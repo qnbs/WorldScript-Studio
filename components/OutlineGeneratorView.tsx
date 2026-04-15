@@ -1,20 +1,21 @@
-import React, { FC } from "react";
-import { View } from "../types";
-import { Button } from "./ui/Button";
-import { Textarea } from "./ui/Textarea";
-import { Input } from "./ui/Input";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { Spinner } from "./ui/Spinner";
-import { ICONS } from "../constants";
-import { Select } from "./ui/Select";
-import { Skeleton } from "./ui/Skeleton";
-import { Modal } from "./ui/Modal";
-import { useOutlineGenerator } from "../hooks/useOutlineGenerator";
+import type { FC } from 'react';
+import React from 'react';
+import type { View } from '../types';
+import { Button } from './ui/Button';
+import { Textarea } from './ui/Textarea';
+import { Input } from './ui/Input';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Spinner } from './ui/Spinner';
+import { ICONS } from '../constants';
+import { Select } from './ui/Select';
+import { Skeleton } from './ui/Skeleton';
+import { Modal } from './ui/Modal';
+import { useOutlineGenerator } from '../hooks/useOutlineGenerator';
 import {
   OutlineGeneratorContext,
   useOutlineGeneratorContext,
-} from "../contexts/OutlineGeneratorContext";
-import { Checkbox } from "./ui/Checkbox";
+} from '../contexts/OutlineGeneratorContext';
+import { Checkbox } from './ui/Checkbox';
 
 // --- SUB-COMPONENTS ---
 
@@ -44,7 +45,7 @@ const IdeaForm: FC = () => {
     <Card>
       <CardHeader>
         <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t("outline.idea.title")}
+          {t('outline.idea.title')}
         </h2>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -53,11 +54,11 @@ const IdeaForm: FC = () => {
             htmlFor="genre"
             className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
           >
-            {t("outline.idea.genreLabel")}
+            {t('outline.idea.genreLabel')}
           </label>
           <Input
             id="genre"
-            placeholder={t("outline.idea.genrePlaceholder")}
+            placeholder={t('outline.idea.genrePlaceholder')}
             value={genre}
             onChange={(e) => setGenre(e.target.value)}
           />
@@ -67,11 +68,11 @@ const IdeaForm: FC = () => {
             htmlFor="idea"
             className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
           >
-            {t("outline.idea.promptLabel")}
+            {t('outline.idea.promptLabel')}
           </label>
           <Textarea
             id="idea"
-            placeholder={t("outline.idea.promptPlaceholder")}
+            placeholder={t('outline.idea.promptPlaceholder')}
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
             className="min-h-[150px]"
@@ -83,7 +84,7 @@ const IdeaForm: FC = () => {
             className="text-indigo-500 dark:text-indigo-400 font-semibold w-full text-left"
             aria-expanded={showAdvanced}
           >
-            {t("outline.advanced.title")} {showAdvanced ? "(-)" : "(+)"}
+            {t('outline.advanced.title')} {showAdvanced ? '(-)' : '(+)'}
           </button>
           {showAdvanced && (
             <div className="mt-4 space-y-4">
@@ -92,11 +93,11 @@ const IdeaForm: FC = () => {
                   htmlFor="characters"
                   className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
                 >
-                  {t("outline.advanced.charactersLabel")}
+                  {t('outline.advanced.charactersLabel')}
                 </label>
                 <Input
                   id="characters"
-                  placeholder={t("outline.advanced.charactersPlaceholder")}
+                  placeholder={t('outline.advanced.charactersPlaceholder')}
                   value={characters}
                   onChange={(e) => setCharacters(e.target.value)}
                 />
@@ -106,11 +107,11 @@ const IdeaForm: FC = () => {
                   htmlFor="setting"
                   className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
                 >
-                  {t("outline.advanced.settingLabel")}
+                  {t('outline.advanced.settingLabel')}
                 </label>
                 <Input
                   id="setting"
-                  placeholder={t("outline.advanced.settingPlaceholder")}
+                  placeholder={t('outline.advanced.settingPlaceholder')}
                   value={setting}
                   onChange={(e) => setSetting(e.target.value)}
                 />
@@ -121,25 +122,13 @@ const IdeaForm: FC = () => {
                     htmlFor="pacing"
                     className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
                   >
-                    {t("outline.advanced.pacingLabel")}
+                    {t('outline.advanced.pacingLabel')}
                   </label>
-                  <Select
-                    id="pacing"
-                    value={pacing}
-                    onChange={(e) => setPacing(e.target.value)}
-                  >
-                    <option value="">
-                      {t("outline.advanced.pacingDefault")}
-                    </option>
-                    <option value="Slow Burn">
-                      {t("outline.advanced.pacingSlow")}
-                    </option>
-                    <option value="Medium Paced">
-                      {t("outline.advanced.pacingMedium")}
-                    </option>
-                    <option value="Fast-Paced Thriller">
-                      {t("outline.advanced.pacingFast")}
-                    </option>
+                  <Select id="pacing" value={pacing} onChange={(e) => setPacing(e.target.value)}>
+                    <option value="">{t('outline.advanced.pacingDefault')}</option>
+                    <option value="Slow Burn">{t('outline.advanced.pacingSlow')}</option>
+                    <option value="Medium Paced">{t('outline.advanced.pacingMedium')}</option>
+                    <option value="Fast-Paced Thriller">{t('outline.advanced.pacingFast')}</option>
                   </Select>
                 </div>
                 <div>
@@ -147,15 +136,13 @@ const IdeaForm: FC = () => {
                     htmlFor="numChapters"
                     className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
                   >
-                    {t("outline.advanced.chaptersLabel")}
+                    {t('outline.advanced.chaptersLabel')}
                   </label>
                   <Input
                     id="numChapters"
                     type="number"
                     value={numChapters}
-                    onChange={(e) =>
-                      setNumChapters(Number(e.target.value) || 1)
-                    }
+                    onChange={(e) => setNumChapters(Number(e.target.value) || 1)}
                     min="1"
                     max="50"
                   />
@@ -163,18 +150,14 @@ const IdeaForm: FC = () => {
               </div>
               <Checkbox
                 id="includeTwist"
-                label={t("outline.advanced.twistLabel")}
+                label={t('outline.advanced.twistLabel')}
                 checked={includeTwist}
                 onChange={(e) => setIncludeTwist(e.target.checked)}
               />
             </div>
           )}
         </div>
-        <Button
-          onClick={handleGenerate}
-          disabled={isLoading || !idea || !genre}
-          className="w-full"
-        >
+        <Button onClick={handleGenerate} disabled={isLoading || !idea || !genre} className="w-full">
           {isLoading ? (
             <Spinner />
           ) : (
@@ -190,7 +173,7 @@ const IdeaForm: FC = () => {
               {ICONS.SPARKLES}
             </svg>
           )}
-          {t("outline.idea.generateButton")}
+          {t('outline.idea.generateButton')}
         </Button>
       </CardContent>
     </Card>
@@ -222,7 +205,7 @@ const OutlineResult: FC = () => {
       <Card>
         <CardHeader>
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-            {t("outline.result.title")}
+            {t('outline.result.title')}
           </h2>
         </CardHeader>
         <CardContent>
@@ -239,7 +222,7 @@ const OutlineResult: FC = () => {
       <Card>
         <CardHeader>
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-            {t("outline.result.title")}
+            {t('outline.result.title')}
           </h2>
         </CardHeader>
         <CardContent>
@@ -254,7 +237,7 @@ const OutlineResult: FC = () => {
     <Card className="h-full flex flex-col">
       <CardHeader>
         <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t("outline.result.title")}
+          {t('outline.result.title')}
         </h2>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col">
@@ -263,6 +246,7 @@ const OutlineResult: FC = () => {
             {outline.map((section, index) => (
               <div
                 key={section.id}
+                role="listitem"
                 draggable
                 onDragStart={() => {
                   draggedItem.current = index;
@@ -276,14 +260,14 @@ const OutlineResult: FC = () => {
                 onDragOver={(e) => e.preventDefault()}
               >
                 <div
-                  className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${section.isTwist ? "bg-[var(--accent-1-background)]/20 border-[var(--accent-1-border)]" : "bg-transparent border-[var(--border-primary)] hover:bg-[var(--background-secondary)]/30"} ${draggingIndex === index ? "opacity-60 scale-[1.02] shadow-2xl shadow-indigo-500/50" : ""}`}
+                  className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${section.isTwist ? 'bg-[var(--accent-1-background)]/20 border-[var(--accent-1-border)]' : 'bg-transparent border-[var(--border-primary)] hover:bg-[var(--background-secondary)]/30'} ${draggingIndex === index ? 'opacity-60 scale-[1.02] shadow-2xl shadow-indigo-500/50' : ''}`}
                 >
                   <div className="p-4 border-b border-[var(--border-primary)]/50 flex justify-between items-start gap-2 bg-white/[0.01]">
                     <div className="flex-grow flex items-center gap-2">
                       <button
                         className="cursor-move text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]"
-                        title={t("outline.result.dragHandleTooltip")}
-                        aria-label={t("outline.result.dragHandleTooltip")}
+                        title={t('outline.result.dragHandleTooltip')}
+                        aria-label={t('outline.result.dragHandleTooltip')}
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -297,7 +281,7 @@ const OutlineResult: FC = () => {
                         </svg>
                       </button>
                       {section.isTwist && (
-                        <span title={t("outline.result.twistTooltip")}>
+                        <span title={t('outline.result.twistTooltip')}>
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
                             fill="none"
@@ -312,19 +296,17 @@ const OutlineResult: FC = () => {
                       )}
                       <Input
                         value={section.title}
-                        onChange={(e) =>
-                          updateSection(section.id, { title: e.target.value })
-                        }
+                        onChange={(e) => updateSection(section.id, { title: e.target.value })}
                         className="bg-transparent border-0 p-0 text-lg font-semibold text-indigo-500 dark:text-indigo-300 h-auto focus:ring-0 focus:bg-[var(--background-secondary)]/50 rounded-md px-2"
                       />
                     </div>
                     <div className="flex items-center space-x-1 flex-shrink-0">
                       <button
-                        onClick={() => handleMove(index, "up")}
+                        onClick={() => handleMove(index, 'up')}
                         disabled={index === 0}
                         className="p-1 rounded-md hover:bg-[var(--background-secondary)] disabled:opacity-20"
-                        title={t("common.moveUp")}
-                        aria-label={t("common.moveUp")}
+                        title={t('common.moveUp')}
+                        aria-label={t('common.moveUp')}
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -340,11 +322,11 @@ const OutlineResult: FC = () => {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleMove(index, "down")}
+                        onClick={() => handleMove(index, 'down')}
                         disabled={index === outline.length - 1}
                         className="p-1 rounded-md hover:bg-[var(--background-secondary)] disabled:opacity-20"
-                        title={t("common.moveDown")}
-                        aria-label={t("common.moveDown")}
+                        title={t('common.moveDown')}
+                        aria-label={t('common.moveDown')}
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -363,8 +345,8 @@ const OutlineResult: FC = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleRegenerate(index)}
-                        title={t("outline.result.regenerateTooltip")}
-                        aria-label={t("outline.result.regenerateTooltip")}
+                        title={t('outline.result.regenerateTooltip')}
+                        aria-label={t('outline.result.regenerateTooltip')}
                         disabled={!!isRegenerating}
                       >
                         {isRegenerating === section.id ? (
@@ -386,8 +368,8 @@ const OutlineResult: FC = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => addSection(index)}
-                        title={t("outline.result.addTooltip")}
-                        aria-label={t("outline.result.addTooltip")}
+                        title={t('outline.result.addTooltip')}
+                        aria-label={t('outline.result.addTooltip')}
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -404,8 +386,8 @@ const OutlineResult: FC = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => deleteSection(section.id)}
-                        title={t("outline.result.deleteTooltip")}
-                        aria-label={t("outline.result.deleteTooltip")}
+                        title={t('outline.result.deleteTooltip')}
+                        aria-label={t('outline.result.deleteTooltip')}
                         className="text-red-500 hover:bg-red-500/10 dark:hover:bg-red-900/50"
                       >
                         <svg
@@ -451,17 +433,17 @@ const OutlineResult: FC = () => {
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-2">
-              {t("outline.result.placeholder")}
+              {t('outline.result.placeholder')}
             </h3>
             <p className="text-[var(--foreground-secondary)] max-w-sm">
-              Fill out the form on the left and click Generate to see your story
-              structure come to life here.
+              Fill out the form on the left and click Generate to see your story structure come to
+              life here.
             </p>
           </div>
         )}
         {outline.length > 0 && (
           <Button className="mt-6 w-full" onClick={handleApplyOutline}>
-            {t("outline.result.applyButton")}
+            {t('outline.result.applyButton')}
           </Button>
         )}
       </CardContent>
@@ -474,21 +456,15 @@ const ConfirmationModal: FC = () => {
   if (!confirmModal) return null;
 
   return (
-    <Modal
-      isOpen={true}
-      onClose={() => setConfirmModal(null)}
-      title={confirmModal.title}
-    >
+    <Modal isOpen={true} onClose={() => setConfirmModal(null)} title={confirmModal.title}>
       <div className="space-y-4">
-        <p className="text-[var(--foreground-secondary)]">
-          {confirmModal.description}
-        </p>
+        <p className="text-[var(--foreground-secondary)]">{confirmModal.description}</p>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setConfirmModal(null)}>
-            {t("common.cancel")}
+            {t('common.cancel')}
           </Button>
           <Button
-            variant={confirmModal.type === "delete" ? "danger" : "primary"}
+            variant={confirmModal.type === 'delete' ? 'danger' : 'primary'}
             onClick={confirmModal.onConfirm}
           >
             {confirmModal.confirmText}
@@ -500,7 +476,7 @@ const ConfirmationModal: FC = () => {
 };
 
 const OutlineGeneratorUI: FC = () => {
-  const { t } = useOutlineGeneratorContext();
+  const { t: _t } = useOutlineGeneratorContext();
   return (
     <div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">

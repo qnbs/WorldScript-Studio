@@ -13,7 +13,7 @@
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
 import type { Awareness } from 'y-protocols/awareness';
-import { CollaborationUser } from '../types';
+import type { CollaborationUser } from '../types';
 
 // Free public signaling servers for y-webrtc
 const SIGNALING_SERVERS = ['wss://y-webrtc-signaling.fly.dev'];

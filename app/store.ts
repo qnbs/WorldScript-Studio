@@ -1,10 +1,5 @@
-import {
-  configureStore,
-  combineReducers,
-  createStore,
-  AnyAction,
-  Middleware,
-} from '@reduxjs/toolkit';
+import type { AnyAction, Middleware } from '@reduxjs/toolkit';
+import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import projectReducer, {
   importProjectThunk,
   projectActions,
@@ -15,7 +10,7 @@ import statusReducer from '../features/status/statusSlice';
 import writerReducer from '../features/writer/writerSlice';
 import undoable from 'redux-undo';
 import { listenerMiddleware } from './listenerMiddleware';
-import { PersistedRootState } from '../types';
+import type { PersistedRootState } from '../types';
 
 // A sophisticated filter to prevent async thunk actions from populating the undo history.
 const filterUndoableActions = (action: AnyAction) => {
@@ -38,7 +33,7 @@ const isLoggerEnabled = () => {
 const loggerMiddleware: Middleware = (store) => (next) => (action) => {
   if (process.env.NODE_ENV !== 'production' && isLoggerEnabled()) {
     console.group((action as AnyAction).type);
-    console.info('dispatching', action);
+    console.log('dispatching', action);
     const result = next(action);
     console.log('next state', store.getState());
     console.groupEnd();
@@ -74,7 +69,7 @@ export const rootReducer = (
     action.type === restoreSnapshotThunk.fulfilled.type
   ) {
     if (nextState && nextState.project) {
-      const { past, future, ...restOfProject } = nextState.project;
+      const { past: _past, future: _future, ...restOfProject } = nextState.project;
       nextState = {
         ...nextState,
         project: {
@@ -108,6 +103,6 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
   });
 };
 
-const tempStore = configureStore({ reducer: rootReducer });
-export type RootState = ReturnType<typeof tempStore.getState>;
-export type AppDispatch = typeof tempStore.dispatch;
+const _tempStore = configureStore({ reducer: rootReducer });
+export type RootState = ReturnType<typeof _tempStore.getState>;
+export type AppDispatch = typeof _tempStore.dispatch;

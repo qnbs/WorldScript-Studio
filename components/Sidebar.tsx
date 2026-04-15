@@ -1,7 +1,7 @@
-import React, { useEffect } from "react";
-import { View } from "../types";
-import { ICONS } from "../constants";
-import { useTranslation } from "../hooks/useTranslation";
+import React, { useEffect } from 'react';
+import type { View } from '../types';
+import { ICONS } from '../constants';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface SidebarProps {
   currentView: View;
@@ -21,10 +21,10 @@ const NavItem: React.FC<{
       onClick={onClick}
       className={`relative flex items-center w-full px-4 py-3 text-left rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] overflow-hidden ${
         isActive
-          ? "bg-gradient-to-r from-[var(--nav-background-active)] to-transparent text-[var(--nav-text-active)] shadow-sm font-semibold"
-          : "text-[var(--foreground-secondary)] hover:bg-[var(--nav-background-hover)] hover:text-[var(--foreground-primary)] font-medium"
+          ? 'bg-gradient-to-r from-[var(--nav-background-active)] to-transparent text-[var(--nav-text-active)] shadow-sm font-semibold'
+          : 'text-[var(--foreground-secondary)] hover:bg-[var(--nav-background-hover)] hover:text-[var(--foreground-primary)] font-medium'
       }`}
-      aria-current={isActive ? "page" : undefined}
+      aria-current={isActive ? 'page' : undefined}
     >
       {isActive && (
         <>
@@ -39,7 +39,7 @@ const NavItem: React.FC<{
           viewBox="0 0 24 24"
           strokeWidth={isActive ? 2 : 1.5}
           stroke="currentColor"
-          className={`w-5 h-5 mr-3 transition-transform duration-300 ${isActive ? "scale-110 text-[var(--nav-text-active)]" : "group-hover:scale-110 text-[var(--foreground-muted)] group-hover:text-[var(--foreground-primary)]"}`}
+          className={`w-5 h-5 mr-3 transition-transform duration-300 ${isActive ? 'scale-110 text-[var(--nav-text-active)]' : 'group-hover:scale-110 text-[var(--foreground-muted)] group-hover:text-[var(--foreground-primary)]'}`}
           aria-hidden="true"
         >
           {icon}
@@ -49,6 +49,7 @@ const NavItem: React.FC<{
     </button>
   );
 });
+NavItem.displayName = 'NavItem';
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
@@ -67,52 +68,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     if (!isSidebarOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsSidebarOpen(false);
+      if (e.key === 'Escape') setIsSidebarOpen(false);
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSidebarOpen, setIsSidebarOpen]);
 
   const navItems = [
-    { id: "dashboard", label: t("sidebar.dashboard"), icon: ICONS.DASHBOARD },
-    { id: "manuscript", label: t("sidebar.manuscript"), icon: ICONS.WRITER },
-    { id: "writer", label: t("sidebar.writer"), icon: ICONS.SPARKLES },
-    { id: "templates", label: t("sidebar.templates"), icon: ICONS.TEMPLATES },
-    { id: "outline", label: t("sidebar.outline"), icon: ICONS.OUTLINE },
+    { id: 'dashboard', label: t('sidebar.dashboard'), icon: ICONS.DASHBOARD },
+    { id: 'manuscript', label: t('sidebar.manuscript'), icon: ICONS.WRITER },
+    { id: 'writer', label: t('sidebar.writer'), icon: ICONS.SPARKLES },
+    { id: 'templates', label: t('sidebar.templates'), icon: ICONS.TEMPLATES },
+    { id: 'outline', label: t('sidebar.outline'), icon: ICONS.OUTLINE },
     {
-      id: "characters",
-      label: t("sidebar.characters"),
+      id: 'characters',
+      label: t('sidebar.characters'),
       icon: ICONS.CHARACTERS,
     },
-    { id: "world", label: t("sidebar.world"), icon: ICONS.WORLD },
+    { id: 'world', label: t('sidebar.world'), icon: ICONS.WORLD },
     {
-      id: "sceneboard",
-      label: t("sidebar.sceneboard"),
+      id: 'sceneboard',
+      label: t('sidebar.sceneboard'),
       icon: ICONS.SCENEBOARD,
     },
     {
-      id: "characterGraph",
-      label: t("sidebar.characterGraph"),
+      id: 'characterGraph',
+      label: t('sidebar.characterGraph'),
       icon: ICONS.CHARACTERGRAPH,
     },
     {
-      id: "consistencyChecker",
-      label: t("sidebar.consistencyChecker"),
+      id: 'consistencyChecker',
+      label: t('sidebar.consistencyChecker'),
       icon: ICONS.CONSISTENCYCHECKER,
     },
-    { id: "critic", label: t("sidebar.critic"), icon: ICONS.CRITIC },
-    { id: "export", label: t("sidebar.export"), icon: ICONS.EXPORT },
+    { id: 'critic', label: t('sidebar.critic'), icon: ICONS.CRITIC },
+    { id: 'export', label: t('sidebar.export'), icon: ICONS.EXPORT },
   ];
 
   const bottomNavItems = [
-    { id: "settings", label: t("sidebar.settings"), icon: ICONS.SETTINGS },
-    { id: "help", label: t("sidebar.help"), icon: ICONS.HELP },
+    { id: 'settings', label: t('sidebar.settings'), icon: ICONS.SETTINGS },
+    { id: 'help', label: t('sidebar.help'), icon: ICONS.HELP },
   ];
 
   return (
     <>
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-30 transition-opacity duration-300 md:hidden ${isSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-30 transition-opacity duration-300 md:hidden ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsSidebarOpen(false)}
         aria-hidden="true"
       />
@@ -127,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         flex flex-col justify-between 
         transform transition-transform duration-300 cubic-bezier(0.2, 0.8, 0.2, 1) 
         md:translate-x-0 
-        ${isSidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} 
+        ${isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} 
         border-r border-[var(--border-primary)]
         md:bg-transparent md:border-r md:border-[var(--border-primary)]
         md:top-16 md:h-[calc(100vh-4rem)]
@@ -140,10 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               StoryCraft
             </h2>
           </div>
-          <nav
-            className="flex flex-col space-y-1.5"
-            aria-label="Main navigation"
-          >
+          <nav className="flex flex-col space-y-1.5" aria-label="Main navigation">
             {navItems.map((item) => (
               <NavItem
                 key={item.id}

@@ -1,21 +1,16 @@
-import React, {
-  createContext,
-  useState,
-  useCallback,
-  ReactNode,
-  useEffect,
-} from "react";
+import type { ReactNode } from 'react';
+import React, { createContext, useState, useCallback, useEffect } from 'react';
 
-type Language = "en" | "de" | "fr" | "es" | "it";
+type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
 
 interface I18nContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string, replacements?: Record<string, string>) => any;
+  t: (key: string, replacements?: Record<string, string>) => string;
 }
 
 export const I18nContext = createContext<I18nContextType>({
-  language: "de",
+  language: 'de',
   setLanguage: () => {},
   t: (key: string) => key,
 });
@@ -25,46 +20,49 @@ interface I18nProviderProps {
 }
 
 const modules = [
-  "common",
-  "sidebar",
-  "portal",
-  "dashboard",
-  "manuscript",
-  "writer",
-  "templates",
-  "tags",
-  "outline",
-  "characters",
-  "worlds",
-  "export",
-  "settings",
-  "help",
+  'common',
+  'sidebar',
+  'portal',
+  'dashboard',
+  'manuscript',
+  'writer',
+  'templates',
+  'tags',
+  'outline',
+  'characters',
+  'worlds',
+  'export',
+  'settings',
+  'help',
 ];
 
-const LANG_KEY = "storycraft-language";
-const VALID_LANGS: Language[] = ["en", "de", "fr", "es", "it"];
+const LANG_KEY = 'storycraft-language';
+const VALID_LANGS: Language[] = ['en', 'de', 'fr', 'es', 'it'];
 
 const getInitialLanguage = (): Language => {
   try {
     const saved = localStorage.getItem(LANG_KEY) as Language;
     if (saved && VALID_LANGS.includes(saved)) return saved;
-  } catch {}
-  return "de";
+  } catch {
+    /* localStorage may be unavailable */
+  }
+  return 'de';
 };
 
 export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(getInitialLanguage);
-  const [translations, setTranslations] = useState<Record<
-    string,
-    Record<string, any>
-  > | null>(null);
+  const [translations, setTranslations] = useState<Record<string, Record<string, unknown>> | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
     try {
       localStorage.setItem(LANG_KEY, lang);
-    } catch {}
+    } catch {
+      /* localStorage may be unavailable */
+    }
   }, []);
 
   useEffect(() => {
@@ -73,7 +71,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // KRITISCHER FIX: Verwende import.meta.env.BASE_URL für Subpath-Unterstützung
-    const base = import.meta.env.BASE_URL || "/";
+    const base = import.meta.env.BASE_URL || '/';
 
     const fetchTranslations = async (lang: Language) => {
       const settled = await Promise.allSettled(
@@ -81,15 +79,15 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
           fetch(`${base}locales/${lang}/${module}.json`).then((res) => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.json();
-          }),
-        ),
+          })
+        )
       );
       return settled.reduce(
         (acc, result) => {
-          if (result.status === "fulfilled") return { ...acc, ...result.value };
+          if (result.status === 'fulfilled') return { ...acc, ...result.value };
           return acc;
         },
-        {} as Record<string, any>,
+        {} as Record<string, unknown>
       );
     };
 
@@ -97,11 +95,11 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
       setIsLoading(true);
       try {
         const [enData, deData, frData, esData, itData] = await Promise.all([
-          fetchTranslations("en"),
-          fetchTranslations("de"),
-          fetchTranslations("fr"),
-          fetchTranslations("es"),
-          fetchTranslations("it"),
+          fetchTranslations('en'),
+          fetchTranslations('de'),
+          fetchTranslations('fr'),
+          fetchTranslations('es'),
+          fetchTranslations('it'),
         ]);
         setTranslations({
           en: enData,
@@ -111,7 +109,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
           it: itData,
         });
       } catch (error) {
-        console.error("Failed to load all translation files", error);
+        console.error('Failed to load all translation files', error);
       } finally {
         setIsLoading(false);
       }
@@ -125,10 +123,9 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
         return key;
       }
       // Fallback auf EN wenn die aktuelle Sprache den Key nicht hat
-      const value =
-        translations[language]?.[key] ?? translations["en"]?.[key] ?? key;
+      const value = translations[language]?.[key] ?? translations['en']?.[key] ?? key;
 
-      if (typeof value !== "string") {
+      if (typeof value !== 'string') {
         return value; // For objects/arrays like help categories
       }
 
@@ -142,7 +139,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
 
       return translation;
     },
-    [language, translations],
+    [language, translations]
   );
 
   if (isLoading) {
@@ -154,8 +151,6 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   }
 
   return (
-    <I18nContext.Provider value={{ language, setLanguage, t }}>
-      {children}
-    </I18nContext.Provider>
+    <I18nContext.Provider value={{ language, setLanguage, t }}>{children}</I18nContext.Provider>
   );
 };

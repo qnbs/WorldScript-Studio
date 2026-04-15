@@ -1,13 +1,10 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import {
+import type { PayloadAction } from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
+import type {
   Settings,
   Theme,
   EditorFont,
   AiCreativity,
-  AiModel,
-  NotificationFrequency,
-  BackupFrequency,
-  SyncProvider,
   CustomFont,
   KeyboardShortcut,
   WritingGoal,
@@ -21,42 +18,40 @@ import {
   AdvancedEditorSettings,
   BackupSettings,
   ThemeCustomization,
-} from "../../types";
+} from '../../types';
 
 // Detect system preference for initial theme
 const getSystemThemePreference = (): Theme => {
-  if (typeof window !== "undefined" && window.matchMedia) {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
-  return "dark";
+  return 'dark';
 };
 
 const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
-  editorFont: "serif",
+  editorFont: 'serif',
   fontSize: 16,
   lineSpacing: 1.6,
-  aiCreativity: "Balanced",
+  aiCreativity: 'Balanced',
   paragraphSpacing: 1,
   indentFirstLine: false,
 
   // Advanced Settings
   keyboardShortcuts: [
-    { id: "save", keys: ["Ctrl", "S"], action: "save" },
-    { id: "new-section", keys: ["Ctrl", "N"], action: "newSection" },
-    { id: "search", keys: ["Ctrl", "F"], action: "search" },
-    { id: "export", keys: ["Ctrl", "E"], action: "export" },
+    { id: 'save', keys: ['Ctrl', 'S'], action: 'save' },
+    { id: 'new-section', keys: ['Ctrl', 'N'], action: 'newSection' },
+    { id: 'search', keys: ['Ctrl', 'F'], action: 'search' },
+    { id: 'export', keys: ['Ctrl', 'E'], action: 'export' },
   ],
   writingGoals: [
-    { type: "words", target: 2000, period: "daily", enabled: false },
-    { type: "time", target: 120, period: "daily", enabled: false },
+    { type: 'words', target: 2000, period: 'daily', enabled: false },
+    { type: 'time', target: 120, period: 'daily', enabled: false },
   ],
   advancedAi: {
-    model: "gemini-1.5-flash",
-    provider: "gemini",
+    model: 'gemini-1.5-flash',
+    provider: 'gemini',
     temperature: 0.7,
     maxTokens: 4096,
     topP: 0.9,
@@ -64,7 +59,7 @@ const defaultSettings: Settings = {
     presencePenalty: 0.0,
     customPrompts: {},
     rateLimit: 60,
-    ollamaBaseUrl: "http://localhost:11434",
+    ollamaBaseUrl: 'http://localhost:11434',
   },
   accessibility: {
     highContrast: false,
@@ -72,7 +67,7 @@ const defaultSettings: Settings = {
     largeText: false,
     screenReader: false,
     focusIndicators: true,
-    colorBlindMode: "none",
+    colorBlindMode: 'none',
   },
   privacy: {
     analyticsEnabled: false,
@@ -91,7 +86,7 @@ const defaultSettings: Settings = {
   notifications: {
     desktopNotifications: false,
     emailNotifications: false,
-    writingReminders: "never",
+    writingReminders: 'never',
     goalAchievements: true,
     collaborationUpdates: false,
   },
@@ -102,7 +97,7 @@ const defaultSettings: Settings = {
     versionHistory: true,
   },
   integrations: {
-    syncProvider: "none",
+    syncProvider: 'none',
     evernoteSync: false,
     notionSync: false,
     scrivenerExport: false,
@@ -123,25 +118,25 @@ const defaultSettings: Settings = {
   },
   backup: {
     autoBackup: true,
-    backupFrequency: "weekly",
-    backupLocation: "./backups",
+    backupFrequency: 'weekly',
+    backupLocation: './backups',
     maxBackups: 10,
     encryptBackups: false,
   },
   themeCustomization: {
-    primaryColor: "#3b82f6",
-    secondaryColor: "#64748b",
-    accentColor: "#f59e0b",
-    backgroundColor: "#0f172a",
-    textColor: "#f8fafc",
-    customCss: "",
+    primaryColor: '#3b82f6',
+    secondaryColor: '#64748b',
+    accentColor: '#f59e0b',
+    backgroundColor: '#0f172a',
+    textColor: '#f8fafc',
+    customCss: '',
   },
 };
 
 const initialState: Settings = { ...defaultSettings };
 
 const settingsSlice = createSlice({
-  name: "settings",
+  name: 'settings',
   initialState,
   reducers: {
     setSettings(state, action: PayloadAction<Settings>) {
@@ -184,11 +179,9 @@ const settingsSlice = createSlice({
       action: PayloadAction<{
         id: string;
         shortcut: Partial<KeyboardShortcut>;
-      }>,
+      }>
     ) {
-      const index = state.keyboardShortcuts.findIndex(
-        (s) => s.id === action.payload.id,
-      );
+      const index = state.keyboardShortcuts.findIndex((s) => s.id === action.payload.id);
       if (index !== -1) {
         state.keyboardShortcuts[index] = {
           ...state.keyboardShortcuts[index],
@@ -199,10 +192,7 @@ const settingsSlice = createSlice({
     setWritingGoals(state, action: PayloadAction<WritingGoal[]>) {
       state.writingGoals = action.payload;
     },
-    updateWritingGoal(
-      state,
-      action: PayloadAction<{ index: number; goal: Partial<WritingGoal> }>,
-    ) {
+    updateWritingGoal(state, action: PayloadAction<{ index: number; goal: Partial<WritingGoal> }>) {
       if (state.writingGoals[action.payload.index]) {
         state.writingGoals[action.payload.index] = {
           ...state.writingGoals[action.payload.index],
@@ -213,10 +203,7 @@ const settingsSlice = createSlice({
     setAdvancedAi(state, action: PayloadAction<Partial<AdvancedAiSettings>>) {
       state.advancedAi = { ...state.advancedAi, ...action.payload };
     },
-    setAccessibility(
-      state,
-      action: PayloadAction<Partial<AccessibilitySettings>>,
-    ) {
+    setAccessibility(state, action: PayloadAction<Partial<AccessibilitySettings>>) {
       state.accessibility = { ...state.accessibility, ...action.payload };
     },
     setPrivacy(state, action: PayloadAction<Partial<PrivacySettings>>) {
@@ -225,37 +212,22 @@ const settingsSlice = createSlice({
     setPerformance(state, action: PayloadAction<Partial<PerformanceSettings>>) {
       state.performance = { ...state.performance, ...action.payload };
     },
-    setNotifications(
-      state,
-      action: PayloadAction<Partial<NotificationSettings>>,
-    ) {
+    setNotifications(state, action: PayloadAction<Partial<NotificationSettings>>) {
       state.notifications = { ...state.notifications, ...action.payload };
     },
-    setCollaboration(
-      state,
-      action: PayloadAction<Partial<CollaborationSettings>>,
-    ) {
+    setCollaboration(state, action: PayloadAction<Partial<CollaborationSettings>>) {
       state.collaboration = { ...state.collaboration, ...action.payload };
     },
-    setIntegrations(
-      state,
-      action: PayloadAction<Partial<IntegrationSettings>>,
-    ) {
+    setIntegrations(state, action: PayloadAction<Partial<IntegrationSettings>>) {
       state.integrations = { ...state.integrations, ...action.payload };
     },
-    setAdvancedEditor(
-      state,
-      action: PayloadAction<Partial<AdvancedEditorSettings>>,
-    ) {
+    setAdvancedEditor(state, action: PayloadAction<Partial<AdvancedEditorSettings>>) {
       state.advancedEditor = { ...state.advancedEditor, ...action.payload };
     },
     setBackup(state, action: PayloadAction<Partial<BackupSettings>>) {
       state.backup = { ...state.backup, ...action.payload };
     },
-    setThemeCustomization(
-      state,
-      action: PayloadAction<Partial<ThemeCustomization>>,
-    ) {
+    setThemeCustomization(state, action: PayloadAction<Partial<ThemeCustomization>>) {
       state.themeCustomization = {
         ...state.themeCustomization,
         ...action.payload,
@@ -267,16 +239,15 @@ const settingsSlice = createSlice({
 // Helper function to apply initial theme on load
 const applyInitialTheme = () => {
   let settings = defaultSettings;
-  const storedState = localStorage.getItem("storycraft-state");
+  const storedState = localStorage.getItem('storycraft-state');
   if (storedState) {
     const persistedState = JSON.parse(storedState);
     if (persistedState.settings) {
       settings = persistedState.settings;
     }
   }
-  const theme =
-    settings.theme === "auto" ? getSystemThemePreference() : settings.theme;
-  document.body.classList.remove("light-theme", "dark-theme", "auto-theme");
+  const theme = settings.theme === 'auto' ? getSystemThemePreference() : settings.theme;
+  document.body.classList.remove('light-theme', 'dark-theme', 'auto-theme');
   document.body.classList.add(`${theme}-theme`);
 };
 

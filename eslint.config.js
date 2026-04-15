@@ -14,6 +14,7 @@ export default tseslint.config(
       '.storybook/**',
       'backend/**',
       'src-tauri/**',
+      'public/sw.js',
       '*.config.js',
       '*.config.ts',
       'vite-env.d.ts',

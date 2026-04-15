@@ -1,9 +1,10 @@
 import { createContext, useContext } from 'react';
-import { StorySection, Character } from '../types';
+import type { StorySection, Character } from '../types';
+import type { ProjectData } from '../features/project/projectSlice';
 
 interface SceneBoardViewContextType {
   t: (key: string) => string;
-  project: any;
+  project: ProjectData;
   sections: (StorySection & { position: { x: number; y: number }; wordCount: number })[];
   characters: Character[];
   handleUpdateSection: (id: string, updates: Partial<StorySection>) => void;
@@ -17,7 +18,9 @@ export const SceneBoardViewContext = createContext<SceneBoardViewContextType | n
 export const useSceneBoardViewContext = () => {
   const context = useContext(SceneBoardViewContext);
   if (!context) {
-    throw new Error('useSceneBoardViewContext must be used within a SceneBoardViewContext.Provider');
+    throw new Error(
+      'useSceneBoardViewContext must be used within a SceneBoardViewContext.Provider'
+    );
   }
   return context;
 };

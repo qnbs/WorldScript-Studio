@@ -1,19 +1,17 @@
-import React, { FC } from "react";
-import { View } from "../types";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { ICONS } from "../constants";
-import { DebouncedInput } from "./ui/DebouncedInput";
-import { DebouncedTextarea } from "./ui/DebouncedTextarea";
-import { Button } from "./ui/Button";
-import { Spinner } from "./ui/Spinner";
-import { Modal } from "./ui/Modal";
-import { Progress } from "./ui/Progress";
-import { Input } from "./ui/Input";
-import { useDashboard } from "../hooks/useDashboard";
-import {
-  DashboardContext,
-  useDashboardContext,
-} from "../contexts/DashboardContext";
+import type { FC } from 'react';
+import React from 'react';
+import type { View } from '../types';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { ICONS } from '../constants';
+import { DebouncedInput } from './ui/DebouncedInput';
+import { DebouncedTextarea } from './ui/DebouncedTextarea';
+import { Button } from './ui/Button';
+import { Spinner } from './ui/Spinner';
+import { Modal } from './ui/Modal';
+import { Progress } from './ui/Progress';
+import { Input } from './ui/Input';
+import { useDashboard } from '../hooks/useDashboard';
+import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
 
 // --- Generic Components ---
 
@@ -24,16 +22,10 @@ const StatCard: FC<{
   animationIndex: number;
   colorClass?: string;
 }> = React.memo(
-  ({
-    title,
-    value,
-    icon,
-    animationIndex,
-    colorClass = "text-indigo-500 bg-indigo-500/10",
-  }) => (
+  ({ title, value, icon, animationIndex, colorClass = 'text-indigo-500 bg-indigo-500/10' }) => (
     <Card
       className="animate-in flex items-center p-5 h-auto hover:border-[var(--border-highlight)] transition-colors group"
-      style={{ "--index": animationIndex } as React.CSSProperties}
+      style={{ '--index': animationIndex } as React.CSSProperties}
     >
       <div
         className={`p-4 rounded-2xl mr-5 flex-shrink-0 border border-white/5 group-hover:scale-110 transition-transform duration-300 shadow-sm ${colorClass}`}
@@ -58,8 +50,9 @@ const StatCard: FC<{
         </p>
       </div>
     </Card>
-  ),
+  )
 );
+StatCard.displayName = 'StatCard';
 
 const QuickAccessCard: FC<{
   title: string;
@@ -72,7 +65,7 @@ const QuickAccessCard: FC<{
     as="button"
     onClick={onClick}
     className="text-left p-6 h-full min-w-[260px] max-w-[260px] md:max-w-none md:min-w-0 group animate-in snap-center flex flex-col justify-between hover:border-[var(--border-interactive)] transition-all duration-300"
-    style={{ "--index": animationIndex } as React.CSSProperties}
+    style={{ '--index': animationIndex } as React.CSSProperties}
   >
     <div>
       <div className="flex items-center mb-4">
@@ -97,7 +90,7 @@ const QuickAccessCard: FC<{
       </p>
     </div>
     <div className="mt-6 flex items-center text-xs font-bold text-[var(--background-interactive)] opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-[-10px] group-hover:translate-x-0">
-      OPEN{" "}
+      OPEN{' '}
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 20 20"
@@ -113,6 +106,7 @@ const QuickAccessCard: FC<{
     </div>
   </Card>
 ));
+QuickAccessCard.displayName = 'QuickAccessCard';
 
 // --- Sub-Components Consuming Context ---
 
@@ -128,7 +122,7 @@ const ProjectDetails: FC = () => {
   return (
     <Card
       className="animate-in lg:col-span-2 h-full flex flex-col"
-      style={{ "--index": 0 } as React.CSSProperties}
+      style={{ '--index': 0 } as React.CSSProperties}
     >
       <CardHeader className="border-b-0 pb-0 pt-6">
         <h1 className="text-base font-semibold text-[var(--foreground-primary)] flex items-center gap-2">
@@ -142,7 +136,7 @@ const ProjectDetails: FC = () => {
           >
             {ICONS.WRITER}
           </svg>
-          {t("dashboard.details.title")}
+          {t('dashboard.details.title')}
         </h1>
       </CardHeader>
       <CardContent className="space-y-5 flex-grow pt-4">
@@ -151,13 +145,13 @@ const ProjectDetails: FC = () => {
             htmlFor="projectTitle"
             className="text-sm font-medium text-[var(--foreground-secondary)]"
           >
-            {t("dashboard.details.projectTitle")}
+            {t('dashboard.details.projectTitle')}
           </label>
           <DebouncedInput
             id="projectTitle"
             value={project.title}
             onDebouncedChange={handleTitleChange}
-            placeholder={t("dashboard.details.projectTitlePlaceholder")}
+            placeholder={t('dashboard.details.projectTitlePlaceholder')}
           />
         </div>
         <div className="space-y-2 flex-grow flex flex-col">
@@ -166,7 +160,7 @@ const ProjectDetails: FC = () => {
               htmlFor="projectLogline"
               className="text-sm font-medium text-[var(--foreground-secondary)]"
             >
-              {t("dashboard.details.logline")}
+              {t('dashboard.details.logline')}
             </label>
             <Button
               onClick={handleGenerateLoglines}
@@ -189,7 +183,7 @@ const ProjectDetails: FC = () => {
                   {ICONS.SPARKLES}
                 </svg>
               )}
-              {t("dashboard.details.aiLoglineButton")}
+              {t('dashboard.details.aiLoglineButton')}
             </Button>
           </div>
           <div className="relative group flex-grow">
@@ -197,7 +191,7 @@ const ProjectDetails: FC = () => {
               id="projectLogline"
               value={project.logline}
               onDebouncedChange={handleLoglineChange}
-              placeholder={t("dashboard.details.loglinePlaceholder")}
+              placeholder={t('dashboard.details.loglinePlaceholder')}
               className="min-h-[120px] h-full resize-none"
             />
           </div>
@@ -215,12 +209,12 @@ const GoalTracker: FC = () => {
     if (daysLeft === null)
       return (
         <p className="text-xl font-bold text-[var(--foreground-muted)]">
-          {t("dashboard.goals.noDeadline")}
+          {t('dashboard.goals.noDeadline')}
         </p>
       );
-    let color = "text-[var(--foreground-primary)]";
-    if (daysLeft < 0) color = "text-red-500";
-    else if (daysLeft < 7) color = "text-amber-500";
+    let color = 'text-[var(--foreground-primary)]';
+    if (daysLeft < 0) color = 'text-red-500';
+    else if (daysLeft < 7) color = 'text-amber-500';
 
     const count = Math.abs(daysLeft);
 
@@ -229,10 +223,8 @@ const GoalTracker: FC = () => {
         <span className={`text-4xl font-black ${color}`}>{count}</span>
         <span className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide">
           {daysLeft < 0
-            ? t("dashboard.goals.overdue")
-            : t("dashboard.goals.daysLeft", { count: "" })
-                .replace(/\d+/, "")
-                .trim()}
+            ? t('dashboard.goals.overdue')
+            : t('dashboard.goals.daysLeft', { count: '' }).replace(/\d+/, '').trim()}
         </span>
       </div>
     );
@@ -241,11 +233,11 @@ const GoalTracker: FC = () => {
   return (
     <Card
       className="animate-in h-full flex flex-col"
-      style={{ "--index": 1 } as React.CSSProperties}
+      style={{ '--index': 1 } as React.CSSProperties}
     >
       <CardHeader className="flex justify-between items-center border-b-0 pb-0 pt-6">
         <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--foreground-muted)]">
-          {t("dashboard.goals.title")}
+          {t('dashboard.goals.title')}
         </h2>
         <Button
           variant="ghost"
@@ -272,15 +264,14 @@ const GoalTracker: FC = () => {
               {wordCount.toLocaleString()}
             </span>
             <span className="text-sm font-medium text-[var(--foreground-muted)] mb-1">
-              / {project.projectGoals?.totalWordCount.toLocaleString()}{" "}
-              {t("common.words")}
+              / {project.projectGoals?.totalWordCount.toLocaleString()} {t('common.words')}
             </span>
           </div>
           <Progress value={wordCountProgress} className="h-4" />
         </div>
         <div className="bg-[var(--background-primary)]/40 p-5 rounded-2xl border border-[var(--border-primary)] backdrop-blur-sm">
           <label className="text-xs uppercase tracking-wider font-bold text-[var(--foreground-muted)] mb-1 block">
-            {t("dashboard.goals.deadline")}
+            {t('dashboard.goals.deadline')}
           </label>
           {renderDaysLeft()}
         </div>
@@ -294,28 +285,28 @@ const StatsGrid: FC = () => {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
       <StatCard
-        title={t("dashboard.stats.totalWordCount")}
+        title={t('dashboard.stats.totalWordCount')}
         value={wordCount.toLocaleString()}
         icon={ICONS.WRITER}
         animationIndex={1}
         colorClass="text-emerald-500 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-500/10"
       />
       <StatCard
-        title={t("dashboard.stats.characters")}
+        title={t('dashboard.stats.characters')}
         value={characters.length}
         icon={ICONS.CHARACTERS}
         animationIndex={2}
         colorClass="text-blue-500 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-500/10"
       />
       <StatCard
-        title={t("dashboard.stats.worlds")}
+        title={t('dashboard.stats.worlds')}
         value={worlds.length}
         icon={ICONS.WORLD}
         animationIndex={3}
         colorClass="text-purple-500 bg-purple-500/10 dark:text-purple-400 dark:bg-purple-500/10"
       />
       <StatCard
-        title={t("dashboard.stats.outlineSections")}
+        title={t('dashboard.stats.outlineSections')}
         value={project.outline?.length || 0}
         icon={ICONS.OUTLINE}
         animationIndex={4}
@@ -330,40 +321,40 @@ const QuickActions: FC = () => {
 
   const quickAccessItems = [
     {
-      title: t("sidebar.manuscript"),
-      description: t("dashboard.quickAccess.manuscriptDesc"),
+      title: t('sidebar.manuscript'),
+      description: t('dashboard.quickAccess.manuscriptDesc'),
       icon: ICONS.WRITER,
-      view: "manuscript",
+      view: 'manuscript',
     },
     {
-      title: t("sidebar.writer"),
-      description: t("dashboard.quickAccess.writerDesc"),
+      title: t('sidebar.writer'),
+      description: t('dashboard.quickAccess.writerDesc'),
       icon: ICONS.SPARKLES,
-      view: "writer",
+      view: 'writer',
     },
     {
-      title: t("sidebar.outline"),
-      description: t("dashboard.quickAccess.outlineDesc"),
+      title: t('sidebar.outline'),
+      description: t('dashboard.quickAccess.outlineDesc'),
       icon: ICONS.OUTLINE,
-      view: "outline",
+      view: 'outline',
     },
     {
-      title: t("sidebar.characters"),
-      description: t("dashboard.quickAccess.charactersDesc"),
+      title: t('sidebar.characters'),
+      description: t('dashboard.quickAccess.charactersDesc'),
       icon: ICONS.CHARACTERS,
-      view: "characters",
+      view: 'characters',
     },
     {
-      title: t("sidebar.world"),
-      description: t("dashboard.quickAccess.worldDesc"),
+      title: t('sidebar.world'),
+      description: t('dashboard.quickAccess.worldDesc'),
       icon: ICONS.WORLD,
-      view: "world",
+      view: 'world',
     },
     {
-      title: t("sidebar.export"),
-      description: t("dashboard.quickAccess.exportDesc"),
+      title: t('sidebar.export'),
+      description: t('dashboard.quickAccess.exportDesc'),
       icon: ICONS.EXPORT,
-      view: "export",
+      view: 'export',
     },
   ];
 
@@ -371,9 +362,9 @@ const QuickActions: FC = () => {
     <div>
       <h2
         className="text-xl font-bold mb-6 animate-in px-1 tracking-tight text-[var(--foreground-primary)]"
-        style={{ "--index": 5 } as React.CSSProperties}
+        style={{ '--index': 5 } as React.CSSProperties}
       >
-        {t("dashboard.quickAccess.title")}
+        {t('dashboard.quickAccess.title')}
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -414,13 +405,13 @@ const DashboardModals: FC = () => {
       <Modal
         isOpen={isLoglineModalOpen}
         onClose={() => setIsLoglineModalOpen(false)}
-        title={t("dashboard.loglineModal.title")}
+        title={t('dashboard.loglineModal.title')}
       >
         {isAiLoading && (
           <div className="flex flex-col items-center justify-center min-h-[200px]">
             <Spinner className="w-8 h-8" />
             <p className="mt-4 text-[var(--foreground-secondary)]">
-              {t("dashboard.loglineModal.loading")}
+              {t('dashboard.loglineModal.loading')}
             </p>
           </div>
         )}
@@ -444,7 +435,7 @@ const DashboardModals: FC = () => {
         )}
         {!isAiLoading && loglineSuggestions.length === 0 && (
           <div className="text-center text-red-400 min-h-[200px] flex items-center justify-center">
-            <p>{t("outline.error.generationFailed")}</p>
+            <p>{t('outline.error.generationFailed')}</p>
           </div>
         )}
       </Modal>
@@ -452,7 +443,7 @@ const DashboardModals: FC = () => {
       <Modal
         isOpen={isGoalModalOpen}
         onClose={() => setIsGoalModalOpen(false)}
-        title={t("dashboard.goals.modal.title")}
+        title={t('dashboard.goals.modal.title')}
       >
         <div className="space-y-6">
           <div>
@@ -460,7 +451,7 @@ const DashboardModals: FC = () => {
               htmlFor="goal-word-count"
               className="block text-sm font-semibold text-[var(--foreground-primary)] mb-2"
             >
-              {t("dashboard.goals.modal.wordCountLabel")}
+              {t('dashboard.goals.modal.wordCountLabel')}
             </label>
             <Input
               id="goal-word-count"
@@ -477,7 +468,7 @@ const DashboardModals: FC = () => {
               htmlFor="goal-date"
               className="block text-sm font-semibold text-[var(--foreground-primary)] mb-2"
             >
-              {t("dashboard.goals.modal.deadlineLabel")}
+              {t('dashboard.goals.modal.deadlineLabel')}
             </label>
             <Input
               id="goal-date"
@@ -487,14 +478,11 @@ const DashboardModals: FC = () => {
             />
           </div>
           <div className="flex justify-end pt-4 gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => setIsGoalModalOpen(false)}
-            >
-              {t("common.cancel")}
+            <Button variant="secondary" onClick={() => setIsGoalModalOpen(false)}>
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleSaveGoals} variant="primary">
-              {t("dashboard.goals.modal.save")}
+              {t('dashboard.goals.modal.save')}
             </Button>
           </div>
         </div>

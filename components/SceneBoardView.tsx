@@ -1,65 +1,51 @@
-import React, { FC, useState, useCallback, useMemo } from "react";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { Button } from "./ui/Button";
-import { Input } from "./ui/Input";
-import { Textarea } from "./ui/Textarea";
-import { Select } from "./ui/Select";
-import { Spinner } from "./ui/Spinner";
-import { ICONS } from "../constants";
-import { useSceneBoardView } from "../hooks/useSceneBoardView";
-import {
-  SceneBoardViewContext,
-  useSceneBoardViewContext,
-} from "../contexts/SceneBoardViewContext";
+import type { FC } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Textarea } from './ui/Textarea';
+import { Select } from './ui/Select';
+import { Spinner } from './ui/Spinner';
+import { ICONS } from '../constants';
+import { useSceneBoardView } from '../hooks/useSceneBoardView';
+import { SceneBoardViewContext, useSceneBoardViewContext } from '../contexts/SceneBoardViewContext';
+import type { StorySection, Character } from '../types';
+import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   DndContext,
-  DragEndEvent,
-  DragOverEvent,
-  DragStartEvent,
   closestCenter,
   PointerSensor,
   useSensor,
   useSensors,
   DragOverlay,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+} from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // --- Status-Farben ---
 const STATUS_COLORS: Record<string, string> = {
-  draft: "#6b7280",
-  outline: "#f59e0b",
-  "first-draft": "#3b82f6",
-  revised: "#8b5cf6",
-  final: "#10b981",
+  draft: '#6b7280',
+  outline: '#f59e0b',
+  'first-draft': '#3b82f6',
+  revised: '#8b5cf6',
+  final: '#10b981',
 };
 
 // --- Einzelne Szenen-Karte (sortierbar) ---
 const SortableSceneCard: FC<{
-  section: any;
-  characters: any[];
-  onUpdate: (id: string, updates: any) => void;
+  section: StorySection;
+  characters: Character[];
+  onUpdate: (id: string, updates: Partial<StorySection>) => void;
   onDelete: (id: string) => void;
 }> = ({ section, characters, onUpdate, onDelete }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: section.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: section.id,
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     title: section.title,
-    summary: section.summary || "",
-    color: section.color || "#3b82f6",
-    status: section.status || "draft",
+    summary: section.summary || '',
+    color: section.color || '#3b82f6',
+    status: section.status || 'draft',
     act: section.act || 1,
   });
 
@@ -74,10 +60,8 @@ const SortableSceneCard: FC<{
     setIsEditing(false);
   };
 
-  const linkedChars = (characters || []).filter((c: any) =>
-    section.characterIds?.includes(c.id),
-  );
-  const statusColor = STATUS_COLORS[section.status || "draft"] || "#6b7280";
+  const linkedChars = (characters || []).filter((c) => section.characterIds?.includes(c.id));
+  const statusColor = STATUS_COLORS[section.status || 'draft'] || '#6b7280';
 
   return (
     <div
@@ -88,28 +72,27 @@ const SortableSceneCard: FC<{
       {...listeners}
     >
       {isEditing ? (
-        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+        <div
+          role="group"
+          className="space-y-2"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
           <Input
             value={editData.title}
-            onChange={(e) =>
-              setEditData((p) => ({ ...p, title: e.target.value }))
-            }
+            onChange={(e) => setEditData((p) => ({ ...p, title: e.target.value }))}
             className="text-sm font-semibold"
           />
           <Textarea
             value={editData.summary}
-            onChange={(e) =>
-              setEditData((p) => ({ ...p, summary: e.target.value }))
-            }
+            onChange={(e) => setEditData((p) => ({ ...p, summary: e.target.value }))}
             placeholder="Szenen-Zusammenfassung..."
             className="text-xs h-16 resize-none"
           />
           <div className="flex items-center gap-2">
             <Select
               value={editData.status}
-              onChange={(e) =>
-                setEditData((p) => ({ ...p, status: e.target.value }))
-              }
+              onChange={(e) => setEditData((p) => ({ ...p, status: e.target.value }))}
               className="text-xs"
             >
               <option value="draft">Entwurf</option>
@@ -135,9 +118,7 @@ const SortableSceneCard: FC<{
             <input
               type="color"
               value={editData.color}
-              onChange={(e) =>
-                setEditData((p) => ({ ...p, color: e.target.value }))
-              }
+              onChange={(e) => setEditData((p) => ({ ...p, color: e.target.value }))}
               className="w-7 h-7 rounded border cursor-pointer"
             />
           </div>
@@ -146,17 +127,13 @@ const SortableSceneCard: FC<{
               size="sm"
               variant="danger"
               onClick={() => {
-                if (confirm("Szene löschen?")) onDelete(section.id);
+                if (confirm('Szene löschen?')) onDelete(section.id);
               }}
             >
               Löschen
             </Button>
             <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setIsEditing(false)}
-              >
+              <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>
                 Abbrechen
               </Button>
               <Button size="sm" onClick={handleSave}>
@@ -171,7 +148,7 @@ const SortableSceneCard: FC<{
             <div className="flex items-center gap-1.5">
               <div
                 className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: section.color || "#3b82f6" }}
+                style={{ backgroundColor: section.color || '#3b82f6' }}
               />
               <h4 className="text-sm font-semibold text-[var(--foreground-primary)] line-clamp-1">
                 {section.title}
@@ -208,12 +185,9 @@ const SortableSceneCard: FC<{
           )}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <div
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: statusColor }}
-              />
+              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusColor }} />
               <span className="text-xs text-[var(--foreground-muted)] capitalize">
-                {section.status || "draft"}
+                {section.status || 'draft'}
               </span>
             </div>
             <span className="text-xs text-[var(--foreground-muted)]">
@@ -222,7 +196,7 @@ const SortableSceneCard: FC<{
           </div>
           {linkedChars.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
-              {linkedChars.slice(0, 3).map((c: any) => (
+              {linkedChars.slice(0, 3).map((c) => (
                 <span
                   key={c.id}
                   className="text-xs bg-indigo-500/15 text-indigo-400 px-1.5 py-0.5 rounded"
@@ -246,21 +220,21 @@ const SortableSceneCard: FC<{
 // --- Swimlane-Spalte (ein Akt) ---
 const ActSwimlane: FC<{
   act: 1 | 2 | 3;
-  sections: any[];
-  characters: any[];
-  onUpdate: (id: string, updates: any) => void;
+  sections: StorySection[];
+  characters: Character[];
+  onUpdate: (id: string, updates: Partial<StorySection>) => void;
   onDelete: (id: string) => void;
   onAddSection: (act: 1 | 2 | 3) => void;
 }> = ({ act, sections, characters, onUpdate, onDelete, onAddSection }) => {
   const ACT_LABELS: Record<number, string> = {
-    1: "Akt 1 – Einführung",
-    2: "Akt 2 – Konflikt",
-    3: "Akt 3 – Auflösung",
+    1: 'Akt 1 – Einführung',
+    2: 'Akt 2 – Konflikt',
+    3: 'Akt 3 – Auflösung',
   };
   const ACT_COLORS: Record<number, string> = {
-    1: "from-blue-500/10",
-    2: "from-purple-500/10",
-    3: "from-green-500/10",
+    1: 'from-blue-500/10',
+    2: 'from-purple-500/10',
+    3: 'from-green-500/10',
   };
 
   const wordCount = sections.reduce((sum, s) => sum + (s.wordCount || 0), 0);
@@ -292,10 +266,7 @@ const ActSwimlane: FC<{
         role="list"
         aria-label="Szenen sortieren – Drag & Drop oder Enter zum Auswählen, Pfeiltasten zum Verschieben"
       >
-        <SortableContext
-          items={sections.map((s) => s.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           {sections.map((section) => (
             <SortableSceneCard
               key={section.id}
@@ -330,9 +301,7 @@ const SceneBoardUI: FC = () => {
   } = useSceneBoardViewContext();
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   // Szenen nach Akt gruppieren (Standard: Akt 1)
   const sectionsByAct = useMemo(
@@ -341,7 +310,7 @@ const SceneBoardUI: FC = () => {
       2: sections.filter((s) => s.act === 2),
       3: sections.filter((s) => s.act === 3),
     }),
-    [sections],
+    [sections]
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -358,30 +327,26 @@ const SceneBoardUI: FC = () => {
       // Wenn über einer anderen Karte, in denselben Akt verschieben
       const overSection = sections.find((s) => s.id === over.id);
       const activeSection = sections.find((s) => s.id === active.id);
-      if (
-        overSection &&
-        activeSection &&
-        overSection.act !== activeSection.act
-      ) {
+      if (overSection && activeSection && overSection.act !== activeSection.act) {
         handleUpdateSection(active.id as string, { act: overSection.act || 1 });
       }
     },
-    [sections, handleUpdateSection],
+    [sections, handleUpdateSection]
   );
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
       // Akt-Wechsel beim Darüberfahren prüfen (Container-IDs: 'act-1', 'act-2', 'act-3')
       const { over } = event;
-      if (over?.id && String(over.id).startsWith("act-")) {
-        const act = parseInt(String(over.id).replace("act-", "")) as 1 | 2 | 3;
+      if (over?.id && String(over.id).startsWith('act-')) {
+        const act = parseInt(String(over.id).replace('act-', '')) as 1 | 2 | 3;
         const activeSection = sections.find((s) => s.id === event.active.id);
         if (activeSection && activeSection.act !== act) {
           handleUpdateSection(event.active.id as string, { act });
         }
       }
     },
-    [sections, handleUpdateSection],
+    [sections, handleUpdateSection]
   );
 
   const handleAddForAct = useCallback(
@@ -393,12 +358,10 @@ const SceneBoardUI: FC = () => {
         if (last) handleUpdateSection(last.id, { act });
       }, 100);
     },
-    [handleAddSection, sections, handleUpdateSection],
+    [handleAddSection, sections, handleUpdateSection]
   );
 
-  const activeSection = activeId
-    ? sections.find((s) => s.id === activeId)
-    : null;
+  const activeSection = activeId ? sections.find((s) => s.id === activeId) : null;
 
   if (!project)
     return (
@@ -414,7 +377,7 @@ const SceneBoardUI: FC = () => {
       <div className="mb-4 flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
-            {t("sceneboard.title")}
+            {t('sceneboard.title')}
           </h1>
           <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
             {sections.length} Szenen · {totalWords} Wörter
@@ -431,7 +394,7 @@ const SceneBoardUI: FC = () => {
           >
             {ICONS.ADD}
           </svg>
-          {t("sceneboard.addScene")}
+          {t('sceneboard.addScene')}
         </Button>
       </div>
 

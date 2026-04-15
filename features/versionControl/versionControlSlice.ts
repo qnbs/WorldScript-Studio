@@ -1,31 +1,32 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import LZString from "lz-string";
-import { v4 as uuid } from "uuid";
-import { VersionBranch, VersionSnapshot } from "../../types";
-import { StorySection } from "../../types";
+import type { PayloadAction } from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
+import LZString from 'lz-string';
+import { v4 as uuid } from 'uuid';
+import type { VersionBranch, VersionSnapshot } from '../../types';
+import type { StorySection } from '../../types';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
 const BRANCH_COLORS = [
-  "#6366f1",
-  "#8b5cf6",
-  "#ec4899",
-  "#14b8a6",
-  "#f59e0b",
-  "#10b981",
-  "#3b82f6",
-  "#f97316",
-  "#84cc16",
-  "#06b6d4",
+  '#6366f1',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f59e0b',
+  '#10b981',
+  '#3b82f6',
+  '#f97316',
+  '#84cc16',
+  '#06b6d4',
 ];
 
-export const MAIN_BRANCH_ID = "main";
+export const MAIN_BRANCH_ID = 'main';
 
 const initialMainBranch: VersionBranch = {
   id: MAIN_BRANCH_ID,
-  name: "main",
-  description: "Hauptlinie der Geschichte",
-  color: "#6366f1",
+  name: 'main',
+  description: 'Hauptlinie der Geschichte',
+  color: '#6366f1',
   createdAt: new Date().toISOString(),
 };
 
@@ -60,7 +61,7 @@ export function decompressManuscript(compressed: string): StorySection[] {
 
 function countWords(sections: StorySection[]): number {
   return sections.reduce((acc, s) => {
-    const text = s.content ?? "";
+    const text = s.content ?? '';
     return acc + (text.trim() ? text.trim().split(/\s+/).length : 0);
   }, 0);
 }
@@ -68,7 +69,7 @@ function countWords(sections: StorySection[]): number {
 // ─── Slice ────────────────────────────────────────────────────────────────────
 
 export const versionControlSlice = createSlice({
-  name: "versionControl",
+  name: 'versionControl',
   initialState,
   reducers: {
     /** Create a snapshot of the current manuscript on the current branch */
@@ -78,7 +79,7 @@ export const versionControlSlice = createSlice({
         label: string;
         sections: StorySection[];
         parentId?: string;
-      }>,
+      }>
     ) {
       const { label, sections, parentId } = action.payload;
       const id = uuid();
@@ -106,14 +107,9 @@ export const versionControlSlice = createSlice({
         description?: string;
         fromSnapshotId?: string;
         switchTo?: boolean;
-      }>,
+      }>
     ) {
-      const {
-        name,
-        description = "",
-        fromSnapshotId,
-        switchTo = true,
-      } = action.payload;
+      const { name, description = '', fromSnapshotId, switchTo = true } = action.payload;
       const colorIndex = state.branches.length % BRANCH_COLORS.length;
       const id = uuid();
       const branch: VersionBranch = {
@@ -140,9 +136,7 @@ export const versionControlSlice = createSlice({
     deleteBranch(state, action: PayloadAction<string>) {
       if (action.payload === MAIN_BRANCH_ID) return;
       state.branches = state.branches.filter((b) => b.id !== action.payload);
-      state.snapshots = state.snapshots.filter(
-        (s) => s.branchId !== action.payload,
-      );
+      state.snapshots = state.snapshots.filter((s) => s.branchId !== action.payload);
       if (state.currentBranchId === action.payload) {
         state.currentBranchId = MAIN_BRANCH_ID;
       }
@@ -171,27 +165,16 @@ export default versionControlSlice.reducer;
 
 // ─── Selectors ────────────────────────────────────────────────────────────────
 
-export const selectCurrentBranch = (state: {
-  versionControl: VersionControlState;
-}) =>
-  state.versionControl.branches.find(
-    (b) => b.id === state.versionControl.currentBranchId,
-  );
+export const selectCurrentBranch = (state: { versionControl: VersionControlState }) =>
+  state.versionControl.branches.find((b) => b.id === state.versionControl.currentBranchId);
 
-export const selectCurrentBranchSnapshots = (state: {
-  versionControl: VersionControlState;
-}) =>
+export const selectCurrentBranchSnapshots = (state: { versionControl: VersionControlState }) =>
   state.versionControl.snapshots
     .filter((s) => s.branchId === state.versionControl.currentBranchId)
-    .sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-export const selectAllBranches = (state: {
-  versionControl: VersionControlState;
-}) => state.versionControl.branches;
+export const selectAllBranches = (state: { versionControl: VersionControlState }) =>
+  state.versionControl.branches;
 
-export const selectIsPanelOpen = (state: {
-  versionControl: VersionControlState;
-}) => state.versionControl.isPanelOpen;
+export const selectIsPanelOpen = (state: { versionControl: VersionControlState }) =>
+  state.versionControl.isPanelOpen;

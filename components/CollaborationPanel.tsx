@@ -1,9 +1,10 @@
-import React, { FC, useState, useEffect, useCallback, useRef } from 'react';
+import type { FC } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { v4 as uuid } from 'uuid';
 import { collaborationService } from '../services/collaborationService';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { CollaborationUser } from '../types';
+import type { CollaborationUser } from '../types';
 
 // Preset user colors for avatar display
 const USER_COLORS = [

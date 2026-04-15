@@ -1,37 +1,52 @@
 import { useMemo, useCallback } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
-import { useAppSelector, useAppDispatch, useAppSelectorShallow } from '../app/hooks';
+import { useAppDispatch, useAppSelectorShallow } from '../app/hooks';
 import { projectActions } from '../features/project/projectSlice';
 import { selectAllCharacters } from '../features/project/projectSelectors';
-import { StorySection } from '../types';
+import type { StorySection } from '../types';
+import type { RootState } from '../app/store';
 
 export const useSceneBoardView = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const project = useAppSelectorShallow((state) => state.project.present.data);
-  const characters = selectAllCharacters({ project: { present: { data: project } } } as any);
+  const characters = selectAllCharacters({
+    project: { present: { data: project } },
+  } as unknown as RootState);
 
   const sections = useMemo(() => {
-    return project.manuscript.map(section => ({
+    return project.manuscript.map((section) => ({
       ...section,
-      position: project.sceneBoardLayout?.[section.id] || { x: Math.random() * 800, y: Math.random() * 600 },
+      position: project.sceneBoardLayout?.[section.id] || {
+        x: Math.random() * 800,
+        y: Math.random() * 600,
+      },
       wordCount: section.content?.split(/\s+/).filter(Boolean).length || 0,
     }));
   }, [project.manuscript, project.sceneBoardLayout]);
 
-  const handleUpdateSection = useCallback((id: string, updates: Partial<StorySection>) => {
-    dispatch(projectActions.updateManuscriptSection({ id, updates }));
-  }, [dispatch]);
+  const handleUpdateSection = useCallback(
+    (id: string, updates: Partial<StorySection>) => {
+      dispatch(projectActions.updateManuscriptSection({ id, updates }));
+    },
+    [dispatch]
+  );
 
-  const handleDeleteSection = useCallback((id: string) => {
-    if (confirm(t('sceneboard.confirmDelete'))) {
-      dispatch(projectActions.deleteManuscriptSection(id));
-    }
-  }, [dispatch, t]);
+  const handleDeleteSection = useCallback(
+    (id: string) => {
+      if (confirm(t('sceneboard.confirmDelete'))) {
+        dispatch(projectActions.deleteManuscriptSection(id));
+      }
+    },
+    [dispatch, t]
+  );
 
-  const handleMoveSection = useCallback((id: string, position: { x: number; y: number }) => {
-    dispatch(projectActions.updateSceneBoardLayout({ [id]: position }));
-  }, [dispatch]);
+  const handleMoveSection = useCallback(
+    (id: string, position: { x: number; y: number }) => {
+      dispatch(projectActions.updateSceneBoardLayout({ [id]: position }));
+    },
+    [dispatch]
+  );
 
   const handleAddSection = useCallback(() => {
     const newSection: Omit<StorySection, 'id'> = {

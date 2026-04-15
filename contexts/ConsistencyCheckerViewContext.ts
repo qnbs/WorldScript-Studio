@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import { Character } from '../types';
+import type { Character } from '../types';
 
 interface ConsistencyCheckerViewContextType {
   t: (key: string) => string;
@@ -11,12 +11,15 @@ interface ConsistencyCheckerViewContextType {
   runCheck: (characterId: string) => void;
 }
 
-export const ConsistencyCheckerViewContext = createContext<ConsistencyCheckerViewContextType | null>(null);
+export const ConsistencyCheckerViewContext =
+  createContext<ConsistencyCheckerViewContextType | null>(null);
 
 export const useConsistencyCheckerViewContext = () => {
   const context = useContext(ConsistencyCheckerViewContext);
   if (!context) {
-    throw new Error('useConsistencyCheckerViewContext must be used within a ConsistencyCheckerViewContext.Provider');
+    throw new Error(
+      'useConsistencyCheckerViewContext must be used within a ConsistencyCheckerViewContext.Provider'
+    );
   }
   return context;
 };

@@ -1,17 +1,9 @@
-import {
-  createListenerMiddleware,
-  isAnyOf,
-  isRejected,
-  addListener,
-  TypedStartListening,
-} from '@reduxjs/toolkit';
+import type { TypedStartListening } from '@reduxjs/toolkit';
+import { createListenerMiddleware, isRejected, addListener } from '@reduxjs/toolkit';
 import type { RootState, AppDispatch } from './store';
-import { dbService } from '../services/dbService';
 import { storageService } from '../services/storageService';
 import { statusActions } from '../features/status/statusSlice';
-import { projectActions } from '../features/project/projectSlice';
-import { settingsActions } from '../features/settings/settingsSlice';
-import { PersistedRootState } from '../types';
+import type { PersistedRootState } from '../types';
 
 export const listenerMiddleware = createListenerMiddleware();
 
@@ -49,7 +41,7 @@ listenerMiddleware.startListening({
       const presentData = state.project.present?.data ?? state.project.data;
 
       // Validate state before saving — guard against silent corruption
-      if (!presentData || !presentData.title === undefined) {
+      if (!presentData || presentData.title === undefined) {
         console.error('Auto-save aborted: Invalid project state detected (missing present.data)');
         listenerApi.dispatch(statusActions.setSavingStatus('idle'));
         return;

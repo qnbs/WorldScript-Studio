@@ -1,29 +1,24 @@
-import React, { FC, useState, useEffect, useRef } from "react";
-import { World, WorldTimelineEvent, WorldLocation } from "../types";
-import { ICONS } from "../constants";
-import { Button } from "./ui/Button";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { Spinner } from "./ui/Spinner";
-import { Modal } from "./ui/Modal";
-import { DebouncedInput } from "./ui/DebouncedInput";
-import { DebouncedTextarea } from "./ui/DebouncedTextarea";
-import { useWorldView } from "../hooks/useWorldView";
-import {
-  WorldViewContext,
-  useWorldViewContext,
-} from "../contexts/WorldViewContext";
-import { Input } from "./ui/Input";
-import { Textarea } from "./ui/Textarea";
-import { AddNewCard } from "./ui/AddNewCard";
-import { dbService } from "../services/dbService";
-import { useAppDispatch } from "../app/hooks";
-import { uploadWorldImageThunk } from "../features/project/projectSlice";
+import type { FC } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import type { World } from '../types';
+import { ICONS } from '../constants';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Spinner } from './ui/Spinner';
+import { Modal } from './ui/Modal';
+import { DebouncedInput } from './ui/DebouncedInput';
+import { DebouncedTextarea } from './ui/DebouncedTextarea';
+import { useWorldView } from '../hooks/useWorldView';
+import { WorldViewContext, useWorldViewContext } from '../contexts/WorldViewContext';
+import { Input } from './ui/Input';
+import { Textarea } from './ui/Textarea';
+import { AddNewCard } from './ui/AddNewCard';
+import { dbService } from '../services/dbService';
+import { useAppDispatch } from '../app/hooks';
+import { uploadWorldImageThunk } from '../features/project/projectSlice';
 
 // A local hook to fetch image data on-demand from IndexedDB
-const useStoredImage = (
-  id: string | undefined,
-  hasImage: boolean | undefined,
-) => {
+const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   useEffect(() => {
     setImageUrl(null); // Reset on change
@@ -58,64 +53,62 @@ const TabButton: FC<{
     aria-selected={active}
     aria-controls={controls}
     onClick={onClick}
-    className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${active ? "border-indigo-500 text-[var(--foreground-primary)]" : "border-transparent text-[var(--foreground-muted)] hover:border-[var(--border-primary)] hover:text-[var(--foreground-secondary)]"}`}
+    className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${active ? 'border-indigo-500 text-[var(--foreground-primary)]' : 'border-transparent text-[var(--foreground-muted)] hover:border-[var(--border-primary)] hover:text-[var(--foreground-secondary)]'}`}
   >
     {children}
   </button>
 ));
+TabButton.displayName = 'TabButton';
 
 interface DetailFieldProps {
   label: string;
-  field: "geography" | "culture" | "magicSystem";
+  field: 'geography' | 'culture' | 'magicSystem';
   value: string;
 }
 
-const DetailField: FC<DetailFieldProps> = React.memo(
-  ({ label, field, value }) => {
-    const { t, handleFieldChange, handleRegenerateField, isRegeneratingField } =
-      useWorldViewContext();
-    const fullLabel = `${t("characters.edit.regenerate")} ${label}`;
-    return (
-      <div className="space-y-2">
-        <div className="flex justify-between items-center">
-          <label className="text-sm font-medium text-[var(--foreground-secondary)]">
-            {label}
-          </label>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleRegenerateField(field)}
-            disabled={isRegeneratingField === field}
-            title={fullLabel}
-            aria-label={fullLabel}
-          >
-            {isRegeneratingField === field ? (
-              <Spinner />
-            ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-4 h-4 text-indigo-500 dark:text-indigo-400"
-                aria-hidden="true"
-              >
-                {ICONS.RECYCLE}
-              </svg>
-            )}
-          </Button>
-        </div>
-        <DebouncedTextarea
-          value={value}
-          onDebouncedChange={(newValue) => handleFieldChange(field, newValue)}
-          className="min-h-[120px]"
-          aria-label={label}
-        />
+const DetailField: FC<DetailFieldProps> = React.memo(({ label, field, value }) => {
+  const { t, handleFieldChange, handleRegenerateField, isRegeneratingField } =
+    useWorldViewContext();
+  const fullLabel = `${t('characters.edit.regenerate')} ${label}`;
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center">
+        <label className="text-sm font-medium text-[var(--foreground-secondary)]">{label}</label>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleRegenerateField(field)}
+          disabled={isRegeneratingField === field}
+          title={fullLabel}
+          aria-label={fullLabel}
+        >
+          {isRegeneratingField === field ? (
+            <Spinner />
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-4 h-4 text-indigo-500 dark:text-indigo-400"
+              aria-hidden="true"
+            >
+              {ICONS.RECYCLE}
+            </svg>
+          )}
+        </Button>
       </div>
-    );
-  },
-);
+      <DebouncedTextarea
+        value={value}
+        onDebouncedChange={(newValue) => handleFieldChange(field, newValue)}
+        className="min-h-[120px]"
+        aria-label={label}
+      />
+    </div>
+  );
+});
+DetailField.displayName = 'DetailField';
 
 const WorldAtlas: FC = () => {
   const {
@@ -138,11 +131,8 @@ const WorldAtlas: FC = () => {
     addLocation,
     deleteLocation,
   } = useWorldViewContext();
-  const [activeTab, setActiveTab] = useState("overview");
-  const imageUrl = useStoredImage(
-    selectedWorld?.id,
-    selectedWorld?.hasAmbianceImage,
-  );
+  const [activeTab, setActiveTab] = useState('overview');
+  const imageUrl = useStoredImage(selectedWorld?.id, selectedWorld?.hasAmbianceImage);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dispatch = useAppDispatch();
 
@@ -150,14 +140,10 @@ const WorldAtlas: FC = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0] && selectedWorld) {
       const file = event.target.files[0];
-      await dispatch(
-        uploadWorldImageThunk({ worldId: selectedWorld.id, file }),
-      );
+      await dispatch(uploadWorldImageThunk({ worldId: selectedWorld.id, file }));
     }
   };
 
@@ -167,18 +153,14 @@ const WorldAtlas: FC = () => {
     <Modal
       isOpen={true}
       onClose={() => setIsAtlasOpen(false)}
-      title={t("worlds.atlas.title", { name: selectedWorld.name })}
+      title={t('worlds.atlas.title', { name: selectedWorld.name })}
       size="xl"
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 space-y-4">
           <div className="relative aspect-video w-full rounded-lg bg-[var(--background-tertiary)]/50 flex items-center justify-center overflow-hidden border border-[var(--border-primary)]">
             {selectedWorld.hasAmbianceImage && imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={selectedWorld.name}
-                className="w-full h-full object-cover"
-              />
+              <img src={imageUrl} alt={selectedWorld.name} className="w-full h-full object-cover" />
             ) : (
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -193,10 +175,8 @@ const WorldAtlas: FC = () => {
             )}
             {(isGeneratingImage || isRefiningImage) && (
               <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-[var(--foreground-primary)]">
-                <Spinner className="w-8 h-8" />{" "}
-                <p className="mt-2 text-sm">
-                  {t("worlds.edit.generatingImage")}
-                </p>
+                <Spinner className="w-8 h-8" />{' '}
+                <p className="mt-2 text-sm">{t('worlds.edit.generatingImage')}</p>
               </div>
             )}
 
@@ -214,7 +194,7 @@ const WorldAtlas: FC = () => {
               onClick={handleGenerateImage}
               disabled={isGeneratingImage || !selectedWorld.description}
               className="col-span-4"
-              title={t("worlds.edit.generateImageButton")}
+              title={t('worlds.edit.generateImageButton')}
             >
               {isGeneratingImage ? (
                 <Spinner />
@@ -230,7 +210,7 @@ const WorldAtlas: FC = () => {
                   {ICONS.PHOTO}
                 </svg>
               )}
-              {t("common.generate")}
+              {t('common.generate')}
             </Button>
             <Button
               onClick={handleUploadClick}
@@ -260,11 +240,11 @@ const WorldAtlas: FC = () => {
                 htmlFor="refine-prompt-world"
                 className="text-sm font-medium text-[var(--foreground-secondary)]"
               >
-                {t("worlds.atlas.refineLabel")}
+                {t('worlds.atlas.refineLabel')}
               </label>
               <Input
                 id="refine-prompt-world"
-                placeholder={t("worlds.atlas.refinePlaceholder")}
+                placeholder={t('worlds.atlas.refinePlaceholder')}
                 value={refinementPrompt}
                 onChange={(e) => setRefinementPrompt(e.target.value)}
                 disabled={isRefiningImage}
@@ -288,7 +268,7 @@ const WorldAtlas: FC = () => {
                     {ICONS.SPARKLES}
                   </svg>
                 )}
-                {t("worlds.atlas.refineButton")}
+                {t('worlds.atlas.refineButton')}
               </Button>
             </div>
           )}
@@ -296,17 +276,17 @@ const WorldAtlas: FC = () => {
         <div className="md:col-span-2">
           <div className="flex justify-between items-center p-0 mb-2">
             <DebouncedInput
-              aria-label={t("worlds.edit.name")}
+              aria-label={t('worlds.edit.name')}
               value={selectedWorld.name}
-              onDebouncedChange={(value) => handleFieldChange("name", value)}
+              onDebouncedChange={(value) => handleFieldChange('name', value)}
               className="bg-transparent border-0 p-0 text-2xl font-semibold text-[var(--foreground-primary)] h-auto focus:ring-0 focus:bg-[var(--foreground-primary)]/10 rounded-md px-2 w-full mr-2"
             />
             <Button
               variant="danger"
               size="sm"
               onClick={() => handleDelete(selectedWorld.id)}
-              title={t("worlds.deleteLabel", { name: selectedWorld.name })}
-              aria-label={t("worlds.deleteLabel", { name: selectedWorld.name })}
+              title={t('worlds.deleteLabel', { name: selectedWorld.name })}
+              aria-label={t('worlds.deleteLabel', { name: selectedWorld.name })}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -327,39 +307,39 @@ const WorldAtlas: FC = () => {
               className="flex items-center space-x-1 min-w-max"
             >
               <TabButton
-                active={activeTab === "overview"}
-                onClick={() => setActiveTab("overview")}
+                active={activeTab === 'overview'}
+                onClick={() => setActiveTab('overview')}
                 controls="tabpanel-overview-w"
               >
-                {t("worlds.tabs.overview")}
+                {t('worlds.tabs.overview')}
               </TabButton>
               <TabButton
-                active={activeTab === "details"}
-                onClick={() => setActiveTab("details")}
+                active={activeTab === 'details'}
+                onClick={() => setActiveTab('details')}
                 controls="tabpanel-details-w"
               >
-                {t("worlds.tabs.details")}
+                {t('worlds.tabs.details')}
               </TabButton>
               <TabButton
-                active={activeTab === "timeline"}
-                onClick={() => setActiveTab("timeline")}
+                active={activeTab === 'timeline'}
+                onClick={() => setActiveTab('timeline')}
                 controls="tabpanel-timeline-w"
               >
-                {t("worlds.tabs.timeline")}
+                {t('worlds.tabs.timeline')}
               </TabButton>
               <TabButton
-                active={activeTab === "locations"}
-                onClick={() => setActiveTab("locations")}
+                active={activeTab === 'locations'}
+                onClick={() => setActiveTab('locations')}
                 controls="tabpanel-locations-w"
               >
-                {t("worlds.tabs.locations")}
+                {t('worlds.tabs.locations')}
               </TabButton>
               <TabButton
-                active={activeTab === "notes"}
-                onClick={() => setActiveTab("notes")}
+                active={activeTab === 'notes'}
+                onClick={() => setActiveTab('notes')}
                 controls="tabpanel-notes-w"
               >
-                {t("worlds.tabs.notes")}
+                {t('worlds.tabs.notes')}
               </TabButton>
             </div>
           </div>
@@ -367,45 +347,43 @@ const WorldAtlas: FC = () => {
             {isGeneratingProfile && (
               <div className="flex items-center justify-center space-x-2 text-[var(--foreground-secondary)] p-8">
                 <Spinner />
-                <p>{t("worlds.loading.profile")}</p>
+                <p>{t('worlds.loading.profile')}</p>
               </div>
             )}
             <div
               id="tabpanel-overview-w"
               role="tabpanel"
-              hidden={isGeneratingProfile || activeTab !== "overview"}
+              hidden={isGeneratingProfile || activeTab !== 'overview'}
               className="space-y-2"
             >
               <label className="text-sm font-medium text-[var(--foreground-secondary)]">
-                {t("worlds.edit.description")}
+                {t('worlds.edit.description')}
               </label>
               <DebouncedTextarea
                 value={selectedWorld.description}
-                onDebouncedChange={(value) =>
-                  handleFieldChange("description", value)
-                }
+                onDebouncedChange={(value) => handleFieldChange('description', value)}
                 className="min-h-[150px]"
-                aria-label={t("worlds.edit.description")}
+                aria-label={t('worlds.edit.description')}
               />
             </div>
             <div
               id="tabpanel-details-w"
               role="tabpanel"
-              hidden={isGeneratingProfile || activeTab !== "details"}
+              hidden={isGeneratingProfile || activeTab !== 'details'}
               className="space-y-4"
             >
               <DetailField
-                label={t("worlds.edit.geography")}
+                label={t('worlds.edit.geography')}
                 field="geography"
                 value={selectedWorld.geography}
               />
               <DetailField
-                label={t("worlds.edit.culture")}
+                label={t('worlds.edit.culture')}
                 field="culture"
                 value={selectedWorld.culture}
               />
               <DetailField
-                label={t("worlds.edit.magicSystem")}
+                label={t('worlds.edit.magicSystem')}
                 field="magicSystem"
                 value={selectedWorld.magicSystem}
               />
@@ -413,31 +391,23 @@ const WorldAtlas: FC = () => {
             <div
               id="tabpanel-timeline-w"
               role="tabpanel"
-              hidden={isGeneratingProfile || activeTab !== "timeline"}
+              hidden={isGeneratingProfile || activeTab !== 'timeline'}
               className="space-y-4"
             >
-              {(selectedWorld.timeline || []).map((event, index) => (
+              {(selectedWorld.timeline || []).map((event, _index) => (
                 <div
                   key={event.id}
                   className="grid grid-cols-1 md:grid-cols-3 gap-2 items-start border border-[var(--border-primary)] bg-white/5 p-2 rounded-md"
                 >
                   <Input
-                    placeholder={t("worlds.edit.eraPlaceholder")}
+                    placeholder={t('worlds.edit.eraPlaceholder')}
                     value={event.era}
-                    onChange={(e) =>
-                      handleTimelineChange(event.id, "era", e.target.value)
-                    }
+                    onChange={(e) => handleTimelineChange(event.id, 'era', e.target.value)}
                   />
                   <Textarea
-                    placeholder={t("worlds.edit.eventPlaceholder")}
+                    placeholder={t('worlds.edit.eventPlaceholder')}
                     value={event.description}
-                    onChange={(e) =>
-                      handleTimelineChange(
-                        event.id,
-                        "description",
-                        e.target.value,
-                      )
-                    }
+                    onChange={(e) => handleTimelineChange(event.id, 'description', e.target.value)}
                     className="md:col-span-2 min-h-[60px]"
                     rows={2}
                   />
@@ -460,19 +430,14 @@ const WorldAtlas: FC = () => {
                   </Button>
                 </div>
               ))}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={addTimelineEvent}
-                className="w-full"
-              >
-                {t("worlds.edit.addEvent")}
+              <Button variant="secondary" size="sm" onClick={addTimelineEvent} className="w-full">
+                {t('worlds.edit.addEvent')}
               </Button>
             </div>
             <div
               id="tabpanel-locations-w"
               role="tabpanel"
-              hidden={isGeneratingProfile || activeTab !== "locations"}
+              hidden={isGeneratingProfile || activeTab !== 'locations'}
               className="space-y-4"
             >
               {(selectedWorld.locations || []).map((loc) => (
@@ -482,11 +447,9 @@ const WorldAtlas: FC = () => {
                 >
                   <div className="flex justify-between items-center">
                     <Input
-                      placeholder={t("worlds.edit.locationNamePlaceholder")}
+                      placeholder={t('worlds.edit.locationNamePlaceholder')}
                       value={loc.name}
-                      onChange={(e) =>
-                        handleLocationChange(loc.id, "name", e.target.value)
-                      }
+                      onChange={(e) => handleLocationChange(loc.id, 'name', e.target.value)}
                       className="font-semibold text-[var(--foreground-primary)] bg-transparent border-0 focus:ring-1 focus:bg-[var(--background-tertiary)] h-auto"
                     />
                     <Button
@@ -508,43 +471,32 @@ const WorldAtlas: FC = () => {
                     </Button>
                   </div>
                   <Textarea
-                    placeholder={t("worlds.edit.locationDescPlaceholder")}
+                    placeholder={t('worlds.edit.locationDescPlaceholder')}
                     value={loc.description}
-                    onChange={(e) =>
-                      handleLocationChange(
-                        loc.id,
-                        "description",
-                        e.target.value,
-                      )
-                    }
+                    onChange={(e) => handleLocationChange(loc.id, 'description', e.target.value)}
                     className="min-h-[80px]"
                     rows={3}
                   />
                 </div>
               ))}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={addLocation}
-                className="w-full"
-              >
-                {t("worlds.edit.addLocation")}
+              <Button variant="secondary" size="sm" onClick={addLocation} className="w-full">
+                {t('worlds.edit.addLocation')}
               </Button>
             </div>
             <div
               id="tabpanel-notes-w"
               role="tabpanel"
-              hidden={isGeneratingProfile || activeTab !== "notes"}
+              hidden={isGeneratingProfile || activeTab !== 'notes'}
               className="space-y-2"
             >
               <label className="text-sm font-medium text-[var(--foreground-secondary)]">
-                {t("worlds.edit.notes")}
+                {t('worlds.edit.notes')}
               </label>
               <DebouncedTextarea
                 value={selectedWorld.notes}
-                onDebouncedChange={(value) => handleFieldChange("notes", value)}
+                onDebouncedChange={(value) => handleFieldChange('notes', value)}
                 className="min-h-[300px]"
-                aria-label={t("worlds.edit.notes")}
+                aria-label={t('worlds.edit.notes')}
               />
             </div>
           </div>
@@ -555,33 +507,25 @@ const WorldAtlas: FC = () => {
 };
 
 const AIProfileModal: FC = () => {
-  const {
-    t,
-    isAiModalOpen,
-    setIsAiModalOpen,
-    aiConcept,
-    setAiConcept,
-    handleGenerateProfile,
-  } = useWorldViewContext();
+  const { t, isAiModalOpen, setIsAiModalOpen, aiConcept, setAiConcept, handleGenerateProfile } =
+    useWorldViewContext();
   return (
     <Modal
       isOpen={isAiModalOpen}
       onClose={() => setIsAiModalOpen(false)}
-      title={t("worlds.aiModal.title")}
+      title={t('worlds.aiModal.title')}
     >
       <div className="space-y-4">
-        <p className="text-[var(--foreground-secondary)]">
-          {t("worlds.aiModal.description")}
-        </p>
+        <p className="text-[var(--foreground-secondary)]">{t('worlds.aiModal.description')}</p>
         <DebouncedTextarea
-          placeholder={t("worlds.aiModal.placeholder")}
+          placeholder={t('worlds.aiModal.placeholder')}
           value={aiConcept}
           onDebouncedChange={setAiConcept}
           rows={4}
         />
         <div className="flex justify-end">
           <Button onClick={handleGenerateProfile} disabled={!aiConcept}>
-            {t("worlds.aiModal.button")}
+            {t('worlds.aiModal.button')}
           </Button>
         </div>
       </div>
@@ -590,26 +534,23 @@ const AIProfileModal: FC = () => {
 };
 
 const DeleteConfirmationModal: FC = () => {
-  const { t, worldToDelete, setWorldToDelete, confirmDelete } =
-    useWorldViewContext();
+  const { t, worldToDelete, setWorldToDelete, confirmDelete } = useWorldViewContext();
   if (!worldToDelete) return null;
 
   return (
     <Modal
       isOpen={true}
       onClose={() => setWorldToDelete(null)}
-      title={t("worlds.deleteLabel", { name: worldToDelete.name })}
+      title={t('worlds.deleteLabel', { name: worldToDelete.name })}
     >
       <div className="space-y-4">
-        <p className="text-[var(--foreground-secondary)]">
-          {t("worlds.deleteConfirm")}
-        </p>
+        <p className="text-[var(--foreground-secondary)]">{t('worlds.deleteConfirm')}</p>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setWorldToDelete(null)}>
-            {t("common.cancel")}
+            {t('common.cancel')}
           </Button>
           <Button variant="danger" onClick={confirmDelete}>
-            {t("outline.confirm.deleteAction")}
+            {t('outline.confirm.deleteAction')}
           </Button>
         </div>
       </div>
@@ -627,7 +568,7 @@ const WorldCard: FC<{ world: World; animationIndex: number }> = React.memo(
         as="button"
         onClick={() => handleSelect(world)}
         className="group text-left relative overflow-hidden transition-all duration-300 hover:-translate-y-1 animate-in"
-        style={{ "--index": animationIndex } as React.CSSProperties}
+        style={{ '--index': animationIndex } as React.CSSProperties}
       >
         <div className="aspect-video w-full bg-[var(--background-tertiary)]/50 flex items-center justify-center overflow-hidden">
           {world.hasAmbianceImage && imageUrl ? (
@@ -650,15 +591,14 @@ const WorldCard: FC<{ world: World; animationIndex: number }> = React.memo(
           )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-black/40 to-transparent">
-          <h3 className="font-bold text-lg text-white truncate">
-            {world.name}
-          </h3>
+          <h3 className="font-bold text-lg text-white truncate">{world.name}</h3>
           <p className="text-sm text-gray-300 truncate">{world.description}</p>
         </div>
       </Card>
     );
-  },
+  }
 );
+WorldCard.displayName = 'WorldCard';
 
 const WorldViewUI: FC = () => {
   const { t, handleAddNewManually, handleAddNewWithAI, worlds, isAtlasOpen } =
@@ -666,25 +606,19 @@ const WorldViewUI: FC = () => {
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-        <div
-          className="animate-in"
-          style={{ "--index": 0 } as React.CSSProperties}
-        >
+        <div className="animate-in" style={{ '--index': 0 } as React.CSSProperties}>
           <AddNewCard
-            title={t("worlds.addNewManually")}
-            description={t("worlds.addNewManuallyHint")}
+            title={t('worlds.addNewManually')}
+            description={t('worlds.addNewManuallyHint')}
             onClick={handleAddNewManually}
             icon={ICONS.ADD}
             variant="default"
           />
         </div>
-        <div
-          className="animate-in"
-          style={{ "--index": 1 } as React.CSSProperties}
-        >
+        <div className="animate-in" style={{ '--index': 1 } as React.CSSProperties}>
           <AddNewCard
-            title={t("worlds.addNewWithAI")}
-            description={t("worlds.addNewWithAIHint")}
+            title={t('worlds.addNewWithAI')}
+            description={t('worlds.addNewWithAIHint')}
             onClick={handleAddNewWithAI}
             icon={ICONS.SPARKLES}
             variant="primary"

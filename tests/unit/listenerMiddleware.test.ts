@@ -5,8 +5,8 @@ const mockSaveProject = vi.fn().mockResolvedValue(undefined);
 const mockSaveSettings = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../services/storageService', () => ({
   storageService: {
-    saveProject: (...args: any[]) => mockSaveProject(...args),
-    saveSettings: (...args: any[]) => mockSaveSettings(...args),
+    saveProject: (...args: unknown[]) => mockSaveProject(...args),
+    saveSettings: (...args: unknown[]) => mockSaveSettings(...args),
   },
 }));
 

@@ -10,7 +10,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { analyzeAsCritic, detectPlotHoles } from '../services/geminiService';
 
 export const useCriticView = () => {
-  const dispatch = useAppDispatch();
+  const _dispatch = useAppDispatch();
   const { t, language } = useTranslation();
   const aiCreativity = useAppSelector(selectAiCreativity);
   const characters = useAppSelector(selectAllCharacters);

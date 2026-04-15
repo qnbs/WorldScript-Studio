@@ -10,7 +10,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { checkConsistency } from '../services/geminiService';
 
 export const useConsistencyCheckerView = () => {
-  const dispatch = useAppDispatch();
+  const _dispatch = useAppDispatch();
   const { t, language } = useTranslation();
   const aiCreativity = useAppSelector(selectAiCreativity);
   const characters = useAppSelector(selectAllCharacters);

@@ -1,19 +1,17 @@
-import React, { FC } from "react";
-import { Button } from "./ui/Button";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { Select } from "./ui/Select";
-import { Spinner } from "./ui/Spinner";
-import { ICONS } from "../constants";
-import { useExportView } from "../hooks/useExportView";
-import { exportEpub } from "../services/epubApiService";
-import {
-  ExportViewContext,
-  useExportViewContext,
-} from "../contexts/ExportViewContext";
-import { useAppSelector } from "../app/hooks";
-import { Textarea } from "./ui/Textarea";
-import { Checkbox } from "./ui/Checkbox";
-import { AdvancedImportExport } from "./AdvancedImportExport";
+import type { FC } from 'react';
+import React from 'react';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Select } from './ui/Select';
+import { Spinner } from './ui/Spinner';
+import { ICONS } from '../constants';
+import { useExportView } from '../hooks/useExportView';
+import { exportEpub } from '../services/epubApiService';
+import { ExportViewContext, useExportViewContext } from '../contexts/ExportViewContext';
+import { useAppSelector } from '../app/hooks';
+import { Textarea } from './ui/Textarea';
+import { Checkbox } from './ui/Checkbox';
+import { AdvancedImportExport } from './AdvancedImportExport';
 
 // --- SUB-COMPONENTS ---
 
@@ -27,10 +25,7 @@ const AccordionSection: FC<{
   const headerId = `accordion-header-${idSuffix}`;
   return (
     <div className="border-b border-[var(--border-primary)] last:border-b-0">
-      <h3
-        id={headerId}
-        className="font-semibold text-[var(--foreground-primary)]"
-      >
+      <h3 id={headerId} className="font-semibold text-[var(--foreground-primary)]">
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="w-full flex justify-between items-center p-3 text-left hover:bg-[var(--background-tertiary)]/50 transition-colors"
@@ -44,13 +39,9 @@ const AccordionSection: FC<{
             viewBox="0 0 24 24"
             strokeWidth={2}
             stroke="currentColor"
-            className={`w-5 h-5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+            className={`w-5 h-5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19.5 8.25l-7.5 7.5-7.5-7.5"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
         </button>
       </h3>
@@ -66,6 +57,7 @@ const AccordionSection: FC<{
     </div>
   );
 });
+AccordionSection.displayName = 'AccordionSection';
 
 const ExportControls: FC = () => {
   const {
@@ -96,18 +88,18 @@ const ExportControls: FC = () => {
     try {
       const chapters = project.manuscript.map((section) => ({
         title: section.title,
-        content: section.content || "",
+        content: section.content || '',
       }));
       await exportEpub({
         title: project.title,
-        author: project.author || "",
+        author: project.author || '',
         ...(synopsis ? { synopsis } : {}),
         chapters,
-        lang: "de",
+        lang: 'de',
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      setEpubError("EPUB-Export fehlgeschlagen: " + msg);
+      setEpubError('EPUB-Export fehlgeschlagen: ' + msg);
     } finally {
       setEpubLoading(false);
     }
@@ -116,23 +108,21 @@ const ExportControls: FC = () => {
     <Card>
       <CardHeader>
         <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t("export.options.title")}
+          {t('export.options.title')}
         </h2>
       </CardHeader>
       <CardContent className="space-y-4 p-0">
-        <AccordionSection title={t("export.content.title")} idSuffix="content">
+        <AccordionSection title={t('export.content.title')} idSuffix="content">
           <div className="space-y-3 pt-4">
             <Checkbox
               id="exp-title"
-              label={t("export.content.titleAndLogline")}
+              label={t('export.content.titleAndLogline')}
               checked={contentToExport.title}
-              onChange={(e) =>
-                setContentToExport((c) => ({ ...c, title: e.target.checked }))
-              }
+              onChange={(e) => setContentToExport((c) => ({ ...c, title: e.target.checked }))}
             />
             <Checkbox
               id="exp-char"
-              label={t("export.content.characters")}
+              label={t('export.content.characters')}
               checked={contentToExport.characters}
               onChange={(e) =>
                 setContentToExport((c) => ({
@@ -144,16 +134,14 @@ const ExportControls: FC = () => {
             />
             <Checkbox
               id="exp-world"
-              label={t("export.content.worlds")}
+              label={t('export.content.worlds')}
               checked={contentToExport.worlds}
-              onChange={(e) =>
-                setContentToExport((c) => ({ ...c, worlds: e.target.checked }))
-              }
+              onChange={(e) => setContentToExport((c) => ({ ...c, worlds: e.target.checked }))}
               disabled={project.worlds.length === 0}
             />
             <Checkbox
               id="exp-manu"
-              label={t("export.content.manuscript")}
+              label={t('export.content.manuscript')}
               checked={contentToExport.manuscript}
               onChange={(e) =>
                 setContentToExport((c) => ({
@@ -165,15 +153,13 @@ const ExportControls: FC = () => {
             />
           </div>
         </AccordionSection>
-        <AccordionSection title={t("export.ai.title")} idSuffix="ai">
+        <AccordionSection title={t('export.ai.title')} idSuffix="ai">
           <div className="space-y-3 pt-4">
             <Checkbox
               id="ai-synop"
-              label={t("export.ai.synopsis")}
+              label={t('export.ai.synopsis')}
               checked={aiEnhancements.synopsis}
-              onChange={(e) =>
-                setAiEnhancements((s) => ({ ...s, synopsis: e.target.checked }))
-              }
+              onChange={(e) => setAiEnhancements((s) => ({ ...s, synopsis: e.target.checked }))}
               disabled={project.manuscript.length === 0}
             />
             {aiEnhancements.synopsis && (
@@ -202,44 +188,46 @@ const ExportControls: FC = () => {
                       />
                     </svg>
                   )}
-                  {t("export.ai.generateButton")}
+                  {t('export.ai.generateButton')}
                 </Button>
                 <Textarea
                   value={synopsis}
                   onChange={(e) => setSynopsis(e.target.value)}
-                  placeholder={t("export.ai.synopsisPlaceholder")}
+                  placeholder={t('export.ai.synopsisPlaceholder')}
                   className="min-h-[150px] text-sm"
                 />
               </div>
             )}
           </div>
         </AccordionSection>
-        <AccordionSection title={t("export.format.title")} idSuffix="format">
+        <AccordionSection title={t('export.format.title')} idSuffix="format">
           <div className="space-y-4 pt-4">
             <div>
               <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                {t("export.format.format")}
+                {t('export.format.format')}
               </label>
               <Select
                 value={format}
-                onChange={(e) => setFormat(e.target.value as any)}
+                onChange={(e) =>
+                  setFormat(e.target.value as 'md' | 'txt' | 'pdf' | 'docx' | 'epub')
+                }
               >
-                <option value="md">{t("export.format.md")}</option>
-                <option value="txt">{t("export.format.txt")}</option>
-                <option value="pdf">{t("export.format.pdf")}</option>
+                <option value="md">{t('export.format.md')}</option>
+                <option value="txt">{t('export.format.txt')}</option>
+                <option value="pdf">{t('export.format.pdf')}</option>
                 <option value="docx">Microsoft Word (.docx)</option>
                 <option value="epub">eBook (.epub)</option>
               </Select>
             </div>
-            {format === "pdf" && (
+            {format === 'pdf' && (
               <div className="space-y-4 border-t border-[var(--border-primary)] pt-4 animate-in">
                 <h4 className="font-semibold text-[var(--foreground-secondary)]">
-                  {t("export.format.pdfOptions")}
+                  {t('export.format.pdfOptions')}
                 </h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-[var(--foreground-muted)] mb-1 block">
-                      {t("export.format.font")}
+                      {t('export.format.font')}
                     </label>
                     <Select
                       value={pdfOptions.font}
@@ -257,7 +245,7 @@ const ExportControls: FC = () => {
                   </div>
                   <div>
                     <label className="text-xs text-[var(--foreground-muted)] mb-1 block">
-                      {t("export.format.fontSize")}
+                      {t('export.format.fontSize')}
                     </label>
                     <Select
                       value={pdfOptions.fontSize}
@@ -275,7 +263,7 @@ const ExportControls: FC = () => {
                 </div>
                 <div>
                   <label className="text-xs text-[var(--foreground-muted)] mb-1 block">
-                    {t("export.format.lineSpacing")}
+                    {t('export.format.lineSpacing')}
                   </label>
                   <Select
                     value={pdfOptions.lineSpacing}
@@ -286,13 +274,13 @@ const ExportControls: FC = () => {
                       }))
                     }
                   >
-                    <option value="double">{t("export.format.double")}</option>
-                    <option value="single">{t("export.format.single")}</option>
+                    <option value="double">{t('export.format.double')}</option>
+                    <option value="single">{t('export.format.single')}</option>
                   </Select>
                 </div>
                 <Checkbox
                   id="pdf-titlepage"
-                  label={t("export.format.titlePage")}
+                  label={t('export.format.titlePage')}
                   checked={pdfOptions.includeTitlePage}
                   onChange={(e) =>
                     setPdfOptions((o) => ({
@@ -317,14 +305,10 @@ const ExportControls: FC = () => {
             >
               {ICONS.EXPORT}
             </svg>
-            {t("export.options.downloadButton")}
+            {t('export.options.downloadButton')}
           </Button>
-          <Button
-            onClick={handleCopyToClipboard}
-            variant="secondary"
-            className="w-full"
-          >
-            {copied ? t("export.options.copied") : t("common.copyToClipboard")}
+          <Button onClick={handleCopyToClipboard} variant="secondary" className="w-full">
+            {copied ? t('export.options.copied') : t('common.copyToClipboard')}
           </Button>
           <Button
             onClick={handleEpubExport}
@@ -364,9 +348,9 @@ const ExportPreview: FC = () => {
   const settings = useAppSelector((state) => state.settings);
 
   const fontMap: Record<string, string> = {
-    serif: "serif",
-    "sans-serif": "sans-serif",
-    monospace: "monospace",
+    serif: 'serif',
+    'sans-serif': 'sans-serif',
+    monospace: 'monospace',
   };
 
   const editorStyles: React.CSSProperties = {
@@ -379,7 +363,7 @@ const ExportPreview: FC = () => {
     <Card className="h-full flex flex-col">
       <CardHeader>
         <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t("export.preview.title")}
+          {t('export.preview.title')}
         </h2>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col min-h-0">
@@ -408,9 +392,7 @@ const ExportPreview: FC = () => {
                 />
               </svg>
             </div>
-            <p className="text-lg font-medium">
-              {t("export.preview.noContent")}
-            </p>
+            <p className="text-lg font-medium">{t('export.preview.noContent')}</p>
           </div>
         )}
       </CardContent>
@@ -419,7 +401,7 @@ const ExportPreview: FC = () => {
 };
 
 const ExportViewUI: FC = () => {
-  const { t, project, errorMessage } = useExportViewContext();
+  const { project, errorMessage } = useExportViewContext();
   if (!project)
     return (
       <div className="flex h-[80vh] w-full items-center justify-center">

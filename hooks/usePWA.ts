@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { PWAInstallEvent } from '../register-sw';
 
 // ──────────────────────────────────────────────────────────────
 // usePWA — Reactive hook for Progressive Web App state
@@ -17,29 +16,29 @@ import type { PWAInstallEvent } from '../register-sw';
 // ──────────────────────────────────────────────────────────────
 
 interface UsePWAReturn {
-  isInstallable:     boolean;
-  isInstalled:       boolean;
+  isInstallable: boolean;
+  isInstalled: boolean;
   isUpdateAvailable: boolean;
-  isOffline:         boolean;
-  installApp:        () => Promise<void>;
-  dismissInstall:    () => void;
-  applyUpdate:       () => void;
-  dismissUpdate:     () => void;
-  clearCache:        () => Promise<void>;
+  isOffline: boolean;
+  installApp: () => Promise<void>;
+  dismissInstall: () => void;
+  applyUpdate: () => void;
+  dismissUpdate: () => void;
+  clearCache: () => Promise<void>;
 }
 
 export function usePWA(): UsePWAReturn {
-  const [isInstallable,     setIsInstallable]     = useState(false);
-  const [isInstalled,       setIsInstalled]       = useState(false);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
-  const [isOffline,         setIsOffline]         = useState(!navigator.onLine);
-  const [applyUpdateFn,     setApplyUpdateFn]     = useState<(() => void) | null>(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [applyUpdateFn, setApplyUpdateFn] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     // ── Online / offline ───────────────────────────────────────
-    const onOnline  = () => setIsOffline(false);
+    const onOnline = () => setIsOffline(false);
     const onOffline = () => setIsOffline(true);
-    window.addEventListener('online',  onOnline);
+    window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
 
     // ── Install prompt available ───────────────────────────────
@@ -78,11 +77,11 @@ export function usePWA(): UsePWAReturn {
     }
 
     return () => {
-      window.removeEventListener('online',             onOnline);
-      window.removeEventListener('offline',            onOffline);
-      window.removeEventListener('sw-installable',     onInstallable);
-      window.removeEventListener('sw-installed',       onInstalled);
-      window.removeEventListener('sw-update-available',onUpdate);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('sw-installable', onInstallable);
+      window.removeEventListener('sw-installed', onInstalled);
+      window.removeEventListener('sw-update-available', onUpdate);
     };
   }, []);
 
@@ -117,7 +116,7 @@ export function usePWA(): UsePWAReturn {
   const installDismissed = sessionStorage.getItem('pwa-install-dismissed') === '1';
 
   return {
-    isInstallable:     isInstallable && !installDismissed && !isInstalled,
+    isInstallable: isInstallable && !installDismissed && !isInstalled,
     isInstalled,
     isUpdateAvailable,
     isOffline,

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Type } from '@google/genai';
 
 const mockGenerateContent = vi.fn().mockResolvedValue({ text: 'mock response' });
 
@@ -80,8 +81,8 @@ describe('geminiService', () => {
 
       const { generateJson } = await import('../../services/geminiService');
       const result = await generateJson<{ name: string }>('test prompt', 'Balanced', {
-        type: 'OBJECT' as any,
-        properties: { name: { type: 'STRING' as any } },
+        type: 'OBJECT' as unknown as typeof Type.OBJECT,
+        properties: { name: { type: 'STRING' as unknown as typeof Type.STRING } },
       });
       expect(result).toEqual({ name: 'Test Character' });
     });
@@ -110,9 +111,12 @@ describe('geminiService', () => {
 
     it('should throw for unknown prompt type', async () => {
       const { getPrompts } = await import('../../services/geminiService');
-      expect(() => getPrompts('unknownType' as any, { lang: 'en' } as any)).toThrow(
-        'Unknown prompt type'
-      );
+      expect(() =>
+        getPrompts(
+          'unknownType' as unknown as Parameters<typeof getPrompts>[0],
+          { lang: 'en' } as unknown as Parameters<typeof getPrompts>[1]
+        )
+      ).toThrow('Unknown prompt type');
     });
   });
 

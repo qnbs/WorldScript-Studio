@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View } from '../types';
+import type { View } from '../types';
 
 export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   const [currentView, setCurrentView] = useState<View>(() => {
@@ -16,7 +16,7 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
     }
     setIsInitialLoad(false);
   }, [isNewUser]);
-  
+
   // Save the current view to localStorage whenever it changes.
   useEffect(() => {
     localStorage.setItem('storycraft-last-view', currentView);

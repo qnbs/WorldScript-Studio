@@ -1,16 +1,20 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import type React from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
-import { Theme, EditorFont, AiCreativity, StoryProject, ProjectSnapshot } from '../types';
-import { useAppDispatch, useAppSelector, useAppSelectorShallow } from '../app/hooks';
+import type { Theme, EditorFont, AiCreativity, StoryProject, ProjectSnapshot } from '../types';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { settingsActions } from '../features/settings/settingsSlice';
-import { projectActions, importProjectThunk, restoreSnapshotThunk } from '../features/project/projectSlice';
-import { selectProjectData, selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
-import { dbService } from '../services/dbService';
+import {
+  projectActions,
+  importProjectThunk,
+  restoreSnapshotThunk,
+} from '../features/project/projectSlice';
+import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { storageService } from '../services/storageService';
-import { RootState } from '../app/store';
+import type { RootState } from '../app/store';
 
 type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create';
-type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: number; };
+type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: number };
 
 export const useSettingsView = () => {
   const { t, language, setLanguage } = useTranslation();
@@ -21,9 +25,12 @@ export const useSettingsView = () => {
   // We mock the RootState structure for the selector, as we are pulling from a detached state slice for export/management
   const characters = selectAllCharacters({ project: { present: projectState } } as RootState);
   const worlds = selectAllWorlds({ project: { present: projectState } } as RootState);
-  
+
   const [activeCategory, setActiveCategory] = useState('data');
-  const [modal, setModal] = useState<{ state: ModalState, payload: ModalPayload }>({ state: 'closed', payload: {} });
+  const [modal, setModal] = useState<{ state: ModalState; payload: ModalPayload }>({
+    state: 'closed',
+    payload: {},
+  });
   const importFileRef = useRef<HTMLInputElement>(null);
   const [snapshots, setSnapshots] = useState<ProjectSnapshot[]>([]);
   const [snapshotName, setSnapshotName] = useState('');
@@ -38,48 +45,99 @@ export const useSettingsView = () => {
       refreshSnapshots();
     }
   }, [activeCategory, refreshSnapshots]);
-  
-  const handleLanguageChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setLanguage(e.target.value as 'en' | 'de' | 'fr' | 'es' | 'it');
-  }, [setLanguage]);
 
-  const handleSettingChange = useCallback((key: string, value: any) => {
-    switch(key) {
+  const handleLanguageChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setLanguage(e.target.value as 'en' | 'de' | 'fr' | 'es' | 'it');
+    },
+    [setLanguage]
+  );
+
+  const handleSettingChange = useCallback(
+    (key: string, value: unknown) => {
+      switch (key) {
         // Basic Settings
-        case 'theme': dispatch(settingsActions.setTheme(value as Theme)); break;
-        case 'editorFont': dispatch(settingsActions.setEditorFont(value as EditorFont)); break;
-        case 'fontSize': dispatch(settingsActions.setFontSize(Number(value))); break;
-        case 'lineSpacing': dispatch(settingsActions.setLineSpacing(Number(value))); break;
-        case 'aiCreativity': dispatch(settingsActions.setAiCreativity(value as AiCreativity)); break;
-        case 'paragraphSpacing': dispatch(settingsActions.setParagraphSpacing(Number(value))); break;
-        case 'indentFirstLine': dispatch(settingsActions.setIndentFirstLine(Boolean(value))); break;
+        case 'theme':
+          dispatch(settingsActions.setTheme(value as Theme));
+          break;
+        case 'editorFont':
+          dispatch(settingsActions.setEditorFont(value as EditorFont));
+          break;
+        case 'fontSize':
+          dispatch(settingsActions.setFontSize(Number(value)));
+          break;
+        case 'lineSpacing':
+          dispatch(settingsActions.setLineSpacing(Number(value)));
+          break;
+        case 'aiCreativity':
+          dispatch(settingsActions.setAiCreativity(value as AiCreativity));
+          break;
+        case 'paragraphSpacing':
+          dispatch(settingsActions.setParagraphSpacing(Number(value)));
+          break;
+        case 'indentFirstLine':
+          dispatch(settingsActions.setIndentFirstLine(Boolean(value)));
+          break;
 
         // Advanced Settings
-        case 'customFont': dispatch(settingsActions.setCustomFont(value)); break;
-        case 'keyboardShortcuts': dispatch(settingsActions.setKeyboardShortcuts(value)); break;
-        case 'writingGoals': dispatch(settingsActions.setWritingGoals(value)); break;
-        case 'advancedAi': dispatch(settingsActions.setAdvancedAi(value)); break;
-        case 'accessibility': dispatch(settingsActions.setAccessibility(value)); break;
-        case 'privacy': dispatch(settingsActions.setPrivacy(value)); break;
-        case 'performance': dispatch(settingsActions.setPerformance(value)); break;
-        case 'notifications': dispatch(settingsActions.setNotifications(value)); break;
-        case 'collaboration': dispatch(settingsActions.setCollaboration(value)); break;
-        case 'integrations': dispatch(settingsActions.setIntegrations(value)); break;
-        case 'advancedEditor': dispatch(settingsActions.setAdvancedEditor(value)); break;
-        case 'backup': dispatch(settingsActions.setBackup(value)); break;
-        case 'themeCustomization': dispatch(settingsActions.setThemeCustomization(value)); break;
+        case 'customFont':
+          dispatch(settingsActions.setCustomFont(value));
+          break;
+        case 'keyboardShortcuts':
+          dispatch(settingsActions.setKeyboardShortcuts(value));
+          break;
+        case 'writingGoals':
+          dispatch(settingsActions.setWritingGoals(value));
+          break;
+        case 'advancedAi':
+          dispatch(settingsActions.setAdvancedAi(value));
+          break;
+        case 'accessibility':
+          dispatch(settingsActions.setAccessibility(value));
+          break;
+        case 'privacy':
+          dispatch(settingsActions.setPrivacy(value));
+          break;
+        case 'performance':
+          dispatch(settingsActions.setPerformance(value));
+          break;
+        case 'notifications':
+          dispatch(settingsActions.setNotifications(value));
+          break;
+        case 'collaboration':
+          dispatch(settingsActions.setCollaboration(value));
+          break;
+        case 'integrations':
+          dispatch(settingsActions.setIntegrations(value));
+          break;
+        case 'advancedEditor':
+          dispatch(settingsActions.setAdvancedEditor(value));
+          break;
+        case 'backup':
+          dispatch(settingsActions.setBackup(value));
+          break;
+        case 'themeCustomization':
+          dispatch(settingsActions.setThemeCustomization(value));
+          break;
 
-        default: console.warn(`Unknown setting key: ${key}`); break;
-    }
-  }, [dispatch]);
+        default:
+          console.warn(`Unknown setting key: ${key}`);
+          break;
+      }
+    },
+    [dispatch]
+  );
 
   const projectSize = useMemo(() => {
     const size = new TextEncoder().encode(JSON.stringify(project)).length;
     return `${(size / 1024).toFixed(2)} KB`;
   }, [project]);
-  
+
   const currentWordCount = useMemo(() => {
-    return project.manuscript.reduce((sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0), 0);
+    return project.manuscript.reduce(
+      (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
+      0
+    );
   }, [project.manuscript]);
 
   const handleExport = useCallback(() => {
@@ -98,44 +156,52 @@ export const useSettingsView = () => {
     link.click();
     URL.revokeObjectURL(url);
   }, [project, characters, worlds]);
-  
-  const handleImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const resultAction = await dispatch(importProjectThunk(file));
-      if (importProjectThunk.fulfilled.match(resultAction)) {
-        alert(t('settings.data.importSuccess'));
-      } else {
-        alert(t('settings.data.importError'));
+
+  const handleImport = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (file) {
+        const resultAction = await dispatch(importProjectThunk(file));
+        if (importProjectThunk.fulfilled.match(resultAction)) {
+          alert(t('settings.data.importSuccess'));
+        } else {
+          alert(t('settings.data.importError'));
+        }
       }
-    }
-    if(event.target) event.target.value = '';
-  }, [dispatch, t]);
+      if (event.target) event.target.value = '';
+    },
+    [dispatch, t]
+  );
 
   const handleResetProject = useCallback(() => {
-    dispatch(projectActions.resetProject({ title: t('initialProject.title'), logline: t('initialProject.logline') }));
+    dispatch(
+      projectActions.resetProject({
+        title: t('initialProject.title'),
+        logline: t('initialProject.logline'),
+      })
+    );
     setModal({ state: 'closed', payload: {} });
   }, [dispatch, t]);
-  
+
   const handleCreateSnapshot = useCallback(async () => {
-      await storageService.saveSnapshot(snapshotName, project);
-      setSnapshotName('');
-      setModal({ state: 'closed', payload: {} });
-      refreshSnapshots();
+    await storageService.saveSnapshot(snapshotName, project);
+    setSnapshotName('');
+    setModal({ state: 'closed', payload: {} });
+    refreshSnapshots();
   }, [project, snapshotName, refreshSnapshots]);
-  
+
   const handleRestoreSnapshot = useCallback(async () => {
-      if (modal.payload.id) {
-          await dispatch(restoreSnapshotThunk(modal.payload.id));
-          setModal({ state: 'closed', payload: {} });
-      }
+    if (modal.payload.id) {
+      await dispatch(restoreSnapshotThunk(modal.payload.id));
+      setModal({ state: 'closed', payload: {} });
+    }
   }, [dispatch, modal.payload.id]);
 
   const handleDeleteSnapshot = useCallback(async () => {
     if (modal.payload.id) {
-        await storageService.deleteSnapshot(modal.payload.id);
-        setModal({ state: 'closed', payload: {} });
-        refreshSnapshots();
+      await storageService.deleteSnapshot(modal.payload.id);
+      setModal({ state: 'closed', payload: {} });
+      refreshSnapshots();
     }
   }, [modal.payload.id, refreshSnapshots]);
 

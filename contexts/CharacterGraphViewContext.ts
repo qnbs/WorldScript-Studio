@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import { Character, CharacterRelationship } from '../types';
+import type { Character, CharacterRelationship } from '../types';
 
 interface CharacterGraphViewContextType {
   t: (key: string) => string;
@@ -16,7 +16,9 @@ export const CharacterGraphViewContext = createContext<CharacterGraphViewContext
 export const useCharacterGraphViewContext = () => {
   const context = useContext(CharacterGraphViewContext);
   if (!context) {
-    throw new Error('useCharacterGraphViewContext must be used within a CharacterGraphViewContext.Provider');
+    throw new Error(
+      'useCharacterGraphViewContext must be used within a CharacterGraphViewContext.Provider'
+    );
   }
   return context;
 };

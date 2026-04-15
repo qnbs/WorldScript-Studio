@@ -1,16 +1,14 @@
-import React, { FC, Fragment, useRef, useEffect } from "react";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { Input } from "./ui/Input";
-import { ICONS } from "../constants";
-import { HelpArticle, HelpCategory } from "../types";
-import { useHelpView } from "../hooks/useHelpView";
-import {
-  HelpViewContext,
-  useHelpViewContext,
-} from "../contexts/HelpViewContext";
-import { Button } from "./ui/Button";
-import { Spinner } from "./ui/Spinner";
-import { useAppSelector } from "../app/hooks";
+import type { FC } from 'react';
+import React, { Fragment, useRef, useEffect } from 'react';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Input } from './ui/Input';
+import { ICONS } from '../constants';
+import type { HelpCategory } from '../types';
+import { useHelpView } from '../hooks/useHelpView';
+import { HelpViewContext, useHelpViewContext } from '../contexts/HelpViewContext';
+import { Button } from './ui/Button';
+import { Spinner } from './ui/Spinner';
+import { useAppSelector } from '../app/hooks';
 
 // --- SUB-COMPONENTS ---
 
@@ -32,7 +30,7 @@ const NavButton: FC<{
 }> = React.memo(({ icon, label, isActive, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center w-full px-3 py-2 text-left rounded-md transition-colors ${isActive ? "bg-[var(--nav-background-active)] text-[var(--nav-text-active)]" : "hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]"}`}
+    className={`flex items-center w-full px-3 py-2 text-left rounded-md transition-colors ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
   >
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -47,6 +45,7 @@ const NavButton: FC<{
     <span>{label}</span>
   </button>
 ));
+NavButton.displayName = 'NavButton';
 
 const ArticleViewer: FC = () => {
   const { t, selectedArticle, handleBackToList } = useHelpViewContext();
@@ -58,12 +57,7 @@ const ArticleViewer: FC = () => {
     <Card>
       <CardHeader>
         <div className="flex items-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleBackToList}
-            className="mr-2 -ml-2"
-          >
+          <Button variant="ghost" size="sm" onClick={handleBackToList} className="mr-2 -ml-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -72,11 +66,7 @@ const ArticleViewer: FC = () => {
               stroke="currentColor"
               className="w-5 h-5"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15.75 19.5L8.25 12l7.5-7.5"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </Button>
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
@@ -86,7 +76,7 @@ const ArticleViewer: FC = () => {
       </CardHeader>
       <CardContent>
         <div
-          className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--foreground-secondary)] prose-strong:text-[var(--foreground-primary)] prose-a:text-indigo-400 prose-ul:list-disc prose-li:text-[var(--foreground-secondary)] prose-ol:text-[var(--foreground-secondary)] ${theme === "dark" ? "prose-invert" : ""}`}
+          className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--foreground-secondary)] prose-strong:text-[var(--foreground-primary)] prose-a:text-indigo-400 prose-ul:list-disc prose-li:text-[var(--foreground-secondary)] prose-ol:text-[var(--foreground-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
           dangerouslySetInnerHTML={{ __html: t(selectedArticle.content) }}
         />
       </CardContent>
@@ -120,58 +110,54 @@ const ArticleList: FC<{ category: HelpCategory }> = ({ category }) => {
   );
 };
 
-const ChatMessage: FC<{ role: "user" | "model"; text: string }> = React.memo(
-  ({ role, text }) => {
-    const isUser = role === "user";
-    const theme = useAppSelector((state) => state.settings.theme);
+const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ role, text }) => {
+  const isUser = role === 'user';
+  const theme = useAppSelector((state) => state.settings.theme);
 
-    const parsedText = text.split(/```([\s\S]*?)```/g).map((part, index) => {
-      if (index % 2 === 1) {
-        // It's a code block
-        return (
-          <pre
-            key={index}
-            className="bg-[var(--background-primary)] p-3 rounded-md text-sm whitespace-pre-wrap"
-          >
-            <code>{part}</code>
-          </pre>
-        );
-      }
-      const bolded = part
-        .split(/(\*\*[\s\S]*?\*\*)/g)
-        .map((subPart, subIndex) => {
-          if (subIndex % 2 === 1)
-            return <strong key={subIndex}>{subPart.slice(2, -2)}</strong>;
-          return subPart;
-        });
-      return <Fragment key={index}>{bolded}</Fragment>;
-    });
-
-    return (
-      <div className={`flex items-start gap-3 ${isUser ? "justify-end" : ""}`}>
-        {!isUser && (
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5 text-indigo-400"
-            >
-              {ICONS.SPARKLES}
-            </svg>
-          </div>
-        )}
-        <div
-          className={`max-w-xl p-3 rounded-lg prose ${theme === "dark" ? "prose-invert" : ""} prose-p:my-0 ${isUser ? "bg-[var(--background-interactive)] text-white shadow-lg" : "bg-white/5 border border-[var(--border-primary)]"}`}
+  const parsedText = text.split(/```([\s\S]*?)```/g).map((part, index) => {
+    if (index % 2 === 1) {
+      // It's a code block
+      return (
+        <pre
+          key={index}
+          className="bg-[var(--background-primary)] p-3 rounded-md text-sm whitespace-pre-wrap"
         >
-          {parsedText}
+          <code>{part}</code>
+        </pre>
+      );
+    }
+    const bolded = part.split(/(\*\*[\s\S]*?\*\*)/g).map((subPart, subIndex) => {
+      if (subIndex % 2 === 1) return <strong key={subIndex}>{subPart.slice(2, -2)}</strong>;
+      return subPart;
+    });
+    return <Fragment key={index}>{bolded}</Fragment>;
+  });
+
+  return (
+    <div className={`flex items-start gap-3 ${isUser ? 'justify-end' : ''}`}>
+      {!isUser && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            className="w-5 h-5 text-indigo-400"
+          >
+            {ICONS.SPARKLES}
+          </svg>
         </div>
+      )}
+      <div
+        className={`max-w-xl p-3 rounded-lg prose ${theme === 'dark' ? 'prose-invert' : ''} prose-p:my-0 ${isUser ? 'bg-[var(--background-interactive)] text-white shadow-lg' : 'bg-white/5 border border-[var(--border-primary)]'}`}
+      >
+        {parsedText}
       </div>
-    );
-  },
-);
+    </div>
+  );
+});
+ChatMessage.displayName = 'ChatMessage';
 
 const AiAssistant: FC = () => {
   const { t, chatHistory, userInput, setUserInput, isAiReplying, handleAskAi } =
@@ -179,19 +165,14 @@ const AiAssistant: FC = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    chatContainerRef.current?.scrollTo(
-      0,
-      chatContainerRef.current.scrollHeight,
-    );
+    chatContainerRef.current?.scrollTo(0, chatContainerRef.current.scrollHeight);
   }, [chatHistory, isAiReplying]);
 
   const handleSuggestionClick = (suggestion: string) => {
     setUserInput(suggestion);
     // Trigger form submission after state update
     setTimeout(() => {
-      const form = chatContainerRef.current
-        ?.closest("div")
-        ?.querySelector("form");
+      const form = chatContainerRef.current?.closest('div')?.querySelector('form');
       form?.requestSubmit();
     }, 0);
   };
@@ -200,20 +181,17 @@ const AiAssistant: FC = () => {
     <Card className="h-full flex flex-col">
       <CardHeader>
         <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t("help.ai.title")}
+          {t('help.ai.title')}
         </h2>
       </CardHeader>
       <CardContent className="p-0 flex flex-col flex-grow min-h-0">
-        <div
-          ref={chatContainerRef}
-          className="flex-grow p-4 space-y-4 overflow-y-auto"
-        >
+        <div ref={chatContainerRef} className="flex-grow p-4 space-y-4 overflow-y-auto">
           {chatHistory.map((msg, index) => (
             <ChatMessage key={index} {...msg} />
           ))}
           {isAiReplying &&
             chatHistory.length > 0 &&
-            chatHistory[chatHistory.length - 1]?.text === "" && (
+            chatHistory[chatHistory.length - 1]?.text === '' && (
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center">
                   <svg
@@ -232,15 +210,15 @@ const AiAssistant: FC = () => {
                 >
                   <div
                     className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"
-                    style={{ animationDelay: "0s" }}
+                    style={{ animationDelay: '0s' }}
                   ></div>
                   <div
                     className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"
-                    style={{ animationDelay: "0.2s" }}
+                    style={{ animationDelay: '0.2s' }}
                   ></div>
                   <div
                     className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"
-                    style={{ animationDelay: "0.4s" }}
+                    style={{ animationDelay: '0.4s' }}
                   ></div>
                 </div>
               </div>
@@ -251,23 +229,23 @@ const AiAssistant: FC = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => handleSuggestionClick(t("help.ai.suggestion1"))}
+              onClick={() => handleSuggestionClick(t('help.ai.suggestion1'))}
             >
-              {t("help.ai.suggestion1")}
+              {t('help.ai.suggestion1')}
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => handleSuggestionClick(t("help.ai.suggestion2"))}
+              onClick={() => handleSuggestionClick(t('help.ai.suggestion2'))}
             >
-              {t("help.ai.suggestion2")}
+              {t('help.ai.suggestion2')}
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => handleSuggestionClick(t("help.ai.suggestion3"))}
+              onClick={() => handleSuggestionClick(t('help.ai.suggestion3'))}
             >
-              {t("help.ai.suggestion3")}
+              {t('help.ai.suggestion3')}
             </Button>
           </div>
           <form
@@ -279,7 +257,7 @@ const AiAssistant: FC = () => {
           >
             <Input
               type="text"
-              placeholder={t("help.ai.placeholder")}
+              placeholder={t('help.ai.placeholder')}
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
               disabled={isAiReplying}
@@ -288,7 +266,7 @@ const AiAssistant: FC = () => {
             <Button
               type="submit"
               disabled={isAiReplying || !userInput}
-              aria-label={t("help.tabs.askAi")}
+              aria-label={t('help.tabs.askAi')}
             >
               {isAiReplying ? (
                 <Spinner />
@@ -317,20 +295,15 @@ const AiAssistant: FC = () => {
 };
 
 const HelpViewUI: FC = () => {
-  const {
-    t,
-    helpContent,
-    activeCategory,
-    selectedArticle,
-    handleSelectCategory,
-  } = useHelpViewContext();
+  const { t, helpContent, activeCategory, selectedArticle, handleSelectCategory } =
+    useHelpViewContext();
 
   const renderContent = () => {
     if (selectedArticle) {
       return <ArticleViewer />;
     }
 
-    if (activeCategory === "ai") {
+    if (activeCategory === 'ai') {
       return <AiAssistant />;
     }
 
@@ -359,9 +332,9 @@ const HelpViewUI: FC = () => {
             <NavButton
               key="ai"
               icon={ICONS.SPARKLES}
-              label={t("help.ai.title")}
-              isActive={activeCategory === "ai"}
-              onClick={() => handleSelectCategory("ai")}
+              label={t('help.ai.title')}
+              isActive={activeCategory === 'ai'}
+              onClick={() => handleSelectCategory('ai')}
             />
           </div>
         </div>

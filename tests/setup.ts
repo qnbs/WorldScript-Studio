@@ -1,9 +1,9 @@
 // Global test setup for Vitest + React Testing Library
-import "@testing-library/jest-dom";
-import { vi } from "vitest";
+import '@testing-library/jest-dom';
+import { vi, beforeEach, afterEach } from 'vitest';
 
 // Mock Web APIs not available in jsdom
-Object.defineProperty(window, "matchMedia", {
+Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
     matches: false,
@@ -17,7 +17,7 @@ Object.defineProperty(window, "matchMedia", {
   })),
 });
 
-Object.defineProperty(window, "speechSynthesis", {
+Object.defineProperty(window, 'speechSynthesis', {
   writable: true,
   value: {
     speak: vi.fn(),
@@ -35,16 +35,16 @@ Object.defineProperty(window, "speechSynthesis", {
 const mockIndexedDB = {
   open: vi.fn(),
 };
-Object.defineProperty(window, "indexedDB", {
+Object.defineProperty(window, 'indexedDB', {
   writable: true,
   value: mockIndexedDB,
 });
 
 // Mock SpeechSynthesisUtterance (not available in jsdom)
-if (!("SpeechSynthesisUtterance" in window)) {
+if (!('SpeechSynthesisUtterance' in window)) {
   class SpeechSynthesisUtteranceMock {
     text: string;
-    lang: string = "";
+    lang: string = '';
     rate: number = 1;
     pitch: number = 1;
     volume: number = 1;
@@ -55,14 +55,14 @@ if (!("SpeechSynthesisUtterance" in window)) {
       this.text = text;
     }
   }
-  (window as unknown as Record<string, unknown>)["SpeechSynthesisUtterance"] =
+  (window as unknown as Record<string, unknown>)['SpeechSynthesisUtterance'] =
     SpeechSynthesisUtteranceMock;
 }
 
 // Silence console noise in tests
 beforeEach(() => {
-  vi.spyOn(console, "log").mockImplementation(() => undefined);
-  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 
 afterEach(() => {

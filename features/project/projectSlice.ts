@@ -1,10 +1,5 @@
-import {
-  createSlice,
-  createAsyncThunk,
-  createEntityAdapter,
-  PayloadAction,
-  EntityState,
-} from '@reduxjs/toolkit';
+import type { PayloadAction, EntityState } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, createEntityAdapter } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
 import {
   getPrompts,
@@ -13,8 +8,8 @@ import {
   generateImage,
   streamText,
 } from '../../services/geminiService';
-import { RootState } from '../../app/store';
-import {
+import type { RootState } from '../../app/store';
+import type {
   Character,
   World,
   StorySection,
@@ -25,7 +20,6 @@ import {
   WritingSession,
   WritingGoal,
 } from '../../types';
-import { dbService } from '../../services/dbService';
 import { storageService } from '../../services/storageService';
 
 // --- Entity Adapters ---
@@ -93,7 +87,7 @@ export const generateLoglineSuggestionsThunk = createAsyncThunk(
     const creativity = state.settings.aiCreativity;
 
     const { prompt, schema } = getPrompts('logline', { project, lang });
-    const response = await generateJson<string[]>(prompt, creativity, schema, signal);
+    const response = await generateJson<string[]>(prompt, creativity, schema!, signal);
     return response;
   }
 );
@@ -186,7 +180,7 @@ export const generateCharacterProfileThunk = createAsyncThunk(
     return await generateJson<Omit<Character, 'id'>>(
       prompt,
       state.settings.aiCreativity,
-      schema,
+      schema!,
       signal,
       thinkingBudget
     );
@@ -264,7 +258,7 @@ export const generateWorldProfileThunk = createAsyncThunk(
     return await generateJson<Omit<World, 'id'>>(
       prompt,
       state.settings.aiCreativity,
-      schema,
+      schema!,
       signal,
       thinkingBudget
     );
@@ -333,7 +327,7 @@ export const generateOutlineThunk = createAsyncThunk(
     return await generateJson<OutlineSection[]>(
       prompt,
       state.settings.aiCreativity,
-      schema,
+      schema!,
       signal,
       thinkingBudget
     );
@@ -359,7 +353,7 @@ export const regenerateOutlineSectionThunk = createAsyncThunk(
     const response = await generateJson<OutlineSection>(
       prompt,
       state.settings.aiCreativity,
-      schema,
+      schema!,
       signal,
       thinkingBudget
     );
@@ -382,7 +376,7 @@ export const personalizeTemplateThunk = createAsyncThunk(
     return await generateJson<{ title: string; prompt: string }[]>(
       prompt,
       state.settings.aiCreativity,
-      schema,
+      schema!,
       signal,
       thinkingBudget
     );
@@ -397,7 +391,7 @@ export const generateCustomTemplateThunk = createAsyncThunk(
     return await generateJson<{ title: string }[]>(
       prompt,
       state.settings.aiCreativity,
-      schema,
+      schema!,
       signal,
       thinkingBudget
     );
@@ -452,7 +446,7 @@ export const proofreadTextThunk = createAsyncThunk(
     return await generateJson<{ original: string; suggestion: string; explanation: string }[]>(
       prompt,
       creativity,
-      schema,
+      schema!,
       signal,
       thinkingBudget
     );
@@ -500,7 +494,6 @@ const projectSlice = createSlice({
     addCharacter: (state, action: PayloadAction<Partial<Character> & { name: string }>) => {
       const newChar: Character = {
         id: uuidv4(),
-        name: action.payload.name,
         backstory: '',
         motivation: '',
         appearance: '',
@@ -530,7 +523,6 @@ const projectSlice = createSlice({
     addWorld: (state, action: PayloadAction<Partial<World> & { name: string }>) => {
       const newWorld: World = {
         id: uuidv4(),
-        name: action.payload.name,
         description: '',
         geography: '',
         magicSystem: '',
@@ -647,7 +639,7 @@ const projectSlice = createSlice({
         state.data = action.payload;
       })
       .addCase(restoreSnapshotThunk.fulfilled, (state, action) => {
-        state.data = action.payload;
+        state.data = action.payload as ProjectData;
       })
       .addCase(generateCharacterPortraitThunk.fulfilled, (state, action) => {
         charactersAdapter.updateOne(state.data.characters, {

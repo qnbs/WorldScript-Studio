@@ -1,13 +1,25 @@
-import React, { FC, useState, useCallback } from 'react';
+import type { FC } from 'react';
+import React, { useCallback } from 'react';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Button } from './ui/Button';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 import { useConsistencyCheckerView } from '../hooks/useConsistencyCheckerView';
-import { ConsistencyCheckerViewContext, useConsistencyCheckerViewContext } from '../contexts/ConsistencyCheckerViewContext';
+import {
+  ConsistencyCheckerViewContext,
+  useConsistencyCheckerViewContext,
+} from '../contexts/ConsistencyCheckerViewContext';
 
 const ConsistencyCheckerUI: FC = () => {
-  const { t, characters, selectedCharacterId, setSelectedCharacterId, checkResult, isChecking, runCheck } = useConsistencyCheckerViewContext();
+  const {
+    t,
+    characters,
+    selectedCharacterId,
+    setSelectedCharacterId,
+    checkResult,
+    isChecking,
+    runCheck,
+  } = useConsistencyCheckerViewContext();
 
   const handleCheck = useCallback(() => {
     if (selectedCharacterId) {
@@ -18,8 +30,12 @@ const ConsistencyCheckerUI: FC = () => {
   return (
     <div className="h-full">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">{t('consistencyChecker.title')}</h1>
-        <p className="text-[var(--foreground-secondary)] mt-2">{t('consistencyChecker.description')}</p>
+        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+          {t('consistencyChecker.title')}
+        </h1>
+        <p className="text-[var(--foreground-secondary)] mt-2">
+          {t('consistencyChecker.description')}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -34,8 +50,10 @@ const ConsistencyCheckerUI: FC = () => {
                 onValueChange={setSelectedCharacterId}
                 placeholder={t('consistencyChecker.selectPlaceholder')}
               >
-                {characters.map(char => (
-                  <option key={char.id} value={char.id}>{char.name}</option>
+                {characters.map((char) => (
+                  <option key={char.id} value={char.id}>
+                    {char.name}
+                  </option>
                 ))}
               </Select>
               <Button
@@ -61,7 +79,9 @@ const ConsistencyCheckerUI: FC = () => {
                   <pre className="whitespace-pre-wrap text-sm">{checkResult}</pre>
                 </div>
               ) : (
-                <p className="text-[var(--foreground-secondary)]">{t('consistencyChecker.noResults')}</p>
+                <p className="text-[var(--foreground-secondary)]">
+                  {t('consistencyChecker.noResults')}
+                </p>
               )}
             </CardContent>
           </Card>

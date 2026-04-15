@@ -6,10 +6,10 @@
  * in the main branch of qnbs/StoryCraft-Studio.
  */
 
-import { CommunityTemplate } from "../types";
+import type { CommunityTemplate } from '../types';
 
 const GITHUB_RAW_BASE =
-  "https://raw.githubusercontent.com/qnbs/StoryCraft-Studio/main/community-templates";
+  'https://raw.githubusercontent.com/qnbs/StoryCraft-Studio/main/community-templates';
 
 const GITHUB_INDEX_URL = `${GITHUB_RAW_BASE}/index.json`;
 
@@ -26,16 +26,16 @@ export interface CommunityTemplateResult {
  * Falls back to an empty array on network errors.
  */
 export async function fetchCommunityTemplates(
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ): Promise<CommunityTemplateResult> {
   if (cachedTemplates) return { templates: cachedTemplates };
 
   try {
     const res = await fetch(GITHUB_INDEX_URL, {
       signal,
-      headers: { Accept: "application/json" },
+      headers: { Accept: 'application/json' },
       // Avoid stale GitHub CDN cache
-      cache: "no-store",
+      cache: 'no-store',
     });
 
     if (!res.ok) {
@@ -49,13 +49,13 @@ export async function fetchCommunityTemplates(
     cachedTemplates = data;
     return { templates: data };
   } catch (e) {
-    if ((e as Error)?.name === "AbortError") {
+    if ((e as Error)?.name === 'AbortError') {
       return { templates: [] };
     }
     // Network error — use embedded fallbacks so the feature still works offline
     return {
       templates: getFallbackTemplates(),
-      error: "Community Templates konnten nicht geladen werden (offline?)",
+      error: 'Community Templates konnten nicht geladen werden (offline?)',
     };
   }
 }
@@ -71,96 +71,94 @@ export function clearCommunityTemplateCache(): void {
 function getFallbackTemplates(): CommunityTemplate[] {
   return [
     {
-      id: "community-hero-journey",
-      name: "Die Heldenreise (Community)",
-      description:
-        "Campbells klassisches Monomythos-Framework, angepasst für moderne Geschichten.",
-      type: "Structure",
-      author: "Community",
-      tags: ["Klassisch", "Abenteuer", "Transformation"],
+      id: 'community-hero-journey',
+      name: 'Die Heldenreise (Community)',
+      description: 'Campbells klassisches Monomythos-Framework, angepasst für moderne Geschichten.',
+      type: 'Structure',
+      author: 'Community',
+      tags: ['Klassisch', 'Abenteuer', 'Transformation'],
       arcDescription:
-        "Der Held verlässt die gewohnte Welt, übersteht Prüfungen und kehrt verändert zurück.",
+        'Der Held verlässt die gewohnte Welt, übersteht Prüfungen und kehrt verändert zurück.',
       stars: 42,
       sections: [
-        { title: "Die gewohnte Welt" },
-        { title: "Der Ruf zum Abenteuer" },
-        { title: "Weigerung des Rufs" },
-        { title: "Begegnung mit dem Mentor" },
-        { title: "Überschreiten der ersten Schwelle" },
-        { title: "Prüfungen, Verbündete und Feinde" },
-        { title: "Am tiefsten Punkt" },
-        { title: "Die entscheidende Prüfung" },
-        { title: "Belohnung" },
-        { title: "Der Rückweg" },
-        { title: "Auferstehung" },
-        { title: "Rückkehr mit dem Elixier" },
+        { title: 'Die gewohnte Welt' },
+        { title: 'Der Ruf zum Abenteuer' },
+        { title: 'Weigerung des Rufs' },
+        { title: 'Begegnung mit dem Mentor' },
+        { title: 'Überschreiten der ersten Schwelle' },
+        { title: 'Prüfungen, Verbündete und Feinde' },
+        { title: 'Am tiefsten Punkt' },
+        { title: 'Die entscheidende Prüfung' },
+        { title: 'Belohnung' },
+        { title: 'Der Rückweg' },
+        { title: 'Auferstehung' },
+        { title: 'Rückkehr mit dem Elixier' },
       ],
     },
     {
-      id: "community-dark-romantik",
-      name: "Dark Romantik",
-      description:
-        "Gotische Liebesgeschichte mit Spannung und dunklen Geheimnissen.",
-      type: "Genre",
-      author: "NightWriter42",
-      tags: ["Romantik", "Gothic", "Mystery", "#dark"],
+      id: 'community-dark-romantik',
+      name: 'Dark Romantik',
+      description: 'Gotische Liebesgeschichte mit Spannung und dunklen Geheimnissen.',
+      type: 'Genre',
+      author: 'NightWriter42',
+      tags: ['Romantik', 'Gothic', 'Mystery', '#dark'],
       arcDescription:
-        "Verbotene Liebe in einer Welt voller Geheimnisse — Spannung und Leidenschaft im Gleichgewicht.",
+        'Verbotene Liebe in einer Welt voller Geheimnisse — Spannung und Leidenschaft im Gleichgewicht.',
       stars: 31,
       sections: [
-        { title: "Erste Begegnung im Dunkeln" },
-        { title: "Das verborgene Geheimnis" },
-        { title: "Anziehung trotz Warnung" },
-        { title: "Das erste Versprechen" },
-        { title: "Entdeckung der wahren Natur" },
-        { title: "Verrat und Trennung" },
-        { title: "Die Entscheidung" },
-        { title: "Opfer und Erlösung" },
+        { title: 'Erste Begegnung im Dunkeln' },
+        { title: 'Das verborgene Geheimnis' },
+        { title: 'Anziehung trotz Warnung' },
+        { title: 'Das erste Versprechen' },
+        { title: 'Entdeckung der wahren Natur' },
+        { title: 'Verrat und Trennung' },
+        { title: 'Die Entscheidung' },
+        { title: 'Opfer und Erlösung' },
       ],
     },
     {
-      id: "community-thriller-countdown",
-      name: "Countdown Thriller",
+      id: 'community-thriller-countdown',
+      name: 'Countdown Thriller',
       description:
-        "Hochspannung mit tickender Uhr — Zeitdruck von der ersten bis zur letzten Seite.",
-      type: "Structure",
-      author: "ThrillMaster",
-      tags: ["Thriller", "Action", "Zeitdruck"],
+        'Hochspannung mit tickender Uhr — Zeitdruck von der ersten bis zur letzten Seite.',
+      type: 'Structure',
+      author: 'ThrillMaster',
+      tags: ['Thriller', 'Action', 'Zeitdruck'],
       arcDescription:
-        "Ein Protagonist mit begrenzter Zeit, ein Antagonist der im Verborgenen agiert.",
+        'Ein Protagonist mit begrenzter Zeit, ein Antagonist der im Verborgenen agiert.',
       stars: 28,
       sections: [
-        { title: "Die Bombe tickt (Setup)" },
-        { title: "Erste Spur" },
-        { title: "Falsche Fährte" },
-        { title: "Eskalation — erste Casualty" },
-        { title: "Wendepunkt: Enthüllung" },
-        { title: "Countdown beschleunigt sich" },
-        { title: "Alles verloren — Heldin allein" },
-        { title: "Finale Konfrontation" },
-        { title: "Auflösung & Aftermath" },
+        { title: 'Die Bombe tickt (Setup)' },
+        { title: 'Erste Spur' },
+        { title: 'Falsche Fährte' },
+        { title: 'Eskalation — erste Casualty' },
+        { title: 'Wendepunkt: Enthüllung' },
+        { title: 'Countdown beschleunigt sich' },
+        { title: 'Alles verloren — Heldin allein' },
+        { title: 'Finale Konfrontation' },
+        { title: 'Auflösung & Aftermath' },
       ],
     },
     {
-      id: "community-cozy-mystery",
-      name: "Cozy Mystery",
+      id: 'community-cozy-mystery',
+      name: 'Cozy Mystery',
       description:
-        "Gemütliches Rätsel in einer charmanten Kleinstadt — ohne Blut, aber mit viel Witz.",
-      type: "Genre",
-      author: "TeaAndClues",
-      tags: ["Mystery", "Cozy", "Humor", "Kleinstadt"],
+        'Gemütliches Rätsel in einer charmanten Kleinstadt — ohne Blut, aber mit viel Witz.',
+      type: 'Genre',
+      author: 'TeaAndClues',
+      tags: ['Mystery', 'Cozy', 'Humor', 'Kleinstadt'],
       arcDescription:
-        "Amateurermittlerin löst Dorfgeheimnisse zwischen Kuchenbäckerei und Klatsch.",
+        'Amateurermittlerin löst Dorfgeheimnisse zwischen Kuchenbäckerei und Klatsch.',
       stars: 19,
       sections: [
-        { title: "Die charmante Kleinstadt" },
-        { title: "Das seltsame Ereignis" },
-        { title: "Verdächtige Dorfbewohner" },
-        { title: "Erste Ermittlungen" },
-        { title: "Roter Hering" },
-        { title: "Persönliche Gefahr" },
-        { title: "Der entscheidende Hinweis" },
-        { title: "Auflösung beim Dorffest" },
+        { title: 'Die charmante Kleinstadt' },
+        { title: 'Das seltsame Ereignis' },
+        { title: 'Verdächtige Dorfbewohner' },
+        { title: 'Erste Ermittlungen' },
+        { title: 'Roter Hering' },
+        { title: 'Persönliche Gefahr' },
+        { title: 'Der entscheidende Hinweis' },
+        { title: 'Auflösung beim Dorffest' },
       ],
     },
   ];

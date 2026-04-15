@@ -1,23 +1,18 @@
-import React, { FC, useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { Select } from "./ui/Select";
-import { Button } from "./ui/Button";
-import { Modal } from "./ui/Modal";
-import { Input } from "./ui/Input";
-import { Spinner } from "./ui/Spinner";
-import { useSettingsView } from "../hooks/useSettingsView";
-import {
-  SettingsViewContext,
-  useSettingsViewContext,
-} from "../contexts/SettingsViewContext";
-import { ICONS } from "../constants";
-import { ApiKeySection } from "./ApiKeySection";
-import {
-  listOllamaModels,
-  testAIConnection,
-} from "../services/aiProviderService";
-import { storageService } from "../services/storageService";
-import { AIProvider } from "../types";
+import type { FC } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Select } from './ui/Select';
+import { Button } from './ui/Button';
+import { Modal } from './ui/Modal';
+import { Input } from './ui/Input';
+import { Spinner } from './ui/Spinner';
+import { useSettingsView } from '../hooks/useSettingsView';
+import { SettingsViewContext, useSettingsViewContext } from '../contexts/SettingsViewContext';
+import { ICONS } from '../constants';
+import { ApiKeySection } from './ApiKeySection';
+import { listOllamaModels, testAIConnection } from '../services/aiProviderService';
+import { storageService } from '../services/storageService';
+import type { AIProvider } from '../types';
 
 // --- SUB-COMPONENTS ---
 
@@ -29,8 +24,8 @@ const NavButton: FC<{
 }> = React.memo(({ icon, label, isActive, onClick }) => (
   <button
     onClick={onClick}
-    aria-current={isActive ? "page" : undefined}
-    className={`flex items-center w-full px-3 py-2 text-left rounded-md transition-colors ${isActive ? "bg-[var(--nav-background-active)] text-[var(--nav-text-active)]" : "hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]"}`}
+    aria-current={isActive ? 'page' : undefined}
+    className={`flex items-center w-full px-3 py-2 text-left rounded-md transition-colors ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
   >
     <svg
       aria-hidden="true"
@@ -46,6 +41,7 @@ const NavButton: FC<{
     <span>{label}</span>
   </button>
 ));
+NavButton.displayName = 'NavButton';
 
 const ToggleSwitch: FC<{
   label: string;
@@ -53,22 +49,21 @@ const ToggleSwitch: FC<{
   onChange: (checked: boolean) => void;
 }> = React.memo(({ label, checked, onChange }) => (
   <div className="flex items-center justify-between">
-    <span className="text-sm font-medium text-[var(--foreground-secondary)]">
-      {label}
-    </span>
+    <span className="text-sm font-medium text-[var(--foreground-secondary)]">{label}</span>
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`${checked ? "bg-[var(--background-interactive)] border-[var(--background-interactive)]" : "bg-[var(--background-tertiary)]/40 border-[var(--border-primary)]"} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--ring-focus)] focus:ring-offset-2 focus:ring-offset-[var(--background-primary)] hover:border-[var(--border-highlight)]`}
+      className={`${checked ? 'bg-[var(--background-interactive)] border-[var(--background-interactive)]' : 'bg-[var(--background-tertiary)]/40 border-[var(--border-primary)]'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--ring-focus)] focus:ring-offset-2 focus:ring-offset-[var(--background-primary)] hover:border-[var(--border-highlight)]`}
     >
       <span
-        className={`${checked ? "translate-x-5" : "translate-x-0"} inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+        className={`${checked ? 'translate-x-5' : 'translate-x-0'} inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
       />
     </button>
   </div>
 ));
+ToggleSwitch.displayName = 'ToggleSwitch';
 
 // ─── AI Provider Settings Card ────────────────────────────────────────────────
 
@@ -85,19 +80,17 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
   onProviderChange,
   onOllamaUrlChange,
 }) => {
-  const [openaiKey, setOpenaiKey] = useState("");
+  const [openaiKey, setOpenaiKey] = useState('');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [testStatus, setTestStatus] = useState<
-    "idle" | "loading" | "ok" | "error"
-  >("idle");
-  const [testError, setTestError] = useState("");
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [testError, setTestError] = useState('');
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isSavingKey, setIsSavingKey] = useState(false);
 
   useEffect(() => {
     storageService
-      .getApiKey("openai")
-      .then((k) => setOpenaiKey(k ?? ""))
+      .getApiKey('openai')
+      .then((k) => setOpenaiKey(k ?? ''))
       .catch(() => {});
   }, []);
 
@@ -105,9 +98,9 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
     setIsSavingKey(true);
     try {
       if (openaiKey.trim()) {
-        await storageService.saveApiKey("openai", openaiKey.trim());
+        await storageService.saveApiKey('openai', openaiKey.trim());
       } else {
-        await storageService.clearApiKey("openai");
+        await storageService.clearApiKey('openai');
       }
     } finally {
       setIsSavingKey(false);
@@ -127,42 +120,38 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
   }, [ollamaBaseUrl]);
 
   const handleTest = useCallback(async () => {
-    setTestStatus("loading");
-    setTestError("");
+    setTestStatus('loading');
+    setTestError('');
     try {
       const apiKey =
-        provider === "openai"
-          ? ((await storageService.getApiKey("openai")) ?? "")
-          : undefined;
+        provider === 'openai' ? ((await storageService.getApiKey('openai')) ?? '') : undefined;
       const result = await testAIConnection(provider, {
         apiKey,
         ollamaBaseUrl,
       });
       if (result.ok) {
-        setTestStatus("ok");
+        setTestStatus('ok');
       } else {
-        setTestStatus("error");
-        setTestError(result.error ?? "Verbindung fehlgeschlagen");
+        setTestStatus('error');
+        setTestError(result.error ?? 'Verbindung fehlgeschlagen');
       }
     } catch (e) {
-      setTestStatus("error");
-      setTestError(e instanceof Error ? e.message : "Unbekannter Fehler");
+      setTestStatus('error');
+      setTestError(e instanceof Error ? e.message : 'Unbekannter Fehler');
     }
   }, [provider, ollamaBaseUrl]);
 
   const providers: { id: AIProvider; label: string }[] = [
-    { id: "gemini", label: "Google Gemini" },
-    { id: "openai", label: "OpenAI" },
-    { id: "ollama", label: "Ollama (lokal)" },
-    { id: "anthropic", label: "Anthropic Claude" },
+    { id: 'gemini', label: 'Google Gemini' },
+    { id: 'openai', label: 'OpenAI' },
+    { id: 'ollama', label: 'Ollama (lokal)' },
+    { id: 'anthropic', label: 'Anthropic Claude' },
   ];
 
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          KI-Anbieter
-        </h2>
+        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">KI-Anbieter</h2>
         <p className="text-sm text-[var(--foreground-muted)] mt-1">
           Wähle, welchen KI-Anbieter StoryCraft Studio verwenden soll.
         </p>
@@ -175,9 +164,9 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
               key={p.id}
               onClick={() => {
                 onProviderChange(p.id);
-                setTestStatus("idle");
+                setTestStatus('idle');
               }}
-              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${provider === p.id ? "bg-[var(--background-interactive)] border-[var(--background-interactive)] text-white" : "border-[var(--border-primary)] text-[var(--foreground-secondary)] hover:border-[var(--border-interactive)]"}`}
+              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${provider === p.id ? 'bg-[var(--background-interactive)] border-[var(--background-interactive)] text-white' : 'border-[var(--border-primary)] text-[var(--foreground-secondary)] hover:border-[var(--border-interactive)]'}`}
             >
               {p.label}
             </button>
@@ -185,33 +174,33 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         </div>
 
         {/* Gemini */}
-        {provider === "gemini" && (
+        {provider === 'gemini' && (
           <div className="p-3 rounded-lg bg-[var(--background-secondary)] text-sm text-[var(--foreground-secondary)]">
-            Google Gemini ist ausgewählt. API-Schlüssel weiter unten im
-            Abschnitt <strong>„API-Schlüssel"</strong> konfigurieren.
+            Google Gemini ist ausgewählt. API-Schlüssel weiter unten im Abschnitt{' '}
+            <strong>„API-Schlüssel"</strong> konfigurieren.
           </div>
         )}
 
         {/* OpenAI */}
-        {provider === "openai" && (
+        {provider === 'openai' && (
           <div className="space-y-3">
-            <label className="text-sm font-medium text-[var(--foreground-secondary)] block">
+            <label
+              htmlFor="openai-api-key"
+              className="text-sm font-medium text-[var(--foreground-secondary)] block"
+            >
               OpenAI API-Schlüssel
             </label>
             <div className="flex gap-2">
               <Input
+                id="openai-api-key"
                 type="password"
                 placeholder="sk-..."
                 value={openaiKey}
                 onChange={(e) => setOpenaiKey(e.target.value)}
                 className="flex-1 font-mono text-sm"
               />
-              <Button
-                onClick={handleSaveOpenAiKey}
-                disabled={isSavingKey}
-                variant="secondary"
-              >
-                {isSavingKey ? <Spinner className="w-4 h-4" /> : "Speichern"}
+              <Button onClick={handleSaveOpenAiKey} disabled={isSavingKey} variant="secondary">
+                {isSavingKey ? <Spinner className="w-4 h-4" /> : 'Speichern'}
               </Button>
             </div>
             <p className="text-xs text-[var(--foreground-muted)]">
@@ -221,13 +210,17 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         )}
 
         {/* Ollama */}
-        {provider === "ollama" && (
+        {provider === 'ollama' && (
           <div className="space-y-3">
-            <label className="text-sm font-medium text-[var(--foreground-secondary)] block">
+            <label
+              htmlFor="ollama-server-url"
+              className="text-sm font-medium text-[var(--foreground-secondary)] block"
+            >
               Ollama-Server URL
             </label>
             <div className="flex gap-2">
               <Input
+                id="ollama-server-url"
                 placeholder="http://localhost:11434"
                 value={ollamaBaseUrl}
                 onChange={(e) => onOllamaUrlChange(e.target.value)}
@@ -238,11 +231,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
                 disabled={isLoadingModels}
                 variant="secondary"
               >
-                {isLoadingModels ? (
-                  <Spinner className="w-4 h-4" />
-                ) : (
-                  "Modelle laden"
-                )}
+                {isLoadingModels ? <Spinner className="w-4 h-4" /> : 'Modelle laden'}
               </Button>
             </div>
             {ollamaModels.length > 0 && (
@@ -258,46 +247,32 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
               </div>
             )}
             <p className="text-xs text-[var(--foreground-muted)]">
-              Stelle sicher, dass <code>ollama serve</code> läuft und CORS
-              aktiviert ist.
+              Stelle sicher, dass <code>ollama serve</code> läuft und CORS aktiviert ist.
             </p>
           </div>
         )}
 
         {/* Anthropic */}
-        {provider === "anthropic" && (
+        {provider === 'anthropic' && (
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
             <p className="font-semibold mb-1">⚠️ CORS-Einschränkung</p>
             <p>
-              Anthropic Claude kann nicht direkt aus dem Browser aufgerufen
-              werden. Richte einen Proxy-Server ein oder nutze die
-              Tauri-Desktop-App für Anthropic-Aufrufe.
+              Anthropic Claude kann nicht direkt aus dem Browser aufgerufen werden. Richte einen
+              Proxy-Server ein oder nutze die Tauri-Desktop-App für Anthropic-Aufrufe.
             </p>
           </div>
         )}
 
         {/* Test connection */}
-        {provider !== "gemini" && (
+        {provider !== 'gemini' && (
           <div className="flex items-center gap-3 pt-1">
-            <Button
-              onClick={handleTest}
-              disabled={testStatus === "loading"}
-              variant="secondary"
-            >
-              {testStatus === "loading" ? (
-                <Spinner className="w-4 h-4" />
-              ) : (
-                "Verbindung testen"
-              )}
+            <Button onClick={handleTest} disabled={testStatus === 'loading'} variant="secondary">
+              {testStatus === 'loading' ? <Spinner className="w-4 h-4" /> : 'Verbindung testen'}
             </Button>
-            {testStatus === "ok" && (
-              <span className="text-sm text-emerald-400">
-                ✓ Verbindung erfolgreich
-              </span>
+            {testStatus === 'ok' && (
+              <span className="text-sm text-emerald-400">✓ Verbindung erfolgreich</span>
             )}
-            {testStatus === "error" && (
-              <span className="text-sm text-red-400">✗ {testError}</span>
-            )}
+            {testStatus === 'error' && <span className="text-sm text-red-400">✗ {testError}</span>}
           </div>
         )}
       </CardContent>
@@ -334,165 +309,153 @@ const SettingsViewUI: FC = () => {
 
   const navCategories = [
     {
-      id: "general",
-      label: t("settings.categories.general"),
+      id: 'general',
+      label: t('settings.categories.general'),
       icon: ICONS.SETTINGS,
     },
     {
-      id: "appearance",
-      label: t("settings.categories.appearance"),
+      id: 'appearance',
+      label: t('settings.categories.appearance'),
       icon: <path d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" />,
     },
     {
-      id: "editor",
-      label: t("settings.categories.editor"),
+      id: 'editor',
+      label: t('settings.categories.editor'),
       icon: ICONS.WRITER,
     },
     {
-      id: "advanced-editor",
-      label: t("settings.categories.advancedEditor"),
+      id: 'advanced-editor',
+      label: t('settings.categories.advancedEditor'),
       icon: (
         <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       ),
     },
-    { id: "ai", label: t("settings.categories.ai"), icon: ICONS.SPARKLES },
+    { id: 'ai', label: t('settings.categories.ai'), icon: ICONS.SPARKLES },
     {
-      id: "advanced-ai",
-      label: t("settings.categories.advancedAi"),
+      id: 'advanced-ai',
+      label: t('settings.categories.advancedAi'),
       icon: (
         <path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       ),
     },
     {
-      id: "accessibility",
-      label: t("settings.categories.accessibility"),
+      id: 'accessibility',
+      label: t('settings.categories.accessibility'),
       icon: (
         <path d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75M4.5 16.5v-.75a2.25 2.25 0 011.372-2.048l1.287-.513a.75.75 0 011.06.184l.867 1.302a.75.75 0 00.816.316l1.084-.27a.75.75 0 01.816.316l.867 1.302a.75.75 0 00.816.316l1.084-.27a.75.75 0 01.816.316l.867 1.302a.75.75 0 00.816.316l1.084-.27a.75.75 0 01.816.316l.867 1.302a.75.75 0 00.816.316l1.084-.27a.75.75 0 01.816.316l.867 1.302a.75.75 0 00.816.316l1.084-.27a.75.75 0 01.816.316l.867 1.302a.75.75 0 00.816.316l1.084-.27z" />
       ),
     },
     {
-      id: "privacy",
-      label: t("settings.categories.privacy"),
+      id: 'privacy',
+      label: t('settings.categories.privacy'),
       icon: (
         <path d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
       ),
     },
     {
-      id: "performance",
-      label: t("settings.categories.performance"),
-      icon: (
-        <path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-      ),
+      id: 'performance',
+      label: t('settings.categories.performance'),
+      icon: <path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />,
     },
     {
-      id: "notifications",
-      label: t("settings.categories.notifications"),
+      id: 'notifications',
+      label: t('settings.categories.notifications'),
       icon: (
         <path d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
       ),
     },
     {
-      id: "collaboration",
-      label: t("settings.categories.collaboration"),
+      id: 'collaboration',
+      label: t('settings.categories.collaboration'),
       icon: (
         <path d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
       ),
     },
     {
-      id: "integrations",
-      label: t("settings.categories.integrations"),
+      id: 'integrations',
+      label: t('settings.categories.integrations'),
       icon: (
         <path d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
       ),
     },
     {
-      id: "backup",
-      label: t("settings.categories.backup"),
+      id: 'backup',
+      label: t('settings.categories.backup'),
       icon: (
         <path d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0v-7.5A2.25 2.25 0 018.25 2.25h13.5A2.25 2.25 0 0124 4.5v7.5m-19.5 0v7.5a2.25 2.25 0 002.25 2.25h13.5a2.25 2.25 0 002.25-2.25v-7.5" />
       ),
     },
     {
-      id: "data",
-      label: t("settings.categories.data"),
+      id: 'data',
+      label: t('settings.categories.data'),
       icon: (
         <path d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125m17.25 0h.008v.008h-.008v-.008zm-17.25 0a1.125 1.125 0 00-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25 0h.008v.008h-.008v-.008zM6 16.5V9.75m6.75 6.75V9.75m6.75 6.75V9.75M9 9.75h.008v.008H9v-.008zm3.75 0h.008v.008h-.008v-.008zm3.75 0h.008v.008h-.008v-.008z" />
       ),
     },
-    { id: "about", label: t("settings.categories.about"), icon: ICONS.HELP },
+    { id: 'about', label: t('settings.categories.about'), icon: ICONS.HELP },
   ];
 
   const creativityMap = { Focused: 0, Balanced: 1, Imaginative: 2 };
-  const creativityReverseMap = ["Focused", "Balanced", "Imaginative"];
+  const creativityReverseMap = ['Focused', 'Balanced', 'Imaginative'];
 
   const renderContent = () => {
     switch (activeCategory) {
-      case "general":
+      case 'general':
         return (
           <Card>
             <CardHeader>
               <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                {t("settings.language.title")}
+                {t('settings.language.title')}
               </h2>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-[var(--foreground-secondary)] mb-2">
-                {t("settings.language.description")}
+                {t('settings.language.description')}
               </p>
-              <Select
-                id="language-select"
-                value={language}
-                onChange={handleLanguageChange}
-              >
-                <option value="en">{t("settings.language.english")}</option>
-                <option value="de">{t("settings.language.german")}</option>
-                <option value="fr">{t("settings.language.french")}</option>
-                <option value="es">{t("settings.language.spanish")}</option>
-                <option value="it">{t("settings.language.italian")}</option>
+              <Select id="language-select" value={language} onChange={handleLanguageChange}>
+                <option value="en">{t('settings.language.english')}</option>
+                <option value="de">{t('settings.language.german')}</option>
+                <option value="fr">{t('settings.language.french')}</option>
+                <option value="es">{t('settings.language.spanish')}</option>
+                <option value="it">{t('settings.language.italian')}</option>
               </Select>
             </CardContent>
           </Card>
         );
-      case "appearance":
+      case 'appearance':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.appearance.title")}
+                  {t('settings.appearance.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <label className="text-sm font-medium text-[var(--foreground-secondary)]">
-                  {t("settings.appearance.theme")}
+                  {t('settings.appearance.theme')}
                 </label>
                 <div className="grid grid-cols-3 gap-4">
                   <Button
-                    variant={
-                      settings.theme === "dark" ? "primary" : "secondary"
-                    }
-                    onClick={() => handleSettingChange("theme", "dark")}
+                    variant={settings.theme === 'dark' ? 'primary' : 'secondary'}
+                    onClick={() => handleSettingChange('theme', 'dark')}
                     className="text-center justify-center py-4"
                   >
-                    {t("settings.theme.dark")}
+                    {t('settings.theme.dark')}
                   </Button>
                   <Button
-                    variant={
-                      settings.theme === "light" ? "primary" : "secondary"
-                    }
-                    onClick={() => handleSettingChange("theme", "light")}
+                    variant={settings.theme === 'light' ? 'primary' : 'secondary'}
+                    onClick={() => handleSettingChange('theme', 'light')}
                     className="text-center justify-center py-4"
                   >
-                    {t("settings.theme.light")}
+                    {t('settings.theme.light')}
                   </Button>
                   <Button
-                    variant={
-                      settings.theme === "auto" ? "primary" : "secondary"
-                    }
-                    onClick={() => handleSettingChange("theme", "auto")}
+                    variant={settings.theme === 'auto' ? 'primary' : 'secondary'}
+                    onClick={() => handleSettingChange('theme', 'auto')}
                     className="text-center justify-center py-4"
                   >
-                    {t("settings.theme.auto")}
+                    {t('settings.theme.auto')}
                   </Button>
                 </div>
               </CardContent>
@@ -500,20 +463,20 @@ const SettingsViewUI: FC = () => {
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.appearance.customization")}
+                  {t('settings.appearance.customization')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                      {t("settings.appearance.primaryColor")}
+                      {t('settings.appearance.primaryColor')}
                     </label>
                     <input
                       type="color"
                       value={settings.themeCustomization.primaryColor}
                       onChange={(e) =>
-                        handleSettingChange("themeCustomization", {
+                        handleSettingChange('themeCustomization', {
                           ...settings.themeCustomization,
                           primaryColor: e.target.value,
                         })
@@ -523,13 +486,13 @@ const SettingsViewUI: FC = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                      {t("settings.appearance.secondaryColor")}
+                      {t('settings.appearance.secondaryColor')}
                     </label>
                     <input
                       type="color"
                       value={settings.themeCustomization.secondaryColor}
                       onChange={(e) =>
-                        handleSettingChange("themeCustomization", {
+                        handleSettingChange('themeCustomization', {
                           ...settings.themeCustomization,
                           secondaryColor: e.target.value,
                         })
@@ -539,13 +502,13 @@ const SettingsViewUI: FC = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                      {t("settings.appearance.accentColor")}
+                      {t('settings.appearance.accentColor')}
                     </label>
                     <input
                       type="color"
                       value={settings.themeCustomization.accentColor}
                       onChange={(e) =>
-                        handleSettingChange("themeCustomization", {
+                        handleSettingChange('themeCustomization', {
                           ...settings.themeCustomization,
                           accentColor: e.target.value,
                         })
@@ -555,13 +518,13 @@ const SettingsViewUI: FC = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                      {t("settings.appearance.backgroundColor")}
+                      {t('settings.appearance.backgroundColor')}
                     </label>
                     <input
                       type="color"
                       value={settings.themeCustomization.backgroundColor}
                       onChange={(e) =>
-                        handleSettingChange("themeCustomization", {
+                        handleSettingChange('themeCustomization', {
                           ...settings.themeCustomization,
                           backgroundColor: e.target.value,
                         })
@@ -572,12 +535,12 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.appearance.customCss")}
+                    {t('settings.appearance.customCss')}
                   </label>
                   <textarea
                     value={settings.themeCustomization.customCss}
                     onChange={(e) =>
-                      handleSettingChange("themeCustomization", {
+                      handleSettingChange('themeCustomization', {
                         ...settings.themeCustomization,
                         customCss: e.target.value,
                       })
@@ -590,9 +553,9 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "editor":
+      case 'editor': {
         const getFontFamily = () => {
-          if (settings.editorFont === "custom" && settings.customFont) {
+          if (settings.editorFont === 'custom' && settings.customFont) {
             return settings.customFont.name;
           }
           return settings.editorFont;
@@ -601,15 +564,15 @@ const SettingsViewUI: FC = () => {
           fontFamily: getFontFamily(),
           fontSize: `${settings.fontSize}px`,
           lineHeight: settings.lineSpacing,
-          "--paragraph-spacing": `${settings.paragraphSpacing * 0.5}rem`,
-          textIndent: settings.indentFirstLine ? "2em" : "0",
+          '--paragraph-spacing': `${settings.paragraphSpacing * 0.5}rem`,
+          textIndent: settings.indentFirstLine ? '2em' : '0',
         } as React.CSSProperties;
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.editor.title")}
+                  {t('settings.editor.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -618,47 +581,43 @@ const SettingsViewUI: FC = () => {
                     htmlFor="font-family-select"
                     className="text-sm font-medium text-[var(--foreground-secondary)]"
                   >
-                    {t("settings.editor.fontFamily")}
+                    {t('settings.editor.fontFamily')}
                   </label>
                   <Select
                     id="font-family-select"
                     value={settings.editorFont}
-                    onChange={(e) =>
-                      handleSettingChange("editorFont", e.target.value)
-                    }
+                    onChange={(e) => handleSettingChange('editorFont', e.target.value)}
                   >
-                    <option value="serif">{t("settings.font.serif")}</option>
-                    <option value="sans-serif">
-                      {t("settings.font.sans")}
-                    </option>
-                    <option value="monospace">{t("settings.font.mono")}</option>
-                    <option value="custom">{t("settings.font.custom")}</option>
+                    <option value="serif">{t('settings.font.serif')}</option>
+                    <option value="sans-serif">{t('settings.font.sans')}</option>
+                    <option value="monospace">{t('settings.font.mono')}</option>
+                    <option value="custom">{t('settings.font.custom')}</option>
                   </Select>
                 </div>
-                {settings.editorFont === "custom" && (
+                {settings.editorFont === 'custom' && (
                   <div className="space-y-4 p-4 border border-[var(--border-primary)] rounded-lg">
                     <h4 className="font-semibold text-[var(--foreground-primary)]">
-                      {t("settings.editor.customFont")}
+                      {t('settings.editor.customFont')}
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Input
-                        placeholder={t("settings.editor.customFontName")}
-                        value={settings.customFont?.name || ""}
+                        placeholder={t('settings.editor.customFontName')}
+                        value={settings.customFont?.name || ''}
                         onChange={(e) =>
-                          handleSettingChange("customFont", {
+                          handleSettingChange('customFont', {
                             name: e.target.value,
-                            url: settings.customFont?.url || "",
-                            format: settings.customFont?.format || "woff2",
+                            url: settings.customFont?.url || '',
+                            format: settings.customFont?.format || 'woff2',
                           })
                         }
                       />
                       <Select
-                        value={settings.customFont?.format || "woff2"}
+                        value={settings.customFont?.format || 'woff2'}
                         onChange={(e) =>
-                          handleSettingChange("customFont", {
-                            name: settings.customFont?.name || "",
-                            url: settings.customFont?.url || "",
-                            format: e.target.value as any,
+                          handleSettingChange('customFont', {
+                            name: settings.customFont?.name || '',
+                            url: settings.customFont?.url || '',
+                            format: e.target.value as 'woff' | 'woff2' | 'ttf' | 'otf',
                           })
                         }
                       >
@@ -669,13 +628,13 @@ const SettingsViewUI: FC = () => {
                       </Select>
                     </div>
                     <Input
-                      placeholder={t("settings.editor.customFontUrl")}
-                      value={settings.customFont?.url || ""}
+                      placeholder={t('settings.editor.customFontUrl')}
+                      value={settings.customFont?.url || ''}
                       onChange={(e) =>
-                        handleSettingChange("customFont", {
-                          name: settings.customFont?.name || "",
+                        handleSettingChange('customFont', {
+                          name: settings.customFont?.name || '',
                           url: e.target.value,
-                          format: settings.customFont?.format || "woff2",
+                          format: settings.customFont?.format || 'woff2',
                         })
                       }
                     />
@@ -686,7 +645,7 @@ const SettingsViewUI: FC = () => {
                     htmlFor="font-size-input"
                     className="flex justify-between text-sm font-medium text-[var(--foreground-secondary)]"
                   >
-                    <span>{t("settings.editor.fontSize")}</span>
+                    <span>{t('settings.editor.fontSize')}</span>
                     <span>{settings.fontSize}px</span>
                   </label>
                   <input
@@ -695,9 +654,7 @@ const SettingsViewUI: FC = () => {
                     min="12"
                     max="24"
                     value={settings.fontSize}
-                    onChange={(e) =>
-                      handleSettingChange("fontSize", e.target.value)
-                    }
+                    onChange={(e) => handleSettingChange('fontSize', e.target.value)}
                     className="w-full"
                   />
                 </div>
@@ -706,7 +663,7 @@ const SettingsViewUI: FC = () => {
                     htmlFor="line-height-input"
                     className="flex justify-between text-sm font-medium text-[var(--foreground-secondary)]"
                   >
-                    <span>{t("settings.editor.lineHeight")}</span>
+                    <span>{t('settings.editor.lineHeight')}</span>
                     <span>{settings.lineSpacing}</span>
                   </label>
                   <input
@@ -716,9 +673,7 @@ const SettingsViewUI: FC = () => {
                     max="2.2"
                     step="0.1"
                     value={settings.lineSpacing}
-                    onChange={(e) =>
-                      handleSettingChange("lineSpacing", e.target.value)
-                    }
+                    onChange={(e) => handleSettingChange('lineSpacing', e.target.value)}
                     className="w-full"
                   />
                 </div>
@@ -727,7 +682,7 @@ const SettingsViewUI: FC = () => {
                     htmlFor="p-spacing-input"
                     className="flex justify-between text-sm font-medium text-[var(--foreground-secondary)]"
                   >
-                    <span>{t("settings.editor.paragraphSpacing")}</span>
+                    <span>{t('settings.editor.paragraphSpacing')}</span>
                     <span>{settings.paragraphSpacing.toFixed(1)}</span>
                   </label>
                   <input
@@ -737,23 +692,21 @@ const SettingsViewUI: FC = () => {
                     max="2"
                     step="0.1"
                     value={settings.paragraphSpacing}
-                    onChange={(e) =>
-                      handleSettingChange("paragraphSpacing", e.target.value)
-                    }
+                    onChange={(e) => handleSettingChange('paragraphSpacing', e.target.value)}
                     className="w-full"
                   />
                 </div>
                 <ToggleSwitch
-                  label={t("settings.editor.indentFirstLine")}
+                  label={t('settings.editor.indentFirstLine')}
                   checked={settings.indentFirstLine}
-                  onChange={(v) => handleSettingChange("indentFirstLine", v)}
+                  onChange={(v) => handleSettingChange('indentFirstLine', v)}
                 />
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
                 <h3 className="text-lg font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.editor.previewTitle")}
+                  {t('settings.editor.previewTitle')}
                 </h3>
               </CardHeader>
               <CardContent>
@@ -762,34 +715,29 @@ const SettingsViewUI: FC = () => {
                   className="p-4 bg-white/5 rounded-md border border-[var(--border-primary)] max-h-48 overflow-y-auto text-[var(--foreground-primary)]"
                 >
                   <p className="[&&]:my-0 [&&]:mb-[var(--paragraph-spacing)]">
-                    {t("settings.editor.previewText1")}
+                    {t('settings.editor.previewText1')}
                   </p>
-                  <p className="[&&]:my-0">
-                    {t("settings.editor.previewText2")}
-                  </p>
+                  <p className="[&&]:my-0">{t('settings.editor.previewText2')}</p>
                 </div>
               </CardContent>
             </Card>
           </div>
         );
-      case "ai":
+      }
+      case 'ai':
         return (
           <div className="space-y-6">
             <AiProviderCard
-              provider={
-                (settings.advancedAi?.provider ?? "gemini") as AIProvider
-              }
-              ollamaBaseUrl={
-                settings.advancedAi?.ollamaBaseUrl ?? "http://localhost:11434"
-              }
+              provider={(settings.advancedAi?.provider ?? 'gemini') as AIProvider}
+              ollamaBaseUrl={settings.advancedAi?.ollamaBaseUrl ?? 'http://localhost:11434'}
               onProviderChange={(p) =>
-                handleSettingChange("advancedAi", {
+                handleSettingChange('advancedAi', {
                   ...settings.advancedAi,
                   provider: p,
                 })
               }
               onOllamaUrlChange={(url) =>
-                handleSettingChange("advancedAi", {
+                handleSettingChange('advancedAi', {
                   ...settings.advancedAi,
                   ollamaBaseUrl: url,
                 })
@@ -798,7 +746,7 @@ const SettingsViewUI: FC = () => {
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.ai.title")}
+                  {t('settings.ai.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -807,13 +755,13 @@ const SettingsViewUI: FC = () => {
                     htmlFor="ai-creativity-select"
                     className="flex justify-between text-sm font-medium text-[var(--foreground-secondary)]"
                   >
-                    <span>{t("settings.ai.creativity")}</span>
+                    <span>{t('settings.ai.creativity')}</span>
                     <span className="font-bold text-[var(--foreground-primary)]">
                       {settings.aiCreativity}
                     </span>
                   </label>
                   <p className="text-xs text-[var(--foreground-muted)] mb-2">
-                    {t("settings.ai.creativityDescription")}
+                    {t('settings.ai.creativityDescription')}
                   </p>
                   <input
                     id="ai-creativity-select"
@@ -824,16 +772,16 @@ const SettingsViewUI: FC = () => {
                     value={creativityMap[settings.aiCreativity]}
                     onChange={(e) =>
                       handleSettingChange(
-                        "aiCreativity",
-                        creativityReverseMap[Number(e.target.value)],
+                        'aiCreativity',
+                        creativityReverseMap[Number(e.target.value)]
                       )
                     }
                     className="w-full"
                   />
                   <div className="flex justify-between text-xs text-[var(--foreground-muted)]">
-                    <span>{t("settings.creativity.focused")}</span>
-                    <span>{t("settings.creativity.balanced")}</span>
-                    <span>{t("settings.creativity.imaginative")}</span>
+                    <span>{t('settings.creativity.focused')}</span>
+                    <span>{t('settings.creativity.balanced')}</span>
+                    <span>{t('settings.creativity.imaginative')}</span>
                   </div>
                 </div>
               </CardContent>
@@ -845,32 +793,29 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "data":
+      case 'data':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.data.title")}
+                  {t('settings.data.title')}
                 </h2>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-[var(--foreground-secondary)] mb-6">
-                  {t("settings.data.description")}
+                  {t('settings.data.description')}
                 </p>
                 <div className="p-4 rounded-lg bg-white/5 border border-[var(--border-primary)] space-y-3">
                   <h3 className="font-semibold text-[var(--foreground-primary)]">
-                    {t("settings.data.actions")}
+                    {t('settings.data.actions')}
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Button onClick={handleExport} variant="secondary">
-                      {t("settings.data.export")}
+                      {t('settings.data.export')}
                     </Button>
-                    <Button
-                      onClick={() => importFileRef.current?.click()}
-                      variant="secondary"
-                    >
-                      {t("settings.data.import")}
+                    <Button onClick={() => importFileRef.current?.click()} variant="secondary">
+                      {t('settings.data.import')}
                     </Button>
                     <input
                       type="file"
@@ -880,35 +825,35 @@ const SettingsViewUI: FC = () => {
                       className="hidden"
                     />
                     <Button
-                      onClick={() => setModal({ state: "reset", payload: {} })}
+                      onClick={() => setModal({ state: 'reset', payload: {} })}
                       variant="danger"
                     >
-                      {t("settings.data.reset")}
+                      {t('settings.data.reset')}
                     </Button>
                   </div>
                 </div>
                 <div className="text-xs text-center text-[var(--foreground-muted)] pt-2">
-                  {t("settings.data.projectSize", { size: projectSize })}
+                  {t('settings.data.projectSize', { size: projectSize })}
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.data.snapshots")}
+                  {t('settings.data.snapshots')}
                 </h2>
                 <Button
                   onClick={() => {
-                    setSnapshotName("");
-                    setModal({ state: "create", payload: {} });
+                    setSnapshotName('');
+                    setModal({ state: 'create', payload: {} });
                   }}
                 >
-                  {t("settings.data.createSnapshot")}
+                  {t('settings.data.createSnapshot')}
                 </Button>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-[var(--foreground-secondary)] mb-4">
-                  {t("settings.data.snapshotsDescription")}
+                  {t('settings.data.snapshotsDescription')}
                 </p>
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {snapshots.length > 0 ? (
@@ -919,21 +864,20 @@ const SettingsViewUI: FC = () => {
                       >
                         <div>
                           <p className="font-semibold text-[var(--foreground-primary)]">
-                            {snap.name === "Automatic Snapshot"
-                              ? t("settings.data.automaticSnapshot")
+                            {snap.name === 'Automatic Snapshot'
+                              ? t('settings.data.automaticSnapshot')
                               : snap.name}
                           </p>
                           <p className="text-xs text-[var(--foreground-muted)]">
-                            {new Date(snap.date).toLocaleString()} -{" "}
-                            {snap.wordCount}{" "}
-                            {t("dashboard.stats.totalWordCount")}
+                            {new Date(snap.date).toLocaleString()} - {snap.wordCount}{' '}
+                            {t('dashboard.stats.totalWordCount')}
                           </p>
                         </div>
                         <div className="flex items-center space-x-2">
                           <Button
                             onClick={() =>
                               setModal({
-                                state: "restore",
+                                state: 'restore',
                                 payload: {
                                   id: snap.id,
                                   date: new Date(snap.date).toLocaleString(),
@@ -944,19 +888,19 @@ const SettingsViewUI: FC = () => {
                             variant="secondary"
                             size="sm"
                           >
-                            {t("settings.data.restore")}
+                            {t('settings.data.restore')}
                           </Button>
                           <Button
                             onClick={() =>
                               setModal({
-                                state: "delete",
+                                state: 'delete',
                                 payload: { id: snap.id, name: snap.name },
                               })
                             }
                             variant="ghost"
                             size="sm"
                             className="text-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/50"
-                            aria-label={`${t("settings.data.delete")} ${snap.name}`}
+                            aria-label={`${t('settings.data.delete')} ${snap.name}`}
                           >
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
@@ -991,7 +935,7 @@ const SettingsViewUI: FC = () => {
                         </svg>
                       </div>
                       <p className="text-sm font-medium text-[var(--foreground-primary)]">
-                        {t("settings.data.noSnapshots")}
+                        {t('settings.data.noSnapshots')}
                       </p>
                     </div>
                   )}
@@ -1000,72 +944,72 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "advanced-editor":
+      case 'advanced-editor':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.advancedEditor.title")}
+                  {t('settings.advancedEditor.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ToggleSwitch
-                    label={t("settings.advancedEditor.autoComplete")}
+                    label={t('settings.advancedEditor.autoComplete')}
                     checked={settings.advancedEditor.autoComplete}
                     onChange={(v) =>
-                      handleSettingChange("advancedEditor", {
+                      handleSettingChange('advancedEditor', {
                         ...settings.advancedEditor,
                         autoComplete: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.advancedEditor.spellCheck")}
+                    label={t('settings.advancedEditor.spellCheck')}
                     checked={settings.advancedEditor.spellCheck}
                     onChange={(v) =>
-                      handleSettingChange("advancedEditor", {
+                      handleSettingChange('advancedEditor', {
                         ...settings.advancedEditor,
                         spellCheck: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.advancedEditor.grammarCheck")}
+                    label={t('settings.advancedEditor.grammarCheck')}
                     checked={settings.advancedEditor.grammarCheck}
                     onChange={(v) =>
-                      handleSettingChange("advancedEditor", {
+                      handleSettingChange('advancedEditor', {
                         ...settings.advancedEditor,
                         grammarCheck: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.advancedEditor.wordCount")}
+                    label={t('settings.advancedEditor.wordCount')}
                     checked={settings.advancedEditor.wordCount}
                     onChange={(v) =>
-                      handleSettingChange("advancedEditor", {
+                      handleSettingChange('advancedEditor', {
                         ...settings.advancedEditor,
                         wordCount: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.advancedEditor.readingTime")}
+                    label={t('settings.advancedEditor.readingTime')}
                     checked={settings.advancedEditor.readingTime}
                     onChange={(v) =>
-                      handleSettingChange("advancedEditor", {
+                      handleSettingChange('advancedEditor', {
                         ...settings.advancedEditor,
                         readingTime: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.advancedEditor.writingStats")}
+                    label={t('settings.advancedEditor.writingStats')}
                     checked={settings.advancedEditor.writingStats}
                     onChange={(v) =>
-                      handleSettingChange("advancedEditor", {
+                      handleSettingChange('advancedEditor', {
                         ...settings.advancedEditor,
                         writingStats: v,
                       })
@@ -1074,44 +1018,44 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div className="border-t border-[var(--border-primary)] pt-4">
                   <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-4">
-                    {t("settings.advancedEditor.focusModes")}
+                    {t('settings.advancedEditor.focusModes')}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <ToggleSwitch
-                      label={t("settings.advancedEditor.distractionFree")}
+                      label={t('settings.advancedEditor.distractionFree')}
                       checked={settings.advancedEditor.distractionFree}
                       onChange={(v) =>
-                        handleSettingChange("advancedEditor", {
+                        handleSettingChange('advancedEditor', {
                           ...settings.advancedEditor,
                           distractionFree: v,
                         })
                       }
                     />
                     <ToggleSwitch
-                      label={t("settings.advancedEditor.typewriterMode")}
+                      label={t('settings.advancedEditor.typewriterMode')}
                       checked={settings.advancedEditor.typewriterMode}
                       onChange={(v) =>
-                        handleSettingChange("advancedEditor", {
+                        handleSettingChange('advancedEditor', {
                           ...settings.advancedEditor,
                           typewriterMode: v,
                         })
                       }
                     />
                     <ToggleSwitch
-                      label={t("settings.advancedEditor.zenMode")}
+                      label={t('settings.advancedEditor.zenMode')}
                       checked={settings.advancedEditor.zenMode}
                       onChange={(v) =>
-                        handleSettingChange("advancedEditor", {
+                        handleSettingChange('advancedEditor', {
                           ...settings.advancedEditor,
                           zenMode: v,
                         })
                       }
                     />
                     <ToggleSwitch
-                      label={t("settings.advancedEditor.focusMode")}
+                      label={t('settings.advancedEditor.focusMode')}
                       checked={settings.advancedEditor.focusMode}
                       onChange={(v) =>
-                        handleSettingChange("advancedEditor", {
+                        handleSettingChange('advancedEditor', {
                           ...settings.advancedEditor,
                           focusMode: v,
                         })
@@ -1123,24 +1067,24 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "advanced-ai":
+      case 'advanced-ai':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.advancedAi.title")}
+                  {t('settings.advancedAi.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.advancedAi.model")}
+                    {t('settings.advancedAi.model')}
                   </label>
                   <Select
                     value={settings.advancedAi.model}
                     onChange={(e) =>
-                      handleSettingChange("advancedAi", {
+                      handleSettingChange('advancedAi', {
                         ...settings.advancedAi,
                         model: e.target.value,
                       })
@@ -1157,8 +1101,7 @@ const SettingsViewUI: FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                      {t("settings.advancedAi.temperature")} (
-                      {settings.advancedAi.temperature})
+                      {t('settings.advancedAi.temperature')} ({settings.advancedAi.temperature})
                     </label>
                     <input
                       type="range"
@@ -1167,7 +1110,7 @@ const SettingsViewUI: FC = () => {
                       step="0.1"
                       value={settings.advancedAi.temperature}
                       onChange={(e) =>
-                        handleSettingChange("advancedAi", {
+                        handleSettingChange('advancedAi', {
                           ...settings.advancedAi,
                           temperature: parseFloat(e.target.value),
                         })
@@ -1177,8 +1120,7 @@ const SettingsViewUI: FC = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                      {t("settings.advancedAi.maxTokens")} (
-                      {settings.advancedAi.maxTokens})
+                      {t('settings.advancedAi.maxTokens')} ({settings.advancedAi.maxTokens})
                     </label>
                     <input
                       type="range"
@@ -1187,7 +1129,7 @@ const SettingsViewUI: FC = () => {
                       step="256"
                       value={settings.advancedAi.maxTokens}
                       onChange={(e) =>
-                        handleSettingChange("advancedAi", {
+                        handleSettingChange('advancedAi', {
                           ...settings.advancedAi,
                           maxTokens: parseInt(e.target.value),
                         })
@@ -1197,8 +1139,7 @@ const SettingsViewUI: FC = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                      {t("settings.advancedAi.topP")} (
-                      {settings.advancedAi.topP})
+                      {t('settings.advancedAi.topP')} ({settings.advancedAi.topP})
                     </label>
                     <input
                       type="range"
@@ -1207,7 +1148,7 @@ const SettingsViewUI: FC = () => {
                       step="0.1"
                       value={settings.advancedAi.topP}
                       onChange={(e) =>
-                        handleSettingChange("advancedAi", {
+                        handleSettingChange('advancedAi', {
                           ...settings.advancedAi,
                           topP: parseFloat(e.target.value),
                         })
@@ -1217,8 +1158,7 @@ const SettingsViewUI: FC = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                      {t("settings.advancedAi.rateLimit")} (
-                      {settings.advancedAi.rateLimit}/min)
+                      {t('settings.advancedAi.rateLimit')} ({settings.advancedAi.rateLimit}/min)
                     </label>
                     <input
                       type="range"
@@ -1227,7 +1167,7 @@ const SettingsViewUI: FC = () => {
                       step="10"
                       value={settings.advancedAi.rateLimit}
                       onChange={(e) =>
-                        handleSettingChange("advancedAi", {
+                        handleSettingChange('advancedAi', {
                           ...settings.advancedAi,
                           rateLimit: parseInt(e.target.value),
                         })
@@ -1240,62 +1180,62 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "accessibility":
+      case 'accessibility':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.accessibility.title")}
+                  {t('settings.accessibility.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ToggleSwitch
-                    label={t("settings.accessibility.highContrast")}
+                    label={t('settings.accessibility.highContrast')}
                     checked={settings.accessibility.highContrast}
                     onChange={(v) =>
-                      handleSettingChange("accessibility", {
+                      handleSettingChange('accessibility', {
                         ...settings.accessibility,
                         highContrast: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.accessibility.reducedMotion")}
+                    label={t('settings.accessibility.reducedMotion')}
                     checked={settings.accessibility.reducedMotion}
                     onChange={(v) =>
-                      handleSettingChange("accessibility", {
+                      handleSettingChange('accessibility', {
                         ...settings.accessibility,
                         reducedMotion: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.accessibility.largeText")}
+                    label={t('settings.accessibility.largeText')}
                     checked={settings.accessibility.largeText}
                     onChange={(v) =>
-                      handleSettingChange("accessibility", {
+                      handleSettingChange('accessibility', {
                         ...settings.accessibility,
                         largeText: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.accessibility.screenReader")}
+                    label={t('settings.accessibility.screenReader')}
                     checked={settings.accessibility.screenReader}
                     onChange={(v) =>
-                      handleSettingChange("accessibility", {
+                      handleSettingChange('accessibility', {
                         ...settings.accessibility,
                         screenReader: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.accessibility.focusIndicators")}
+                    label={t('settings.accessibility.focusIndicators')}
                     checked={settings.accessibility.focusIndicators}
                     onChange={(v) =>
-                      handleSettingChange("accessibility", {
+                      handleSettingChange('accessibility', {
                         ...settings.accessibility,
                         focusIndicators: v,
                       })
@@ -1304,28 +1244,26 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.accessibility.colorBlindMode")}
+                    {t('settings.accessibility.colorBlindMode')}
                   </label>
                   <Select
                     value={settings.accessibility.colorBlindMode}
                     onChange={(e) =>
-                      handleSettingChange("accessibility", {
+                      handleSettingChange('accessibility', {
                         ...settings.accessibility,
                         colorBlindMode: e.target.value,
                       })
                     }
                   >
-                    <option value="none">
-                      {t("settings.accessibility.colorBlind.none")}
-                    </option>
+                    <option value="none">{t('settings.accessibility.colorBlind.none')}</option>
                     <option value="protanopia">
-                      {t("settings.accessibility.colorBlind.protanopia")}
+                      {t('settings.accessibility.colorBlind.protanopia')}
                     </option>
                     <option value="deuteranopia">
-                      {t("settings.accessibility.colorBlind.deuteranopia")}
+                      {t('settings.accessibility.colorBlind.deuteranopia')}
                     </option>
                     <option value="tritanopia">
-                      {t("settings.accessibility.colorBlind.tritanopia")}
+                      {t('settings.accessibility.colorBlind.tritanopia')}
                     </option>
                   </Select>
                 </div>
@@ -1333,62 +1271,62 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "privacy":
+      case 'privacy':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.privacy.title")}
+                  {t('settings.privacy.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ToggleSwitch
-                    label={t("settings.privacy.analyticsEnabled")}
+                    label={t('settings.privacy.analyticsEnabled')}
                     checked={settings.privacy.analyticsEnabled}
                     onChange={(v) =>
-                      handleSettingChange("privacy", {
+                      handleSettingChange('privacy', {
                         ...settings.privacy,
                         analyticsEnabled: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.privacy.crashReporting")}
+                    label={t('settings.privacy.crashReporting')}
                     checked={settings.privacy.crashReporting}
                     onChange={(v) =>
-                      handleSettingChange("privacy", {
+                      handleSettingChange('privacy', {
                         ...settings.privacy,
                         crashReporting: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.privacy.dataEncryption")}
+                    label={t('settings.privacy.dataEncryption')}
                     checked={settings.privacy.dataEncryption}
                     onChange={(v) =>
-                      handleSettingChange("privacy", {
+                      handleSettingChange('privacy', {
                         ...settings.privacy,
                         dataEncryption: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.privacy.localStorageOnly")}
+                    label={t('settings.privacy.localStorageOnly')}
                     checked={settings.privacy.localStorageOnly}
                     onChange={(v) =>
-                      handleSettingChange("privacy", {
+                      handleSettingChange('privacy', {
                         ...settings.privacy,
                         localStorageOnly: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.privacy.shareUsageData")}
+                    label={t('settings.privacy.shareUsageData')}
                     checked={settings.privacy.shareUsageData}
                     onChange={(v) =>
-                      handleSettingChange("privacy", {
+                      handleSettingChange('privacy', {
                         ...settings.privacy,
                         shareUsageData: v,
                       })
@@ -1399,19 +1337,19 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "performance":
+      case 'performance':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.performance.title")}
+                  {t('settings.performance.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.performance.autoSaveInterval")} (
+                    {t('settings.performance.autoSaveInterval')} (
                     {settings.performance.autoSaveInterval}s)
                   </label>
                   <input
@@ -1421,7 +1359,7 @@ const SettingsViewUI: FC = () => {
                     step="10"
                     value={settings.performance.autoSaveInterval}
                     onChange={(e) =>
-                      handleSettingChange("performance", {
+                      handleSettingChange('performance', {
                         ...settings.performance,
                         autoSaveInterval: parseInt(e.target.value),
                       })
@@ -1431,8 +1369,7 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.performance.cacheSize")} (
-                    {settings.performance.cacheSize} MB)
+                    {t('settings.performance.cacheSize')} ({settings.performance.cacheSize} MB)
                   </label>
                   <input
                     type="range"
@@ -1441,7 +1378,7 @@ const SettingsViewUI: FC = () => {
                     step="50"
                     value={settings.performance.cacheSize}
                     onChange={(e) =>
-                      handleSettingChange("performance", {
+                      handleSettingChange('performance', {
                         ...settings.performance,
                         cacheSize: parseInt(e.target.value),
                       })
@@ -1451,30 +1388,30 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ToggleSwitch
-                    label={t("settings.performance.preloadContent")}
+                    label={t('settings.performance.preloadContent')}
                     checked={settings.performance.preloadContent}
                     onChange={(v) =>
-                      handleSettingChange("performance", {
+                      handleSettingChange('performance', {
                         ...settings.performance,
                         preloadContent: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.performance.lazyLoadImages")}
+                    label={t('settings.performance.lazyLoadImages')}
                     checked={settings.performance.lazyLoadImages}
                     onChange={(v) =>
-                      handleSettingChange("performance", {
+                      handleSettingChange('performance', {
                         ...settings.performance,
                         lazyLoadImages: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.performance.offlineMode")}
+                    label={t('settings.performance.offlineMode')}
                     checked={settings.performance.offlineMode}
                     onChange={(v) =>
-                      handleSettingChange("performance", {
+                      handleSettingChange('performance', {
                         ...settings.performance,
                         offlineMode: v,
                       })
@@ -1485,52 +1422,52 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "notifications":
+      case 'notifications':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.notifications.title")}
+                  {t('settings.notifications.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ToggleSwitch
-                    label={t("settings.notifications.desktopNotifications")}
+                    label={t('settings.notifications.desktopNotifications')}
                     checked={settings.notifications.desktopNotifications}
                     onChange={(v) =>
-                      handleSettingChange("notifications", {
+                      handleSettingChange('notifications', {
                         ...settings.notifications,
                         desktopNotifications: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.notifications.emailNotifications")}
+                    label={t('settings.notifications.emailNotifications')}
                     checked={settings.notifications.emailNotifications}
                     onChange={(v) =>
-                      handleSettingChange("notifications", {
+                      handleSettingChange('notifications', {
                         ...settings.notifications,
                         emailNotifications: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.notifications.goalAchievements")}
+                    label={t('settings.notifications.goalAchievements')}
                     checked={settings.notifications.goalAchievements}
                     onChange={(v) =>
-                      handleSettingChange("notifications", {
+                      handleSettingChange('notifications', {
                         ...settings.notifications,
                         goalAchievements: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.notifications.collaborationUpdates")}
+                    label={t('settings.notifications.collaborationUpdates')}
                     checked={settings.notifications.collaborationUpdates}
                     onChange={(v) =>
-                      handleSettingChange("notifications", {
+                      handleSettingChange('notifications', {
                         ...settings.notifications,
                         collaborationUpdates: v,
                       })
@@ -1539,81 +1476,73 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.notifications.writingReminders")}
+                    {t('settings.notifications.writingReminders')}
                   </label>
                   <Select
                     value={settings.notifications.writingReminders}
                     onChange={(e) =>
-                      handleSettingChange("notifications", {
+                      handleSettingChange('notifications', {
                         ...settings.notifications,
                         writingReminders: e.target.value,
                       })
                     }
                   >
-                    <option value="never">
-                      {t("settings.notifications.frequency.never")}
-                    </option>
-                    <option value="daily">
-                      {t("settings.notifications.frequency.daily")}
-                    </option>
-                    <option value="weekly">
-                      {t("settings.notifications.frequency.weekly")}
-                    </option>
-                    <option value="monthly">
-                      {t("settings.notifications.frequency.monthly")}
-                    </option>
+                    <option value="never">{t('settings.notifications.frequency.never')}</option>
+                    <option value="daily">{t('settings.notifications.frequency.daily')}</option>
+                    <option value="weekly">{t('settings.notifications.frequency.weekly')}</option>
+                    <option value="monthly">{t('settings.notifications.frequency.monthly')}</option>
                   </Select>
                 </div>
               </CardContent>
             </Card>
           </div>
         );
-      case "collaboration":
+      case 'collaboration':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.collaboration.title")}
+                  {t('settings.collaboration.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ToggleSwitch
-                    label={t("settings.collaboration.realTimeCollaboration")}
+                    label={t('settings.collaboration.realTimeCollaboration')}
                     checked={settings.collaboration.realTimeCollaboration}
                     onChange={(v) =>
-                      handleSettingChange("collaboration", {
+                      handleSettingChange('collaboration', {
                         ...settings.collaboration,
                         realTimeCollaboration: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.collaboration.publicSharing")}
+                    label={t('settings.collaboration.publicSharing')}
                     checked={settings.collaboration.publicSharing}
                     onChange={(v) =>
-                      handleSettingChange("collaboration", {
+                      handleSettingChange('collaboration', {
                         ...settings.collaboration,
                         publicSharing: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.collaboration.commentSystem")}
+                    label={t('settings.collaboration.commentSystem')}
                     checked={settings.collaboration.commentSystem}
                     onChange={(v) =>
-                      handleSettingChange("collaboration", {
+                      handleSettingChange('collaboration', {
                         ...settings.collaboration,
                         commentSystem: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.collaboration.versionHistory")}
+                    label={t('settings.collaboration.versionHistory')}
                     checked={settings.collaboration.versionHistory}
                     onChange={(v) =>
-                      handleSettingChange("collaboration", {
+                      handleSettingChange('collaboration', {
                         ...settings.collaboration,
                         versionHistory: v,
                       })
@@ -1624,82 +1553,76 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "integrations":
+      case 'integrations':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.integrations.title")}
+                  {t('settings.integrations.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.integrations.syncProvider")}
+                    {t('settings.integrations.syncProvider')}
                   </label>
                   <Select
                     value={settings.integrations.syncProvider}
                     onChange={(e) =>
-                      handleSettingChange("integrations", {
+                      handleSettingChange('integrations', {
                         ...settings.integrations,
                         syncProvider: e.target.value,
                       })
                     }
                   >
-                    <option value="none">
-                      {t("settings.integrations.providers.none")}
-                    </option>
+                    <option value="none">{t('settings.integrations.providers.none')}</option>
                     <option value="google-drive">
-                      {t("settings.integrations.providers.googleDrive")}
+                      {t('settings.integrations.providers.googleDrive')}
                     </option>
-                    <option value="dropbox">
-                      {t("settings.integrations.providers.dropbox")}
-                    </option>
+                    <option value="dropbox">{t('settings.integrations.providers.dropbox')}</option>
                     <option value="onedrive">
-                      {t("settings.integrations.providers.onedrive")}
+                      {t('settings.integrations.providers.onedrive')}
                     </option>
-                    <option value="icloud">
-                      {t("settings.integrations.providers.icloud")}
-                    </option>
+                    <option value="icloud">{t('settings.integrations.providers.icloud')}</option>
                   </Select>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ToggleSwitch
-                    label={t("settings.integrations.evernoteSync")}
+                    label={t('settings.integrations.evernoteSync')}
                     checked={settings.integrations.evernoteSync}
                     onChange={(v) =>
-                      handleSettingChange("integrations", {
+                      handleSettingChange('integrations', {
                         ...settings.integrations,
                         evernoteSync: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.integrations.notionSync")}
+                    label={t('settings.integrations.notionSync')}
                     checked={settings.integrations.notionSync}
                     onChange={(v) =>
-                      handleSettingChange("integrations", {
+                      handleSettingChange('integrations', {
                         ...settings.integrations,
                         notionSync: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.integrations.scrivenerExport")}
+                    label={t('settings.integrations.scrivenerExport')}
                     checked={settings.integrations.scrivenerExport}
                     onChange={(v) =>
-                      handleSettingChange("integrations", {
+                      handleSettingChange('integrations', {
                         ...settings.integrations,
                         scrivenerExport: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.integrations.googleDocsImport")}
+                    label={t('settings.integrations.googleDocsImport')}
                     checked={settings.integrations.googleDocsImport}
                     onChange={(v) =>
-                      handleSettingChange("integrations", {
+                      handleSettingChange('integrations', {
                         ...settings.integrations,
                         googleDocsImport: v,
                       })
@@ -1710,32 +1633,32 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "backup":
+      case 'backup':
         return (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                  {t("settings.backup.title")}
+                  {t('settings.backup.title')}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ToggleSwitch
-                    label={t("settings.backup.autoBackup")}
+                    label={t('settings.backup.autoBackup')}
                     checked={settings.backup.autoBackup}
                     onChange={(v) =>
-                      handleSettingChange("backup", {
+                      handleSettingChange('backup', {
                         ...settings.backup,
                         autoBackup: v,
                       })
                     }
                   />
                   <ToggleSwitch
-                    label={t("settings.backup.encryptBackups")}
+                    label={t('settings.backup.encryptBackups')}
                     checked={settings.backup.encryptBackups}
                     onChange={(v) =>
-                      handleSettingChange("backup", {
+                      handleSettingChange('backup', {
                         ...settings.backup,
                         encryptBackups: v,
                       })
@@ -1744,35 +1667,26 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.backup.backupFrequency")}
+                    {t('settings.backup.backupFrequency')}
                   </label>
                   <Select
                     value={settings.backup.backupFrequency}
                     onChange={(e) =>
-                      handleSettingChange("backup", {
+                      handleSettingChange('backup', {
                         ...settings.backup,
                         backupFrequency: e.target.value,
                       })
                     }
                   >
-                    <option value="manual">
-                      {t("settings.backup.frequency.manual")}
-                    </option>
-                    <option value="daily">
-                      {t("settings.backup.frequency.daily")}
-                    </option>
-                    <option value="weekly">
-                      {t("settings.backup.frequency.weekly")}
-                    </option>
-                    <option value="monthly">
-                      {t("settings.backup.frequency.monthly")}
-                    </option>
+                    <option value="manual">{t('settings.backup.frequency.manual')}</option>
+                    <option value="daily">{t('settings.backup.frequency.daily')}</option>
+                    <option value="weekly">{t('settings.backup.frequency.weekly')}</option>
+                    <option value="monthly">{t('settings.backup.frequency.monthly')}</option>
                   </Select>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.backup.maxBackups")} (
-                    {settings.backup.maxBackups})
+                    {t('settings.backup.maxBackups')} ({settings.backup.maxBackups})
                   </label>
                   <input
                     type="range"
@@ -1781,7 +1695,7 @@ const SettingsViewUI: FC = () => {
                     step="5"
                     value={settings.backup.maxBackups}
                     onChange={(e) =>
-                      handleSettingChange("backup", {
+                      handleSettingChange('backup', {
                         ...settings.backup,
                         maxBackups: parseInt(e.target.value),
                       })
@@ -1791,12 +1705,12 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
-                    {t("settings.backup.backupLocation")}
+                    {t('settings.backup.backupLocation')}
                   </label>
                   <Input
                     value={settings.backup.backupLocation}
                     onChange={(e) =>
-                      handleSettingChange("backup", {
+                      handleSettingChange('backup', {
                         ...settings.backup,
                         backupLocation: e.target.value,
                       })
@@ -1808,12 +1722,12 @@ const SettingsViewUI: FC = () => {
             </Card>
           </div>
         );
-      case "about":
+      case 'about':
         return (
           <Card>
             <CardHeader>
               <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-                {t("settings.about.title")}
+                {t('settings.about.title')}
               </h2>
             </CardHeader>
             <CardContent className="text-center text-[var(--foreground-muted)] space-y-2">
@@ -1831,7 +1745,7 @@ const SettingsViewUI: FC = () => {
                 StoryCraft Studio
               </h3>
               <p>Version 2.0.0</p>
-              <p>{t("settings.about.description")}</p>
+              <p>{t('settings.about.description')}</p>
             </CardContent>
           </Card>
         );
@@ -1844,10 +1758,14 @@ const SettingsViewUI: FC = () => {
     <div>
       {/* Mobile Navigation */}
       <div className="md:hidden mb-6">
-        <label className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2">
+        <label
+          htmlFor="settings-category"
+          className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+        >
           Category
         </label>
         <Select
+          id="settings-category"
           value={activeCategory}
           onChange={(e) => setActiveCategory(e.target.value)}
           className="w-full"
@@ -1896,121 +1814,105 @@ const SettingsModals: FC = () => {
     currentWordCount,
   } = useSettingsViewContext();
 
-  if (modal.state === "closed") return null;
+  if (modal.state === 'closed') return null;
 
-  if (modal.state === "reset")
+  if (modal.state === 'reset')
     return (
       <Modal
         isOpen={true}
-        onClose={() => setModal({ state: "closed", payload: {} })}
-        title={t("settings.resetModal.title")}
+        onClose={() => setModal({ state: 'closed', payload: {} })}
+        title={t('settings.resetModal.title')}
       >
         <div className="space-y-4">
-          {" "}
+          {' '}
           <p className="text-[var(--foreground-secondary)]">
-            {t("settings.resetModal.description")}
-          </p>{" "}
+            {t('settings.resetModal.description')}
+          </p>{' '}
           <div className="flex justify-end gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => setModal({ state: "closed", payload: {} })}
-            >
-              {t("common.cancel")}
+            <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
+              {t('common.cancel')}
             </Button>
             <Button variant="danger" onClick={handleResetProject}>
-              {t("settings.resetModal.confirm")}
+              {t('settings.resetModal.confirm')}
             </Button>
           </div>
         </div>
       </Modal>
     );
 
-  if (modal.state === "create")
+  if (modal.state === 'create')
     return (
       <Modal
         isOpen={true}
-        onClose={() => setModal({ state: "closed", payload: {} })}
-        title={t("settings.data.createSnapshot")}
+        onClose={() => setModal({ state: 'closed', payload: {} })}
+        title={t('settings.data.createSnapshot')}
       >
         <div className="space-y-4">
-          <label htmlFor="snapshot-name">
-            {t("settings.data.snapshotName")}
-          </label>
+          <label htmlFor="snapshot-name">{t('settings.data.snapshotName')}</label>
           <Input
             id="snapshot-name"
             value={snapshotName}
             onChange={(e) => setSnapshotName(e.target.value)}
-            placeholder={t("settings.data.snapshotNamePlaceholder")}
+            placeholder={t('settings.data.snapshotNamePlaceholder')}
           />
           <div className="flex justify-end gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => setModal({ state: "closed", payload: {} })}
-            >
-              {t("common.cancel")}
+            <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
+              {t('common.cancel')}
             </Button>
-            <Button onClick={handleCreateSnapshot}>
-              {t("common.generate")}
-            </Button>
+            <Button onClick={handleCreateSnapshot}>{t('common.generate')}</Button>
           </div>
         </div>
       </Modal>
     );
 
-  if (modal.state === "restore")
+  if (modal.state === 'restore')
     return (
       <Modal
         isOpen={true}
-        onClose={() => setModal({ state: "closed", payload: {} })}
-        title={t("settings.restoreModal.title")}
+        onClose={() => setModal({ state: 'closed', payload: {} })}
+        title={t('settings.restoreModal.title')}
       >
         <div className="space-y-4">
           <p className="text-[var(--foreground-secondary)]">
-            {t("settings.restoreModal.description", {
-              date: modal.payload.date || "the past",
+            {t('settings.restoreModal.description', {
+              date: modal.payload.date || 'the past',
             })}
           </p>
           <p className="text-sm bg-[var(--background-tertiary)] p-3 rounded-md border border-[var(--border-primary)]">
-            {t("settings.restoreModal.wordCountInfo", {
+            {t('settings.restoreModal.wordCountInfo', {
               snapshotWordCount: modal.payload.wordCount || 0,
               currentWordCount,
             })}
           </p>
           <div className="flex justify-end gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => setModal({ state: "closed", payload: {} })}
-            >
-              {t("common.cancel")}
+            <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
+              {t('common.cancel')}
             </Button>
             <Button variant="danger" onClick={handleRestoreSnapshot}>
-              {t("settings.restoreModal.confirm")}
+              {t('settings.restoreModal.confirm')}
             </Button>
           </div>
         </div>
       </Modal>
     );
 
-  if (modal.state === "delete")
+  if (modal.state === 'delete')
     return (
       <Modal
         isOpen={true}
-        onClose={() => setModal({ state: "closed", payload: {} })}
-        title={t("settings.deleteModal.title")}
+        onClose={() => setModal({ state: 'closed', payload: {} })}
+        title={t('settings.deleteModal.title')}
       >
         <div className="space-y-4">
           <p className="text-[var(--foreground-secondary)]">
-            {t("settings.deleteModal.description")}
+            {t('settings.deleteModal.description')}
           </p>
           <div className="flex justify-end gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => setModal({ state: "closed", payload: {} })}
-            >
-              {t("common.cancel")}
+            <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
+              {t('common.cancel')}
             </Button>
             <Button variant="danger" onClick={handleDeleteSnapshot}>
-              {t("settings.deleteModal.confirm")}
+              {t('settings.deleteModal.confirm')}
             </Button>
           </div>
         </div>

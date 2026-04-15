@@ -6,8 +6,8 @@
  * Streaming is supported for all providers.
  */
 
-import { AIProvider, AiModel } from "../types";
-import { storageService } from "./storageService";
+import type { AIProvider, AiModel } from '../types';
+import { storageService } from './storageService';
 
 export interface AIRequestOptions {
   model: AiModel;
@@ -34,27 +34,25 @@ export interface AIStreamCallbacks {
 async function streamOpenAI(
   prompt: string,
   opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks,
+  callbacks: AIStreamCallbacks
 ): Promise<void> {
-  const apiKey = await storageService.getApiKey("openai");
+  const apiKey = await storageService.getApiKey('openai');
   if (!apiKey)
-    throw new Error(
-      "NO_API_KEY: OpenAI API Key fehlt. Bitte in den Einstellungen eintragen.",
-    );
+    throw new Error('NO_API_KEY: OpenAI API Key fehlt. Bitte in den Einstellungen eintragen.');
 
-  const model = opts.model.startsWith("gpt-") ? opts.model : "gpt-4o-mini";
+  const model = opts.model.startsWith('gpt-') ? opts.model : 'gpt-4o-mini';
   const messages = opts.systemPrompt
     ? [
-        { role: "system", content: opts.systemPrompt },
-        { role: "user", content: prompt },
+        { role: 'system', content: opts.systemPrompt },
+        { role: 'user', content: prompt },
       ]
-    : [{ role: "user", content: prompt }];
+    : [{ role: 'user', content: prompt }];
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       model,
@@ -63,35 +61,35 @@ async function streamOpenAI(
       temperature: opts.temperature ?? 0.7,
       max_tokens: opts.maxTokens ?? 2048,
     }),
-    signal: opts.signal,
+    signal: opts.signal ?? null,
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
-      `OpenAI API Error ${res.status}: ${(err as Record<string, unknown>)?.error?.message ?? res.statusText}`,
+      `OpenAI API Error ${res.status}: ${(err as { error?: { message?: string } })?.error?.message ?? res.statusText}`
     );
   }
 
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("OpenAI: Kein Response-Body");
+  if (!reader) throw new Error('OpenAI: Kein Response-Body');
 
   const decoder = new TextDecoder();
-  let buffer = "";
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
 
     for (const line of lines) {
-      if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+      if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
       try {
         const json = JSON.parse(line.slice(6));
-        const delta = json?.choices?.[0]?.delta?.content ?? "";
+        const delta = json?.choices?.[0]?.delta?.content ?? '';
         if (delta) callbacks.onChunk(delta);
       } catch {
         // malformed chunk – skip
@@ -107,11 +105,11 @@ async function streamOpenAI(
 async function streamOllama(
   prompt: string,
   opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks,
+  callbacks: AIStreamCallbacks
 ): Promise<void> {
-  const baseUrl = opts.ollamaBaseUrl ?? "http://localhost:11434";
+  const baseUrl = opts.ollamaBaseUrl ?? 'http://localhost:11434';
   // Strip "ollama/" prefix if present
-  const model = opts.model.replace(/^ollama\//, "");
+  const model = opts.model.replace(/^ollama\//, '');
 
   const body: Record<string, unknown> = {
     model,
@@ -126,14 +124,15 @@ async function streamOllama(
   let res: Response;
   try {
     res = await fetch(`${baseUrl}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: opts.signal,
+      signal: opts.signal ?? null,
     });
   } catch (err) {
     throw new Error(
       `Ollama nicht erreichbar (${baseUrl}). Stellen Sie sicher, dass Ollama läuft: ollama serve`,
+      { cause: err }
     );
   }
 
@@ -142,18 +141,18 @@ async function streamOllama(
   }
 
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("Ollama: Kein Response-Body");
+  if (!reader) throw new Error('Ollama: Kein Response-Body');
 
   const decoder = new TextDecoder();
-  let buffer = "";
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
 
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -173,13 +172,13 @@ async function streamOllama(
 async function streamAnthropic(
   _prompt: string,
   _opts: AIRequestOptions,
-  _callbacks: AIStreamCallbacks,
+  _callbacks: AIStreamCallbacks
 ): Promise<void> {
   // Anthropic's API blocks direct browser requests (CORS).
   // A proxy backend is required. Show a helpful error.
   throw new Error(
-    "Claude/Anthropic: Direkte Browser-Anfragen werden von Anthropic blockiert (CORS). " +
-      "Bitte verwende einen Backend-Proxy oder wechsle zu Gemini/OpenAI/Ollama.",
+    'Claude/Anthropic: Direkte Browser-Anfragen werden von Anthropic blockiert (CORS). ' +
+      'Bitte verwende einen Backend-Proxy oder wechsle zu Gemini/OpenAI/Ollama.'
   );
 }
 
@@ -192,22 +191,22 @@ async function streamAnthropic(
 export async function streamAI(
   prompt: string,
   opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks,
+  callbacks: AIStreamCallbacks
 ): Promise<void> {
   switch (opts.provider) {
-    case "openai":
+    case 'openai':
       return streamOpenAI(prompt, opts, callbacks);
-    case "ollama":
+    case 'ollama':
       return streamOllama(prompt, opts, callbacks);
-    case "anthropic":
+    case 'anthropic':
       return streamAnthropic(prompt, opts, callbacks);
-    case "gemini":
+    case 'gemini':
     default:
       // Gemini is handled by the existing geminiService.ts
       // This is a fallback for when gemini is explicitly selected
       throw new Error(
-        "Gemini Provider: Bitte geminiService.ts direkt nutzen. " +
-          "aiProviderService ist für OpenAI/Ollama/Anthropic.",
+        'Gemini Provider: Bitte geminiService.ts direkt nutzen. ' +
+          'aiProviderService ist für OpenAI/Ollama/Anthropic.'
       );
   }
 }
@@ -218,37 +217,37 @@ export async function streamAI(
  */
 export async function testAIConnection(
   provider: AIProvider,
-  opts: Partial<AIRequestOptions>,
+  opts: Partial<AIRequestOptions>
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     switch (provider) {
-      case "openai": {
-        const apiKey = await storageService.getApiKey("openai");
-        if (!apiKey) return { ok: false, error: "Kein OpenAI API Key gesetzt" };
-        const res = await fetch("https://api.openai.com/v1/models", {
+      case 'openai': {
+        const apiKey = await storageService.getApiKey('openai');
+        if (!apiKey) return { ok: false, error: 'Kein OpenAI API Key gesetzt' };
+        const res = await fetch('https://api.openai.com/v1/models', {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),
         });
         if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
         return { ok: true };
       }
-      case "ollama": {
-        const base = opts.ollamaBaseUrl ?? "http://localhost:11434";
+      case 'ollama': {
+        const base = opts.ollamaBaseUrl ?? 'http://localhost:11434';
         const res = await fetch(`${base}/api/tags`, {
           signal: AbortSignal.timeout(5000),
         });
         if (!res.ok) return { ok: false, error: `Ollama HTTP ${res.status}` };
         return { ok: true };
       }
-      case "anthropic":
+      case 'anthropic':
         return {
           ok: false,
-          error: "Claude benötigt einen Backend-Proxy (CORS-Einschränkung)",
+          error: 'Claude benötigt einen Backend-Proxy (CORS-Einschränkung)',
         };
-      case "gemini":
+      case 'gemini':
         return { ok: true }; // Tested via existing geminiService
       default:
-        return { ok: false, error: "Unbekannter Provider" };
+        return { ok: false, error: 'Unbekannter Provider' };
     }
   } catch (e) {
     return {
@@ -261,9 +260,7 @@ export async function testAIConnection(
 /**
  * List available Ollama models from the local server.
  */
-export async function listOllamaModels(
-  baseUrl = "http://localhost:11434",
-): Promise<string[]> {
+export async function listOllamaModels(baseUrl = 'http://localhost:11434'): Promise<string[]> {
   try {
     const res = await fetch(`${baseUrl}/api/tags`, {
       signal: AbortSignal.timeout(5000),

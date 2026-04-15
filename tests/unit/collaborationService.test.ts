@@ -23,7 +23,7 @@ if (!globalThis.crypto?.subtle) {
     },
   });
 } else if (!globalThis.crypto.subtle.digest) {
-  globalThis.crypto.subtle.digest = mockDigest as any;
+  globalThis.crypto.subtle.digest = mockDigest as unknown as SubtleCrypto['digest'];
 }
 import { collaborationService } from '../../services/collaborationService';
 
@@ -38,14 +38,14 @@ vi.mock('y-webrtc', () => {
     };
     disconnect = vi.fn();
     destroy = vi.fn();
-    constructor(_room: string, _doc: any, _opts: any) {}
+    constructor(_room: string, _doc: unknown, _opts: unknown) {}
   }
   return { WebrtcProvider: MockWebrtcProvider };
 });
 
 vi.mock('yjs', () => {
   class MockDoc {
-    getText(name: string) {
+    getText(_name: string) {
       return { toString: () => '' };
     }
     destroy() {}

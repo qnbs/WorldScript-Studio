@@ -1,5 +1,5 @@
-import { ProjectSnapshot, Settings } from '../types';
-import { ProjectData } from '../features/project/projectSlice';
+import type { ProjectSnapshot, Settings } from '../types';
+import type { ProjectData } from '../features/project/projectSlice';
 import LZString from 'lz-string';
 
 const DB_NAME = 'storycraft-db';
@@ -25,7 +25,7 @@ function compressData<T>(data: T): string | T {
   }
 }
 
-function decompressData<T>(raw: any): T {
+function decompressData<T>(raw: unknown): T {
   if (typeof raw === 'string' && raw.startsWith('\x00lz1\x00')) {
     try {
       const decompressed = LZString.decompressFromUTF16(raw.slice(5));
@@ -55,18 +55,19 @@ interface PersistedState {
 
 // Hilfsfunktion für Retry bei IndexedDB
 async function retryDb<T>(fn: () => Promise<T>, retries = 2, delayMs = 500): Promise<T> {
-  let lastError: any;
+  let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
-    } catch (err) {
+    } catch (err: unknown) {
       lastError = err;
       // Nur bei temporären Fehlern erneut versuchen
+      const name = err instanceof DOMException ? err.name : undefined;
       if (
-        err?.name === 'QuotaExceededError' ||
-        err?.name === 'InvalidStateError' ||
-        err?.name === 'AbortError' ||
-        err?.name === 'TransactionInactiveError'
+        name === 'QuotaExceededError' ||
+        name === 'InvalidStateError' ||
+        name === 'AbortError' ||
+        name === 'TransactionInactiveError'
       ) {
         if (attempt < retries) await new Promise((res) => setTimeout(res, delayMs));
       } else {
@@ -77,24 +78,25 @@ async function retryDb<T>(fn: () => Promise<T>, retries = 2, delayMs = 500): Pro
   throw lastError;
 }
 
-function getUserFriendlyDbError(error: any): string {
-  if (error?.name === 'QuotaExceededError') {
-    return 'Speicherplatz im Browser ist erschöpft. Bitte löschen Sie alte Projekte oder Snapshots.';
+function getUserFriendlyDbError(error: unknown): string {
+  if (error instanceof DOMException) {
+    if (error.name === 'QuotaExceededError') {
+      return 'Speicherplatz im Browser ist erschöpft. Bitte löschen Sie alte Projekte oder Snapshots.';
+    }
+    if (error.name === 'InvalidStateError' || error.name === 'TransactionInactiveError') {
+      return 'Interner Fehler beim Zugriff auf die Datenbank. Bitte Seite neu laden.';
+    }
+    if (error.name === 'AbortError') {
+      return 'Datenbankoperation wurde abgebrochen.';
+    }
   }
-  if (error?.name === 'InvalidStateError' || error?.name === 'TransactionInactiveError') {
-    return 'Interner Fehler beim Zugriff auf die Datenbank. Bitte Seite neu laden.';
+  if (error instanceof Error) {
+    return error.message;
   }
-  if (error?.name === 'AbortError') {
-    return 'Datenbankoperation wurde abgebrochen.';
-  }
-  return error?.message || 'Unbekannter Fehler beim Zugriff auf die Datenbank.';
+  return 'Unbekannter Fehler beim Zugriff auf die Datenbank.';
 }
 
-import { StoryProject, Settings } from '../types';
-import { StorageBackend } from './storageService';
-
-// Extend IndexedDBService to implement StorageBackend
-class IndexedDBService implements StorageBackend {
+class IndexedDBService {
   private db: IDBDatabase | null = null;
   private lastAutoSnapshotTime = Date.now();
   private readonly AUTO_SNAPSHOT_INTERVAL = 30 * 1000; // 30 Sekunden (War: 30 Minuten)
@@ -329,11 +331,7 @@ class IndexedDBService implements StorageBackend {
         };
         this.db = db;
         resolve();
-        return; // Verhindert doppeltes Setzen unten
       };
-
-      // Dummy-Value damit der folgende onsuccess-Block nicht doppelt läuft
-      (request as any).__handled = true;
 
       request.onerror = () => {
         console.error('IndexedDB error:', request.error);
@@ -357,10 +355,10 @@ class IndexedDBService implements StorageBackend {
     sliceName: 'project' | 'settings',
     data: PersistedProjectState | Settings
   ): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-      // Compress large state objects (project data can exceed 100 KB)
-      const payload = compressData(data);
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    // Compress large state objects (project data can exceed 100 KB)
+    const payload = compressData(data);
+    return new Promise((resolve, reject) => {
       const request = store.put(payload, sliceName);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
@@ -391,7 +389,7 @@ class IndexedDBService implements StorageBackend {
     // If project is missing but we have settings, return partial to allow new user flow
     if (!project && !settings) return undefined;
 
-    let validProject = project ? (project as PersistedProjectState) : undefined;
+    const validProject = project ? (project as PersistedProjectState) : undefined;
 
     // Ensure Project Structure consistency
     if (validProject) {
@@ -409,8 +407,9 @@ class IndexedDBService implements StorageBackend {
     }
 
     // Ensure settings has defaults if missing keys
-    let validSettings = settings as Settings;
+    let validSettings: Settings | undefined;
     if (settings) {
+      const incoming = settings as Record<string, unknown>;
       validSettings = {
         theme: 'dark',
         editorFont: 'serif',
@@ -419,19 +418,22 @@ class IndexedDBService implements StorageBackend {
         aiCreativity: 'Balanced',
         paragraphSpacing: 1,
         indentFirstLine: false,
-        ...(settings as Partial<Settings>),
-      };
+        ...incoming,
+      } as Settings;
     }
 
-    return { project: validProject, settings: validSettings };
+    const result: PersistedState = {};
+    if (validProject) result.project = validProject;
+    if (validSettings) result.settings = validSettings;
+    return result;
   }
 
   async loadState(): Promise<PersistedState | undefined> {
-    return new Promise(async (resolve, reject) => {
-      const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
-      const projectRequest = store.get('project');
-      const settingsRequest = store.get('settings');
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
+    const projectRequest = store.get('project');
+    const settingsRequest = store.get('settings');
 
+    return new Promise((resolve, reject) => {
       let project: unknown;
       let settings: unknown;
       let completed = 0;
@@ -467,7 +469,7 @@ class IndexedDBService implements StorageBackend {
         };
         request.onerror = () => resolve(false);
       });
-    } catch (e) {
+    } catch {
       return false;
     }
   }
@@ -482,11 +484,11 @@ class IndexedDBService implements StorageBackend {
     });
   }
 
-  async getImage(id: string): Promise<string | undefined> {
+  async getImage(id: string): Promise<string | null> {
     const store = await this.getObjectStore(IMAGES_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.get(id);
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => resolve(request.result ?? null);
       request.onerror = () => reject(request.error);
     });
   }
@@ -533,7 +535,7 @@ class IndexedDBService implements StorageBackend {
       request.onsuccess = () => {
         const cursor = request.result;
         if (cursor) {
-          const { data, ...metadata } = cursor.value;
+          const { data: _data, ...metadata } = cursor.value;
           snapshots.push({ id: cursor.key as number, ...metadata });
           cursor.continue();
         } else {
@@ -586,45 +588,5 @@ class IndexedDBService implements StorageBackend {
     }
   }
 }
-
-// StorageBackend interface implementation
-// These methods provide the interface expected by storageService
-export interface StorageBackendMethods {
-  saveProject(project: StoryProject): Promise<void>;
-  loadProject(projectId: string): Promise<StoryProject | null>;
-  listProjects(): Promise<string[]>;
-  deleteProject(projectId: string): Promise<void>;
-  saveImage(id: string, base64Data: string): Promise<void>;
-  getImage(id: string): Promise<string | null>;
-  saveSettings(settings: Settings): Promise<void>;
-  loadSettings(): Promise<Settings | null>;
-  saveGeminiApiKey(apiKey: string): Promise<void>;
-  getGeminiApiKey(): Promise<string | null>;
-  saveSnapshot(snapshotId: string, data: any): Promise<void>;
-  getSnapshotData(snapshotId: string): Promise<any>;
-  listSnapshots(): Promise<string[]>;
-  deleteSnapshot(snapshotId: string): Promise<void>;
-}
-
-// Add StorageBackend implementation to IndexedDBService
-declare module './dbService' {
-  interface IndexedDBService extends StorageBackendMethods {}
-}
-
-// Implement the methods
-IndexedDBService.prototype.saveProject = IndexedDBService.prototype.saveProject;
-IndexedDBService.prototype.loadProject = IndexedDBService.prototype.loadProject;
-IndexedDBService.prototype.listProjects = IndexedDBService.prototype.listProjects;
-IndexedDBService.prototype.deleteProject = IndexedDBService.prototype.deleteProject;
-IndexedDBService.prototype.saveImage = IndexedDBService.prototype.saveImage;
-IndexedDBService.prototype.getImage = IndexedDBService.prototype.getImage;
-IndexedDBService.prototype.saveSettings = IndexedDBService.prototype.saveSettings;
-IndexedDBService.prototype.loadSettings = IndexedDBService.prototype.loadSettings;
-IndexedDBService.prototype.saveGeminiApiKey = IndexedDBService.prototype.saveGeminiApiKey;
-IndexedDBService.prototype.getGeminiApiKey = IndexedDBService.prototype.getGeminiApiKey;
-IndexedDBService.prototype.saveSnapshot = IndexedDBService.prototype.createSnapshot;
-IndexedDBService.prototype.getSnapshotData = IndexedDBService.prototype.getSnapshotData;
-IndexedDBService.prototype.listSnapshots = IndexedDBService.prototype.listSnapshots;
-IndexedDBService.prototype.deleteSnapshot = IndexedDBService.prototype.deleteSnapshot;
 
 export const dbService = new IndexedDBService();

@@ -2,8 +2,12 @@ import { useState, useRef, useCallback } from 'react';
 import { useTranslation } from './useTranslation';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectManuscript, selectOutline } from '../features/project/projectSelectors';
-import { projectActions, generateOutlineThunk, regenerateOutlineSectionThunk } from '../features/project/projectSlice';
-import { OutlineSection, View, StorySection } from '../types';
+import {
+  projectActions,
+  generateOutlineThunk,
+  regenerateOutlineSectionThunk,
+} from '../features/project/projectSlice';
+import type { OutlineSection, View, StorySection } from '../types';
 import { useToast } from '../components/ui/Toast';
 
 interface UseOutlineGeneratorProps {
@@ -48,19 +52,40 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   const generate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    const resultAction = await dispatch(generateOutlineThunk({
-        genre, idea, characters, setting, pacing, numChapters, includeTwist, lang: language
-    }));
-    
-    if(generateOutlineThunk.fulfilled.match(resultAction)) {
-        setOutline(resultAction.payload.map(s => ({...s, id: s.id || `gen-${Math.random()}`})));
-        toast.success(t('common.saved'));
+    const resultAction = await dispatch(
+      generateOutlineThunk({
+        genre,
+        idea,
+        characters,
+        setting,
+        pacing,
+        numChapters,
+        includeTwist,
+        lang: language,
+      })
+    );
+
+    if (generateOutlineThunk.fulfilled.match(resultAction)) {
+      setOutline(resultAction.payload.map((s) => ({ ...s, id: s.id || `gen-${Math.random()}` })));
+      toast.success(t('common.saved'));
     } else {
-        setError(t('outline.error.generationFailed'));
-        toast.error(t('outline.error.generationFailed'));
+      setError(t('outline.error.generationFailed'));
+      toast.error(t('outline.error.generationFailed'));
     }
     setIsLoading(false);
-  }, [dispatch, genre, idea, characters, setting, pacing, numChapters, includeTwist, language, t, toast]);
+  }, [
+    dispatch,
+    genre,
+    idea,
+    characters,
+    setting,
+    pacing,
+    numChapters,
+    includeTwist,
+    language,
+    t,
+    toast,
+  ]);
 
   const handleGenerate = useCallback(() => {
     if (outline.length > 0) {
@@ -78,26 +103,33 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
       generate();
     }
   }, [outline.length, t, generate]);
-  
-  const handleRegenerate = useCallback(async (index: number) => {
-    const sectionToRegen = outline[index];
-    setIsRegenerating(sectionToRegen.id);
-    const resultAction = await dispatch(regenerateOutlineSectionThunk({
-        allSections: outline, sectionToIndex: index, lang: language
-    }));
 
-    if (regenerateOutlineSectionThunk.fulfilled.match(resultAction)) {
+  const handleRegenerate = useCallback(
+    async (index: number) => {
+      const sectionToRegen = outline[index];
+      setIsRegenerating(sectionToRegen.id);
+      const resultAction = await dispatch(
+        regenerateOutlineSectionThunk({
+          allSections: outline,
+          sectionToIndex: index,
+          lang: language,
+        })
+      );
+
+      if (regenerateOutlineSectionThunk.fulfilled.match(resultAction)) {
         const { index: newIndex, newSection } = resultAction.payload;
-        setOutline(currentOutline => {
-            const newOutline = [...currentOutline];
-            newOutline[newIndex] = { ...newOutline[newIndex], ...newSection };
-            return newOutline;
+        setOutline((currentOutline) => {
+          const newOutline = [...currentOutline];
+          newOutline[newIndex] = { ...newOutline[newIndex], ...newSection };
+          return newOutline;
         });
-    } else {
-         toast.error(t('outline.error.generationFailed'));
-    }
-    setIsRegenerating(null);
-  }, [dispatch, outline, language, t, toast]);
+      } else {
+        toast.error(t('outline.error.generationFailed'));
+      }
+      setIsRegenerating(null);
+    },
+    [dispatch, outline, language, t, toast]
+  );
 
   const handleDragSort = useCallback(() => {
     if (draggedItem.current === null || dragOverItem.current === null) return;
@@ -108,70 +140,93 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
     draggedItem.current = null;
     dragOverItem.current = null;
   }, [outline]);
-  
-  const handleMove = useCallback((index: number, direction: 'up' | 'down') => {
+
+  const handleMove = useCallback(
+    (index: number, direction: 'up' | 'down') => {
       const newIndex = direction === 'up' ? index - 1 : index + 1;
       if (newIndex < 0 || newIndex >= outline.length) return;
       const newOutline = [...outline];
       [newOutline[index], newOutline[newIndex]] = [newOutline[newIndex], newOutline[index]];
       setOutline(newOutline);
-  }, [outline]);
+    },
+    [outline]
+  );
 
   const updateSection = useCallback((id: string, changes: Partial<OutlineSection>) => {
-    setOutline(currentOutline => currentOutline.map(sec => sec.id === id ? { ...sec, ...changes } : sec));
+    setOutline((currentOutline) =>
+      currentOutline.map((sec) => (sec.id === id ? { ...sec, ...changes } : sec))
+    );
   }, []);
-  
-  const addSection = useCallback((index: number) => {
-    const newSection = { id: `custom-${Date.now()}`, title: t('outline.result.newSectionTitle'), description: '' };
-    setOutline(currentOutline => {
+
+  const addSection = useCallback(
+    (index: number) => {
+      const newSection = {
+        id: `custom-${Date.now()}`,
+        title: t('outline.result.newSectionTitle'),
+        description: '',
+      };
+      setOutline((currentOutline) => {
         const newOutline = [...currentOutline];
         newOutline.splice(index + 1, 0, newSection);
         return newOutline;
-    });
-  }, [t]);
+      });
+    },
+    [t]
+  );
 
   const deleteSection = useCallback((id: string) => {
-    setOutline(currentOutline => currentOutline.filter(sec => sec.id !== id));
+    setOutline((currentOutline) => currentOutline.filter((sec) => sec.id !== id));
   }, []);
-  
+
   const apply = useCallback(() => {
-      const newManuscript: StorySection[] = outline.map((s, i) => ({
-          id: `sec-${Date.now()}-${i}`,
-          title: s.title,
-          content: '',
-          prompt: s.description
-      }));
-      dispatch(projectActions.setOutline(outline));
-      dispatch(projectActions.setManuscript(newManuscript));
-      setConfirmModal(null);
-      toast.success(t('common.saved'), t('sidebar.manuscript'));
-      onNavigate('manuscript');
+    const newManuscript: StorySection[] = outline.map((s, i) => ({
+      id: `sec-${Date.now()}-${i}`,
+      title: s.title,
+      content: '',
+      prompt: s.description,
+    }));
+    dispatch(projectActions.setOutline(outline));
+    dispatch(projectActions.setManuscript(newManuscript));
+    setConfirmModal(null);
+    toast.success(t('common.saved'), t('sidebar.manuscript'));
+    onNavigate('manuscript');
   }, [dispatch, outline, onNavigate, toast, t]);
-  
+
   const handleApplyOutline = useCallback(() => {
-      if (existingManuscript.length > 1 || (existingManuscript.length === 1 && existingManuscript[0].content !== '')) {
-           setConfirmModal({
-                type: 'apply',
-                title: t('outline.confirm.applyTitle'),
-                description: t('outline.applyOverwriteConfirm'),
-                confirmText: t('outline.confirm.applyAction'),
-                onConfirm: apply,
-            });
-      } else {
-          apply();
-      }
+    if (
+      existingManuscript.length > 1 ||
+      (existingManuscript.length === 1 && existingManuscript[0].content !== '')
+    ) {
+      setConfirmModal({
+        type: 'apply',
+        title: t('outline.confirm.applyTitle'),
+        description: t('outline.applyOverwriteConfirm'),
+        confirmText: t('outline.confirm.applyAction'),
+        onConfirm: apply,
+      });
+    } else {
+      apply();
+    }
   }, [existingManuscript, t, apply]);
 
   return {
     t,
-    genre, setGenre,
-    idea, setIdea,
-    showAdvanced, setShowAdvanced,
-    characters, setCharacters,
-    setting, setSetting,
-    pacing, setPacing,
-    numChapters, setNumChapters,
-    includeTwist, setIncludeTwist,
+    genre,
+    setGenre,
+    idea,
+    setIdea,
+    showAdvanced,
+    setShowAdvanced,
+    characters,
+    setCharacters,
+    setting,
+    setSetting,
+    pacing,
+    setPacing,
+    numChapters,
+    setNumChapters,
+    includeTwist,
+    setIncludeTwist,
     isLoading,
     handleGenerate,
     outline,

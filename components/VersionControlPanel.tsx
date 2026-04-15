@@ -1,5 +1,6 @@
-import React, { FC, useState, useCallback, useMemo } from "react";
-import { useAppDispatch, useAppSelector } from "../app/hooks";
+import type { FC } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
 import {
   versionControlActions,
   selectCurrentBranch,
@@ -8,25 +9,22 @@ import {
   selectIsPanelOpen,
   decompressManuscript,
   MAIN_BRANCH_ID,
-} from "../features/versionControl/versionControlSlice";
-import { projectActions } from "../features/project/projectSlice";
-import { selectProjectData } from "../features/project/projectSelectors";
-import { Button } from "./ui/Button";
-import { Input } from "./ui/Input";
-import { Modal } from "./ui/Modal";
-import { VersionBranch, VersionSnapshot } from "../types";
+} from '../features/versionControl/versionControlSlice';
+import { projectActions } from '../features/project/projectSlice';
+import { selectProjectData } from '../features/project/projectSelectors';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
+import type { VersionBranch, VersionSnapshot, StorySection } from '../types';
 
 // ─── Helper Components ────────────────────────────────────────────────────────
 
-const BranchBadge: FC<{ branch: VersionBranch; isActive?: boolean }> = ({
-  branch,
-  isActive,
-}) => (
+const BranchBadge: FC<{ branch: VersionBranch; isActive?: boolean }> = ({ branch, isActive }) => (
   <span
     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${
       isActive
-        ? "bg-[var(--background-interactive)] text-white"
-        : "bg-[var(--background-tertiary)] text-[var(--foreground-secondary)]"
+        ? 'bg-[var(--background-interactive)] text-white'
+        : 'bg-[var(--background-tertiary)] text-[var(--foreground-secondary)]'
     }`}
   >
     <span
@@ -48,8 +46,8 @@ const SnapshotCard: FC<{
   <div
     className={`p-3 rounded-lg border transition-colors ${
       isHead
-        ? "border-[var(--border-interactive)] bg-[var(--background-interactive)]/5"
-        : "border-[var(--border-primary)] bg-[var(--background-secondary)]/50"
+        ? 'border-[var(--border-interactive)] bg-[var(--background-interactive)]/5'
+        : 'border-[var(--border-primary)] bg-[var(--background-secondary)]/50'
     }`}
   >
     <div className="flex items-start justify-between gap-2">
@@ -66,7 +64,7 @@ const SnapshotCard: FC<{
           {branch && <BranchBadge branch={branch} />}
         </div>
         <div className="flex items-center gap-3 mt-1 text-xs text-[var(--foreground-muted)]">
-          <time>{new Date(snapshot.timestamp).toLocaleString("de-DE")}</time>
+          <time>{new Date(snapshot.timestamp).toLocaleString('de-DE')}</time>
           <span>{snapshot.wordCount.toLocaleString()} Wörter</span>
         </div>
       </div>
@@ -103,23 +101,18 @@ export const VersionControlPanel: FC = () => {
   const allBranches = useAppSelector(selectAllBranches);
   const project = useAppSelector(selectProjectData);
 
-  const [snapshotLabel, setSnapshotLabel] = useState("");
-  const [newBranchName, setNewBranchName] = useState("");
-  const [newBranchDesc, setNewBranchDesc] = useState("");
+  const [snapshotLabel, setSnapshotLabel] = useState('');
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchDesc, setNewBranchDesc] = useState('');
   const [fromSnapshotId, setFromSnapshotId] = useState<string | undefined>();
   const [modal, setModal] = useState<
-    "none" | "createSnapshot" | "createBranch" | "restore" | "switchBranch"
-  >("none");
-  const [pendingRestore, setPendingRestore] = useState<VersionSnapshot | null>(
-    null,
-  );
+    'none' | 'createSnapshot' | 'createBranch' | 'restore' | 'switchBranch'
+  >('none');
+  const [pendingRestore, setPendingRestore] = useState<VersionSnapshot | null>(null);
 
   const manuscript = useMemo(
-    () =>
-      Array.isArray(project?.manuscript)
-        ? (project.manuscript as import("../types").StorySection[])
-        : [],
-    [project?.manuscript],
+    () => (Array.isArray(project?.manuscript) ? (project.manuscript as StorySection[]) : []),
+    [project?.manuscript]
   );
 
   const handleCreateSnapshot = useCallback(() => {
@@ -128,10 +121,10 @@ export const VersionControlPanel: FC = () => {
       versionControlActions.createSnapshot({
         label: snapshotLabel.trim(),
         sections: manuscript,
-      }),
+      })
     );
-    setSnapshotLabel("");
-    setModal("none");
+    setSnapshotLabel('');
+    setModal('none');
   }, [dispatch, snapshotLabel, manuscript]);
 
   const handleCreateBranch = useCallback(() => {
@@ -142,17 +135,17 @@ export const VersionControlPanel: FC = () => {
         description: newBranchDesc.trim(),
         fromSnapshotId,
         switchTo: true,
-      }),
+      })
     );
-    setNewBranchName("");
-    setNewBranchDesc("");
+    setNewBranchName('');
+    setNewBranchDesc('');
     setFromSnapshotId(undefined);
-    setModal("none");
+    setModal('none');
   }, [dispatch, newBranchName, newBranchDesc, fromSnapshotId]);
 
   const handleRestore = useCallback((snapshot: VersionSnapshot) => {
     setPendingRestore(snapshot);
-    setModal("restore");
+    setModal('restore');
   }, []);
 
   const confirmRestore = useCallback(() => {
@@ -166,7 +159,7 @@ export const VersionControlPanel: FC = () => {
           projectActions.updateSectionContent({
             id: section.id,
             content: section.content,
-          }),
+          })
         );
       }
     });
@@ -174,14 +167,14 @@ export const VersionControlPanel: FC = () => {
     dispatch(projectActions.setManuscript(sections));
     dispatch(versionControlActions.closePanel());
     setPendingRestore(null);
-    setModal("none");
+    setModal('none');
   }, [dispatch, pendingRestore]);
 
   const handleDeleteSnapshot = useCallback(
     (id: string) => {
       dispatch(versionControlActions.deleteSnapshot(id));
     },
-    [dispatch],
+    [dispatch]
   );
 
   const handleDeleteBranch = useCallback(
@@ -189,7 +182,7 @@ export const VersionControlPanel: FC = () => {
       if (id === MAIN_BRANCH_ID) return;
       dispatch(versionControlActions.deleteBranch(id));
     },
-    [dispatch],
+    [dispatch]
   );
 
   if (!isOpen) return null;
@@ -258,7 +251,7 @@ export const VersionControlPanel: FC = () => {
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => setModal("switchBranch")}
+                    onClick={() => setModal('switchBranch')}
                     aria-label="Branch wechseln"
                   >
                     Wechseln
@@ -268,7 +261,7 @@ export const VersionControlPanel: FC = () => {
                     variant="secondary"
                     onClick={() => {
                       setFromSnapshotId(currentBranch.headSnapshotId);
-                      setModal("createBranch");
+                      setModal('createBranch');
                     }}
                     aria-label="Neuen Branch erstellen"
                   >
@@ -287,7 +280,7 @@ export const VersionControlPanel: FC = () => {
               </h3>
               <Button
                 size="sm"
-                onClick={() => setModal("createSnapshot")}
+                onClick={() => setModal('createSnapshot')}
                 aria-label="Neuen Snapshot erstellen"
               >
                 + Snapshot
@@ -303,9 +296,7 @@ export const VersionControlPanel: FC = () => {
             ) : (
               <div className="space-y-2">
                 {currentSnapshots.map((snap) => {
-                  const branch = allBranches.find(
-                    (b) => b.id === snap.branchId,
-                  );
+                  const branch = allBranches.find((b) => b.id === snap.branchId);
                   const isHead = currentBranch?.headSnapshotId === snap.id;
                   return (
                     <SnapshotCard
@@ -334,18 +325,14 @@ export const VersionControlPanel: FC = () => {
                   className="flex items-center justify-between p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)]"
                 >
                   <div>
-                    <BranchBadge
-                      branch={branch}
-                      isActive={branch.id === currentBranch?.id}
-                    />
+                    <BranchBadge branch={branch} isActive={branch.id === currentBranch?.id} />
                     {branch.description && (
                       <p className="text-xs text-[var(--foreground-muted)] mt-1">
                         {branch.description}
                       </p>
                     )}
                     <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
-                      Erstellt:{" "}
-                      {new Date(branch.createdAt).toLocaleDateString("de-DE")}
+                      Erstellt: {new Date(branch.createdAt).toLocaleDateString('de-DE')}
                     </p>
                   </div>
                   <div className="flex gap-1">
@@ -353,11 +340,7 @@ export const VersionControlPanel: FC = () => {
                       <Button
                         size="sm"
                         variant="secondary"
-                        onClick={() =>
-                          dispatch(
-                            versionControlActions.switchBranch(branch.id),
-                          )
-                        }
+                        onClick={() => dispatch(versionControlActions.switchBranch(branch.id))}
                       >
                         Wechseln
                       </Button>
@@ -383,30 +366,26 @@ export const VersionControlPanel: FC = () => {
 
       {/* Modal: Create Snapshot */}
       <Modal
-        isOpen={modal === "createSnapshot"}
-        onClose={() => setModal("none")}
+        isOpen={modal === 'createSnapshot'}
+        onClose={() => setModal('none')}
         title="Snapshot erstellen"
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--foreground-secondary)]">
-            Speichert den aktuellen Stand des Manuskripts als
-            wiederherstellbaren Snapshot.
+            Speichert den aktuellen Stand des Manuskripts als wiederherstellbaren Snapshot.
           </p>
           <Input
             placeholder="z.B. Vor dem großen Twist"
             value={snapshotLabel}
             onChange={(e) => setSnapshotLabel(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreateSnapshot()}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreateSnapshot()}
             autoFocus
           />
           <div className="flex gap-3 justify-end">
-            <Button variant="secondary" onClick={() => setModal("none")}>
+            <Button variant="secondary" onClick={() => setModal('none')}>
               Abbrechen
             </Button>
-            <Button
-              onClick={handleCreateSnapshot}
-              disabled={!snapshotLabel.trim()}
-            >
+            <Button onClick={handleCreateSnapshot} disabled={!snapshotLabel.trim()}>
               Snapshot erstellen
             </Button>
           </div>
@@ -415,14 +394,13 @@ export const VersionControlPanel: FC = () => {
 
       {/* Modal: Create Branch */}
       <Modal
-        isOpen={modal === "createBranch"}
-        onClose={() => setModal("none")}
+        isOpen={modal === 'createBranch'}
+        onClose={() => setModal('none')}
         title="Neuen Branch erstellen"
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--foreground-secondary)]">
-            Branches erlauben alternative Handlungsverläufe (z.B. „Alternatives
-            Ende").
+            Branches erlauben alternative Handlungsverläufe (z.B. „Alternatives Ende").
           </p>
           <Input
             placeholder="Branch-Name, z.B. Alternatives Ende"
@@ -436,13 +414,10 @@ export const VersionControlPanel: FC = () => {
             onChange={(e) => setNewBranchDesc(e.target.value)}
           />
           <div className="flex gap-3 justify-end">
-            <Button variant="secondary" onClick={() => setModal("none")}>
+            <Button variant="secondary" onClick={() => setModal('none')}>
               Abbrechen
             </Button>
-            <Button
-              onClick={handleCreateBranch}
-              disabled={!newBranchName.trim()}
-            >
+            <Button onClick={handleCreateBranch} disabled={!newBranchName.trim()}>
               Branch erstellen
             </Button>
           </div>
@@ -451,33 +426,29 @@ export const VersionControlPanel: FC = () => {
 
       {/* Modal: Restore Snapshot */}
       <Modal
-        isOpen={modal === "restore"}
+        isOpen={modal === 'restore'}
         onClose={() => {
-          setModal("none");
+          setModal('none');
           setPendingRestore(null);
         }}
         title="Snapshot wiederherstellen"
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--foreground-secondary)]">
-            Das Manuskript wird auf den Snapshot{" "}
-            <strong className="text-[var(--foreground-primary)]">
-              „{pendingRestore?.label}"
-            </strong>{" "}
-            (
-            {pendingRestore &&
-              new Date(pendingRestore.timestamp).toLocaleString("de-DE")}
-            ) zurückgesetzt.
+            Das Manuskript wird auf den Snapshot{' '}
+            <strong className="text-[var(--foreground-primary)]">„{pendingRestore?.label}"</strong>{' '}
+            ({pendingRestore && new Date(pendingRestore.timestamp).toLocaleString('de-DE')})
+            zurückgesetzt.
           </p>
           <p className="text-sm text-amber-400">
-            ⚠️ Der aktuelle Stand geht verloren, sofern kein Snapshot existiert.
-            Erstelle vorher einen Snapshot!
+            ⚠️ Der aktuelle Stand geht verloren, sofern kein Snapshot existiert. Erstelle vorher
+            einen Snapshot!
           </p>
           <div className="flex gap-3 justify-end">
             <Button
               variant="secondary"
               onClick={() => {
-                setModal("none");
+                setModal('none');
                 setPendingRestore(null);
               }}
             >
@@ -492,8 +463,8 @@ export const VersionControlPanel: FC = () => {
 
       {/* Modal: Switch Branch */}
       <Modal
-        isOpen={modal === "switchBranch"}
-        onClose={() => setModal("none")}
+        isOpen={modal === 'switchBranch'}
+        onClose={() => setModal('none')}
         title="Branch wechseln"
       >
         <div className="space-y-3">
@@ -502,12 +473,12 @@ export const VersionControlPanel: FC = () => {
               key={branch.id}
               onClick={() => {
                 dispatch(versionControlActions.switchBranch(branch.id));
-                setModal("none");
+                setModal('none');
               }}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
                 branch.id === currentBranch?.id
-                  ? "border-[var(--border-interactive)] bg-[var(--background-interactive)]/5"
-                  : "border-[var(--border-primary)] hover:border-[var(--border-highlight)]"
+                  ? 'border-[var(--border-interactive)] bg-[var(--background-interactive)]/5'
+                  : 'border-[var(--border-primary)] hover:border-[var(--border-highlight)]'
               }`}
             >
               <span
@@ -519,15 +490,11 @@ export const VersionControlPanel: FC = () => {
                   {branch.name}
                 </p>
                 {branch.description && (
-                  <p className="text-xs text-[var(--foreground-muted)]">
-                    {branch.description}
-                  </p>
+                  <p className="text-xs text-[var(--foreground-muted)]">{branch.description}</p>
                 )}
               </div>
               {branch.id === currentBranch?.id && (
-                <span className="ml-auto text-xs text-[var(--foreground-muted)]">
-                  Aktiv
-                </span>
+                <span className="ml-auto text-xs text-[var(--foreground-muted)]">Aktiv</span>
               )}
             </button>
           ))}

@@ -1,4 +1,5 @@
-import React, { FC, useState, useEffect, useCallback } from 'react';
+import type { FC } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { dbService } from '../services/dbService';
 import { invalidateAiClientCache, generateText } from '../services/geminiService';
 import { Button } from './ui/Button';
@@ -61,9 +62,12 @@ export const ApiKeySection: FC = () => {
       setDecryptFailed(false);
       setMessage({ type: 'success', text: t('settings.apiKey.saved') });
       setTestResult(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to save API key:', error);
-      setMessage({ type: 'error', text: error?.message || t('settings.apiKey.errorSave') });
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : t('settings.apiKey.errorSave'),
+      });
     } finally {
       setIsSaving(false);
     }
@@ -78,9 +82,12 @@ export const ApiKeySection: FC = () => {
       invalidateAiClientCache();
       setHasKey(false);
       setMessage({ type: 'success', text: t('settings.apiKey.removed') });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to remove API key:', error);
-      setMessage({ type: 'error', text: error?.message || t('settings.apiKey.errorRemove') });
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : t('settings.apiKey.errorRemove'),
+      });
     } finally {
       setIsSaving(false);
     }
@@ -97,8 +104,8 @@ export const ApiKeySection: FC = () => {
       } else {
         setTestResult({ ok: false, text: 'API hat eine leere Antwort geliefert.' });
       }
-    } catch (err: any) {
-      const msg = err?.message || 'Verbindungstest fehlgeschlagen.';
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Verbindungstest fehlgeschlagen.';
       if (msg.includes('INVALID_API_KEY')) {
         setTestResult({
           ok: false,

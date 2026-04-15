@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { configureStore, AnyAction } from '@reduxjs/toolkit';
+import { describe, it, expect } from 'vitest';
+import type { AnyAction } from '@reduxjs/toolkit';
+import { configureStore } from '@reduxjs/toolkit';
+import type { ProjectData } from '../../features/project/projectSlice';
 import projectReducer, {
   projectActions,
-  ProjectData,
   charactersAdapter,
   worldsAdapter,
 } from '../../features/project/projectSlice';
-import undoable from 'redux-undo';
+import undoable, { type StateWithHistory } from 'redux-undo';
 
 // Helper to create a test store with proper structure
 function createTestStore(preloadedProjectData?: Partial<ProjectData>) {
@@ -34,7 +35,7 @@ function createTestStore(preloadedProjectData?: Partial<ProjectData>) {
         _latestUnfiltered: { data: { ...defaultData, ...preloadedProjectData } },
         index: 0,
         limit: 100,
-      } as any,
+      } as unknown as StateWithHistory<{ data: ProjectData }>,
     },
   });
 }

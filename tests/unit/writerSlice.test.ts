@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import writerReducer, { WriterState, WriterTool } from '../../features/writer/writerSlice';
-import { PayloadAction, createAction } from '@reduxjs/toolkit';
+import { describe, it, expect, beforeEach } from 'vitest';
+import type { WriterState } from '../../features/writer/writerSlice';
+import writerReducer from '../../features/writer/writerSlice';
 
 // Helper to get initial state
 function getInitialState(): WriterState {

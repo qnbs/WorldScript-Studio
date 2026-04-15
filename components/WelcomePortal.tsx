@@ -1,34 +1,31 @@
-import React, { useState, useRef, useEffect } from "react";
-import { useTranslation } from "../hooks/useTranslation";
-import { ICONS } from "../constants";
-import { Button } from "./ui/Button";
-import {
-  projectActions,
-  importProjectThunk,
-} from "../features/project/projectSlice";
-import { useAppDispatch } from "../app/hooks";
-import { View } from "../types";
-import { dbService } from "../services/dbService";
+import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from '../hooks/useTranslation';
+import { ICONS } from '../constants';
+import { Button } from './ui/Button';
+import { projectActions, importProjectThunk } from '../features/project/projectSlice';
+import { useAppDispatch } from '../app/hooks';
+import type { View } from '../types';
+import { dbService } from '../services/dbService';
 
 interface WelcomePortalProps {
   onExit: (view?: View) => void;
 }
 
-type PortalView = "main" | "new_project" | "open_project";
+type PortalView = 'main' | 'new_project' | 'open_project';
 
 const LanguageSelector = () => {
   const { language, setLanguage } = useTranslation();
   return (
     <div className="absolute top-4 right-4 space-x-2">
       <button
-        onClick={() => setLanguage("de")}
-        className={`px-3 py-1 text-sm rounded-md transition-colors ${language === "de" ? "bg-indigo-600 text-white" : "bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]"}`}
+        onClick={() => setLanguage('de')}
+        className={`px-3 py-1 text-sm rounded-md transition-colors ${language === 'de' ? 'bg-indigo-600 text-white' : 'bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]'}`}
       >
         DE
       </button>
       <button
-        onClick={() => setLanguage("en")}
-        className={`px-3 py-1 text-sm rounded-md transition-colors ${language === "en" ? "bg-indigo-600 text-white" : "bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]"}`}
+        onClick={() => setLanguage('en')}
+        className={`px-3 py-1 text-sm rounded-md transition-colors ${language === 'en' ? 'bg-indigo-600 text-white' : 'bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]'}`}
       >
         EN
       </button>
@@ -44,7 +41,15 @@ const NewProjectOption: React.FC<{
 }> = ({ icon, title, description, onClick }) => {
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className="bg-[var(--background-secondary)]/80 p-6 rounded-lg border border-[var(--border-primary)] hover:border-indigo-500 hover:bg-[var(--background-secondary)] transition-all cursor-pointer flex items-start space-x-4"
     >
       <div className="flex-shrink-0 bg-[var(--background-tertiary)] p-3 rounded-lg">
@@ -60,9 +65,7 @@ const NewProjectOption: React.FC<{
         </svg>
       </div>
       <div>
-        <h3 className="text-lg font-bold text-[var(--foreground-primary)]">
-          {title}
-        </h3>
+        <h3 className="text-lg font-bold text-[var(--foreground-primary)]">{title}</h3>
         <p className="text-[var(--foreground-muted)] mt-1">{description}</p>
       </div>
     </div>
@@ -72,7 +75,7 @@ const NewProjectOption: React.FC<{
 export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
-  const [view, setView] = useState<PortalView>("main");
+  const [view, setView] = useState<PortalView>('main');
   const importFileRef = useRef<HTMLInputElement>(null);
   const [hasExistingSession, setHasExistingSession] = useState(false);
 
@@ -87,41 +90,39 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   const handleStartBlank = () => {
     dispatch(
       projectActions.resetProject({
-        title: t("initialProject.title"),
-        logline: t("initialProject.logline"),
-      }),
+        title: t('initialProject.title'),
+        logline: t('initialProject.logline'),
+      })
     );
     dispatch(
       projectActions.setManuscript([
         {
           id: `sec-${Date.now()}`,
-          title: t("initialProject.chapter1"),
-          content: "",
+          title: t('initialProject.chapter1'),
+          content: '',
         },
-      ]),
+      ])
     );
-    onExit("manuscript");
+    onExit('manuscript');
   };
 
   const handleStartWithTemplate = () => {
-    onExit("templates");
+    onExit('templates');
   };
 
   const handleStartWithAI = () => {
-    onExit("outline");
+    onExit('outline');
   };
 
-  const handleImportFile = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const resultAction = await dispatch(importProjectThunk(file));
       if (importProjectThunk.fulfilled.match(resultAction)) {
-        alert(t("settings.data.importSuccess"));
-        onExit("manuscript");
+        alert(t('settings.data.importSuccess'));
+        onExit('manuscript');
       } else {
-        alert(t("settings.data.importError"));
+        alert(t('settings.data.importError'));
       }
     }
   };
@@ -139,34 +140,34 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         {ICONS.WRITER}
       </svg>
       <h1 className="text-4xl md:text-5xl font-bold text-[var(--foreground-primary)]">
-        {t("portal.welcome.title")}
+        {t('portal.welcome.title')}
       </h1>
       <p className="text-lg text-[var(--foreground-muted)] mt-2 mb-8">
-        {t("portal.welcome.subtitle")}
+        {t('portal.welcome.subtitle')}
       </p>
       <div className="flex flex-col sm:flex-row gap-4 justify-center">
         {hasExistingSession && (
           <Button
-            onClick={() => onExit("manuscript")}
+            onClick={() => onExit('manuscript')}
             variant="primary"
             className="px-8 py-4 text-lg"
           >
-            {t("portal.welcome.continue")}
+            {t('portal.welcome.continue')}
           </Button>
         )}
         <Button
-          onClick={() => setView("new_project")}
+          onClick={() => setView('new_project')}
           variant="secondary"
           className="px-8 py-4 text-lg"
         >
-          {t("portal.welcome.newProject")}
+          {t('portal.welcome.newProject')}
         </Button>
         <Button
-          onClick={() => setView("open_project")}
+          onClick={() => setView('open_project')}
           variant="secondary"
           className="px-8 py-4 text-lg"
         >
-          {t("portal.welcome.openProject")}
+          {t('portal.welcome.openProject')}
         </Button>
       </div>
     </div>
@@ -175,7 +176,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   const renderNewProjectView = () => (
     <div>
       <button
-        onClick={() => setView("main")}
+        onClick={() => setView('main')}
         className="flex items-center space-x-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 mb-6"
       >
         <svg
@@ -186,37 +187,31 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
           stroke="currentColor"
           className="w-5 h-5"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15 19l-7-7 7-7"
-          />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        <span>{t("portal.back")}</span>
+        <span>{t('portal.back')}</span>
       </button>
       <h2 className="text-3xl font-bold text-[var(--foreground-primary)] mb-2">
-        {t("portal.new.title")}
+        {t('portal.new.title')}
       </h2>
-      <p className="text-[var(--foreground-muted)] mb-8">
-        {t("portal.new.description")}
-      </p>
+      <p className="text-[var(--foreground-muted)] mb-8">{t('portal.new.description')}</p>
       <div className="space-y-4">
         <NewProjectOption
           icon={ICONS.TEMPLATES}
-          title={t("portal.new.template.title")}
-          description={t("portal.new.template.description")}
+          title={t('portal.new.template.title')}
+          description={t('portal.new.template.description')}
           onClick={handleStartWithTemplate}
         />
         <NewProjectOption
           icon={ICONS.SPARKLES}
-          title={t("portal.new.ai.title")}
-          description={t("portal.new.ai.description")}
+          title={t('portal.new.ai.title')}
+          description={t('portal.new.ai.description')}
           onClick={handleStartWithAI}
         />
         <NewProjectOption
           icon={ICONS.DOCUMENT_TEXT}
-          title={t("portal.new.blank.title")}
-          description={t("portal.new.blank.description")}
+          title={t('portal.new.blank.title')}
+          description={t('portal.new.blank.description')}
           onClick={handleStartBlank}
         />
       </div>
@@ -226,7 +221,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   const renderOpenProjectView = () => (
     <div>
       <button
-        onClick={() => setView("main")}
+        onClick={() => setView('main')}
         className="flex items-center space-x-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 mb-6"
       >
         <svg
@@ -237,25 +232,19 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
           stroke="currentColor"
           className="w-5 h-5"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15 19l-7-7 7-7"
-          />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        <span>{t("portal.back")}</span>
+        <span>{t('portal.back')}</span>
       </button>
       <h2 className="text-3xl font-bold text-[var(--foreground-primary)] mb-2">
-        {t("portal.open.title")}
+        {t('portal.open.title')}
       </h2>
-      <p className="text-[var(--foreground-muted)] mb-8">
-        {t("portal.open.description")}
-      </p>
+      <p className="text-[var(--foreground-muted)] mb-8">{t('portal.open.description')}</p>
       <Button
         onClick={() => importFileRef.current?.click()}
         className="w-full sm:w-auto px-8 py-4 text-lg"
       >
-        {t("portal.open.button")}
+        {t('portal.open.button')}
       </Button>
       <input
         type="file"
@@ -269,11 +258,11 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
 
   const renderView = () => {
     switch (view) {
-      case "main":
+      case 'main':
         return renderMainView();
-      case "new_project":
+      case 'new_project':
         return renderNewProjectView();
-      case "open_project":
+      case 'open_project':
         return renderOpenProjectView();
     }
   };

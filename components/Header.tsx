@@ -1,14 +1,11 @@
-import React from "react";
-import { ActionCreators as UndoAction } from "redux-undo";
-import { ICONS } from "../constants";
-import { useTranslation } from "../hooks/useTranslation";
-import { SaveStatusIndicator } from "./ui/SaveStatusIndicator";
-import {
-  selectCanUndo,
-  selectCanRedo,
-} from "../features/project/projectSelectors";
-import { useAppDispatch, useAppSelector } from "../app/hooks";
-import { View } from "../types";
+import React from 'react';
+import { ActionCreators as UndoAction } from 'redux-undo';
+import { ICONS } from '../constants';
+import { useTranslation } from '../hooks/useTranslation';
+import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
+import { selectCanUndo, selectCanRedo } from '../features/project/projectSelectors';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
+import type { View } from '../types';
 
 interface HeaderProps {
   currentView: View;
@@ -41,19 +38,19 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const viewTitleMap: Record<View, string> = {
-    dashboard: "sidebar.dashboard",
-    manuscript: "sidebar.manuscript",
-    writer: "sidebar.writer",
-    templates: "sidebar.templates",
-    outline: "sidebar.outline",
-    characters: "sidebar.characters",
-    world: "sidebar.world",
-    export: "sidebar.export",
-    settings: "sidebar.settings",
-    help: "sidebar.help",
+    dashboard: 'sidebar.dashboard',
+    manuscript: 'sidebar.manuscript',
+    writer: 'sidebar.writer',
+    templates: 'sidebar.templates',
+    outline: 'sidebar.outline',
+    characters: 'sidebar.characters',
+    world: 'sidebar.world',
+    export: 'sidebar.export',
+    settings: 'sidebar.settings',
+    help: 'sidebar.help',
   };
 
-  const pageTitle = t(viewTitleMap[currentView] || "sidebar.dashboard");
+  const pageTitle = t(viewTitleMap[currentView] || 'sidebar.dashboard');
 
   return (
     <header
@@ -72,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={() => setIsSidebarOpen(true)}
           className="md:hidden p-2 -ml-2 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors"
-          aria-label={t("header.openMenu")}
+          aria-label={t('header.openMenu')}
           aria-controls="sidebar"
           aria-expanded={isSidebarOpen}
         >
@@ -89,10 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
           </svg>
         </button>
         <div className="flex items-center gap-3">
-          <div
-            className="p-1.5 rounded-lg bg-indigo-500/10 hidden xs:block"
-            aria-hidden="true"
-          >
+          <div className="p-1.5 rounded-lg bg-indigo-500/10 hidden xs:block" aria-hidden="true">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -131,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
             />
           </svg>
           <span className="flex-grow text-left group-hover:text-[var(--foreground-secondary)] transition-colors">
-            {t("palette.placeholder")}...
+            {t('palette.placeholder')}...
           </span>
           <div className="flex gap-1 items-center">
             <kbd className="hidden md:inline-flex items-center h-5 px-2 text-[10px] font-mono font-bold text-[var(--foreground-muted)] bg-[var(--background-primary)] rounded border border-[var(--border-primary)] shadow-sm group-hover:border-[var(--border-highlight)] transition-colors">
@@ -145,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onOpenPalette}
           className="sm:hidden p-2 text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]"
-          aria-label={t("palette.placeholder")}
+          aria-label={t('palette.placeholder')}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -173,8 +167,8 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={handleUndo}
             disabled={!canUndo}
             className="p-2 rounded-lg text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            aria-label={t("common.undo")}
-            title={t("common.undo")}
+            aria-label={t('common.undo')}
+            title={t('common.undo')}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -191,8 +185,8 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={handleRedo}
             disabled={!canRedo}
             className="p-2 rounded-lg text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            aria-label={t("common.redo")}
-            title={t("common.redo")}
+            aria-label={t('common.redo')}
+            title={t('common.redo')}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

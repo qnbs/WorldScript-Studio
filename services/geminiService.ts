@@ -1,14 +1,15 @@
-import { GoogleGenAI, Type, GenerateContentResponse, Schema } from '@google/genai';
-import {
+import type { GenerateContentConfig, GenerateContentResponse, Schema } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
+import type {
   AiCreativity,
   Character,
+  CharacterRelationship,
   World,
   OutlineSection,
   GeminiSchema,
   OutlineGenerationParams,
   CustomTemplateParams,
 } from '../types';
-import { dbService } from './dbService';
 import { storageService } from './storageService';
 
 // === DYNAMIC API KEY MANAGEMENT ===
@@ -94,24 +95,25 @@ const getModelForImage = () => 'gemini-2.5-flash-image';
 
 // --- Hilfsfunktion für Retry mit 401/429-Handling ---
 async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promise<T> {
-  let lastError: any;
+  let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
-    } catch (err: any) {
+    } catch (err: unknown) {
       lastError = err;
 
       // Sofortiger Abbruch + Cache-/Key-Reset bei ungültigem API-Key (401)
       const is401 =
-        err?.status === 401 ||
-        err?.message?.includes('401') ||
-        err?.message?.toLowerCase().includes('api key not valid') ||
-        err?.message?.toLowerCase().includes('invalid api key') ||
-        err?.message?.toLowerCase().includes('permission_denied');
+        (err as Record<string, unknown>)?.status === 401 ||
+        (err instanceof Error && err.message?.includes('401')) ||
+        (err instanceof Error && err.message?.toLowerCase().includes('api key not valid')) ||
+        (err instanceof Error && err.message?.toLowerCase().includes('invalid api key')) ||
+        (err instanceof Error && err.message?.toLowerCase().includes('permission_denied'));
       if (is401) {
         await handleInvalidApiKey();
         throw new Error(
-          'INVALID_API_KEY: Der API-Key ist ungültig oder abgelaufen. Bitte in den Einstellungen einen gültigen Key hinterlegen.'
+          'INVALID_API_KEY: Der API-Key ist ungültig oder abgelaufen. Bitte in den Einstellungen einen gültigen Key hinterlegen.',
+          { cause: err }
         );
       }
 
@@ -120,18 +122,19 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
 
       // Bei Rate-Limit (429) längere Wartezeit
       const is429 =
-        err?.status === 429 ||
-        err?.message?.includes('429') ||
-        err?.message?.toLowerCase().includes('quota') ||
-        err?.message?.toLowerCase().includes('rate limit') ||
-        err?.message?.toLowerCase().includes('resource_exhausted');
+        (err as Record<string, unknown>)?.status === 429 ||
+        (err instanceof Error && err.message?.includes('429')) ||
+        (err instanceof Error && err.message?.toLowerCase().includes('quota')) ||
+        (err instanceof Error && err.message?.toLowerCase().includes('rate limit')) ||
+        (err instanceof Error && err.message?.toLowerCase().includes('resource_exhausted'));
       if (is429) {
         if (attempt < retries) {
           await new Promise((res) => setTimeout(res, delayMs * 3 * (attempt + 1)));
           continue;
         }
         throw new Error(
-          'RATE_LIMITED: Das API-Nutzungslimit wurde erreicht. Bitte warte eine Minute und versuche es erneut.'
+          'RATE_LIMITED: Das API-Nutzungslimit wurde erreicht. Bitte warte eine Minute und versuche es erneut.',
+          { cause: err }
         );
       }
 
@@ -141,7 +144,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
   throw lastError;
 }
 
-function getUserFriendlyGeminiError(error: any): string {
+function _getUserFriendlyGeminiError(error: unknown): string {
   if (error instanceof Error) {
     if (error.message.includes('NO_API_KEY')) {
       return 'Gemini API-Key fehlt. Bitte in den Einstellungen hinterlegen.';
@@ -227,7 +230,7 @@ type ConsistencyCheckParams = BasePromptParams & {
   characters: Character[];
   worlds: World[];
   manuscript: { title: string; content: string }[];
-  relationships?: any[];
+  relationships?: CharacterRelationship[];
 };
 type CriticAnalysisParams = BasePromptParams & { text: string; context?: string };
 type PlotHoleDetectionParams = BasePromptParams & { text: string };
@@ -533,7 +536,7 @@ export const generateText = async (
       }
       const ai = await getAiClient();
 
-      const config: any = {
+      const config: GenerateContentConfig = {
         temperature: creativityToTemperature[creativity],
       };
 
@@ -555,7 +558,7 @@ export const generateText = async (
     console.error('Error generating text:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate text from AI.';
-    throw new Error(errorMessage);
+    throw new Error(errorMessage, { cause: error });
   }
 };
 
@@ -578,7 +581,7 @@ export const generateJson = async <T>(
       }
       const ai = await getAiClient();
 
-      const config: any = {
+      const config: GenerateContentConfig = {
         temperature: creativityToTemperature[creativity],
         responseMimeType: 'application/json',
         responseSchema: schema as Schema, // Safely cast to SDK Schema type
@@ -605,7 +608,9 @@ export const generateJson = async <T>(
         return JSON.parse(jsonText) as T;
       } catch (e) {
         console.error('Failed to parse JSON from model:', jsonText);
-        throw new Error('The AI response was not in a valid format. Please try again.');
+        throw new Error('The AI response was not in a valid format. Please try again.', {
+          cause: e,
+        });
       }
     });
   } catch (error: unknown) {
@@ -615,7 +620,7 @@ export const generateJson = async <T>(
     console.error('Error generating JSON:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate structured data from AI.';
-    throw new Error(errorMessage);
+    throw new Error(errorMessage, { cause: error });
   }
 };
 
@@ -624,7 +629,7 @@ export const checkConsistency = async (
   characters: Character[],
   worlds: World[],
   manuscript: { title: string; content: string }[],
-  relationships: any[],
+  relationships: CharacterRelationship[],
   creativity: AiCreativity,
   lang: string,
   signal?: AbortSignal
@@ -698,7 +703,7 @@ export const streamText = async (
     }
     console.error('Error streaming text:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to stream text from AI.';
-    throw new Error(errorMessage);
+    throw new Error(errorMessage, { cause: error });
   }
 };
 
@@ -740,7 +745,7 @@ export const streamAiHelpResponse = async (
     console.error('Error streaming AI help response:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to get help from AI assistant.';
-    throw new Error(errorMessage);
+    throw new Error(errorMessage, { cause: error });
   }
 };
 
@@ -768,14 +773,11 @@ export const generateImage = async (prompt: string, signal?: AbortSignal): Promi
       });
 
       // Iterate to find the image part
-      if (
-        response.candidates &&
-        response.candidates.length > 0 &&
-        response.candidates[0].content.parts
-      ) {
-        for (const part of response.candidates[0].content.parts) {
+      const firstCandidate = response.candidates?.[0];
+      if (firstCandidate?.content?.parts) {
+        for (const part of firstCandidate.content.parts) {
           if (part.inlineData) {
-            return part.inlineData.data;
+            return part.inlineData.data!;
           }
         }
       }
@@ -789,6 +791,6 @@ export const generateImage = async (prompt: string, signal?: AbortSignal): Promi
     console.error('Error generating image:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate image from AI.';
-    throw new Error(errorMessage);
+    throw new Error(errorMessage, { cause: error });
   }
 };

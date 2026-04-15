@@ -1,46 +1,42 @@
-import React, { FC, useState, useEffect } from "react";
-import { Template, View, CommunityTemplate } from "../types";
-import { ICONS } from "../constants";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { Button } from "./ui/Button";
-import { Modal } from "./ui/Modal";
-import { Textarea } from "./ui/Textarea";
-import { Input } from "./ui/Input";
-import { Spinner } from "./ui/Spinner";
-import { useTemplateView } from "../hooks/useTemplateView";
-import {
-  TemplateViewContext,
-  useTemplateViewContext,
-} from "../contexts/TemplateViewContext";
-import { AddNewCard } from "./ui/AddNewCard";
-import { fetchCommunityTemplates } from "../services/communityTemplateService";
+import type { FC } from 'react';
+import React, { useState, useEffect } from 'react';
+import type { Template, View, CommunityTemplate } from '../types';
+import { ICONS } from '../constants';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Button } from './ui/Button';
+import { Modal } from './ui/Modal';
+import { Textarea } from './ui/Textarea';
+import { Input } from './ui/Input';
+import { Spinner } from './ui/Spinner';
+import { useTemplateView } from '../hooks/useTemplateView';
+import { TemplateViewContext, useTemplateViewContext } from '../contexts/TemplateViewContext';
+import { AddNewCard } from './ui/AddNewCard';
+import { fetchCommunityTemplates } from '../services/communityTemplateService';
 
 // --- SUB-COMPONENTS ---
 
-const TemplateCard: FC<{ template: Template; animationIndex: number }> =
-  React.memo(({ template, animationIndex }) => {
+const TemplateCard: FC<{ template: Template; animationIndex: number }> = React.memo(
+  ({ template, animationIndex }) => {
     const { t, openPreviewModal } = useTemplateViewContext();
     return (
       <Card
         as="button"
         onClick={() => openPreviewModal(template)}
         className="flex flex-col group text-left transition-all duration-200 hover:-translate-y-1 animate-in"
-        style={{ "--index": animationIndex } as React.CSSProperties}
+        style={{ '--index': animationIndex } as React.CSSProperties}
       >
         <CardHeader>
           <h3 className="text-xl font-bold text-[var(--foreground-primary)] transition-colors">
             {t(template.name)}
           </h3>
           <span
-            className={`inline-block px-2 py-1 text-xs font-semibold rounded-full mt-2 ${template.type === "Genre" ? "bg-[var(--accent-2-background)] text-[var(--accent-2-text)] border border-[var(--accent-2-border)]" : "bg-[var(--accent-3-background)] text-[var(--accent-3-text)] border border-[var(--accent-3-border)]"}`}
+            className={`inline-block px-2 py-1 text-xs font-semibold rounded-full mt-2 ${template.type === 'Genre' ? 'bg-[var(--accent-2-background)] text-[var(--accent-2-text)] border border-[var(--accent-2-border)]' : 'bg-[var(--accent-3-background)] text-[var(--accent-3-text)] border border-[var(--accent-3-border)]'}`}
           >
             {t(`templates.types.${template.type}`)}
           </span>
         </CardHeader>
         <CardContent className="flex-grow space-y-4">
-          <p className="text-sm text-[var(--foreground-muted)]">
-            {t(template.description)}
-          </p>
+          <p className="text-sm text-[var(--foreground-muted)]">{t(template.description)}</p>
           <div className="flex flex-wrap gap-2">
             {template.tags.map((tag) => (
               <span
@@ -53,11 +49,13 @@ const TemplateCard: FC<{ template: Template; animationIndex: number }> =
           </div>
         </CardContent>
         <div className="p-4 pt-0 mt-auto">
-          <Button className="w-full">{t("templates.previewAndRemix")}</Button>
+          <Button className="w-full">{t('templates.previewAndRemix')}</Button>
         </div>
       </Card>
     );
-  });
+  }
+);
+TemplateCard.displayName = 'TemplateCard';
 
 const PreviewModal: FC = () => {
   const {
@@ -86,19 +84,19 @@ const PreviewModal: FC = () => {
     <Modal
       isOpen={true}
       onClose={closeModal}
-      title={t("templates.modal.title", { name: t(selectedTemplate.name) })}
+      title={t('templates.modal.title', { name: t(selectedTemplate.name) })}
       size="xl"
     >
       <div className="flex flex-col md:grid md:grid-cols-2 gap-8">
         <div className="order-1 md:order-2 md:border-l border-[var(--border-primary)]/50 md:pl-8">
           <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-2">
-            {t("templates.modal.ai.title")}
+            {t('templates.modal.ai.title')}
           </h3>
           <p className="text-sm text-[var(--foreground-muted)] mb-3">
-            {t("templates.modal.ai.description")}
+            {t('templates.modal.ai.description')}
           </p>
           <Textarea
-            placeholder={t("templates.modal.ai.placeholder")}
+            placeholder={t('templates.modal.ai.placeholder')}
             value={aiConcept}
             onChange={(e) => setAiConcept(e.target.value)}
             rows={4}
@@ -123,38 +121,31 @@ const PreviewModal: FC = () => {
                   {ICONS.SPARKLES}
                 </svg>
               )}
-              {t("templates.modal.ai.button")}
+              {t('templates.modal.ai.button')}
             </Button>
-            <Button
-              onClick={handleStandardApply}
-              variant="secondary"
-              className="w-full sm:w-auto"
-            >
-              {t("templates.modal.standardButton")}
+            <Button onClick={handleStandardApply} variant="secondary" className="w-full sm:w-auto">
+              {t('templates.modal.standardButton')}
             </Button>
           </div>
         </div>
         <div className="order-2 md:order-1 border-t md:border-t-0 border-[var(--border-primary)]/50 pt-6 md:pt-0">
           <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-2">
-            {isRemixMode
-              ? t("templates.remix.title")
-              : t("templates.modal.sectionsTitle")}
+            {isRemixMode ? t('templates.remix.title') : t('templates.modal.sectionsTitle')}
           </h3>
           <p className="text-sm text-[var(--foreground-muted)] mb-4">
-            {isRemixMode
-              ? t("templates.remix.description")
-              : t("templates.remix.descriptionHint")}
+            {isRemixMode ? t('templates.remix.description') : t('templates.remix.descriptionHint')}
           </p>
           <div className="space-y-2 max-h-64 sm:max-h-96 overflow-y-auto bg-white/5 p-2 rounded-md border border-[var(--border-primary)]/50">
             {remixedSections.map((sec, i) => (
               <div
                 key={sec.id}
+                role="listitem"
                 draggable={isRemixMode}
                 onDragStart={() => isRemixMode && (draggedItem.current = i)}
                 onDragEnter={() => isRemixMode && (dragOverItem.current = i)}
                 onDragEnd={handleDragSort}
                 onDragOver={(e) => isRemixMode && e.preventDefault()}
-                className={`flex items-center gap-2 p-2 rounded-md ${isRemixMode ? "bg-[var(--foreground-primary)]/5 cursor-move" : "bg-transparent"}`}
+                className={`flex items-center gap-2 p-2 rounded-md ${isRemixMode ? 'bg-[var(--foreground-primary)]/5 cursor-move' : 'bg-transparent'}`}
               >
                 {isRemixMode && (
                   <svg
@@ -170,9 +161,7 @@ const PreviewModal: FC = () => {
                 )}
                 <Input
                   value={sec.title}
-                  onChange={(e) =>
-                    updateRemixedSectionTitle(sec.id, e.target.value)
-                  }
+                  onChange={(e) => updateRemixedSectionTitle(sec.id, e.target.value)}
                   disabled={!isRemixMode}
                   className="bg-transparent border-0 text-[var(--foreground-secondary)] h-auto focus:ring-1 focus:bg-[var(--background-tertiary)] disabled:cursor-default"
                 />
@@ -182,7 +171,7 @@ const PreviewModal: FC = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => addRemixedSection(i)}
-                      aria-label={t("outline.result.addTooltip")}
+                      aria-label={t('outline.result.addTooltip')}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -199,7 +188,7 @@ const PreviewModal: FC = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => deleteRemixedSection(sec.id)}
-                      aria-label={t("outline.result.deleteTooltip")}
+                      aria-label={t('outline.result.deleteTooltip')}
                       className="text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/50"
                     >
                       <svg
@@ -224,7 +213,7 @@ const PreviewModal: FC = () => {
               onClick={() => setIsRemixMode(true)}
               className="w-full mt-3"
             >
-              {t("templates.remix.button")}
+              {t('templates.remix.button')}
             </Button>
           )}
         </div>
@@ -247,26 +236,21 @@ const CreateCustomModal: FC = () => {
     handleGenerateCustom,
   } = useTemplateViewContext();
   return (
-    <Modal
-      isOpen={true}
-      onClose={closeModal}
-      title={t("templates.custom.modalTitle")}
-      size="lg"
-    >
+    <Modal isOpen={true} onClose={closeModal} title={t('templates.custom.modalTitle')} size="lg">
       <div className="space-y-4">
         <p className="text-[var(--foreground-secondary)]">
-          {t("templates.custom.modalDescription")}
+          {t('templates.custom.modalDescription')}
         </p>
         <div>
           <label
             htmlFor="custom-concept"
             className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
           >
-            {t("templates.custom.conceptLabel")}
+            {t('templates.custom.conceptLabel')}
           </label>
           <Textarea
             id="custom-concept"
-            placeholder={t("templates.custom.conceptPlaceholder")}
+            placeholder={t('templates.custom.conceptPlaceholder')}
             value={customConcept}
             onChange={(e) => setCustomConcept(e.target.value)}
             rows={3}
@@ -277,11 +261,11 @@ const CreateCustomModal: FC = () => {
             htmlFor="custom-elements"
             className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
           >
-            {t("templates.custom.elementsLabel")}
+            {t('templates.custom.elementsLabel')}
           </label>
           <Input
             id="custom-elements"
-            placeholder={t("templates.custom.elementsPlaceholder")}
+            placeholder={t('templates.custom.elementsPlaceholder')}
             value={customElements}
             onChange={(e) => setCustomElements(e.target.value)}
           />
@@ -291,7 +275,7 @@ const CreateCustomModal: FC = () => {
             htmlFor="custom-sections"
             className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
           >
-            {t("templates.custom.sectionsLabel")}
+            {t('templates.custom.sectionsLabel')}
           </label>
           <Input
             id="custom-sections"
@@ -322,7 +306,7 @@ const CreateCustomModal: FC = () => {
                 {ICONS.SPARKLES}
               </svg>
             )}
-            {t("templates.custom.generateButton")}
+            {t('templates.custom.generateButton')}
           </Button>
         </div>
       </div>
@@ -339,20 +323,16 @@ const CommunityTemplateCard: FC<{
 }> = React.memo(({ template, onApply, animationIndex }) => (
   <Card
     className="flex flex-col group text-left transition-all duration-200 hover:-translate-y-1 animate-in"
-    style={{ "--index": animationIndex } as React.CSSProperties}
+    style={{ '--index': animationIndex } as React.CSSProperties}
   >
     <CardHeader>
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-xl font-bold text-[var(--foreground-primary)]">
-          {template.name}
-        </h3>
+        <h3 className="text-xl font-bold text-[var(--foreground-primary)]">{template.name}</h3>
         <span className="flex items-center gap-1 text-xs text-amber-400 flex-shrink-0">
           ★ {template.stars ?? 0}
         </span>
       </div>
-      <p className="text-xs text-[var(--foreground-muted)] mt-1">
-        von {template.author}
-      </p>
+      <p className="text-xs text-[var(--foreground-muted)] mt-1">von {template.author}</p>
       <div className="flex flex-wrap gap-1 mt-2">
         {template.tags.map((tag) => (
           <span
@@ -365,17 +345,13 @@ const CommunityTemplateCard: FC<{
       </div>
     </CardHeader>
     <CardContent className="flex-grow space-y-2">
-      <p className="text-sm text-[var(--foreground-muted)]">
-        {template.description}
-      </p>
+      <p className="text-sm text-[var(--foreground-muted)]">{template.description}</p>
       {template.arcDescription && (
         <p className="text-xs text-[var(--foreground-secondary)] italic">
           {template.arcDescription}
         </p>
       )}
-      <p className="text-xs text-[var(--foreground-muted)]">
-        {template.sections.length} Kapitel
-      </p>
+      <p className="text-xs text-[var(--foreground-muted)]">{template.sections.length} Kapitel</p>
     </CardContent>
     <div className="p-4 pt-0 mt-auto">
       <Button className="w-full" onClick={() => onApply(template)}>
@@ -384,13 +360,14 @@ const CommunityTemplateCard: FC<{
     </div>
   </Card>
 ));
+CommunityTemplateCard.displayName = 'CommunityTemplateCard';
 
 const CommunityTab: FC = () => {
   const [templates, setTemplates] = useState<CommunityTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFallback, setIsFallback] = useState(false);
-  const { t } = useTemplateViewContext();
+  const { t: _t } = useTemplateViewContext();
 
   useEffect(() => {
     const ac = new AbortController();
@@ -401,7 +378,7 @@ const CommunityTab: FC = () => {
         setIsFallback(res.isFallback);
       })
       .catch((e) => {
-        if (e?.name !== "AbortError") setError(String(e));
+        if (e?.name !== 'AbortError') setError(String(e));
       })
       .finally(() => setIsLoading(false));
     return () => ac.abort();
@@ -412,9 +389,9 @@ const CommunityTab: FC = () => {
     const sections = ct.sections.map((s, i) => ({
       id: `sec-${Date.now()}-${i}`,
       title: s.title,
-      content: s.description ? `# ${s.title}\n\n${s.description}` : "",
+      content: s.description ? `# ${s.title}\n\n${s.description}` : '',
     }));
-    const event = new CustomEvent("storycraft:applyTemplate", {
+    const event = new CustomEvent('storycraft:applyTemplate', {
       detail: { title: ct.name, sections },
     });
     window.dispatchEvent(event);
@@ -438,8 +415,8 @@ const CommunityTab: FC = () => {
     <div>
       {isFallback && (
         <div className="mb-6 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
-          Du bist offline — zeige eingebettete Beispiel-Templates. Für das
-          vollständige Community-Angebot verbinde dich mit dem Internet.
+          Du bist offline — zeige eingebettete Beispiel-Templates. Für das vollständige
+          Community-Angebot verbinde dich mit dem Internet.
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -461,35 +438,35 @@ const CommunityTab: FC = () => {
 const TemplateViewUI: FC = () => {
   const { t, filter, setFilter, filteredTemplates, modalState, setModalState } =
     useTemplateViewContext();
-  const [activeTab, setActiveTab] = useState<"local" | "community">("local");
+  const [activeTab, setActiveTab] = useState<'local' | 'community'>('local');
 
   return (
     <div>
       {/* Tab Switcher */}
       <div className="flex items-center gap-2 mb-6 border-b border-[var(--border-primary)] pb-4">
         <button
-          onClick={() => setActiveTab("local")}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === "local" ? "text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px" : "text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]"}`}
+          onClick={() => setActiveTab('local')}
+          className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'local' ? 'text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'}`}
         >
           Meine Templates
         </button>
         <button
-          onClick={() => setActiveTab("community")}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === "community" ? "text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px" : "text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]"}`}
+          onClick={() => setActiveTab('community')}
+          className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'community' ? 'text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'}`}
         >
           🌐 Community
         </button>
       </div>
 
-      {activeTab === "community" ? (
+      {activeTab === 'community' ? (
         <CommunityTab />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2 mb-8">
-            {(["All", "Structure", "Genre"] as const).map((f) => (
+            {(['All', 'Structure', 'Genre'] as const).map((f) => (
               <Button
                 key={f}
-                variant={filter === f ? "primary" : "secondary"}
+                variant={filter === f ? 'primary' : 'secondary'}
                 onClick={() => setFilter(f)}
                 className="rounded-full px-4 text-sm"
               >
@@ -498,39 +475,30 @@ const TemplateViewUI: FC = () => {
             ))}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <div
-              className="animate-in"
-              style={{ "--index": 0 } as React.CSSProperties}
-            >
+            <div className="animate-in" style={{ '--index': 0 } as React.CSSProperties}>
               <AddNewCard
-                title={t("templates.custom.title")}
-                description={t("templates.custom.description")}
-                onClick={() => setModalState("create")}
+                title={t('templates.custom.title')}
+                description={t('templates.custom.description')}
+                onClick={() => setModalState('create')}
                 icon={ICONS.SPARKLES}
               />
             </div>
             {filteredTemplates.map((template, index) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                animationIndex={index + 1}
-              />
+              <TemplateCard key={template.id} template={template} animationIndex={index + 1} />
             ))}
           </div>
-          {modalState === "preview" && <PreviewModal />}
-          {modalState === "create" && <CreateCustomModal />}
+          {modalState === 'preview' && <PreviewModal />}
+          {modalState === 'create' && <CreateCustomModal />}
         </>
       )}
     </div>
   );
 };
 
-export const TemplateView: React.FC<{ onNavigate: (view: View) => void }> = ({
-  onNavigate,
-}) => {
+export const TemplateView: React.FC<{ onNavigate: (view: View) => void }> = ({ onNavigate }) => {
   // Explicitly casting onNavigate to fit internal hook needs if necessary, but changing prop type above is cleaner
   const contextValue = useTemplateView({
-    onNavigate: onNavigate as (view: "manuscript") => void,
+    onNavigate: onNavigate as (view: 'manuscript') => void,
   });
   return (
     <TemplateViewContext.Provider value={contextValue}>

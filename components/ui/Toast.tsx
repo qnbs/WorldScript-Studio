@@ -1,18 +1,12 @@
-import React, { createContext, useContext, FC, useEffect } from "react";
-import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import {
-  statusActions,
-  Notification,
-  NotificationType,
-} from "../../features/status/statusSlice";
+import type { FC } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import type { Notification, NotificationType } from '../../features/status/statusSlice';
+import { statusActions } from '../../features/status/statusSlice';
 
 // Context remains to provide a convenient hook API for components
 interface ToastContextType {
-  addToast: (
-    type: NotificationType,
-    title: string,
-    description?: string,
-  ) => void;
+  addToast: (type: NotificationType, title: string, description?: string) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -23,16 +17,14 @@ export const useToast = () => {
     // Fallback if used outside provider, though ideally shouldn't happen
     // We can also just use dispatch directly in components if we wanted to remove the Context entirely,
     // but keeping the hook API is cleaner for the existing codebase.
-    throw new Error("useToast must be used within a ToastProvider");
+    throw new Error('useToast must be used within a ToastProvider');
   }
 
   return {
     success: (title: string, description?: string) =>
-      context.addToast("success", title, description),
-    error: (title: string, description?: string) =>
-      context.addToast("error", title, description),
-    info: (title: string, description?: string) =>
-      context.addToast("info", title, description),
+      context.addToast('success', title, description),
+    error: (title: string, description?: string) => context.addToast('error', title, description),
+    info: (title: string, description?: string) => context.addToast('info', title, description),
   };
 };
 
@@ -50,16 +42,16 @@ const ToastItem: FC<{
 
   const typeClasses = {
     success:
-      "bg-green-500/10 border-green-500/30 text-green-800 dark:bg-green-600/20 dark:border-green-500/50 dark:text-green-200",
+      'bg-green-500/10 border-green-500/30 text-green-800 dark:bg-green-600/20 dark:border-green-500/50 dark:text-green-200',
     error:
-      "bg-red-500/10 border-red-500/30 text-red-800 dark:bg-red-600/20 dark:border-red-500/50 dark:text-red-200",
-    info: "bg-blue-500/10 border-blue-500/30 text-blue-800 dark:bg-blue-600/20 dark:border-blue-500/50 dark:text-blue-200",
+      'bg-red-500/10 border-red-500/30 text-red-800 dark:bg-red-600/20 dark:border-red-500/50 dark:text-red-200',
+    info: 'bg-blue-500/10 border-blue-500/30 text-blue-800 dark:bg-blue-600/20 dark:border-blue-500/50 dark:text-blue-200',
   };
 
   const progressClasses = {
-    success: "bg-green-500",
-    error: "bg-red-500",
-    info: "bg-blue-500",
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500',
   };
 
   const ICONS = {
@@ -106,9 +98,7 @@ const ToastItem: FC<{
             </svg>
           </div>
           <div className="ml-3 w-0 flex-1 pt-0.5">
-            <p className="text-sm font-bold text-[var(--foreground-primary)]">
-              {message.title}
-            </p>
+            <p className="text-sm font-bold text-[var(--foreground-primary)]">{message.title}</p>
             {message.description && (
               <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
                 {message.description}
@@ -141,7 +131,7 @@ const ToastItem: FC<{
       </div>
       <div
         className={`absolute bottom-0 left-0 h-1 ${progressClasses[message.type]}`}
-        style={{ animation: "shrink-width 5s linear forwards" }}
+        style={{ animation: 'shrink-width 5s linear forwards' }}
       ></div>
       <style>{`
         @keyframes fade-in-up {
@@ -160,23 +150,17 @@ const ToastItem: FC<{
   );
 };
 
-export const ToastProvider: FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const ToastProvider: FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
   const notifications = useAppSelector((state) => state.status.notifications);
 
-  const addToast = (
-    type: NotificationType,
-    title: string,
-    description?: string,
-  ) => {
+  const addToast = (type: NotificationType, title: string, description?: string) => {
     dispatch(
       statusActions.addNotification({
         type,
         title,
         ...(description !== undefined ? { description } : {}),
-      }),
+      })
     );
   };
 

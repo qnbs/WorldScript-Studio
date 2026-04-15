@@ -49,7 +49,8 @@ if (!globalThis.crypto?.subtle) {
 }
 
 describe('dbService', () => {
-  let dbService: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let dbService: Record<string, any>;
 
   beforeEach(async () => {
     vi.resetModules();

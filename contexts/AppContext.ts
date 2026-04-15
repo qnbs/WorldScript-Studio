@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import { UseAppReturnType } from '../hooks/useApp';
+import type { UseAppReturnType } from '../hooks/useApp';
 
 export const AppContext = createContext<UseAppReturnType | null>(null);
 

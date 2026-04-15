@@ -1,24 +1,24 @@
-import { EntityState } from "@reduxjs/toolkit";
-import { Type } from "@google/genai";
-import { ProjectData } from "./features/project/projectSlice"; // Import ProjectData type
+import type { EntityState } from '@reduxjs/toolkit';
+import type { Type } from '@google/genai';
+import type { ProjectData } from './features/project/projectSlice'; // Import ProjectData type
 
 export type View =
-  | "dashboard"
-  | "manuscript"
-  | "writer"
-  | "templates"
-  | "outline"
-  | "characters"
-  | "world"
-  | "export"
-  | "settings"
-  | "help"
-  | "sceneboard"
-  | "analytics"
-  | "zen"
-  | "characterGraph"
-  | "consistencyChecker"
-  | "critic";
+  | 'dashboard'
+  | 'manuscript'
+  | 'writer'
+  | 'templates'
+  | 'outline'
+  | 'characters'
+  | 'world'
+  | 'export'
+  | 'settings'
+  | 'help'
+  | 'sceneboard'
+  | 'analytics'
+  | 'zen'
+  | 'characterGraph'
+  | 'consistencyChecker'
+  | 'critic';
 
 export interface Character {
   id: string;
@@ -38,15 +38,7 @@ export interface CharacterRelationship {
   id: string;
   fromCharacterId: string;
   toCharacterId: string;
-  type:
-    | "family"
-    | "romantic"
-    | "friend"
-    | "enemy"
-    | "mentor"
-    | "rival"
-    | "ally"
-    | "acquaintance";
+  type: 'family' | 'romantic' | 'friend' | 'enemy' | 'mentor' | 'rival' | 'ally' | 'acquaintance';
   description?: string;
   strength: number; // 1-10
 }
@@ -56,14 +48,7 @@ export interface WorldLocation {
   name: string;
   description: string;
   coordinates?: { lat: number; lng: number };
-  type:
-    | "city"
-    | "village"
-    | "forest"
-    | "mountain"
-    | "castle"
-    | "temple"
-    | "other";
+  type: 'city' | 'village' | 'forest' | 'mountain' | 'castle' | 'temple' | 'other';
   population?: number;
   significance?: string;
 }
@@ -115,7 +100,7 @@ export interface StorySection {
   characterIds?: string[]; // Linked characters
   worldIds?: string[]; // Linked worlds
   wordCount?: number;
-  status?: "draft" | "outline" | "first-draft" | "revised" | "final";
+  status?: 'draft' | 'outline' | 'first-draft' | 'revised' | 'final';
   act?: 1 | 2 | 3; // Akt-Zugehörigkeit für Swimlanes
 }
 
@@ -140,7 +125,7 @@ export interface Template {
   id: string;
   name: string;
   description: string;
-  type: "Genre" | "Structure";
+  type: 'Genre' | 'Structure';
   tags: string[];
   arcDescription: string;
   sections: { titleKey: string }[];
@@ -154,34 +139,29 @@ export interface OutlineSection {
 }
 
 // Settings Types
-export type Theme = "dark" | "light" | "auto";
-export type EditorFont = "serif" | "sans-serif" | "monospace" | "custom";
-export type AiCreativity = "Focused" | "Balanced" | "Imaginative";
+export type Theme = 'dark' | 'light' | 'auto';
+export type EditorFont = 'serif' | 'sans-serif' | 'monospace' | 'custom';
+export type AiCreativity = 'Focused' | 'Balanced' | 'Imaginative';
 export type AiModel =
-  | "gemini-1.5-flash"
-  | "gemini-1.5-pro"
-  | "claude-3-haiku"
-  | "claude-3-sonnet"
-  | "gpt-4o-mini"
-  | "gpt-4o"
-  | "ollama/llama3"
-  | "ollama/mistral"
-  | "ollama/gemma3"
-  | "ollama/custom";
-export type AIProvider = "gemini" | "openai" | "anthropic" | "ollama";
-export type NotificationFrequency = "never" | "daily" | "weekly" | "monthly";
-export type BackupFrequency = "manual" | "daily" | "weekly" | "monthly";
-export type SyncProvider =
-  | "none"
-  | "google-drive"
-  | "dropbox"
-  | "onedrive"
-  | "icloud";
+  | 'gemini-1.5-flash'
+  | 'gemini-1.5-pro'
+  | 'claude-3-haiku'
+  | 'claude-3-sonnet'
+  | 'gpt-4o-mini'
+  | 'gpt-4o'
+  | 'ollama/llama3'
+  | 'ollama/mistral'
+  | 'ollama/gemma3'
+  | 'ollama/custom';
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama';
+export type NotificationFrequency = 'never' | 'daily' | 'weekly' | 'monthly';
+export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
+export type SyncProvider = 'none' | 'google-drive' | 'dropbox' | 'onedrive' | 'icloud';
 
 export interface CustomFont {
   name: string;
   url: string;
-  format: "woff" | "woff2" | "ttf" | "otf";
+  format: 'woff' | 'woff2' | 'ttf' | 'otf';
 }
 
 export interface KeyboardShortcut {
@@ -192,17 +172,10 @@ export interface KeyboardShortcut {
 
 export interface WritingGoal {
   id?: string;
-  type:
-    | "words"
-    | "time"
-    | "sessions"
-    | "daily"
-    | "weekly"
-    | "monthly"
-    | "total";
+  type: 'words' | 'time' | 'sessions' | 'daily' | 'weekly' | 'monthly' | 'total';
   target: number;
   current?: number;
-  period: "daily" | "weekly" | "monthly" | string;
+  period: 'daily' | 'weekly' | 'monthly' | string;
   achieved?: boolean;
   enabled?: boolean;
 }
@@ -226,7 +199,7 @@ export interface AccessibilitySettings {
   largeText: boolean;
   screenReader: boolean;
   focusIndicators: boolean;
-  colorBlindMode: "none" | "protanopia" | "deuteranopia" | "tritanopia";
+  colorBlindMode: 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 }
 
 export interface PrivacySettings {
@@ -361,7 +334,7 @@ export interface CommunityTemplate {
   id: string;
   name: string;
   description: string;
-  type: "Genre" | "Structure";
+  type: 'Genre' | 'Structure';
   tags: string[];
   arcDescription: string;
   author: string;

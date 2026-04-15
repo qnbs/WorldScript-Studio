@@ -1,32 +1,30 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { Provider } from "react-redux";
-import App from "./App";
-import { setupStore } from "./app/store";
-import { dbService } from "./services/dbService";
-import { PersistedRootState } from "./types";
-import "./register-sw";
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { Provider } from 'react-redux';
+import App from './App';
+import { setupStore } from './app/store';
+import { dbService } from './services/dbService';
+import type { PersistedRootState } from './types';
+import './register-sw';
 
 // SPA Redirect Handler für GitHub Pages
 (() => {
   const url = new URL(window.location.href);
-  const redirectPath = url.searchParams.get("p");
+  const redirectPath = url.searchParams.get('p');
 
   if (redirectPath) {
     // Entferne Query-Parameter und navigiere zur richtigen Route
     const cleanPath = decodeURIComponent(redirectPath);
-    const base = import.meta.env.BASE_URL || "/";
-    const targetPath = cleanPath.startsWith("/")
-      ? cleanPath.slice(1)
-      : cleanPath;
+    const base = import.meta.env.BASE_URL || '/';
+    const targetPath = cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath;
 
-    window.history.replaceState(null, "", base + targetPath);
+    window.history.replaceState(null, '', base + targetPath);
   }
 })();
 
-const rootElement = document.getElementById("root");
+const rootElement = document.getElementById('root');
 if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
+  throw new Error('Could not find root element to mount to');
 }
 const root = ReactDOM.createRoot(rootElement);
 
@@ -52,7 +50,7 @@ const root = ReactDOM.createRoot(rootElement);
       const isFlatData = !projectPart.present && projectPart.data;
 
       if (isFlatData && projectPart.data) {
-        console.debug("Hydrating flat project state into Redux-Undo envelope.");
+        console.log('Hydrating flat project state into Redux-Undo envelope.');
         preloadedState.project = {
           past: [],
           present: { data: projectPart.data }, // Reconstruct the slice structure
@@ -61,7 +59,7 @@ const root = ReactDOM.createRoot(rootElement);
         };
       } else if (!projectPart.present && !projectPart.data) {
         // Fallback: Corrupt or empty project state
-        console.warn("Project state corrupted. Resetting project.");
+        console.warn('Project state corrupted. Resetting project.');
         delete (preloadedState as Record<string, unknown>).project;
       }
     }
@@ -74,18 +72,15 @@ const root = ReactDOM.createRoot(rootElement);
         <Provider store={store}>
           <App isNewUser={isNewUser} />
         </Provider>
-      </React.StrictMode>,
+      </React.StrictMode>
     );
   } catch (error) {
-    console.error("Failed to initialize the application:", error);
+    console.error('Failed to initialize the application:', error);
     root.render(
-      <div style={{ color: "red", padding: "20px" }}>
+      <div style={{ color: 'red', padding: '20px' }}>
         <h1>Application Initialization Failed</h1>
-        <p>
-          Could not load project data. Please check the browser console for more
-          details.
-        </p>
-      </div>,
+        <p>Could not load project data. Please check the browser console for more details.</p>
+      </div>
     );
   }
 })();
