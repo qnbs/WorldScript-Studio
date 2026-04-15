@@ -1,0 +1,45 @@
+{
+  "name": "StoryCraft Studio (Image)",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:0-22-bullseye",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "remoteUser": "vscode",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends curl git build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev libsecret-1-dev libsoup2.4-dev && curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable && /root/.cargo/bin/rustup target add x86_64-unknown-linux-gnu && npm ci",
+  "postAttachCommand": "npm run dev",
+  "forwardPorts": [3000, 6006, 1420],
+  "portsAttributes": {
+    "3000": {
+      "label": "Vite dev server",
+      "onAutoForward": "notify"
+    },
+    "6006": {
+      "label": "Storybook",
+      "onAutoForward": "notify"
+    },
+    "1420": {
+      "label": "Playwright inspector",
+      "onAutoForward": "notify"
+    }
+  },
+  "settings": {
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.profiles.linux": {
+      "bash": {
+        "path": "/bin/bash"
+      }
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "tailwindcss.tailwindcss",
+        "vitest.vitest",
+        "ms-playwright.playwright",
+        "tauri.tauri-vscode",
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  }
+}

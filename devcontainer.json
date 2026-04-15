@@ -1,0 +1,4 @@
+{
+  "name": "StoryCraft Studio",
+  "extends": ".devcontainer/devcontainer.json"
+}
