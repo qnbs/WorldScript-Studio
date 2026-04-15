@@ -17,6 +17,7 @@ StoryCraft Studio is an AI-powered creative writing application built as an offl
 - **Storage:** IndexedDB (`dbService.ts`) with LZ-String compression, AES-256-GCM key encryption
 - **Collaboration:** Yjs + y-webrtc for P2P real-time editing
 - **Desktop:** Tauri 2 (optional)
+- **Package manager:** npm@10.x with `.npmrc` legacy-peer-deps compatibility
 - **Testing:** Vitest + @testing-library/react (unit), Playwright (E2E)
 
 ### Directory Structure
@@ -31,6 +32,7 @@ hooks/            → Custom hooks with view business logic (one hook per view)
 services/         → External adapters: geminiService, dbService, storageService, collaborationService, epubApiService
 locales/          → i18n source files (de, en, es, fr, it) × 14 modules
 public/locales/   → i18n runtime files served at BASE_URL
+tests/            → Unit + E2E tests (Vitest + Playwright)
 types/            → Additional TypeScript type definitions
 types.ts          → Core shared interfaces and types
 ```
@@ -43,6 +45,7 @@ types.ts          → Core shared interfaces and types
    - `contexts/DashboardContext.ts` — React context to pass hook return to child components
 
 2. **Redux:** All state mutations go through Redux slices. Async operations use `createAsyncThunk`. Side effects (auto-save) run in the listener middleware. The `project` slice is wrapped with `redux-undo` for undo/redo.
+   - `features/project/aiThunkUtils.ts` provides a reusable deduplicated async-thunk wrapper for AI requests.
 
 3. **AI Service:** `geminiService.ts` is the primary AI adapter. It handles API key loading/caching, retry logic (2 retries, exponential backoff for 429s), and prompt construction. All AI calls should go through this service or `aiProviderService.ts`.
 
@@ -50,7 +53,7 @@ types.ts          → Core shared interfaces and types
 
 5. **i18n:** Custom React Context system in `I18nContext.tsx`. Translation keys use dot notation (`common.save`, `dashboard.wordCount`). All user-facing strings MUST be translation keys, never hardcoded text.
 
-6. **Code Splitting:** All views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy dependencies (Konva, Leaflet, react-force-graph) are in separate Vite manual chunks.
+6. **Code Splitting:** All views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy dependencies (Konva, Leaflet, react-force-graph) are in separate Vite manual chunks. The export stack also uses dynamic imports for `docx` and `jszip` so large document libraries are only loaded when export actions are executed.
 
 ## Coding Standards
 
@@ -106,7 +109,8 @@ types.ts          → Core shared interfaces and types
 - Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - Pre-commit: Husky runs lint-staged (Prettier + ESLint on staged `.ts`/`.tsx` files)
 - CI pipeline: lint → typecheck → test → build → deploy (GitHub Actions)
-- ESLint and typecheck run in soft-fail mode in CI (`continue-on-error: true`)
+- CI installs dependencies with `npm ci --legacy-peer-deps` to resolve current peer dependency constraints
+- Local developers should use `npm install --legacy-peer-deps` or the repo `.npmrc` configuration for compatibility
 
 ## Known Technical Debt
 
@@ -117,6 +121,7 @@ See `AUDIT.md` for the full list. Key items:
 - `components/AdvancedImportExport.tsx` — DOCX export uses Tauri-only `fileSystemService`
 - `app/listenerMiddleware.ts` — Complex TypeScript workarounds for redux-undo's `StateWithHistory`
 - Several hooks use `as any` casts that should be replaced with proper generics
+- `hooks/useExportView.ts` / `components/ExportView.tsx` — export document libraries are lazy-loaded at runtime and should remain optional to preserve bundle size
 
 ## Commands
 
