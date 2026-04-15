@@ -284,6 +284,7 @@ const SettingsViewUI: FC = () => {
     t,
     project,
     settings,
+    featureFlags,
     language,
     activeCategory,
     setActiveCategory,
@@ -1172,6 +1173,31 @@ const SettingsViewUI: FC = () => {
                       className="w-full"
                     />
                   </div>
+                </div>
+                <div className="border-t border-[var(--border-primary)] pt-4">
+                  <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-3">
+                    {t('settings.featureFlags.title')}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <ToggleSwitch
+                      label={t('settings.featureFlags.enableOllama')}
+                      checked={featureFlags.enableOllama}
+                      onChange={(v) => handleSettingChange('enableOllama', v)}
+                    />
+                    <ToggleSwitch
+                      label={t('settings.featureFlags.enablePerformanceBudgets')}
+                      checked={featureFlags.enablePerformanceBudgets}
+                      onChange={(v) => handleSettingChange('enablePerformanceBudgets', v)}
+                    />
+                    <ToggleSwitch
+                      label={t('settings.featureFlags.enableVisualRegression')}
+                      checked={featureFlags.enableVisualRegression}
+                      onChange={(v) => handleSettingChange('enableVisualRegression', v)}
+                    />
+                  </div>
+                  <p className="text-sm text-[var(--foreground-muted)] mt-3">
+                    {t('settings.featureFlags.description')}
+                  </p>
                 </div>
               </CardContent>
             </Card>

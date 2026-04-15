@@ -28,6 +28,7 @@ import {
   importProjectThunk,
   restoreSnapshotThunk,
 } from '../features/project/projectSlice';
+import { featureFlagsActions } from '../features/featureFlags/featureFlagsSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { storageService } from '../services/storageService';
 import type { RootState } from '../app/store';
@@ -39,6 +40,7 @@ export const useSettingsView = () => {
   const { t, language, setLanguage } = useTranslation();
   const dispatch = useAppDispatch();
   const settings = useAppSelector((state) => state.settings);
+  const featureFlags = useAppSelector((state) => state.featureFlags);
   const projectState = useAppSelector((state) => state.project.present);
   const project = projectState.data;
   // We mock the RootState structure for the selector, as we are pulling from a detached state slice for export/management
@@ -152,7 +154,15 @@ export const useSettingsView = () => {
             settingsActions.setThemeCustomization(value as unknown as Partial<ThemeCustomization>)
           );
           break;
-
+        case 'enableOllama':
+          dispatch(featureFlagsActions.setEnableOllama(Boolean(value)));
+          break;
+        case 'enablePerformanceBudgets':
+          dispatch(featureFlagsActions.setEnablePerformanceBudgets(Boolean(value)));
+          break;
+        case 'enableVisualRegression':
+          dispatch(featureFlagsActions.setEnableVisualRegression(Boolean(value)));
+          break;
         default:
           console.warn(`Unknown setting key: ${key}`);
           break;
@@ -242,6 +252,7 @@ export const useSettingsView = () => {
     t,
     language,
     settings,
+    featureFlags,
     project,
     activeCategory,
     setActiveCategory,

@@ -10,6 +10,9 @@
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-DE_|_EN-0EA5E9" alt="i18n DE EN">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
+  <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
+  <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
+  <img src="https://img.shields.io/badge/Lighthouse-90%2B-brightgreen" alt="Lighthouse Score">
 </p>
 
 ---
@@ -39,6 +42,7 @@
 - [Technology Deep Dive](#️-technology-deep-dive)
 - [Project Structure](#-project-structure)
 - [Getting Started](#getting-started)
+- [CI & Local Validation](#-ci--local-validation)
 - [A Creative Workflow](#-a-creative-workflow)
 - [Contributing](#-contributing)
 - [Deutsche Version (German)](#-storycraft-studio-deutsch)
@@ -258,6 +262,33 @@ npm run preview
 ```
 
 > Note: The production build uses Vite manual chunking and lazy-loaded export libraries (`docx` / `jszip`) to keep the main app bundle smaller and improve load performance.
+
+### 🧪 CI & Local Validation
+
+This repository uses an optimized GitHub Actions pipeline that includes:
+
+- `lint` + `typecheck`
+- `test` with Vitest coverage and JUnit reporting
+- `storybook` build artifact generation
+- `security` dependency-review with `npm audit` on dependency changes
+- `build` for production, plus optional `build-node` compatibility on tags and manual dispatch
+- `lighthouse` budget validation
+- `deploy` to GitHub Pages on `main`
+
+You can simulate the pipeline locally using [Act](https://github.com/nektos/act):
+
+```bash
+# Install Act (requires Docker)
+npm install -g act
+
+# Run the CI workflow locally for pull request simulation
+act pull_request --job lint --job typecheck --job test --job storybook --job build
+
+# Run the full CI workflow locally for a tag/dispatch build
+act push --job build --job build-node --job lighthouse --job deploy
+```
+
+If you use Codecov locally, provide the token with `-s CODECOV_TOKEN=<token>`. For faster local runs, you can skip external upload steps by using `--secret-file .github/act.secrets` or disabling `CODECOV_TOKEN`.
 
 ### 🌐 Custom Domain Setup
 

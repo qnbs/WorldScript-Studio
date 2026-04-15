@@ -7,8 +7,10 @@ import { Sidebar } from './components/Sidebar';
 import { I18nProvider } from './contexts/I18nContext';
 import { useTranslation } from './hooks/useTranslation';
 import { AppContext } from './contexts/AppContext';
+import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { Spinner } from './components/ui/Spinner';
 import { selectProjectData } from './features/project/projectSelectors';
+import { selectFeatureFlags } from './features/featureFlags/featureFlagsSlice';
 import { projectActions } from './features/project/projectSlice';
 import { ToastProvider } from './components/ui/Toast';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -96,6 +98,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const { currentView, handleNavigate, isPortalActive, isInitialLoad } = appState;
   const settings = useAppSelector((state) => state.settings);
   const project = useAppSelector(selectProjectData);
+  const featureFlags = useAppSelector(selectFeatureFlags);
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
@@ -226,58 +229,60 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   }
 
   return (
-    <AppContext.Provider value={appState}>
-      {/* Skip-to-main-content link for keyboard users */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[var(--background-interactive)] focus:text-white focus:rounded-lg focus:text-sm focus:font-medium focus:shadow-lg"
-      >
-        Zum Hauptinhalt springen
-      </a>
-      {/* ARIA live region: announces view changes to screen readers */}
-      <div aria-live="polite" aria-atomic="true" className="sr-only">
-        {currentView}
-      </div>
-      <div className="flex h-[100dvh] bg-[var(--background-primary)] text-[var(--foreground-primary)] overflow-hidden touch-none md:touch-auto">
-        <Sidebar
-          currentView={currentView}
-          onNavigate={handleNavigate}
-          isSidebarOpen={appState.isSidebarOpen}
-          setIsSidebarOpen={appState.setIsSidebarOpen}
-        />
-        <div className="flex-1 flex flex-col h-full overflow-hidden pt-16 transition-all duration-300 ease-in-out md:ml-64">
-          <Header
-            currentView={currentView}
-            setIsSidebarOpen={appState.setIsSidebarOpen}
-            isSidebarOpen={appState.isSidebarOpen}
-            onOpenPalette={() => setIsPaletteOpen(true)}
-          />
-          <main
-            id="main-content"
-            aria-label="Hauptinhalt"
-            className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 scroll-smooth overscroll-none"
-          >
-            <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>
-              <Suspense fallback={<ViewLoader />}>{renderView()}</Suspense>
-            </ErrorBoundary>
-          </main>
+    <FeatureFlagsProvider value={featureFlags}>
+      <AppContext.Provider value={appState}>
+        {/* Skip-to-main-content link for keyboard users */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[var(--background-interactive)] focus:text-white focus:rounded-lg focus:text-sm focus:font-medium focus:shadow-lg"
+        >
+          Zum Hauptinhalt springen
+        </a>
+        {/* ARIA live region: announces view changes to screen readers */}
+        <div aria-live="polite" aria-atomic="true" className="sr-only">
+          {currentView}
         </div>
-        <CommandPalette
-          isOpen={isPaletteOpen}
-          onClose={() => setIsPaletteOpen(false)}
-          onNavigate={handleNavigate}
-        />
-        <VersionControlPanel />
-        <CollaborationPanel
-          isOpen={isCollabPanelOpen}
-          onClose={() => setIsCollabPanelOpen(false)}
-          projectId={project?.id ?? 'default'}
-        />
-        <PWAUpdateToast />
-        <PWAInstallBanner />
-        <OfflineIndicator />
-      </div>
-    </AppContext.Provider>
+        <div className="flex h-[100dvh] bg-[var(--background-primary)] text-[var(--foreground-primary)] overflow-hidden touch-none md:touch-auto">
+          <Sidebar
+            currentView={currentView}
+            onNavigate={handleNavigate}
+            isSidebarOpen={appState.isSidebarOpen}
+            setIsSidebarOpen={appState.setIsSidebarOpen}
+          />
+          <div className="flex-1 flex flex-col h-full overflow-hidden pt-16 transition-all duration-300 ease-in-out md:ml-64">
+            <Header
+              currentView={currentView}
+              setIsSidebarOpen={appState.setIsSidebarOpen}
+              isSidebarOpen={appState.isSidebarOpen}
+              onOpenPalette={() => setIsPaletteOpen(true)}
+            />
+            <main
+              id="main-content"
+              aria-label="Hauptinhalt"
+              className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 scroll-smooth overscroll-none"
+            >
+              <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>
+                <Suspense fallback={<ViewLoader />}>{renderView()}</Suspense>
+              </ErrorBoundary>
+            </main>
+          </div>
+          <CommandPalette
+            isOpen={isPaletteOpen}
+            onClose={() => setIsPaletteOpen(false)}
+            onNavigate={handleNavigate}
+          />
+          <VersionControlPanel />
+          <CollaborationPanel
+            isOpen={isCollabPanelOpen}
+            onClose={() => setIsCollabPanelOpen(false)}
+            projectId={project?.id ?? 'default'}
+          />
+          <PWAUpdateToast />
+          <PWAInstallBanner />
+          <OfflineIndicator />
+        </div>
+      </AppContext.Provider>
+    </FeatureFlagsProvider>
   );
 };
 

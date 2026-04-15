@@ -108,8 +108,10 @@ types.ts          → Core shared interfaces and types
 
 - Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - Pre-commit: Husky runs lint-staged (Prettier + ESLint on staged `.ts`/`.tsx` files)
-- CI pipeline: lint → typecheck → test → build → deploy (GitHub Actions)
+- CI pipeline: lint → typecheck → security → test → storybook → build → lighthouse → deploy
+- CI includes dependency-review + `npm audit` on dependency file changes, Storybook artifact generation, Lighthouse budgets, and optional Tauri builds on tags/workflow dispatch
 - CI installs dependencies with `npm ci --legacy-peer-deps` to resolve current peer dependency constraints
+- Local CI can be simulated with `act` (requires Docker); use `act pull_request` for PR flows and `act push` for tag/dispatch flows
 - Local developers should use `npm install --legacy-peer-deps` or the repo `.npmrc` configuration for compatibility
 
 ## Known Technical Debt

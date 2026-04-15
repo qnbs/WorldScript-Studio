@@ -8,6 +8,9 @@ import projectReducer, {
 import settingsReducer from '../features/settings/settingsSlice';
 import statusReducer from '../features/status/statusSlice';
 import writerReducer from '../features/writer/writerSlice';
+import featureFlagsReducer, {
+  featureFlagsPersistenceMiddleware,
+} from '../features/featureFlags/featureFlagsSlice';
 import undoable from 'redux-undo';
 import { listenerMiddleware } from './listenerMiddleware';
 import type { PersistedRootState } from '../types';
@@ -53,6 +56,7 @@ const combinedReducer = combineReducers({
   status: statusReducer,
   writer: writerReducer,
   versionControl: versionControlReducer,
+  featureFlags: featureFlagsReducer,
 });
 
 // A sophisticated higher-order reducer to augment redux-undo's behavior
@@ -98,7 +102,7 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
         },
       })
         .prepend(listenerMiddleware.middleware)
-        .concat(loggerMiddleware),
+        .concat(featureFlagsPersistenceMiddleware, loggerMiddleware),
   };
 
   if (preloadedState) {

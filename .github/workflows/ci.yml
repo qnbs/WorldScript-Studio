@@ -8,21 +8,20 @@ name: CI / CD
 on:
   push:
     branches: [main]
+    tags: ['*']
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 # ============================================================
-# SHARED SETUP STEP (composite-like via job output)
+# JOBS
 # ============================================================
 jobs:
 
@@ -32,16 +31,18 @@ jobs:
   lint:
     name: 🔍 Lint (ESLint + Prettier)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [lts/*, node]
+    continue-on-error: ${{ matrix.node-version == 'node' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/setup-node
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+          node-version: ${{ matrix.node-version }}
 
       - name: Run ESLint
         run: npm run lint -- --max-warnings 0
@@ -52,19 +53,73 @@ jobs:
   typecheck:
     name: 🏷️ TypeScript type-check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [lts/*, node]
+    continue-on-error: ${{ matrix.node-version == 'node' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/setup-node
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+          node-version: ${{ matrix.node-version }}
 
       - name: Run tsc --noEmit
         run: npm run typecheck
+
+  # ----------------------------------------------------------
+  # 2.5 DEPENDENCY REVIEW
+  # ----------------------------------------------------------
+  security:
+    name: 🔐 Dependency Review & npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Run GitHub dependency review
+        uses: github/dependency-review-action@v1
+
+      - name: Detect dependency file changes
+        id: deps
+        run: |
+          set -e
+          git fetch --depth=2 origin +refs/heads/*:refs/remotes/origin/* || true
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            git diff --name-only "origin/${GITHUB_BASE_REF}" "${GITHUB_SHA}" | grep -E '(^package\.json$|^package-lock\.json$|^yarn\.lock$|^pnpm-lock\.yaml$)' > /tmp/deps.changed || true
+          else
+            git diff --name-only HEAD~1 HEAD | grep -E '(^package\.json$|^package-lock\.json$|^yarn\.lock$|^pnpm-lock\.yaml$)' > /tmp/deps.changed || true
+          fi
+          if [ -s /tmp/deps.changed ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            cat /tmp/deps.changed
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip npm audit when no dependency files changed
+        if: steps.deps.outputs.changed != 'true'
+        run: echo "No package manifest or lockfile changes detected, skipping npm audit."
+
+      - name: Setup Node.js for npm audit
+        if: steps.deps.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install minimal dependencies for audit
+        if: steps.deps.outputs.changed == 'true'
+        run: npm ci --legacy-peer-deps
+
+      - name: Run npm audit and fail on critical
+        if: steps.deps.outputs.changed == 'true'
+        run: npm audit --audit-level=critical
 
   # ----------------------------------------------------------
   # 3. UNIT TESTS
@@ -72,19 +127,21 @@ jobs:
   test:
     name: 🧪 Unit Tests (Vitest)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [lts/*, node]
+    continue-on-error: ${{ matrix.node-version == 'node' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/setup-node
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
+          node-version: ${{ matrix.node-version }}
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Run unit tests
-        run: npm run test:run
+      - name: Run unit tests with coverage and JUnit output
+        run: npx vitest run --coverage
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -92,24 +149,150 @@ jobs:
         with:
           name: coverage-report
           path: coverage/
+          retention-days: 7
+
+      - name: Upload JUnit test report
+        if: always()
+        uses: actions/upload-test-report@v3
+        with:
+          test-report-files: reports/junit.xml
+          test-report-name: Vitest
+
+      - name: Publish coverage to Codecov
+        if: secrets.CODECOV_TOKEN != ''
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: npx --yes codecov -f coverage/lcov.info
+
+      - name: Upload visual regression baseline
+        if-no-files-found: ignore
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-baseline
+          path: |
+            tests/e2e/baseline/**
+            tests/e2e/**/baseline/**
+            tests/e2e/**/screenshots/**
+          retention-days: 7
 
   # ----------------------------------------------------------
-  # 4. BUILD
+  # 4. STORYBOOK
+  # ----------------------------------------------------------
+  storybook:
+    name: 🎨 Storybook Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: ./.github/actions/setup-node
+
+      - name: Build Storybook
+        run: npm run build-storybook
+
+      - name: Upload Storybook artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: storybook-static
+          path: storybook-static/
+          retention-days: 7
+
+  # ----------------------------------------------------------
+  # 4.5 TAURI
+  # ----------------------------------------------------------
+  tauri:
+    name: 🦀 Tauri Desktop Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Detect Tauri file changes
+        id: tauri-check
+        run: |
+          set -e
+          git fetch --depth=2 origin +refs/heads/*:refs/remotes/origin/* || true
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            git diff --name-only "origin/${GITHUB_BASE_REF}" "${GITHUB_SHA}" | grep -E '(^src-tauri/|^tauri\.conf\.json$|^Cargo\.toml$|^Cargo\.lock$|^package\.json$|^package-lock\.json$)' > /tmp/tauri.changed || true
+          else
+            git diff --name-only HEAD~1 HEAD | grep -E '(^src-tauri/|^tauri\.conf\.json$|^Cargo\.toml$|^Cargo\.lock$|^package\.json$|^package-lock\.json$)' > /tmp/tauri.changed || true
+          fi
+          if [ -s /tmp/tauri.changed ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            cat /tmp/tauri.changed
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip Tauri build when no Tauri files changed
+        if: steps.tauri-check.outputs.changed != 'true'
+        run: echo "No Tauri-related file changes detected, skipping Tauri build."
+
+      - uses: ./.github/actions/setup-node
+        if: steps.tauri-check.outputs.changed == 'true'
+
+      - name: Install Rust toolchain
+        if: steps.tauri-check.outputs.changed == 'true'
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install Tauri build dependencies
+        if: steps.tauri-check.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev
+
+      - name: Build frontend for Tauri
+        if: steps.tauri-check.outputs.changed == 'true'
+        run: npm run build
+
+      - name: Build Tauri desktop bundles
+        if: steps.tauri-check.outputs.changed == 'true'
+        run: npx tauri build --target deb --target appimage
+
+      - name: Upload Tauri desktop artifacts
+        if: steps.tauri-check.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-bundles
+          path: src-tauri/target/release/bundle/
+          retention-days: 7
+
+      - name: Package release asset
+        if: steps.tauri-check.outputs.changed == 'true' && startsWith(github.ref, 'refs/tags/')
+        run: zip -r tauri-desktop-bundles.zip src-tauri/target/release/bundle/
+
+      - name: Publish Tauri release artifact
+        if: steps.tauri-check.outputs.changed == 'true' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Tauri Desktop Bundles ${{ github.ref_name }}"
+          files: tauri-desktop-bundles.zip
+
+  # ----------------------------------------------------------
+  # 5. BUILD
   # ----------------------------------------------------------
   build:
     name: 🏗️ Build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     needs: [test]
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/setup-node
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+          node-version: lts/*
 
       - name: Build application
         run: npm run build
@@ -125,12 +308,65 @@ jobs:
           path: './dist'
 
   # ----------------------------------------------------------
-  # 5. DEPLOY (only on main branch push)
+  # 5.5 NODE COMPATIBILITY BUILD
+  # ----------------------------------------------------------
+  build-node:
+    name: 🧩 Node Current Compatibility Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    needs: [build]
+    steps:
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: node
+
+      - name: Build application on current Node
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+  # ----------------------------------------------------------
+  # 5. LIGHTHOUSE
+  # ----------------------------------------------------------
+  lighthouse:
+    name: 📈 Lighthouse Performance Budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    needs: [build]
+    steps:
+      - uses: ./.github/actions/setup-node
+
+      - name: Run Lighthouse CI against the production build
+        run: |
+          set -e
+          npx --yes http-server ./dist -p 4173 --silent &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" >/dev/null 2>&1 || true' EXIT
+          EXIT_CODE=0
+          npx --yes @lhci/cli autorun --upload=false --config=./.lighthouserc.json || EXIT_CODE=$?
+          kill "$SERVER_PID" >/dev/null 2>&1 || true
+          wait "$SERVER_PID" >/dev/null 2>&1 || true
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "Lighthouse budget validation failed."
+            exit "$EXIT_CODE"
+          fi
+
+  # ----------------------------------------------------------
+  # 6. DEPLOY (only on main branch push)
   # ----------------------------------------------------------
   deploy:
     name: 🚀 Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    needs: [build]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+    needs: [lighthouse]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     environment:
       name: github-pages

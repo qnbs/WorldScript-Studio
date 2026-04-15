@@ -83,8 +83,7 @@ StoryCraft-Studio/
 ├── types/            # Global TypeScript types
 └── .github/
     └── workflows/
-        ├── ci.yml    # Full CI pipeline (lint → test → build → deploy)
-        └── deploy.yml # Legacy deploy-only workflow
+        ├── ci.yml    # Full CI pipeline (lint → test → build → deploy with security, Storybook, Lighthouse, and optional Tauri)
 ```
 
 ---
@@ -127,6 +126,28 @@ chore: update dependencies
 npm run test         # Run in watch mode
 npm run test:run     # Run once (CI mode)
 npm run test:coverage  # With coverage report
+```
+
+### Local CI Simulation
+
+You can simulate the GitHub Actions pipeline locally using [Act](https://github.com/nektos/act). This is especially useful for testing workflow logic and environment-specific behavior before opening a PR.
+
+```bash
+npm install -g act
+act pull_request --job lint --job typecheck --job test --job storybook --job build
+```
+
+For release-style checks including `build-node` and `lighthouse`, run:
+
+```bash
+act push --job build --job build-node --job lighthouse
+```
+
+If you need Codecov support locally, export the token first:
+
+```bash
+export CODECOV_TOKEN="your_token_here"
+act pull_request -s CODECOV_TOKEN=${CODECOV_TOKEN}
 ```
 
 Tests live in `tests/unit/`. Each UI component and core hook should have a test file.
