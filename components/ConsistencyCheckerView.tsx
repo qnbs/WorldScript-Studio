@@ -47,8 +47,7 @@ const ConsistencyCheckerUI: FC = () => {
             <CardContent className="space-y-4">
               <Select
                 value={selectedCharacterId || ''}
-                onValueChange={setSelectedCharacterId}
-                placeholder={t('consistencyChecker.selectPlaceholder')}
+                onChange={(e) => setSelectedCharacterId(e.target.value)}
               >
                 {characters.map((char) => (
                   <option key={char.id} value={char.id}>

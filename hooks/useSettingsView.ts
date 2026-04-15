@@ -1,7 +1,26 @@
 import type React from 'react';
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
-import type { Theme, EditorFont, AiCreativity, StoryProject, ProjectSnapshot } from '../types';
+import type {
+  Theme,
+  EditorFont,
+  AiCreativity,
+  StoryProject,
+  ProjectSnapshot,
+  CustomFont,
+  KeyboardShortcut,
+  WritingGoal,
+  AdvancedAiSettings,
+  AccessibilitySettings,
+  PrivacySettings,
+  PerformanceSettings,
+  NotificationSettings,
+  CollaborationSettings,
+  IntegrationSettings,
+  AdvancedEditorSettings,
+  BackupSettings,
+  ThemeCustomization,
+} from '../types';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { settingsActions } from '../features/settings/settingsSlice';
 import {
@@ -81,43 +100,57 @@ export const useSettingsView = () => {
 
         // Advanced Settings
         case 'customFont':
-          dispatch(settingsActions.setCustomFont(value));
+          dispatch(settingsActions.setCustomFont(value as unknown as CustomFont | undefined));
           break;
         case 'keyboardShortcuts':
-          dispatch(settingsActions.setKeyboardShortcuts(value));
+          dispatch(settingsActions.setKeyboardShortcuts(value as unknown as KeyboardShortcut[]));
           break;
         case 'writingGoals':
-          dispatch(settingsActions.setWritingGoals(value));
+          dispatch(settingsActions.setWritingGoals(value as unknown as WritingGoal[]));
           break;
         case 'advancedAi':
-          dispatch(settingsActions.setAdvancedAi(value));
+          dispatch(settingsActions.setAdvancedAi(value as unknown as Partial<AdvancedAiSettings>));
           break;
         case 'accessibility':
-          dispatch(settingsActions.setAccessibility(value));
+          dispatch(
+            settingsActions.setAccessibility(value as unknown as Partial<AccessibilitySettings>)
+          );
           break;
         case 'privacy':
-          dispatch(settingsActions.setPrivacy(value));
+          dispatch(settingsActions.setPrivacy(value as unknown as Partial<PrivacySettings>));
           break;
         case 'performance':
-          dispatch(settingsActions.setPerformance(value));
+          dispatch(
+            settingsActions.setPerformance(value as unknown as Partial<PerformanceSettings>)
+          );
           break;
         case 'notifications':
-          dispatch(settingsActions.setNotifications(value));
+          dispatch(
+            settingsActions.setNotifications(value as unknown as Partial<NotificationSettings>)
+          );
           break;
         case 'collaboration':
-          dispatch(settingsActions.setCollaboration(value));
+          dispatch(
+            settingsActions.setCollaboration(value as unknown as Partial<CollaborationSettings>)
+          );
           break;
         case 'integrations':
-          dispatch(settingsActions.setIntegrations(value));
+          dispatch(
+            settingsActions.setIntegrations(value as unknown as Partial<IntegrationSettings>)
+          );
           break;
         case 'advancedEditor':
-          dispatch(settingsActions.setAdvancedEditor(value));
+          dispatch(
+            settingsActions.setAdvancedEditor(value as unknown as Partial<AdvancedEditorSettings>)
+          );
           break;
         case 'backup':
-          dispatch(settingsActions.setBackup(value));
+          dispatch(settingsActions.setBackup(value as unknown as Partial<BackupSettings>));
           break;
         case 'themeCustomization':
-          dispatch(settingsActions.setThemeCustomization(value));
+          dispatch(
+            settingsActions.setThemeCustomization(value as unknown as Partial<ThemeCustomization>)
+          );
           break;
 
         default:

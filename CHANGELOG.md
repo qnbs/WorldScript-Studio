@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI pipeline: ESLint and typecheck switched from soft-fail to hard-fail mode
 - ErrorBoundary component now accepts `onReset` callback prop
 - `AUDIT.md` updated with resolution status for addressed findings
+- Lazy-loaded `docx`/`jszip` export libraries and improved Vite manual chunk splitting with a higher `chunkSizeWarningLimit` for optimized production builds
 
 ## [1.0.0] - 2025-01-01
 

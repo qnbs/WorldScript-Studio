@@ -92,6 +92,7 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
     cssCodeSplit: true,
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       external: [
         '@tauri-apps/api',
@@ -107,16 +108,53 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash][extname]',
 
         // Code-Splitting für bessere Ladezeiten
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'redux-vendor': ['@reduxjs/toolkit', 'react-redux', 'redux-undo'],
-          'ai-vendor': ['@google/genai'],
-          'export-vendor': ['jspdf', 'docx', 'jszip'],
-          'dnd-vendor': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
-          'graph-vendor': ['react-force-graph-2d'],
-          'map-vendor': ['leaflet', 'react-leaflet'],
-          'canvas-vendor': ['konva', 'react-konva'],
-          'chart-vendor': ['recharts'],
+        manualChunks: (id) => {
+          if (!id || !id.includes('node_modules')) return undefined;
+          if (
+            id.includes('/react-dom/') ||
+            id.includes('/react/') ||
+            id.includes('/react-router')
+          ) {
+            return 'react-vendor';
+          }
+          if (
+            id.includes('@reduxjs') ||
+            id.includes('/react-redux/') ||
+            id.includes('/redux-undo/')
+          ) {
+            return 'redux-vendor';
+          }
+          if (id.includes('@google/genai')) {
+            return 'ai-vendor';
+          }
+          if (id.includes('/jspdf/')) {
+            return 'jspdf-vendor';
+          }
+          if (id.includes('/docx/')) {
+            return 'docx-vendor';
+          }
+          if (id.includes('/jszip/')) {
+            return 'jszip-vendor';
+          }
+          if (id.includes('/html2canvas/')) {
+            return 'html2canvas-vendor';
+          }
+          if (id.includes('@dnd-kit') || id.includes('/dnd-kit/')) {
+            return 'dnd-vendor';
+          }
+          if (id.includes('react-force-graph-2d')) {
+            return 'graph-vendor';
+          }
+          if (id.includes('/leaflet/') || id.includes('/react-leaflet/')) {
+            return 'map-vendor';
+          }
+          if (id.includes('/konva/') || id.includes('/react-konva/')) {
+            return 'canvas-vendor';
+          }
+          if (id.includes('/recharts/')) {
+            return 'chart-vendor';
+          }
+          return undefined;
         },
       },
     },

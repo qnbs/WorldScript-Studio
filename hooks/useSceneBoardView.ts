@@ -27,7 +27,7 @@ export const useSceneBoardView = () => {
 
   const handleUpdateSection = useCallback(
     (id: string, updates: Partial<StorySection>) => {
-      dispatch(projectActions.updateManuscriptSection({ id, updates }));
+      dispatch(projectActions.updateManuscriptSection({ id, changes: updates }));
     },
     [dispatch]
   );

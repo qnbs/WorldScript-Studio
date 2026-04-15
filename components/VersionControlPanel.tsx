@@ -129,14 +129,16 @@ export const VersionControlPanel: FC = () => {
 
   const handleCreateBranch = useCallback(() => {
     if (!newBranchName.trim()) return;
-    dispatch(
-      versionControlActions.createBranch({
+    const payload: { name: string; description: string; fromSnapshotId?: string; switchTo: true } =
+      {
         name: newBranchName.trim(),
         description: newBranchDesc.trim(),
-        fromSnapshotId,
         switchTo: true,
-      })
-    );
+      };
+    if (fromSnapshotId) {
+      payload.fromSnapshotId = fromSnapshotId;
+    }
+    dispatch(versionControlActions.createBranch(payload));
     setNewBranchName('');
     setNewBranchDesc('');
     setFromSnapshotId(undefined);
@@ -156,9 +158,9 @@ export const VersionControlPanel: FC = () => {
       if (idx === 0) {
         // Update the first section to trigger re-render
         dispatch(
-          projectActions.updateSectionContent({
+          projectActions.updateManuscriptSection({
             id: section.id,
-            content: section.content,
+            changes: { content: section.content },
           })
         );
       }

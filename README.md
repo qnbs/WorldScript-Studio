@@ -180,7 +180,7 @@ Language selection persists across sessions via `localStorage`.
 | **Storage**          | IndexedDB (custom `dbService`)       | Large-capacity, async, offline-first local persistence               |
 | **Encryption**       | Web Crypto API (AES-256-GCM)         | Client-side API key encryption before IndexedDB storage              |
 | **PDF Export**       | jsPDF                                | Client-side, configurable PDF document generation                    |
-| **Document Export**  | docx + jszip                         | Word-compatible `.docx` generation                                   |
+| **Document Export**  | docx + jszip                         | Word-compatible `.docx` generation (lazy-loaded for export actions)  |
 | **PWA**              | Service Worker + Web App Manifest v3 | Offline support, installability, app shortcuts                       |
 | **i18n**             | Custom React Context system          | JSON locale files, EN fallback, `localStorage` persistence           |
 | **Visualization**    | Force-directed graph                 | Interactive character relationship network                           |
@@ -245,7 +245,7 @@ git clone https://github.com/qnbs/StoryCraft-Studio.git
 cd StoryCraft-Studio
 
 # Install dependencies
-npm install
+npm install --legacy-peer-deps
 
 # Start the development server (http://localhost:3000)
 npm run dev
@@ -256,6 +256,8 @@ npm run build
 # Preview the production build locally
 npm run preview
 ```
+
+> Note: The production build uses Vite manual chunking and lazy-loaded export libraries (`docx` / `jszip`) to keep the main app bundle smaller and improve load performance.
 
 ### 🌐 Custom Domain Setup
 

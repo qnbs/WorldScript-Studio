@@ -37,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const viewTitleMap: Record<View, string> = {
+  const viewTitleMap: Partial<Record<View, string>> = {
     dashboard: 'sidebar.dashboard',
     manuscript: 'sidebar.manuscript',
     writer: 'sidebar.writer',
@@ -48,9 +48,15 @@ export const Header: React.FC<HeaderProps> = ({
     export: 'sidebar.export',
     settings: 'sidebar.settings',
     help: 'sidebar.help',
+    sceneboard: 'sidebar.sceneboard',
+    analytics: 'sidebar.analytics',
+    zen: 'sidebar.zen',
+    characterGraph: 'sidebar.characterGraph',
+    consistencyChecker: 'sidebar.consistencyChecker',
+    critic: 'sidebar.critic',
   };
 
-  const pageTitle = t(viewTitleMap[currentView] || 'sidebar.dashboard');
+  const pageTitle = t(viewTitleMap[currentView] ?? 'sidebar.dashboard');
 
   return (
     <header

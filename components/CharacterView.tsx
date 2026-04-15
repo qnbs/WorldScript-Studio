@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { Character } from '../types';
 import { ICONS } from '../constants';
 import { Button } from './ui/Button';
+import { Input } from './ui/Input';
 import { Card } from './ui/Card';
 import { Spinner } from './ui/Spinner';
 import { Modal } from './ui/Modal';

@@ -488,12 +488,29 @@ ${project.manuscript || 'No manuscript content yet.'}
       }
     }
 
+    const logline = description || (author ? `Imported by ${author}` : 'Imported project');
+    const manuscriptSections = manuscript
+      ? [
+          {
+            id: 'imported-manuscript-1',
+            title: 'Imported Manuscript',
+            content: manuscript.trim(),
+          },
+        ]
+      : [
+          {
+            id: 'imported-manuscript-1',
+            title: 'Imported Manuscript',
+            content: 'No manuscript content yet.',
+          },
+        ];
+
     return {
       title,
-      logline: description,
+      logline,
       characters: [],
       worlds: [],
-      manuscript: [],
+      manuscript: manuscriptSections,
     } as StoryProject;
   }
 }

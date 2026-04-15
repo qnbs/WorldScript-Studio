@@ -19,6 +19,7 @@ let cachedTemplates: CommunityTemplate[] | null = null;
 export interface CommunityTemplateResult {
   templates: CommunityTemplate[];
   error?: string;
+  isFallback?: boolean;
 }
 
 /**
@@ -32,7 +33,7 @@ export async function fetchCommunityTemplates(
 
   try {
     const res = await fetch(GITHUB_INDEX_URL, {
-      signal,
+      signal: signal ?? null,
       headers: { Accept: 'application/json' },
       // Avoid stale GitHub CDN cache
       cache: 'no-store',
@@ -56,6 +57,7 @@ export async function fetchCommunityTemplates(
     return {
       templates: getFallbackTemplates(),
       error: 'Community Templates konnten nicht geladen werden (offline?)',
+      isFallback: true,
     };
   }
 }

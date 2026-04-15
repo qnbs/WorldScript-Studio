@@ -339,7 +339,7 @@ export interface CommunityTemplate {
   arcDescription: string;
   author: string;
   stars?: number;
-  sections: { title: string }[];
+  sections: { title: string; description?: string }[];
 }
 
 // ─── Collaboration Types ─────────────────────────────────────────────────────

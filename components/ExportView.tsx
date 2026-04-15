@@ -6,7 +6,6 @@ import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 import { ICONS } from '../constants';
 import { useExportView } from '../hooks/useExportView';
-import { exportEpub } from '../services/epubApiService';
 import { ExportViewContext, useExportViewContext } from '../contexts/ExportViewContext';
 import { useAppSelector } from '../app/hooks';
 import { Textarea } from './ui/Textarea';
@@ -86,6 +85,7 @@ const ExportControls: FC = () => {
     setEpubError(null);
     setEpubLoading(true);
     try {
+      const { exportEpub } = await import('../services/epubApiService');
       const chapters = project.manuscript.map((section) => ({
         title: section.title,
         content: section.content || '',
@@ -130,14 +130,14 @@ const ExportControls: FC = () => {
                   characters: e.target.checked,
                 }))
               }
-              disabled={project.characters.length === 0}
+              disabled={project.characters.ids.length === 0}
             />
             <Checkbox
               id="exp-world"
               label={t('export.content.worlds')}
               checked={contentToExport.worlds}
               onChange={(e) => setContentToExport((c) => ({ ...c, worlds: e.target.checked }))}
-              disabled={project.worlds.length === 0}
+              disabled={project.worlds.ids.length === 0}
             />
             <Checkbox
               id="exp-manu"
@@ -401,7 +401,7 @@ const ExportPreview: FC = () => {
 };
 
 const ExportViewUI: FC = () => {
-  const { project, errorMessage } = useExportViewContext();
+  const { project } = useExportViewContext();
   if (!project)
     return (
       <div className="flex h-[80vh] w-full items-center justify-center">
@@ -411,12 +411,6 @@ const ExportViewUI: FC = () => {
 
   return (
     <div className="h-full">
-      {errorMessage && (
-        <div className="mb-4 p-3 rounded bg-red-500/10 text-red-600 border border-red-500/30 text-sm">
-          {errorMessage}
-        </div>
-      )}
-
       {/* Advanced Import/Export */}
       <div className="mb-6">
         <AdvancedImportExport />

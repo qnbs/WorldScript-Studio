@@ -4,8 +4,6 @@ import { useTranslation } from './useTranslation';
 import { useAppSelector, useAppDispatch } from '../app/hooks';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { generateSynopsisThunk } from '../features/project/projectSlice';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
-import JSZip from 'jszip';
 
 type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub';
 interface ContentToExport {
@@ -153,6 +151,7 @@ export const useExportView = () => {
   }, [pdfOptions, project, synopsis, t, aiEnhancements, contentToExport]);
 
   const downloadDocx = useCallback(async () => {
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
     const children = [];
 
     // Title
@@ -207,6 +206,7 @@ export const useExportView = () => {
   }, [project, synopsis, aiEnhancements, contentToExport, t]);
 
   const downloadEpub = useCallback(async () => {
+    const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
     const folder = zip.folder('OEBPS');
 

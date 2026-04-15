@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Type } from '@google/genai';
+import type { Type } from '@google/genai';
 
 const mockGenerateContent = vi.fn().mockResolvedValue({ text: 'mock response' });
 
@@ -81,8 +81,8 @@ describe('geminiService', () => {
 
       const { generateJson } = await import('../../services/geminiService');
       const result = await generateJson<{ name: string }>('test prompt', 'Balanced', {
-        type: 'OBJECT' as unknown as typeof Type.OBJECT,
-        properties: { name: { type: 'STRING' as unknown as typeof Type.STRING } },
+        type: 'OBJECT' as unknown as Type,
+        properties: { name: { type: 'STRING' as unknown as Type } },
       });
       expect(result).toEqual({ name: 'Test Character' });
     });

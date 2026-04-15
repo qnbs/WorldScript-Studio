@@ -24,7 +24,7 @@ import {
 // --- SUB-COMPONENTS ---
 
 const ContextPanel: FC = React.memo(() => {
-  const { t, errorMessage } = useTranslation();
+  const { t } = useTranslation();
   const { project, selectedSectionId, handleContentChange, writerState, dispatch } =
     useWriterViewContext();
   const { selection, activeTool } = writerState;
@@ -35,6 +35,7 @@ const ContextPanel: FC = React.memo(() => {
     serif: 'serif',
     'sans-serif': 'sans-serif',
     monospace: 'monospace',
+    custom: 'monospace',
   };
   const editorStyles: React.CSSProperties = {
     fontFamily: fontMap[settings.editorFont],
@@ -59,11 +60,6 @@ const ContextPanel: FC = React.memo(() => {
     selection.start === selection.end;
   return (
     <div className="h-full flex flex-col">
-      {errorMessage && (
-        <div className="mb-4 p-3 rounded bg-red-500/10 text-red-600 border border-red-500/30 text-sm">
-          {errorMessage}
-        </div>
-      )}
       <Card className="h-full flex flex-col border-0 sm:border">
         <CardHeader className="hidden md:block">
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">

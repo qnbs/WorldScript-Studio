@@ -215,7 +215,6 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
         prompt,
         lang: language,
         onChunk,
-        signal: abortControllerRef.current.signal,
       })
     )
       .unwrap()

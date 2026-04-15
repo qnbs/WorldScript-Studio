@@ -16,9 +16,20 @@ import { useAppSelector } from '../app/hooks';
 import { useTranslation } from '../hooks/useTranslation';
 
 // --- Custom Hook for Resizable Panels ---
+const throttle = <A extends readonly unknown[]>(fn: (...args: A) => void, delay = 16) => {
+  let lastCall = 0;
+  return ((...args: A) => {
+    const now = performance.now();
+    if (now - lastCall < delay) return;
+    lastCall = now;
+    fn(...args);
+  }) as typeof fn;
+};
+
 const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
   const [leftPanelWidth, setLeftPanelWidth] = useState(initialLeft);
   const [rightPanelWidth, setRightPanelWidth] = useState(initialRight);
+  const [activeResize, setActiveResize] = useState<'left' | 'right' | null>(null);
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
 
@@ -41,33 +52,59 @@ const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
   const stopResizing = useCallback(() => {
     isResizingLeft.current = false;
     isResizingRight.current = false;
+    setActiveResize(null);
     document.body.style.cursor = 'default';
-    window.removeEventListener('mousemove', handleLeftResize);
-    window.removeEventListener('mousemove', handleRightResize);
-    window.removeEventListener('mouseup', stopResizing);
-  }, [handleLeftResize, handleRightResize]);
+  }, []);
 
-  const startLeftResize = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizingLeft.current = true;
-      document.body.style.cursor = 'col-resize';
-      window.addEventListener('mousemove', handleLeftResize);
-      window.addEventListener('mouseup', stopResizing);
-    },
-    [handleLeftResize, stopResizing]
-  );
+  const startLeftResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingLeft.current = true;
+    isResizingRight.current = false;
+    setActiveResize('left');
+    document.body.style.cursor = 'col-resize';
+  }, []);
 
-  const startRightResize = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizingRight.current = true;
-      document.body.style.cursor = 'col-resize';
-      window.addEventListener('mousemove', handleRightResize);
-      window.addEventListener('mouseup', stopResizing);
-    },
-    [handleRightResize, stopResizing]
-  );
+  const startRightResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRight.current = true;
+    isResizingLeft.current = false;
+    setActiveResize('right');
+    document.body.style.cursor = 'col-resize';
+  }, []);
+
+  // Effect-managed resize listeners ensure cleanup on unmount and avoid stale
+  // callback references that could leak when the component is removed.
+  // Test hint: verify mousemove/mouseup listeners are removed on unmount,
+  // and that AbortController is used to cancel outstanding listener registration.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    if (!activeResize) {
+      return () => {
+        controller.abort();
+      };
+    }
+
+    const handleMove = (e: MouseEvent) => {
+      if (activeResize === 'left') {
+        handleLeftResize(e);
+      }
+      if (activeResize === 'right') {
+        handleRightResize(e);
+      }
+    };
+
+    const throttledMove = throttle(handleMove, 16);
+
+    window.addEventListener('mousemove', throttledMove, { signal: controller.signal });
+    window.addEventListener('mouseup', stopResizing, { signal: controller.signal });
+
+    return () => {
+      window.removeEventListener('mousemove', throttledMove);
+      window.removeEventListener('mouseup', stopResizing);
+      controller.abort();
+    };
+  }, [activeResize, handleLeftResize, handleRightResize, stopResizing]);
 
   return {
     leftPanelWidth,

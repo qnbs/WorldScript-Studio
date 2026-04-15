@@ -126,7 +126,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
       const value = translations[language]?.[key] ?? translations['en']?.[key] ?? key;
 
       if (typeof value !== 'string') {
-        return value; // For objects/arrays like help categories
+        return key;
       }
 
       let translation = value;

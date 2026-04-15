@@ -1,9 +1,15 @@
 import type { TypedStartListening } from '@reduxjs/toolkit';
-import { createListenerMiddleware, isRejected, addListener } from '@reduxjs/toolkit';
+import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import type { RootState, AppDispatch } from './store';
 import { storageService } from '../services/storageService';
 import { statusActions } from '../features/status/statusSlice';
 import type { PersistedRootState } from '../types';
+import type { ProjectData } from '../features/project/projectSlice';
+
+type ProjectStateWithHistory = {
+  present?: { data?: ProjectData };
+  data?: ProjectData;
+};
 
 export const listenerMiddleware = createListenerMiddleware();
 
@@ -38,7 +44,8 @@ listenerMiddleware.startListening({
       // We only save `state.project.present`. The hydration logic in index.tsx handles re-wrapping it.
 
       // Check if 'present' exists (it should with redux-undo), otherwise fallback to flat state
-      const presentData = state.project.present?.data ?? state.project.data;
+      const projectState = state.project as ProjectStateWithHistory;
+      const presentData = projectState.present?.data ?? projectState.data;
 
       // Validate state before saving — guard against silent corruption
       if (!presentData || presentData.title === undefined) {
@@ -127,4 +134,3 @@ export const startAppListening = listenerMiddleware.startListening as TypedStart
   RootState,
   AppDispatch
 >;
-export const addAppListener = addListener as TypedStartListening<RootState, AppDispatch>;

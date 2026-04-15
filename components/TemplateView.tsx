@@ -375,7 +375,7 @@ const CommunityTab: FC = () => {
     fetchCommunityTemplates(ac.signal)
       .then((res) => {
         setTemplates(res.templates);
-        setIsFallback(res.isFallback);
+        setIsFallback(Boolean(res.isFallback));
       })
       .catch((e) => {
         if (e?.name !== 'AbortError') setError(String(e));

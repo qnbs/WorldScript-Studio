@@ -16,10 +16,6 @@ import { CommandPalette } from './components/CommandPalette';
 import { PWAInstallBanner, PWAUpdateToast, OfflineIndicator } from './components/ui/PWAComponents';
 import { VersionControlPanel } from './components/VersionControlPanel';
 import { CollaborationPanel } from './components/CollaborationPanel';
-import {
-  versionControlActions,
-  selectIsPanelOpen,
-} from './features/versionControl/versionControlSlice';
 
 // ── Lazy-geladene Views (Code-Splitting → separate JS-Chunks) ─────────────────
 const Dashboard = lazy(() =>
@@ -107,8 +103,6 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   // Collaboration Panel State
   const [isCollabPanelOpen, setIsCollabPanelOpen] = useState(false);
-  // Version Control Panel State (from Redux)
-  const isVCPanelOpen = useAppSelector(selectIsPanelOpen);
 
   useEffect(() => {
     const applyTheme = (isDark: boolean) => {
@@ -273,10 +267,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
           onClose={() => setIsPaletteOpen(false)}
           onNavigate={handleNavigate}
         />
-        <VersionControlPanel
-          isOpen={isVCPanelOpen}
-          onClose={() => dispatch(versionControlActions.closePanel())}
-        />
+        <VersionControlPanel />
         <CollaborationPanel
           isOpen={isCollabPanelOpen}
           onClose={() => setIsCollabPanelOpen(false)}

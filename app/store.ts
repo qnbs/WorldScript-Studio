@@ -1,4 +1,4 @@
-import type { AnyAction, Middleware } from '@reduxjs/toolkit';
+import type { AnyAction, Middleware, Reducer } from '@reduxjs/toolkit';
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import projectReducer, {
   importProjectThunk,
@@ -56,7 +56,7 @@ const combinedReducer = combineReducers({
 });
 
 // A sophisticated higher-order reducer to augment redux-undo's behavior
-export const rootReducer = (
+export const rootReducer: Reducer<ReturnType<typeof combinedReducer>, AnyAction> = (
   state: ReturnType<typeof combinedReducer> | undefined,
   action: AnyAction
 ) => {
@@ -87,9 +87,8 @@ export const rootReducer = (
 // The store is now configured and created in index.tsx after async state loading.
 // To support preloadedState, we export a factory function or use this temp store for types.
 export const setupStore = (preloadedState?: PersistedRootState) => {
-  return configureStore({
+  const storeOptions: Parameters<typeof configureStore>[0] = {
     reducer: rootReducer,
-    preloadedState: preloadedState as Partial<RootState> | undefined,
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware({
         serializableCheck: {
@@ -100,7 +99,13 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
       })
         .prepend(listenerMiddleware.middleware)
         .concat(loggerMiddleware),
-  });
+  };
+
+  if (preloadedState) {
+    storeOptions.preloadedState = preloadedState as unknown as ReturnType<typeof combinedReducer>;
+  }
+
+  return configureStore(storeOptions);
 };
 
 const _tempStore = configureStore({ reducer: rootReducer });

@@ -8,6 +8,7 @@ import {
   generateImage,
   streamText,
 } from '../../services/geminiService';
+import { createDeduplicatedThunk } from './aiThunkUtils';
 import type { RootState } from '../../app/store';
 import type {
   Character,
@@ -29,6 +30,7 @@ export const worldsAdapter = createEntityAdapter<World>();
 
 // --- Initial State ---
 export interface ProjectData {
+  id?: string;
   title: string;
   logline: string;
   author?: string;
@@ -64,6 +66,7 @@ interface ImportedProjectData {
 
 const initialState: { data: ProjectData } = {
   data: {
+    id: 'default',
     title: '',
     logline: '',
     characters: charactersAdapter.getInitialState(),
@@ -79,14 +82,15 @@ const initialState: { data: ProjectData } = {
 };
 
 // --- Async Thunks ---
-export const generateLoglineSuggestionsThunk = createAsyncThunk(
+export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
   'project/generateLogline',
-  async (lang: string, { getState, signal }) => {
+  async (lang: string, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present.data;
     const creativity = state.settings.aiCreativity;
 
     const { prompt, schema } = getPrompts('logline', { project, lang });
+    registerDuplicateRequest(prompt, 'logline');
     const response = await generateJson<string[]>(prompt, creativity, schema!, signal);
     return response;
   }
@@ -168,15 +172,19 @@ export const restoreSnapshotThunk = createAsyncThunk(
   }
 );
 
-export const generateCharacterProfileThunk = createAsyncThunk(
+export const generateCharacterProfileThunk = createDeduplicatedThunk(
   'project/generateCharacterProfile',
-  async ({ concept, lang }: { concept: string; lang: string }, { getState, signal }) => {
+  async (
+    { concept, lang }: { concept: string; lang: string },
+    { getState, signal, registerDuplicateRequest }
+  ) => {
     const state = getState() as RootState;
     // Pass thinking budget indirectly via prompt type config in geminiService
     const { prompt, schema, thinkingBudget } = getPrompts('characterProfile', {
       concept,
       lang,
     });
+    registerDuplicateRequest(prompt, 'characterProfile');
     return await generateJson<Omit<Character, 'id'>>(
       prompt,
       state.settings.aiCreativity,
@@ -187,11 +195,11 @@ export const generateCharacterProfileThunk = createAsyncThunk(
   }
 );
 
-export const regenerateCharacterFieldThunk = createAsyncThunk(
+export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
   'project/regenerateCharacterField',
   async (
     { character, field, lang }: { character: Character; field: keyof Character; lang: string },
-    { getState, signal }
+    { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
     const { prompt } = getPrompts('regenerateCharacterField', {
@@ -199,12 +207,13 @@ export const regenerateCharacterFieldThunk = createAsyncThunk(
       field,
       lang,
     });
+    registerDuplicateRequest(prompt, 'regenerateCharacterField');
     const response = await generateText(prompt, state.settings.aiCreativity, signal);
     return { field, value: response };
   }
 );
 
-export const generateCharacterPortraitThunk = createAsyncThunk(
+export const generateCharacterPortraitThunk = createDeduplicatedThunk(
   'project/generateCharacterPortrait',
   async (
     {
@@ -218,13 +227,14 @@ export const generateCharacterPortraitThunk = createAsyncThunk(
       style?: string;
       lang: string;
     },
-    { signal }
+    { signal, registerDuplicateRequest }
   ) => {
     const fullDescription = style ? `${description}. Style: ${style}` : description;
     const { prompt } = getPrompts('characterPortrait', {
       description: fullDescription,
       lang,
     });
+    registerDuplicateRequest(prompt, 'characterPortrait');
     const base64 = await generateImage(prompt, signal);
     await storageService.saveImage(characterId, base64);
     return { characterId };
@@ -247,14 +257,18 @@ export const uploadCharacterImageThunk = createAsyncThunk(
   }
 );
 
-export const generateWorldProfileThunk = createAsyncThunk(
+export const generateWorldProfileThunk = createDeduplicatedThunk(
   'project/generateWorldProfile',
-  async ({ concept, lang }: { concept: string; lang: string }, { getState, signal }) => {
+  async (
+    { concept, lang }: { concept: string; lang: string },
+    { getState, signal, registerDuplicateRequest }
+  ) => {
     const state = getState() as RootState;
     const { prompt, schema, thinkingBudget } = getPrompts('worldProfile', {
       concept,
       lang,
     });
+    registerDuplicateRequest(prompt, 'worldProfile');
     return await generateJson<Omit<World, 'id'>>(
       prompt,
       state.settings.aiCreativity,
@@ -265,11 +279,11 @@ export const generateWorldProfileThunk = createAsyncThunk(
   }
 );
 
-export const regenerateWorldFieldThunk = createAsyncThunk(
+export const regenerateWorldFieldThunk = createDeduplicatedThunk(
   'project/regenerateWorldField',
   async (
     { world, field, lang }: { world: World; field: keyof World; lang: string },
-    { getState, signal }
+    { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
     const { prompt } = getPrompts('regenerateWorldField', {
@@ -277,12 +291,13 @@ export const regenerateWorldFieldThunk = createAsyncThunk(
       field,
       lang,
     });
+    registerDuplicateRequest(prompt, 'regenerateWorldField');
     const response = await generateText(prompt, state.settings.aiCreativity, signal);
     return { field, value: response };
   }
 );
 
-export const generateWorldImageThunk = createAsyncThunk(
+export const generateWorldImageThunk = createDeduplicatedThunk(
   'project/generateWorldImage',
   async (
     {
@@ -294,9 +309,10 @@ export const generateWorldImageThunk = createAsyncThunk(
       description: string;
       lang: string;
     },
-    { signal }
+    { signal, registerDuplicateRequest }
   ) => {
     const { prompt } = getPrompts('worldImage', { description, lang });
+    registerDuplicateRequest(prompt, 'worldImage');
     const base64 = await generateImage(prompt, signal);
     await storageService.saveImage(worldId, base64);
     return { worldId };
@@ -319,11 +335,12 @@ export const uploadWorldImageThunk = createAsyncThunk(
   }
 );
 
-export const generateOutlineThunk = createAsyncThunk(
+export const generateOutlineThunk = createDeduplicatedThunk(
   'project/generateOutline',
-  async (params: OutlineGenerationParams, { getState, signal }) => {
+  async (params: OutlineGenerationParams, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const { prompt, schema, thinkingBudget } = getPrompts('outline', params);
+    registerDuplicateRequest(prompt, 'outline');
     return await generateJson<OutlineSection[]>(
       prompt,
       state.settings.aiCreativity,
@@ -334,7 +351,7 @@ export const generateOutlineThunk = createAsyncThunk(
   }
 );
 
-export const regenerateOutlineSectionThunk = createAsyncThunk(
+export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
   'project/regenerateOutlineSection',
   async (
     {
@@ -342,7 +359,7 @@ export const regenerateOutlineSectionThunk = createAsyncThunk(
       sectionToIndex,
       lang,
     }: { allSections: OutlineSection[]; sectionToIndex: number; lang: string },
-    { getState, signal }
+    { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
     const { prompt, schema, thinkingBudget } = getPrompts('regenerateOutlineSection', {
@@ -350,6 +367,7 @@ export const regenerateOutlineSectionThunk = createAsyncThunk(
       sectionToIndex,
       lang,
     });
+    registerDuplicateRequest(prompt, 'regenerateOutlineSection');
     const response = await generateJson<OutlineSection>(
       prompt,
       state.settings.aiCreativity,
@@ -361,11 +379,11 @@ export const regenerateOutlineSectionThunk = createAsyncThunk(
   }
 );
 
-export const personalizeTemplateThunk = createAsyncThunk(
+export const personalizeTemplateThunk = createDeduplicatedThunk(
   'project/personalizeTemplate',
   async (
     { sections, concept, lang }: { sections: { title: string }[]; concept: string; lang: string },
-    { getState, signal }
+    { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
     const { prompt, schema, thinkingBudget } = getPrompts('personalizeTemplate', {
@@ -373,6 +391,7 @@ export const personalizeTemplateThunk = createAsyncThunk(
       concept,
       lang,
     });
+    registerDuplicateRequest(prompt, 'personalizeTemplate');
     return await generateJson<{ title: string; prompt: string }[]>(
       prompt,
       state.settings.aiCreativity,
@@ -383,11 +402,12 @@ export const personalizeTemplateThunk = createAsyncThunk(
   }
 );
 
-export const generateCustomTemplateThunk = createAsyncThunk(
+export const generateCustomTemplateThunk = createDeduplicatedThunk(
   'project/generateCustomTemplate',
-  async (params: CustomTemplateParams, { getState, signal }) => {
+  async (params: CustomTemplateParams, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const { prompt, schema, thinkingBudget } = getPrompts('customTemplate', params);
+    registerDuplicateRequest(prompt, 'customTemplate');
     return await generateJson<{ title: string }[]>(
       prompt,
       state.settings.aiCreativity,
@@ -398,31 +418,30 @@ export const generateCustomTemplateThunk = createAsyncThunk(
   }
 );
 
-export const streamGenerationThunk = createAsyncThunk(
+export const streamGenerationThunk = createDeduplicatedThunk(
   'project/streamGeneration',
   async (
     {
       prompt,
       lang,
       onChunk,
-      signal,
     }: {
       prompt: string;
       lang: string;
       onChunk: (chunk: string) => void;
-      signal?: AbortSignal;
     },
-    { getState }
+    { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
     const fullPrompt = `${prompt}\n\nRespond in ${lang === 'de' ? 'German' : 'English'}.`;
+    registerDuplicateRequest(fullPrompt, 'streamGeneration');
     await streamText(fullPrompt, state.settings.aiCreativity, onChunk, signal);
   }
 );
 
-export const generateSynopsisThunk = createAsyncThunk(
+export const generateSynopsisThunk = createDeduplicatedThunk(
   'project/generateSynopsis',
-  async (lang: string, { getState, signal }) => {
+  async (lang: string, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present.data;
     const creativity = state.settings.aiCreativity;
@@ -430,19 +449,24 @@ export const generateSynopsisThunk = createAsyncThunk(
       project,
       lang,
     });
+    registerDuplicateRequest(prompt, 'synopsis');
     return await generateText(prompt, creativity, signal, thinkingBudget);
   }
 );
 
-export const proofreadTextThunk = createAsyncThunk(
+export const proofreadTextThunk = createDeduplicatedThunk(
   'project/proofreadText',
-  async ({ text, lang }: { text: string; lang: string }, { getState, signal }) => {
+  async (
+    { text, lang }: { text: string; lang: string },
+    { getState, signal, registerDuplicateRequest }
+  ) => {
     const state = getState() as RootState;
     const creativity = state.settings.aiCreativity;
     const { prompt, schema, thinkingBudget } = getPrompts('proofread', {
       text,
       lang,
     });
+    registerDuplicateRequest(prompt, 'proofread');
     return await generateJson<{ original: string; suggestion: string; explanation: string }[]>(
       prompt,
       creativity,
@@ -452,6 +476,8 @@ export const proofreadTextThunk = createAsyncThunk(
     );
   }
 );
+
+export { createDeduplicatedThunk } from './aiThunkUtils';
 
 // --- Slice Definition ---
 const projectSlice = createSlice({

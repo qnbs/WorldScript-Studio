@@ -124,7 +124,7 @@ export const useWorldView = () => {
   // Timeline and Location Handlers
   const addTimelineEvent = useCallback(() => {
     if (!selectedWorld) return;
-    const newEvent: WorldTimelineEvent = { id: uuidv4(), era: '', description: '' };
+    const newEvent: WorldTimelineEvent = { id: uuidv4(), title: '', era: '', description: '' };
     handleFieldChange('timeline', [...(selectedWorld.timeline || []), newEvent]);
   }, [selectedWorld, handleFieldChange]);
 
@@ -152,7 +152,7 @@ export const useWorldView = () => {
 
   const addLocation = useCallback(() => {
     if (!selectedWorld) return;
-    const newLoc: WorldLocation = { id: uuidv4(), name: '', description: '' };
+    const newLoc: WorldLocation = { id: uuidv4(), name: '', description: '', type: 'other' };
     handleFieldChange('locations', [...(selectedWorld.locations || []), newLoc]);
   }, [selectedWorld, handleFieldChange]);
 

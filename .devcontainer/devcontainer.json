@@ -11,7 +11,7 @@
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "remoteUser": "vscode",
-  "postCreateCommand": "npm ci",
+  "postCreateCommand": "npm ci --legacy-peer-deps",
   "postAttachCommand": "npm run dev",
   "forwardPorts": [3000, 6006, 1420],
   "portsAttributes": {

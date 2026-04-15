@@ -29,6 +29,7 @@ export const useCharacterView = () => {
   const [isRefiningPortrait, setIsRefiningPortrait] = useState(false);
   const [refinementPrompt, setRefinementPrompt] = useState('');
   const [portraitStyle, setPortraitStyle] = useState('digital painting');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
 
@@ -104,7 +105,9 @@ export const useCharacterView = () => {
       })
     );
     if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
-      toast.error(t('characters.error.portraitFailed'));
+      const errorText = t('characters.error.portraitFailed');
+      setErrorMessage(errorText);
+      toast.error(errorText);
     } else {
       // Trigger re-render by updating local state, redux state will update via extraReducer
       setSelectedCharacter((c) => (c ? { ...c, hasAvatar: true } : null));
@@ -124,7 +127,9 @@ export const useCharacterView = () => {
       })
     );
     if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
-      toast.error(t('characters.error.portraitFailed'));
+      const errorText = t('characters.error.portraitFailed');
+      setErrorMessage(errorText);
+      toast.error(errorText);
     }
     setRefinementPrompt('');
     setIsRefiningPortrait(false);
@@ -182,6 +187,7 @@ export const useCharacterView = () => {
     handleRefinePortrait,
     handleDelete,
     confirmDelete,
+    errorMessage,
   };
 };
 

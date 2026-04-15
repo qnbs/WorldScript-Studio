@@ -123,10 +123,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
     setTestStatus('loading');
     setTestError('');
     try {
-      const apiKey =
-        provider === 'openai' ? ((await storageService.getApiKey('openai')) ?? '') : undefined;
       const result = await testAIConnection(provider, {
-        apiKey,
         ollamaBaseUrl,
       });
       if (result.ok) {
@@ -1880,8 +1877,8 @@ const SettingsModals: FC = () => {
           </p>
           <p className="text-sm bg-[var(--background-tertiary)] p-3 rounded-md border border-[var(--border-primary)]">
             {t('settings.restoreModal.wordCountInfo', {
-              snapshotWordCount: modal.payload.wordCount || 0,
-              currentWordCount,
+              snapshotWordCount: String(modal.payload.wordCount || 0),
+              currentWordCount: String(currentWordCount),
             })}
           </p>
           <div className="flex justify-end gap-3">

@@ -49,7 +49,7 @@ const CharacterForceGraph: FC = () => {
       nodes: characters.map((c) => ({
         id: c.id,
         name: c.name,
-        role: ((c as Record<string, unknown>).role as string) ?? '',
+        role: c.characterArc || '',
       })),
       links: relationships.map((r) => ({
         source: r.fromCharacterId,

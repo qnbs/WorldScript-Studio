@@ -92,7 +92,17 @@ const SortableSceneCard: FC<{
           <div className="flex items-center gap-2">
             <Select
               value={editData.status}
-              onChange={(e) => setEditData((p) => ({ ...p, status: e.target.value }))}
+              onChange={(e) =>
+                setEditData((p) => ({
+                  ...p,
+                  status: e.target.value as
+                    | 'outline'
+                    | 'draft'
+                    | 'first-draft'
+                    | 'revised'
+                    | 'final',
+                }))
+              }
               className="text-xs"
             >
               <option value="draft">Entwurf</option>
