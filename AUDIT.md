@@ -9,17 +9,41 @@
 ## Self-Audit Summary
 
 - `npm outdated` identified outdated dependencies that should be reviewed in a follow-up dependency refresh cycle.
-- `npm audit` reported 25 vulnerabilities (4 low, 3 moderate, 15 high, 3 critical) in the current dependency tree.
+- `npm audit` baseline in this cycle reported 10 vulnerabilities (4 low, 1 moderate, 4 high, 1 critical).
 - `npm run lint:fix` completed successfully; 45 existing warnings remain from legacy `any` usage and React hook dependency concerns.
 - `npm run typecheck` passed without type errors.
 - `npm run build` completed successfully with production artifact generation.
 - `npm run test:coverage` passed with 110 tests, 96.1% statements, 81.81% branches, and 97.87% lines.
 
+### Dependency Hardening Update (2026-04-16)
+
+- Implemented conservative dependency remediation in `package.json` and `package-lock.json`:
+  - Upgraded `jspdf` from `^2.5.1` to `^4.2.1`.
+  - Added npm `overrides` for `@lhci/cli` to force modern transitive packages:
+    - `chrome-launcher` -> `^1.2.1`
+    - `tmp` -> `^0.2.5`
+- Removed deprecated transitive chain elements from the active install graph:
+  - `inflight@1.0.6` no longer present.
+  - `rimraf@2.x/3.x` no longer present.
+  - old `glob@7` deprecation path no longer present.
+- Remaining deprecation warning is currently limited to `node-domexception@1.0.0`, pulled transitively via:
+  - `@google/genai` -> `google-auth-library` -> `gaxios` -> `node-fetch` -> `fetch-blob`.
+  - This is currently an upstream dependency-chain constraint.
+- Validation after remediation:
+  - `npm run lint -- --max-warnings=0` passed.
+  - `npm run typecheck` passed.
+  - `npm run test:run` passed (113/113 tests).
+  - `npm run build` passed.
+- `npm audit` now reports 4 high vulnerabilities (down from 10 total, including 1 critical):
+  - all remaining findings are in `vite-plugin-pwa` / `workbox-build` via `@rollup/plugin-terser` -> `serialize-javascript`.
+  - npm suggests `vite-plugin-pwa@0.19.8` as a fix path, which is a major backward downgrade from the current line and not applied in this conservative cycle.
+
 ## Current Status
 
-- Security vulnerabilities remain due to transitive outdated dependencies; package upgrades are recommended for the next maintenance cycle.
-- `npm audit` currently reports 24 vulnerabilities (4 low, 3 moderate, 14 high, 3 critical) after safe dependency updates.
-- Updated safe patch/minor dependency versions while deferring major-version upgrades that could introduce compatibility risk.
+- Security posture was significantly improved in this cycle with targeted dependency remediation and lockfile cleanup.
+- `npm audit` currently reports 4 vulnerabilities (0 low, 0 moderate, 4 high, 0 critical), all linked to the PWA toolchain advisory chain.
+- Deprecated dependency footprint was reduced by removing the legacy LHCI transitive chain that introduced `inflight` and old `rimraf`.
+- One deprecation (`node-domexception`) remains as an upstream transitive dependency from the Gemini SDK stack.
 - The repository is stable: build, lint, typecheck, and coverage all pass.
 - The version bump to `1.1.0` is documented and ready for commit.
 
