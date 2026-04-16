@@ -54,7 +54,18 @@ const fakeDb = {
   transaction: vi.fn().mockImplementation(() => ({ objectStore: () => createFakeStore() })),
 };
 
-type TestDbService = { db?: typeof fakeDb; [key: string]: unknown };
+type TestDbService = {
+  db?: typeof fakeDb;
+  saveGeminiApiKey: (key: string) => Promise<void>;
+  getGeminiApiKey: () => Promise<string>;
+  clearGeminiApiKey: () => Promise<void>;
+  saveApiKey: (provider: string, key: string) => Promise<void>;
+  getApiKey: (provider: string) => Promise<string>;
+  saveStoryCodex: (codex: unknown) => Promise<void>;
+  getStoryCodex: (projectId: string) => Promise<unknown>;
+  hasGeminiApiKey: () => Promise<boolean>;
+  [key: string]: unknown;
+};
 
 describe('dbService', () => {
   let dbService: TestDbService;
@@ -76,7 +87,7 @@ describe('dbService', () => {
     } as unknown as Crypto);
 
     const mod = await import('../../services/dbService');
-    dbService = mod.dbService as TestDbService;
+    dbService = mod.dbService as unknown as TestDbService;
     dbService.db = fakeDb;
   });
 

@@ -3,8 +3,9 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useHelpView } from '../../hooks/useHelpView';
 
 const mockStreamAiHelpResponse = vi.fn<
-  Promise<void>,
-  [string, string, Record<string, unknown>, { onChunk: (chunk: string) => void }]
+  (
+    ...args: [string, string, Record<string, unknown>, { onChunk: (chunk: string) => void }]
+  ) => Promise<void>
 >(async (_question, _creativity, _opts, callbacks) => {
   callbacks.onChunk('Hello from AI.');
 });

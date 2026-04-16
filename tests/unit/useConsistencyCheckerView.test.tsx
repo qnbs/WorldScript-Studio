@@ -20,18 +20,19 @@ type MockState = {
       ollamaBaseUrl: string;
     };
   };
-  projectData?: MockProjectData;
+  projectData: MockProjectData | undefined;
   characters: { id: string; name: string }[];
   worlds: { id: string; name: string }[];
 };
 
 const mockDispatch = vi.fn();
 const mockGenerateText = vi.fn<
-  Promise<string>,
-  [string, string, Record<string, unknown>, AbortSignal?]
+  (...args: [string, string, Record<string, unknown>, AbortSignal?]) => Promise<string>
 >(async () => 'Consistency OK');
-const mockGetStoryCodex = vi.fn<Promise<StoryCodex | null>, [string]>(async () => null);
-const mockGetPrompts = vi.fn<{ prompt: string }, [string, unknown]>(() => ({
+const mockGetStoryCodex = vi.fn<(...args: [string]) => Promise<StoryCodex | null>>(
+  async () => null
+);
+const mockGetPrompts = vi.fn<(...args: [string, unknown]) => { prompt: string }>(() => ({
   prompt: 'check prompt',
 }));
 const mockState: MockState = {
@@ -145,13 +146,19 @@ describe('useConsistencyCheckerView', () => {
 
   it('aborts active consistency checks when the component unmounts', async () => {
     let abortSignal: AbortSignal | null = null;
-    mockGenerateText.mockImplementation(async (...args: Parameters<typeof mockGenerateText>) => {
-      const signal = args[3];
-      abortSignal = signal ?? null;
-      return new Promise((resolve) => {
-        setTimeout(resolve, 100);
-      });
-    });
+    mockGenerateText.mockImplementation(
+      async (
+        _prompt: string,
+        _creativity: string,
+        _opts: Record<string, unknown>,
+        signal?: AbortSignal
+      ) => {
+        abortSignal = signal ?? null;
+        return new Promise((resolve) => {
+          setTimeout(resolve, 100);
+        });
+      }
+    );
 
     const { result, unmount } = renderHook(() => useConsistencyCheckerView());
     act(() => {
@@ -159,11 +166,19 @@ describe('useConsistencyCheckerView', () => {
     });
 
     unmount();
-    expect(abortSignal?.aborted).toBe(true);
+    expect(abortSignal).not.toBeNull();
+    if (abortSignal) {
+      expect((abortSignal as AbortSignal).aborted).toBe(true);
+    }
   });
 
   it('loads story codex and adds it to the prompt arguments', async () => {
-    const storyCodex: StoryCodex = { id: 'codex-1', notes: ['Keep the hero grounded.'] };
+    const storyCodex: StoryCodex = {
+      projectId: 'proj-1',
+      extractedAt: new Date().toISOString(),
+      summary: 'Keep the hero grounded.',
+      entities: [],
+    };
     mockGetStoryCodex.mockResolvedValue(storyCodex);
 
     const { result } = renderHook(() => useConsistencyCheckerView());

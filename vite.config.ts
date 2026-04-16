@@ -151,14 +151,14 @@ export default defineConfig({
           if (id.includes('/konva/') || id.includes('/react-konva/')) {
             return 'canvas-vendor';
           }
-          if (
-            id.includes('/docx/') ||
-            id.includes('/jspdf/') ||
-            id.includes('/jszip/') ||
-            id.includes('mammoth') ||
-            id.includes('epub-gen')
-          ) {
-            return 'export-vendor';
+          if (id.includes('/docx/') || id.includes('/jszip/')) {
+            return 'export-vendor-docx-jszip';
+          }
+          if (id.includes('/jspdf/')) {
+            return 'export-vendor-pdf';
+          }
+          if (id.includes('mammoth') || id.includes('epub-gen')) {
+            return 'export-vendor-ebook';
           }
           if (
             id.includes('@tailwindcss') ||

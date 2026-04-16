@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback } from 'react';
-import jspdf from 'jspdf';
 import { useTranslation } from './useTranslation';
 import { useAppSelector, useAppDispatch } from '../app/hooks';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
@@ -86,7 +85,9 @@ export const useExportView = () => {
     return output.trim();
   }, [project, characters, worlds, contentToExport, aiEnhancements, synopsis, t]);
 
-  const downloadPdf = useCallback(() => {
+  const downloadPdf = useCallback(async () => {
+    const jspdfModule = await import('jspdf');
+    const jspdf = jspdfModule.default || jspdfModule;
     const doc = new jspdf();
     const margin = 20;
     const pageHeight = doc.internal.pageSize.getHeight();

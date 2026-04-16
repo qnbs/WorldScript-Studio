@@ -3,10 +3,9 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCriticView } from '../../hooks/useCriticView';
 
 const mockGenerateText = vi.fn<
-  Promise<string>,
-  [string, string, Record<string, unknown>, AbortSignal?]
+  (...args: [string, string, Record<string, unknown>, AbortSignal?]) => Promise<string>
 >(async () => 'AI critique result');
-const mockGetPrompts = vi.fn<{ prompt: string }, [string, unknown]>(() => ({
+const mockGetPrompts = vi.fn<(...args: [string, unknown]) => { prompt: string }>(() => ({
   prompt: 'mock-prompt',
 }));
 

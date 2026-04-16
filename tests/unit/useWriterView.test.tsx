@@ -177,6 +177,38 @@ describe('useWriterView', () => {
     expect(view.isGenerateDisabled()).toBe(true);
   });
 
+  it('defaults selectedSectionId when none is set', async () => {
+    mockState.writer.selectedSectionId = null;
+
+    const view = await createHookWrapper();
+    expect(view.selectedSectionId).toBe('s1');
+  });
+
+  it('disables dialogue generation when scenario or characters are missing', async () => {
+    mockState.writer.activeTool = 'dialogue';
+    mockState.writer.dialogueCharacters = [];
+    mockState.writer.scenario = '';
+
+    const view = await createHookWrapper();
+    expect(view.isGenerateDisabled()).toBe(true);
+  });
+
+  it('replaces existing text on accept replace', async () => {
+    mockState.writer.selection = { text: '', start: 6, end: 11 };
+    mockState.writer.generationHistory = ['world'];
+    mockState.writer.activeHistoryIndex = 0;
+
+    const view = await createHookWrapper();
+    await act(async () => {
+      view.handleAccept('replace');
+    });
+
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'updateManuscriptSection',
+      payload: { id: 's1', changes: { content: 'Hello world' } },
+    });
+  });
+
   it('inserts generated text on accept', async () => {
     mockState.writer.selection = { text: '', start: 6, end: 6 };
     mockState.writer.generationHistory = [' world'];
