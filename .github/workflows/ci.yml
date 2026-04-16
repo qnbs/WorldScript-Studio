@@ -40,6 +40,10 @@ jobs:
         node-version: [lts/*, node]
     continue-on-error: ${{ matrix.node-version == 'node' }}
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - uses: ./.github/actions/setup-node
         with:
           node-version: ${{ matrix.node-version }}
@@ -62,6 +66,10 @@ jobs:
         node-version: [lts/*, node]
     continue-on-error: ${{ matrix.node-version == 'node' }}
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - uses: ./.github/actions/setup-node
         with:
           node-version: ${{ matrix.node-version }}
@@ -136,6 +144,10 @@ jobs:
         node-version: [lts/*, node]
     continue-on-error: ${{ matrix.node-version == 'node' }}
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - uses: ./.github/actions/setup-node
         with:
           node-version: ${{ matrix.node-version }}
@@ -279,6 +291,10 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - uses: ./.github/actions/setup-node
 
       - name: Build Storybook
@@ -384,6 +400,10 @@ jobs:
       contents: read
     needs: [test]
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - uses: ./.github/actions/setup-node
         with:
           node-version: lts/*
@@ -413,6 +433,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     needs: [build]
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - uses: ./.github/actions/setup-node
         with:
           node-version: node
@@ -433,6 +457,10 @@ jobs:
       contents: read
     needs: [build]
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - uses: ./.github/actions/setup-node
 
       - name: Run Lighthouse CI against the production build
