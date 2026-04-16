@@ -54,8 +54,10 @@ const fakeDb = {
   transaction: vi.fn().mockImplementation(() => ({ objectStore: () => createFakeStore() })),
 };
 
+type TestDbService = { db?: typeof fakeDb; [key: string]: unknown };
+
 describe('dbService', () => {
-  let dbService: Record<string, any>;
+  let dbService: TestDbService;
 
   beforeEach(async () => {
     storeData.clear();
@@ -74,8 +76,8 @@ describe('dbService', () => {
     } as unknown as Crypto);
 
     const mod = await import('../../services/dbService');
-    dbService = mod.dbService;
-    (dbService as any).db = fakeDb;
+    dbService = mod.dbService as TestDbService;
+    dbService.db = fakeDb;
   });
 
   it('should encrypt and decrypt Gemini API keys', async () => {

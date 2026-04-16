@@ -1,12 +1,40 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConsistencyCheckerView } from '../../hooks/useConsistencyCheckerView';
+import type { StoryCodex } from '../../types';
+
+type MockProjectData = {
+  id: string;
+  manuscript: { id: string; content: string }[];
+  relationships: unknown[];
+};
+
+type MockState = {
+  aiCreativity: string;
+  settings: {
+    advancedAi: {
+      provider: string;
+      model: string;
+      temperature: number;
+      maxTokens: number;
+      ollamaBaseUrl: string;
+    };
+  };
+  projectData?: MockProjectData;
+  characters: { id: string; name: string }[];
+  worlds: { id: string; name: string }[];
+};
 
 const mockDispatch = vi.fn();
-const mockGenerateText = vi.fn(async () => 'Consistency OK');
-const mockGetStoryCodex = vi.fn(async () => null);
-const mockGetPrompts = vi.fn(() => ({ prompt: 'check prompt' }));
-const mockState = {
+const mockGenerateText = vi.fn<
+  Promise<string>,
+  [string, string, Record<string, unknown>, AbortSignal?]
+>(async () => 'Consistency OK');
+const mockGetStoryCodex = vi.fn<Promise<StoryCodex | null>, [string]>(async () => null);
+const mockGetPrompts = vi.fn<{ prompt: string }, [string, unknown]>(() => ({
+  prompt: 'check prompt',
+}));
+const mockState: MockState = {
   aiCreativity: 'Balanced',
   settings: {
     advancedAi: {
@@ -34,15 +62,15 @@ vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (key: string) => key, language: 'de' }),
 }));
 vi.mock('../../services/geminiService', () => ({
-  getPrompts: (...args: unknown[]) => mockGetPrompts(...args),
+  getPrompts: (...args: Parameters<typeof mockGetPrompts>) => mockGetPrompts(...args),
 }));
 vi.mock('../../services/dbService', () => ({
   dbService: {
-    getStoryCodex: (...args: unknown[]) => mockGetStoryCodex(...args),
+    getStoryCodex: (...args: Parameters<typeof mockGetStoryCodex>) => mockGetStoryCodex(...args),
   },
 }));
 vi.mock('../../services/aiProviderService', () => ({
-  generateText: (...args: unknown[]) => (mockGenerateText as any)(...args),
+  generateText: (...args: Parameters<typeof mockGenerateText>) => mockGenerateText(...args),
 }));
 vi.mock('../../features/project/projectSelectors', () => ({
   selectAiCreativity: (state: typeof mockState) => state.aiCreativity,
@@ -79,7 +107,7 @@ describe('useConsistencyCheckerView', () => {
 
   it('returns early when no project data is available', async () => {
     const originalProjectData = mockState.projectData;
-    mockState.projectData = undefined as any;
+    mockState.projectData = undefined;
 
     const { result } = renderHook(() => useConsistencyCheckerView());
 
@@ -116,9 +144,9 @@ describe('useConsistencyCheckerView', () => {
   });
 
   it('aborts active consistency checks when the component unmounts', async () => {
-    let abortSignal: any = null;
-    mockGenerateText.mockImplementation(async (...args: unknown[]) => {
-      const signal = args[3] as AbortSignal | undefined;
+    let abortSignal: AbortSignal | null = null;
+    mockGenerateText.mockImplementation(async (...args: Parameters<typeof mockGenerateText>) => {
+      const signal = args[3];
       abortSignal = signal ?? null;
       return new Promise((resolve) => {
         setTimeout(resolve, 100);
@@ -135,7 +163,7 @@ describe('useConsistencyCheckerView', () => {
   });
 
   it('loads story codex and adds it to the prompt arguments', async () => {
-    const storyCodex = { id: 'codex-1', notes: ['Keep the hero grounded.'] } as any;
+    const storyCodex: StoryCodex = { id: 'codex-1', notes: ['Keep the hero grounded.'] };
     mockGetStoryCodex.mockResolvedValue(storyCodex);
 
     const { result } = renderHook(() => useConsistencyCheckerView());
@@ -175,7 +203,7 @@ describe('useConsistencyCheckerView', () => {
 
   it('sets storyCodex to null when no project data exists', async () => {
     const originalProjectData = mockState.projectData;
-    mockState.projectData = undefined as any;
+    mockState.projectData = undefined;
 
     const { result } = renderHook(() => useConsistencyCheckerView());
 

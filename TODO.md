@@ -2,6 +2,8 @@
 
 Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 
+> Self-audit complete. Remaining action items include review of major-version dependency upgrades and remediation of 24 remaining vulnerabilities from `npm audit`.
+
 > Self-audit abgeschlossen: `npm outdated`, `npm audit`, `npm run lint:fix`, `npm run typecheck`, `npm run build`, `npm run test:coverage`.
 > Paketversion auf `1.1.0` angehoben; Build und Coverage erfolgreich.
 

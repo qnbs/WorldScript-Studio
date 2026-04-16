@@ -2,15 +2,26 @@ import React, { useEffect } from 'react';
 import { act, render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockDispatch = vi.fn((action) => {
-  if (
-    typeof action === 'object' &&
-    action !== null &&
-    (action as any).type === 'streamGenerationThunk'
-  ) {
+type DispatcherAction = { type: string; payload?: unknown };
+
+type StreamGenerationThunk = {
+  type: 'streamGenerationThunk';
+  payload: { prompt?: string; onChunk?: (chunk: string) => void };
+};
+
+const isDispatcherAction = (value: unknown): value is DispatcherAction =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { type?: unknown }).type === 'string';
+
+const isStreamGenerationThunk = (value: unknown): value is StreamGenerationThunk =>
+  isDispatcherAction(value) && value.type === 'streamGenerationThunk';
+
+const mockDispatch = vi.fn((action: unknown) => {
+  if (isStreamGenerationThunk(action)) {
     return {
       unwrap: async () => {
-        const payload = (action as any).payload;
+        const payload = action.payload;
         if (payload?.onChunk) {
           payload.onChunk('stream-chunk');
         }
@@ -192,16 +203,24 @@ describe('useWriterView', () => {
     });
 
     expect(
-      mockDispatch.mock.calls.some(([action]) => (action as any).type === 'startLoading')
+      mockDispatch.mock.calls.some(
+        ([action]) => isDispatcherAction(action) && action.type === 'startLoading'
+      )
     ).toBe(true);
     expect(
-      mockDispatch.mock.calls.some(([action]) => (action as any).type === 'clearResultStream')
+      mockDispatch.mock.calls.some(
+        ([action]) => isDispatcherAction(action) && action.type === 'clearResultStream'
+      )
     ).toBe(true);
-    expect(mockDispatch.mock.calls.some(([action]) => (action as any).type === 'addHistory')).toBe(
-      true
-    );
     expect(
-      mockDispatch.mock.calls.some(([action]) => (action as any).type === 'streamGenerationThunk')
+      mockDispatch.mock.calls.some(
+        ([action]) => isDispatcherAction(action) && action.type === 'addHistory'
+      )
+    ).toBe(true);
+    expect(
+      mockDispatch.mock.calls.some(
+        ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk'
+      )
     ).toBe(true);
   });
 
@@ -214,12 +233,12 @@ describe('useWriterView', () => {
       view.handleGenerate();
     });
 
-    const thunkCall = mockDispatch.mock.calls.find(
-      (call) => (call[0] as any).type === 'streamGenerationThunk'
+    const thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
+      isStreamGenerationThunk(call[0])
     );
     expect(thunkCall).toBeDefined();
-    expect((thunkCall![0] as any).payload.prompt).toContain('Improve the following text');
-    expect((thunkCall![0] as any).payload.prompt).toContain('short sample');
+    expect(thunkCall?.[0].payload.prompt).toContain('Improve the following text');
+    expect(thunkCall?.[0].payload.prompt).toContain('short sample');
   });
 
   it('generates a dialogue prompt when dialogue tool is selected', async () => {
@@ -232,13 +251,11 @@ describe('useWriterView', () => {
       view.handleGenerate();
     });
 
-    const thunkCall = mockDispatch.mock.calls.find(
-      (call) => (call[0] as any).type === 'streamGenerationThunk'
+    const thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
+      isStreamGenerationThunk(call[0])
     );
-    expect((thunkCall![0] as any).payload.prompt).toContain(
-      'Write a piece of dialogue between Villain'
-    );
-    expect((thunkCall![0] as any).payload.prompt).toContain('A tense encounter');
+    expect(thunkCall?.[0].payload.prompt).toContain('Write a piece of dialogue between Villain');
+    expect(thunkCall?.[0].payload.prompt).toContain('A tense encounter');
   });
 
   it('builds prompts for multiple writer tools', async () => {
@@ -299,11 +316,11 @@ describe('useWriterView', () => {
         view.handleGenerate();
       });
 
-      const thunkCall = mockDispatch.mock.calls.find(
-        (call) => (call[0] as any).type === 'streamGenerationThunk'
+      const thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
+        isStreamGenerationThunk(call[0])
       );
       expect(thunkCall).toBeDefined();
-      expect((thunkCall![0] as any).payload.prompt).toContain(scenario.expected);
+      expect(thunkCall?.[0].payload.prompt).toContain(scenario.expected);
     }
   });
 
@@ -329,10 +346,10 @@ describe('useWriterView', () => {
       view.handleGenerate();
     });
 
-    const thunkCall = mockDispatch.mock.calls.find(
-      (call) => (call[0] as any).type === 'streamGenerationThunk'
+    const thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
+      isStreamGenerationThunk(call[0])
     );
-    expect((thunkCall![0] as any).payload.prompt).toContain(
+    expect(thunkCall?.[0].payload.prompt).toContain(
       'Rewrite the following text in a different tone'
     );
   });
@@ -361,15 +378,11 @@ describe('useWriterView', () => {
     mockDispatch.mockClear();
     const originalImplementation = mockDispatch.getMockImplementation();
     mockDispatch.mockImplementation((action) => {
-      if (
-        typeof action === 'object' &&
-        action !== null &&
-        (action as any).type === 'streamGenerationThunk'
-      ) {
+      if (isStreamGenerationThunk(action)) {
         return {
           unwrap: async () => {
             const error = new Error('Unexpected failure');
-            (error as any).name = 'SomeError';
+            error.name = 'SomeError';
             throw error;
           },
         };
@@ -393,7 +406,9 @@ describe('useWriterView', () => {
       )
     );
 
-    mockDispatch.mockImplementation(originalImplementation as any);
+    if (originalImplementation) {
+      mockDispatch.mockImplementation(originalImplementation);
+    }
   });
 
   it('falls back to content for brainstorm and image prompts when no selection exists', async () => {
@@ -405,10 +420,10 @@ describe('useWriterView', () => {
     await act(async () => {
       view.handleGenerate();
     });
-    let thunkCall = mockDispatch.mock.calls.find(
-      (call) => (call[0] as any).type === 'streamGenerationThunk'
+    let thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
+      isStreamGenerationThunk(call[0])
     );
-    expect((thunkCall![0] as any).payload.prompt).toContain('based on this context');
+    expect(thunkCall?.[0].payload.prompt).toContain('based on this context');
 
     mockDispatch.mockClear();
     mockState.writer.activeTool = 'imagePrompt';
@@ -416,12 +431,10 @@ describe('useWriterView', () => {
     await act(async () => {
       view.handleGenerate();
     });
-    thunkCall = mockDispatch.mock.calls.find(
-      (call) => (call[0] as any).type === 'streamGenerationThunk'
+    thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
+      isStreamGenerationThunk(call[0])
     );
-    expect((thunkCall![0] as any).payload.prompt).toContain(
-      'Analyze the following scene from a story'
-    );
+    expect(thunkCall?.[0].payload.prompt).toContain('Analyze the following scene from a story');
   });
 
   it('replaces generated text on accept replace action', async () => {
@@ -441,7 +454,7 @@ describe('useWriterView', () => {
   });
 
   it('does nothing for unknown tool and empty prompt', async () => {
-    mockState.writer.activeTool = 'unknown' as any;
+    mockState.writer.activeTool = 'unknown';
 
     const view = await createHookWrapper();
     await act(async () => {
@@ -449,7 +462,9 @@ describe('useWriterView', () => {
     });
 
     expect(
-      mockDispatch.mock.calls.some(([action]) => (action as any).type === 'streamGenerationThunk')
+      mockDispatch.mock.calls.some(
+        ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk'
+      )
     ).toBe(false);
   });
 

@@ -116,7 +116,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
         const invalidApiKeyError = new Error(
           'INVALID_API_KEY: Der API-Key ist ungültig oder abgelaufen. Bitte in den Einstellungen einen gültigen Key hinterlegen.'
         );
-        (invalidApiKeyError as any).cause = err;
+        attachCause(invalidApiKeyError, err);
         throw invalidApiKeyError;
       }
 
@@ -300,6 +300,15 @@ const sanitizePromptBlock = (input: unknown): string =>
     .trim();
 
 const cleanPrompt = (prompt: string): string => sanitizePromptBlock(prompt);
+
+const attachCause = <T extends Error>(error: T, cause: unknown): T => {
+  Object.defineProperty(error, 'cause', {
+    value: cause,
+    enumerable: false,
+    configurable: true,
+  });
+  return error;
+};
 
 // --- PROMPT FACTORY ---
 export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMap[T]) => {
@@ -571,7 +580,7 @@ export const generateText = async (
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate text from AI.';
     const wrappedError = new Error(errorMessage);
-    (wrappedError as any).cause = error;
+    attachCause(wrappedError, error);
     throw wrappedError;
   }
 };
@@ -625,7 +634,7 @@ export const generateJson = async <T>(
         const parseError = new Error(
           'The AI response was not in a valid format. Please try again.'
         );
-        (parseError as any).cause = e;
+        attachCause(parseError, e);
         throw parseError;
       }
     });
@@ -637,7 +646,7 @@ export const generateJson = async <T>(
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate structured data from AI.';
     const wrappedError = new Error(errorMessage);
-    (wrappedError as any).cause = error;
+    attachCause(wrappedError, error);
     throw wrappedError;
   }
 };
@@ -722,7 +731,7 @@ export const streamText = async (
     logger.error('Error streaming text:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to stream text from AI.';
     const wrappedError = new Error(errorMessage);
-    (wrappedError as any).cause = error;
+    attachCause(wrappedError, error);
     throw wrappedError;
   }
 };
@@ -766,7 +775,7 @@ export const streamAiHelpResponse = async (
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to get help from AI assistant.';
     const wrappedError = new Error(errorMessage);
-    (wrappedError as any).cause = error;
+    attachCause(wrappedError, error);
     throw wrappedError;
   }
 };
@@ -814,7 +823,7 @@ export const generateImage = async (prompt: string, signal?: AbortSignal): Promi
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate image from AI.';
     const wrappedError = new Error(errorMessage);
-    (wrappedError as any).cause = error;
+    attachCause(wrappedError, error);
     throw wrappedError;
   }
 };

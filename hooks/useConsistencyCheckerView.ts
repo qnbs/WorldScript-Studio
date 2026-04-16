@@ -10,7 +10,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { getPrompts } from '../services/geminiService';
 import { generateText } from '../services/aiProviderService';
 import { dbService } from '../services/dbService';
-import type { StoryCodex } from '../types';
+import type { CharacterRelationship, StoryCodex } from '../types';
 
 export const useConsistencyCheckerView = () => {
   const { t, language } = useTranslation();
@@ -68,7 +68,7 @@ export const useConsistencyCheckerView = () => {
     return () => {
       cancelled = true;
     };
-  }, [projectData?.id, projectData?.manuscript]);
+  }, [projectData]);
 
   const runCheck = useCallback(
     async (characterId: string) => {
@@ -80,7 +80,15 @@ export const useConsistencyCheckerView = () => {
 
       setIsChecking(true);
       try {
-        const promptArgs: Record<string, unknown> = {
+        const promptArgs: {
+          characterId: string;
+          characters: typeof characters;
+          worlds: typeof worlds;
+          manuscript: typeof projectData.manuscript;
+          relationships: CharacterRelationship[];
+          lang: string;
+          codex?: StoryCodex;
+        } = {
           characterId,
           characters,
           worlds,
@@ -93,7 +101,7 @@ export const useConsistencyCheckerView = () => {
           promptArgs.codex = storyCodex;
         }
 
-        const { prompt } = getPrompts('consistencyCheck', promptArgs as any);
+        const { prompt } = getPrompts('consistencyCheck', promptArgs);
         const result = await generateText(prompt, aiCreativity, aiOptions, controller.signal);
         setCheckResult(result);
       } catch (error) {

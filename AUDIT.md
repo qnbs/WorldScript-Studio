@@ -18,6 +18,8 @@
 ## Current Status
 
 - Security vulnerabilities remain due to transitive outdated dependencies; package upgrades are recommended for the next maintenance cycle.
+- `npm audit` currently reports 24 vulnerabilities (4 low, 3 moderate, 14 high, 3 critical) after safe dependency updates.
+- Updated safe patch/minor dependency versions while deferring major-version upgrades that could introduce compatibility risk.
 - The repository is stable: build, lint, typecheck, and coverage all pass.
 - The version bump to `1.1.0` is documented and ready for commit.
 

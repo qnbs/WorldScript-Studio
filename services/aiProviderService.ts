@@ -33,6 +33,15 @@ const stripControlChars = (value: string): string => {
 const sanitizeProviderPrompt = (prompt: string): string =>
   stripControlChars(prompt).replace(/```/g, '"').replace(/\s+/g, ' ').trim();
 
+const attachCause = <T extends Error>(error: T, cause: unknown): T => {
+  Object.defineProperty(error, 'cause', {
+    value: cause,
+    enumerable: false,
+    configurable: true,
+  });
+  return error;
+};
+
 export interface AIRequestOptions {
   model: AiModel;
   provider: AIProvider;
@@ -221,7 +230,7 @@ export async function generateJson<T>(
     const parseErr = new Error(
       'Die Antwort des KI-Modells ist kein gültiges JSON. Bitte versuche es erneut.'
     );
-    (parseErr as any).cause = parseError;
+    attachCause(parseErr, parseError);
     throw parseErr;
   }
 }

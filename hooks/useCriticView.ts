@@ -88,7 +88,7 @@ export const useCriticView = () => {
       setIsAnalyzing(false);
       abortControllerRef.current = null;
     }
-  }, [projectData, characters, worlds, language, aiCreativity]);
+  }, [projectData, characters, worlds, language, aiCreativity, aiOptions]);
 
   return {
     t,

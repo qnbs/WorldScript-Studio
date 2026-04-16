@@ -1,12 +1,5 @@
 import { dbService } from './dbService';
-import type {
-  Character,
-  StoryCodex,
-  StoryCodexEntity,
-  StoryCodexMention,
-  StorySection,
-  World,
-} from '../types';
+import type { Character, StoryCodex, StoryCodexEntity, StorySection, World } from '../types';
 
 const STOPWORDS = new Set([
   'The',

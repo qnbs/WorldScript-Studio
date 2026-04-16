@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Placeholder for future release notes.
 
+### Security
+
+- Updated safe patch/minor dependency versions for CI stability and compatibility.
+- Deferred higher-risk major-version upgrades for Storybook, ESLint, TypeScript, jsPDF, docx, wait-on and related transitive dependencies until a targeted compatibility review is completed.
+
 ## [1.1.0] - 2026-04-16
 
 ### Security

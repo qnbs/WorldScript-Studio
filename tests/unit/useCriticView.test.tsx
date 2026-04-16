@@ -2,8 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCriticView } from '../../hooks/useCriticView';
 
-const mockGenerateText = vi.fn(async () => 'AI critique result');
-const mockGetPrompts = vi.fn(() => ({ prompt: 'mock-prompt' }));
+const mockGenerateText = vi.fn<
+  Promise<string>,
+  [string, string, Record<string, unknown>, AbortSignal?]
+>(async () => 'AI critique result');
+const mockGetPrompts = vi.fn<{ prompt: string }, [string, unknown]>(() => ({
+  prompt: 'mock-prompt',
+}));
 
 const mockState = {
   settings: {
@@ -33,10 +38,10 @@ vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (key: string) => key, language: 'de' }),
 }));
 vi.mock('../../services/geminiService', () => ({
-  getPrompts: (...args: unknown[]) => (mockGetPrompts as any)(...args),
+  getPrompts: (...args: Parameters<typeof mockGetPrompts>) => mockGetPrompts(...args),
 }));
 vi.mock('../../services/aiProviderService', () => ({
-  generateText: (...args: unknown[]) => (mockGenerateText as any)(...args),
+  generateText: (...args: Parameters<typeof mockGenerateText>) => mockGenerateText(...args),
 }));
 vi.mock('../../features/project/projectSelectors', () => ({
   selectAiCreativity: (state: typeof mockState) => state.aiCreativity,

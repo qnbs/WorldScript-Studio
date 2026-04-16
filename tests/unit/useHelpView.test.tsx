@@ -2,16 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useHelpView } from '../../hooks/useHelpView';
 
-const mockStreamAiHelpResponse = vi.fn(
-  async (
-    _question: string,
-    _creativity: unknown,
-    _opts: unknown,
-    callbacks: { onChunk: (chunk: string) => void }
-  ) => {
-    callbacks.onChunk('Hello from AI.');
-  }
-);
+const mockStreamAiHelpResponse = vi.fn<
+  Promise<void>,
+  [string, string, Record<string, unknown>, { onChunk: (chunk: string) => void }]
+>(async (_question, _creativity, _opts, callbacks) => {
+  callbacks.onChunk('Hello from AI.');
+});
 
 const mockState = {
   settings: {
@@ -33,7 +29,8 @@ vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (key: string) => key, language: 'en' }),
 }));
 vi.mock('../../services/aiProviderService', () => ({
-  streamAiHelpResponse: (...args: unknown[]) => (mockStreamAiHelpResponse as any)(...args),
+  streamAiHelpResponse: (...args: Parameters<typeof mockStreamAiHelpResponse>) =>
+    mockStreamAiHelpResponse(...args),
 }));
 
 describe('useHelpView', () => {
