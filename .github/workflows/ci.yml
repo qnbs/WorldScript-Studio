@@ -165,7 +165,6 @@ jobs:
         run: npx --yes codecov -f coverage/lcov.info
 
       - name: Upload visual regression baseline
-        if-no-files-found: ignore
         uses: actions/upload-artifact@v4
         with:
           name: visual-regression-baseline
@@ -173,10 +172,101 @@ jobs:
             tests/e2e/baseline/**
             tests/e2e/**/baseline/**
             tests/e2e/**/screenshots/**
+          if-no-files-found: ignore
           retention-days: 7
 
   # ----------------------------------------------------------
-  # 4. STORYBOOK
+  # 3.5 END-TO-END TESTS
+  # ----------------------------------------------------------
+  e2e:
+    name: 🧭 End-to-End Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright E2E tests
+        run: npm run test:e2e -- --reporter=html,junit
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-html-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Upload Playwright JUnit report
+        if: always()
+        uses: actions/upload-test-report@v3
+        with:
+          test-report-files: tests/e2e/results/junit.xml
+          test-report-name: Playwright E2E
+
+      - name: Upload Playwright screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: tests/e2e/screenshots/
+          retention-days: 7
+
+  # ----------------------------------------------------------
+  # 4. PERFORMANCE BUDGETS
+  # ----------------------------------------------------------
+  performance:
+    name: 🚦 Performance Budgets (LHCI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build production assets
+        run: npm run build
+
+      - name: Start preview server
+        run: |
+          npx vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/vite-preview.log 2>&1 &
+          echo $! > /tmp/vite-preview.pid
+          npx wait-on http://127.0.0.1:4173
+
+      - name: Run Lighthouse CI assertions
+        run: |
+          npx lhci autorun --upload.target=temporary-public-storage
+
+      - name: Stop preview server
+        if: always()
+        run: |
+          kill $(cat /tmp/vite-preview.pid) || true
+
+  # ----------------------------------------------------------
+  # 5. STORYBOOK
   # ----------------------------------------------------------
   storybook:
     name: 🎨 Storybook Build
