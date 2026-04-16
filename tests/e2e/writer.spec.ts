@@ -2,8 +2,9 @@ import { test, expect } from '@playwright/test';
 
 const isCI = process.env.CI === 'true';
 
-test.describe.skip(!isCI, 'AI Writer Flow (CI-only)', () => {
+test.describe('AI Writer Flow (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
+    test.skip(!isCI, 'CI-only E2E suite');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
   });

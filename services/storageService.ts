@@ -1,4 +1,5 @@
 import type { StoryProject, Settings, ProjectSnapshot } from '../types';
+import type { ProjectData } from '../features/project/projectSlice';
 
 // Storage interface for different backends
 export interface StorageBackend {
@@ -169,7 +170,7 @@ class StorageManager {
       return (backend as StorageBackend).saveSnapshot(name, data);
     }
     // IndexedDB backend uses createSnapshot(data, name)
-    return backend.createSnapshot(data as Parameters<typeof backend.createSnapshot>[0], name);
+    return (backend as typeof dbService).createSnapshot(data as ProjectData, name);
   }
 
   async getSnapshotData(id: number): Promise<unknown> {

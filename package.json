@@ -94,7 +94,7 @@
     "vite": "^6.2.0",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.0.18",
-    "@lhci/cli": "^1.11.0",
+    "@lhci/cli": "^0.15.1",
     "wait-on": "^7.0.0"
   },
   "lint-staged": {

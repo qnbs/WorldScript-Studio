@@ -1,8 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Route } from '@playwright/test';
 
 const isCI = process.env.CI === 'true';
 
-const mockGemini = async (route: any) => {
+const mockGemini = async (route: Route) => {
   const request = route.request();
   if (request.method() !== 'POST') {
     return route.continue();
@@ -32,8 +32,9 @@ const mockGemini = async (route: any) => {
   });
 };
 
-test.describe.skip(!isCI, 'End-to-end project flow (CI-only)', () => {
+test.describe('End-to-end project flow (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
+    test.skip(!isCI, 'CI-only E2E suite');
     await page.route('**/generativelanguage.googleapis.com/**', mockGemini);
     await page.goto('/');
     await page.waitForLoadState('networkidle');

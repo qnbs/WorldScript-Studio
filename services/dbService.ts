@@ -526,6 +526,10 @@ class IndexedDBService {
     });
   }
 
+  async saveSnapshot(name: string, data: ProjectData): Promise<void> {
+    return this.createSnapshot(data, name);
+  }
+
   async listSnapshots(): Promise<ProjectSnapshot[]> {
     const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
     // IDBKeyRange: iterate in reverse (newest first) using cursor direction 'prev'
