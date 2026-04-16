@@ -1,5 +1,8 @@
 const isProd = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.PROD);
-const hasLocalStorage = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const hasLocalStorage =
+  typeof window !== 'undefined' &&
+  typeof window.localStorage !== 'undefined' &&
+  typeof window.localStorage.getItem === 'function';
 const debugEnabled = !isProd && hasLocalStorage && window.localStorage.getItem('debug') === 'true';
 
 const formatMessage = (level: string, args: unknown[]) => [`[StoryCraft:${level}]`, ...args];
@@ -24,13 +27,13 @@ export const logger = {
 };
 
 export const enableDebugLogging = (): void => {
-  if (hasLocalStorage) {
+  if (hasLocalStorage && typeof window.localStorage.setItem === 'function') {
     window.localStorage.setItem('debug', 'true');
   }
 };
 
 export const disableDebugLogging = (): void => {
-  if (hasLocalStorage) {
+  if (hasLocalStorage && typeof window.localStorage.removeItem === 'function') {
     window.localStorage.removeItem('debug');
   }
 };
