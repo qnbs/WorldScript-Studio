@@ -56,5 +56,6 @@
   "sceneboard.confirmDelete": "Are you sure you want to delete this scene?",
   "sceneboard.newSceneTitle": "New Scene",
   "sceneboard.addScene": "Add Scene",
-  "sceneboard.noScenes": "No scenes yet. Add one to get started."
+  "sceneboard.noScenes": "No scenes yet. Add one to get started.",
+  "common.more": "More"
 }

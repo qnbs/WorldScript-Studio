@@ -129,5 +129,6 @@
   "writer.studio.tools.plotholes.title": "Plot-Hole Detector",
   "writer.studio.tools.plotholes.instruction": "Find logical gaps or plot holes in the selected text.",
   "writer.studio.tools.consistency.title": "Universe Consistency",
-  "writer.studio.tools.consistency.instruction": "Check the text against your character dossiers and world lore for continuity errors."
+  "writer.studio.tools.consistency.instruction": "Check the text against your character dossiers and world lore for continuity errors.",
+  "common.more": "Plus"
 }

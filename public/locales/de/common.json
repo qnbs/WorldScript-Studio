@@ -56,5 +56,6 @@
   "sceneboard.confirmDelete": "Sind Sie sicher, dass Sie diese Szene löschen möchten?",
   "sceneboard.newSceneTitle": "Neue Szene",
   "sceneboard.addScene": "Szene hinzufügen",
-  "sceneboard.noScenes": "Noch keine Szenen. Fügen Sie eine hinzu, um zu beginnen."
+  "sceneboard.noScenes": "Noch keine Szenen. Fügen Sie eine hinzu, um zu beginnen.",
+  "common.more": "Mehr"
 }
