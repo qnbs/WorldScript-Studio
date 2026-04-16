@@ -98,7 +98,7 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
     cssCodeSplit: true,
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 900,
     reportCompressedSize: true,
     rollupOptions: {
       external: [
@@ -151,14 +151,19 @@ export default defineConfig({
           if (id.includes('/konva/') || id.includes('/react-konva/')) {
             return 'canvas-vendor';
           }
-          if (id.includes('/docx/') || id.includes('/jszip/')) {
-            return 'export-vendor-docx-jszip';
-          }
           if (id.includes('/jspdf/')) {
             return 'export-vendor-pdf';
           }
-          if (id.includes('mammoth') || id.includes('epub-gen')) {
-            return 'export-vendor-ebook';
+          if (
+            id.includes('/docx/') ||
+            id.includes('/jszip/') ||
+            id.includes('mammoth') ||
+            id.includes('epub-gen')
+          ) {
+            return 'export-vendor-docx-ebook';
+          }
+          if (id.includes('/html2canvas/')) {
+            return 'html2canvas-vendor';
           }
           if (
             id.includes('@tailwindcss') ||

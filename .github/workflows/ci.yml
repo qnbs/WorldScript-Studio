@@ -44,6 +44,9 @@ jobs:
       - name: Run ESLint
         run: npm run lint -- --max-warnings 0
 
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
   typecheck:
     name: 🏷️ TypeScript type-check
     runs-on: ubuntu-latest
@@ -64,8 +67,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Run tsc --noEmit
-        run: npm run typecheck
+      - name: Run ESLint + TypeScript typecheck
+        run: |
+          npm run lint -- --max-warnings 0
+          npm run typecheck
 
   test:
     name: 🧪 Unit Tests (Vitest)

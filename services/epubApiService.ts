@@ -1,7 +1,6 @@
 // Client-side EPUB 3.0 Generator (kein Server nötig)
 // Verwendet JSZip für vollständige EPUB-3.0-Erzeugung direkt im Browser
 
-import JSZip from 'jszip';
 import { logger } from './logger';
 
 export interface EpubExportOptions {
@@ -27,6 +26,7 @@ const toParagraphs = (text: string) =>
 
 export async function exportEpub(options: EpubExportOptions): Promise<void> {
   const { title, author, synopsis, chapters, lang = 'de', coverImage } = options;
+  const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
   const uid = `urn:uuid:sc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const dateStr = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
