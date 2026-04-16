@@ -1,16 +1,12 @@
 {
   "name": "StoryCraft Studio Dev Container",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": "..",
-    "args": {
-      "VARIANT": "22-bullseye"
-    }
-  },
-  "image": "",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:0-22-bullseye",
   "workspaceFolder": "/workspace",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {}
+  },
   "postCreateCommand": "npm ci --legacy-peer-deps",
   "postAttachCommand": "npm run dev",
   "forwardPorts": [3000, 6006, 1420],
