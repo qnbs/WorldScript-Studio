@@ -72,11 +72,12 @@ export const useHelpView = () => {
           onChunk: (chunk) => {
             setChatHistory((prev) => {
               const lastMsgIndex = prev.length - 1;
-              if (lastMsgIndex >= 0 && prev[lastMsgIndex].role === 'model') {
+              const lastMessage = prev[lastMsgIndex];
+              if (lastMessage?.role === 'model') {
                 const newHistory = [...prev];
                 newHistory[lastMsgIndex] = {
-                  ...newHistory[lastMsgIndex],
-                  text: newHistory[lastMsgIndex].text + chunk,
+                  ...lastMessage,
+                  text: lastMessage.text + chunk,
                 };
                 return newHistory;
               }
@@ -88,9 +89,10 @@ export const useHelpView = () => {
     } catch {
       setChatHistory((prev) => {
         const lastMsgIndex = prev.length - 1;
-        if (lastMsgIndex >= 0 && prev[lastMsgIndex].role === 'model') {
+        const lastMessage = prev[lastMsgIndex];
+        if (lastMessage?.role === 'model') {
           const newHistory = [...prev];
-          newHistory[lastMsgIndex].text = 'Sorry, I encountered an error.';
+          newHistory[lastMsgIndex] = { ...lastMessage, text: 'Sorry, I encountered an error.' };
           return newHistory;
         }
         return prev;

@@ -58,13 +58,13 @@ export const Modal: React.FC<ModalProps> = ({
 
           if (e.shiftKey) {
             // Shift+Tab
-            if (document.activeElement === firstElement) {
+            if (document.activeElement === firstElement && lastElement) {
               lastElement.focus();
               e.preventDefault();
             }
           } else {
             // Tab
-            if (document.activeElement === lastElement) {
+            if (document.activeElement === lastElement && firstElement) {
               firstElement.focus();
               e.preventDefault();
             }

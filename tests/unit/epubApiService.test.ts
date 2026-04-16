@@ -5,9 +5,9 @@ import { exportEpub } from '../../services/epubApiService';
 vi.mock('jszip', () => {
   const blobResult = new Blob(['mock-epub'], { type: 'application/epub+zip' });
   function MockJSZip(this: Record<string, unknown>) {
-    this.file = () => this;
-    this.folder = () => this;
-    this.generateAsync = () => Promise.resolve(blobResult);
+    this['file'] = () => this;
+    this['folder'] = () => this;
+    this['generateAsync'] = () => Promise.resolve(blobResult);
   }
   return { default: MockJSZip };
 });

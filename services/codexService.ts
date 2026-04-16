@@ -130,7 +130,7 @@ export const extractStoryCodex = (
     const properNounRegex = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
     let match: RegExpExecArray | null;
     while ((match = properNounRegex.exec(text))) {
-      const candidate = normalizeCandidate(match[1]);
+      const candidate = normalizeCandidate(match[1] ?? '');
       const normalized = candidate.toLowerCase();
       if (STOPWORDS.has(candidate) || normalized.length < 3) continue;
       if (knownNameIndex.has(normalized)) continue;

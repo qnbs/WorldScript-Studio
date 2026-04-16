@@ -1,40 +1,9 @@
 import path from 'path';
-import fs from 'fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Repository name für GitHub Pages
-const REPO_NAME = 'StoryCraft-Studio';
-const isDebugBuild = process.env.VITE_DEBUG === 'true' || process.env.DEBUG === 'true';
-const buildLogger = (...args: unknown[]) => {
-  if (isDebugBuild) {
-    console.log('[Vite]', ...args);
-  }
-};
-
-// Custom Domain Detection:
-// Wenn public/CNAME existiert und einen Wert hat, verwende '/' als base
-// Sonst nutze den Repository-Namen für GitHub Pages Subpath
-function getBasePath(): string {
-  try {
-    const cnamePath = path.resolve(__dirname, 'public/CNAME');
-    if (fs.existsSync(cnamePath)) {
-      const cname = fs.readFileSync(cnamePath, 'utf-8').trim();
-      if (cname && cname.length > 0) {
-        buildLogger(`📦 Custom Domain detected: ${cname} → Using base '/'`);
-        return '/';
-      }
-    }
-  } catch {
-    // Fallback to default
-  }
-  buildLogger(`📦 No Custom Domain → Using base '/${REPO_NAME}/'`);
-  return `/${REPO_NAME}/`;
-}
-
 export default defineConfig({
-  // Fix: Statischer Base-Pfad fr GitHub Pages
   base: '/StoryCraft-Studio/',
 
   server: {

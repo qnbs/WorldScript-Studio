@@ -19,6 +19,7 @@ const BRANCH_COLORS = [
   '#84cc16',
   '#06b6d4',
 ];
+const DEFAULT_BRANCH_COLOR = BRANCH_COLORS[0] as string;
 
 export const MAIN_BRANCH_ID = 'main';
 
@@ -116,7 +117,7 @@ export const versionControlSlice = createSlice({
         id,
         name,
         description,
-        color: BRANCH_COLORS[colorIndex],
+        color: BRANCH_COLORS[colorIndex] ?? DEFAULT_BRANCH_COLOR,
         createdAt: new Date().toISOString(),
         ...(fromSnapshotId ? { headSnapshotId: fromSnapshotId } : {}),
       };

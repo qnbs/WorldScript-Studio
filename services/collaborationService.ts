@@ -117,7 +117,7 @@ class CollaborationService {
     if (!this.provider) return [];
     const users: CollaborationUser[] = [];
     this.provider.awareness.getStates().forEach((state: Record<string, unknown>) => {
-      if (state.user) users.push(state.user as CollaborationUser);
+      if (state['user']) users.push(state['user'] as CollaborationUser);
     });
     return users;
   }

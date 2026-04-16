@@ -4,7 +4,6 @@ import { charactersAdapter, worldsAdapter } from './projectSlice';
 
 // --- Base Selectors ---
 const selectProjectWithHistory = (state: RootState) => state.project;
-const _selectProjectState = (state: RootState) => state.project.present;
 export const selectProjectData = (state: RootState) => state.project.present?.data;
 
 // --- Undo/Redo Selectors ---

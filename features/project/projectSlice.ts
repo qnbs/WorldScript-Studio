@@ -125,7 +125,9 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     'entities' in projectData.characters
   ) {
     const { ids, entities } = projectData.characters;
-    characterArray = ids.map((id: string) => entities[id]);
+    characterArray = ids
+      .map((id: string) => entities[id])
+      .filter((item): item is Character & { avatarBase64?: string } => Boolean(item));
   }
 
   for (const char of characterArray) {
@@ -148,7 +150,9 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     'entities' in projectData.worlds
   ) {
     const { ids, entities } = projectData.worlds;
-    worldArray = ids.map((id: string) => entities[id]);
+    worldArray = ids
+      .map((id: string) => entities[id])
+      .filter((item): item is World & { ambianceImageBase64?: string } => Boolean(item));
   }
 
   for (const world of worldArray) {
@@ -609,10 +613,10 @@ const projectSlice = createSlice({
     ) => {
       const index = state.data.manuscript.findIndex((s) => s.id === action.payload.id);
       if (index !== -1) {
-        state.data.manuscript[index] = {
-          ...state.data.manuscript[index],
-          ...action.payload.changes,
-        };
+        const section = state.data.manuscript[index];
+        if (section) {
+          Object.assign(section, action.payload.changes);
+        }
       }
     },
     addManuscriptSection: (state, action: PayloadAction<{ title: string; index?: number }>) => {
@@ -645,10 +649,10 @@ const projectSlice = createSlice({
       if (!state.data.relationships) state.data.relationships = [];
       const index = state.data.relationships.findIndex((r) => r.id === action.payload.id);
       if (index !== -1) {
-        state.data.relationships[index] = {
-          ...state.data.relationships[index],
-          ...action.payload.changes,
-        };
+        const relationship = state.data.relationships[index];
+        if (relationship) {
+          Object.assign(relationship, action.payload.changes);
+        }
       }
     },
     deleteRelationship: (state, action: PayloadAction<string>) => {
@@ -677,10 +681,10 @@ const projectSlice = createSlice({
       if (!state.data.writingGoals) state.data.writingGoals = [];
       const index = state.data.writingGoals.findIndex((g) => g.id === action.payload.id);
       if (index !== -1) {
-        state.data.writingGoals[index] = {
-          ...state.data.writingGoals[index],
-          ...action.payload.changes,
-        };
+        const goal = state.data.writingGoals[index];
+        if (goal) {
+          Object.assign(goal, action.payload.changes);
+        }
       }
     },
   },

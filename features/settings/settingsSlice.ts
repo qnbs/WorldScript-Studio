@@ -166,9 +166,9 @@ const settingsSlice = createSlice({
     // Advanced Settings Reducers
     setCustomFont(state, action: PayloadAction<CustomFont | undefined>) {
       if (action.payload !== undefined) {
-        state.customFont = action.payload;
+        state['customFont'] = action.payload;
       } else {
-        delete (state as Record<string, unknown>).customFont;
+        delete (state as Record<string, unknown>)['customFont'];
       }
     },
     setKeyboardShortcuts(state, action: PayloadAction<KeyboardShortcut[]>) {
@@ -182,22 +182,18 @@ const settingsSlice = createSlice({
       }>
     ) {
       const index = state.keyboardShortcuts.findIndex((s) => s.id === action.payload.id);
-      if (index !== -1) {
-        state.keyboardShortcuts[index] = {
-          ...state.keyboardShortcuts[index],
-          ...action.payload.shortcut,
-        };
+      const shortcut = state.keyboardShortcuts[index];
+      if (shortcut) {
+        Object.assign(shortcut, action.payload.shortcut);
       }
     },
     setWritingGoals(state, action: PayloadAction<WritingGoal[]>) {
       state.writingGoals = action.payload;
     },
     updateWritingGoal(state, action: PayloadAction<{ index: number; goal: Partial<WritingGoal> }>) {
-      if (state.writingGoals[action.payload.index]) {
-        state.writingGoals[action.payload.index] = {
-          ...state.writingGoals[action.payload.index],
-          ...action.payload.goal,
-        };
+      const goal = state.writingGoals[action.payload.index];
+      if (goal) {
+        Object.assign(goal, action.payload.goal);
       }
     },
     setAdvancedAi(state, action: PayloadAction<Partial<AdvancedAiSettings>>) {

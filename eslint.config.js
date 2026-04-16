@@ -104,13 +104,15 @@ export default tseslint.config(
       'jsx-a11y/label-has-associated-control': 'warn',
 
       // TypeScript
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
-        'warn',
+        'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/no-unused-expressions': 'error',
-      '@typescript-eslint/consistent-type-imports': ['warn', { prefer: 'type-imports' }],
+      '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      'no-var': 'error',
+      'prefer-const': 'error',
 
       // Security: no API keys in logs
       'no-console': ['warn', { allow: ['warn', 'error', 'group', 'groupEnd', 'groupCollapsed', 'log'] }],

@@ -15,8 +15,8 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "prepare": "husky",
-    "lint": "eslint . --ext .ts,.tsx",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix --max-warnings=0",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -97,13 +97,5 @@
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.4",
     "wait-on": "^7.0.0"
-  },
-  "lint-staged": {
-    "*.{ts,tsx}": [
-      "prettier --write"
-    ],
-    "*.{json,md}": [
-      "prettier --write"
-    ]
   }
 }

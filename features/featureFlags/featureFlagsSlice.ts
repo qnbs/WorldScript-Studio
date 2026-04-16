@@ -50,7 +50,7 @@ const featureFlagsSlice = createSlice({
   name: 'featureFlags',
   initialState,
   reducers: {
-    setFeatureFlags(state, action: PayloadAction<FeatureFlagsState>) {
+    setFeatureFlags(_state, action: PayloadAction<FeatureFlagsState>) {
       return action.payload;
     },
     setEnableOllama(state, action: PayloadAction<boolean>) {

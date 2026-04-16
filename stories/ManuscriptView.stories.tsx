@@ -31,12 +31,14 @@ store.dispatch(
   ])
 );
 
+const defaultT = <T = string>(key: string): T => key as unknown as T;
+
 const I18nMockProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <I18nContext.Provider
     value={{
       language: 'en',
       setLanguage: () => {},
-      t: (key: string) => key,
+      t: defaultT,
     }}
   >
     {children}

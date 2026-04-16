@@ -1,6 +1,6 @@
 import { test, expect, type Route } from '@playwright/test';
 
-const isCI = process.env.CI === 'true';
+const isCI = process.env['CI'] === 'true';
 
 const mockGemini = async (route: Route) => {
   const request = route.request();

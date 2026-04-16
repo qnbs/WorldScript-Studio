@@ -12,7 +12,8 @@ const defaultTranslations: Record<string, string> = {
   'manuscript.untitledSection': 'Untitled Section',
 };
 
-const defaultT = (key: string) => defaultTranslations[key] ?? key;
+const defaultT = <T = string>(key: string): T =>
+  (defaultTranslations[key] ?? key) as unknown as T;
 
 const store = setupStore();
 

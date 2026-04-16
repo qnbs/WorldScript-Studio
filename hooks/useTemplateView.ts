@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from './useTranslation';
-import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { selectProjectData } from '../features/project/projectSelectors';
+import { useAppDispatch } from '../app/hooks';
 import {
   projectActions,
   personalizeTemplateThunk,
@@ -18,7 +17,6 @@ interface UseTemplateViewProps {
 export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
-  const _project = useAppSelector(selectProjectData);
   const toast = useToast();
 
   const [filter, setFilter] = useState<'All' | 'Structure' | 'Genre'>('All');
@@ -65,6 +63,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
     if (draggedItem.current === null || dragOverItem.current === null) return;
     const newSections = [...remixedSections];
     const [reorderedItem] = newSections.splice(draggedItem.current, 1);
+    if (reorderedItem === undefined) return;
     newSections.splice(dragOverItem.current, 0, reorderedItem);
     setRemixedSections(newSections);
     draggedItem.current = null;

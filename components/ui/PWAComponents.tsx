@@ -7,7 +7,6 @@
  */
 
 import type { FC } from 'react';
-import React from 'react';
 import { usePWA } from '../../hooks/usePWA';
 
 // ────────────────────────────────────────────────────────────

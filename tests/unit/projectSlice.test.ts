@@ -59,7 +59,8 @@ describe('projectSlice', () => {
       store.dispatch(projectActions.addCharacter({ name: 'Hero' }));
       const chars = store.getState().project.present.data.characters;
       expect(chars.ids.length).toBe(1);
-      expect(chars.entities[chars.ids[0]]?.name).toBe('Hero');
+      const charId = chars.ids[0] as string;
+      expect(chars.entities[charId]?.name).toBe('Hero');
     });
 
     it('should update a character', () => {
@@ -87,7 +88,8 @@ describe('projectSlice', () => {
       store.dispatch(projectActions.addWorld({ name: 'Middle Earth' }));
       const worlds = store.getState().project.present.data.worlds;
       expect(worlds.ids.length).toBe(1);
-      expect(worlds.entities[worlds.ids[0]]?.name).toBe('Middle Earth');
+      const worldId = worlds.ids[0] as string;
+      expect(worlds.entities[worldId]?.name).toBe('Middle Earth');
     });
 
     it('should set outline', () => {
@@ -114,9 +116,8 @@ describe('projectSlice', () => {
           changes: { content: 'Once upon a time...' },
         })
       );
-      expect(store.getState().project.present.data.manuscript[0].content).toBe(
-        'Once upon a time...'
-      );
+      const manuscript = store.getState().project.present.data.manuscript;
+      expect(manuscript[0]?.content).toBe('Once upon a time...');
     });
 
     it('should delete manuscript section', () => {
@@ -153,7 +154,8 @@ describe('projectSlice', () => {
           changes: { strength: 8 },
         })
       );
-      expect(store.getState().project.present.data.relationships?.[0].strength).toBe(8);
+      const relationships = store.getState().project.present.data.relationships;
+      expect(relationships?.[0]?.strength).toBe(8);
 
       store.dispatch(projectActions.deleteRelationship('rel-1'));
       expect(store.getState().project.present.data.relationships?.length).toBe(0);

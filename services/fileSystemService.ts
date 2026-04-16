@@ -52,6 +52,7 @@ const stripControlChars = (value: string): string => {
   let output = '';
   for (let i = 0; i < value.length; i += 1) {
     const char = value[i];
+    if (!char) continue;
     const code = char.charCodeAt(0);
     output += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
   }
@@ -128,7 +129,7 @@ class FileSystemService implements StorageBackend {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const projectId = sanitizePathSegment(
-      ((project as unknown as Record<string, unknown>).id as string) || project.title || 'project'
+      ((project as unknown as Record<string, unknown>)['id'] as string) || project.title || 'project'
     );
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
@@ -473,15 +474,15 @@ class FileSystemService implements StorageBackend {
         ) as World[]);
     const markdown = `---
 title: "${project.title}"
-author: "${(p.author as string) || ''}"
-description: "${(p.description as string) || ''}"
-created: "${(p.createdAt as string) || ''}"
-updated: "${(p.updatedAt as string) || ''}"
+author: "${(p['author'] as string) || ''}"
+description: "${(p['description'] as string) || ''}"
+created: "${(p['createdAt'] as string) || ''}"
+updated: "${(p['updatedAt'] as string) || ''}"
 ---
 
 # ${project.title}
 
-${(p.description as string) || ''}
+${(p['description'] as string) || ''}
 
 ## Characters
 
@@ -542,11 +543,11 @@ ${project.manuscript || 'No manuscript content yet.'}
 
       if (inFrontmatter) {
         if (line.startsWith('title:')) {
-          title = line.split(':')[1].trim().replace(/"/g, '');
+          title = line.split(':')[1]?.trim().replace(/"/g, '') ?? title;
         } else if (line.startsWith('author:')) {
-          author = line.split(':')[1].trim().replace(/"/g, '');
+          author = line.split(':')[1]?.trim().replace(/"/g, '') ?? author;
         } else if (line.startsWith('description:')) {
-          description = line.split(':')[1].trim().replace(/"/g, '');
+          description = line.split(':')[1]?.trim().replace(/"/g, '') ?? description;
         }
       } else if (line.startsWith('## Manuscript')) {
         inManuscript = true;

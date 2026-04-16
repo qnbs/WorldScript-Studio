@@ -35,7 +35,11 @@ const getCursorXY = (input: HTMLTextAreaElement, selectionPoint: number) => {
     'textAlign',
   ];
   props.forEach((prop) => {
-    mirror.style[prop as unknown as number] = style[prop as unknown as number];
+    const key = prop as string;
+    const value = style.getPropertyValue(key);
+    if (value) {
+      mirror.style.setProperty(key, value);
+    }
   });
 
   // Make it invisible and position it off-screen
@@ -79,7 +83,7 @@ export const useManuscriptView = ({
   const toast = useToast();
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(
-    manuscript?.[0]?.id || null
+    manuscript?.[0]?.id ?? null
   );
   const [isLoglineModalOpen, setIsLoglineModalOpen] = useState(false);
   const [loglineSuggestions, setLoglineSuggestions] = useState<string[]>([]);
@@ -129,7 +133,12 @@ export const useManuscriptView = ({
 
         if (mentionMatch) {
           const [_, symbol, query] = mentionMatch;
-          const normalizedQuery = query.toLowerCase();
+          const queryText = query ?? '';
+          if (!queryText) {
+            setMentions([]);
+            return;
+          }
+          const normalizedQuery = queryText.toLowerCase();
 
           const suggestions: ((Character & { type: 'character' }) | (World & { type: 'world' }))[] =
             symbol === '@'
@@ -171,7 +180,9 @@ export const useManuscriptView = ({
       if (manuscript.length <= 1) return; // Prevent deleting last section
 
       const index = manuscript.findIndex((s) => s.id === id);
-      const newActiveId = index > 0 ? manuscript[index - 1].id : manuscript[index + 1].id;
+      if (index === -1) return;
+      const newActiveId = index > 0 ? manuscript[index - 1]?.id : manuscript[index + 1]?.id;
+      if (!newActiveId) return;
 
       dispatch(projectActions.deleteManuscriptSection(id));
       if (activeSectionId === id) {
@@ -213,7 +224,9 @@ export const useManuscriptView = ({
   const handleDragSort = useCallback(() => {
     if (draggedItem.current === null || dragOverItem.current === null) return;
     const newManuscript = [...manuscript];
-    const [reorderedItem] = newManuscript.splice(draggedItem.current, 1);
+    const removedItems = newManuscript.splice(draggedItem.current, 1);
+    const reorderedItem = removedItems[0];
+    if (!reorderedItem) return;
     newManuscript.splice(dragOverItem.current, 0, reorderedItem);
     dispatch(projectActions.setManuscript(newManuscript));
     draggedItem.current = null;
@@ -227,9 +240,12 @@ export const useManuscriptView = ({
       if (newIndex < 0 || newIndex >= manuscript.length) return;
 
       const newManuscript = [...manuscript];
+      const currentSection = newManuscript[index];
+      const targetSection = newManuscript[newIndex];
+      if (!currentSection || !targetSection) return;
       [newManuscript[index], newManuscript[newIndex]] = [
-        newManuscript[newIndex],
-        newManuscript[index],
+        targetSection,
+        currentSection,
       ]; // swap
       dispatch(projectActions.setManuscript(newManuscript));
     },
@@ -285,6 +301,7 @@ export const useManuscriptView = ({
   const applyProofreadSuggestion = (index: number) => {
     if (!activeSection) return;
     const suggestion = proofreadSuggestions[index];
+    if (!suggestion) return;
     // Simple string replacement (basic implementation, improved via real diffing in production)
     const newContent = activeSection.content.replace(suggestion.original, suggestion.suggestion);
     handleContentChange(activeSection.id, newContent);

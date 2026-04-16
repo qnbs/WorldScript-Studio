@@ -107,6 +107,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   const handleRegenerate = useCallback(
     async (index: number) => {
       const sectionToRegen = outline[index];
+      if (!sectionToRegen) return;
       setIsRegenerating(sectionToRegen.id);
       const resultAction = await dispatch(
         regenerateOutlineSectionThunk({
@@ -134,7 +135,9 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   const handleDragSort = useCallback(() => {
     if (draggedItem.current === null || dragOverItem.current === null) return;
     const newOutline = [...outline];
-    const [reorderedItem] = newOutline.splice(draggedItem.current, 1);
+    const removedItems = newOutline.splice(draggedItem.current, 1);
+    const reorderedItem = removedItems[0];
+    if (!reorderedItem) return;
     newOutline.splice(dragOverItem.current, 0, reorderedItem);
     setOutline(newOutline);
     draggedItem.current = null;
@@ -146,7 +149,10 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
       const newIndex = direction === 'up' ? index - 1 : index + 1;
       if (newIndex < 0 || newIndex >= outline.length) return;
       const newOutline = [...outline];
-      [newOutline[index], newOutline[newIndex]] = [newOutline[newIndex], newOutline[index]];
+      const currentItem = newOutline[index];
+      const swapItem = newOutline[newIndex];
+      if (!currentItem || !swapItem) return;
+      [newOutline[index], newOutline[newIndex]] = [swapItem, currentItem];
       setOutline(newOutline);
     },
     [outline]
@@ -195,7 +201,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   const handleApplyOutline = useCallback(() => {
     if (
       existingManuscript.length > 1 ||
-      (existingManuscript.length === 1 && existingManuscript[0].content !== '')
+      (existingManuscript.length === 1 && existingManuscript[0]?.content !== '')
     ) {
       setConfirmModal({
         type: 'apply',

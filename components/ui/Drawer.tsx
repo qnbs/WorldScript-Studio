@@ -58,12 +58,12 @@ export const Drawer: React.FC<DrawerProps> = ({
               document.activeElement === firstElement ||
               document.activeElement === drawerElement
             ) {
-              lastElement.focus();
+              lastElement?.focus();
               e.preventDefault();
             }
           } else {
             if (document.activeElement === lastElement) {
-              firstElement.focus();
+              firstElement?.focus();
               e.preventDefault();
             }
           }
@@ -71,8 +71,9 @@ export const Drawer: React.FC<DrawerProps> = ({
 
         // Focus first focusable or the container itself
         const focusableElements = getFocusable();
-        if (focusableElements.length > 0) {
-          focusableElements[0].focus();
+        const firstElement = focusableElements[0];
+        if (firstElement) {
+          firstElement.focus();
         }
 
         drawerElement.addEventListener('keydown', handleTabKey);
@@ -91,6 +92,8 @@ export const Drawer: React.FC<DrawerProps> = ({
         previouslyFocusedElement.current?.focus();
       };
     }
+
+    return undefined;
   }, [isOpen, onClose]);
 
   const backdropClasses = `fixed inset-0 bg-gray-900/50 dark:bg-black/60 z-40 transition-opacity duration-300 ${isOpen ? 'backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`;

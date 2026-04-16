@@ -61,7 +61,9 @@ export const useWriterView = () => {
 
   const handleContentChange = useCallback(
     (index: number, content: string) => {
-      const sectionId = manuscript[index].id;
+      const section = manuscript[index];
+      if (!section) return;
+      const sectionId = section.id;
       dispatch(projectActions.updateManuscriptSection({ id: sectionId, changes: { content } }));
     },
     [dispatch, manuscript]
@@ -257,6 +259,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       if (selectedSectionIndex === -1) return;
 
       const section = manuscript[selectedSectionIndex];
+      if (!section) return;
       const currentResult = generationHistory[activeHistoryIndex] || '';
 
       const newContent =

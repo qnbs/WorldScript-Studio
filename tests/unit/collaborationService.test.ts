@@ -6,7 +6,9 @@ const mockDigest = vi.fn().mockImplementation(async (_algo: string, data: ArrayB
   const input = new Uint8Array(data);
   const output = new Uint8Array(32);
   for (let i = 0; i < input.length; i++) {
-    output[i % 32] = (output[i % 32] + input[i]) % 256;
+    const idx = i % 32;
+    const inputByte = input[i] ?? 0;
+    output[idx] = ((output[idx] ?? 0) + inputByte) % 256;
   }
   return output.buffer;
 });

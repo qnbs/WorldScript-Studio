@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const isCI = process.env.CI === 'true';
+const isCI = process.env['CI'] === 'true';
 
 test.describe('AI Writer Flow (CI-only)', () => {
   test.beforeEach(async ({ page }) => {

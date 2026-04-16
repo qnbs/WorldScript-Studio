@@ -1,5 +1,5 @@
 import type { ErrorInfo, ReactNode } from 'react';
-import React, { Component } from 'react';
+import { Component } from 'react';
 import { Card, CardHeader, CardContent } from './Card';
 import { Button } from './Button';
 import { ICONS } from '../../constants';

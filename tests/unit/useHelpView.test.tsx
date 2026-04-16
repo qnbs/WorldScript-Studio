@@ -60,9 +60,8 @@ describe('useHelpView', () => {
       expect.objectContaining({ provider: 'gemini', model: 'gemini-1.5-flash' }),
       expect.objectContaining({ onChunk: expect.any(Function) })
     );
-    expect(result.current.chatHistory[result.current.chatHistory.length - 1].text).toContain(
-      'Hello from AI.'
-    );
+    const lastHistoryItem = result.current.chatHistory[result.current.chatHistory.length - 1];
+    expect(lastHistoryItem?.text).toContain('Hello from AI.');
     expect(result.current.isAiReplying).toBe(false);
   });
 
@@ -79,9 +78,8 @@ describe('useHelpView', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.chatHistory[result.current.chatHistory.length - 1].text).toBe(
-        'Sorry, I encountered an error.'
-      );
+      const lastHistoryItem = result.current.chatHistory[result.current.chatHistory.length - 1];
+      expect(lastHistoryItem?.text).toBe('Sorry, I encountered an error.');
     });
     expect(result.current.isAiReplying).toBe(false);
   });

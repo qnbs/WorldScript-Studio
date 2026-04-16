@@ -106,7 +106,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
 
       // Sofortiger Abbruch + Cache-/Key-Reset bei ungültigem API-Key (401)
       const is401 =
-        (err as Record<string, unknown>)?.status === 401 ||
+        (err as Record<string, unknown>)?.['status'] === 401 ||
         (err instanceof Error && err.message?.includes('401')) ||
         (err instanceof Error && err.message?.toLowerCase().includes('api key not valid')) ||
         (err instanceof Error && err.message?.toLowerCase().includes('invalid api key')) ||
@@ -125,7 +125,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
 
       // Bei Rate-Limit (429) längere Wartezeit
       const is429 =
-        (err as Record<string, unknown>)?.status === 429 ||
+        (err as Record<string, unknown>)?.['status'] === 429 ||
         (err instanceof Error && err.message?.includes('429')) ||
         (err instanceof Error && err.message?.toLowerCase().includes('quota')) ||
         (err instanceof Error && err.message?.toLowerCase().includes('rate limit')) ||
@@ -145,34 +145,6 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
     }
   }
   throw lastError;
-}
-
-function _getUserFriendlyGeminiError(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.message.includes('NO_API_KEY')) {
-      return 'Gemini API-Key fehlt. Bitte in den Einstellungen hinterlegen.';
-    }
-    if (error.message.includes('INVALID_API_KEY')) {
-      return 'Der Gemini API-Key ist ungültig oder abgelaufen. Bitte hinterlegen Sie einen gültigen Key in den Einstellungen.';
-    }
-    if (error.message.includes('RATE_LIMITED')) {
-      return 'Das API-Nutzungslimit wurde erreicht. Bitte warte eine Minute und versuche es erneut.';
-    }
-    if (error.message.includes('OFFLINE')) {
-      return 'Keine Internetverbindung. KI-Funktionen sind offline nicht verfügbar.';
-    }
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      return 'Netzwerkfehler: Die Verbindung zum Gemini-Server ist fehlgeschlagen. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.';
-    }
-    if (error.message.includes('quota') || error.message.includes('limit')) {
-      return 'Das Nutzungslimit für die Gemini-API wurde erreicht. Bitte warten Sie etwas und versuchen Sie es später erneut.';
-    }
-    if (error.message.includes('format')) {
-      return 'Die Antwort des KI-Modells war ungültig. Bitte versuchen Sie es erneut.';
-    }
-    return error.message;
-  }
-  return 'Unbekannter Fehler bei der Gemini-API.';
 }
 
 // Offline-Check vor jedem API-Aufruf
@@ -411,7 +383,9 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
       return {
         prompt: `You are regenerating a single section of a story outline.
                 Here is the context of the surrounding sections: ${JSON.stringify(contextSections)}
-                The section to regenerate is: "${allSections[sectionToIndex].title}".
+                The section to regenerate is: "${
+                  allSections[sectionToIndex]?.title ?? 'unknown section'
+                }".
                 Provide a new, more interesting version of this section with a new "title" and "description".
                 ${langInstruction}`,
         schema: {

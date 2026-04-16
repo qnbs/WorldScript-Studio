@@ -61,7 +61,7 @@ const root = ReactDOM.createRoot(rootElement);
       } else if (!projectPart.present && !projectPart.data) {
         // Fallback: Corrupt or empty project state
         logger.warn('Project state corrupted. Resetting project.');
-        delete (preloadedState as Record<string, unknown>).project;
+        delete (preloadedState as Record<string, unknown>)['project'];
       }
     }
     // --------------------------------

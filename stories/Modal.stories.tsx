@@ -27,12 +27,15 @@ const meta: Meta<typeof Modal> = {
 export default meta;
 type Story = StoryObj<typeof Modal>;
 
+const defaultT = <T = string>(key: string): T =>
+  (key === 'common.close' ? 'Close' : key) as unknown as T;
+
 const I18nMockProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <I18nContext.Provider
     value={{
       language: 'en',
       setLanguage: () => {},
-      t: (key: string) => (key === 'common.close' ? 'Close' : key),
+      t: defaultT,
     }}
   >
     {children}

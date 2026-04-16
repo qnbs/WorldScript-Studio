@@ -69,22 +69,25 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
 
   // Optional cover image
   if (coverImage && coverImage.startsWith('data:image/')) {
-    const mimeType = coverImage.split(';')[0].split(':')[1];
-    const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
-    const base64 = coverImage.split(',')[1];
-    oebps.file(`cover.${ext}`, base64, { base64: true });
-    manifest.push(
-      `<item id="cover-img" href="cover.${ext}" media-type="${mimeType}" properties="cover-image"/>`,
-      `<item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`
-    );
-    spine.push(`<itemref idref="cover-page"/>`);
-    oebps.file(
-      'cover.xhtml',
-      `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
+    const coverMeta = coverImage.split(';')[0] ?? '';
+    const mimeType = coverMeta.split(':')[1] ?? 'application/octet-stream';
+    const ext = (mimeType.split('/')[1] ?? 'bin').replace('jpeg', 'jpg');
+    const base64 = coverImage.split(',')[1] ?? '';
+    if (base64) {
+      oebps.file(`cover.${ext}`, base64, { base64: true });
+      manifest.push(
+        `<item id="cover-img" href="cover.${ext}" media-type="${mimeType}" properties="cover-image"/>`,
+        `<item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`
+      );
+      spine.push(`<itemref idref="cover-page"/>`);
+      oebps.file(
+        'cover.xhtml',
+        `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head><title>Cover</title>
 <style>body{margin:0;padding:0}img{width:100%;height:100vh;object-fit:contain}</style></head>
 <body><img src="cover.${ext}" alt="Cover"/></body></html>`
-    );
+      );
+    }
   }
 
   // Title page
