@@ -100,10 +100,11 @@ jobs:
 
       - name: Upload JUnit test report
         if: always()
-        uses: actions/upload-test-report@v3
+        uses: actions/upload-artifact@v4
         with:
-          test-report-files: reports/junit.xml
-          test-report-name: Vitest
+          name: vitest-junit-report
+          path: reports/junit.xml
+          retention-days: 7
 
       - name: Publish coverage to Codecov
         if: always()
