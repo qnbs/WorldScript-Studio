@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":npm"],
+  "dependencyDashboard": true,
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+  "npm": {
+    "legacy-peer-deps": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "matchPackagePatterns": [
+        "^react",
+        "^vite",
+        "^tailwind",
+        "^storybook",
+        "^@storybook",
+        "^@vitejs",
+        "^@tauri-apps"
+      ],
+      "rangeStrategy": "bump",
+      "automerge": false
+    }
+  ]
+}

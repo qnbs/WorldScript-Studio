@@ -19,7 +19,8 @@ export const useHelpView = () => {
   const { t } = useTranslation();
   const settings = useAppSelector((state) => state.settings);
 
-  const helpContent: HelpCategory[] = t('help.categories') as unknown as HelpCategory[];
+  const rawHelpContent = t<HelpCategory[]>('help.categories');
+  const helpContent: HelpCategory[] = Array.isArray(rawHelpContent) ? rawHelpContent : [];
 
   const [activeCategory, setActiveCategory] = useState<string>(helpContent[0]?.id || 'ai');
   const [selectedArticle, setSelectedArticle] = useState<HelpArticle | null>(null);

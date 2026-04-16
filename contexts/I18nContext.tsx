@@ -7,13 +7,13 @@ type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
 interface I18nContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string, replacements?: Record<string, string>) => string;
+  t: <T = string>(key: string, replacements?: Record<string, string>) => T;
 }
 
 export const I18nContext = createContext<I18nContextType>({
   language: 'de',
   setLanguage: () => {},
-  t: (key: string) => key,
+  t: <T = string,>(key: string) => key as unknown as T,
 });
 
 interface I18nProviderProps {
@@ -119,26 +119,26 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   }, []);
 
   const t = useCallback(
-    (key: string, replacements?: Record<string, string>) => {
+    <T = string,>(key: string, replacements?: Record<string, string>): T => {
       if (!translations) {
-        return key;
+        return key as unknown as T;
       }
       // Fallback auf EN wenn die aktuelle Sprache den Key nicht hat
       const value = translations[language]?.[key] ?? translations['en']?.[key] ?? key;
 
       if (typeof value !== 'string') {
-        return key;
+        return value as unknown as T;
       }
 
       let translation = value;
 
       if (replacements) {
-        Object.entries(replacements).forEach(([placeholder, value]) => {
-          translation = translation.replace(`{{${placeholder}}}`, value);
+        Object.entries(replacements).forEach(([placeholder, replacementValue]) => {
+          translation = translation.replace(`{{${placeholder}}}`, replacementValue);
         });
       }
 
-      return translation;
+      return translation as unknown as T;
     },
     [language, translations]
   );
