@@ -159,7 +159,7 @@ jobs:
           test-report-name: Vitest
 
       - name: Publish coverage to Codecov
-        if: secrets.CODECOV_TOKEN != ''
+        if: ${{ secrets.CODECOV_TOKEN != '' }}
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: npx --yes codecov -f coverage/lcov.info
