@@ -239,7 +239,12 @@ const settingsSlice = createSlice({
 // Helper function to apply initial theme on load
 const applyInitialTheme = () => {
   let settings = defaultSettings;
-  const storedState = localStorage.getItem('storycraft-state');
+  const hasLocalStorage =
+    typeof localStorage !== 'undefined' &&
+    localStorage !== null &&
+    typeof localStorage.getItem === 'function';
+
+  const storedState = hasLocalStorage ? localStorage.getItem('storycraft-state') : null;
   if (storedState) {
     const persistedState = JSON.parse(storedState);
     if (persistedState.settings) {
