@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "typecheck": "tsc --noEmit",
+    "lhci:assert": "lhci autorun --upload.target=temporary-public-storage",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
@@ -19,8 +20,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
+    "test:e2e": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test",
+    "test:e2e:ui": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test --ui",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "dev:tauri": "tauri dev",
@@ -92,7 +93,9 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^6.2.0",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@lhci/cli": "^1.11.0",
+    "wait-on": "^7.0.0"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
