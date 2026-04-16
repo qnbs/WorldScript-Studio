@@ -9,6 +9,18 @@
 import type { AIProvider, AiModel } from '../types';
 import { storageService } from './storageService';
 
+const stripControlChars = (value: string): string => {
+  let output = '';
+  for (const char of String(value)) {
+    const code = char.charCodeAt(0);
+    output += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
+  }
+  return output;
+};
+
+const sanitizeProviderPrompt = (prompt: string): string =>
+  stripControlChars(prompt).replace(/```/g, '"').replace(/\s+/g, ' ').trim();
+
 export interface AIRequestOptions {
   model: AiModel;
   provider: AIProvider;
@@ -43,10 +55,10 @@ async function streamOpenAI(
   const model = opts.model.startsWith('gpt-') ? opts.model : 'gpt-4o-mini';
   const messages = opts.systemPrompt
     ? [
-        { role: 'system', content: opts.systemPrompt },
-        { role: 'user', content: prompt },
+        { role: 'system', content: sanitizeProviderPrompt(opts.systemPrompt) },
+        { role: 'user', content: sanitizeProviderPrompt(prompt) },
       ]
-    : [{ role: 'user', content: prompt }];
+    : [{ role: 'user', content: sanitizeProviderPrompt(prompt) }];
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -113,7 +125,9 @@ async function streamOllama(
 
   const body: Record<string, unknown> = {
     model,
-    prompt: opts.systemPrompt ? `${opts.systemPrompt}\n\n${prompt}` : prompt,
+    prompt: opts.systemPrompt
+      ? `${sanitizeProviderPrompt(opts.systemPrompt)}\n\n${sanitizeProviderPrompt(prompt)}`
+      : sanitizeProviderPrompt(prompt),
     stream: true,
     options: {
       temperature: opts.temperature ?? 0.7,

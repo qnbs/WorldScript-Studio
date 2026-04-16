@@ -121,11 +121,11 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 **Recommendation:** Align both to the same version, or automate version sync in CI.
 **Effort:** Low | **Priority:** Low
 
-### 14. Deprecated `backend/epubExport.js` Still Present
+### 14. Deprecated `backend/epubExport.js` Removed
 
 **File:** `backend/epubExport.js`
-**Issue:** Marked as deprecated in the code comments. EPUB export is now fully client-side in `services/epubApiService.ts`.
-**Recommendation:** Remove in the next major release or move to an `archive/` folder.
+**Issue:** Was marked as deprecated and no longer used anywhere in the current codebase.
+**Resolution:** The deprecated backend export script has been deleted. EPUB export remains fully client-side in `services/epubApiService.ts`.
 **Effort:** Low | **Priority:** Low
 
 ### 15. No Performance Budgets

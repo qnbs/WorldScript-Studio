@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import React, { createContext, useState, useCallback, useEffect } from 'react';
+import { logger } from '../services/logger';
 
 type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
 
@@ -109,7 +110,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
           it: itData,
         });
       } catch (error) {
-        console.error('Failed to load all translation files', error);
+        logger.error('Failed to load all translation files', error);
       } finally {
         setIsLoading(false);
       }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
+import { logger } from '../services/logger';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -72,7 +73,7 @@ export const AdvancedImportExport: React.FC = () => {
         toast.success(t('export.importSuccess'), file.name);
         setIsImportModalOpen(false);
       } catch (error) {
-        console.error('Import failed:', error);
+        logger.error('Import failed:', error);
         toast.error(t('export.importFailed'));
       } finally {
         setIsProcessing(false);
@@ -148,7 +149,7 @@ export const AdvancedImportExport: React.FC = () => {
       );
       toast.success(t('export.importSuccess'), title);
     } catch (error) {
-      console.error('DOCX import failed:', error);
+      logger.error('DOCX import failed:', error);
       toast.error(t('export.importFailed'));
     }
   };

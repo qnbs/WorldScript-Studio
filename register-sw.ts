@@ -1,3 +1,5 @@
+import { logger as appLogger } from './services/logger';
+
 // ============================================================
 // StoryCraft Studio — Service Worker Registration v3.0
 // Features:
@@ -30,8 +32,8 @@ declare global {
 // ── Global PWA state object ───────────────────────────────────
 window.storyCraftPWA = {
   deferredInstallPrompt: null,
-  isInstalled:           false,
-  swRegistration:        null,
+  isInstalled: false,
+  swRegistration: null,
 
   async installApp() {
     const prompt = window.storyCraftPWA.deferredInstallPrompt;
@@ -66,14 +68,13 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 window.addEventListener('appinstalled', () => {
-  window.storyCraftPWA.isInstalled           = true;
+  window.storyCraftPWA.isInstalled = true;
   window.storyCraftPWA.deferredInstallPrompt = null;
   window.dispatchEvent(new CustomEvent('sw-installed'));
-  console.log('[PWA] App installed successfully');
+  appLogger.info('[PWA] App installed successfully');
 });
 
-// ── Handle messages from the service worker ──────────────────
-navigator.serviceWorker?.addEventListener('message', (event) => {
+navigator.serviceWorker?.addEventListener('message', (event: MessageEvent) => {
   const { type } = event.data || {};
   if (type === 'CACHE_CLEARED') {
     window.dispatchEvent(new CustomEvent('sw-cache-cleared'));
@@ -89,34 +90,36 @@ navigator.serviceWorker?.addEventListener('message', (event) => {
 // ── Core registration ─────────────────────────────────────────
 const registerServiceWorker = async (): Promise<void> => {
   if (!('serviceWorker' in navigator)) {
-    console.warn('[SW] Service Workers not supported in this browser.');
+    appLogger.warn('[SW] Service Workers not supported in this browser.');
     return;
   }
 
   try {
     const basePath = import.meta.env.BASE_URL || '/';
-    const swUrl    = `${basePath}sw.js`;
+    const swUrl = `${basePath}sw.js`;
 
     const registration = await navigator.serviceWorker.register(swUrl, {
-      scope:      basePath,
+      scope: basePath,
       updateViaCache: 'none', // always fetch new SW from network
     });
 
     window.storyCraftPWA.swRegistration = registration;
-    console.log('[SW] Registered, scope:', registration.scope);
+    appLogger.info('[SW] Registered, scope:', registration.scope);
 
     // ── Detect and announce SW updates ───────────────────────
     const onNewWorkerReady = (worker: ServiceWorker) => {
       worker.addEventListener('statechange', () => {
         if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-          window.dispatchEvent(new CustomEvent('sw-update-available', {
-            detail: {
-              applyUpdate: () => {
-                worker.postMessage({ type: 'SKIP_WAITING' });
-                window.location.reload();
+          window.dispatchEvent(
+            new CustomEvent('sw-update-available', {
+              detail: {
+                applyUpdate: () => {
+                  worker.postMessage({ type: 'SKIP_WAITING' });
+                  window.location.reload();
+                },
               },
-            },
-          }));
+            })
+          );
         }
       });
     };
@@ -154,14 +157,15 @@ const registerServiceWorker = async (): Promise<void> => {
     }
 
     // ── Detect standalone / installed mode ────────────────────
-    if (window.matchMedia('(display-mode: standalone)').matches ||
-        // @ts-expect-error — iOS Safari proprietary
-        window.navigator.standalone === true) {
+    if (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      // @ts-expect-error — iOS Safari proprietary
+      window.navigator.standalone === true
+    ) {
       window.storyCraftPWA.isInstalled = true;
     }
-
   } catch (error) {
-    console.error('[SW] Registration failed:', error);
+    appLogger.error('[SW] Registration failed:', error);
   }
 };
 
@@ -170,4 +174,3 @@ if (typeof window !== 'undefined') {
 }
 
 export { registerServiceWorker };
-

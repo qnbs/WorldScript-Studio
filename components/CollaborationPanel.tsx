@@ -63,6 +63,18 @@ interface CollaborationPanelProps {
   projectId: string;
 }
 
+const stripControlChars = (value: string): string => {
+  let output = '';
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    output += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
+  }
+  return output;
+};
+
+const sanitizeRoomInput = (value: string): string =>
+  stripControlChars(value).trim().replace(/\s+/g, ' ').slice(0, 128);
+
 export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClose, projectId }) => {
   const panelRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -148,7 +160,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
     setConnectionError(null);
 
     try {
-      const roomId = customRoomId.trim() || projectId;
+      const roomId = sanitizeRoomInput(customRoomId) || projectId;
       const user: CollaborationUser = {
         ...localUser,
         name: displayName.trim() || 'Anonym',
@@ -158,7 +170,11 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
       setLocalUser(user);
       sessionStorage.setItem('collab_user', JSON.stringify(user));
 
-      await collaborationService.connect(roomId, user, roomPassword.trim() || undefined);
+      await collaborationService.connect(
+        roomId,
+        user,
+        sanitizeRoomInput(roomPassword) || undefined
+      );
 
       cleanupRef.current = () => collaborationService.disconnect();
 

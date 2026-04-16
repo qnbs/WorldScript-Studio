@@ -13,6 +13,7 @@ import featureFlagsReducer, {
 } from '../features/featureFlags/featureFlagsSlice';
 import undoable from 'redux-undo';
 import { listenerMiddleware } from './listenerMiddleware';
+import { logger } from '../services/logger';
 import type { PersistedRootState } from '../types';
 
 // A sophisticated filter to prevent async thunk actions from populating the undo history.
@@ -35,11 +36,9 @@ const isLoggerEnabled = () => {
 
 const loggerMiddleware: Middleware = (store) => (next) => (action) => {
   if (process.env.NODE_ENV !== 'production' && isLoggerEnabled()) {
-    console.group((action as AnyAction).type);
-    console.log('dispatching', action);
+    logger.debug('dispatching', action);
     const result = next(action);
-    console.log('next state', store.getState());
-    console.groupEnd();
+    logger.debug('next state', store.getState());
     return result;
   }
   return next(action);

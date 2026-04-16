@@ -11,6 +11,7 @@ import type {
   CustomTemplateParams,
 } from '../types';
 import { storageService } from './storageService';
+import { logger } from './logger';
 
 // === DYNAMIC API KEY MANAGEMENT ===
 // KRITISCH: Kein hardcoded API key mehr!
@@ -273,6 +274,30 @@ const getThinkingBudget = (type: PromptType): number => {
   }
 };
 
+const stripControlChars = (value: string): string => {
+  let output = '';
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    output += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
+  }
+  return output;
+};
+
+const sanitizePromptValue = (input: unknown): string =>
+  stripControlChars(String(input ?? ''))
+    .replace(/```/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const sanitizePromptBlock = (input: unknown): string =>
+  stripControlChars(String(input ?? ''))
+    .replace(/```/g, '"')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const cleanPrompt = (prompt: string): string => sanitizePromptBlock(prompt);
+
 // --- PROMPT FACTORY ---
 export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMap[T]) => {
   const langInstruction = `\n\nVERY IMPORTANT: Your entire response must be in the following language: ${params.lang === 'de' ? 'German' : 'English'}. Do not use any other language. For JSON responses, only translate the string values, not the keys.`;
@@ -281,14 +306,14 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
     case 'logline': {
       const p = params as LoglineParams;
       return {
-        prompt: `Based on the following story details, generate 4 compelling and diverse logline suggestions.\nTitle: ${p.project.title}\nOutline: ${p.project.outline.map((s) => s.title).join(', ')}\n${langInstruction}`,
+        prompt: `Based on the following story details, generate 4 compelling and diverse logline suggestions.\nTitle: ${sanitizePromptValue(p.project.title)}\nOutline: ${p.project.outline.map((s) => sanitizePromptValue(s.title)).join(', ')}\n${langInstruction}`,
         schema: { type: Type.ARRAY, items: { type: Type.STRING } },
       };
     }
     case 'characterProfile': {
       const p = params as CharacterProfileParams;
       return {
-        prompt: `Generate a detailed character profile based on this concept: "${p.concept}". The profile should include fields for 'name', 'backstory', 'motivation', 'appearance', 'personalityTraits', 'flaws', 'characterArc', and 'relationships'.${langInstruction}`,
+        prompt: `Generate a detailed character profile based on this concept: "${sanitizePromptValue(p.concept)}". The profile should include fields for 'name', 'backstory', 'motivation', 'appearance', 'personalityTraits', 'flaws', 'characterArc', and 'relationships'.${langInstruction}`,
         schema: {
           type: Type.OBJECT,
           properties: {
@@ -313,13 +338,13 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
     case 'characterPortrait': {
       const p = params as CharacterPortraitParams;
       return {
-        prompt: `Generate portrait of ${p.description} in style of ${p.style || 'vivid, artistic, digital painting'}. The portrait should be centered, showing the character from the chest up. The background should be simple and atmospheric. Focus on capturing the character's key features and mood. Do not include any text or watermarks.${langInstruction}`,
+        prompt: `Generate portrait of ${sanitizePromptValue(p.description)} in style of ${sanitizePromptValue(p.style) || 'vivid, artistic, digital painting'}. The portrait should be centered, showing the character from the chest up. The background should be simple and atmospheric. Focus on capturing the character's key features and mood. Do not include any text or watermarks.${langInstruction}`,
       };
     }
     case 'worldProfile': {
       const p = params as WorldProfileParams;
       return {
-        prompt: `Generate a detailed world profile based on this concept: "${p.concept}". The profile should include 'name', 'description', 'geography', 'magicSystem', and 'culture'.${langInstruction}`,
+        prompt: `Generate a detailed world profile based on this concept: "${sanitizePromptValue(p.concept)}". The profile should include 'name', 'description', 'geography', 'magicSystem', and 'culture'.${langInstruction}`,
 
         schema: {
           type: Type.OBJECT,
@@ -348,13 +373,7 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
     case 'outline': {
       const p = params as OutlineGenerationParams;
       return {
-        prompt: `Generate a story outline with ${p.numChapters} sections for a ${p.pacing || ''} ${p.genre}.
-                Core Idea: ${p.idea}
-                ${p.characters ? `Key Characters: ${p.characters}` : ''}
-                ${p.setting ? `Setting: ${p.setting}` : ''}
-                ${p.includeTwist ? 'The outline must include a significant plot twist in one of the later sections.' : ''}
-                For each section, provide a "title" and a "description". If a section is a plot twist, add "isTwist": true.
-                ${langInstruction}`,
+        prompt: `Generate a story outline with ${p.numChapters} sections for a ${sanitizePromptValue(p.pacing) || ''} ${sanitizePromptValue(p.genre)}.\n                Core Idea: ${sanitizePromptBlock(p.idea)}\n                ${p.characters ? `Key Characters: ${sanitizePromptBlock(p.characters)}` : ''}\n                ${p.setting ? `Setting: ${sanitizePromptBlock(p.setting)}` : ''}\n                ${p.includeTwist ? 'The outline must include a significant plot twist in one of the later sections.' : ''}\n                For each section, provide a "title" and a "description". If a section is a plot twist, add "isTwist": true.\n                ${langInstruction}`,
         schema: {
           type: Type.ARRAY,
           items: {
@@ -394,9 +413,7 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
     case 'personalizeTemplate': {
       const p = params as PersonalizeTemplateParams;
       return {
-        prompt: `Personalize this story template for the concept: "${p.concept}". For each section title provided, create a short, inspiring "prompt" (a few sentences) to guide the writer.
-                Sections: ${JSON.stringify(p.sections.map((s) => s.title))}
-                ${langInstruction}`,
+        prompt: `Personalize this story template for the concept: "${sanitizePromptValue(p.concept)}". For each section title provided, create a short, inspiring "prompt" (a few sentences) to guide the writer.\n                Sections: ${sanitizePromptBlock(JSON.stringify(p.sections.map((s) => s.title)))}\n                ${langInstruction}`,
         schema: {
           type: Type.ARRAY,
           items: {
@@ -411,11 +428,7 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
     case 'customTemplate': {
       const p = params as CustomTemplateParams;
       return {
-        prompt: `Generate a custom story structure template with approximately ${p.numSections} sections.
-                Concept: ${p.customConcept}
-                Key Elements: ${p.customElements}
-                For each section, just provide a "title".
-                ${langInstruction}`,
+        prompt: `Generate a custom story structure template with approximately ${p.numSections} sections.\n                Concept: ${sanitizePromptBlock(p.customConcept)}\n                Key Elements: ${sanitizePromptBlock(p.customElements)}\n                For each section, just provide a "title".\n                ${langInstruction}`,
         schema: {
           type: Type.ARRAY,
           items: {
@@ -430,24 +443,20 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
     case 'synopsis': {
       const p = params as SynopsisParams;
       return {
-        prompt: `Based on the following story details, write a concise, one-page synopsis (3-4 paragraphs) suitable for a book proposal or query letter.\nTitle: ${p.project.title}\nLogline: ${p.project.logline}\nManuscript Text:\n${p.project.manuscript
-          .map((s) => `Chapter: ${s.title}\n${s.content}`)
-          .join('\n\n')
-          .substring(0, 10000)}...\n(Text truncated for length)${langInstruction}`,
+        prompt: `Based on the following story details, write a concise, one-page synopsis (3-4 paragraphs) suitable for a book proposal or query letter.\nTitle: ${sanitizePromptValue(p.project.title)}\nLogline: ${sanitizePromptBlock(p.project.logline)}\nManuscript Text:\n${sanitizePromptBlock(
+          p.project.manuscript
+            .map(
+              (s) => `Chapter: ${sanitizePromptValue(s.title)}\n${sanitizePromptBlock(s.content)}`
+            )
+            .join('\n\n')
+        ).substring(0, 10000)}...\n(Text truncated for length)${langInstruction}`,
         thinkingBudget: getThinkingBudget('synopsis'),
       };
     }
     case 'proofread': {
       const p = params as ProofreadParams;
       return {
-        prompt: `Act as a professional copy editor. Review the following text for spelling, grammar, punctuation, and flow errors.
-                Return a JSON list of issues found. For each issue, provide the 'original' text snippet, the 'suggestion' to fix it, and a brief 'explanation'.
-                If the text is perfect, return an empty array.
-                Text to review:
-                """
-                ${p.text}
-                """
-                ${langInstruction}`,
+        prompt: `Act as a professional copy editor. Review the following text for spelling, grammar, punctuation, and flow errors.\n                Return a JSON list of issues found. For each issue, provide the 'original' text snippet, the 'suggestion' to fix it, and a brief 'explanation'.\n                If the text is perfect, return an empty array.\n                Text to review:\n                """\n                ${sanitizePromptBlock(p.text)}\n                """\n                ${langInstruction}`,
         schema: {
           type: Type.ARRAY,
           items: {
@@ -468,13 +477,15 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
       const character = p.characters.find((c) => c.id === p.characterId);
       if (!character) throw new Error('Character not found');
       const context = `
-Characters: ${JSON.stringify(p.characters)}
-Worlds: ${JSON.stringify(p.worlds)}
-Relationships: ${JSON.stringify(p.relationships || [])}
-Manuscript: ${p.manuscript
-        .map((s) => `${s.title}: ${s.content}`)
-        .join('\n\n')
-        .substring(0, 50000)}
+Characters: ${sanitizePromptBlock(JSON.stringify(p.characters))}
+Worlds: ${sanitizePromptBlock(JSON.stringify(p.worlds))}
+Relationships: ${sanitizePromptBlock(JSON.stringify(p.relationships || []))}
+Manuscript: ${sanitizePromptBlock(
+        p.manuscript
+          .map((s) => `${sanitizePromptValue(s.title)}: ${sanitizePromptBlock(s.content)}`)
+          .join('\n\n')
+          .substring(0, 50000)
+      )}
             `;
       return {
         prompt: `You are a consistency checker for a story universe. Analyze the character "${character.name}" for any contradictions or inconsistencies with the established lore, other characters, world-building, and the written manuscript.
@@ -491,24 +502,14 @@ ${langInstruction}`,
     case 'criticAnalysis': {
       const p = params as CriticAnalysisParams;
       return {
-        prompt: `Act as a professional literary critic and editor. Analyze the following text for writing quality, character development, pacing, dialogue, and overall effectiveness.
-
-Text to analyze:
-"""
-${p.text}
-"""
-${p.context ? `Context: ${p.context}` : ''}
-
-Provide constructive feedback on strengths and weaknesses. Suggest specific improvements.
-
-${langInstruction}`,
+        prompt: `Act as a professional literary critic and editor. Analyze the following text for writing quality, character development, pacing, dialogue, and overall effectiveness.\n\nText to analyze:\n"""\n${sanitizePromptBlock(p.text)}\n"""\n${p.context ? `Context: ${sanitizePromptBlock(p.context)}` : ''}\n\nProvide constructive feedback on strengths and weaknesses. Suggest specific improvements.\n\n${langInstruction}`,
         thinkingBudget: getThinkingBudget('criticAnalysis'),
       };
     }
     case 'plotHoleDetection': {
       const p = params as PlotHoleDetectionParams;
       return {
-        prompt: `Analyze the following text for any logical inconsistencies, plot holes, or unresolved narrative threads.\n\nText: ${p.text}\n${langInstruction}`,
+        prompt: `Analyze the following text for any logical inconsistencies, plot holes, or unresolved narrative threads.\n\nText: ${sanitizePromptBlock(p.text)}\n${langInstruction}`,
       };
     }
     default:
@@ -546,7 +547,7 @@ export const generateText = async (
 
       const response: GenerateContentResponse = await ai.models.generateContent({
         model: getModelForText(),
-        contents: prompt,
+        contents: cleanPrompt(prompt),
         config: config,
       });
       return response.text || '';
@@ -555,7 +556,7 @@ export const generateText = async (
     if ((error instanceof Error && error.name === 'AbortError') || signal?.aborted) {
       throw error;
     }
-    console.error('Error generating text:', error);
+    logger.error('Error generating text:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate text from AI.';
     throw new Error(errorMessage, { cause: error });
@@ -593,7 +594,7 @@ export const generateJson = async <T>(
 
       const response: GenerateContentResponse = await ai.models.generateContent({
         model: getModelForText(),
-        contents: prompt,
+        contents: cleanPrompt(prompt),
         config: config,
       });
 
@@ -607,7 +608,7 @@ export const generateJson = async <T>(
       try {
         return JSON.parse(jsonText) as T;
       } catch (e) {
-        console.error('Failed to parse JSON from model:', jsonText);
+        logger.error('Failed to parse JSON from model:', jsonText);
         throw new Error('The AI response was not in a valid format. Please try again.', {
           cause: e,
         });
@@ -617,7 +618,7 @@ export const generateJson = async <T>(
     if ((error instanceof Error && error.name === 'AbortError') || signal?.aborted) {
       throw error;
     }
-    console.error('Error generating JSON:', error);
+    logger.error('Error generating JSON:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate structured data from AI.';
     throw new Error(errorMessage, { cause: error });
@@ -681,7 +682,7 @@ export const streamText = async (
 
     const responseStream = await ai.models.generateContentStream({
       model: getModelForText(),
-      contents: prompt,
+      contents: cleanPrompt(prompt),
       config: {
         temperature: creativityToTemperature[creativity],
       },
@@ -701,7 +702,7 @@ export const streamText = async (
       // but re-throwing allows Redux to know it was cancelled.
       throw error;
     }
-    console.error('Error streaming text:', error);
+    logger.error('Error streaming text:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to stream text from AI.';
     throw new Error(errorMessage, { cause: error });
   }
@@ -721,7 +722,7 @@ export const streamAiHelpResponse = async (
 
     const ai = await getAiClient();
 
-    const prompt = `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${question}`;
+    const prompt = `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptBlock(question)}`;
     const responseStream = await ai.models.generateContentStream({
       model: getModelForText(),
       contents: prompt,
@@ -742,7 +743,7 @@ export const streamAiHelpResponse = async (
     if ((error instanceof Error && error.name === 'AbortError') || signal?.aborted) {
       throw error;
     }
-    console.error('Error streaming AI help response:', error);
+    logger.error('Error streaming AI help response:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to get help from AI assistant.';
     throw new Error(errorMessage, { cause: error });
@@ -765,7 +766,7 @@ export const generateImage = async (prompt: string, signal?: AbortSignal): Promi
       const response = await ai.models.generateContent({
         model: getModelForImage(),
         contents: {
-          parts: [{ text: prompt }],
+          parts: [{ text: sanitizePromptBlock(prompt) }],
         },
         config: {
           // Nano Banana doesn't support responseMimeType, using text prompt to get image part
@@ -788,7 +789,7 @@ export const generateImage = async (prompt: string, signal?: AbortSignal): Promi
     if ((error instanceof Error && error.name === 'AbortError') || signal?.aborted) {
       throw error;
     }
-    console.error('Error generating image:', error);
+    logger.error('Error generating image:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate image from AI.';
     throw new Error(errorMessage, { cause: error });

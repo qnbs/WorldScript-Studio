@@ -28,9 +28,26 @@ class CollaborationService {
   private _roomId: string | null = null;
   private readonly listeners = new Set<() => void>();
 
+  private stripControlChars(value: string): string {
+    let output = '';
+    for (const char of value) {
+      const code = char.charCodeAt(0);
+      output += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
+    }
+    return output;
+  }
+
+  private sanitizeRoomValue(value: string): string {
+    return this.stripControlChars(value).trim().replace(/\s+/g, ' ').slice(0, 128);
+  }
+
   /** Hash projectId + password into a deterministic room name for PSK isolation. */
   private async deriveRoomId(projectId: string, password?: string): Promise<string> {
-    const raw = password ? `${projectId}:${password}` : projectId;
+    const sanitizedProjectId = this.sanitizeRoomValue(projectId);
+    const sanitizedPassword = password ? this.sanitizeRoomValue(password) : undefined;
+    const raw = sanitizedPassword
+      ? `${sanitizedProjectId}:${sanitizedPassword}`
+      : sanitizedProjectId;
     const data = new TextEncoder().encode(raw);
     const hash = await crypto.subtle.digest('SHA-256', data);
     const hex = Array.from(new Uint8Array(hash))

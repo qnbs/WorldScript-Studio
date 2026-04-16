@@ -41,10 +41,62 @@ async function loadTauriApis() {
   }
 }
 
+async function deriveFileSystemCryptoKey(secretMaterial: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const material = encoder.encode(secretMaterial);
+  const hash = await crypto.subtle.digest('SHA-256', material);
+  return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+const stripControlChars = (value: string): string => {
+  let output = '';
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    output += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
+  }
+  return output;
+};
+
+const sanitizePathSegment = (segment: string, fallback = 'item'): string => {
+  const raw = stripControlChars(String(segment).trim());
+  const cleaned = raw
+    .replace(/[<>:"/\\|?*]+/g, ' ')
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120);
+  return cleaned || fallback;
+};
+
+async function encryptText(
+  value: string,
+  secretMaterial: string
+): Promise<{ iv: string; data: string }> {
+  const key = await deriveFileSystemCryptoKey(secretMaterial);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(value);
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+  return {
+    iv: btoa(String.fromCharCode(...new Uint8Array(iv))),
+    data: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+  };
+}
+
+async function decryptText(
+  payload: { iv: string; data: string },
+  secretMaterial: string
+): Promise<string> {
+  const key = await deriveFileSystemCryptoKey(secretMaterial);
+  const iv = Uint8Array.from(atob(payload.iv), (c) => c.charCodeAt(0));
+  const encrypted = Uint8Array.from(atob(payload.data), (c) => c.charCodeAt(0));
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
+  return new TextDecoder().decode(decrypted);
+}
+
 import type { StoryProject, Settings, Character, World } from '../types';
 import type { EntityState } from '@reduxjs/toolkit';
 
 import type { StorageBackend } from './storageService';
+import { logger } from './logger';
 
 class FileSystemService implements StorageBackend {
   private appDataPath: string | null = null;
@@ -54,7 +106,7 @@ class FileSystemService implements StorageBackend {
       const apis = await loadTauriApis();
       this.appDataPath = await apis.appDataDir();
     } catch (error) {
-      console.error('Failed to get app data directory:', error);
+      logger.error('Failed to get app data directory:', error);
       throw error;
     }
   }
@@ -74,11 +126,10 @@ class FileSystemService implements StorageBackend {
   async saveProject(project: StoryProject): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const projectPath = await apis.join(
-      appDataPath,
-      'projects',
-      ((project as unknown as Record<string, unknown>).id as string) || project.title
+    const projectId = sanitizePathSegment(
+      ((project as unknown as Record<string, unknown>).id as string) || project.title || 'project'
     );
+    const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
     // Ensure project directory exists
     if (!(await apis.exists(projectPath))) {
@@ -93,7 +144,8 @@ class FileSystemService implements StorageBackend {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const projectFile = await apis.join(appDataPath, 'projects', projectId, 'project.json');
+      const safeProjectId = sanitizePathSegment(projectId);
+      const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
 
       if (!(await apis.exists(projectFile))) {
         return null;
@@ -102,7 +154,7 @@ class FileSystemService implements StorageBackend {
       const content = await apis.readTextFile(projectFile);
       return JSON.parse(content);
     } catch (error) {
-      console.error('Failed to load project:', error);
+      logger.error('Failed to load project:', error);
       return null;
     }
   }
@@ -120,7 +172,7 @@ class FileSystemService implements StorageBackend {
       const entries = await apis.readDir(projectsPath);
       return entries.filter((entry) => entry.name).map((entry) => entry.name as string);
     } catch (error) {
-      console.error('Failed to list projects:', error);
+      logger.error('Failed to list projects:', error);
       return [];
     }
   }
@@ -128,7 +180,8 @@ class FileSystemService implements StorageBackend {
   async deleteProject(projectId: string): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const projectPath = await apis.join(appDataPath, 'projects', projectId);
+    const safeProjectId = sanitizePathSegment(projectId);
+    const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
 
     // For simplicity, we'll just remove the project.json file
     if (await apis.exists(projectPath)) {
@@ -146,7 +199,7 @@ class FileSystemService implements StorageBackend {
       await apis.mkdir(imagesPath, { recursive: true });
     }
 
-    const imageFile = await apis.join(imagesPath, `${id}.png`);
+    const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
     // Remove data URL prefix if present
     const cleanBase64 = base64Data.replace(/^data:image\/png;base64,/, '');
     await apis.writeTextFile(imageFile, cleanBase64);
@@ -156,7 +209,11 @@ class FileSystemService implements StorageBackend {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const imageFile = await apis.join(appDataPath, 'images', `${id}.png`);
+      const imageFile = await apis.join(
+        appDataPath,
+        'images',
+        `${sanitizePathSegment(id, 'image')}.png`
+      );
 
       if (!(await apis.exists(imageFile))) {
         return null;
@@ -165,7 +222,7 @@ class FileSystemService implements StorageBackend {
       const base64Data = await apis.readTextFile(imageFile);
       return `data:image/png;base64,${base64Data}`;
     } catch (error) {
-      console.error('Failed to load image:', error);
+      logger.error('Failed to load image:', error);
       return null;
     }
   }
@@ -197,7 +254,7 @@ class FileSystemService implements StorageBackend {
       const content = await apis.readTextFile(settingsFile);
       return JSON.parse(content);
     } catch (error) {
-      console.error('Failed to load settings:', error);
+      logger.error('Failed to load settings:', error);
       return null;
     }
   }
@@ -215,25 +272,36 @@ class FileSystemService implements StorageBackend {
     return this.clearApiKey('gemini');
   }
 
-  // Generic provider API key — stored as plaintext in app data dir (Tauri is sandboxed)
+  // Generic provider API key — stored encrypted in app data dir
   async saveApiKey(provider: string, apiKey: string): Promise<void> {
+    if (!apiKey?.trim()) {
+      throw new Error('API key cannot be empty');
+    }
+
     const apis = await this.getApis();
-    const configPath = await apis.join(await this.ensureAppDataPath(), 'config');
+    const appDataPath = await this.ensureAppDataPath();
+    const configPath = await apis.join(appDataPath, 'config');
     if (!(await apis.exists(configPath))) await apis.mkdir(configPath, { recursive: true });
-    await apis.writeTextFile(await apis.join(configPath, `${provider}_key.txt`), apiKey);
+
+    const encrypted = await encryptText(
+      apiKey.trim(),
+      `${appDataPath}|${provider}|StoryCraftStudio|v1`
+    );
+    const filePath = await apis.join(configPath, `${provider}_key.enc.json`);
+    await apis.writeTextFile(filePath, JSON.stringify(encrypted));
   }
 
   async getApiKey(provider: string): Promise<string | null> {
     try {
       const apis = await this.getApis();
-      const keyFile = await apis.join(
-        await this.ensureAppDataPath(),
-        'config',
-        `${provider}_key.txt`
-      );
+      const appDataPath = await this.ensureAppDataPath();
+      const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
       if (!(await apis.exists(keyFile))) return null;
-      return await apis.readTextFile(keyFile);
-    } catch {
+      const content = await apis.readTextFile(keyFile);
+      const payload = JSON.parse(content) as { iv: string; data: string };
+      return await decryptText(payload, `${appDataPath}|${provider}|StoryCraftStudio|v1`);
+    } catch (error) {
+      logger.warn(`Failed to decrypt API key for provider "${provider}":`, error);
       return null;
     }
   }
@@ -241,11 +309,8 @@ class FileSystemService implements StorageBackend {
   async clearApiKey(provider: string): Promise<void> {
     try {
       const apis = await this.getApis();
-      const keyFile = await apis.join(
-        await this.ensureAppDataPath(),
-        'config',
-        `${provider}_key.txt`
-      );
+      const appDataPath = await this.ensureAppDataPath();
+      const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
       if (await apis.exists(keyFile)) await apis.remove(keyFile);
     } catch {
       /* ignore */
@@ -262,7 +327,8 @@ class FileSystemService implements StorageBackend {
       await apis.mkdir(snapshotsPath, { recursive: true });
     }
 
-    const snapshotFile = await apis.join(snapshotsPath, `${snapshotId}.json`);
+    const safeSnapshotId = sanitizePathSegment(snapshotId, 'snapshot');
+    const snapshotFile = await apis.join(snapshotsPath, `${safeSnapshotId}.json`);
     await apis.writeTextFile(snapshotFile, JSON.stringify(data, null, 2));
   }
 
@@ -270,7 +336,8 @@ class FileSystemService implements StorageBackend {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${snapshotId}.json`);
+      const safeSnapshotId = sanitizePathSegment(snapshotId, 'snapshot');
+      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${safeSnapshotId}.json`);
 
       if (!(await apis.exists(snapshotFile))) {
         return null;
@@ -279,7 +346,7 @@ class FileSystemService implements StorageBackend {
       const content = await apis.readTextFile(snapshotFile);
       return JSON.parse(content);
     } catch (error) {
-      console.error('Failed to load snapshot:', error);
+      logger.error('Failed to load snapshot:', error);
       return null;
     }
   }
@@ -299,7 +366,7 @@ class FileSystemService implements StorageBackend {
         .filter((entry) => entry.name?.endsWith('.json'))
         .map((entry) => entry.name!.replace('.json', ''));
     } catch (error) {
-      console.error('Failed to list snapshots:', error);
+      logger.error('Failed to list snapshots:', error);
       return [];
     }
   }
@@ -308,13 +375,14 @@ class FileSystemService implements StorageBackend {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${snapshotId}.json`);
+      const safeSnapshotId = sanitizePathSegment(snapshotId, 'snapshot');
+      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${safeSnapshotId}.json`);
 
       if (await apis.exists(snapshotFile)) {
         await apis.remove(snapshotFile);
       }
     } catch (error) {
-      console.error('Failed to delete snapshot:', error);
+      logger.error('Failed to delete snapshot:', error);
     }
   }
 

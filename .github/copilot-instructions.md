@@ -113,6 +113,7 @@ types.ts          → Core shared interfaces and types
 - CI installs dependencies with `npm ci --legacy-peer-deps` to resolve current peer dependency constraints
 - Local CI can be simulated with `act` (requires Docker); use `act pull_request` for PR flows and `act push` for tag/dispatch flows
 - Local developers should use `npm install --legacy-peer-deps` or the repo `.npmrc` configuration for compatibility
+- All public-facing documentation, markdown files, and GitHub-visible content must be written in English to keep the project accessible to the open-source community
 
 ## Known Technical Debt
 

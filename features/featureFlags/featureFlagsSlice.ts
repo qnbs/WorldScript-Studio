@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction, type Middleware } from '@reduxjs/toolkit';
+import { createSlice, type PayloadAction, type Middleware } from '@reduxjs/toolkit';
 
 export interface FeatureFlagsState {
   enableOllama: boolean;
@@ -75,7 +75,7 @@ export const selectEnablePerformanceBudgets = (state: { featureFlags: FeatureFla
 export const selectEnableVisualRegression = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableVisualRegression;
 
-export const featureFlagsPersistenceMiddleware: Middleware<{}, unknown> =
+export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {
     const result = next(action);
     const actionType = (action as { type?: string }).type;

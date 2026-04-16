@@ -2,6 +2,7 @@
 // Verwendet JSZip für vollständige EPUB-3.0-Erzeugung direkt im Browser
 
 import JSZip from 'jszip';
+import { logger } from './logger';
 
 export interface EpubExportOptions {
   title: string;
@@ -13,7 +14,10 @@ export interface EpubExportOptions {
 }
 
 const esc = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+  s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c
+  );
 
 const toParagraphs = (text: string) =>
   text
@@ -169,7 +173,12 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Lee
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${title.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'export'}.epub`;
+  a.download = `${
+    title
+      .replace(/[^\w\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '_') || 'export'
+  }.epub`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -178,7 +187,7 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Lee
 
 // Legacy-Kompatibilität – wird nicht mehr für Server-Requests genutzt
 export async function exportEpubViaApi(options: EpubExportOptions): Promise<Blob> {
-  console.warn('exportEpubViaApi ist veraltet. Verwende exportEpub() stattdessen.');
+  logger.warn('exportEpubViaApi ist veraltet. Verwende exportEpub() stattdessen.');
   await exportEpub(options);
   return new Blob([], { type: 'application/epub+zip' });
 }

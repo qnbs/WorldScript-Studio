@@ -14,6 +14,12 @@ const ALL_CACHES    = [CACHE_STATIC, CACHE_DYNAMIC, CACHE_IMAGES, CACHE_FONTS];
 
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 
+const swLogger = {
+  log: (...args) => self.console.log('[SW]', ...args),
+  warn: (...args) => self.console.warn('[SW]', ...args),
+  error: (...args) => self.console.error('[SW]', ...args),
+};
+
 // ── Pre-cache shell assets ───────────────────────────────────
 const PRECACHE_URLS = [
   BASE,
@@ -89,7 +95,7 @@ self.addEventListener('install', (event) => {
       .then(() => self.skipWaiting())
       .catch((err) => {
         // Some precache entries (e.g. offline.html) may not exist yet; continue anyway
-        console.warn('[SW] Precache partial failure (non-fatal):', err);
+        swLogger.warn('Precache partial failure (non-fatal):', err);
         return self.skipWaiting();
       })
   );
@@ -106,7 +112,7 @@ self.addEventListener('activate', (event) => {
           cacheNames
             .filter((name) => !ALL_CACHES.includes(name))
             .map((name) => {
-              console.log('[SW] Pruning old cache:', name);
+              swLogger.log('Pruning old cache:', name);
               return caches.delete(name);
             })
         )
@@ -345,4 +351,4 @@ self.addEventListener('periodicsync', (event) => {
   }
 });
 
-console.log(`[SW] StoryCraft Studio Service Worker v${APP_VERSION} loaded`);
+swLogger.log(`StoryCraft Studio Service Worker v${APP_VERSION} loaded`);

@@ -1,9 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ISpeechRecognition } from '../types';
+import { logger } from '../services/logger';
 
-// Präferierte Sprachen in Fallback-Reihenfolge
 const LANG_PREFERENCES = ['de-DE', 'de-AT', 'en-US', 'en-GB'];
 const MIC_TIMEOUT_MS = 8000; // 8 Sekunden ohne Ergebnis → Timeout
+
+const stripControlChars = (value: string): string => {
+  let result = '';
+  for (const char of String(value)) {
+    const code = char.charCodeAt(0);
+    result += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
+  }
+  return result;
+};
+
+const sanitizeSpeechTranscript = (text: string): string =>
+  stripControlChars(text).replace(/\s+/g, ' ').trim().slice(0, 1024);
 
 export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
@@ -13,7 +25,6 @@ export const useSpeechRecognition = () => {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isListeningRef = useRef(false);
 
-  // isListening-Ref synchron halten (für Callbacks ohne Stale-Closure)
   useEffect(() => {
     isListeningRef.current = isListening;
   }, [isListening]);
@@ -34,7 +45,6 @@ export const useSpeechRecognition = () => {
           recognitionRef.current.continuous = true;
           recognitionRef.current.interimResults = true;
 
-          // Sprache: Browser-Sprache bevorzugt, dann Fallback-Kette
           const browserLang = navigator.language || 'de-DE';
           const preferred =
             LANG_PREFERENCES.find((l) => l.startsWith(browserLang.slice(0, 2))) || 'de-DE';
@@ -49,8 +59,9 @@ export const useSpeechRecognition = () => {
                 finalTranscript += event.results[i][0].transcript;
               }
             }
-            if (finalTranscript) {
-              setTranscript(finalTranscript);
+            const sanitizedTranscript = sanitizeSpeechTranscript(finalTranscript);
+            if (sanitizedTranscript) {
+              setTranscript(sanitizedTranscript);
             }
           };
 
@@ -63,10 +74,9 @@ export const useSpeechRecognition = () => {
 
           recognitionRef.current.onerror = (event) => {
             clearMicTimeout();
-            console.error('Speech recognition error', event.error);
+            logger.error('Speech recognition error', event.error);
             setIsListening(false);
 
-            // Benutzerfreundliche Fehlermeldungen
             switch (event.error) {
               case 'not-allowed':
               case 'permission-denied':
@@ -84,7 +94,6 @@ export const useSpeechRecognition = () => {
                 setMicError('Netzwerkfehler bei der Spracherkennung.');
                 break;
               case 'language-not-supported':
-                // Fallback auf en-US
                 if (recognitionRef.current && recognitionRef.current.lang !== 'en-US') {
                   recognitionRef.current.lang = 'en-US';
                   setMicError(null);
@@ -102,9 +111,7 @@ export const useSpeechRecognition = () => {
 
     return () => {
       clearMicTimeout();
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+      recognitionRef.current?.stop();
     };
   }, [clearMicTimeout]);
 
@@ -116,7 +123,6 @@ export const useSpeechRecognition = () => {
         recognitionRef.current.start();
         setIsListening(true);
 
-        // Mikrofon-Timeout: Wenn nach X Sekunden kein Ergebnis → automatisch stoppen
         timeoutRef.current = setTimeout(() => {
           if (isListeningRef.current) {
             recognitionRef.current?.stop();
@@ -125,7 +131,7 @@ export const useSpeechRecognition = () => {
           }
         }, MIC_TIMEOUT_MS);
       } catch (e) {
-        console.error('Failed to start recognition', e);
+        logger.error('Failed to start recognition', e);
         setMicError('Spracherkennung konnte nicht gestartet werden.');
       }
     }

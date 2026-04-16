@@ -5,6 +5,7 @@ import { storageService } from '../services/storageService';
 import { statusActions } from '../features/status/statusSlice';
 import type { PersistedRootState } from '../types';
 import type { ProjectData } from '../features/project/projectSlice';
+import { logger } from '../services/logger';
 
 type ProjectStateWithHistory = {
   present?: { data?: ProjectData };
@@ -49,7 +50,7 @@ listenerMiddleware.startListening({
 
       // Validate state before saving — guard against silent corruption
       if (!presentData || presentData.title === undefined) {
-        console.error('Auto-save aborted: Invalid project state detected (missing present.data)');
+        logger.error('Auto-save aborted: Invalid project state detected (missing present.data)');
         listenerApi.dispatch(statusActions.setSavingStatus('idle'));
         return;
       }
@@ -60,7 +61,7 @@ listenerMiddleware.startListening({
       try {
         const serialized = JSON.stringify(projectDataToSave);
         if (serialized.length > 5 * 1024 * 1024) {
-          console.warn(
+          logger.warn(
             `Auto-save: Project size is ${(serialized.length / 1024 / 1024).toFixed(1)} MB. Consider exporting and archiving.`
           );
         }
@@ -86,7 +87,7 @@ listenerMiddleware.startListening({
         listenerApi.dispatch(statusActions.setSavingStatus('idle'));
       }
     } catch (error) {
-      console.error('Auto-save failed:', error);
+      logger.error('Auto-save failed:', error);
       listenerApi.dispatch(
         statusActions.addNotification({
           type: 'error',

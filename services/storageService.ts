@@ -36,6 +36,7 @@ export interface StorageBackend {
 // Import existing services
 import { dbService } from './dbService';
 import { fileSystemService } from './fileSystemService';
+import { logger } from './logger';
 
 declare global {
   interface Window {
@@ -48,122 +49,143 @@ declare global {
 // signatures) but is compatible at runtime. The manager adapts where needed.
 class StorageManager {
   private backend: StorageBackend | typeof dbService;
+  private ready: Promise<void>;
 
   constructor() {
     this.backend = dbService;
-    this.initializeBackend();
+    this.ready = this.initializeBackend();
   }
 
-  private async initializeBackend() {
+  private async initializeBackend(): Promise<void> {
     // Check if we're running in Tauri
     if (typeof window !== 'undefined' && window.__TAURI__) {
       try {
         await fileSystemService.initialize();
         this.backend = fileSystemService;
-        console.log('Using file system storage backend');
+        logger.debug('Using file system storage backend');
       } catch (error) {
-        console.warn('Failed to initialize file system storage, falling back to IndexedDB:', error);
+        logger.warn('Failed to initialize file system storage, falling back to IndexedDB:', error);
         this.backend = dbService;
       }
     } else {
-      console.log('Using IndexedDB storage backend');
+      logger.debug('Using IndexedDB storage backend');
       this.backend = dbService;
     }
   }
 
+  private async getBackend(): Promise<StorageBackend | typeof dbService> {
+    await this.ready;
+    return this.backend;
+  }
+
   // Delegate all methods to the current backend
   async saveProject(project: unknown): Promise<void> {
-    return (this.backend.saveProject as (p: unknown) => Promise<void>)(project);
+    const backend = await this.getBackend();
+    return (backend.saveProject as (p: unknown) => Promise<void>)(project);
   }
 
   async loadProject(_projectId: string): Promise<StoryProject | null> {
-    if ('loadProject' in this.backend) {
-      return (this.backend as StorageBackend).loadProject(_projectId);
+    const backend = await this.getBackend();
+    if ('loadProject' in backend) {
+      return (backend as StorageBackend).loadProject(_projectId);
     }
     return null;
   }
 
   async listProjects(): Promise<string[]> {
-    if ('listProjects' in this.backend) {
-      return (this.backend as StorageBackend).listProjects();
+    const backend = await this.getBackend();
+    if ('listProjects' in backend) {
+      return (backend as StorageBackend).listProjects();
     }
     return [];
   }
 
   async deleteProject(_projectId: string): Promise<void> {
-    if ('deleteProject' in this.backend) {
-      return (this.backend as StorageBackend).deleteProject(_projectId);
+    const backend = await this.getBackend();
+    if ('deleteProject' in backend) {
+      return (backend as StorageBackend).deleteProject(_projectId);
     }
   }
 
   async saveImage(id: string, base64Data: string): Promise<void> {
-    return this.backend.saveImage(id, base64Data);
+    const backend = await this.getBackend();
+    return backend.saveImage(id, base64Data);
   }
 
   async getImage(id: string): Promise<string | null> {
-    return this.backend.getImage(id);
+    const backend = await this.getBackend();
+    return backend.getImage(id);
   }
 
   async saveSettings(settings: Settings): Promise<void> {
-    return this.backend.saveSettings(settings);
+    const backend = await this.getBackend();
+    return backend.saveSettings(settings);
   }
 
   async loadSettings(): Promise<Settings | null> {
+    const backend = await this.getBackend();
     if (
-      'loadSettings' in this.backend &&
-      typeof (this.backend as StorageBackend).loadSettings === 'function'
+      'loadSettings' in backend &&
+      typeof (backend as StorageBackend).loadSettings === 'function'
     ) {
-      return (this.backend as StorageBackend).loadSettings();
+      return (backend as StorageBackend).loadSettings();
     }
     return null;
   }
 
   async saveGeminiApiKey(apiKey: string): Promise<void> {
-    return this.backend.saveGeminiApiKey(apiKey);
+    const backend = await this.getBackend();
+    return backend.saveGeminiApiKey(apiKey);
   }
 
   async getGeminiApiKey(): Promise<string | null> {
-    return this.backend.getGeminiApiKey();
+    const backend = await this.getBackend();
+    return backend.getGeminiApiKey();
   }
 
   async clearGeminiApiKey(): Promise<void> {
-    return this.backend.clearGeminiApiKey();
+    const backend = await this.getBackend();
+    return backend.clearGeminiApiKey();
   }
 
   async saveApiKey(provider: string, apiKey: string): Promise<void> {
-    return this.backend.saveApiKey(provider, apiKey);
+    const backend = await this.getBackend();
+    return backend.saveApiKey(provider, apiKey);
   }
 
   async getApiKey(provider: string): Promise<string | null> {
-    return this.backend.getApiKey(provider);
+    const backend = await this.getBackend();
+    return backend.getApiKey(provider);
   }
 
   async clearApiKey(provider: string): Promise<void> {
-    return this.backend.clearApiKey(provider);
+    const backend = await this.getBackend();
+    return backend.clearApiKey(provider);
   }
 
   async saveSnapshot(name: string, data: unknown): Promise<void> {
-    if ('saveSnapshot' in this.backend) {
-      return (this.backend as StorageBackend).saveSnapshot(name, data);
+    const backend = await this.getBackend();
+    if ('saveSnapshot' in backend) {
+      return (backend as StorageBackend).saveSnapshot(name, data);
     }
     // IndexedDB backend uses createSnapshot(data, name)
-    return this.backend.createSnapshot(
-      data as Parameters<typeof this.backend.createSnapshot>[0],
-      name
-    );
+    return backend.createSnapshot(data as Parameters<typeof backend.createSnapshot>[0], name);
   }
 
   async getSnapshotData(id: number): Promise<unknown> {
-    return (this.backend.getSnapshotData as (i: number) => Promise<unknown>)(id);
+    const backend = await this.getBackend();
+    return (backend.getSnapshotData as (i: number) => Promise<unknown>)(id);
   }
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {
-    const result = await this.backend.listSnapshots();
+    const backend = await this.getBackend();
+    const result = await backend.listSnapshots();
     return result as ProjectSnapshot[];
   }
 
   async deleteSnapshot(id: number): Promise<void> {
-    return (this.backend.deleteSnapshot as (i: number) => Promise<void>)(id);
+    const backend = await this.getBackend();
+    return (backend.deleteSnapshot as (i: number) => Promise<void>)(id);
   }
 }
 

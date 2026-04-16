@@ -6,10 +6,13 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : 4,
-  reporter: 'html',
+  reporter: [
+    ['html', { outputFolder: 'tests/e2e/html-report' }],
+    ['junit', { outputFile: 'tests/e2e/results/junit.xml' }],
+  ],
 
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://127.0.0.1:3000/StoryCraft-Studio',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -26,8 +29,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
+    command: 'npm run dev -- --host 127.0.0.1 --port 3000',
+    url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

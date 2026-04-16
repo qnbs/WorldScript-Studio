@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import featureFlagsReducer, {
   featureFlagsActions,
-  FeatureFlagsState,
 } from '../../features/featureFlags/featureFlagsSlice';
+import type { FeatureFlagsState } from '../../features/featureFlags/featureFlagsSlice';
 
 describe('featureFlagsSlice', () => {
   const initialState: FeatureFlagsState = {

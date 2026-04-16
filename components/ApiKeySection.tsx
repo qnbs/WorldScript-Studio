@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Spinner } from './ui/Spinner';
 import { useTranslation } from '../hooks/useTranslation';
+import { logger } from '../services/logger';
 
 export const ApiKeySection: FC = () => {
   const { t } = useTranslation();
@@ -33,7 +34,7 @@ export const ApiKeySection: FC = () => {
         }
       }
     } catch (error) {
-      console.error('Failed to check API key status:', error);
+      logger.error('Failed to check API key status:', error);
     } finally {
       setIsLoading(false);
     }
@@ -63,7 +64,7 @@ export const ApiKeySection: FC = () => {
       setMessage({ type: 'success', text: t('settings.apiKey.saved') });
       setTestResult(null);
     } catch (error: unknown) {
-      console.error('Failed to save API key:', error);
+      logger.error('Failed to save API key:', error);
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : t('settings.apiKey.errorSave'),
@@ -83,7 +84,7 @@ export const ApiKeySection: FC = () => {
       setHasKey(false);
       setMessage({ type: 'success', text: t('settings.apiKey.removed') });
     } catch (error: unknown) {
-      console.error('Failed to remove API key:', error);
+      logger.error('Failed to remove API key:', error);
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : t('settings.apiKey.errorRemove'),

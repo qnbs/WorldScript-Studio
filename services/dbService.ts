@@ -1,6 +1,7 @@
 import type { ProjectSnapshot, Settings } from '../types';
 import type { ProjectData } from '../features/project/projectSlice';
 import LZString from 'lz-string';
+import { logger } from './logger';
 
 const DB_NAME = 'storycraft-db';
 const DB_VERSION = 5; // v5: RAG vectors store added
@@ -167,7 +168,7 @@ class IndexedDBService {
         );
         return new TextDecoder().decode(decrypted);
       } catch (error) {
-        console.warn('Failed to decrypt API key:', error);
+        logger.warn('Failed to decrypt API key:', error);
         return 'DECRYPT_FAILED' as string;
       }
     });
@@ -250,7 +251,7 @@ class IndexedDBService {
         return new TextDecoder().decode(decrypted);
       } catch (err) {
         // Distinguish between "no key stored" vs "decryption failed" (e.g. device change, cleared site data)
-        console.warn(`API key decryption failed for provider "${provider}":`, err);
+        logger.warn(`API key decryption failed for provider "${provider}":`, err);
         return 'DECRYPT_FAILED' as string;
       }
     });
@@ -325,7 +326,7 @@ class IndexedDBService {
         db.onversionchange = () => {
           db.close();
           this.db = null;
-          console.warn(
+          logger.warn(
             'IndexedDB: Datenbankversion geändert – Verbindung geschlossen. Bitte Seite neu laden.'
           );
         };
@@ -334,7 +335,7 @@ class IndexedDBService {
       };
 
       request.onerror = () => {
-        console.error('IndexedDB error:', request.error);
+        logger.error('IndexedDB error:', request.error);
         reject(request.error);
       };
     });

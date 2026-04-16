@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import App from './App';
 import { setupStore } from './app/store';
 import { dbService } from './services/dbService';
+import { logger } from './services/logger';
 import type { PersistedRootState } from './types';
 import './register-sw';
 
@@ -50,7 +51,7 @@ const root = ReactDOM.createRoot(rootElement);
       const isFlatData = !projectPart.present && projectPart.data;
 
       if (isFlatData && projectPart.data) {
-        console.log('Hydrating flat project state into Redux-Undo envelope.');
+        logger.debug('Hydrating flat project state into Redux-Undo envelope.');
         preloadedState.project = {
           past: [],
           present: { data: projectPart.data }, // Reconstruct the slice structure
@@ -59,7 +60,7 @@ const root = ReactDOM.createRoot(rootElement);
         };
       } else if (!projectPart.present && !projectPart.data) {
         // Fallback: Corrupt or empty project state
-        console.warn('Project state corrupted. Resetting project.');
+        logger.warn('Project state corrupted. Resetting project.');
         delete (preloadedState as Record<string, unknown>).project;
       }
     }
@@ -75,7 +76,7 @@ const root = ReactDOM.createRoot(rootElement);
       </React.StrictMode>
     );
   } catch (error) {
-    console.error('Failed to initialize the application:', error);
+    logger.error('Failed to initialize the application:', error);
     root.render(
       <div style={{ color: 'red', padding: '20px' }}>
         <h1>Application Initialization Failed</h1>

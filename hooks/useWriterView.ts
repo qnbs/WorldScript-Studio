@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from './useTranslation';
 import { useAppDispatch, useAppSelector, useAppSelectorShallow } from '../app/hooks';
+import { logger } from '../services/logger';
 import {
   selectProjectData,
   selectManuscript,
@@ -220,7 +221,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       .unwrap()
       .catch((err) => {
         if (err.name !== 'AbortError') {
-          console.error('Generation failed', err);
+          logger.error('Generation failed', err);
           dispatch(
             writerActions.updateCurrentHistoryItem(
               'Error generating content. Please try again later or check your API key.'

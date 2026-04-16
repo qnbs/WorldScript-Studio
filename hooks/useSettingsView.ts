@@ -31,6 +31,7 @@ import {
 import { featureFlagsActions } from '../features/featureFlags/featureFlagsSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { storageService } from '../services/storageService';
+import { logger } from '../services/logger';
 import type { RootState } from '../app/store';
 
 type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create';
@@ -164,7 +165,7 @@ export const useSettingsView = () => {
           dispatch(featureFlagsActions.setEnableVisualRegression(Boolean(value)));
           break;
         default:
-          console.warn(`Unknown setting key: ${key}`);
+          logger.warn(`Unknown setting key: ${key}`);
           break;
       }
     },

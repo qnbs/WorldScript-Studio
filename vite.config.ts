@@ -6,6 +6,12 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // Repository name für GitHub Pages
 const REPO_NAME = 'StoryCraft-Studio';
+const isDebugBuild = process.env.VITE_DEBUG === 'true' || process.env.DEBUG === 'true';
+const buildLogger = (...args: unknown[]) => {
+  if (isDebugBuild) {
+    console.log('[Vite]', ...args);
+  }
+};
 
 // Custom Domain Detection:
 // Wenn public/CNAME existiert und einen Wert hat, verwende '/' als base
@@ -16,14 +22,14 @@ function getBasePath(): string {
     if (fs.existsSync(cnamePath)) {
       const cname = fs.readFileSync(cnamePath, 'utf-8').trim();
       if (cname && cname.length > 0) {
-        console.log(`📦 Custom Domain detected: ${cname} → Using base '/'`);
+        buildLogger(`📦 Custom Domain detected: ${cname} → Using base '/'`);
         return '/';
       }
     }
   } catch {
     // Fallback to default
   }
-  console.log(`📦 No Custom Domain → Using base '/${REPO_NAME}/'`);
+  buildLogger(`📦 No Custom Domain → Using base '/${REPO_NAME}/'`);
   return `/${REPO_NAME}/`;
 }
 
@@ -92,7 +98,8 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
     cssCodeSplit: true,
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 600,
+    reportCompressedSize: true,
     rollupOptions: {
       external: [
         '@tauri-apps/api',
@@ -113,7 +120,7 @@ export default defineConfig({
           if (
             id.includes('/react-dom/') ||
             id.includes('/react/') ||
-            id.includes('/react-router')
+            id.includes('/react-router-dom/')
           ) {
             return 'react-vendor';
           }
@@ -127,32 +134,38 @@ export default defineConfig({
           if (id.includes('@google/genai')) {
             return 'ai-vendor';
           }
-          if (id.includes('/jspdf/')) {
-            return 'jspdf-vendor';
+          if (id.includes('y-webrtc') || id.includes('yjs')) {
+            return 'collaboration-vendor';
           }
-          if (id.includes('/docx/')) {
-            return 'docx-vendor';
+          if (id.includes('@dnd-kit') || id.includes('/dnd-kit/') || id.includes('react-flow')) {
+            return 'interaction-vendor';
           }
-          if (id.includes('/jszip/')) {
-            return 'jszip-vendor';
-          }
-          if (id.includes('/html2canvas/')) {
-            return 'html2canvas-vendor';
-          }
-          if (id.includes('@dnd-kit') || id.includes('/dnd-kit/')) {
-            return 'dnd-vendor';
-          }
-          if (id.includes('react-force-graph-2d')) {
-            return 'graph-vendor';
-          }
-          if (id.includes('/leaflet/') || id.includes('/react-leaflet/')) {
-            return 'map-vendor';
+          if (
+            id.includes('recharts') ||
+            id.includes('/leaflet/') ||
+            id.includes('/react-leaflet/') ||
+            id.includes('react-force-graph-2d')
+          ) {
+            return 'data-vendor';
           }
           if (id.includes('/konva/') || id.includes('/react-konva/')) {
             return 'canvas-vendor';
           }
-          if (id.includes('/recharts/')) {
-            return 'chart-vendor';
+          if (
+            id.includes('/docx/') ||
+            id.includes('/jspdf/') ||
+            id.includes('/jszip/') ||
+            id.includes('mammoth') ||
+            id.includes('epub-gen')
+          ) {
+            return 'export-vendor';
+          }
+          if (
+            id.includes('@tailwindcss') ||
+            id.includes('postcss') ||
+            id.includes('autoprefixer')
+          ) {
+            return 'style-vendor';
           }
           return undefined;
         },

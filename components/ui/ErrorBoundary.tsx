@@ -3,6 +3,7 @@ import React, { Component } from 'react';
 import { Card, CardHeader, CardContent } from './Card';
 import { Button } from './Button';
 import { ICONS } from '../../constants';
+import { logger } from '../../services/logger';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -23,7 +24,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    logger.error('Uncaught error:', error, errorInfo);
   }
 
   render() {

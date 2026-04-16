@@ -40,7 +40,7 @@ Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 
 ## Niedrig (🟢)
 
-- ⬜ Deprecated `backend/epubExport.js` archivieren
+- ✅ Deprecated `backend/epubExport.js` archiviert
 - ⬜ Logging-Framework statt console.log/warn/error
 - ⬜ Storybook Stories erweitern (Modal, Toast, Spinner, Drawer)
 - ⬜ Visual Regression Tests
