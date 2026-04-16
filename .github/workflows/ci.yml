@@ -159,10 +159,14 @@ jobs:
           test-report-name: Vitest
 
       - name: Publish coverage to Codecov
-        if: ${{ secrets.CODECOV_TOKEN != '' }}
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: npx --yes codecov -f coverage/lcov.info
+        run: |
+          if [ -n "$CODECOV_TOKEN" ]; then
+            npx --yes codecov -f coverage/lcov.info
+          else
+            echo "No CODECOV_TOKEN configured; skipping Codecov upload."
+          fi
 
       - name: Upload visual regression baseline
         uses: actions/upload-artifact@v4
