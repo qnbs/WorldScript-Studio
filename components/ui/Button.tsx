@@ -34,6 +34,7 @@ export const Button = React.memo(
       return (
         <button
           ref={ref}
+          type="button"
           className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className ?? ''}`}
           {...props}
         >

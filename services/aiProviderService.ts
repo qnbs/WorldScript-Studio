@@ -6,8 +6,20 @@
  * Streaming is supported for all providers.
  */
 
-import type { AIProvider, AiModel } from '../types';
+import type { AIProvider, AiModel, AiCreativity, GeminiSchema } from '../types';
 import { storageService } from './storageService';
+import {
+  listOllamaModels as listOllamaModelsFromService,
+  streamOllama,
+  testOllamaConnection,
+} from './ollamaService';
+import {
+  generateText as generateTextGemini,
+  generateJson as generateJsonGemini,
+  streamText as streamTextGemini,
+  generateImage as generateImageGemini,
+  streamAiHelpResponse as streamAiHelpResponseGemini,
+} from './geminiService';
 
 const stripControlChars = (value: string): string => {
   let output = '';
@@ -29,6 +41,7 @@ export interface AIRequestOptions {
   systemPrompt?: string;
   signal?: AbortSignal;
   ollamaBaseUrl?: string;
+  fallbackProviders?: AIProvider[];
 }
 
 export interface AIStreamCallbacks {
@@ -112,100 +125,23 @@ async function streamOpenAI(
   callbacks.onDone?.();
 }
 
-// ─── Ollama Provider ──────────────────────────────────────────────────────────
-
-async function streamOllama(
-  prompt: string,
-  opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks
-): Promise<void> {
-  const baseUrl = opts.ollamaBaseUrl ?? 'http://localhost:11434';
-  // Strip "ollama/" prefix if present
-  const model = opts.model.replace(/^ollama\//, '');
-
-  const body: Record<string, unknown> = {
-    model,
-    prompt: opts.systemPrompt
-      ? `${sanitizeProviderPrompt(opts.systemPrompt)}\n\n${sanitizeProviderPrompt(prompt)}`
-      : sanitizeProviderPrompt(prompt),
-    stream: true,
-    options: {
-      temperature: opts.temperature ?? 0.7,
-      num_predict: opts.maxTokens ?? 2048,
-    },
-  };
-
-  let res: Response;
-  try {
-    res = await fetch(`${baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: opts.signal ?? null,
-    });
-  } catch (err) {
-    throw new Error(
-      `Ollama nicht erreichbar (${baseUrl}). Stellen Sie sicher, dass Ollama läuft: ollama serve`,
-      { cause: err }
-    );
-  }
-
-  if (!res.ok) {
-    throw new Error(`Ollama API Error ${res.status}: ${res.statusText}`);
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error('Ollama: Kein Response-Body');
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const json = JSON.parse(line);
-        if (json.response) callbacks.onChunk(json.response);
-        if (json.done) callbacks.onDone?.();
-      } catch {
-        // malformed chunk – skip
-      }
-    }
-  }
-}
-
-// ─── Anthropic/Claude (Browser-Hinweis) ─────────────────────────────────────
-
 async function streamAnthropic(
   _prompt: string,
   _opts: AIRequestOptions,
   _callbacks: AIStreamCallbacks
 ): Promise<void> {
-  // Anthropic's API blocks direct browser requests (CORS).
-  // A proxy backend is required. Show a helpful error.
   throw new Error(
     'Claude/Anthropic: Direkte Browser-Anfragen werden von Anthropic blockiert (CORS). ' +
       'Bitte verwende einen Backend-Proxy oder wechsle zu Gemini/OpenAI/Ollama.'
   );
 }
 
-// ─── Unified stream function ──────────────────────────────────────────────────
-
-/**
- * Stream text from the configured AI provider.
- * Automatically routes to Gemini, OpenAI, Ollama, or Anthropic.
- */
-export async function streamAI(
+async function streamProvider(
   prompt: string,
+  creativity: AiCreativity,
   opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks
+  callbacks: AIStreamCallbacks,
+  signal?: AbortSignal
 ): Promise<void> {
   switch (opts.provider) {
     case 'openai':
@@ -216,19 +152,149 @@ export async function streamAI(
       return streamAnthropic(prompt, opts, callbacks);
     case 'gemini':
     default:
-      // Gemini is handled by the existing geminiService.ts
-      // This is a fallback for when gemini is explicitly selected
-      throw new Error(
-        'Gemini Provider: Bitte geminiService.ts direkt nutzen. ' +
-          'aiProviderService ist für OpenAI/Ollama/Anthropic.'
+      return streamTextGemini(
+        opts.systemPrompt
+          ? `${sanitizeProviderPrompt(opts.systemPrompt)}\n\n${sanitizeProviderPrompt(prompt)}`
+          : prompt,
+        creativity,
+        callbacks.onChunk,
+        signal
       );
   }
 }
 
-/**
- * Test connection to the given provider.
- * Returns { ok: true } or { ok: false, error: string }.
- */
+export async function generateText(
+  prompt: string,
+  creativity: AiCreativity,
+  opts: AIRequestOptions,
+  signal?: AbortSignal
+): Promise<string> {
+  switch (opts.provider) {
+    case 'openai': {
+      let result = '';
+      await streamOpenAI(prompt, opts, {
+        onChunk: (text) => {
+          result += text;
+        },
+      });
+      return result;
+    }
+    case 'ollama': {
+      let result = '';
+      await streamOllama(prompt, opts, {
+        onChunk: (text) => {
+          result += text;
+        },
+      });
+      return result;
+    }
+    case 'anthropic':
+      throw new Error(
+        'Claude/Anthropic ist derzeit im Browser nicht verfügbar. Bitte verwende Gemini, OpenAI oder Ollama.'
+      );
+    case 'gemini':
+    default:
+      return generateTextGemini(prompt, creativity, signal);
+  }
+}
+
+export async function generateJson<T>(
+  prompt: string,
+  creativity: AiCreativity,
+  schema: GeminiSchema,
+  opts: AIRequestOptions,
+  signal?: AbortSignal
+): Promise<T> {
+  if (opts.provider === 'gemini') {
+    return generateJsonGemini(prompt, creativity, schema, signal);
+  }
+
+  const raw = await generateText(prompt, creativity, opts, signal);
+  let jsonText = raw.trim();
+  if (jsonText.startsWith('```')) {
+    jsonText = jsonText.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '');
+  }
+
+  try {
+    return JSON.parse(jsonText) as T;
+  } catch (parseError) {
+    const parseErr = new Error(
+      'Die Antwort des KI-Modells ist kein gültiges JSON. Bitte versuche es erneut.'
+    );
+    (parseErr as any).cause = parseError;
+    throw parseErr;
+  }
+}
+
+export async function generateImage(
+  prompt: string,
+  opts: AIRequestOptions,
+  signal?: AbortSignal
+): Promise<string> {
+  switch (opts.provider) {
+    case 'gemini':
+      return generateImageGemini(prompt, signal);
+    case 'openai':
+      throw new Error(
+        'OpenAI-Bildgenerierung ist derzeit nicht über die Browser-Version verfügbar.'
+      );
+    case 'ollama':
+      throw new Error(
+        'Ollama-Bildgenerierung ist aktuell nicht unterstützt. Bitte nutzen Sie Gemini für Bilder.'
+      );
+    case 'anthropic':
+      throw new Error(
+        'Anthropic-Bildgenerierung ist nicht verfügbar. Bitte verwenden Sie Gemini oder Ollama für Bildinhalte.'
+      );
+    default:
+      return generateImageGemini(prompt, signal);
+  }
+}
+
+export async function streamText(
+  prompt: string,
+  creativity: AiCreativity,
+  opts: AIRequestOptions,
+  callbacks: AIStreamCallbacks,
+  signal?: AbortSignal
+): Promise<void> {
+  try {
+    await streamProvider(prompt, creativity, opts, callbacks, signal);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      opts.fallbackProviders?.includes('gemini') &&
+      opts.provider === 'ollama'
+    ) {
+      await streamProvider(prompt, creativity, { ...opts, provider: 'gemini' }, callbacks, signal);
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function streamAiHelpResponse(
+  question: string,
+  creativity: AiCreativity,
+  opts: AIRequestOptions,
+  callbacks: AIStreamCallbacks
+): Promise<void> {
+  const helpPrompt = `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizeProviderPrompt(question)}`;
+  if (opts.provider === 'gemini') {
+    return streamAiHelpResponseGemini(
+      question,
+      callbacks.onChunk,
+      opts.temperature ?? 0.7,
+      opts.signal
+    );
+  }
+  return streamProvider(helpPrompt, creativity, opts, callbacks, opts.signal);
+}
+
+export async function listOllamaModels(baseUrl = 'http://localhost:11434'): Promise<string[]> {
+  return listOllamaModelsFromService(baseUrl);
+}
+
 export async function testAIConnection(
   provider: AIProvider,
   opts: Partial<AIRequestOptions>
@@ -245,21 +311,15 @@ export async function testAIConnection(
         if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
         return { ok: true };
       }
-      case 'ollama': {
-        const base = opts.ollamaBaseUrl ?? 'http://localhost:11434';
-        const res = await fetch(`${base}/api/tags`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (!res.ok) return { ok: false, error: `Ollama HTTP ${res.status}` };
-        return { ok: true };
-      }
+      case 'ollama':
+        return testOllamaConnection(opts.ollamaBaseUrl);
       case 'anthropic':
         return {
           ok: false,
           error: 'Claude benötigt einen Backend-Proxy (CORS-Einschränkung)',
         };
       case 'gemini':
-        return { ok: true }; // Tested via existing geminiService
+        return { ok: true };
       default:
         return { ok: false, error: 'Unbekannter Provider' };
     }
@@ -268,21 +328,5 @@ export async function testAIConnection(
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     };
-  }
-}
-
-/**
- * List available Ollama models from the local server.
- */
-export async function listOllamaModels(baseUrl = 'http://localhost:11434'): Promise<string[]> {
-  try {
-    const res = await fetch(`${baseUrl}/api/tags`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { models?: { name: string }[] };
-    return data.models?.map((m) => m.name) ?? [];
-  } catch {
-    return [];
   }
 }

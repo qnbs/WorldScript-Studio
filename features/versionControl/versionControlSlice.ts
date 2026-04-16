@@ -1,6 +1,6 @@
 import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from '@reduxjs/toolkit';
-import LZString from 'lz-string';
+import * as LZString from 'lz-string';
 import { v4 as uuid } from 'uuid';
 import type { VersionBranch, VersionSnapshot } from '../../types';
 import type { StorySection } from '../../types';

@@ -7,6 +7,7 @@ import { Modal } from './ui/Modal';
 import { Input } from './ui/Input';
 import { Spinner } from './ui/Spinner';
 import { useSettingsView } from '../hooks/useSettingsView';
+import { useTranslation } from '../hooks/useTranslation';
 import { SettingsViewContext, useSettingsViewContext } from '../contexts/SettingsViewContext';
 import { ICONS } from '../constants';
 import { ApiKeySection } from './ApiKeySection';
@@ -80,6 +81,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
   onProviderChange,
   onOllamaUrlChange,
 }) => {
+  const { t } = useTranslation();
   const [openaiKey, setOpenaiKey] = useState('');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
@@ -138,6 +140,13 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
     }
   }, [provider, ollamaBaseUrl]);
 
+  useEffect(() => {
+    if (provider === 'ollama') {
+      void handleLoadOllamaModels();
+      void handleTest();
+    }
+  }, [provider, ollamaBaseUrl, handleLoadOllamaModels, handleTest]);
+
   const providers: { id: AIProvider; label: string }[] = [
     { id: 'gemini', label: 'Google Gemini' },
     { id: 'openai', label: 'OpenAI' },
@@ -168,6 +177,30 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
               {p.label}
             </button>
           ))}
+        </div>
+
+        <div className="flex flex-col gap-2 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-[var(--foreground-secondary)]">
+              {t('settings.ai.providerStatusLabel')}
+            </span>
+            <span
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
+                testStatus === 'ok'
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : testStatus === 'error'
+                    ? 'bg-red-500/15 text-red-300'
+                    : 'bg-slate-400/10 text-slate-200'
+              }`}
+            >
+              {testStatus === 'ok' && t('settings.ai.providerStatusConnected')}
+              {testStatus === 'error' && t('settings.ai.providerStatusDisconnected')}
+              {testStatus === 'idle' && t('settings.ai.providerStatusReady')}
+            </span>
+          </div>
+          {testStatus === 'error' && testError && (
+            <p className="text-xs text-red-300">{testError}</p>
+          )}
         </div>
 
         {/* Gemini */}
@@ -728,12 +761,32 @@ const SettingsViewUI: FC = () => {
             <AiProviderCard
               provider={(settings.advancedAi?.provider ?? 'gemini') as AIProvider}
               ollamaBaseUrl={settings.advancedAi?.ollamaBaseUrl ?? 'http://localhost:11434'}
-              onProviderChange={(p) =>
+              onProviderChange={(p) => {
+                const currentModel = settings.advancedAi?.model ?? 'gemini-1.5-flash';
+                const newModel =
+                  p === 'ollama'
+                    ? currentModel.startsWith('ollama/')
+                      ? currentModel
+                      : 'ollama/gemma3'
+                    : p === 'gemini'
+                      ? currentModel.startsWith('ollama/')
+                        ? 'gemini-1.5-flash'
+                        : currentModel
+                      : p === 'openai'
+                        ? currentModel.startsWith('gpt-')
+                          ? currentModel
+                          : 'gpt-4o-mini'
+                        : p === 'anthropic'
+                          ? currentModel.startsWith('claude-')
+                            ? currentModel
+                            : 'claude-3-haiku'
+                          : currentModel;
                 handleSettingChange('advancedAi', {
                   ...settings.advancedAi,
                   provider: p,
-                })
-              }
+                  model: newModel,
+                });
+              }}
               onOllamaUrlChange={(url) =>
                 handleSettingChange('advancedAi', {
                   ...settings.advancedAi,
@@ -1088,12 +1141,36 @@ const SettingsViewUI: FC = () => {
                       })
                     }
                   >
-                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                    <option value="claude-3-haiku">Claude 3 Haiku</option>
-                    <option value="claude-3-sonnet">Claude 3 Sonnet</option>
-                    <option value="gpt-4o-mini">GPT-4o Mini</option>
-                    <option value="gpt-4o">GPT-4o</option>
+                    {settings.advancedAi.provider === 'ollama' ? (
+                      <>
+                        <option value="ollama/gemma3">Gemma 3 4B</option>
+                        <option value="ollama/llama3">Llama 3</option>
+                        <option value="ollama/qwen3-8b">Qwen3 8B</option>
+                        <option value="ollama/deepseek-v3.2-7b">DeepSeek V3.2 7B</option>
+                        <option value="ollama/llama4-scout-17b">Llama 4 Scout 17B</option>
+                        <option value="ollama/mistral">Mistral</option>
+                        <option value="ollama/mistral-small-3.2-24b">Mistral Small 3.2 24B</option>
+                        <option value="ollama/phi-4-mini-3.8b">Phi-4 Mini 3.8B</option>
+                        <option value="ollama/glm-4-9b">GLM-4 9B</option>
+                        <option value="ollama/kimi-k2-instruct-32b">Kimi K2 Instruct 32B</option>
+                        <option value="ollama/custom">Benutzerdefiniertes Modell</option>
+                      </>
+                    ) : settings.advancedAi.provider === 'openai' ? (
+                      <>
+                        <option value="gpt-4o-mini">GPT-4o Mini</option>
+                        <option value="gpt-4o">GPT-4o</option>
+                      </>
+                    ) : settings.advancedAi.provider === 'anthropic' ? (
+                      <>
+                        <option value="claude-3-haiku">Claude 3 Haiku</option>
+                        <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                      </>
+                    )}
                   </Select>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

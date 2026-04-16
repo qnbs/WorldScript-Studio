@@ -1,132 +1,173 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// NOTE: dbService relies heavily on IndexedDB + Web Crypto which are limited in jsdom.
-// These tests cover the module structure and exportable logic.
-// Full integration tests for encryption/compression need a browser environment.
-
-// Mock IndexedDB for import
-const mockOpen = vi.fn().mockReturnValue({
-  onsuccess: null,
-  onerror: null,
-  onupgradeneeded: null,
-  result: {
-    transaction: vi.fn().mockReturnValue({
-      objectStore: vi.fn().mockReturnValue({
-        put: vi.fn().mockReturnValue({ onsuccess: null, onerror: null }),
-        get: vi.fn().mockReturnValue({ onsuccess: null, onerror: null }),
-        delete: vi.fn().mockReturnValue({ onsuccess: null, onerror: null }),
-        getAll: vi.fn().mockReturnValue({ onsuccess: null, onerror: null }),
-      }),
-    }),
-    onversionchange: null,
-    close: vi.fn(),
-    objectStoreNames: { contains: vi.fn().mockReturnValue(true) },
+const storeData = new Map<string, unknown>();
+const createFakeStore = () => ({
+  put: (value: unknown, key: IDBValidKey) => {
+    const request = {
+      onsuccess: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+    };
+    Promise.resolve().then(() => {
+      storeData.set(String(key), value);
+      request.onsuccess?.();
+    });
+    return request;
+  },
+  get: (key: IDBValidKey) => {
+    const request = {
+      onsuccess: null as ((event: Event) => void) | null,
+      onerror: null as ((event: Event) => void) | null,
+      result: storeData.get(String(key)),
+      error: null,
+    } as unknown as IDBRequest;
+    Promise.resolve().then(() => {
+      request.onsuccess?.({} as Event);
+    });
+    return request;
+  },
+  delete: (key: IDBValidKey) => {
+    const request = {
+      onsuccess: null as ((event: Event) => void) | null,
+      onerror: null as ((event: Event) => void) | null,
+    };
+    Promise.resolve().then(() => {
+      storeData.delete(String(key));
+      request.onsuccess?.({} as Event);
+    });
+    return request;
+  },
+  count: () => {
+    const request = {
+      onsuccess: null as ((event: Event) => void) | null,
+      onerror: null as ((event: Event) => void) | null,
+      result: storeData.size,
+      error: null,
+    } as unknown as IDBRequest;
+    Promise.resolve().then(() => {
+      request.onsuccess?.({} as Event);
+    });
+    return request;
   },
 });
 
-Object.defineProperty(window, 'indexedDB', {
-  writable: true,
-  value: { open: mockOpen },
-});
-
-// Mock Web Crypto API (minimal for import)
-if (!globalThis.crypto?.subtle) {
-  Object.defineProperty(globalThis, 'crypto', {
-    writable: true,
-    value: {
-      subtle: {
-        digest: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
-        importKey: vi.fn().mockResolvedValue({}),
-        encrypt: vi.fn().mockResolvedValue(new ArrayBuffer(16)),
-        decrypt: vi.fn().mockResolvedValue(new ArrayBuffer(16)),
-      },
-      getRandomValues: (arr: Uint8Array) => {
-        for (let i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 256);
-        return arr;
-      },
-    },
-  });
-}
+const fakeDb = {
+  transaction: vi.fn().mockImplementation(() => ({ objectStore: () => createFakeStore() })),
+};
 
 describe('dbService', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let dbService: Record<string, any>;
 
   beforeEach(async () => {
+    storeData.clear();
     vi.resetModules();
+    vi.stubGlobal('crypto', {
+      subtle: {
+        digest: vi.fn(async () => new Uint8Array(32).buffer),
+        importKey: vi.fn(async () => ({})),
+        encrypt: vi.fn(async (_algo, _key, data) => data),
+        decrypt: vi.fn(async (_algo, _key, data) => data),
+      },
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    } as unknown as Crypto);
+
     const mod = await import('../../services/dbService');
     dbService = mod.dbService;
+    (dbService as any).db = fakeDb;
   });
 
-  it('should export dbService singleton', () => {
-    expect(dbService).toBeDefined();
+  it('should encrypt and decrypt Gemini API keys', async () => {
+    await dbService.saveGeminiApiKey('  test-key ');
+
+    expect(storeData.get('gemini_api_key_encrypted_v1')).toEqual(
+      Array.from(new TextEncoder().encode('test-key'))
+    );
+    expect(storeData.get('gemini_api_key_iv_v1')).toEqual([...Array(12).keys()]);
+
+    const apiKey = await dbService.getGeminiApiKey();
+    expect(apiKey).toBe('test-key');
   });
 
-  it('should have initDB method', () => {
-    expect(typeof dbService.initDB).toBe('function');
+  it('should clear Gemini API key values', async () => {
+    await dbService.saveGeminiApiKey('secret');
+    await dbService.clearGeminiApiKey();
+
+    expect(storeData.has('gemini_api_key_encrypted_v1')).toBe(false);
+    expect(storeData.has('gemini_api_key_iv_v1')).toBe(false);
   });
 
-  it('should have key management methods', () => {
-    expect(typeof dbService.saveGeminiApiKey).toBe('function');
-    expect(typeof dbService.getGeminiApiKey).toBe('function');
-    expect(typeof dbService.hasGeminiApiKey).toBe('function');
-    expect(typeof dbService.clearGeminiApiKey).toBe('function');
+  it('should encrypt and decrypt generic provider API keys', async () => {
+    await dbService.saveApiKey('provider', 'provider-secret');
+    expect(storeData.get('api_key_provider_enc')).toEqual(
+      Array.from(new TextEncoder().encode('provider-secret'))
+    );
+    expect(storeData.get('api_key_provider_iv')).toEqual([...Array(12).keys()]);
+
+    const providerKey = await dbService.getApiKey('provider');
+    expect(providerKey).toBe('provider-secret');
   });
 
-  it('should have generic API key methods', () => {
-    expect(typeof dbService.saveApiKey).toBe('function');
-    expect(typeof dbService.getApiKey).toBe('function');
-    expect(typeof dbService.clearApiKey).toBe('function');
+  it('should persist and retrieve story codex entries', async () => {
+    const sampleCodex = {
+      projectId: 'proj-1',
+      extractedAt: new Date().toISOString(),
+      summary: 'Test summary',
+      entities: [
+        {
+          id: 'character-hero',
+          name: 'Hero',
+          type: 'character',
+          known: true,
+          mentionCount: 1,
+          canonicalId: 'c1',
+          mentions: [
+            {
+              sectionId: 's1',
+              sectionTitle: 'Chapter 1',
+              excerpt: 'Hero enters the scene.',
+              count: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    await dbService.saveStoryCodex(sampleCodex);
+    const loaded = await dbService.getStoryCodex('proj-1');
+
+    expect(loaded).toEqual(sampleCodex);
   });
 
-  it('should have project/settings save methods', () => {
-    expect(typeof dbService.saveSlice).toBe('function');
-    expect(typeof dbService.saveProject).toBe('function');
-    expect(typeof dbService.saveSettings).toBe('function');
+  it('should return DECRYPT_FAILED when generic provider decryption fails', async () => {
+    await dbService.saveApiKey('provider', 'provider-secret');
+    vi.stubGlobal('crypto', {
+      subtle: {
+        digest: vi.fn(async () => new Uint8Array(32).buffer),
+        importKey: vi.fn(async () => ({})),
+        encrypt: vi.fn(async (_algo, _key, data) => data),
+        decrypt: vi.fn(async () => {
+          throw new Error('decryption failed');
+        }),
+      },
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    } as unknown as Crypto);
+
+    const providerKey = await dbService.getApiKey('provider');
+    expect(providerKey).toBe('DECRYPT_FAILED');
   });
 
-  it('should have snapshot methods', () => {
-    expect(typeof dbService.saveSnapshot).toBe('function');
-    expect(typeof dbService.listSnapshots).toBe('function');
-    expect(typeof dbService.deleteSnapshot).toBe('function');
-  });
+  it('should report no saved Gemini API key after failed decryption', async () => {
+    const originalGetGeminiApiKey = dbService.getGeminiApiKey;
+    dbService.getGeminiApiKey = vi.fn().mockResolvedValue('DECRYPT_FAILED');
 
-  it('should have image methods', () => {
-    expect(typeof dbService.saveImage).toBe('function');
-    expect(typeof dbService.getImage).toBe('function');
-    expect(typeof dbService.deleteImage).toBe('function');
-  });
+    const result = await dbService.hasGeminiApiKey();
+    expect(result).toBe(false);
 
-  describe('DECRYPT_FAILED behavior', () => {
-    it('hasGeminiApiKey should filter DECRYPT_FAILED', async () => {
-      // Mock getGeminiApiKey to return DECRYPT_FAILED
-      const originalGet = dbService.getGeminiApiKey;
-      dbService.getGeminiApiKey = vi.fn().mockResolvedValue('DECRYPT_FAILED');
-
-      const result = await dbService.hasGeminiApiKey();
-      expect(result).toBe(false);
-
-      dbService.getGeminiApiKey = originalGet;
-    });
-
-    it('hasGeminiApiKey should return true for valid key', async () => {
-      const originalGet = dbService.getGeminiApiKey;
-      dbService.getGeminiApiKey = vi.fn().mockResolvedValue('AIzaSy_valid_key');
-
-      const result = await dbService.hasGeminiApiKey();
-      expect(result).toBe(true);
-
-      dbService.getGeminiApiKey = originalGet;
-    });
-
-    it('hasGeminiApiKey should return false for null', async () => {
-      const originalGet = dbService.getGeminiApiKey;
-      dbService.getGeminiApiKey = vi.fn().mockResolvedValue(null);
-
-      const result = await dbService.hasGeminiApiKey();
-      expect(result).toBe(false);
-
-      dbService.getGeminiApiKey = originalGet;
-    });
+    dbService.getGeminiApiKey = originalGetGeminiApiKey;
   });
 });

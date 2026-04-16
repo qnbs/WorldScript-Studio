@@ -287,8 +287,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
               </button>
             )}
             <div
-              title={t('outline.result.dragHandleTooltip')}
-              aria-label={t('outline.result.dragHandleTooltip')}
+              aria-hidden="true"
               className={`cursor-move p-1 ${isActive ? 'text-indigo-200 group-hover:text-white' : 'text-[var(--foreground-muted)] group-hover:text-[var(--foreground-primary)]'}`}
             >
               <svg

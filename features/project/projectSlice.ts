@@ -1,13 +1,14 @@
 import type { PayloadAction, EntityState } from '@reduxjs/toolkit';
 import { createSlice, createAsyncThunk, createEntityAdapter } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
+import { getPrompts } from '../../services/geminiService';
 import {
-  getPrompts,
   generateText,
   generateJson,
   generateImage,
   streamText,
-} from '../../services/geminiService';
+  type AIRequestOptions,
+} from '../../services/aiProviderService';
 import { createDeduplicatedThunk } from './aiThunkUtils';
 import type { RootState } from '../../app/store';
 import type {
@@ -82,16 +83,25 @@ const initialState: { data: ProjectData } = {
 };
 
 // --- Async Thunks ---
+const buildAiOptions = (state: RootState): AIRequestOptions => ({
+  provider: state.settings.advancedAi.provider,
+  model: state.settings.advancedAi.model,
+  temperature: state.settings.advancedAi.temperature,
+  maxTokens: state.settings.advancedAi.maxTokens,
+  ollamaBaseUrl: state.settings.advancedAi.ollamaBaseUrl,
+});
+
 export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
   'project/generateLogline',
   async (lang: string, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present.data;
     const creativity = state.settings.aiCreativity;
+    const aiOptions = buildAiOptions(state);
 
     const { prompt, schema } = getPrompts('logline', { project, lang });
     registerDuplicateRequest(prompt, 'logline');
-    const response = await generateJson<string[]>(prompt, creativity, schema!, signal);
+    const response = await generateJson<string[]>(prompt, creativity, schema!, aiOptions, signal);
     return response;
   }
 );
@@ -179,8 +189,9 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
+    const aiOptions = buildAiOptions(state);
     // Pass thinking budget indirectly via prompt type config in geminiService
-    const { prompt, schema, thinkingBudget } = getPrompts('characterProfile', {
+    const { prompt, schema } = getPrompts('characterProfile', {
       concept,
       lang,
     });
@@ -189,8 +200,8 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
       prompt,
       state.settings.aiCreativity,
       schema!,
-      signal,
-      thinkingBudget
+      aiOptions,
+      signal
     );
   }
 );
@@ -202,13 +213,14 @@ export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
+    const aiOptions = buildAiOptions(state);
     const { prompt } = getPrompts('regenerateCharacterField', {
       character,
       field,
       lang,
     });
     registerDuplicateRequest(prompt, 'regenerateCharacterField');
-    const response = await generateText(prompt, state.settings.aiCreativity, signal);
+    const response = await generateText(prompt, state.settings.aiCreativity, aiOptions, signal);
     return { field, value: response };
   }
 );
@@ -227,15 +239,17 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
       style?: string;
       lang: string;
     },
-    { signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest }
   ) => {
     const fullDescription = style ? `${description}. Style: ${style}` : description;
+    const state = getState() as RootState;
+    const aiOptions = buildAiOptions(state);
     const { prompt } = getPrompts('characterPortrait', {
       description: fullDescription,
       lang,
     });
     registerDuplicateRequest(prompt, 'characterPortrait');
-    const base64 = await generateImage(prompt, signal);
+    const base64 = await generateImage(prompt, aiOptions, signal);
     await storageService.saveImage(characterId, base64);
     return { characterId };
   }
@@ -264,7 +278,8 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
-    const { prompt, schema, thinkingBudget } = getPrompts('worldProfile', {
+    const aiOptions = buildAiOptions(state);
+    const { prompt, schema } = getPrompts('worldProfile', {
       concept,
       lang,
     });
@@ -273,8 +288,8 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
       prompt,
       state.settings.aiCreativity,
       schema!,
-      signal,
-      thinkingBudget
+      aiOptions,
+      signal
     );
   }
 );
@@ -286,13 +301,14 @@ export const regenerateWorldFieldThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
+    const aiOptions = buildAiOptions(state);
     const { prompt } = getPrompts('regenerateWorldField', {
       world,
       field,
       lang,
     });
     registerDuplicateRequest(prompt, 'regenerateWorldField');
-    const response = await generateText(prompt, state.settings.aiCreativity, signal);
+    const response = await generateText(prompt, state.settings.aiCreativity, aiOptions, signal);
     return { field, value: response };
   }
 );
@@ -309,11 +325,13 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
       description: string;
       lang: string;
     },
-    { signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest }
   ) => {
+    const state = getState() as RootState;
+    const aiOptions = buildAiOptions(state);
     const { prompt } = getPrompts('worldImage', { description, lang });
     registerDuplicateRequest(prompt, 'worldImage');
-    const base64 = await generateImage(prompt, signal);
+    const base64 = await generateImage(prompt, aiOptions, signal);
     await storageService.saveImage(worldId, base64);
     return { worldId };
   }
@@ -339,14 +357,15 @@ export const generateOutlineThunk = createDeduplicatedThunk(
   'project/generateOutline',
   async (params: OutlineGenerationParams, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
-    const { prompt, schema, thinkingBudget } = getPrompts('outline', params);
+    const aiOptions = buildAiOptions(state);
+    const { prompt, schema } = getPrompts('outline', params);
     registerDuplicateRequest(prompt, 'outline');
     return await generateJson<OutlineSection[]>(
       prompt,
       state.settings.aiCreativity,
       schema!,
-      signal,
-      thinkingBudget
+      aiOptions,
+      signal
     );
   }
 );
@@ -362,7 +381,8 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
-    const { prompt, schema, thinkingBudget } = getPrompts('regenerateOutlineSection', {
+    const aiOptions = buildAiOptions(state);
+    const { prompt, schema } = getPrompts('regenerateOutlineSection', {
       allSections,
       sectionToIndex,
       lang,
@@ -372,8 +392,8 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
       prompt,
       state.settings.aiCreativity,
       schema!,
-      signal,
-      thinkingBudget
+      aiOptions,
+      signal
     );
     return { index: sectionToIndex, newSection: response };
   }
@@ -386,7 +406,8 @@ export const personalizeTemplateThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
-    const { prompt, schema, thinkingBudget } = getPrompts('personalizeTemplate', {
+    const aiOptions = buildAiOptions(state);
+    const { prompt, schema } = getPrompts('personalizeTemplate', {
       sections,
       concept,
       lang,
@@ -396,8 +417,8 @@ export const personalizeTemplateThunk = createDeduplicatedThunk(
       prompt,
       state.settings.aiCreativity,
       schema!,
-      signal,
-      thinkingBudget
+      aiOptions,
+      signal
     );
   }
 );
@@ -406,14 +427,15 @@ export const generateCustomTemplateThunk = createDeduplicatedThunk(
   'project/generateCustomTemplate',
   async (params: CustomTemplateParams, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
-    const { prompt, schema, thinkingBudget } = getPrompts('customTemplate', params);
+    const aiOptions = buildAiOptions(state);
+    const { prompt, schema } = getPrompts('customTemplate', params);
     registerDuplicateRequest(prompt, 'customTemplate');
     return await generateJson<{ title: string }[]>(
       prompt,
       state.settings.aiCreativity,
       schema!,
-      signal,
-      thinkingBudget
+      aiOptions,
+      signal
     );
   }
 );
@@ -433,9 +455,10 @@ export const streamGenerationThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest }
   ) => {
     const state = getState() as RootState;
+    const aiOptions = buildAiOptions(state);
     const fullPrompt = `${prompt}\n\nRespond in ${lang === 'de' ? 'German' : 'English'}.`;
     registerDuplicateRequest(fullPrompt, 'streamGeneration');
-    await streamText(fullPrompt, state.settings.aiCreativity, onChunk, signal);
+    await streamText(fullPrompt, state.settings.aiCreativity, aiOptions, { onChunk }, signal);
   }
 );
 
@@ -445,12 +468,13 @@ export const generateSynopsisThunk = createDeduplicatedThunk(
     const state = getState() as RootState;
     const project = state.project.present.data;
     const creativity = state.settings.aiCreativity;
-    const { prompt, thinkingBudget } = getPrompts('synopsis', {
+    const aiOptions = buildAiOptions(state);
+    const { prompt } = getPrompts('synopsis', {
       project,
       lang,
     });
     registerDuplicateRequest(prompt, 'synopsis');
-    return await generateText(prompt, creativity, signal, thinkingBudget);
+    return await generateText(prompt, creativity, aiOptions, signal);
   }
 );
 
@@ -462,7 +486,8 @@ export const proofreadTextThunk = createDeduplicatedThunk(
   ) => {
     const state = getState() as RootState;
     const creativity = state.settings.aiCreativity;
-    const { prompt, schema, thinkingBudget } = getPrompts('proofread', {
+    const aiOptions = buildAiOptions(state);
+    const { prompt, schema } = getPrompts('proofread', {
       text,
       lang,
     });
@@ -471,8 +496,8 @@ export const proofreadTextThunk = createDeduplicatedThunk(
       prompt,
       creativity,
       schema!,
-      signal,
-      thinkingBudget
+      aiOptions,
+      signal
     );
   }
 );

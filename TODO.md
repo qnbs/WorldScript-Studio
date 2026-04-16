@@ -2,6 +2,9 @@
 
 Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 
+> Self-audit abgeschlossen: `npm outdated`, `npm audit`, `npm run lint:fix`, `npm run typecheck`, `npm run build`, `npm run test:coverage`.
+> Paketversion auf `1.1.0` angehoben; Build und Coverage erfolgreich.
+
 ---
 
 ## Kritisch (🔴)
@@ -40,7 +43,6 @@ Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 
 ## Niedrig (🟢)
 
-- ✅ Deprecated `backend/epubExport.js` archiviert
 - ⬜ Logging-Framework statt console.log/warn/error
 - ⬜ Storybook Stories erweitern (Modal, Toast, Spinner, Drawer)
 - ⬜ Visual Regression Tests

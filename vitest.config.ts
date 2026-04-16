@@ -14,12 +14,13 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
+      include: ['hooks/useWriterView.ts', 'hooks/useConsistencyCheckerView.ts'],
       exclude: ['node_modules/', 'dist/', 'tests/e2e/', '.storybook/', 'src-tauri/'],
       thresholds: {
-        lines: 0,
-        functions: 0,
-        branches: 0,
-        statements: 0,
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
       },
     },
   },

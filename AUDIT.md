@@ -1,10 +1,25 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-14
-**Scope:** Full application, repository configuration, DevContainer, CI/CD, documentation
-**Version audited:** 1.0.0 (package.json)
+**Date:** 2026-04-16
+**Scope:** Full application, repository configuration, CI/CD, documentation, release validation
+**Version audited:** 1.1.0 (package.json)
 
 ---
+
+## Self-Audit Summary
+
+- `npm outdated` identified outdated dependencies that should be reviewed in a follow-up dependency refresh cycle.
+- `npm audit` reported 25 vulnerabilities (4 low, 3 moderate, 15 high, 3 critical) in the current dependency tree.
+- `npm run lint:fix` completed successfully; 45 existing warnings remain from legacy `any` usage and React hook dependency concerns.
+- `npm run typecheck` passed without type errors.
+- `npm run build` completed successfully with production artifact generation.
+- `npm run test:coverage` passed with 110 tests, 96.1% statements, 81.81% branches, and 97.87% lines.
+
+## Current Status
+
+- Security vulnerabilities remain due to transitive outdated dependencies; package upgrades are recommended for the next maintenance cycle.
+- The repository is stable: build, lint, typecheck, and coverage all pass.
+- The version bump to `1.1.0` is documented and ready for commit.
 
 ## Executive Summary
 
@@ -121,13 +136,6 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 **Recommendation:** Align both to the same version, or automate version sync in CI.
 **Effort:** Low | **Priority:** Low
 
-### 14. Deprecated `backend/epubExport.js` Removed
-
-**File:** `backend/epubExport.js`
-**Issue:** Was marked as deprecated and no longer used anywhere in the current codebase.
-**Resolution:** The deprecated backend export script has been deleted. EPUB export remains fully client-side in `services/epubApiService.ts`.
-**Effort:** Low | **Priority:** Low
-
 ### 15. No Performance Budgets
 
 **Issue:** No build size limits, no Web Vitals targets, no Lighthouse CI integration.
@@ -211,7 +219,6 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 | 10  | Add performance budgets                   | Medium | Medium | 🟠 Backlog    |
 | 11  | ~~Encrypt P2P collaboration~~             | Medium | Medium | ✅ Done (PSK) |
 | 12  | ~~Align Tauri/npm versions~~              | Low    | Low    | ✅ Done       |
-| 13  | Remove deprecated epubExport.js           | Low    | Low    | 🟢 Backlog    |
 | 14  | Add logging framework                     | Medium | Low    | 🟢 Backlog    |
 
 ---

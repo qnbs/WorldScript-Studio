@@ -50,7 +50,8 @@ async function deriveFileSystemCryptoKey(secretMaterial: string): Promise<Crypto
 
 const stripControlChars = (value: string): string => {
   let output = '';
-  for (const char of value) {
+  for (let i = 0; i < value.length; i += 1) {
+    const char = value[i];
     const code = char.charCodeAt(0);
     output += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
   }
@@ -76,8 +77,8 @@ async function encryptText(
   const encoded = new TextEncoder().encode(value);
   const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
   return {
-    iv: btoa(String.fromCharCode(...new Uint8Array(iv))),
-    data: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+    iv: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(iv)))),
+    data: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(encrypted)))),
   };
 }
 

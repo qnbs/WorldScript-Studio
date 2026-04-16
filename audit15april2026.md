@@ -23,7 +23,6 @@ StoryCraft Studio ist eine starke, moderne React/TypeScript-Anwendung mit gutem 
 - **Persistenz-Mismatch:** `services/storageService.ts` verwendet `StorageBackend`, aber `dbService` implementiert das Interface nicht exakt.
 - **Exception-Handling/Logging:** Viele `console.*`-Ausgaben sind verstreut und teilweise ohne Umgebungsfilter.
 - **Testabdeckung:** Unit-Tests vorhanden, aber kritische Bereiche wie Desktop-Backend, PWA-Flow, Export-Import und Error Boundary fehlen.
-- **Wartung:** Eine alte Backend-Datei `backend/epubExport.js` wird noch mitgeführt.
 
 ---
 
@@ -81,13 +80,6 @@ StoryCraft Studio ist eine starke, moderne React/TypeScript-Anwendung mit gutem 
   - API-Key-Konfiguration + KI-Generierung
   - Export/Import
   - Tauri-Desktop-Build-Passage
-
-### 3.2 Legacy-Code: `backend/epubExport.js`
-
-- **Datei:** `backend/epubExport.js`
-- **Problem:** Altlast, die neben `services/epubApiService.ts` existierte.
-- **Status:** Entfernt.
-- **Empfehlung:** EPUB-Export bleibt clientseitig in `services/epubApiService.ts`.
 
 ### 3.3 Storage-Backend-Dynamik kann Laufzeitfehler verursachen
 
@@ -197,7 +189,6 @@ StoryCraft Studio ist eine starke, moderne React/TypeScript-Anwendung mit gutem 
    - Prüfe, ob `build.frontendDist` korrekt auf `../build` statt `../dist` zeigen muss.
 
 8. **Bereinigung**
-   - Entferne `backend/epubExport.js`, falls ungenutzt.
    - Schaue nach weiteren veralteten Backend-Dateien oder Kommentaren im Repo.
 
 ---
@@ -230,7 +221,6 @@ Mit diesen Schritten ist StoryCraft Studio auf einem sehr guten Weg, die laufend
 
 ## 9. Nachbereitungs-Status
 
-- `backend/epubExport.js` entfernt, da es als deprecated markiert war und nicht mehr referenziert wird.
 - Alle verbleibenden `console.log`/`console.warn`/`console.error`-Aufrufe im App-Code wurden durch das zentrale `services/logger.ts`-System oder einen lokalen Service-Worker-Logger ersetzt.
 - `public/sw.js` wurde auf den internen `swLogger` umgestellt, damit Service-Worker-Logs ebenfalls konsistent behandelt werden.
 - `features/featureFlags/featureFlagsSlice.ts` wurde korrigiert, um den ESLint-Fehler wegen leerem Objekt-Typ zu beseitigen.

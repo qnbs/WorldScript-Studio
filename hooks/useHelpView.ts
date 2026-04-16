@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from './useTranslation';
 import type { HelpCategory, HelpArticle } from '../types';
-import * as geminiService from '../services/geminiService';
 import { useAppSelector } from '../app/hooks';
+import { streamAiHelpResponse } from '../services/aiProviderService';
 import type { AiCreativity } from '../types';
 
 interface ChatMessage {
@@ -57,23 +57,32 @@ export const useHelpView = () => {
 
     try {
       const temperature = creativityToTemperature[settings.aiCreativity];
-      await geminiService.streamAiHelpResponse(
+      await streamAiHelpResponse(
         question,
-        (chunk) => {
-          setChatHistory((prev) => {
-            const lastMsgIndex = prev.length - 1;
-            if (lastMsgIndex >= 0 && prev[lastMsgIndex].role === 'model') {
-              const newHistory = [...prev];
-              newHistory[lastMsgIndex] = {
-                ...newHistory[lastMsgIndex],
-                text: newHistory[lastMsgIndex].text + chunk,
-              };
-              return newHistory;
-            }
-            return prev;
-          });
+        settings.aiCreativity,
+        {
+          provider: settings.advancedAi.provider,
+          model: settings.advancedAi.model,
+          temperature,
+          maxTokens: settings.advancedAi.maxTokens,
+          ollamaBaseUrl: settings.advancedAi.ollamaBaseUrl,
         },
-        temperature
+        {
+          onChunk: (chunk) => {
+            setChatHistory((prev) => {
+              const lastMsgIndex = prev.length - 1;
+              if (lastMsgIndex >= 0 && prev[lastMsgIndex].role === 'model') {
+                const newHistory = [...prev];
+                newHistory[lastMsgIndex] = {
+                  ...newHistory[lastMsgIndex],
+                  text: newHistory[lastMsgIndex].text + chunk,
+                };
+                return newHistory;
+              }
+              return prev;
+            });
+          },
+        }
       );
     } catch {
       setChatHistory((prev) => {
@@ -88,7 +97,7 @@ export const useHelpView = () => {
     } finally {
       setIsAiReplying(false);
     }
-  }, [userInput, isAiReplying, settings.aiCreativity]);
+  }, [userInput, isAiReplying, settings.aiCreativity, settings.advancedAi]);
 
   return {
     t,

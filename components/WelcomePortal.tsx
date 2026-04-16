@@ -50,7 +50,7 @@ const NewProjectOption: React.FC<{
           onClick();
         }
       }}
-      className="bg-[var(--background-secondary)]/80 p-6 rounded-lg border border-[var(--border-primary)] hover:border-indigo-500 hover:bg-[var(--background-secondary)] transition-all cursor-pointer flex items-start space-x-4"
+      className="bg-[var(--background-secondary)]/80 p-6 rounded-lg border border-[var(--border-primary)] hover:border-indigo-500 hover:bg-[var(--background-secondary)] transition-all cursor-pointer flex items-start space-x-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
     >
       <div className="flex-shrink-0 bg-[var(--background-tertiary)] p-3 rounded-lg">
         <svg

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Placeholder for future release notes.
+
+## [1.1.0] - 2026-04-16
+
 ### Security
 
 - Set restrictive Content Security Policy for Tauri desktop app (`src-tauri/tauri.conf.json`)

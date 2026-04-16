@@ -121,6 +121,30 @@ export interface StoryProject {
   }[];
 }
 
+export interface StoryCodexMention {
+  sectionId: string;
+  sectionTitle: string;
+  excerpt: string;
+  count: number;
+}
+
+export interface StoryCodexEntity {
+  id: string;
+  name: string;
+  type: 'character' | 'world' | 'location' | 'object' | 'event' | 'unknown';
+  known: boolean;
+  mentionCount: number;
+  canonicalId?: string | undefined;
+  mentions: StoryCodexMention[];
+}
+
+export interface StoryCodex {
+  projectId: string;
+  extractedAt: string;
+  entities: StoryCodexEntity[];
+  summary: string;
+}
+
 export interface Template {
   id: string;
   name: string;
@@ -149,9 +173,16 @@ export type AiModel =
   | 'claude-3-sonnet'
   | 'gpt-4o-mini'
   | 'gpt-4o'
+  | 'ollama/gemma3'
   | 'ollama/llama3'
   | 'ollama/mistral'
-  | 'ollama/gemma3'
+  | 'ollama/qwen3-8b'
+  | 'ollama/deepseek-v3.2-7b'
+  | 'ollama/llama4-scout-17b'
+  | 'ollama/mistral-small-3.2-24b'
+  | 'ollama/phi-4-mini-3.8b'
+  | 'ollama/glm-4-9b'
+  | 'ollama/kimi-k2-instruct-32b'
   | 'ollama/custom';
 export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama';
 export type NotificationFrequency = 'never' | 'daily' | 'weekly' | 'monthly';

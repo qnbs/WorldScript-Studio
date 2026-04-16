@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { useAppSelector, useAppDispatch } from '../app/hooks';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useAppSelector } from '../app/hooks';
 import {
   selectAllCharacters,
   selectAllWorlds,
@@ -7,15 +7,26 @@ import {
   selectAiCreativity,
 } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
-import { analyzeAsCritic, detectPlotHoles } from '../services/geminiService';
+import { getPrompts } from '../services/geminiService';
+import { generateText } from '../services/aiProviderService';
 
 export const useCriticView = () => {
-  const _dispatch = useAppDispatch();
   const { t, language } = useTranslation();
   const aiCreativity = useAppSelector(selectAiCreativity);
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
   const projectData = useAppSelector(selectProjectData);
+  const aiSettings = useAppSelector((state) => state.settings.advancedAi);
+  const aiOptions = useMemo(
+    () => ({
+      provider: aiSettings.provider,
+      model: aiSettings.model,
+      temperature: aiSettings.temperature,
+      maxTokens: aiSettings.maxTokens,
+      ollamaBaseUrl: aiSettings.ollamaBaseUrl,
+    }),
+    [aiSettings]
+  );
 
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -35,7 +46,8 @@ export const useCriticView = () => {
 
       setIsAnalyzing(true);
       try {
-        const result = await analyzeAsCritic(text, aiCreativity, language, controller.signal);
+        const { prompt } = getPrompts('criticAnalysis', { text, lang: language });
+        const result = await generateText(prompt, aiCreativity, aiOptions, controller.signal);
         setAnalysisResult(result);
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -45,7 +57,7 @@ export const useCriticView = () => {
         abortControllerRef.current = null;
       }
     },
-    [aiCreativity, language]
+    [aiCreativity, language, aiOptions]
   );
 
   const detectPlotHolesFn = useCallback(async () => {
@@ -57,18 +69,17 @@ export const useCriticView = () => {
 
     setIsAnalyzing(true);
     try {
-      const result = await detectPlotHoles(
-        JSON.stringify({
+      const { prompt } = getPrompts('plotHoleDetection', {
+        text: JSON.stringify({
           title: projectData.title,
           logline: projectData.logline,
           manuscript: projectData.manuscript,
           characters,
           worlds,
         }),
-        aiCreativity,
-        language,
-        controller.signal
-      );
+        lang: language,
+      });
+      const result = await generateText(prompt, aiCreativity, aiOptions, controller.signal);
       setAnalysisResult(result);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;

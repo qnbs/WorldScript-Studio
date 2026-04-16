@@ -9,6 +9,7 @@ import type {
   GeminiSchema,
   OutlineGenerationParams,
   CustomTemplateParams,
+  StoryCodex,
 } from '../types';
 import { storageService } from './storageService';
 import { logger } from './logger';
@@ -112,10 +113,11 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
         (err instanceof Error && err.message?.toLowerCase().includes('permission_denied'));
       if (is401) {
         await handleInvalidApiKey();
-        throw new Error(
-          'INVALID_API_KEY: Der API-Key ist ungültig oder abgelaufen. Bitte in den Einstellungen einen gültigen Key hinterlegen.',
-          { cause: err }
+        const invalidApiKeyError = new Error(
+          'INVALID_API_KEY: Der API-Key ist ungültig oder abgelaufen. Bitte in den Einstellungen einen gültigen Key hinterlegen.'
         );
+        (invalidApiKeyError as any).cause = err;
+        throw invalidApiKeyError;
       }
 
       // Kein Retry bei AbortError
@@ -232,6 +234,7 @@ type ConsistencyCheckParams = BasePromptParams & {
   worlds: World[];
   manuscript: { title: string; content: string }[];
   relationships?: CharacterRelationship[];
+  codex?: StoryCodex;
 };
 type CriticAnalysisParams = BasePromptParams & { text: string; context?: string };
 type PlotHoleDetectionParams = BasePromptParams & { text: string };
@@ -487,11 +490,19 @@ Manuscript: ${sanitizePromptBlock(
           .substring(0, 50000)
       )}
             `;
+      const codexSummary = p.codex
+        ? p.codex.entities
+            .slice(0, 20)
+            .map((entity) => `${entity.type}: ${entity.name} (${entity.mentionCount} mentions)`)
+            .join('\n')
+        : 'No Story Codex available.';
+      const codexContext = `Story Codex Summary:\n${sanitizePromptBlock(codexSummary)}`;
       return {
-        prompt: `You are a consistency checker for a story universe. Analyze the character "${character.name}" for any contradictions or inconsistencies with the established lore, other characters, world-building, and the written manuscript.
+        prompt: `You are a consistency checker for a story universe. Analyze the character "${character.name}" for any contradictions or inconsistencies with the established lore, other characters, world-building, the written manuscript, and the story codex.
 
 Character Details: ${JSON.stringify(character)}
 Full Context: ${context}
+${codexContext}
 
 Identify any inconsistencies, plot holes, or contradictions related to this character. Be thorough but concise. If there are no issues, state that clearly.
 
@@ -559,7 +570,9 @@ export const generateText = async (
     logger.error('Error generating text:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate text from AI.';
-    throw new Error(errorMessage, { cause: error });
+    const wrappedError = new Error(errorMessage);
+    (wrappedError as any).cause = error;
+    throw wrappedError;
   }
 };
 
@@ -609,9 +622,11 @@ export const generateJson = async <T>(
         return JSON.parse(jsonText) as T;
       } catch (e) {
         logger.error('Failed to parse JSON from model:', jsonText);
-        throw new Error('The AI response was not in a valid format. Please try again.', {
-          cause: e,
-        });
+        const parseError = new Error(
+          'The AI response was not in a valid format. Please try again.'
+        );
+        (parseError as any).cause = e;
+        throw parseError;
       }
     });
   } catch (error: unknown) {
@@ -621,7 +636,9 @@ export const generateJson = async <T>(
     logger.error('Error generating JSON:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate structured data from AI.';
-    throw new Error(errorMessage, { cause: error });
+    const wrappedError = new Error(errorMessage);
+    (wrappedError as any).cause = error;
+    throw wrappedError;
   }
 };
 
@@ -704,7 +721,9 @@ export const streamText = async (
     }
     logger.error('Error streaming text:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to stream text from AI.';
-    throw new Error(errorMessage, { cause: error });
+    const wrappedError = new Error(errorMessage);
+    (wrappedError as any).cause = error;
+    throw wrappedError;
   }
 };
 
@@ -746,7 +765,9 @@ export const streamAiHelpResponse = async (
     logger.error('Error streaming AI help response:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to get help from AI assistant.';
-    throw new Error(errorMessage, { cause: error });
+    const wrappedError = new Error(errorMessage);
+    (wrappedError as any).cause = error;
+    throw wrappedError;
   }
 };
 
@@ -792,6 +813,8 @@ export const generateImage = async (prompt: string, signal?: AbortSignal): Promi
     logger.error('Error generating image:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to generate image from AI.';
-    throw new Error(errorMessage, { cause: error });
+    const wrappedError = new Error(errorMessage);
+    (wrappedError as any).cause = error;
+    throw wrappedError;
   }
 };

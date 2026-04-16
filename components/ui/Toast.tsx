@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import React, { createContext, useContext, useEffect } from 'react';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import type { Notification, NotificationType } from '../../features/status/statusSlice';
 import { statusActions } from '../../features/status/statusSlice';
@@ -32,6 +33,7 @@ const ToastItem: FC<{
   message: Notification;
   onDismiss: (id: string) => void;
 }> = ({ message, onDismiss }) => {
+  const { t } = useTranslation();
   useEffect(() => {
     const timer = setTimeout(() => {
       onDismiss(message.id);
@@ -107,8 +109,9 @@ const ToastItem: FC<{
           </div>
           <div className="ml-4 flex-shrink-0 flex">
             <button
+              type="button"
               onClick={() => onDismiss(message.id)}
-              aria-label="Benachrichtigung schließen"
+              aria-label={t('common.close')}
               className="inline-flex rounded-md text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <span className="sr-only">Close</span>
@@ -151,6 +154,7 @@ const ToastItem: FC<{
 };
 
 export const ToastProvider: FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const notifications = useAppSelector((state) => state.status.notifications);
 
@@ -175,7 +179,7 @@ export const ToastProvider: FC<{ children: React.ReactNode }> = ({ children }) =
         role="status"
         aria-live="polite"
         aria-atomic="false"
-        aria-label="Benachrichtigungen"
+        aria-label={t('common.notifications')}
         className="fixed inset-0 flex items-end px-4 py-6 pointer-events-none sm:p-6 sm:items-end z-50"
       >
         <div className="w-full flex flex-col items-center space-y-4 sm:items-end">

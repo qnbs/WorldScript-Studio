@@ -2,8 +2,9 @@ import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import type { RootState, AppDispatch } from './store';
 import { storageService } from '../services/storageService';
+import { saveStoryCodex, extractStoryCodex } from '../services/codexService';
 import { statusActions } from '../features/status/statusSlice';
-import type { PersistedRootState } from '../types';
+import type { PersistedRootState, Character, World } from '../types';
 import type { ProjectData } from '../features/project/projectSlice';
 import { logger } from '../services/logger';
 
@@ -96,6 +97,36 @@ listenerMiddleware.startListening({
         })
       );
       listenerApi.dispatch(statusActions.setSavingStatus('idle'));
+    }
+  },
+});
+
+listenerMiddleware.startListening({
+  predicate: (action, currentState, previousState) => {
+    const currentRoot = currentState as RootState;
+    const prevRoot = previousState as RootState;
+
+    const currentManuscript = currentRoot.project.present?.data?.manuscript;
+    const previousManuscript = prevRoot.project.present?.data?.manuscript;
+
+    return currentManuscript !== previousManuscript;
+  },
+  effect: async (_action, listenerApi) => {
+    await listenerApi.delay(1200);
+
+    const state = listenerApi.getState() as RootState;
+    const project = state.project.present?.data;
+    if (!project) return;
+
+    const projectId = project.id || 'default';
+    const characters = Object.values(project.characters.entities).filter(Boolean) as Character[];
+    const worlds = Object.values(project.worlds.entities).filter(Boolean) as World[];
+
+    try {
+      const codex = extractStoryCodex(projectId, project.manuscript, characters, worlds);
+      await saveStoryCodex(codex);
+    } catch (error) {
+      logger.warn('Story Codex auto-tracking failed:', error);
     }
   },
 });

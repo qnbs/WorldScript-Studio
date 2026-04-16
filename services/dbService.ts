@@ -1,14 +1,15 @@
-import type { ProjectSnapshot, Settings } from '../types';
+import type { ProjectSnapshot, Settings, StoryCodex } from '../types';
 import type { ProjectData } from '../features/project/projectSlice';
-import LZString from 'lz-string';
+import * as LZString from 'lz-string';
 import { logger } from './logger';
 
 const DB_NAME = 'storycraft-db';
-const DB_VERSION = 5; // v5: RAG vectors store added
+const DB_VERSION = 6; // v6: Story Codex store added
 const APP_DATA_STORE = 'app-data-store';
 const SNAPSHOTS_STORE = 'snapshots-store';
 const IMAGES_STORE = 'images-store';
 const RAG_VECTORS_STORE = 'rag-vectors-store';
+const CODEX_STORE = 'codex-store';
 
 // LZ-String threshold: compress payloads >10 KB
 const COMPRESS_THRESHOLD_BYTES = 10_240;
@@ -318,6 +319,14 @@ class IndexedDBService {
             vectorStore.createIndex('type', 'type', { unique: false });
           }
         }
+        // v6: Story Codex store für automatische Entitätenextraktion
+        if (event.oldVersion < 6) {
+          if (!db.objectStoreNames.contains(CODEX_STORE)) {
+            db.createObjectStore(CODEX_STORE, {
+              keyPath: 'projectId',
+            });
+          }
+        }
       };
 
       // Verbindungs-Abbruch bei versionchange (anderer Tab öffnet neue Version)
@@ -383,6 +392,41 @@ class IndexedDBService {
 
   async saveSettings(data: Settings): Promise<void> {
     return this.saveSlice('settings', data);
+  }
+
+  async saveStoryCodex(codex: StoryCodex): Promise<void> {
+    const store = await this.getObjectStore(CODEX_STORE, 'readwrite');
+    const payload = compressData(codex);
+    return new Promise((resolve, reject) => {
+      const request = store.put(payload, codex.projectId);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
+    const store = await this.getObjectStore(CODEX_STORE, 'readonly');
+    return new Promise((resolve, reject) => {
+      const request = store.get(projectId);
+      request.onsuccess = () => {
+        const raw = request.result;
+        if (!raw) {
+          resolve(null);
+          return;
+        }
+        resolve(decompressData<StoryCodex>(raw));
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteStoryCodex(projectId: string): Promise<void> {
+    const store = await this.getObjectStore(CODEX_STORE, 'readwrite');
+    return new Promise((resolve, reject) => {
+      const request = store.delete(projectId);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   }
 
   // Helper to validate state structure and fix common issues

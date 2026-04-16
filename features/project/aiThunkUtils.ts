@@ -25,7 +25,8 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
         const baseKey = JSON.stringify({ prompt, viewType });
         const uniqueKey = `${baseKey}|${Date.now()}`;
 
-        for (const [storedKey, controller] of activeControllers.entries()) {
+        for (const entry of Array.from(activeControllers.entries())) {
+          const [storedKey, controller] = entry;
           if (storedKey.startsWith(`${baseKey}|`)) {
             controller.abort();
             activeControllers.delete(storedKey);
