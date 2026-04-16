@@ -25,6 +25,13 @@
       ],
       "rangeStrategy": "bump",
       "automerge": false
+    },
+    {
+      "groupName": "react-vite-storybook majors",
+      "matchPackagePatterns": ["^react", "^vite", "^@vitejs", "^storybook", "^@storybook"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["major-update"]
     }
   ]
 }
