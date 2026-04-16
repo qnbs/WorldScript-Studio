@@ -545,7 +545,10 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
         setSelectedMentionIndex((prev) => (prev - 1 + mentions.length) % mentions.length);
       } else if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        handleMentionSelect(mentions[selectedMentionIndex]);
+        const selectedMention = mentions[selectedMentionIndex];
+        if (selectedMention) {
+          handleMentionSelect(selectedMention);
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         // We need a way to clear mentions from parent, passing empty list for now is handled by parent state

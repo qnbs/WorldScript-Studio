@@ -126,8 +126,7 @@ export default defineConfig({
           if (
             id.includes('/docx/') ||
             id.includes('/jszip/') ||
-            id.includes('mammoth') ||
-            id.includes('epub-gen')
+            id.includes('mammoth')
           ) {
             return 'export-vendor-docx-ebook';
           }

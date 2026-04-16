@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import React, { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import {
   versionControlActions,

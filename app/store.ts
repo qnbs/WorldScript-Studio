@@ -35,7 +35,7 @@ const isLoggerEnabled = () => {
 };
 
 const loggerMiddleware: Middleware = (store) => (next) => (action) => {
-  if (process.env.NODE_ENV !== 'production' && isLoggerEnabled()) {
+  if (process.env['NODE_ENV'] !== 'production' && isLoggerEnabled()) {
     logger.debug('dispatching', action);
     const result = next(action);
     logger.debug('next state', store.getState());

@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import type { NodeObject, LinkObject } from 'react-force-graph-2d';
 import ForceGraph2D from 'react-force-graph-2d';
 import { Card, CardContent, CardHeader } from './ui/Card';
@@ -37,7 +37,9 @@ const CharacterForceGraph: FC = () => {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
+      const firstEntry = entries[0];
+      if (!firstEntry) return;
+      const { width, height } = firstEntry.contentRect;
       if (width > 0 && height > 0) setDimensions({ width, height });
     });
     ro.observe(el);

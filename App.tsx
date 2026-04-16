@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import React, { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { useAppSelector, useAppDispatch } from './app/hooks';
 import { useApp } from './hooks/useApp';
 import { Header } from './components/Header';
@@ -129,6 +129,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     } else {
       applyTheme(settings.theme === 'dark');
     }
+    return undefined;
   }, [settings.theme]);
 
   useEffect(() => {

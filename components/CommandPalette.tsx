@@ -344,8 +344,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   // Grouping for display
   const groupedCommands = filteredCommands.reduce(
     (acc, cmd) => {
-      if (!acc[cmd.category]) acc[cmd.category] = [];
-      acc[cmd.category].push(cmd);
+      const category = cmd.category;
+      if (!acc[category]) acc[category] = [];
+      const bucket = acc[category];
+      if (bucket) {
+        bucket.push(cmd);
+      }
       return acc;
     },
     {} as Record<string, CommandItem[]>

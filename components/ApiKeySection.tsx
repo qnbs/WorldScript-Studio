@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { dbService } from '../services/dbService';
 import { invalidateAiClientCache, generateText } from '../services/geminiService';
 import { Button } from './ui/Button';

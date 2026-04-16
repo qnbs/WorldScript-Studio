@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { v4 as uuid } from 'uuid';
 import { collaborationService } from '../services/collaborationService';
 import { Button } from './ui/Button';
@@ -18,7 +18,7 @@ const USER_COLORS = [
   '#84cc16',
 ];
 
-const getRandomColor = () => USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+const getRandomColor = () => USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)] ?? '#6366f1';
 
 // Persistent user identity for the session
 function getLocalUser(): CollaborationUser {
@@ -110,8 +110,9 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           e.preventDefault();
           return;
         }
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
+        const first = focusable.item(0);
+        const last = focusable.item(focusable.length - 1);
+        if (!first || !last) return;
         if (e.shiftKey) {
           if (document.activeElement === first || document.activeElement === panel) {
             last.focus();
@@ -131,6 +132,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
     } else {
       document.body.style.overflow = '';
     }
+    return undefined;
   }, [isOpen, onClose]);
 
   // Update user list when awareness changes

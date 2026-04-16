@@ -18,7 +18,7 @@ export const listenerMiddleware = createListenerMiddleware();
 // --- 1. Auto-Save Logic ---
 // We listen for *any* action that might change the persistent state.
 listenerMiddleware.startListening({
-  predicate: (action, currentState, previousState) => {
+  predicate: (_action, currentState, previousState) => {
     const currentRoot = currentState as RootState;
     const prevRoot = previousState as RootState;
 
@@ -29,7 +29,7 @@ listenerMiddleware.startListening({
 
     return projectChanged || settingsChanged;
   },
-  effect: async (action, listenerApi) => {
+  effect: async (_action, listenerApi) => {
     // Debounce: Wait 1000ms. If another action comes in, this task is cancelled.
     await listenerApi.delay(1000);
 
@@ -102,7 +102,7 @@ listenerMiddleware.startListening({
 });
 
 listenerMiddleware.startListening({
-  predicate: (action, currentState, previousState) => {
+  predicate: (_action, currentState, previousState) => {
     const currentRoot = currentState as RootState;
     const prevRoot = previousState as RootState;
 

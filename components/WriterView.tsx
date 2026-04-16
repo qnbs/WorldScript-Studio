@@ -738,17 +738,17 @@ const WriterViewUI: FC = () => {
       <div className="hidden md:flex items-center justify-end mb-2 gap-2">
         <button
           onClick={() => togglePanel('context')}
-          title={collapsedPanels.context ? 'Kontext einblenden' : 'Kontext ausblenden'}
+          title={collapsedPanels['context'] ? 'Kontext einblenden' : 'Kontext ausblenden'}
           className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
         >
-          {collapsedPanels.context ? '▷ Kontext' : '◁ Kontext'}
+          {collapsedPanels['context'] ? '▷ Kontext' : '◁ Kontext'}
         </button>
         <button
           onClick={() => togglePanel('tools')}
-          title={collapsedPanels.tools ? 'Tools einblenden' : 'Tools ausblenden'}
+          title={collapsedPanels['tools'] ? 'Tools einblenden' : 'Tools ausblenden'}
           className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
         >
-          {collapsedPanels.tools ? '▷ Tools' : '◁ Tools'}
+          {collapsedPanels['tools'] ? '▷ Tools' : '◁ Tools'}
         </button>
         <button
           onClick={() => setFocusMode((f) => !f)}
@@ -806,22 +806,22 @@ const WriterViewUI: FC = () => {
       ) : (
         <div
           className={`hidden md:grid md:gap-6 h-full items-start transition-all duration-300 ${
-            collapsedPanels.context && collapsedPanels.tools
+            collapsedPanels['context'] && collapsedPanels['tools']
               ? 'md:grid-cols-[0_0_1fr]'
-              : collapsedPanels.context
+              : collapsedPanels['context']
                 ? 'md:grid-cols-[0_1fr_1fr]'
-                : collapsedPanels.tools
+                : collapsedPanels['tools']
                   ? 'md:grid-cols-[1fr_0_1fr]'
                   : 'md:grid-cols-3'
           }`}
         >
           <div
-            className={`h-full overflow-hidden transition-all duration-300 ${collapsedPanels.context ? 'w-0 opacity-0 overflow-hidden' : 'opacity-100'}`}
+            className={`h-full overflow-hidden transition-all duration-300 ${collapsedPanels['context'] ? 'w-0 opacity-0 overflow-hidden' : 'opacity-100'}`}
           >
             <ContextPanel />
           </div>
           <div
-            className={`h-full overflow-hidden transition-all duration-300 ${collapsedPanels.tools ? 'w-0 opacity-0 overflow-hidden' : 'opacity-100'}`}
+            className={`h-full overflow-hidden transition-all duration-300 ${collapsedPanels['tools'] ? 'w-0 opacity-0 overflow-hidden' : 'opacity-100'}`}
           >
             <ToolsPanel />
           </div>
