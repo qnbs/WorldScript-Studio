@@ -10,6 +10,8 @@
     "fs:allow-write-text-file",
     "fs:allow-exists",
     "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-remove",
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",

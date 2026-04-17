@@ -461,7 +461,6 @@ class FileSystemService implements StorageBackend {
   }
 
   private convertToMarkdown(project: StoryProject): string {
-    const p = project as unknown as Record<string, unknown>;
     const characters = Array.isArray(project.characters)
       ? project.characters
       : (Object.values((project.characters as EntityState<Character, string>).entities).filter(
@@ -474,15 +473,9 @@ class FileSystemService implements StorageBackend {
         ) as World[]);
     const markdown = `---
 title: "${project.title}"
-author: "${(p['author'] as string) || ''}"
-description: "${(p['description'] as string) || ''}"
-created: "${(p['createdAt'] as string) || ''}"
-updated: "${(p['updatedAt'] as string) || ''}"
 ---
 
 # ${project.title}
-
-${(p['description'] as string) || ''}
 
 ## Characters
 
