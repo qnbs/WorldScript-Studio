@@ -2,14 +2,7 @@ import type { EntityState, PayloadAction } from '@reduxjs/toolkit';
 import { createAsyncThunk, createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
 import type { RootState } from '../../app/store';
-import {
-  type AIRequestOptions,
-  generateImage,
-  generateJson,
-  generateText,
-  streamText,
-} from '../../services/aiProviderService';
-import { getPrompts } from '../../services/geminiService';
+import type { AIRequestOptions } from '../../services/aiProviderService';
 import { storageService } from '../../services/storageService';
 import type {
   Character,
@@ -23,6 +16,10 @@ import type {
   WritingSession,
 } from '../../types';
 import { createDeduplicatedThunk } from './aiThunkUtils';
+
+// --- Lazy AI Service Loaders (keeps @google/genai out of the eager chunk graph) ---
+const loadAiProvider = () => import('../../services/aiProviderService');
+const loadPrompts = () => import('../../services/geminiService');
 
 // --- Entity Adapters ---
 export const charactersAdapter = createEntityAdapter<Character>();
@@ -99,6 +96,8 @@ export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
     const creativity = state.settings.aiCreativity;
     const aiOptions = buildAiOptions(state);
 
+    const { getPrompts } = await loadPrompts();
+    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('logline', { project, lang });
     registerDuplicateRequest(prompt, 'logline');
     const response = await generateJson<string[]>(prompt, creativity, schema!, aiOptions, signal);
@@ -195,6 +194,8 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     // Pass thinking budget indirectly via prompt type config in geminiService
+    const { getPrompts } = await loadPrompts();
+    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('characterProfile', {
       concept,
       lang,
@@ -218,6 +219,8 @@ export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateCharacterField', {
       character,
       field,
@@ -248,6 +251,8 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
     const fullDescription = style ? `${description}. Style: ${style}` : description;
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('characterPortrait', {
       description: fullDescription,
       lang,
@@ -283,6 +288,8 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('worldProfile', {
       concept,
       lang,
@@ -306,6 +313,8 @@ export const regenerateWorldFieldThunk = createDeduplicatedThunk(
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateWorldField', {
       world,
       field,
@@ -333,6 +342,8 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('worldImage', { description, lang });
     registerDuplicateRequest(prompt, 'worldImage');
     const base64 = await generateImage(prompt, aiOptions, signal);
@@ -362,6 +373,8 @@ export const generateOutlineThunk = createDeduplicatedThunk(
   async (params: OutlineGenerationParams, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('outline', params);
     registerDuplicateRequest(prompt, 'outline');
     return await generateJson<OutlineSection[]>(
@@ -386,6 +399,8 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('regenerateOutlineSection', {
       allSections,
       sectionToIndex,
@@ -411,6 +426,8 @@ export const personalizeTemplateThunk = createDeduplicatedThunk(
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('personalizeTemplate', {
       sections,
       concept,
@@ -432,6 +449,8 @@ export const generateCustomTemplateThunk = createDeduplicatedThunk(
   async (params: CustomTemplateParams, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('customTemplate', params);
     registerDuplicateRequest(prompt, 'customTemplate');
     return await generateJson<{ title: string }[]>(
@@ -462,6 +481,7 @@ export const streamGenerationThunk = createDeduplicatedThunk(
     const aiOptions = buildAiOptions(state);
     const fullPrompt = `${prompt}\n\nRespond in ${lang === 'de' ? 'German' : 'English'}.`;
     registerDuplicateRequest(fullPrompt, 'streamGeneration');
+    const { streamText } = await loadAiProvider();
     await streamText(fullPrompt, state.settings.aiCreativity, aiOptions, { onChunk }, signal);
   },
 );
@@ -473,6 +493,8 @@ export const generateSynopsisThunk = createDeduplicatedThunk(
     const project = state.project.present.data;
     const creativity = state.settings.aiCreativity;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('synopsis', {
       project,
       lang,
@@ -491,6 +513,8 @@ export const proofreadTextThunk = createDeduplicatedThunk(
     const state = getState() as RootState;
     const creativity = state.settings.aiCreativity;
     const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('proofread', {
       text,
       lang,

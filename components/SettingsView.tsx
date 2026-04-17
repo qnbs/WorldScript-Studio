@@ -83,6 +83,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
   onOllamaUrlChange,
 }) => {
   const { t } = useTranslation();
+  const isDesktop = typeof window !== 'undefined' && Boolean(window.__TAURI__);
   const [openaiKey, setOpenaiKey] = useState('');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
@@ -245,6 +246,12 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         {/* Ollama */}
         {provider === 'ollama' && (
           <div className="space-y-3">
+            {!isDesktop && (
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
+                <p className="font-semibold mb-1">⚠️ {t('settings.ai.corsRestriction')}</p>
+                <p>{t('settings.ai.ollamaBrowserNote')}</p>
+              </div>
+            )}
             <label
               htmlFor="ollama-server-url"
               className="text-sm font-medium text-[var(--foreground-secondary)] block"

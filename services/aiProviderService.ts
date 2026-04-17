@@ -292,8 +292,17 @@ export async function testAIConnection(
         if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
         return { ok: true };
       }
-      case 'ollama':
+      case 'ollama': {
+        const isDesktop = typeof window !== 'undefined' && Boolean(window.__TAURI__);
+        if (!isDesktop) {
+          return {
+            ok: false,
+            error:
+              'Ollama is only available in the desktop app. The browser Content Security Policy blocks direct connections to localhost.',
+          };
+        }
         return testOllamaConnection(opts.ollamaBaseUrl);
+      }
       case 'anthropic':
         return {
           ok: false,

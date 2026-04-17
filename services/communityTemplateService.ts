@@ -1,17 +1,15 @@
 /**
  * Community Template Service
- * Fetches public templates from the GitHub repository.
+ * Loads community templates from the bundled static asset.
  *
- * Template definitions live in /community-templates/index.json
- * in the main branch of qnbs/StoryCraft-Studio.
+ * Template definitions live in /public/community-templates/index.json
+ * and are served at ${BASE_URL}community-templates/index.json — no
+ * third-party requests, works offline and with Tauri desktop builds.
  */
 
 import type { CommunityTemplate } from '../types';
 
-const GITHUB_RAW_BASE =
-  'https://raw.githubusercontent.com/qnbs/StoryCraft-Studio/main/community-templates';
-
-const GITHUB_INDEX_URL = `${GITHUB_RAW_BASE}/index.json`;
+const INDEX_URL = `${import.meta.env.BASE_URL}community-templates/index.json`;
 
 // In-memory cache (valid for the duration of the session)
 let cachedTemplates: CommunityTemplate[] | null = null;
@@ -32,11 +30,9 @@ export async function fetchCommunityTemplates(
   if (cachedTemplates) return { templates: cachedTemplates };
 
   try {
-    const res = await fetch(GITHUB_INDEX_URL, {
+    const res = await fetch(INDEX_URL, {
       signal: signal ?? null,
       headers: { Accept: 'application/json' },
-      // Avoid stale GitHub CDN cache
-      cache: 'no-store',
     });
 
     if (!res.ok) {

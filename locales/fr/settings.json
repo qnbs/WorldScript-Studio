@@ -199,6 +199,7 @@
   "settings.ai.testConnection": "Test connection",
   "settings.ai.anthropicHint": "Anthropic requires a proxy server or the Tauri desktop app for API calls.",
   "settings.ai.ollamaHint": "Make sure ollama serve is running and CORS is enabled.",
+  "settings.ai.ollamaBrowserNote": "Ollama n'est disponible que dans l'application de bureau. La politique de sécurité du contenu du navigateur bloque les connexions directes à localhost.",
   "settings.ai.customModel": "Modèle personnalisé",
   "settings.ai.geminiSelected": "Google Gemini est sélectionné. Configurez la clé API dans la section",
   "settings.ai.geminiKeySection": "Clé API",

@@ -27,38 +27,15 @@ export default defineConfig({
       // register-sw.ts übernimmt die manuelle Registrierung
       injectRegister: false,
       registerType: 'prompt',
-      // Workbox generiert den Service Worker mit Precaching
-      strategies: 'generateSW',
-      // sw.js wird im Build-Output generiert (überschreibt public/sw.js)
+      // public/sw.js bleibt erhalten; VitePWA injiziert nur die Precache-Manifest-Liste
+      strategies: 'injectManifest',
+      srcDir: 'public',
       filename: 'sw.js',
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,ico,woff,woff2,png,webp}'],
-        skipWaiting: true,
-        clientsClaim: true,
-        runtimeCaching: [
-          {
-            // i18n-Locale-Dateien: CacheFirst (selten veraltet)
-            urlPattern: /\/locales\/.*\.json$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'storycraft-i18n',
-              expiration: { maxAgeSeconds: 30 * 24 * 60 * 60, maxEntries: 60 },
-            },
-          },
-          {
-            // Gemini API: NetworkOnly (KI-Antworten dürfen nie gecacht werden)
-            urlPattern: /^https:\/\/generativelanguage\.googleapis\.com\//,
-            handler: 'NetworkOnly',
-          },
-          {
-            // Google Fonts: CacheFirst
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'storycraft-fonts',
-              expiration: { maxAgeSeconds: 60 * 24 * 60 * 60, maxEntries: 20 },
-            },
-          },
+      injectManifest: {
+        globPatterns: [
+          '**/*.{js,css,html,svg,ico,woff,woff2,png,webp}',
+          'community-templates/**/*.json',
+          'locales/**/bundle.json',
         ],
       },
       // Manifest bereits in public/manifest.json eingebunden
@@ -89,6 +66,13 @@ export default defineConfig({
     cssCodeSplit: true,
     chunkSizeWarningLimit: 600,
     reportCompressedSize: true,
+    modulePreload: {
+      polyfill: false,
+      resolveDependencies: (_filename: string, deps: string[]) =>
+        deps.filter(
+          (d) => !/ai-vendor|export-vendor|data-vendor|collaboration-vendor|canvas-vendor/.test(d),
+        ),
+    },
     rollupOptions: {
       external: [
         '@tauri-apps/api',

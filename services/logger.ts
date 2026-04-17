@@ -9,13 +9,11 @@ const debugEnabled = !isProd && hasLocalStorage && window.localStorage.getItem('
 const formatMessage = (level: string, args: unknown[]) => [`[StoryCraft:${level}]`, ...args];
 
 export const logger = {
-  debug: (..._args: unknown[]) => {
-    if (debugEnabled) {
-    }
+  debug: (...args: unknown[]) => {
+    if (debugEnabled) console.debug(...formatMessage('DEBUG', args));
   },
-  info: (..._args: unknown[]) => {
-    if (!isProd) {
-    }
+  info: (...args: unknown[]) => {
+    if (!isProd) console.info(...formatMessage('INFO', args));
   },
   warn: (...args: unknown[]) => {
     console.warn(...formatMessage('WARN', args));

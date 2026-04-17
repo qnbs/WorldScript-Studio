@@ -1,0 +1,130 @@
+[
+  {
+    "id": "community-hero-journey",
+    "name": "Die Heldenreise (Community)",
+    "description": "Campbells klassisches Monomythos-Framework, angepasst für moderne Geschichten.",
+    "type": "Structure",
+    "author": "Community",
+    "tags": ["Klassisch", "Abenteuer", "Transformation"],
+    "arcDescription": "Der Held verlässt die gewohnte Welt, übersteht Prüfungen und kehrt verändert zurück.",
+    "stars": 42,
+    "sections": [
+      { "title": "Die gewohnte Welt" },
+      { "title": "Der Ruf zum Abenteuer" },
+      { "title": "Weigerung des Rufs" },
+      { "title": "Begegnung mit dem Mentor" },
+      { "title": "Überschreiten der ersten Schwelle" },
+      { "title": "Prüfungen, Verbündete und Feinde" },
+      { "title": "Am tiefsten Punkt" },
+      { "title": "Die entscheidende Prüfung" },
+      { "title": "Belohnung" },
+      { "title": "Der Rückweg" },
+      { "title": "Auferstehung" },
+      { "title": "Rückkehr mit dem Elixier" }
+    ]
+  },
+  {
+    "id": "community-dark-romantik",
+    "name": "Dark Romantik",
+    "description": "Gotische Liebesgeschichte mit Spannung und dunklen Geheimnissen.",
+    "type": "Genre",
+    "author": "NightWriter42",
+    "tags": ["Romantik", "Gothic", "Mystery", "#dark"],
+    "arcDescription": "Verbotene Liebe in einer Welt voller Geheimnisse — Spannung und Leidenschaft im Gleichgewicht.",
+    "stars": 31,
+    "sections": [
+      { "title": "Erste Begegnung im Dunkeln" },
+      { "title": "Das verborgene Geheimnis" },
+      { "title": "Anziehung trotz Warnung" },
+      { "title": "Das erste Versprechen" },
+      { "title": "Entdeckung der wahren Natur" },
+      { "title": "Verrat und Trennung" },
+      { "title": "Die Entscheidung" },
+      { "title": "Opfer und Erlösung" }
+    ]
+  },
+  {
+    "id": "community-thriller-countdown",
+    "name": "Countdown Thriller",
+    "description": "Hochspannung mit tickender Uhr — Zeitdruck von der ersten bis zur letzten Seite.",
+    "type": "Structure",
+    "author": "ThrillMaster",
+    "tags": ["Thriller", "Action", "Zeitdruck"],
+    "arcDescription": "Ein Protagonist mit begrenzter Zeit, ein Antagonist der im Verborgenen agiert.",
+    "stars": 28,
+    "sections": [
+      { "title": "Die Bombe tickt (Setup)" },
+      { "title": "Erste Spur" },
+      { "title": "Falsche Fährte" },
+      { "title": "Eskalation — erste Casualty" },
+      { "title": "Wendepunkt: Enthüllung" },
+      { "title": "Countdown beschleunigt sich" },
+      { "title": "Alles verloren — Heldin allein" },
+      { "title": "Finale Konfrontation" },
+      { "title": "Auflösung & Aftermath" }
+    ]
+  },
+  {
+    "id": "community-cozy-mystery",
+    "name": "Cozy Mystery",
+    "description": "Gemütliches Rätsel in einer charmanten Kleinstadt — ohne Blut, aber mit viel Witz.",
+    "type": "Genre",
+    "author": "TeaAndClues",
+    "tags": ["Mystery", "Cozy", "Humor", "Kleinstadt"],
+    "arcDescription": "Amateurermittlerin löst Dorfgeheimnisse zwischen Kuchenbäckerei und Klatsch.",
+    "stars": 19,
+    "sections": [
+      { "title": "Die charmante Kleinstadt" },
+      { "title": "Das seltsame Ereignis" },
+      { "title": "Verdächtige Dorfbewohner" },
+      { "title": "Erste Ermittlungen" },
+      { "title": "Roter Hering" },
+      { "title": "Persönliche Gefahr" },
+      { "title": "Der entscheidende Hinweis" },
+      { "title": "Auflösung beim Dorffest" }
+    ]
+  },
+  {
+    "id": "community-scifi-first-contact",
+    "name": "Erstkontakt Sci-Fi",
+    "description": "Die Menschheit begegnet ihrem ersten außerirdischen Kontakt.",
+    "type": "Genre",
+    "author": "StargazerX",
+    "tags": ["Sci-Fi", "Erstkontakt", "Philosophie"],
+    "arcDescription": "Was bedeutet es, Menschlichkeit zu sein — wenn man sie einem Anderen erklären muss?",
+    "stars": 25,
+    "sections": [
+      { "title": "Das Signal" },
+      { "title": "Weltweite Reaktion" },
+      { "title": "Die erste Botschaft" },
+      { "title": "Diplomatische Krise" },
+      { "title": "Missverständnis und Eskalation" },
+      { "title": "Der Durchbruch" },
+      { "title": "Die wahre Absicht" },
+      { "title": "Entscheidung für die Menschheit" },
+      { "title": "Aftermath — eine veränderte Welt" }
+    ]
+  },
+  {
+    "id": "community-bildungsroman",
+    "name": "Bildungsroman",
+    "description": "Coming-of-age Entwicklungsgeschichte eines jungen Protagonisten.",
+    "type": "Structure",
+    "author": "LitProfessor",
+    "tags": ["Literary", "Coming-of-Age", "Entwicklung"],
+    "arcDescription": "Von jugendlicher Naivität zur reifen Persönlichkeit — durch Scheitern, Liebe und Verlust.",
+    "stars": 22,
+    "sections": [
+      { "title": "Kindheit und Unschuld" },
+      { "title": "Erste Konfrontation mit der Welt" },
+      { "title": "Mentor und Wegweiser" },
+      { "title": "Erste Liebe / erste Niederlage" },
+      { "title": "Identitätskrise" },
+      { "title": "Rebellion und Konsequenzen" },
+      { "title": "Tiefpunkt und Krise" },
+      { "title": "Versöhnung mit der Vergangenheit" },
+      { "title": "Reifeprüfung" },
+      { "title": "Aufbruch in die Zukunft" }
+    ]
+  }
+]

@@ -21,12 +21,19 @@ const swLogger = {
 };
 
 // ── Pre-cache shell assets ───────────────────────────────────
+// VitePWA (injectManifest) replaces self.__WB_MANIFEST at build time with
+// the full hashed asset list. In dev / standalone mode the array is empty
+// and we fall back to the minimal shell URLs below.
+// eslint-disable-next-line no-underscore-dangle
+const _WB_MANIFEST = self.__WB_MANIFEST || [];
+
 const PRECACHE_URLS = [
   BASE,
   `${BASE}index.html`,
   `${BASE}manifest.json`,
   `${BASE}favicon.svg`,
   `${BASE}offline.html`,
+  ..._WB_MANIFEST.map((entry) => (typeof entry === 'string' ? entry : entry.url)),
 ];
 
 // ── Max age / entry limits ───────────────────────────────────

@@ -1,6 +1,6 @@
 import type React from 'react';
 import type { ReactNode } from 'react';
-import { createContext, useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '../services/logger';
 
 type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
@@ -21,23 +21,6 @@ interface I18nProviderProps {
   children: ReactNode;
 }
 
-const modules = [
-  'common',
-  'sidebar',
-  'portal',
-  'dashboard',
-  'manuscript',
-  'writer',
-  'templates',
-  'tags',
-  'outline',
-  'characters',
-  'worlds',
-  'export',
-  'settings',
-  'help',
-];
-
 const LANG_KEY = 'storycraft-language';
 const VALID_LANGS: Language[] = ['en', 'de', 'fr', 'es', 'it'];
 
@@ -53,10 +36,10 @@ const getInitialLanguage = (): Language => {
 
 export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(getInitialLanguage);
-  const [translations, setTranslations] = useState<Record<string, Record<string, unknown>> | null>(
-    null,
-  );
-  const [isLoading, setIsLoading] = useState(true);
+  // translations keyed by language — grows lazily as languages are loaded
+  const [translations, setTranslations] = useState<Record<string, Record<string, unknown>>>({});
+  // in-flight fetch promises deduplicate concurrent loads for the same language
+  const inFlight = useRef<Partial<Record<Language, Promise<Record<string, unknown>>>>>({});
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
@@ -71,60 +54,46 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
     document.documentElement.lang = language;
   }, [language]);
 
-  useEffect(() => {
-    // KRITISCHER FIX: Verwende import.meta.env.BASE_URL für Subpath-Unterstützung
-    const base = import.meta.env.BASE_URL || '/';
+  /** Fetch a language bundle, deduplicating concurrent requests. */
+  const loadLanguage = useCallback(
+    async (lang: Language): Promise<Record<string, unknown>> => {
+      // Already loaded
+      if (translations[lang]) return translations[lang];
 
-    const fetchTranslations = async (lang: Language) => {
-      const settled = await Promise.allSettled(
-        modules.map((module) =>
-          fetch(`${base}locales/${lang}/${module}.json`).then((res) => {
+      // Deduplicate in-flight requests
+      if (!inFlight.current[lang]) {
+        const base = import.meta.env.BASE_URL || '/';
+        inFlight.current[lang] = fetch(`${base}locales/${lang}/bundle.json`)
+          .then((res) => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.json();
-          }),
-        ),
-      );
-      return settled.reduce(
-        (acc, result) => {
-          if (result.status === 'fulfilled') Object.assign(acc, result.value);
-          return acc;
-        },
-        {} as Record<string, unknown>,
-      );
-    };
-
-    const loadAllLanguages = async () => {
-      setIsLoading(true);
-      try {
-        const [enData, deData, frData, esData, itData] = await Promise.all([
-          fetchTranslations('en'),
-          fetchTranslations('de'),
-          fetchTranslations('fr'),
-          fetchTranslations('es'),
-          fetchTranslations('it'),
-        ]);
-        setTranslations({
-          en: enData,
-          de: deData,
-          fr: frData,
-          es: esData,
-          it: itData,
-        });
-      } catch (error) {
-        logger.error('Failed to load all translation files', error);
-      } finally {
-        setIsLoading(false);
+            return res.json() as Promise<Record<string, unknown>>;
+          })
+          .then((data) => {
+            setTranslations((prev) => ({ ...prev, [lang]: data }));
+            delete inFlight.current[lang];
+            return data;
+          })
+          .catch((err) => {
+            logger.error(`[i18n] Failed to load bundle for "${lang}"`, err);
+            delete inFlight.current[lang];
+            return {};
+          });
       }
-    };
-    loadAllLanguages();
-  }, []);
+      return inFlight.current[lang] as Promise<Record<string, unknown>>;
+    },
+    [translations],
+  );
+
+  // On mount and whenever language changes: load active lang + EN fallback
+  useEffect(() => {
+    const loads: Promise<unknown>[] = [loadLanguage(language)];
+    if (language !== 'en') loads.push(loadLanguage('en'));
+    Promise.all(loads).catch(() => {});
+  }, [language, loadLanguage]);
 
   const t = useCallback(
     <T = string>(key: string, replacements?: Record<string, string>): T => {
-      if (!translations) {
-        return key as unknown as T;
-      }
-      // Fallback auf EN wenn die aktuelle Sprache den Key nicht hat
+      // Fallback chain: active lang → EN → raw key
       const value = translations[language]?.[key] ?? translations['en']?.[key] ?? key;
 
       if (typeof value !== 'string') {
@@ -143,14 +112,6 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
     },
     [language, translations],
   );
-
-  if (isLoading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[var(--background-primary)]">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--border-interactive)]"></div>
-      </div>
-    );
-  }
 
   return (
     <I18nContext.Provider value={{ language, setLanguage, t }}>{children}</I18nContext.Provider>

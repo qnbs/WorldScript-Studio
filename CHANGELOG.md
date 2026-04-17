@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Logger No-ops**: Fixed empty `debug()` and `info()` method bodies in `logger.ts` that silently discarded all debug/info log messages.
+- **Community Templates CSP**: Replaced GitHub raw URL fetch in `communityTemplateService.ts` with local static asset (`public/community-templates/index.json`), eliminating CSP `connect-src` violations and enabling offline support.
+- **Ollama Browser Guard**: Added `window.__TAURI__` check in `aiProviderService.ts` to prevent Ollama connection attempts in the browser (CSP blocks `localhost` in the deployed PWA). Added amber warning banner in SettingsView for non-desktop environments.
+- **Tauri Ollama CSP**: Changed Tauri CSP `connect-src` from broad `http://localhost` to explicit `http://localhost:11434 http://127.0.0.1:11434` for Ollama API access.
+- **Service Worker Double-Track**: Switched VitePWA from `generateSW` to `injectManifest` strategy, preventing conflicts with the custom `public/sw.js` service worker. Added `self.__WB_MANIFEST` injection point for precache manifest.
+- **i18n Eager Loading**: Replaced 70 parallel fetch calls (14 modules × 5 languages) at boot with lazy single-bundle loading (2 fetches max: active language + EN fallback). Added `scripts/build-i18n.mjs` prebuild step to merge per-module JSON files into `public/locales/<lang>/bundle.json`.
+- **modulePreload Optimization**: Converted all 14 AI thunks in `projectSlice.ts` from static imports to dynamic `import()` calls for `aiProviderService` and `geminiService`, keeping `@google/genai` out of the eager chunk graph. Added Vite `modulePreload.resolveDependencies` filter to skip preloading vendor chunks (`ai-vendor`, `export-vendor`, `data-vendor`, `collaboration-vendor`, `canvas-vendor`).
+
+### Security
+
+- **Tauri FS Scope**: Replaced unscoped `fs:allow-*` permissions in `src-tauri/capabilities/default.json` with `$APPDATA/**`-scoped entries, preventing filesystem access outside the application data directory.
+
+### Added
+
+- `settings.ai.ollamaBrowserNote` translation key in all 5 locale files (de, en, es, fr, it).
+- `public/community-templates/index.json` static asset for offline community template loading.
+- `scripts/build-i18n.mjs` build script for i18n bundle generation.
+- `prebuild` npm script hook to auto-generate i18n bundles before production builds.
+
+### Fixed
+
 - **Critical**: Configured Tailwind CDN dark mode to use `selector` strategy with `.dark-theme` class. Previously, all `dark:` prefixed Tailwind classes responded to OS system preference instead of the in-app theme toggle, causing broken styling when OS and app theme diverged.
 - **Light Mode Overlays**: Replaced all hardcoded `bg-black/40`, `bg-black/60`, `bg-gray-900/50` modal/drawer/panel backdrops with theme-aware `--overlay-backdrop` CSS custom property across Modal, Drawer, CommandPalette, Sidebar, CollaborationPanel, and VersionControlPanel.
 - **Light Mode Card Overlays**: Fixed CharacterView and WorldView card gradient overlays (`via-black/40`) and hardcoded `text-white`/`text-gray-300` text to use theme-aware CSS custom properties.
