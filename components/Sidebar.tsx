@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import type { View } from '../types';
 import { ICONS } from '../constants';
 import { useTranslation } from '../hooks/useTranslation';
+import type { View } from '../types';
 
 interface SidebarProps {
   currentView: View;
@@ -61,9 +61,7 @@ const BottomTabItem: React.FC<{
   <button
     onClick={onClick}
     className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-colors duration-200 touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded-lg ${
-      isActive
-        ? 'text-[var(--nav-text-active)]'
-        : 'text-[var(--foreground-muted)]'
+      isActive ? 'text-[var(--nav-text-active)]' : 'text-[var(--foreground-muted)]'
     }`}
     aria-current={isActive ? 'page' : undefined}
   >
@@ -78,7 +76,9 @@ const BottomTabItem: React.FC<{
     >
       {icon}
     </svg>
-    <span className={`text-[10px] mt-0.5 leading-tight ${isActive ? 'font-semibold' : 'font-medium'}`}>
+    <span
+      className={`text-[10px] mt-0.5 leading-tight ${isActive ? 'font-semibold' : 'font-medium'}`}
+    >
       {label}
     </span>
     {isActive && (

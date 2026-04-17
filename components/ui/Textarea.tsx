@@ -30,7 +30,7 @@ export const Textarea = React.memo(
           const input = inputRef.current;
           const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
             window.HTMLTextAreaElement.prototype,
-            'value'
+            'value',
           )?.set;
 
           if (nativeInputValueSetter) {
@@ -105,7 +105,7 @@ export const Textarea = React.memo(
           </button>
         </div>
       );
-    }
-  )
+    },
+  ),
 );
 Textarea.displayName = 'Textarea';

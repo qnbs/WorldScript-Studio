@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
-import { useTranslation } from '../hooks/useTranslation';
-import { logger } from '../services/logger';
+import type React from 'react';
+import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
+import { useTranslation } from '../hooks/useTranslation';
+import { logger } from '../services/logger';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Modal } from './ui/Modal';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 import { useToast } from './ui/Toast';
-
 
 export const AdvancedImportExport: React.FC = () => {
   const { t } = useTranslation();
@@ -95,7 +95,7 @@ export const AdvancedImportExport: React.FC = () => {
           manuscript: project.manuscript,
         },
         null,
-        2
+        2,
       );
       filename = `${safeName}.json`;
     } else {
@@ -146,7 +146,7 @@ export const AdvancedImportExport: React.FC = () => {
       const content = lines.slice(1).join('\n').trim();
       dispatch(projectActions.updateTitle(title));
       dispatch(
-        projectActions.setManuscript([{ id: `docx-${Date.now()}`, title: 'Chapter 1', content }])
+        projectActions.setManuscript([{ id: `docx-${Date.now()}`, title: 'Chapter 1', content }]),
       );
       toast.success(t('export.importSuccess'), title);
     } catch (error) {
@@ -176,7 +176,9 @@ export const AdvancedImportExport: React.FC = () => {
               size="sm"
               onClick={() => setShowPasteSection(!showPasteSection)}
             >
-              {showPasteSection ? `▲ ${t('export.pasteSection.collapse')}` : `▼ ${t('export.pasteSection.expand')}`}
+              {showPasteSection
+                ? `▲ ${t('export.pasteSection.collapse')}`
+                : `▼ ${t('export.pasteSection.expand')}`}
             </Button>
           </div>
         </CardHeader>

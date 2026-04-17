@@ -1,25 +1,25 @@
 import type { FC } from 'react';
-import React, { useState, useEffect, useRef } from 'react';
-import { Button } from './ui/Button';
-import { Select } from './ui/Select';
-import { Card, CardContent, CardHeader } from './ui/Card';
-import { Spinner } from './ui/Spinner';
+import React, { useEffect, useRef, useState } from 'react';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
-import { useTranslation } from '../hooks/useTranslation';
+import { useWriterViewContext, WriterViewContext } from '../contexts/WriterViewContext';
+import {
+  selectIsPanelOpen,
+  versionControlActions,
+} from '../features/versionControl/versionControlSlice';
 import type { WriterTool } from '../features/writer/writerSlice';
 import { writerActions } from '../features/writer/writerSlice';
-import { DebouncedTextarea } from './ui/DebouncedTextarea';
-import { useWriterView } from '../hooks/useWriterView';
-import { WriterViewContext, useWriterViewContext } from '../contexts/WriterViewContext';
-import { Textarea } from './ui/Textarea';
-import { useAppSelector, useAppDispatch } from '../app/hooks';
-import { Checkbox } from './ui/Checkbox';
-import { Input } from './ui/Input';
+import { useTranslation } from '../hooks/useTranslation';
 import { useTTS } from '../hooks/useTTS';
-import {
-  versionControlActions,
-  selectIsPanelOpen,
-} from '../features/versionControl/versionControlSlice';
+import { useWriterView } from '../hooks/useWriterView';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Checkbox } from './ui/Checkbox';
+import { DebouncedTextarea } from './ui/DebouncedTextarea';
+import { Input } from './ui/Input';
+import { Select } from './ui/Select';
+import { Spinner } from './ui/Spinner';
+import { Textarea } from './ui/Textarea';
 
 // --- SUB-COMPONENTS ---
 
@@ -50,7 +50,7 @@ const ContextPanel: FC = React.memo(() => {
         start: selectionStart,
         end: selectionEnd,
         text: value.substring(selectionStart, selectionEnd),
-      })
+      }),
     );
   };
   const shouldHighlightSelection =
@@ -535,7 +535,7 @@ const AiScratchpad: FC = React.memo(() => {
     if (isLoading && textareaRef.current) {
       textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
     }
-  }, [currentResult, isLoading]);
+  }, [isLoading]);
 
   return (
     <div className="h-full flex flex-col">
@@ -739,7 +739,9 @@ const WriterViewUI: FC = () => {
           title={collapsedPanels['context'] ? t('writer.context.show') : t('writer.context.hide')}
           className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
         >
-          {collapsedPanels['context'] ? `▷ ${t('writer.context.label')}` : `◁ ${t('writer.context.label')}`}
+          {collapsedPanels['context']
+            ? `▷ ${t('writer.context.label')}`
+            : `◁ ${t('writer.context.label')}`}
         </button>
         <button
           onClick={() => togglePanel('tools')}
@@ -753,7 +755,9 @@ const WriterViewUI: FC = () => {
           title={focusMode ? t('writer.focusMode.exit') : t('writer.focusMode.enter')}
           className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
         >
-          {focusMode ? `⊠ ${t('writer.focusMode.exitLabel')}` : `⊡ ${t('writer.focusMode.enterLabel')}`}
+          {focusMode
+            ? `⊠ ${t('writer.focusMode.exitLabel')}`
+            : `⊡ ${t('writer.focusMode.enterLabel')}`}
         </button>
         <button
           onClick={() => dispatch(versionControlActions.togglePanel())}

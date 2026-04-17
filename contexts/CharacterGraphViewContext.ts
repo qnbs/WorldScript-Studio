@@ -17,7 +17,7 @@ export const useCharacterGraphViewContext = () => {
   const context = useContext(CharacterGraphViewContext);
   if (!context) {
     throw new Error(
-      'useCharacterGraphViewContext must be used within a CharacterGraphViewContext.Provider'
+      'useCharacterGraphViewContext must be used within a CharacterGraphViewContext.Provider',
     );
   }
   return context;

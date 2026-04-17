@@ -6,6 +6,7 @@ import { setupStore } from './app/store';
 import { dbService } from './services/dbService';
 import { logger } from './services/logger';
 import type { PersistedRootState } from './types';
+import './index.css';
 import './register-sw';
 
 // SPA Redirect Handler für GitHub Pages
@@ -44,7 +45,7 @@ const root = ReactDOM.createRoot(rootElement);
     // The middleware saves only the 'present' state to save space/time.
     // However, redux-undo expects { past: [], present: ..., future: [] }.
     // We must manually reconstruct the undo envelope if we loaded flat data.
-    if (preloadedState && preloadedState.project) {
+    if (preloadedState?.project) {
       const projectPart = preloadedState.project;
 
       // Check if the loaded project is "flat" (i.e., it doesn't have a 'present' key, but HAS 'data')
@@ -73,7 +74,7 @@ const root = ReactDOM.createRoot(rootElement);
         <Provider store={store}>
           <App isNewUser={isNewUser} />
         </Provider>
-      </React.StrictMode>
+      </React.StrictMode>,
     );
   } catch (error) {
     logger.error('Failed to initialize the application:', error);
@@ -81,7 +82,7 @@ const root = ReactDOM.createRoot(rootElement);
       <div style={{ color: 'red', padding: '20px' }}>
         <h1>Application Initialization Failed</h1>
         <p>Could not load project data. Please check the browser console for more details.</p>
-      </div>
+      </div>,
     );
   }
 })();

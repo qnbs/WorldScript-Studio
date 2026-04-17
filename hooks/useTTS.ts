@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '../services/logger';
 
 export const useTTS = () => {
@@ -54,7 +54,7 @@ export const useTTS = () => {
       utteranceRef.current = utt;
       window.speechSynthesis.speak(utt);
     },
-    [isSupported]
+    [isSupported],
   );
 
   const pause = useCallback(() => {

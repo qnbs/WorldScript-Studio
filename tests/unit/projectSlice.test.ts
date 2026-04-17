@@ -1,13 +1,13 @@
-import { describe, it, expect } from 'vitest';
 import type { AnyAction } from '@reduxjs/toolkit';
 import { configureStore } from '@reduxjs/toolkit';
+import undoable, { type StateWithHistory } from 'redux-undo';
+import { describe, expect, it } from 'vitest';
 import type { ProjectData } from '../../features/project/projectSlice';
 import projectReducer, {
-  projectActions,
   charactersAdapter,
+  projectActions,
   worldsAdapter,
 } from '../../features/project/projectSlice';
-import undoable, { type StateWithHistory } from 'redux-undo';
 
 // Helper to create a test store with proper structure
 function createTestStore(preloadedProjectData?: Partial<ProjectData>) {
@@ -68,10 +68,10 @@ describe('projectSlice', () => {
       store.dispatch(projectActions.addCharacter({ name: 'Hero' }));
       const id = store.getState().project.present.data.characters.ids[0] as string;
       store.dispatch(
-        projectActions.updateCharacter({ id, changes: { backstory: 'Born in shadows' } })
+        projectActions.updateCharacter({ id, changes: { backstory: 'Born in shadows' } }),
       );
       expect(store.getState().project.present.data.characters.entities[id]?.backstory).toBe(
-        'Born in shadows'
+        'Born in shadows',
       );
     });
 
@@ -114,7 +114,7 @@ describe('projectSlice', () => {
         projectActions.updateManuscriptSection({
           id: 'sec-1',
           changes: { content: 'Once upon a time...' },
-        })
+        }),
       );
       const manuscript = store.getState().project.present.data.manuscript;
       expect(manuscript[0]?.content).toBe('Once upon a time...');
@@ -144,7 +144,7 @@ describe('projectSlice', () => {
           toCharacterId: 'b',
           type: 'friend',
           strength: 5,
-        })
+        }),
       );
       expect(store.getState().project.present.data.relationships?.length).toBe(1);
 
@@ -152,7 +152,7 @@ describe('projectSlice', () => {
         projectActions.updateRelationship({
           id: 'rel-1',
           changes: { strength: 8 },
-        })
+        }),
       );
       const relationships = store.getState().project.present.data.relationships;
       expect(relationships?.[0]?.strength).toBe(8);

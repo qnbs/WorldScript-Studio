@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version-file: '.nvmrc'
           cache: pnpm
 
       - name: Install dependencies
@@ -73,8 +73,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint (ESLint)
-        run: pnpm run lint -- --max-warnings 0
+      - name: Lint (Biome)
+        run: pnpm run lint
 
       - name: Typecheck (tsc)
         run: pnpm run typecheck
@@ -116,7 +116,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version-file: '.nvmrc'
           cache: pnpm
 
       - name: Install dependencies
@@ -181,7 +181,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version-file: '.nvmrc'
           cache: pnpm
 
       - name: Install dependencies
@@ -225,7 +225,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version-file: '.nvmrc'
           cache: pnpm
 
       - name: Install dependencies

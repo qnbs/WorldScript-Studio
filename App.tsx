@@ -1,92 +1,96 @@
 import type { FC } from 'react';
-import { useEffect, useState, lazy, Suspense } from 'react';
-import { useAppSelector, useAppDispatch } from './app/hooks';
-import { useApp } from './hooks/useApp';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { useAppDispatch, useAppSelector } from './app/hooks';
+import { CollaborationPanel } from './components/CollaborationPanel';
+import { CommandPalette } from './components/CommandPalette';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
-import { I18nProvider } from './contexts/I18nContext';
-import { useTranslation } from './hooks/useTranslation';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { OfflineIndicator, PWAInstallBanner, PWAUpdateToast } from './components/ui/PWAComponents';
+import { Spinner } from './components/ui/Spinner';
+import { ToastProvider } from './components/ui/Toast';
+import { VersionControlPanel } from './components/VersionControlPanel';
 import { AppContext } from './contexts/AppContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
-import { Spinner } from './components/ui/Spinner';
-import { selectProjectData } from './features/project/projectSelectors';
+import { I18nProvider } from './contexts/I18nContext';
 import { selectFeatureFlags } from './features/featureFlags/featureFlagsSlice';
+import { selectProjectData } from './features/project/projectSelectors';
 import { projectActions } from './features/project/projectSlice';
-import { ToastProvider } from './components/ui/Toast';
-import { ErrorBoundary } from './components/ui/ErrorBoundary';
-import { CommandPalette } from './components/CommandPalette';
-import { PWAInstallBanner, PWAUpdateToast, OfflineIndicator } from './components/ui/PWAComponents';
-import { VersionControlPanel } from './components/VersionControlPanel';
-import { CollaborationPanel } from './components/CollaborationPanel';
+import { useApp } from './hooks/useApp';
+import { useTranslation } from './hooks/useTranslation';
 
 // ── Lazy-geladene Views (Code-Splitting → separate JS-Chunks) ─────────────────
 const Dashboard = lazy(() =>
-  import('./components/Dashboard').then((m) => ({ default: m.Dashboard }))
+  import('./components/Dashboard').then((m) => ({ default: m.Dashboard })),
 );
 const ManuscriptView = lazy(() =>
   import('./components/ManuscriptView').then((m) => ({
     default: m.ManuscriptView,
-  }))
+  })),
 );
 const WriterView = lazy(() =>
-  import('./components/WriterView').then((m) => ({ default: m.WriterView }))
+  import('./components/WriterView').then((m) => ({ default: m.WriterView })),
 );
 const TemplateView = lazy(() =>
   import('./components/TemplateView').then((m) => ({
     default: m.TemplateView,
-  }))
+  })),
 );
 const OutlineGeneratorView = lazy(() =>
   import('./components/OutlineGeneratorView').then((m) => ({
     default: m.OutlineGeneratorView,
-  }))
+  })),
 );
 const CharacterView = lazy(() =>
   import('./components/CharacterView').then((m) => ({
     default: m.CharacterView,
-  }))
+  })),
 );
 const WorldView = lazy(() =>
-  import('./components/WorldView').then((m) => ({ default: m.WorldView }))
+  import('./components/WorldView').then((m) => ({ default: m.WorldView })),
 );
 const ExportView = lazy(() =>
-  import('./components/ExportView').then((m) => ({ default: m.ExportView }))
+  import('./components/ExportView').then((m) => ({ default: m.ExportView })),
 );
 const SettingsView = lazy(() =>
   import('./components/SettingsView').then((m) => ({
     default: m.SettingsView,
-  }))
+  })),
 );
 const HelpView = lazy(() => import('./components/HelpView').then((m) => ({ default: m.HelpView })));
 const SceneBoardView = lazy(() =>
   import('./components/SceneBoardView').then((m) => ({
     default: m.SceneBoardView,
-  }))
+  })),
 );
 const CharacterGraphView = lazy(() =>
   import('./components/CharacterGraphView').then((m) => ({
     default: m.CharacterGraphView,
-  }))
+  })),
 );
 const ConsistencyCheckerView = lazy(() =>
   import('./components/ConsistencyCheckerView').then((m) => ({
     default: m.ConsistencyCheckerView,
-  }))
+  })),
 );
 const CriticView = lazy(() =>
-  import('./components/CriticView').then((m) => ({ default: m.CriticView }))
+  import('./components/CriticView').then((m) => ({ default: m.CriticView })),
 );
 const WelcomePortal = lazy(() =>
   import('./components/WelcomePortal').then((m) => ({
     default: m.WelcomePortal,
-  }))
+  })),
 );
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
   const { t } = useTranslation();
   return (
-    <div role="status" aria-label={t('common.loading')} className="flex h-full w-full items-center justify-center">
+    <div
+      role="status"
+      aria-label={t('common.loading')}
+      className="flex h-full w-full items-center justify-center"
+    >
       <Spinner className="w-10 h-10 text-indigo-500" label={t('common.loading')} />
     </div>
   );
@@ -141,7 +145,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         projectActions.resetProject({
           title: t('initialProject.title'),
           logline: t('initialProject.logline'),
-        })
+        }),
       );
       dispatch(
         projectActions.setManuscript([
@@ -150,7 +154,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
             title: t('initialProject.chapter1'),
             content: '',
           },
-        ])
+        ]),
       );
     }
   }, [project, isPortalActive, dispatch, t]);

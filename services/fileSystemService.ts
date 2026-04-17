@@ -71,7 +71,7 @@ const sanitizePathSegment = (segment: string, fallback = 'item'): string => {
 
 async function encryptText(
   value: string,
-  secretMaterial: string
+  secretMaterial: string,
 ): Promise<{ iv: string; data: string }> {
   const key = await deriveFileSystemCryptoKey(secretMaterial);
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -85,7 +85,7 @@ async function encryptText(
 
 async function decryptText(
   payload: { iv: string; data: string },
-  secretMaterial: string
+  secretMaterial: string,
 ): Promise<string> {
   const key = await deriveFileSystemCryptoKey(secretMaterial);
   const iv = Uint8Array.from(atob(payload.iv), (c) => c.charCodeAt(0));
@@ -94,11 +94,10 @@ async function decryptText(
   return new TextDecoder().decode(decrypted);
 }
 
-import type { StoryProject, Settings, Character, World } from '../types';
 import type { EntityState } from '@reduxjs/toolkit';
-
-import type { StorageBackend } from './storageService';
+import type { Character, Settings, StoryProject, World } from '../types';
 import { logger } from './logger';
+import type { StorageBackend } from './storageService';
 
 class FileSystemService implements StorageBackend {
   private appDataPath: string | null = null;
@@ -129,7 +128,7 @@ class FileSystemService implements StorageBackend {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const projectId = sanitizePathSegment(
-      ((project as unknown as Record<string, unknown>)['id'] as string) || project.title || 'project'
+      ((project as unknown as Record<string, unknown>)['id'] as string) || project.title || 'project',
     );
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
@@ -214,7 +213,7 @@ class FileSystemService implements StorageBackend {
       const imageFile = await apis.join(
         appDataPath,
         'images',
-        `${sanitizePathSegment(id, 'image')}.png`
+        `${sanitizePathSegment(id, 'image')}.png`,
       );
 
       if (!(await apis.exists(imageFile))) {
@@ -287,7 +286,7 @@ class FileSystemService implements StorageBackend {
 
     const encrypted = await encryptText(
       apiKey.trim(),
-      `${appDataPath}|${provider}|StoryCraftStudio|v1`
+      `${appDataPath}|${provider}|StoryCraftStudio|v1`,
     );
     const filePath = await apis.join(configPath, `${provider}_key.enc.json`);
     await apis.writeTextFile(filePath, JSON.stringify(encrypted));
@@ -391,7 +390,7 @@ class FileSystemService implements StorageBackend {
   // Import/Export functionality
   async exportProject(
     project: StoryProject,
-    format: 'json' | 'markdown' | 'docx' = 'json'
+    format: 'json' | 'markdown' | 'docx' = 'json',
   ): Promise<void> {
     const apis = await this.getApis();
     let fileName: string;
@@ -464,12 +463,12 @@ class FileSystemService implements StorageBackend {
     const characters = Array.isArray(project.characters)
       ? project.characters
       : (Object.values((project.characters as EntityState<Character, string>).entities).filter(
-          Boolean
+          Boolean,
         ) as Character[]);
     const worlds = Array.isArray(project.worlds)
       ? project.worlds
       : (Object.values((project.worlds as EntityState<World, string>).entities).filter(
-          Boolean
+          Boolean,
         ) as World[]);
     const markdown = `---
 title: "${project.title}"
@@ -489,7 +488,7 @@ ${char.backstory || ''}
 **Motivation:** ${char.motivation || ''}
 **Appearance:** ${char.appearance || ''}
 
-`
+`,
   )
   .join('\n')}
 
@@ -504,7 +503,7 @@ ${world.description || ''}
 **Geography:** ${world.geography || ''}
 **Culture:** ${world.culture || ''}
 
-`
+`,
   )
   .join('\n')}
 
@@ -547,7 +546,7 @@ ${project.manuscript || 'No manuscript content yet.'}
       } else if (inManuscript && line.startsWith('## ')) {
         inManuscript = false;
       } else if (inManuscript) {
-        manuscript += line + '\n';
+        manuscript += `${line}\n`;
       }
     }
 

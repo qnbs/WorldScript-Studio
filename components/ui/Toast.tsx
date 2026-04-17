@@ -1,9 +1,10 @@
+import type React from 'react';
 import type { FC } from 'react';
-import React, { createContext, useContext, useEffect } from 'react';
-import { useTranslation } from '../../hooks/useTranslation';
+import { createContext, useContext, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import type { Notification, NotificationType } from '../../features/status/statusSlice';
 import { statusActions } from '../../features/status/statusSlice';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // Context remains to provide a convenient hook API for components
 interface ToastContextType {
@@ -164,7 +165,7 @@ export const ToastProvider: FC<{ children: React.ReactNode }> = ({ children }) =
         type,
         title,
         ...(description !== undefined ? { description } : {}),
-      })
+      }),
     );
   };
 

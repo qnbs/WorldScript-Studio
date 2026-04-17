@@ -1,22 +1,22 @@
 import type { FC } from 'react';
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { useTranslation } from '../hooks/useTranslation';
+import { selectProjectData } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
 import {
-  versionControlActions,
-  selectCurrentBranch,
-  selectCurrentBranchSnapshots,
-  selectAllBranches,
-  selectIsPanelOpen,
   decompressManuscript,
   MAIN_BRANCH_ID,
+  selectAllBranches,
+  selectCurrentBranch,
+  selectCurrentBranchSnapshots,
+  selectIsPanelOpen,
+  versionControlActions,
 } from '../features/versionControl/versionControlSlice';
-import { projectActions } from '../features/project/projectSlice';
-import { selectProjectData } from '../features/project/projectSelectors';
+import { useTranslation } from '../hooks/useTranslation';
+import type { StorySection, VersionBranch, VersionSnapshot } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
-import type { VersionBranch, VersionSnapshot, StorySection } from '../types';
 
 // ─── Helper Components ────────────────────────────────────────────────────────
 
@@ -46,52 +46,54 @@ const SnapshotCard: FC<{
 }> = ({ snapshot, branch, onRestore, onDelete, isHead }) => {
   const { t } = useTranslation();
   return (
-  <div
-    className={`p-3 rounded-lg border transition-colors ${
-      isHead
-        ? 'border-[var(--border-interactive)] bg-[var(--background-interactive)]/5'
-        : 'border-[var(--border-primary)] bg-[var(--background-secondary)]/50'
-    }`}
-  >
-    <div className="flex items-start justify-between gap-2">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-sm text-[var(--foreground-primary)] truncate">
-            {snapshot.label}
-          </span>
-          {isHead && (
-            <span className="px-1.5 py-0.5 text-xs bg-[var(--background-interactive)] text-white rounded">
-              HEAD
+    <div
+      className={`p-3 rounded-lg border transition-colors ${
+        isHead
+          ? 'border-[var(--border-interactive)] bg-[var(--background-interactive)]/5'
+          : 'border-[var(--border-primary)] bg-[var(--background-secondary)]/50'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-sm text-[var(--foreground-primary)] truncate">
+              {snapshot.label}
             </span>
-          )}
-          {branch && <BranchBadge branch={branch} />}
+            {isHead && (
+              <span className="px-1.5 py-0.5 text-xs bg-[var(--background-interactive)] text-white rounded">
+                HEAD
+              </span>
+            )}
+            {branch && <BranchBadge branch={branch} />}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--foreground-muted)]">
+            <time>{new Date(snapshot.timestamp).toLocaleString()}</time>
+            <span>
+              {snapshot.wordCount.toLocaleString()} {t('vc.words')}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3 mt-1 text-xs text-[var(--foreground-muted)]">
-          <time>{new Date(snapshot.timestamp).toLocaleString()}</time>
-          <span>{snapshot.wordCount.toLocaleString()} {t('vc.words')}</span>
+        <div className="flex gap-1 flex-shrink-0">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onRestore(snapshot)}
+            aria-label={t('vc.restoreSnapshot', { label: snapshot.label })}
+          >
+            {t('vc.restore')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(snapshot.id)}
+            aria-label={t('vc.deleteSnapshot', { label: snapshot.label })}
+            className="text-red-400 hover:bg-red-500/10"
+          >
+            ✕
+          </Button>
         </div>
-      </div>
-      <div className="flex gap-1 flex-shrink-0">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => onRestore(snapshot)}
-          aria-label={t('vc.restoreSnapshot', { label: snapshot.label })}
-        >
-          {t('vc.restore')}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onDelete(snapshot.id)}
-          aria-label={t('vc.deleteSnapshot', { label: snapshot.label })}
-          className="text-red-400 hover:bg-red-500/10"
-        >
-          ✕
-        </Button>
       </div>
     </div>
-  </div>
   );
 };
 
@@ -117,7 +119,7 @@ export const VersionControlPanel: FC = () => {
 
   const manuscript = useMemo(
     () => (Array.isArray(project?.manuscript) ? (project.manuscript as StorySection[]) : []),
-    [project?.manuscript]
+    [project?.manuscript],
   );
 
   const handleCreateSnapshot = useCallback(() => {
@@ -126,7 +128,7 @@ export const VersionControlPanel: FC = () => {
       versionControlActions.createSnapshot({
         label: snapshotLabel.trim(),
         sections: manuscript,
-      })
+      }),
     );
     setSnapshotLabel('');
     setModal('none');
@@ -166,7 +168,7 @@ export const VersionControlPanel: FC = () => {
           projectActions.updateManuscriptSection({
             id: section.id,
             changes: { content: section.content },
-          })
+          }),
         );
       }
     });
@@ -181,7 +183,7 @@ export const VersionControlPanel: FC = () => {
     (id: string) => {
       dispatch(versionControlActions.deleteSnapshot(id));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleDeleteBranch = useCallback(
@@ -189,7 +191,7 @@ export const VersionControlPanel: FC = () => {
       if (id === MAIN_BRANCH_ID) return;
       dispatch(versionControlActions.deleteBranch(id));
     },
-    [dispatch]
+    [dispatch],
   );
 
   if (!isOpen) return null;
@@ -296,9 +298,7 @@ export const VersionControlPanel: FC = () => {
             {currentSnapshots.length === 0 ? (
               <div className="text-center py-8 text-[var(--foreground-muted)] text-sm border-2 border-dashed border-[var(--border-primary)] rounded-lg">
                 <p>{t('vc.noSnapshots')}</p>
-                <p className="text-xs mt-1">
-                  {t('vc.noSnapshotsHint')}
-                </p>
+                <p className="text-xs mt-1">{t('vc.noSnapshotsHint')}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -446,9 +446,7 @@ export const VersionControlPanel: FC = () => {
             <strong className="text-[var(--foreground-primary)]">„{pendingRestore?.label}“</strong>{' '}
             ({pendingRestore && new Date(pendingRestore.timestamp).toLocaleString()})
           </p>
-          <p className="text-sm text-amber-400">
-            ⚠️ {t('vc.restoreWarning')}
-          </p>
+          <p className="text-sm text-amber-400">⚠️ {t('vc.restoreWarning')}</p>
           <div className="flex gap-3 justify-end">
             <Button
               variant="secondary"
@@ -499,7 +497,9 @@ export const VersionControlPanel: FC = () => {
                 )}
               </div>
               {branch.id === currentBranch?.id && (
-                <span className="ml-auto text-xs text-[var(--foreground-muted)]">{t('vc.active')}</span>
+                <span className="ml-auto text-xs text-[var(--foreground-muted)]">
+                  {t('vc.active')}
+                </span>
               )}
             </button>
           ))}

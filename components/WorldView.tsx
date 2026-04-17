@@ -1,21 +1,21 @@
 import type { FC } from 'react';
-import React, { useState, useEffect, useRef } from 'react';
-import type { World } from '../types';
+import React, { useEffect, useRef, useState } from 'react';
+import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
+import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
+import { uploadWorldImageThunk } from '../features/project/projectSlice';
+import { useWorldView } from '../hooks/useWorldView';
+import { dbService } from '../services/dbService';
+import type { World } from '../types';
+import { AddNewCard } from './ui/AddNewCard';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
-import { Spinner } from './ui/Spinner';
-import { Modal } from './ui/Modal';
 import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
-import { useWorldView } from '../hooks/useWorldView';
-import { WorldViewContext, useWorldViewContext } from '../contexts/WorldViewContext';
 import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
+import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
-import { AddNewCard } from './ui/AddNewCard';
-import { dbService } from '../services/dbService';
-import { useAppDispatch } from '../app/hooks';
-import { uploadWorldImageThunk } from '../features/project/projectSlice';
 
 // A local hook to fetch image data on-demand from IndexedDB
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
@@ -141,7 +141,7 @@ const WorldAtlas: FC = () => {
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0] && selectedWorld) {
+    if (event.target.files?.[0] && selectedWorld) {
       const file = event.target.files[0];
       await dispatch(uploadWorldImageThunk({ worldId: selectedWorld.id, file }));
     }
@@ -591,12 +591,16 @@ const WorldCard: FC<{ world: World; animationIndex: number }> = React.memo(
           )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-[var(--card-gradient-overlay)] to-transparent">
-          <h3 className="font-bold text-lg text-[var(--foreground-interactive)] dark:text-white truncate">{world.name}</h3>
-          <p className="text-sm text-[var(--foreground-secondary)] dark:text-gray-300 truncate">{world.description}</p>
+          <h3 className="font-bold text-lg text-[var(--foreground-interactive)] dark:text-white truncate">
+            {world.name}
+          </h3>
+          <p className="text-sm text-[var(--foreground-secondary)] dark:text-gray-300 truncate">
+            {world.description}
+          </p>
         </div>
       </Card>
     );
-  }
+  },
 );
 WorldCard.displayName = 'WorldCard';
 

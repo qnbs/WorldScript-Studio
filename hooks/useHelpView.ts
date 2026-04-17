@@ -1,9 +1,8 @@
-import { useState, useCallback } from 'react';
-import { useTranslation } from './useTranslation';
-import type { HelpCategory, HelpArticle } from '../types';
+import { useCallback, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
 import { streamAiHelpResponse } from '../services/aiProviderService';
-import type { AiCreativity } from '../types';
+import type { AiCreativity, HelpArticle, HelpCategory } from '../types';
+import { useTranslation } from './useTranslation';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -21,7 +20,9 @@ export const useHelpView = () => {
 
   const rawHelpContent = t<HelpCategory[]>('help.categories');
   const helpContent: HelpCategory[] = Array.isArray(rawHelpContent)
-    ? rawHelpContent.filter((c): c is HelpCategory => c != null && typeof c === 'object' && 'id' in c)
+    ? rawHelpContent.filter(
+        (c): c is HelpCategory => c != null && typeof c === 'object' && 'id' in c,
+      )
     : [];
 
   const [activeCategory, setActiveCategory] = useState<string>(helpContent[0]?.id || 'ai');
@@ -86,7 +87,7 @@ export const useHelpView = () => {
               return prev;
             });
           },
-        }
+        },
       );
     } catch {
       setChatHistory((prev) => {

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Type } from '@google/genai';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGenerateContent = vi.fn().mockResolvedValue({ text: 'mock response' });
 
@@ -13,7 +13,7 @@ vi.mock('@google/genai', () => {
         (async function* () {
           yield { text: 'chunk1' };
           yield { text: 'chunk2' };
-        })()
+        })(),
       ),
     };
   }
@@ -61,7 +61,7 @@ describe('geminiService', () => {
       controller.abort();
 
       await expect(generateText('test prompt', 'Balanced', controller.signal)).rejects.toThrow(
-        'Aborted'
+        'Aborted',
       );
     });
 
@@ -114,8 +114,8 @@ describe('geminiService', () => {
       expect(() =>
         getPrompts(
           'unknownType' as unknown as Parameters<typeof getPrompts>[0],
-          { lang: 'en' } as unknown as Parameters<typeof getPrompts>[1]
-        )
+          { lang: 'en' } as unknown as Parameters<typeof getPrompts>[1],
+        ),
       ).toThrow('Unknown prompt type');
     });
   });
@@ -133,7 +133,7 @@ describe('geminiService', () => {
   describe('retry logic', () => {
     it('should handle API key invalidation on 401', async () => {
       mockGenerateContent.mockRejectedValue(
-        Object.assign(new Error('api key not valid'), { status: 401 })
+        Object.assign(new Error('api key not valid'), { status: 401 }),
       );
 
       const { generateText } = await import('../../services/geminiService');
@@ -170,8 +170,8 @@ describe('geminiService', () => {
           [],
           'Balanced',
           'en',
-          controller.signal
-        )
+          controller.signal,
+        ),
       ).rejects.toThrow();
     });
   });
@@ -183,7 +183,7 @@ describe('geminiService', () => {
       controller.abort();
 
       await expect(
-        analyzeAsCritic('sample text', 'Balanced', 'en', controller.signal)
+        analyzeAsCritic('sample text', 'Balanced', 'en', controller.signal),
       ).rejects.toThrow();
     });
   });

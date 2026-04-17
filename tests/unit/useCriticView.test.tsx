@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCriticView } from '../../hooks/useCriticView';
 
 const mockGenerateText = vi.fn<
@@ -74,7 +74,7 @@ describe('useCriticView', () => {
       'mock-prompt',
       mockState.aiCreativity,
       expect.objectContaining({ provider: 'gemini', model: 'gemini-1.5-flash' }),
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
     );
     expect(result.current.analysisResult).toBe('AI critique result');
     expect(result.current.isAnalyzing).toBe(false);

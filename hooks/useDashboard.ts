@@ -1,14 +1,14 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useToast } from '../components/ui/Toast';
 import {
-  selectProjectData,
   selectAllCharacters,
   selectAllWorlds,
+  selectProjectData,
 } from '../features/project/projectSelectors';
-import { projectActions, generateLoglineSuggestionsThunk } from '../features/project/projectSlice';
-import { useTranslation } from './useTranslation';
-import { useToast } from '../components/ui/Toast';
+import { generateLoglineSuggestionsThunk, projectActions } from '../features/project/projectSlice';
 import type { View } from '../types';
+import { useTranslation } from './useTranslation';
 
 export interface UseDashboardProps {
   onNavigate: (view: View) => void;
@@ -45,7 +45,7 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
       project.projectGoals?.totalWordCount
         ? (wordCount / project.projectGoals.totalWordCount) * 100
         : 0,
-    [wordCount, project.projectGoals?.totalWordCount]
+    [wordCount, project.projectGoals?.totalWordCount],
   );
 
   const daysLeft = useMemo(() => {
@@ -69,10 +69,10 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
 
   const handleSaveGoals = useCallback(() => {
     dispatch(
-      projectActions.updateProjectGoal({ key: 'totalWordCount', value: Number(goalWordCount) })
+      projectActions.updateProjectGoal({ key: 'totalWordCount', value: Number(goalWordCount) }),
     );
     dispatch(
-      projectActions.updateProjectGoal({ key: 'targetDate', value: goalTargetDate || null })
+      projectActions.updateProjectGoal({ key: 'targetDate', value: goalTargetDate || null }),
     );
     setIsGoalModalOpen(false);
   }, [dispatch, goalWordCount, goalTargetDate]);
@@ -87,7 +87,7 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
     } catch (e: unknown) {
       toast.error(
         t('error.apiErrorTitle'),
-        typeof e === 'string' ? e : t('error.apiErrorDescription')
+        typeof e === 'string' ? e : t('error.apiErrorDescription'),
       );
       setIsLoglineModalOpen(false);
     } finally {
@@ -100,21 +100,21 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
       dispatch(projectActions.updateLogline(logline));
       setIsLoglineModalOpen(false);
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleTitleChange = useCallback(
     (value: string) => {
       dispatch(projectActions.updateTitle(value));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleLoglineChange = useCallback(
     (value: string) => {
       dispatch(projectActions.updateLogline(value));
     },
-    [dispatch]
+    [dispatch],
   );
 
   return {

@@ -1,14 +1,14 @@
-import { useMemo, useEffect, useCallback, useRef } from 'react';
-import { useTranslation } from './useTranslation';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector, useAppSelectorShallow } from '../app/hooks';
-import { logger } from '../services/logger';
 import {
-  selectProjectData,
-  selectManuscript,
   selectAllCharacters,
+  selectManuscript,
+  selectProjectData,
 } from '../features/project/projectSelectors';
-import { writerActions } from '../features/writer/writerSlice';
 import { projectActions, streamGenerationThunk } from '../features/project/projectSlice';
+import { writerActions } from '../features/writer/writerSlice';
+import { logger } from '../services/logger';
+import { useTranslation } from './useTranslation';
 
 export const useWriterView = () => {
   const { t, language } = useTranslation();
@@ -66,7 +66,7 @@ export const useWriterView = () => {
       const sectionId = section.id;
       dispatch(projectActions.updateManuscriptSection({ id: sectionId, changes: { content } }));
     },
-    [dispatch, manuscript]
+    [dispatch, manuscript],
   );
 
   const isGenerateDisabled = useCallback(() => {
@@ -218,7 +218,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
         prompt,
         lang: language,
         onChunk,
-      })
+      }),
     )
       .unwrap()
       .catch((err) => {
@@ -226,11 +226,11 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
           logger.error('Generation failed', err);
           dispatch(
             writerActions.updateCurrentHistoryItem(
-              'Error generating content. Please try again later or check your API key.'
-            )
+              'Error generating content. Please try again later or check your API key.',
+            ),
           );
         } else {
-          dispatch(writerActions.updateCurrentHistoryItem(fullStream + ' [Cancelled]'));
+          dispatch(writerActions.updateCurrentHistoryItem(`${fullStream} [Cancelled]`));
         }
       })
       .finally(() => {
@@ -243,14 +243,14 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     (direction: 'prev' | 'next') => {
       dispatch(writerActions.navigateHistory(direction));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleUpdateScratchpad = useCallback(
     (text: string) => {
       dispatch(writerActions.updateCurrentHistoryItem(text));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleAccept = useCallback(
@@ -280,7 +280,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       activeHistoryIndex,
       selection,
       handleContentChange,
-    ]
+    ],
   );
 
   const projectForContext = useMemo(
@@ -288,7 +288,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       ...project,
       characters,
     }),
-    [project, characters]
+    [project, characters],
   );
 
   return {

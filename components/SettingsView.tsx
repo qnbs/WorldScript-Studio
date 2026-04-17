@@ -1,19 +1,19 @@
 import type { FC } from 'react';
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader } from './ui/Card';
-import { Select } from './ui/Select';
-import { Button } from './ui/Button';
-import { Modal } from './ui/Modal';
-import { Input } from './ui/Input';
-import { Spinner } from './ui/Spinner';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ICONS } from '../constants';
+import { SettingsViewContext, useSettingsViewContext } from '../contexts/SettingsViewContext';
 import { useSettingsView } from '../hooks/useSettingsView';
 import { useTranslation } from '../hooks/useTranslation';
-import { SettingsViewContext, useSettingsViewContext } from '../contexts/SettingsViewContext';
-import { ICONS } from '../constants';
-import { ApiKeySection } from './ApiKeySection';
 import { listOllamaModels, testAIConnection } from '../services/aiProviderService';
 import { storageService } from '../services/storageService';
 import type { AIProvider } from '../types';
+import { ApiKeySection } from './ApiKeySection';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
+import { Select } from './ui/Select';
+import { Spinner } from './ui/Spinner';
 
 // --- SUB-COMPONENTS ---
 
@@ -145,7 +145,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
       void handleLoadOllamaModels();
       void handleTest();
     }
-  }, [provider, ollamaBaseUrl, handleLoadOllamaModels, handleTest]);
+  }, [provider, handleLoadOllamaModels, handleTest]);
 
   const providers: { id: AIProvider; label: string }[] = [
     { id: 'gemini', label: 'Google Gemini' },
@@ -157,7 +157,9 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">{t('settings.ai.providerTitle')}</h2>
+        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          {t('settings.ai.providerTitle')}
+        </h2>
         <p className="text-sm text-[var(--foreground-muted)] mt-1">
           {t('settings.ai.providerDescription')}
         </p>
@@ -275,9 +277,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
                 ))}
               </div>
             )}
-            <p className="text-xs text-[var(--foreground-muted)]">
-              {t('settings.ai.ollamaHint')}
-            </p>
+            <p className="text-xs text-[var(--foreground-muted)]">{t('settings.ai.ollamaHint')}</p>
           </div>
         )}
 
@@ -285,9 +285,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         {provider === 'anthropic' && (
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
             <p className="font-semibold mb-1">⚠️ {t('settings.ai.corsRestriction')}</p>
-            <p>
-              {t('settings.ai.anthropicCorsNote')}
-            </p>
+            <p>{t('settings.ai.anthropicCorsNote')}</p>
           </div>
         )}
 
@@ -295,10 +293,16 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         {provider !== 'gemini' && (
           <div className="flex items-center gap-3 pt-1">
             <Button onClick={handleTest} disabled={testStatus === 'loading'} variant="secondary">
-              {testStatus === 'loading' ? <Spinner className="w-4 h-4" /> : t('settings.ai.testConnection')}
+              {testStatus === 'loading' ? (
+                <Spinner className="w-4 h-4" />
+              ) : (
+                t('settings.ai.testConnection')
+              )}
             </Button>
             {testStatus === 'ok' && (
-              <span className="text-sm text-emerald-400">✓ {t('settings.ai.connectionSuccess')}</span>
+              <span className="text-sm text-emerald-400">
+                ✓ {t('settings.ai.connectionSuccess')}
+              </span>
             )}
             {testStatus === 'error' && <span className="text-sm text-red-400">✗ {testError}</span>}
           </div>
@@ -822,7 +826,7 @@ const SettingsViewUI: FC = () => {
                     onChange={(e) =>
                       handleSettingChange(
                         'aiCreativity',
-                        creativityReverseMap[Number(e.target.value)]
+                        creativityReverseMap[Number(e.target.value)],
                       )
                     }
                     className="w-full"
@@ -1204,7 +1208,7 @@ const SettingsViewUI: FC = () => {
                       onChange={(e) =>
                         handleSettingChange('advancedAi', {
                           ...settings.advancedAi,
-                          maxTokens: parseInt(e.target.value),
+                          maxTokens: parseInt(e.target.value, 10),
                         })
                       }
                       className="w-full"
@@ -1242,7 +1246,7 @@ const SettingsViewUI: FC = () => {
                       onChange={(e) =>
                         handleSettingChange('advancedAi', {
                           ...settings.advancedAi,
-                          rateLimit: parseInt(e.target.value),
+                          rateLimit: parseInt(e.target.value, 10),
                         })
                       }
                       className="w-full"
@@ -1459,7 +1463,7 @@ const SettingsViewUI: FC = () => {
                     onChange={(e) =>
                       handleSettingChange('performance', {
                         ...settings.performance,
-                        autoSaveInterval: parseInt(e.target.value),
+                        autoSaveInterval: parseInt(e.target.value, 10),
                       })
                     }
                     className="w-full"
@@ -1478,7 +1482,7 @@ const SettingsViewUI: FC = () => {
                     onChange={(e) =>
                       handleSettingChange('performance', {
                         ...settings.performance,
-                        cacheSize: parseInt(e.target.value),
+                        cacheSize: parseInt(e.target.value, 10),
                       })
                     }
                     className="w-full"
@@ -1795,7 +1799,7 @@ const SettingsViewUI: FC = () => {
                     onChange={(e) =>
                       handleSettingChange('backup', {
                         ...settings.backup,
-                        maxBackups: parseInt(e.target.value),
+                        maxBackups: parseInt(e.target.value, 10),
                       })
                     }
                     className="w-full"

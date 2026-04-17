@@ -10,9 +10,9 @@
  *   collaborationService.disconnect();
  */
 
-import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
 import type { Awareness } from 'y-protocols/awareness';
+import { WebrtcProvider } from 'y-webrtc';
+import * as Y from 'yjs';
 import type { CollaborationUser } from '../types';
 
 // Free public signaling servers for y-webrtc
@@ -73,7 +73,7 @@ class CollaborationService {
 
     // Notify all listeners when awareness changes (connected users update)
     this.provider.awareness.on('change', () => {
-      this.listeners.forEach((l) => l());
+      this.listeners.forEach((l) => void l());
     });
   }
 
@@ -85,7 +85,7 @@ class CollaborationService {
     this.provider = null;
     this.doc = null;
     this._roomId = null;
-    this.listeners.forEach((l) => l());
+    this.listeners.forEach((l) => void l());
   }
 
   get isConnected(): boolean {

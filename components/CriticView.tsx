@@ -1,11 +1,11 @@
 import type { FC } from 'react';
-import { useState, useCallback } from 'react';
-import { Card, CardContent, CardHeader } from './ui/Card';
-import { Button } from './ui/Button';
-import { Textarea } from './ui/Textarea';
-import { Spinner } from './ui/Spinner';
-import { useCriticView } from '../hooks/useCriticView';
+import { useCallback, useState } from 'react';
 import { CriticViewContext, useCriticViewContext } from '../contexts/CriticViewContext';
+import { useCriticView } from '../hooks/useCriticView';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Spinner } from './ui/Spinner';
+import { Textarea } from './ui/Textarea';
 
 const CriticUI: FC = () => {
   const { t, analysisResult, isAnalyzing, analyzeText, detectPlotHoles } = useCriticViewContext();

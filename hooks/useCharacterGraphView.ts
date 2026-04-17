@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useAppSelector, useAppDispatch } from '../app/hooks';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectAllCharacters, selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import { useTranslation } from '../hooks/useTranslation';
@@ -27,21 +27,21 @@ export const useCharacterGraphView = () => {
       };
       dispatch(projectActions.addRelationship(newRelationship));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const onUpdateRelationship = useCallback(
     (relationshipId: string, updates: Partial<CharacterRelationship>) => {
       dispatch(projectActions.updateRelationship({ id: relationshipId, changes: updates }));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const onDeleteRelationship = useCallback(
     (relationshipId: string) => {
       dispatch(projectActions.deleteRelationship(relationshipId));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const onConnect = useCallback(
@@ -49,7 +49,7 @@ export const useCharacterGraphView = () => {
       // Default relationship type
       onAddRelationship(fromId, toId, 'friend', 5);
     },
-    [onAddRelationship]
+    [onAddRelationship],
   );
 
   return {

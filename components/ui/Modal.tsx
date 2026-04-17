@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ModalProps {
@@ -37,8 +38,8 @@ export const Modal: React.FC<ModalProps> = ({
       if (modalElement) {
         const focusableElements = Array.from(
           modalElement.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-          )
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          ),
         ).filter((element) => !element.hasAttribute('disabled'));
         const firstElement = focusableElements[0];
         const lastElement = focusableElements[focusableElements.length - 1];

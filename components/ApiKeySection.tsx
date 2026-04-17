@@ -1,12 +1,12 @@
 import type { FC } from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from '../hooks/useTranslation';
 import { dbService } from '../services/dbService';
-import { invalidateAiClientCache, generateText } from '../services/geminiService';
+import { generateText, invalidateAiClientCache } from '../services/geminiService';
+import { logger } from '../services/logger';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Spinner } from './ui/Spinner';
-import { useTranslation } from '../hooks/useTranslation';
-import { logger } from '../services/logger';
 
 export const ApiKeySection: FC = () => {
   const { t } = useTranslation();
@@ -198,12 +198,8 @@ export const ApiKeySection: FC = () => {
               />
             </svg>
             <div className="text-sm text-red-300">
-              <p className="font-medium mb-1">
-                {t('apiKey.decryptFailed')}
-              </p>
-              <p className="text-red-300/80">
-                {t('apiKey.decryptFailedDetail')}
-              </p>
+              <p className="font-medium mb-1">{t('apiKey.decryptFailed')}</p>
+              <p className="text-red-300/80">{t('apiKey.decryptFailedDetail')}</p>
             </div>
           </div>
         </div>

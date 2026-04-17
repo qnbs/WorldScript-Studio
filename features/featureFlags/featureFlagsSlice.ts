@@ -1,4 +1,4 @@
-import { createSlice, type PayloadAction, type Middleware } from '@reduxjs/toolkit';
+import { createSlice, type Middleware, type PayloadAction } from '@reduxjs/toolkit';
 
 export interface FeatureFlagsState {
   enableOllama: boolean;

@@ -18,7 +18,7 @@ export const useConsistencyCheckerViewContext = () => {
   const context = useContext(ConsistencyCheckerViewContext);
   if (!context) {
     throw new Error(
-      'useConsistencyCheckerViewContext must be used within a ConsistencyCheckerViewContext.Provider'
+      'useConsistencyCheckerViewContext must be used within a ConsistencyCheckerViewContext.Provider',
     );
   }
   return context;

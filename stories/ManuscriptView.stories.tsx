@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import React from 'react';
+import type React from 'react';
 import { Provider } from 'react-redux';
-import { ManuscriptView } from '../components/ManuscriptView';
 import { setupStore } from '../app/store';
-import { projectActions } from '../features/project/projectSlice';
+import { ManuscriptView } from '../components/ManuscriptView';
 import { ToastProvider } from '../components/ui/Toast';
 import { I18nContext } from '../contexts/I18nContext';
+import { projectActions } from '../features/project/projectSlice';
 
 const store = setupStore();
 store.dispatch(
@@ -28,7 +28,7 @@ store.dispatch(
       content:
         'A final confrontation forces the hero to choose between saving the world and saving themselves.',
     },
-  ])
+  ]),
 );
 
 const defaultT = <T = string>(key: string): T => key as unknown as T;

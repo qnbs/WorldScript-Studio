@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { FeatureFlagsState } from '../../features/featureFlags/featureFlagsSlice';
 import featureFlagsReducer, {
   featureFlagsActions,
 } from '../../features/featureFlags/featureFlagsSlice';
-import type { FeatureFlagsState } from '../../features/featureFlags/featureFlagsSlice';
 
 describe('featureFlagsSlice', () => {
   const initialState: FeatureFlagsState = {

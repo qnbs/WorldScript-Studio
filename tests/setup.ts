@@ -1,6 +1,6 @@
 // Global test setup for Vitest + React Testing Library
 import '@testing-library/jest-dom';
-import { vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 
 // Mock Web APIs not available in jsdom
 Object.defineProperty(window, 'matchMedia', {

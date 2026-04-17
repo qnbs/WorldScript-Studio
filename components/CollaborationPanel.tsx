@@ -1,11 +1,11 @@
 import type { FC } from 'react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
-import { collaborationService } from '../services/collaborationService';
 import { useTranslation } from '../hooks/useTranslation';
+import { collaborationService } from '../services/collaborationService';
+import type { CollaborationUser } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import type { CollaborationUser } from '../types';
 
 // Preset user colors for avatar display
 const USER_COLORS = [
@@ -19,7 +19,8 @@ const USER_COLORS = [
   '#84cc16',
 ];
 
-const getRandomColor = () => USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)] ?? '#6366f1';
+const getRandomColor = () =>
+  USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)] ?? '#6366f1';
 
 // Persistent user identity for the session
 function getLocalUser(): CollaborationUser {
@@ -114,7 +115,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
         const panel = panelRef.current;
         if (!panel) return;
         const focusable = panel.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
         );
         if (focusable.length === 0) {
           e.preventDefault();
@@ -189,7 +190,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
       await collaborationService.connect(
         roomId,
         user,
-        sanitizeRoomInput(roomPassword) || undefined
+        sanitizeRoomInput(roomPassword) || undefined,
       );
 
       cleanupRef.current = () => collaborationService.disconnect();
@@ -220,7 +221,11 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-[var(--overlay-backdrop)] z-40" onClick={onClose} aria-hidden="true" />
+      <div
+        className="fixed inset-0 bg-[var(--overlay-backdrop)] z-40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
       {/* Panel */}
       <section
@@ -279,9 +284,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
             <p className="font-semibold text-[var(--foreground-primary)] mb-1">
               🌐 {t('collab.p2pTitle')}
             </p>
-            <p>
-              {t('collab.p2pDescription')}
-            </p>
+            <p>{t('collab.p2pDescription')}</p>
           </div>
 
           {/* User identity */}
@@ -398,7 +401,9 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                       <UserAvatar user={user} size="sm" />
                       <span className="text-sm text-[var(--foreground-primary)]">{user.name}</span>
                       {user.id === localUser.id && (
-                        <span className="ml-auto text-xs text-[var(--foreground-muted)]">({t('collab.you')})</span>
+                        <span className="ml-auto text-xs text-[var(--foreground-muted)]">
+                          ({t('collab.you')})
+                        </span>
                       )}
                     </div>
                   ))}
@@ -410,9 +415,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           {/* Technical note */}
           <div className="p-3 rounded-lg bg-[var(--background-secondary)] text-xs text-[var(--foreground-muted)]">
             <p className="font-semibold mb-1">ℹ️ {t('collab.technicalNote')}</p>
-            <p>
-              {t('collab.technicalDescription')}
-            </p>
+            <p>{t('collab.technicalDescription')}</p>
           </div>
         </div>
       </section>

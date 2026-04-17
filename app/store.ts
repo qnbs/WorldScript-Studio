@@ -1,5 +1,9 @@
 import type { AnyAction, Middleware, Reducer } from '@reduxjs/toolkit';
-import { configureStore, combineReducers } from '@reduxjs/toolkit';
+import { combineReducers, configureStore } from '@reduxjs/toolkit';
+import undoable from 'redux-undo';
+import featureFlagsReducer, {
+  featureFlagsPersistenceMiddleware,
+} from '../features/featureFlags/featureFlagsSlice';
 import projectReducer, {
   importProjectThunk,
   projectActions,
@@ -8,18 +12,14 @@ import projectReducer, {
 import settingsReducer from '../features/settings/settingsSlice';
 import statusReducer from '../features/status/statusSlice';
 import writerReducer from '../features/writer/writerSlice';
-import featureFlagsReducer, {
-  featureFlagsPersistenceMiddleware,
-} from '../features/featureFlags/featureFlagsSlice';
-import undoable from 'redux-undo';
-import { listenerMiddleware } from './listenerMiddleware';
 import { logger } from '../services/logger';
 import type { PersistedRootState } from '../types';
+import { listenerMiddleware } from './listenerMiddleware';
 
 // A sophisticated filter to prevent async thunk actions from populating the undo history.
 const filterUndoableActions = (action: AnyAction) => {
   const isThunkAction = ['/pending', '/fulfilled', '/rejected'].some((suffix) =>
-    action.type.endsWith(suffix)
+    action.type.endsWith(suffix),
   );
   // Also filter out ephemeral UI actions if any
   return !isThunkAction;
@@ -61,7 +61,7 @@ const combinedReducer = combineReducers({
 // A sophisticated higher-order reducer to augment redux-undo's behavior
 export const rootReducer: Reducer<ReturnType<typeof combinedReducer>, AnyAction> = (
   state: ReturnType<typeof combinedReducer> | undefined,
-  action: AnyAction
+  action: AnyAction,
 ) => {
   let nextState = state;
 
@@ -71,7 +71,7 @@ export const rootReducer: Reducer<ReturnType<typeof combinedReducer>, AnyAction>
     action.type === importProjectThunk.fulfilled.type ||
     action.type === restoreSnapshotThunk.fulfilled.type
   ) {
-    if (nextState && nextState.project) {
+    if (nextState?.project) {
       const { past: _past, future: _future, ...restOfProject } = nextState.project;
       nextState = {
         ...nextState,

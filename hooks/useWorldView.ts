@@ -1,17 +1,17 @@
-import { useState, useCallback } from 'react';
-import { useTranslation } from './useTranslation';
+import { useCallback, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useToast } from '../components/ui/Toast';
 import { selectAllWorlds } from '../features/project/projectSelectors';
 import {
-  projectActions,
-  generateWorldProfileThunk,
-  regenerateWorldFieldThunk,
   generateWorldImageThunk,
+  generateWorldProfileThunk,
+  projectActions,
+  regenerateWorldFieldThunk,
 } from '../features/project/projectSlice';
-import type { World, WorldTimelineEvent, WorldLocation } from '../types';
-import { v4 as uuidv4 } from 'uuid';
 import { storageService } from '../services/storageService';
-import { useToast } from '../components/ui/Toast';
+import type { World, WorldLocation, WorldTimelineEvent } from '../types';
+import { useTranslation } from './useTranslation';
 
 export const useWorldView = () => {
   const { t, language } = useTranslation();
@@ -44,7 +44,7 @@ export const useWorldView = () => {
     setIsGeneratingProfile(true);
     setIsAiModalOpen(false);
     const resultAction = await dispatch(
-      generateWorldProfileThunk({ concept: aiConcept, lang: language })
+      generateWorldProfileThunk({ concept: aiConcept, lang: language }),
     );
     if (generateWorldProfileThunk.fulfilled.match(resultAction)) {
       dispatch(projectActions.addWorld(resultAction.payload));
@@ -69,7 +69,7 @@ export const useWorldView = () => {
         dispatch(projectActions.updateWorld({ id: selectedWorld.id, changes }));
       }
     },
-    [dispatch, selectedWorld]
+    [dispatch, selectedWorld],
   );
 
   const handleRegenerateField = useCallback(
@@ -77,7 +77,7 @@ export const useWorldView = () => {
       if (!selectedWorld) return;
       setIsRegeneratingField(field);
       const resultAction = await dispatch(
-        regenerateWorldFieldThunk({ world: selectedWorld, field, lang: language })
+        regenerateWorldFieldThunk({ world: selectedWorld, field, lang: language }),
       );
       if (regenerateWorldFieldThunk.fulfilled.match(resultAction)) {
         handleFieldChange(resultAction.payload.field, resultAction.payload.value);
@@ -86,18 +86,18 @@ export const useWorldView = () => {
       }
       setIsRegeneratingField(null);
     },
-    [dispatch, selectedWorld, language, handleFieldChange, toast, t]
+    [dispatch, selectedWorld, language, handleFieldChange, toast, t],
   );
 
   const handleGenerateImage = useCallback(async () => {
-    if (!selectedWorld || !selectedWorld.description) return;
+    if (!selectedWorld?.description) return;
     setIsGeneratingImage(true);
     const resultAction = await dispatch(
       generateWorldImageThunk({
         worldId: selectedWorld.id,
         description: selectedWorld.description,
         lang: language,
-      })
+      }),
     );
     if (generateWorldImageThunk.fulfilled.match(resultAction)) {
       setSelectedWorld((w) => (w ? { ...w, hasAmbianceImage: true } : null));
@@ -112,7 +112,7 @@ export const useWorldView = () => {
     setIsRefiningImage(true);
     const description = `${selectedWorld.description}. Refinement: ${refinementPrompt}`;
     const resultAction = await dispatch(
-      generateWorldImageThunk({ worldId: selectedWorld.id, description, lang: language })
+      generateWorldImageThunk({ worldId: selectedWorld.id, description, lang: language }),
     );
     if (!generateWorldImageThunk.fulfilled.match(resultAction)) {
       toast.error(t('worlds.error.imageFailed'));
@@ -133,10 +133,10 @@ export const useWorldView = () => {
       if (!selectedWorld) return;
       handleFieldChange(
         'timeline',
-        selectedWorld.timeline.filter((e) => e.id !== id)
+        selectedWorld.timeline.filter((e) => e.id !== id),
       );
     },
-    [selectedWorld, handleFieldChange]
+    [selectedWorld, handleFieldChange],
   );
 
   const handleTimelineChange = useCallback(
@@ -144,10 +144,10 @@ export const useWorldView = () => {
       if (!selectedWorld) return;
       handleFieldChange(
         'timeline',
-        selectedWorld.timeline.map((e) => (e.id === id ? { ...e, [field]: value } : e))
+        selectedWorld.timeline.map((e) => (e.id === id ? { ...e, [field]: value } : e)),
       );
     },
-    [selectedWorld, handleFieldChange]
+    [selectedWorld, handleFieldChange],
   );
 
   const addLocation = useCallback(() => {
@@ -161,10 +161,10 @@ export const useWorldView = () => {
       if (!selectedWorld) return;
       handleFieldChange(
         'locations',
-        selectedWorld.locations.filter((l) => l.id !== id)
+        selectedWorld.locations.filter((l) => l.id !== id),
       );
     },
-    [selectedWorld, handleFieldChange]
+    [selectedWorld, handleFieldChange],
   );
 
   const handleLocationChange = useCallback(
@@ -172,10 +172,10 @@ export const useWorldView = () => {
       if (!selectedWorld) return;
       handleFieldChange(
         'locations',
-        selectedWorld.locations.map((l) => (l.id === id ? { ...l, [field]: value } : l))
+        selectedWorld.locations.map((l) => (l.id === id ? { ...l, [field]: value } : l)),
       );
     },
-    [selectedWorld, handleFieldChange]
+    [selectedWorld, handleFieldChange],
   );
 
   const handleDelete = useCallback(
@@ -183,7 +183,7 @@ export const useWorldView = () => {
       const world = worlds.find((w) => w.id === id);
       if (world) setWorldToDelete(world);
     },
-    [worlds]
+    [worlds],
   );
 
   const confirmDelete = useCallback(async () => {

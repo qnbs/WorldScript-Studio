@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import { act, render, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type DispatcherAction = { type: string; payload?: unknown };
@@ -236,23 +236,23 @@ describe('useWriterView', () => {
 
     expect(
       mockDispatch.mock.calls.some(
-        ([action]) => isDispatcherAction(action) && action.type === 'startLoading'
-      )
+        ([action]) => isDispatcherAction(action) && action.type === 'startLoading',
+      ),
     ).toBe(true);
     expect(
       mockDispatch.mock.calls.some(
-        ([action]) => isDispatcherAction(action) && action.type === 'clearResultStream'
-      )
+        ([action]) => isDispatcherAction(action) && action.type === 'clearResultStream',
+      ),
     ).toBe(true);
     expect(
       mockDispatch.mock.calls.some(
-        ([action]) => isDispatcherAction(action) && action.type === 'addHistory'
-      )
+        ([action]) => isDispatcherAction(action) && action.type === 'addHistory',
+      ),
     ).toBe(true);
     expect(
       mockDispatch.mock.calls.some(
-        ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk'
-      )
+        ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk',
+      ),
     ).toBe(true);
   });
 
@@ -266,7 +266,7 @@ describe('useWriterView', () => {
     });
 
     const thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
-      isStreamGenerationThunk(call[0])
+      isStreamGenerationThunk(call[0]),
     );
     expect(thunkCall).toBeDefined();
     expect(thunkCall?.[0].payload.prompt).toContain('Improve the following text');
@@ -284,7 +284,7 @@ describe('useWriterView', () => {
     });
 
     const thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
-      isStreamGenerationThunk(call[0])
+      isStreamGenerationThunk(call[0]),
     );
     expect(thunkCall?.[0].payload.prompt).toContain('Write a piece of dialogue between Villain');
     expect(thunkCall?.[0].payload.prompt).toContain('A tense encounter');
@@ -349,7 +349,7 @@ describe('useWriterView', () => {
       });
 
       const thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
-        isStreamGenerationThunk(call[0])
+        isStreamGenerationThunk(call[0]),
       );
       expect(thunkCall).toBeDefined();
       expect(thunkCall?.[0].payload.prompt).toContain(scenario.expected);
@@ -364,7 +364,7 @@ describe('useWriterView', () => {
     act(() => view.handleGenerate());
 
     expect(mockDispatch).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'streamGenerationThunk' })
+      expect.objectContaining({ type: 'streamGenerationThunk' }),
     );
   });
 
@@ -379,10 +379,10 @@ describe('useWriterView', () => {
     });
 
     const thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
-      isStreamGenerationThunk(call[0])
+      isStreamGenerationThunk(call[0]),
     );
     expect(thunkCall?.[0].payload.prompt).toContain(
-      'Rewrite the following text in a different tone'
+      'Rewrite the following text in a different tone',
     );
   });
 
@@ -434,8 +434,8 @@ describe('useWriterView', () => {
         expect.objectContaining({
           type: 'updateCurrentHistoryItem',
           payload: 'Error generating content. Please try again later or check your API key.',
-        })
-      )
+        }),
+      ),
     );
 
     if (originalImplementation) {
@@ -453,7 +453,7 @@ describe('useWriterView', () => {
       view.handleGenerate();
     });
     let thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
-      isStreamGenerationThunk(call[0])
+      isStreamGenerationThunk(call[0]),
     );
     expect(thunkCall?.[0].payload.prompt).toContain('based on this context');
 
@@ -464,7 +464,7 @@ describe('useWriterView', () => {
       view.handleGenerate();
     });
     thunkCall = mockDispatch.mock.calls.find((call): call is [StreamGenerationThunk] =>
-      isStreamGenerationThunk(call[0])
+      isStreamGenerationThunk(call[0]),
     );
     expect(thunkCall?.[0].payload.prompt).toContain('Analyze the following scene from a story');
   });
@@ -495,8 +495,8 @@ describe('useWriterView', () => {
 
     expect(
       mockDispatch.mock.calls.some(
-        ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk'
-      )
+        ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk',
+      ),
     ).toBe(false);
   });
 

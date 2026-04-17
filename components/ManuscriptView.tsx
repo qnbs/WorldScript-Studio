@@ -1,19 +1,19 @@
 import type { FC, ReactNode } from 'react';
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardHeader } from './ui/Card';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
+import { ManuscriptViewContext, useManuscriptViewContext } from '../contexts/ManuscriptViewContext';
+import { projectActions } from '../features/project/projectSlice';
+import { useManuscriptView } from '../hooks/useManuscriptView';
+import { useTranslation } from '../hooks/useTranslation';
 import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { DebouncedInput } from './ui/DebouncedInput';
+import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { Drawer } from './ui/Drawer';
 import { Modal } from './ui/Modal';
 import { Spinner } from './ui/Spinner';
-import { DebouncedTextarea } from './ui/DebouncedTextarea';
-import { DebouncedInput } from './ui/DebouncedInput';
-import { projectActions } from '../features/project/projectSlice';
-import { useManuscriptView } from '../hooks/useManuscriptView';
-import { ManuscriptViewContext, useManuscriptViewContext } from '../contexts/ManuscriptViewContext';
 import { Textarea } from './ui/Textarea';
-import { useAppSelector } from '../app/hooks';
-import { useTranslation } from '../hooks/useTranslation';
 
 // --- Custom Hook for Resizable Panels ---
 const throttle = <A extends readonly unknown[]>(fn: (...args: A) => void, delay = 16) => {
@@ -309,7 +309,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
         </div>
       </div>
     );
-  }
+  },
 );
 NavigatorItem.displayName = 'NavigatorItem';
 
@@ -334,7 +334,7 @@ const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(({ onSec
       setActiveSectionId(id);
       onSectionSelect?.();
     },
-    [setActiveSectionId, onSectionSelect]
+    [setActiveSectionId, onSectionSelect],
   );
 
   const handleDragStart = useCallback(
@@ -342,14 +342,14 @@ const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(({ onSec
       draggedItem.current = index;
       setDraggingIndex(index);
     },
-    [setDraggingIndex, draggedItem]
+    [setDraggingIndex, draggedItem],
   );
 
   const handleDragEnter = useCallback(
     (index: number) => {
       dragOverItem.current = index;
     },
-    [dragOverItem]
+    [dragOverItem],
   );
 
   const handleDragEnd = useCallback(() => {
@@ -361,14 +361,14 @@ const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(({ onSec
     (index: number) => {
       handleMoveSection(index, 'up');
     },
-    [handleMoveSection]
+    [handleMoveSection],
   );
 
   const handleMoveDown = useCallback(
     (index: number) => {
       handleMoveSection(index, 'down');
     },
-    [handleMoveSection]
+    [handleMoveSection],
   );
 
   return (
@@ -438,6 +438,7 @@ const TYPOS_EN: Record<string, string> = {
   its: "it's",
   your: "you're",
   there: 'their',
+  // biome-ignore lint/suspicious/noThenProperty: typo dictionary entry, not a thenable
   then: 'than',
 };
 
@@ -509,7 +510,7 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
         });
       }
     },
-    [currentTypos]
+    [currentTypos],
   );
 
   const applyCorrection = () => {
@@ -532,7 +533,7 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
   // Reset mention selection index when suggestions change
   useEffect(() => {
     setSelectedMentionIndex(0);
-  }, [mentions]);
+  }, []);
 
   // Keyboard handling for mention popup navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -592,7 +593,7 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
           parts.push(
             <span key={offset} className={className}>
               {mention}
-            </span>
+            </span>,
           );
         } else {
           parts.push(mention);
@@ -615,7 +616,7 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
               }}
             >
               {word}
-            </span>
+            </span>,
           );
         } else {
           parts.push(word);

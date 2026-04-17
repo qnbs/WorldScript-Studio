@@ -1,14 +1,14 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
 import {
+  selectAiCreativity,
   selectAllCharacters,
   selectAllWorlds,
   selectProjectData,
-  selectAiCreativity,
 } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
-import { getPrompts } from '../services/geminiService';
 import { generateText } from '../services/aiProviderService';
+import { getPrompts } from '../services/geminiService';
 
 export const useCriticView = () => {
   const { t, language } = useTranslation();
@@ -25,7 +25,7 @@ export const useCriticView = () => {
       maxTokens: aiSettings.maxTokens,
       ollamaBaseUrl: aiSettings.ollamaBaseUrl,
     }),
-    [aiSettings]
+    [aiSettings],
   );
 
   const [analysisResult, setAnalysisResult] = useState<string>('');
@@ -57,7 +57,7 @@ export const useCriticView = () => {
         abortControllerRef.current = null;
       }
     },
-    [aiCreativity, language, aiOptions]
+    [aiCreativity, language, aiOptions],
   );
 
   const detectPlotHolesFn = useCallback(async () => {

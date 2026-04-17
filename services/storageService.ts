@@ -1,5 +1,5 @@
-import type { StoryProject, Settings, ProjectSnapshot } from '../types';
 import type { ProjectData } from '../features/project/projectSlice';
+import type { ProjectSnapshot, Settings, StoryProject } from '../types';
 
 // Storage interface for different backends
 export interface StorageBackend {

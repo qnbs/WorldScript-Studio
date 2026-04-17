@@ -2,8 +2,7 @@ import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from '@reduxjs/toolkit';
 import * as LZString from 'lz-string';
 import { v4 as uuid } from 'uuid';
-import type { VersionBranch, VersionSnapshot } from '../../types';
-import type { StorySection } from '../../types';
+import type { StorySection, VersionBranch, VersionSnapshot } from '../../types';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -80,7 +79,7 @@ export const versionControlSlice = createSlice({
         label: string;
         sections: StorySection[];
         parentId?: string;
-      }>
+      }>,
     ) {
       const { label, sections, parentId } = action.payload;
       const id = uuid();
@@ -108,7 +107,7 @@ export const versionControlSlice = createSlice({
         description?: string;
         fromSnapshotId?: string;
         switchTo?: boolean;
-      }>
+      }>,
     ) {
       const { name, description = '', fromSnapshotId, switchTo = true } = action.payload;
       const colorIndex = state.branches.length % BRANCH_COLORS.length;

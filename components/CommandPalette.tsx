@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ICONS } from '../constants';
-import type { View } from '../types';
-import { useTranslation } from '../hooks/useTranslation';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { settingsActions } from '../features/settings/settingsSlice';
-import { projectActions } from '../features/project/projectSlice';
+import { ICONS } from '../constants';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
+import { settingsActions } from '../features/settings/settingsSlice';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { useTranslation } from '../hooks/useTranslation';
+import type { View } from '../types';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -40,9 +40,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   // Detect touch/mobile device to avoid auto-opening virtual keyboard
   const isTouchDevice = useMemo(
     () =>
-      typeof window !== 'undefined' &&
-      ('ontouchstart' in window || navigator.maxTouchPoints > 0),
-    []
+      typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+    [],
   );
 
   // Sync voice transcript to query
@@ -306,7 +305,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     return commands.filter(
       (cmd) =>
         cmd.title.toLowerCase().includes(lowerQuery) ||
-        cmd.category.toLowerCase().includes(lowerQuery)
+        cmd.category.toLowerCase().includes(lowerQuery),
     );
   }, [query, commands]);
 
@@ -339,7 +338,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   // Ensure selection index is valid when filtering
   useEffect(() => {
     setSelectedIndex(0);
-  }, [query]);
+  }, []);
 
   // Scroll active item into view
   useEffect(() => {
@@ -364,7 +363,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
       }
       return acc;
     },
-    {} as Record<string, CommandItem[]>
+    {} as Record<string, CommandItem[]>,
   );
 
   // Flatten for index mapping

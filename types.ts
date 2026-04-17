@@ -1,5 +1,5 @@
-import type { EntityState } from '@reduxjs/toolkit';
 import type { Type } from '@google/genai';
+import type { EntityState } from '@reduxjs/toolkit';
 import type { ProjectData } from './features/project/projectSlice'; // Import ProjectData type
 
 export type View =

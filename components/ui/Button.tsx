@@ -47,7 +47,7 @@ export const Button = React.memo(
           )}
         </button>
       );
-    }
-  )
+    },
+  ),
 );
 Button.displayName = 'Button';

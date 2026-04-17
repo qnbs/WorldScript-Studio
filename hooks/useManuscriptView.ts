@@ -1,18 +1,18 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useToast } from '../components/ui/Toast';
 import {
-  selectProjectData,
   selectAllCharacters,
   selectAllWorlds,
+  selectProjectData,
 } from '../features/project/projectSelectors';
 import {
-  projectActions,
   generateLoglineSuggestionsThunk,
+  projectActions,
   proofreadTextThunk,
 } from '../features/project/projectSlice';
-import { useTranslation } from './useTranslation';
 import type { Character, View, World } from '../types';
-import { useToast } from '../components/ui/Toast';
+import { useTranslation } from './useTranslation';
 
 // Helper to get cursor coords in textarea. This is a robust way to handle it.
 const getCursorXY = (input: HTMLTextAreaElement, selectionPoint: number) => {
@@ -83,7 +83,7 @@ export const useManuscriptView = ({
   const toast = useToast();
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(
-    manuscript?.[0]?.id ?? null
+    manuscript?.[0]?.id ?? null,
   );
   const [isLoglineModalOpen, setIsLoglineModalOpen] = useState(false);
   const [loglineSuggestions, setLoglineSuggestions] = useState<string[]>([]);
@@ -103,7 +103,7 @@ export const useManuscriptView = ({
     ((Character & { type: 'character' }) | (World & { type: 'world' }))[]
   >([]);
   const [mentionPosition, setMentionPosition] = useState<{ top: number; left: number } | null>(
-    null
+    null,
   );
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
@@ -161,14 +161,14 @@ export const useManuscriptView = ({
         }
       }
     },
-    [dispatch, characters, worlds]
+    [dispatch, characters, worlds],
   );
 
   const handleTitleChange = useCallback(
     (id: string, title: string) => {
       dispatch(projectActions.updateManuscriptSection({ id, changes: { title } }));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleAddSection = useCallback(() => {
@@ -189,7 +189,7 @@ export const useManuscriptView = ({
         setActiveSectionId(newActiveId);
       }
     },
-    [dispatch, manuscript, activeSectionId]
+    [dispatch, manuscript, activeSectionId],
   );
 
   const handleMentionSelect = (item: { id: string; name: string }) => {
@@ -243,13 +243,10 @@ export const useManuscriptView = ({
       const currentSection = newManuscript[index];
       const targetSection = newManuscript[newIndex];
       if (!currentSection || !targetSection) return;
-      [newManuscript[index], newManuscript[newIndex]] = [
-        targetSection,
-        currentSection,
-      ]; // swap
+      [newManuscript[index], newManuscript[newIndex]] = [targetSection, currentSection]; // swap
       dispatch(projectActions.setManuscript(newManuscript));
     },
-    [manuscript, dispatch]
+    [manuscript, dispatch],
   );
 
   const handleGenerateLoglines = async () => {
@@ -284,7 +281,7 @@ export const useManuscriptView = ({
     setProofreadSuggestions([]);
 
     const resultAction = await dispatch(
-      proofreadTextThunk({ text: activeSection.content, lang: language })
+      proofreadTextThunk({ text: activeSection.content, lang: language }),
     );
 
     if (proofreadTextThunk.fulfilled.match(resultAction)) {

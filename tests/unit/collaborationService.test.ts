@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock crypto.subtle for SHA-256 room derivation
 const mockDigest = vi.fn().mockImplementation(async (_algo: string, data: ArrayBuffer) => {
@@ -27,6 +27,7 @@ if (!globalThis.crypto?.subtle) {
 } else if (!globalThis.crypto.subtle.digest) {
   globalThis.crypto.subtle.digest = mockDigest as unknown as SubtleCrypto['digest'];
 }
+
 import { collaborationService } from '../../services/collaborationService';
 
 // Mock y-webrtc and yjs
@@ -40,7 +41,6 @@ vi.mock('y-webrtc', () => {
     };
     disconnect = vi.fn();
     destroy = vi.fn();
-    constructor(_room: string, _doc: unknown, _opts: unknown) {}
   }
   return { WebrtcProvider: MockWebrtcProvider };
 });
@@ -93,7 +93,7 @@ describe('collaborationService', () => {
           name: 'A',
           color: '#000',
         },
-        'password1'
+        'password1',
       );
       const room1 = collaborationService.roomId;
 
@@ -106,7 +106,7 @@ describe('collaborationService', () => {
           name: 'A',
           color: '#000',
         },
-        'password2'
+        'password2',
       );
       const room2 = collaborationService.roomId;
 
@@ -121,7 +121,7 @@ describe('collaborationService', () => {
           name: 'A',
           color: '#000',
         },
-        'shared-secret'
+        'shared-secret',
       );
       const room1 = collaborationService.roomId;
 
@@ -134,7 +134,7 @@ describe('collaborationService', () => {
           name: 'B',
           color: '#fff',
         },
-        'shared-secret'
+        'shared-secret',
       );
       const room2 = collaborationService.roomId;
 

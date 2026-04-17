@@ -1,14 +1,14 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
-import { useTranslation } from './useTranslation';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
-import {
-  projectActions,
-  personalizeTemplateThunk,
-  generateCustomTemplateThunk,
-} from '../features/project/projectSlice';
-import type { Template, StorySection, OutlineSection } from '../types';
-import { STORY_TEMPLATES } from '../constants';
 import { useToast } from '../components/ui/Toast';
+import { STORY_TEMPLATES } from '../constants';
+import {
+  generateCustomTemplateThunk,
+  personalizeTemplateThunk,
+  projectActions,
+} from '../features/project/projectSlice';
+import type { OutlineSection, StorySection, Template } from '../types';
+import { useTranslation } from './useTranslation';
 
 interface UseTemplateViewProps {
   onNavigate: (view: 'manuscript') => void;
@@ -49,7 +49,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
       setRemixedSections(template.sections.map((s, i) => ({ id: i, title: t(s.titleKey) })));
       setModalState('preview');
     },
-    [t]
+    [t],
   );
 
   const closeModal = useCallback(() => {
@@ -72,7 +72,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
 
   const updateRemixedSectionTitle = useCallback((id: number, title: string) => {
     setRemixedSections((currentSections) =>
-      currentSections.map((sec) => (sec.id === id ? { ...sec, title } : sec))
+      currentSections.map((sec) => (sec.id === id ? { ...sec, title } : sec)),
     );
   }, []);
 
@@ -85,7 +85,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
         return newSections;
       });
     },
-    [t]
+    [t],
   );
 
   const deleteRemixedSection = useCallback((id: number) => {
@@ -110,7 +110,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
       toast.success(t('common.saved'), t('sidebar.manuscript'));
       onNavigate('manuscript');
     },
-    [dispatch, onNavigate, toast, t]
+    [dispatch, onNavigate, toast, t],
   );
 
   const handleAiApply = useCallback(async () => {
@@ -121,7 +121,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
         sections: remixedSections,
         concept: aiConcept,
         lang: language,
-      })
+      }),
     );
 
     if (personalizeTemplateThunk.fulfilled.match(resultAction)) {
@@ -157,7 +157,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
         customElements,
         numSections: customNumSections,
         lang: language,
-      })
+      }),
     );
     if (generateCustomTemplateThunk.fulfilled.match(resultAction)) {
       applyToManuscript(resultAction.payload);

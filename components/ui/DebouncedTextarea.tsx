@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { Textarea } from './Textarea';
 
 interface DebouncedTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {

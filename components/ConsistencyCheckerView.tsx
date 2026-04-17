@@ -1,14 +1,14 @@
 import type { FC } from 'react';
 import { useCallback } from 'react';
-import { Card, CardContent, CardHeader } from './ui/Card';
-import { Button } from './ui/Button';
-import { Select } from './ui/Select';
-import { Spinner } from './ui/Spinner';
-import { useConsistencyCheckerView } from '../hooks/useConsistencyCheckerView';
 import {
   ConsistencyCheckerViewContext,
   useConsistencyCheckerViewContext,
 } from '../contexts/ConsistencyCheckerViewContext';
+import { useConsistencyCheckerView } from '../hooks/useConsistencyCheckerView';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Select } from './ui/Select';
+import { Spinner } from './ui/Spinner';
 
 const ConsistencyCheckerUI: FC = () => {
   const {

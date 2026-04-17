@@ -1,17 +1,17 @@
 import type { FC } from 'react';
 import React from 'react';
-import type { View } from '../types';
-import { Card, CardContent, CardHeader } from './ui/Card';
 import { ICONS } from '../constants';
+import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
+import { useDashboard } from '../hooks/useDashboard';
+import type { View } from '../types';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
 import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
-import { Button } from './ui/Button';
-import { Spinner } from './ui/Spinner';
+import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { Progress } from './ui/Progress';
-import { Input } from './ui/Input';
-import { useDashboard } from '../hooks/useDashboard';
-import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
+import { Spinner } from './ui/Spinner';
 
 // --- Generic Components ---
 
@@ -50,7 +50,7 @@ const StatCard: FC<{
         </p>
       </div>
     </Card>
-  )
+  ),
 );
 StatCard.displayName = 'StatCard';
 

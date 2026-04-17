@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useTranslation } from '../hooks/useTranslation';
-import { ICONS } from '../constants';
-import { Button } from './ui/Button';
-import { projectActions, importProjectThunk } from '../features/project/projectSlice';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
-import type { View } from '../types';
+import { ICONS } from '../constants';
+import { importProjectThunk, projectActions } from '../features/project/projectSlice';
+import { useTranslation } from '../hooks/useTranslation';
 import { dbService } from '../services/dbService';
+import type { View } from '../types';
+import { Button } from './ui/Button';
 
 interface WelcomePortalProps {
   onExit: (view?: View) => void;
@@ -92,7 +93,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       projectActions.resetProject({
         title: t('initialProject.title'),
         logline: t('initialProject.logline'),
-      })
+      }),
     );
     dispatch(
       projectActions.setManuscript([
@@ -101,7 +102,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
           title: t('initialProject.chapter1'),
           content: '',
         },
-      ])
+      ]),
     );
     onExit('manuscript');
   };

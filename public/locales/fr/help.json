@@ -1,122 +1,134 @@
 {
-    "help.title": "Help & Learning Center",
-    "help.description": "Find answers, learn how to master StoryCraft Studio, or ask our AI assistant for help.",
-    "help.searchPlaceholder": "Search for a topic...",
-    "help.noResults": "No results found for \"{{query}}\". Try another search.",
-    "help.tabs.articles": "Read Articles",
-    "help.tabs.askAi": "Ask AI",
-    "help.ai.title": "AI Help Assistant",
-    "help.ai.description": "Can't find an answer? Ask our AI assistant a question about any feature.",
-    "help.ai.placeholder": "Type your question here...",
-    "help.ai.initialMessage": "Hello! I'm your AI guide for StoryCraft Studio. How can I help you today? You can ask me anything, or start with one of the suggestions below.",
-    "help.ai.suggestion1": "How do I use Templates?",
-    "help.ai.suggestion2": "Explain the AI Writing Studio",
-    "help.ai.suggestion3": "How are my snapshots saved?",
-    "help.article.selectPrompt": "Select an article on the left to read it, or ask our AI assistant for help.",
-    "help.categories": [
+  "help.title": "Help & Learning Center",
+  "help.description": "Find answers, learn how to master StoryCraft Studio, or ask our AI assistant for help.",
+  "help.searchPlaceholder": "Search for a topic...",
+  "help.noResults": "No results found for \"{{query}}\". Try another search.",
+  "help.tabs.articles": "Read Articles",
+  "help.tabs.askAi": "Ask AI",
+  "help.ai.title": "AI Help Assistant",
+  "help.ai.description": "Can't find an answer? Ask our AI assistant a question about any feature.",
+  "help.ai.placeholder": "Type your question here...",
+  "help.ai.initialMessage": "Hello! I'm your AI guide for StoryCraft Studio. How can I help you today? You can ask me anything, or start with one of the suggestions below.",
+  "help.ai.suggestion1": "How do I use Templates?",
+  "help.ai.suggestion2": "Explain the AI Writing Studio",
+  "help.ai.suggestion3": "How are my snapshots saved?",
+  "help.article.selectPrompt": "Select an article on the left to read it, or ask our AI assistant for help.",
+  "help.categories": [
+    {
+      "id": "getting-started",
+      "title": "help.category.gettingStarted",
+      "icon": "DASHBOARD",
+      "articles": [
         {
-            "id": "getting-started",
-            "title": "help.category.gettingStarted",
-            "icon": "DASHBOARD",
-            "articles": [
-                { "title": "help.gettingStarted.tour.title", "content": "help.gettingStarted.tour.content" },
-                { "title": "help.gettingStarted.firstProject.title", "content": "help.gettingStarted.firstProject.content" }
-            ]
+          "title": "help.gettingStarted.tour.title",
+          "content": "help.gettingStarted.tour.content"
         },
         {
-            "id": "writing",
-            "title": "help.category.writing",
-            "icon": "DOCUMENT_TEXT",
-            "articles": [
-                { "title": "help.writing.manuscript.title", "content": "help.writing.manuscript.content" },
-                { "title": "help.writing.templates.title", "content": "help.writing.templates.content" },
-                { "title": "help.writing.outline.title", "content": "help.writing.outline.content" }
-            ]
-        },
-        {
-            "id": "worldbuilding",
-            "title": "help.category.worldbuilding",
-            "icon": "WORLD",
-            "articles": [
-                { "title": "help.worldbuilding.characters.title", "content": "help.worldbuilding.characters.content" },
-                { "title": "help.worldbuilding.worlds.title", "content": "help.worldbuilding.worlds.content" }
-            ]
-        },
-        {
-            "id": "ai-studio",
-            "title": "help.category.aiStudio",
-            "icon": "SPARKLES",
-            "articles": [
-                { "title": "help.aiStudio.overview.title", "content": "help.aiStudio.overview.content" },
-                { "title": "help.aiStudio.tools.title", "content": "help.aiStudio.tools.content" }
-            ]
-        },
-        {
-            "id": "management",
-            "title": "help.category.management",
-            "icon": "SETTINGS",
-            "articles": [
-                { "title": "help.management.export.title", "content": "help.management.export.content" },
-                { "title": "help.management.data.title", "content": "help.management.data.content" }
-            ]
-        },
-        {
-            "id": "pro-tips",
-            "title": "help.category.proTips",
-            "icon": "LIGHTNING_BOLT",
-            "articles": [
-                { "title": "help.proTips.mentions.title", "content": "help.proTips.mentions.content" },
-                { "title": "help.proTips.snapshots.title", "content": "help.proTips.snapshots.content" }
-            ]
-        },
-        {
-            "id": "faq",
-            "title": "help.category.faq",
-            "icon": "HELP",
-            "articles": [
-                { "title": "help.faq.saving.title", "content": "help.faq.saving.content" },
-                { "title": "help.faq.api.title", "content": "help.faq.api.content" },
-                { "title": "help.faq.privacy.title", "content": "help.faq.privacy.content" }
-            ]
+          "title": "help.gettingStarted.firstProject.title",
+          "content": "help.gettingStarted.firstProject.content"
         }
-    ],
-    "help.category.gettingStarted": "Getting Started",
-    "help.gettingStarted.tour.title": "A Quick Tour of the Interface",
-    "help.gettingStarted.tour.content": "<h3>Welcome to StoryCraft Studio!</h3><p>The main navigation is on the left sidebar, giving you access to all core tools:</p><ul><li><b>Dashboard:</b> Your project's home base. Track stats, set goals, and see your project at a glance.</li><li><b>Manuscript:</b> A focused, three-panel view for writing and organizing your chapters.</li><li><b>AI Writing Studio:</b> Your creative partner for generating text, improving prose, and overcoming writer's block.</li><li><b>Templates:</b> Jumpstart your story with pre-built narrative structures.</li><li><b>Outline Generator:</b> Brainstorm a complete plot from a simple idea using AI.</li><li><b>Characters & World Building:</b> Create and manage your story's assets with rich details and AI-generated art.</li><li><b>Export:</b> Prepare your finished work for sharing in various formats.</li><li><b>Settings:</b> Customize your workspace and manage your project data.</li></ul>",
-    "help.gettingStarted.firstProject.title": "Starting Your First Project",
-    "help.gettingStarted.firstProject.content": "<h3>Choose Your Path</h3><p>The <b>Welcome Portal</b> gives you three powerful ways to begin:</p><ol><li><b>Start with a Template:</b> This is great for structured storytelling. Go to the <b>Templates</b> view, choose a structure like the 'Three-Act Structure,' and use the 'Personalize with AI' feature to get custom prompts for each section based on your story idea.</li><li><b>Generate with AI:</b> If you have a concept but no structure, use the <b>Outline Generator</b>. Just provide your genre and a story idea, and it will create a full, editable plot outline that you can apply to your manuscript.</li><li><b>Start Blank:</b> For those who prefer a completely open canvas, this option creates a new project with an empty first chapter, ready for you to start writing immediately.</li></ol>",
-    "help.category.writing": "Writing & Structuring",
-    "help.writing.manuscript.title": "The Three-Panel Manuscript Editor",
-    "help.writing.manuscript.content": "<h3>A Distraction-Free Writing Environment</h3><p>The Manuscript view is designed for focus and flow. On desktop, it features three resizable panels:</p><ul><li><b>Navigator (Left):</b> This panel lists all your chapters or sections. Click to jump between them or <b>drag-and-drop</b> to reorder your story on the fly.</li><li><b>Editor (Center):</b> This is your main writing space. It features real-time highlighting for mentions. Use the <code>@</code> key to tag characters (e.g., <code>@Jax</code>) and the <code>#</code> key to tag worlds (e.g., <code>#Neo-Veridia</code>) for easy reference.</li><li><b>Inspector (Right):</b> This panel keeps your project's high-level details, like the Title and Logline, always within reach. You can even use the AI Assistant here to generate logline ideas.</li></ul><p>On mobile devices, the Navigator and Inspector are tucked away in drawers to maximize your writing space.</p>",
-    "help.writing.templates.title": "Working with Templates",
-    "help.writing.templates.content": "<h3>Building on a Solid Foundation</h3><p>Templates provide a starting structure for your story. In the <b>Templates</b> view, you can:</p><ul><li><b>Preview:</b> Click any template to see its sections.</li><li><b>Remix:</b> Before applying, click 'Remix this Template'. This allows you to add, delete, rename, and reorder sections to create a custom structure.</li><li><b>Personalize with AI:</b> Enter your core story concept and the AI will generate unique, inspiring prompts for each section to guide your writing.</li><li><b>Apply:</b> Once you apply a template, it will replace your current manuscript and outline, giving you a clean slate structured for success.</li></ul>",
-    "help.writing.outline.title": "Mastering the AI Outline Generator",
-    "help.writing.outline.content": "<h3>From Idea to Plot in Minutes</h3><p>This is one of the most powerful tools for starting a story. The process is simple:</p><ol><li><b>Provide Your Idea:</b> Enter a genre and your main concept.</li><li><b>Use Advanced Options:</b> For better results, specify key characters, setting, and desired pacing. You can even ask the AI to include a plot twist.</li><li><b>Edit and Refine:</b> The AI will produce a complete, multi-section outline. This is a fully interactive draft. You can rewrite titles and descriptions, drag sections to reorder them, regenerate individual sections, or add new ones manually.</li><li><b>Apply to Manuscript:</b> When you're happy, click 'Apply Outline to Manuscript'. This will create a new manuscript with each outline section as a chapter, complete with your descriptions as writing prompts.</li></ol>",
-    "help.category.worldbuilding": "Characters & Worlds",
-    "help.worldbuilding.characters.title": "Building Characters",
-    "help.worldbuilding.characters.content": "<h3>Breathing Life into Your Cast</h3><p>In the <b>Characters</b> view, you manage your cast of characters. You can:</p><ul><li><b>Add Manually:</b> Create a blank character sheet to fill out yourself.</li><li><b>Generate with AI:</b> Provide a simple concept (e.g., 'a cynical detective who loves cats'), and the AI will generate a detailed backstory, motivation, personality, flaws, and more.</li><li><b>Generate a Portrait:</b> Based on the 'Appearance' field, the AI can generate a unique character portrait. You can then use the 'Refine Portrait' input to make changes (e.g., 'give him a scar over his left eye').</li><li><b>Regenerate Fields:</b> Don't like a specific detail? Click the regenerate icon next to any field to have the AI rewrite just that part.</li></ul>",
-    "help.worldbuilding.worlds.title": "World Building",
-    "help.worldbuilding.worlds.content": "<h3>Constructing Your Universe</h3><p>The <b>World Building</b> view is for defining your story's setting. Similar to the character builder, you can:</p><ul><li><b>Generate with AI:</b> Create a rich world profile from a core concept (e.g., 'a steampunk city powered by captured lightning').</li><li><b>Flesh out Details:</b> Manually define geography, culture, and magic/technology systems.</li><li><b>Create Timelines and Locations:</b> Use the dedicated tabs in the world atlas to add historical events to a timeline or define key locations within your world.</li><li><b>Generate an Ambiance Image:</b> Let the AI create a beautiful, atmospheric image based on your world's description to set the mood.</li></ul>",
-    "help.category.aiStudio": "AI Writing Studio",
-    "help.aiStudio.overview.title": "Overview of the AI Writing Studio",
-    "help.aiStudio.overview.content": "<h3>Your Creative Co-Pilot</h3><p>The AI Writing Studio is your dedicated space for AI-assisted writing. The workflow is designed for power and flexibility:</p><ol><li><b>Select Context:</b> First, choose the manuscript section you want to work on from the dropdown menu in the 'Manuscript Context' panel.</li><li><b>Choose a Tool:</b> Select one of the powerful AI tools from the top of the 'AI Tools' panel.</li><li><b>Provide Input:</b> Depending on the tool, you might need to select text in the editor, choose characters, or write a prompt.</li><li><b>Generate:</b> Click the 'Generate' button. The output will appear in the 'AI Scratchpad' on the right.</li><li><b>Review and Accept:</b> You can edit the generated text in the scratchpad. Once you're happy, use the 'Insert' or 'Replace' buttons to apply it to your manuscript.</li></ol>",
-    "help.aiStudio.tools.title": "Understanding the AI Tools",
-    "help.aiStudio.tools.content": "<h3>The Right Tool for the Job</h3><p>Each tool in the studio serves a different purpose:</p><ul><li><b>Continue Writing:</b> Perfect for writer's block. Place your cursor in the text, and the AI will write what comes next.</li><li><b>Improve Text:</b> Highlight a sentence or paragraph, and the AI will rewrite it. Use the Style dropdown to guide the improvement (e.g., make it more 'Cinematic').</li><li><b>Change Tone:</b> Similar to 'Improve Text,' but uses the Tone dropdown to change the mood (e.g., make it more 'Suspenseful').</li><li><b>Generate Dialogue:</b> Select the characters in the scene, describe the scenario, and the AI will write their conversation.</li><li><b>Brainstorm Ideas:</b> Get a list of creative plot points for what could happen next.</li><li><b>Summarize Section:</b> Quickly generates a synopsis of the selected manuscript section, which is useful for checking pacing or writing chapter summaries.</li></ul>",
-    "help.category.management": "Data & Settings",
-    "help.management.export.title": "Exporting Your Work",
-    "help.management.export.content": "<h3>From Draft to Document</h3><p>The <b>Export</b> view is a full publishing suite. You have a live preview of your formatted document on the right. In the 'Export Controls' panel, you can:</p><ul><li><b>Select Content:</b> Choose which parts of your project to include, such as Character Dossiers or World-Building notes.</li><li><b>Choose a Format:</b> We support <b>Markdown (.md)</b>, <b>Plain Text (.txt)</b>, and <b>PDF (.pdf)</b>.</li><li><b>Customize PDF:</b> For PDFs, you can set the font, font size, line spacing, and choose whether to include a professional title page.</li><li><b>Use AI Enhancements:</b> Check the 'Generate AI Synopsis' box to have the AI write a professional one-page summary of your entire manuscript to be included in the export.</li></ul>",
-    "help.management.data.title": "Data Management & Backups",
-    "help.management.data.content": "<h3>Your Data, Your Control</h3><p>You can manage your project data in <b>Settings > Data & Backups</b>. StoryCraft Studio gives you full control:</p><ul><li><b>Export Backup:</b> This saves a complete JSON backup file of your entire project (including all text and settings) to your computer. Use this to move your project to another device.</li><li><b>Import Backup:</b> Load a project from a JSON backup file.</li><li><b>Reset Project:</b> This will permanently delete all your data in the browser and start a new, blank project.</li><li><b>Project Snapshots:</b> This powerful feature is your safety net. The app automatically takes snapshots of your project periodically. You can also create a named snapshot manually before making major changes. You can restore your project to any snapshot at any time.</li></ul>",
-    "help.category.proTips": "Pro Tips & Advanced Features",
-    "help.proTips.mentions.title": "Using @mentions Effectively",
-    "help.proTips.mentions.content": "<h3>Create a Living Document</h3><p>The <code>@mention</code> system in the Manuscript Editor is more than just a visual aid; it's a way to create a deeply interconnected story bible. By consistently tagging characters with <code>@</code> and worlds with <code>#</code>, you create a visual map of how your story elements interact within the narrative. This makes it easy to see which characters are active in a scene or where your story is set at a glance. It's a simple habit that pays huge dividends during editing and revision.</p>",
-    "help.proTips.snapshots.title": "Snapshot Strategies for Safe Writing",
-    "help.proTips.snapshots.content": "<h3>Write Without Fear</h3><p>The Snapshot system is your best friend during heavy revisions. Here's a pro workflow:</p><ol><li>Before starting a major rewrite of a chapter, go to <b>Settings > Data & Backups</b>.</li><li>Click <b>'Create Snapshot'</b> and give it a descriptive name, like 'Pre-Act 2 Rewrite'.</li><li>Now, write and revise freely, knowing you can always return to that safe version.</li><li>The app also creates automatic snapshots every 30 minutes of activity, so you're always covered. You can restore from any automatic or manual snapshot if you change your mind about a direction your story has taken.</li></ol>",
-    "help.category.faq": "Frequently Asked Questions",
-    "help.faq.saving.title": "How is my project data saved?",
-    "help.faq.saving.content": "<p>Your entire project, including all text and AI-generated images, is saved automatically and continuously in your web browser's local storage (a database called IndexedDB). This means your work is persisted on your computer between sessions. A 'Saving...' indicator appears in the header when changes are being written, followed by 'All changes saved'.</p><p><b>There is no cloud account or server-side storage.</b> This ensures complete privacy but also means you are responsible for creating backups using the 'Export Backup' feature in Settings.</p>",
-    "help.faq.api.title": "Do I need an API key?",
-    "help.faq.api.content": "<p>Yes. To use any of the AI-powered features (like generation, improvement, or brainstorming), the application requires a Google Gemini API key. You can obtain a free key from <a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a>.</p><p>Go to <b>Settings → AI Configuration</b> and enter your key. It will be encrypted using AES-256-GCM and stored securely in your browser's IndexedDB. Your key never leaves your device and is never transmitted to any server.</p>",
-    "help.faq.privacy.title": "Is my story private?",
-    "help.faq.privacy.content": "<p><b>Absolutely.</b> Your privacy is paramount. Because all data is stored locally in your browser, we never have access to your work. Your story remains completely private and under your control. When you use AI features, only the specific text needed for that request is sent to the Google Gemini API, and it is not used to train their models.</p>"
+      ]
+    },
+    {
+      "id": "writing",
+      "title": "help.category.writing",
+      "icon": "DOCUMENT_TEXT",
+      "articles": [
+        { "title": "help.writing.manuscript.title", "content": "help.writing.manuscript.content" },
+        { "title": "help.writing.templates.title", "content": "help.writing.templates.content" },
+        { "title": "help.writing.outline.title", "content": "help.writing.outline.content" }
+      ]
+    },
+    {
+      "id": "worldbuilding",
+      "title": "help.category.worldbuilding",
+      "icon": "WORLD",
+      "articles": [
+        {
+          "title": "help.worldbuilding.characters.title",
+          "content": "help.worldbuilding.characters.content"
+        },
+        {
+          "title": "help.worldbuilding.worlds.title",
+          "content": "help.worldbuilding.worlds.content"
+        }
+      ]
+    },
+    {
+      "id": "ai-studio",
+      "title": "help.category.aiStudio",
+      "icon": "SPARKLES",
+      "articles": [
+        { "title": "help.aiStudio.overview.title", "content": "help.aiStudio.overview.content" },
+        { "title": "help.aiStudio.tools.title", "content": "help.aiStudio.tools.content" }
+      ]
+    },
+    {
+      "id": "management",
+      "title": "help.category.management",
+      "icon": "SETTINGS",
+      "articles": [
+        { "title": "help.management.export.title", "content": "help.management.export.content" },
+        { "title": "help.management.data.title", "content": "help.management.data.content" }
+      ]
+    },
+    {
+      "id": "pro-tips",
+      "title": "help.category.proTips",
+      "icon": "LIGHTNING_BOLT",
+      "articles": [
+        { "title": "help.proTips.mentions.title", "content": "help.proTips.mentions.content" },
+        { "title": "help.proTips.snapshots.title", "content": "help.proTips.snapshots.content" }
+      ]
+    },
+    {
+      "id": "faq",
+      "title": "help.category.faq",
+      "icon": "HELP",
+      "articles": [
+        { "title": "help.faq.saving.title", "content": "help.faq.saving.content" },
+        { "title": "help.faq.api.title", "content": "help.faq.api.content" },
+        { "title": "help.faq.privacy.title", "content": "help.faq.privacy.content" }
+      ]
+    }
+  ],
+  "help.category.gettingStarted": "Getting Started",
+  "help.gettingStarted.tour.title": "A Quick Tour of the Interface",
+  "help.gettingStarted.tour.content": "<h3>Welcome to StoryCraft Studio!</h3><p>The main navigation is on the left sidebar, giving you access to all core tools:</p><ul><li><b>Dashboard:</b> Your project's home base. Track stats, set goals, and see your project at a glance.</li><li><b>Manuscript:</b> A focused, three-panel view for writing and organizing your chapters.</li><li><b>AI Writing Studio:</b> Your creative partner for generating text, improving prose, and overcoming writer's block.</li><li><b>Templates:</b> Jumpstart your story with pre-built narrative structures.</li><li><b>Outline Generator:</b> Brainstorm a complete plot from a simple idea using AI.</li><li><b>Characters & World Building:</b> Create and manage your story's assets with rich details and AI-generated art.</li><li><b>Export:</b> Prepare your finished work for sharing in various formats.</li><li><b>Settings:</b> Customize your workspace and manage your project data.</li></ul>",
+  "help.gettingStarted.firstProject.title": "Starting Your First Project",
+  "help.gettingStarted.firstProject.content": "<h3>Choose Your Path</h3><p>The <b>Welcome Portal</b> gives you three powerful ways to begin:</p><ol><li><b>Start with a Template:</b> This is great for structured storytelling. Go to the <b>Templates</b> view, choose a structure like the 'Three-Act Structure,' and use the 'Personalize with AI' feature to get custom prompts for each section based on your story idea.</li><li><b>Generate with AI:</b> If you have a concept but no structure, use the <b>Outline Generator</b>. Just provide your genre and a story idea, and it will create a full, editable plot outline that you can apply to your manuscript.</li><li><b>Start Blank:</b> For those who prefer a completely open canvas, this option creates a new project with an empty first chapter, ready for you to start writing immediately.</li></ol>",
+  "help.category.writing": "Writing & Structuring",
+  "help.writing.manuscript.title": "The Three-Panel Manuscript Editor",
+  "help.writing.manuscript.content": "<h3>A Distraction-Free Writing Environment</h3><p>The Manuscript view is designed for focus and flow. On desktop, it features three resizable panels:</p><ul><li><b>Navigator (Left):</b> This panel lists all your chapters or sections. Click to jump between them or <b>drag-and-drop</b> to reorder your story on the fly.</li><li><b>Editor (Center):</b> This is your main writing space. It features real-time highlighting for mentions. Use the <code>@</code> key to tag characters (e.g., <code>@Jax</code>) and the <code>#</code> key to tag worlds (e.g., <code>#Neo-Veridia</code>) for easy reference.</li><li><b>Inspector (Right):</b> This panel keeps your project's high-level details, like the Title and Logline, always within reach. You can even use the AI Assistant here to generate logline ideas.</li></ul><p>On mobile devices, the Navigator and Inspector are tucked away in drawers to maximize your writing space.</p>",
+  "help.writing.templates.title": "Working with Templates",
+  "help.writing.templates.content": "<h3>Building on a Solid Foundation</h3><p>Templates provide a starting structure for your story. In the <b>Templates</b> view, you can:</p><ul><li><b>Preview:</b> Click any template to see its sections.</li><li><b>Remix:</b> Before applying, click 'Remix this Template'. This allows you to add, delete, rename, and reorder sections to create a custom structure.</li><li><b>Personalize with AI:</b> Enter your core story concept and the AI will generate unique, inspiring prompts for each section to guide your writing.</li><li><b>Apply:</b> Once you apply a template, it will replace your current manuscript and outline, giving you a clean slate structured for success.</li></ul>",
+  "help.writing.outline.title": "Mastering the AI Outline Generator",
+  "help.writing.outline.content": "<h3>From Idea to Plot in Minutes</h3><p>This is one of the most powerful tools for starting a story. The process is simple:</p><ol><li><b>Provide Your Idea:</b> Enter a genre and your main concept.</li><li><b>Use Advanced Options:</b> For better results, specify key characters, setting, and desired pacing. You can even ask the AI to include a plot twist.</li><li><b>Edit and Refine:</b> The AI will produce a complete, multi-section outline. This is a fully interactive draft. You can rewrite titles and descriptions, drag sections to reorder them, regenerate individual sections, or add new ones manually.</li><li><b>Apply to Manuscript:</b> When you're happy, click 'Apply Outline to Manuscript'. This will create a new manuscript with each outline section as a chapter, complete with your descriptions as writing prompts.</li></ol>",
+  "help.category.worldbuilding": "Characters & Worlds",
+  "help.worldbuilding.characters.title": "Building Characters",
+  "help.worldbuilding.characters.content": "<h3>Breathing Life into Your Cast</h3><p>In the <b>Characters</b> view, you manage your cast of characters. You can:</p><ul><li><b>Add Manually:</b> Create a blank character sheet to fill out yourself.</li><li><b>Generate with AI:</b> Provide a simple concept (e.g., 'a cynical detective who loves cats'), and the AI will generate a detailed backstory, motivation, personality, flaws, and more.</li><li><b>Generate a Portrait:</b> Based on the 'Appearance' field, the AI can generate a unique character portrait. You can then use the 'Refine Portrait' input to make changes (e.g., 'give him a scar over his left eye').</li><li><b>Regenerate Fields:</b> Don't like a specific detail? Click the regenerate icon next to any field to have the AI rewrite just that part.</li></ul>",
+  "help.worldbuilding.worlds.title": "World Building",
+  "help.worldbuilding.worlds.content": "<h3>Constructing Your Universe</h3><p>The <b>World Building</b> view is for defining your story's setting. Similar to the character builder, you can:</p><ul><li><b>Generate with AI:</b> Create a rich world profile from a core concept (e.g., 'a steampunk city powered by captured lightning').</li><li><b>Flesh out Details:</b> Manually define geography, culture, and magic/technology systems.</li><li><b>Create Timelines and Locations:</b> Use the dedicated tabs in the world atlas to add historical events to a timeline or define key locations within your world.</li><li><b>Generate an Ambiance Image:</b> Let the AI create a beautiful, atmospheric image based on your world's description to set the mood.</li></ul>",
+  "help.category.aiStudio": "AI Writing Studio",
+  "help.aiStudio.overview.title": "Overview of the AI Writing Studio",
+  "help.aiStudio.overview.content": "<h3>Your Creative Co-Pilot</h3><p>The AI Writing Studio is your dedicated space for AI-assisted writing. The workflow is designed for power and flexibility:</p><ol><li><b>Select Context:</b> First, choose the manuscript section you want to work on from the dropdown menu in the 'Manuscript Context' panel.</li><li><b>Choose a Tool:</b> Select one of the powerful AI tools from the top of the 'AI Tools' panel.</li><li><b>Provide Input:</b> Depending on the tool, you might need to select text in the editor, choose characters, or write a prompt.</li><li><b>Generate:</b> Click the 'Generate' button. The output will appear in the 'AI Scratchpad' on the right.</li><li><b>Review and Accept:</b> You can edit the generated text in the scratchpad. Once you're happy, use the 'Insert' or 'Replace' buttons to apply it to your manuscript.</li></ol>",
+  "help.aiStudio.tools.title": "Understanding the AI Tools",
+  "help.aiStudio.tools.content": "<h3>The Right Tool for the Job</h3><p>Each tool in the studio serves a different purpose:</p><ul><li><b>Continue Writing:</b> Perfect for writer's block. Place your cursor in the text, and the AI will write what comes next.</li><li><b>Improve Text:</b> Highlight a sentence or paragraph, and the AI will rewrite it. Use the Style dropdown to guide the improvement (e.g., make it more 'Cinematic').</li><li><b>Change Tone:</b> Similar to 'Improve Text,' but uses the Tone dropdown to change the mood (e.g., make it more 'Suspenseful').</li><li><b>Generate Dialogue:</b> Select the characters in the scene, describe the scenario, and the AI will write their conversation.</li><li><b>Brainstorm Ideas:</b> Get a list of creative plot points for what could happen next.</li><li><b>Summarize Section:</b> Quickly generates a synopsis of the selected manuscript section, which is useful for checking pacing or writing chapter summaries.</li></ul>",
+  "help.category.management": "Data & Settings",
+  "help.management.export.title": "Exporting Your Work",
+  "help.management.export.content": "<h3>From Draft to Document</h3><p>The <b>Export</b> view is a full publishing suite. You have a live preview of your formatted document on the right. In the 'Export Controls' panel, you can:</p><ul><li><b>Select Content:</b> Choose which parts of your project to include, such as Character Dossiers or World-Building notes.</li><li><b>Choose a Format:</b> We support <b>Markdown (.md)</b>, <b>Plain Text (.txt)</b>, and <b>PDF (.pdf)</b>.</li><li><b>Customize PDF:</b> For PDFs, you can set the font, font size, line spacing, and choose whether to include a professional title page.</li><li><b>Use AI Enhancements:</b> Check the 'Generate AI Synopsis' box to have the AI write a professional one-page summary of your entire manuscript to be included in the export.</li></ul>",
+  "help.management.data.title": "Data Management & Backups",
+  "help.management.data.content": "<h3>Your Data, Your Control</h3><p>You can manage your project data in <b>Settings > Data & Backups</b>. StoryCraft Studio gives you full control:</p><ul><li><b>Export Backup:</b> This saves a complete JSON backup file of your entire project (including all text and settings) to your computer. Use this to move your project to another device.</li><li><b>Import Backup:</b> Load a project from a JSON backup file.</li><li><b>Reset Project:</b> This will permanently delete all your data in the browser and start a new, blank project.</li><li><b>Project Snapshots:</b> This powerful feature is your safety net. The app automatically takes snapshots of your project periodically. You can also create a named snapshot manually before making major changes. You can restore your project to any snapshot at any time.</li></ul>",
+  "help.category.proTips": "Pro Tips & Advanced Features",
+  "help.proTips.mentions.title": "Using @mentions Effectively",
+  "help.proTips.mentions.content": "<h3>Create a Living Document</h3><p>The <code>@mention</code> system in the Manuscript Editor is more than just a visual aid; it's a way to create a deeply interconnected story bible. By consistently tagging characters with <code>@</code> and worlds with <code>#</code>, you create a visual map of how your story elements interact within the narrative. This makes it easy to see which characters are active in a scene or where your story is set at a glance. It's a simple habit that pays huge dividends during editing and revision.</p>",
+  "help.proTips.snapshots.title": "Snapshot Strategies for Safe Writing",
+  "help.proTips.snapshots.content": "<h3>Write Without Fear</h3><p>The Snapshot system is your best friend during heavy revisions. Here's a pro workflow:</p><ol><li>Before starting a major rewrite of a chapter, go to <b>Settings > Data & Backups</b>.</li><li>Click <b>'Create Snapshot'</b> and give it a descriptive name, like 'Pre-Act 2 Rewrite'.</li><li>Now, write and revise freely, knowing you can always return to that safe version.</li><li>The app also creates automatic snapshots every 30 minutes of activity, so you're always covered. You can restore from any automatic or manual snapshot if you change your mind about a direction your story has taken.</li></ol>",
+  "help.category.faq": "Frequently Asked Questions",
+  "help.faq.saving.title": "How is my project data saved?",
+  "help.faq.saving.content": "<p>Your entire project, including all text and AI-generated images, is saved automatically and continuously in your web browser's local storage (a database called IndexedDB). This means your work is persisted on your computer between sessions. A 'Saving...' indicator appears in the header when changes are being written, followed by 'All changes saved'.</p><p><b>There is no cloud account or server-side storage.</b> This ensures complete privacy but also means you are responsible for creating backups using the 'Export Backup' feature in Settings.</p>",
+  "help.faq.api.title": "Do I need an API key?",
+  "help.faq.api.content": "<p>Yes. To use any of the AI-powered features (like generation, improvement, or brainstorming), the application requires a Google Gemini API key. You can obtain a free key from <a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a>.</p><p>Go to <b>Settings → AI Configuration</b> and enter your key. It will be encrypted using AES-256-GCM and stored securely in your browser's IndexedDB. Your key never leaves your device and is never transmitted to any server.</p>",
+  "help.faq.privacy.title": "Is my story private?",
+  "help.faq.privacy.content": "<p><b>Absolutely.</b> Your privacy is paramount. Because all data is stored locally in your browser, we never have access to your work. Your story remains completely private and under your control. When you use AI features, only the specific text needed for that request is sent to the Google Gemini API, and it is not used to train their models.</p>"
 }

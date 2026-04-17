@@ -1,14 +1,14 @@
-import { useState, useRef, useCallback } from 'react';
-import { useTranslation } from './useTranslation';
+import { useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useToast } from '../components/ui/Toast';
 import { selectManuscript, selectOutline } from '../features/project/projectSelectors';
 import {
-  projectActions,
   generateOutlineThunk,
+  projectActions,
   regenerateOutlineSectionThunk,
 } from '../features/project/projectSlice';
-import type { OutlineSection, View, StorySection } from '../types';
-import { useToast } from '../components/ui/Toast';
+import type { OutlineSection, StorySection, View } from '../types';
+import { useTranslation } from './useTranslation';
 
 interface UseOutlineGeneratorProps {
   onNavigate: (view: View) => void;
@@ -62,7 +62,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
         numChapters,
         includeTwist,
         lang: language,
-      })
+      }),
     );
 
     if (generateOutlineThunk.fulfilled.match(resultAction)) {
@@ -114,7 +114,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
           allSections: outline,
           sectionToIndex: index,
           lang: language,
-        })
+        }),
       );
 
       if (regenerateOutlineSectionThunk.fulfilled.match(resultAction)) {
@@ -129,7 +129,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
       }
       setIsRegenerating(null);
     },
-    [dispatch, outline, language, t, toast]
+    [dispatch, outline, language, t, toast],
   );
 
   const handleDragSort = useCallback(() => {
@@ -155,12 +155,12 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
       [newOutline[index], newOutline[newIndex]] = [swapItem, currentItem];
       setOutline(newOutline);
     },
-    [outline]
+    [outline],
   );
 
   const updateSection = useCallback((id: string, changes: Partial<OutlineSection>) => {
     setOutline((currentOutline) =>
-      currentOutline.map((sec) => (sec.id === id ? { ...sec, ...changes } : sec))
+      currentOutline.map((sec) => (sec.id === id ? { ...sec, ...changes } : sec)),
     );
   }, []);
 
@@ -177,7 +177,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
         return newOutline;
       });
     },
-    [t]
+    [t],
   );
 
   const deleteSection = useCallback((id: string) => {

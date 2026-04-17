@@ -1,5 +1,5 @@
-import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { AsyncThunkConfig, GetThunkAPI } from '@reduxjs/toolkit';
+import { createAsyncThunk } from '@reduxjs/toolkit';
 
 type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
   registerDuplicateRequest: (prompt: string, viewType: string) => string;
@@ -13,7 +13,7 @@ const activeControllers = new Map<string, AbortController>();
 export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
   typePrefix: string,
   payloadCreator: (arg: ThunkArg, thunkAPI: DeduplicatedThunkAPI) => Promise<Returned>,
-  options?: Parameters<typeof createAsyncThunk<Returned, ThunkArg>>[2]
+  options?: Parameters<typeof createAsyncThunk<Returned, ThunkArg>>[2],
 ) => {
   return createAsyncThunk<Returned, ThunkArg>(
     typePrefix,
@@ -43,7 +43,7 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
           () => {
             controller.abort();
           },
-          { once: true }
+          { once: true },
         );
 
         return uniqueKey;
@@ -65,7 +65,7 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
         }
       }
     },
-    options
+    options,
   );
 };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { View } from '../types';
 
 export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {

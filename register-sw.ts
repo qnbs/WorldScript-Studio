@@ -118,7 +118,7 @@ const registerServiceWorker = async (): Promise<void> => {
                   window.location.reload();
                 },
               },
-            })
+            }),
           );
         }
       });

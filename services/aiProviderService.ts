@@ -6,25 +6,21 @@
  * Streaming is supported for all providers.
  */
 
-import type { AIProvider, AiModel, AiCreativity, GeminiSchema } from '../types';
-import { storageService } from './storageService';
+import type { AIProvider, AiCreativity, AiModel, GeminiSchema } from '../types';
+import { attachCause, sanitizePromptValue, stripJsonFences } from './aiUtils';
+import {
+  generateImage as generateImageGemini,
+  generateJson as generateJsonGemini,
+  generateText as generateTextGemini,
+  streamAiHelpResponse as streamAiHelpResponseGemini,
+  streamText as streamTextGemini,
+} from './geminiService';
 import {
   listOllamaModels as listOllamaModelsFromService,
   streamOllama,
   testOllamaConnection,
 } from './ollamaService';
-import {
-  generateText as generateTextGemini,
-  generateJson as generateJsonGemini,
-  streamText as streamTextGemini,
-  generateImage as generateImageGemini,
-  streamAiHelpResponse as streamAiHelpResponseGemini,
-} from './geminiService';
-import {
-  sanitizePromptValue,
-  attachCause,
-  stripJsonFences,
-} from './aiUtils';
+import { storageService } from './storageService';
 
 export interface AIRequestOptions {
   model: AiModel;
@@ -52,11 +48,10 @@ export interface AIStreamCallbacks {
 async function streamOpenAI(
   prompt: string,
   opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks
+  callbacks: AIStreamCallbacks,
 ): Promise<void> {
   const apiKey = await storageService.getApiKey('openai');
-  if (!apiKey)
-    throw new Error('NO_API_KEY: OpenAI API key missing. Please enter it in Settings.');
+  if (!apiKey) throw new Error('NO_API_KEY: OpenAI API key missing. Please enter it in Settings.');
 
   const model = opts.model.startsWith('gpt-') ? opts.model : 'gpt-4o-mini';
   const messages = opts.systemPrompt
@@ -85,7 +80,7 @@ async function streamOpenAI(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
-      `OpenAI API Error ${res.status}: ${(err as { error?: { message?: string } })?.error?.message ?? res.statusText}`
+      `OpenAI API Error ${res.status}: ${(err as { error?: { message?: string } })?.error?.message ?? res.statusText}`,
     );
   }
 
@@ -121,11 +116,11 @@ async function streamOpenAI(
 async function streamAnthropic(
   _prompt: string,
   _opts: AIRequestOptions,
-  _callbacks: AIStreamCallbacks
+  _callbacks: AIStreamCallbacks,
 ): Promise<void> {
   throw new Error(
     'Claude/Anthropic: Direct browser requests are blocked by Anthropic (CORS). ' +
-      'Please use a backend proxy or switch to Gemini/OpenAI/Ollama.'
+      'Please use a backend proxy or switch to Gemini/OpenAI/Ollama.',
   );
 }
 
@@ -134,7 +129,7 @@ async function streamProvider(
   creativity: AiCreativity,
   opts: AIRequestOptions,
   callbacks: AIStreamCallbacks,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   switch (opts.provider) {
     case 'openai':
@@ -143,7 +138,6 @@ async function streamProvider(
       return streamOllama(prompt, opts, callbacks);
     case 'anthropic':
       return streamAnthropic(prompt, opts, callbacks);
-    case 'gemini':
     default:
       return streamTextGemini(
         opts.systemPrompt
@@ -151,7 +145,7 @@ async function streamProvider(
           : prompt,
         creativity,
         callbacks.onChunk,
-        signal
+        signal,
       );
   }
 }
@@ -160,7 +154,7 @@ export async function generateText(
   prompt: string,
   creativity: AiCreativity,
   opts: AIRequestOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   switch (opts.provider) {
     case 'openai': {
@@ -183,9 +177,8 @@ export async function generateText(
     }
     case 'anthropic':
       throw new Error(
-        'Claude/Anthropic is currently not available in the browser. Please use Gemini, OpenAI or Ollama.'
+        'Claude/Anthropic is currently not available in the browser. Please use Gemini, OpenAI or Ollama.',
       );
-    case 'gemini':
     default:
       return generateTextGemini(prompt, creativity, signal);
   }
@@ -196,7 +189,7 @@ export async function generateJson<T>(
   creativity: AiCreativity,
   schema: GeminiSchema,
   opts: AIRequestOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<T> {
   if (opts.provider === 'gemini') {
     return generateJsonGemini(prompt, creativity, schema, signal);
@@ -208,9 +201,7 @@ export async function generateJson<T>(
   try {
     return JSON.parse(jsonText) as T;
   } catch (parseError) {
-    const parseErr = new Error(
-      'The AI model response is not valid JSON. Please try again.'
-    );
+    const parseErr = new Error('The AI model response is not valid JSON. Please try again.');
     attachCause(parseErr, parseError);
     throw parseErr;
   }
@@ -219,22 +210,22 @@ export async function generateJson<T>(
 export async function generateImage(
   prompt: string,
   opts: AIRequestOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   switch (opts.provider) {
     case 'gemini':
       return generateImageGemini(prompt, signal);
     case 'openai':
       throw new Error(
-        'OpenAI image generation is currently not available via the browser version.'
+        'OpenAI image generation is currently not available via the browser version.',
       );
     case 'ollama':
       throw new Error(
-        'Ollama image generation is currently not supported. Please use Gemini for images.'
+        'Ollama image generation is currently not supported. Please use Gemini for images.',
       );
     case 'anthropic':
       throw new Error(
-        'Anthropic image generation is not available. Please use Gemini or Ollama for image content.'
+        'Anthropic image generation is not available. Please use Gemini or Ollama for image content.',
       );
     default:
       return generateImageGemini(prompt, signal);
@@ -246,7 +237,7 @@ export async function streamText(
   creativity: AiCreativity,
   opts: AIRequestOptions,
   callbacks: AIStreamCallbacks,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   try {
     await streamProvider(prompt, creativity, opts, callbacks, signal);
@@ -267,7 +258,7 @@ export async function streamAiHelpResponse(
   question: string,
   creativity: AiCreativity,
   opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks
+  callbacks: AIStreamCallbacks,
 ): Promise<void> {
   const helpPrompt = `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptValue(question)}`;
   if (opts.provider === 'gemini') {
@@ -275,7 +266,7 @@ export async function streamAiHelpResponse(
       question,
       callbacks.onChunk,
       opts.temperature ?? 0.7,
-      opts.signal
+      opts.signal,
     );
   }
   return streamProvider(helpPrompt, creativity, opts, callbacks, opts.signal);
@@ -287,7 +278,7 @@ export async function listOllamaModels(baseUrl = 'http://localhost:11434'): Prom
 
 export async function testAIConnection(
   provider: AIProvider,
-  opts: Partial<AIRequestOptions>
+  opts: Partial<AIRequestOptions>,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     switch (provider) {

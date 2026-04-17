@@ -1,10 +1,10 @@
-import { useMemo, useCallback } from 'react';
-import { useTranslation } from '../hooks/useTranslation';
+import { useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../app/hooks';
-import { projectActions } from '../features/project/projectSlice';
-import { selectAllCharacters } from '../features/project/projectSelectors';
-import type { StorySection } from '../types';
 import type { RootState } from '../app/store';
+import { selectAllCharacters } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
+import { useTranslation } from '../hooks/useTranslation';
+import type { StorySection } from '../types';
 
 export const useSceneBoardView = () => {
   const { t } = useTranslation();
@@ -29,21 +29,21 @@ export const useSceneBoardView = () => {
     (id: string, updates: Partial<StorySection>) => {
       dispatch(projectActions.updateManuscriptSection({ id, changes: updates }));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleDeleteSection = useCallback(
     (id: string) => {
       dispatch(projectActions.deleteManuscriptSection(id));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleMoveSection = useCallback(
     (id: string, position: { x: number; y: number }) => {
       dispatch(projectActions.updateSceneBoardLayout({ [id]: position }));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleAddSection = useCallback(() => {

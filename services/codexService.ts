@@ -1,5 +1,5 @@
-import { dbService } from './dbService';
 import type { Character, StoryCodex, StoryCodexEntity, StorySection, World } from '../types';
+import { dbService } from './dbService';
 
 const STOPWORDS = new Set([
   'The',
@@ -43,7 +43,7 @@ const createStoryCodexEntity = (
   name: string,
   type: StoryCodexEntity['type'],
   known: boolean,
-  canonicalId?: string
+  canonicalId?: string,
 ): StoryCodexEntity => ({
   id: buildEntityId(name, type),
   name,
@@ -66,7 +66,7 @@ export const extractStoryCodex = (
   projectId: string,
   manuscript: StorySection[],
   characters: Character[],
-  worlds: World[]
+  worlds: World[],
 ): StoryCodex => {
   const entityMap = new Map<string, StoryCodexEntity>();
 
@@ -76,7 +76,7 @@ export const extractStoryCodex = (
     section: StorySection,
     index: number,
     nameId?: string,
-    known = false
+    known = false,
   ) => {
     const normalizedName = normalizeCandidate(entityName);
     const key = normalizedName.toLowerCase();
@@ -121,15 +121,16 @@ export const extractStoryCodex = (
 
     for (const known of knownEntities) {
       const regex = new RegExp(`\\b${escapeRegExp(known.name)}\\b`, 'gi');
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(text))) {
+      let match: RegExpExecArray | null = regex.exec(text);
+      while (match) {
         addMention(known.name, known.type, section, match.index, known.id, true);
+        match = regex.exec(text);
       }
     }
 
     const properNounRegex = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
-    let match: RegExpExecArray | null;
-    while ((match = properNounRegex.exec(text))) {
+    let match: RegExpExecArray | null = properNounRegex.exec(text);
+    while (match) {
       const candidate = normalizeCandidate(match[1] ?? '');
       const normalized = candidate.toLowerCase();
       if (STOPWORDS.has(candidate) || normalized.length < 3) continue;
@@ -137,6 +138,7 @@ export const extractStoryCodex = (
       if (entityMap.has(normalized) && entityMap.get(normalized)!.known) continue;
 
       addMention(candidate, 'unknown', section, match.index, undefined, false);
+      match = properNounRegex.exec(text);
     }
   }
 

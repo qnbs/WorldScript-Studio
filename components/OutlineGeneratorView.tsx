@@ -1,21 +1,21 @@
+import type React from 'react';
 import type { FC } from 'react';
-import React from 'react';
-import type { View } from '../types';
-import { Button } from './ui/Button';
-import { Textarea } from './ui/Textarea';
-import { Input } from './ui/Input';
-import { Card, CardContent, CardHeader } from './ui/Card';
-import { Spinner } from './ui/Spinner';
 import { ICONS } from '../constants';
-import { Select } from './ui/Select';
-import { Skeleton } from './ui/Skeleton';
-import { Modal } from './ui/Modal';
-import { useOutlineGenerator } from '../hooks/useOutlineGenerator';
 import {
   OutlineGeneratorContext,
   useOutlineGeneratorContext,
 } from '../contexts/OutlineGeneratorContext';
+import { useOutlineGenerator } from '../hooks/useOutlineGenerator';
+import type { View } from '../types';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
 import { Checkbox } from './ui/Checkbox';
+import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
+import { Select } from './ui/Select';
+import { Skeleton } from './ui/Skeleton';
+import { Spinner } from './ui/Spinner';
+import { Textarea } from './ui/Textarea';
 
 // --- SUB-COMPONENTS ---
 

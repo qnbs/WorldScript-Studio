@@ -1,122 +1,134 @@
 {
-    "help.title": "Hilfe & Lernzentrum",
-    "help.description": "Finden Sie Antworten, lernen Sie, StoryCraft Studio zu meistern, oder fragen Sie unseren KI-Assistenten um Hilfe.",
-    "help.searchPlaceholder": "Nach einem Thema suchen...",
-    "help.noResults": "Keine Ergebnisse für \"{{query}}\" gefunden. Versuchen Sie eine andere Suche.",
-    "help.tabs.articles": "Artikel lesen",
-    "help.tabs.askAi": "KI fragen",
-    "help.ai.title": "KI-Hilfeassistent",
-    "help.ai.description": "Finden Sie keine Antwort? Stellen Sie unserem KI-Assistenten eine Frage zu jeder Funktion.",
-    "help.ai.placeholder": "Geben Sie hier Ihre Frage ein...",
-    "help.ai.initialMessage": "Hallo! Ich bin Ihr KI-Leitfaden für StoryCraft Studio. Wie kann ich Ihnen heute helfen? Sie können mich alles fragen oder mit einem der folgenden Vorschläge beginnen.",
-    "help.ai.suggestion1": "Wie benutze ich Vorlagen?",
-    "help.ai.suggestion2": "Erkläre das KI-Schreibstudio",
-    "help.ai.suggestion3": "Wie werden meine Snapshots gespeichert?",
-    "help.article.selectPrompt": "Wählen Sie links einen Artikel aus, um ihn zu lesen, oder fragen Sie unseren KI-Assistenten um Hilfe.",
-    "help.categories": [
+  "help.title": "Hilfe & Lernzentrum",
+  "help.description": "Finden Sie Antworten, lernen Sie, StoryCraft Studio zu meistern, oder fragen Sie unseren KI-Assistenten um Hilfe.",
+  "help.searchPlaceholder": "Nach einem Thema suchen...",
+  "help.noResults": "Keine Ergebnisse für \"{{query}}\" gefunden. Versuchen Sie eine andere Suche.",
+  "help.tabs.articles": "Artikel lesen",
+  "help.tabs.askAi": "KI fragen",
+  "help.ai.title": "KI-Hilfeassistent",
+  "help.ai.description": "Finden Sie keine Antwort? Stellen Sie unserem KI-Assistenten eine Frage zu jeder Funktion.",
+  "help.ai.placeholder": "Geben Sie hier Ihre Frage ein...",
+  "help.ai.initialMessage": "Hallo! Ich bin Ihr KI-Leitfaden für StoryCraft Studio. Wie kann ich Ihnen heute helfen? Sie können mich alles fragen oder mit einem der folgenden Vorschläge beginnen.",
+  "help.ai.suggestion1": "Wie benutze ich Vorlagen?",
+  "help.ai.suggestion2": "Erkläre das KI-Schreibstudio",
+  "help.ai.suggestion3": "Wie werden meine Snapshots gespeichert?",
+  "help.article.selectPrompt": "Wählen Sie links einen Artikel aus, um ihn zu lesen, oder fragen Sie unseren KI-Assistenten um Hilfe.",
+  "help.categories": [
+    {
+      "id": "getting-started",
+      "title": "help.category.gettingStarted",
+      "icon": "DASHBOARD",
+      "articles": [
         {
-            "id": "getting-started",
-            "title": "help.category.gettingStarted",
-            "icon": "DASHBOARD",
-            "articles": [
-                { "title": "help.gettingStarted.tour.title", "content": "help.gettingStarted.tour.content" },
-                { "title": "help.gettingStarted.firstProject.title", "content": "help.gettingStarted.firstProject.content" }
-            ]
+          "title": "help.gettingStarted.tour.title",
+          "content": "help.gettingStarted.tour.content"
         },
         {
-            "id": "writing",
-            "title": "help.category.writing",
-            "icon": "DOCUMENT_TEXT",
-            "articles": [
-                { "title": "help.writing.manuscript.title", "content": "help.writing.manuscript.content" },
-                { "title": "help.writing.templates.title", "content": "help.writing.templates.content" },
-                { "title": "help.writing.outline.title", "content": "help.writing.outline.content" }
-            ]
-        },
-        {
-            "id": "worldbuilding",
-            "title": "help.category.worldbuilding",
-            "icon": "WORLD",
-            "articles": [
-                { "title": "help.worldbuilding.characters.title", "content": "help.worldbuilding.characters.content" },
-                { "title": "help.worldbuilding.worlds.title", "content": "help.worldbuilding.worlds.content" }
-            ]
-        },
-        {
-            "id": "ai-studio",
-            "title": "help.category.aiStudio",
-            "icon": "SPARKLES",
-            "articles": [
-                { "title": "help.aiStudio.overview.title", "content": "help.aiStudio.overview.content" },
-                { "title": "help.aiStudio.tools.title", "content": "help.aiStudio.tools.content" }
-            ]
-        },
-        {
-            "id": "management",
-            "title": "help.category.management",
-            "icon": "SETTINGS",
-            "articles": [
-                { "title": "help.management.export.title", "content": "help.management.export.content" },
-                { "title": "help.management.data.title", "content": "help.management.data.content" }
-            ]
-        },
-        {
-            "id": "pro-tips",
-            "title": "help.category.proTips",
-            "icon": "LIGHTNING_BOLT",
-            "articles": [
-                { "title": "help.proTips.mentions.title", "content": "help.proTips.mentions.content" },
-                { "title": "help.proTips.snapshots.title", "content": "help.proTips.snapshots.content" }
-            ]
-        },
-        {
-            "id": "faq",
-            "title": "help.category.faq",
-            "icon": "HELP",
-            "articles": [
-                { "title": "help.faq.saving.title", "content": "help.faq.saving.content" },
-                { "title": "help.faq.api.title", "content": "help.faq.api.content" },
-                { "title": "help.faq.privacy.title", "content": "help.faq.privacy.content" }
-            ]
+          "title": "help.gettingStarted.firstProject.title",
+          "content": "help.gettingStarted.firstProject.content"
         }
-    ],
-    "help.category.gettingStarted": "Erste Schritte",
-    "help.gettingStarted.tour.title": "Eine schnelle Tour durch die Benutzeroberfläche",
-    "help.gettingStarted.tour.content": "<h3>Willkommen im StoryCraft Studio!</h3><p>Die Hauptnavigation befindet sich in der linken Seitenleiste und bietet Ihnen Zugriff auf alle wichtigen Werkzeuge:</p><ul><li><b>Dashboard:</b> Die Startseite Ihres Projekts. Verfolgen Sie Statistiken, setzen Sie Ziele und sehen Sie Ihr Projekt auf einen Blick.</li><li><b>Manuskript:</b> Eine fokussierte Drei-Fenster-Ansicht zum Schreiben und Organisieren Ihrer Kapitel.</li><li><b>KI-Schreibstudio:</b> Ihr kreativer Partner zum Generieren von Text, Verbessern von Prosa und Überwinden von Schreibblockaden.</li><li><b>Vorlagen:</b> Starten Sie Ihre Geschichte mit vorgefertigten Erzählstrukturen.</li><li><b>Gliederungsgenerator:</b> Brainstormen Sie eine komplette Handlung aus einer einfachen Idee mit KI.</li><li><b>Charaktere & Weltenbau:</b> Erstellen und verwalten Sie die Elemente Ihrer Geschichte mit reichhaltigen Details und KI-generierter Kunst.</li><li><b>Exportieren:</b> Bereiten Sie Ihr fertiges Werk zum Teilen in verschiedenen Formaten vor.</li><li><b>Einstellungen:</b> Passen Sie Ihren Arbeitsbereich an und verwalten Sie Ihre Projektdaten.</li></ul>",
-    "help.gettingStarted.firstProject.title": "Ihr erstes Projekt starten",
-    "help.gettingStarted.firstProject.content": "<h3>Wählen Sie Ihren Weg</h3><p>Das <b>Willkommensportal</b> bietet Ihnen drei leistungsstarke Möglichkeiten, um anzufangen:</p><ol><li><b>Mit einer Vorlage starten:</b> Dies ist ideal für strukturiertes Erzählen. Gehen Sie zur Ansicht <b>Vorlagen</b>, wählen Sie eine Struktur wie die 'Drei-Akte-Struktur' und nutzen Sie die Funktion 'Mit KI personalisieren', um basierend auf Ihrer Story-Idee individuelle Anregungen für jeden Abschnitt zu erhalten.</li><li><b>Mit KI generieren:</b> Wenn Sie ein Konzept, aber keine Struktur haben, verwenden Sie den <b>Gliederungsgenerator</b>. Geben Sie einfach Ihr Genre und eine Story-Idee an, und er erstellt eine vollständige, bearbeitbare Handlungsgliederung, die Sie auf Ihr Manuskript anwenden können.</li><li><b>Leer beginnen:</b> Für diejenigen, die eine komplett leere Leinwand bevorzugen, erstellt diese Option ein neues Projekt mit einem leeren ersten Kapitel, bereit, sofort mit dem Schreiben zu beginnen.</li></ol>",
-    "help.category.writing": "Schreiben & Strukturieren",
-    "help.writing.manuscript.title": "Der Drei-Fenster-Manuskript-Editor",
-    "help.writing.manuscript.content": "<h3>Eine ablenkungsfreie Schreibumgebung</h3><p>Die Manuskriptansicht ist für Fokus und Flow konzipiert. Auf dem Desktop verfügt sie über drei größenveränderbare Fenster:</p><ul><li><b>Navigator (Links):</b> Dieses Fenster listet alle Ihre Kapitel oder Abschnitte auf. Klicken Sie, um zwischen ihnen zu springen, oder ziehen Sie sie per <b>Drag-and-Drop</b>, um Ihre Geschichte neu zu ordnen.</li><li><b>Editor (Mitte):</b> Dies ist Ihr Hauptschreibbereich. Er verfügt über eine Echtzeit-Hervorhebung für Erwähnungen. Verwenden Sie die <code>@</code>-Taste, um Charaktere zu markieren (z. B. <code>@Jax</code>), und die <code>#</code>-Taste, um Welten zu markieren (z. B. <code>#Neo-Veridia</code>), um eine einfache Referenz zu schaffen.</li><li><b>Inspektor (Rechts):</b> Dieses Fenster hält die übergeordneten Details Ihres Projekts wie Titel und Logline immer griffbereit. Sie können hier sogar den KI-Assistenten verwenden, um Logline-Ideen zu generieren.</li></ul><p>Auf mobilen Geräten sind der Navigator und der Inspektor in ausziehbaren Schubladen untergebracht, um Ihren Schreibbereich zu maximieren.</p>",
-    "help.writing.templates.title": "Mit Vorlagen arbeiten",
-    "help.writing.templates.content": "<h3>Auf einem soliden Fundament bauen</h3><p>Vorlagen bieten eine Startstruktur für Ihre Geschichte. In der <b>Vorlagen</b>-Ansicht können Sie:</p><ul><li><b>Vorschau anzeigen:</b> Klicken Sie auf eine Vorlage, um deren Abschnitte zu sehen.</li><li><b>Anpassen (Remix):</b> Klicken Sie vor dem Anwenden auf 'Vorlage anpassen'. Dies ermöglicht es Ihnen, Abschnitte hinzuzufügen, zu löschen, umzubenennen und neu anzuordnen, um eine benutzerdefinierte Struktur zu erstellen.</li><li><b>Mit KI personalisieren:</b> Geben Sie Ihr zentrales Story-Konzept ein, und die KI generiert einzigartige, inspirierende Anregungen für jeden Abschnitt, um Ihr Schreiben zu leiten.</li><li><b>Anwenden:</b> Sobald Sie eine Vorlage anwenden, ersetzt sie Ihr aktuelles Manuskript und Ihre Gliederung und gibt Ihnen eine saubere, strukturierte Basis für den Erfolg.</li></ul>",
-    "help.writing.outline.title": "Den KI-Gliederungsgenerator meistern",
-    "help.writing.outline.content": "<h3>Von der Idee zum Plot in Minuten</h3><p>Dies ist eines der leistungsstärksten Werkzeuge, um eine Geschichte zu beginnen. Der Prozess ist einfach:</p><ol><li><b>Ihre Idee angeben:</b> Geben Sie ein Genre und Ihr Hauptkonzept ein.</li><li><b>Erweiterte Optionen nutzen:</b> Für bessere Ergebnisse geben Sie Schlüsselfiguren, Schauplatz und das gewünschte Tempo an. Sie können die KI sogar bitten, eine Wendung einzubauen.</li><li><b>Bearbeiten und verfeinern:</b> Die KI erstellt eine vollständige, mehrteilige Gliederung. Dies ist ein vollständig interaktiver Entwurf. Sie können Titel und Beschreibungen umschreiben, Abschnitte per Drag-and-Drop neu anordnen, einzelne Abschnitte neu generieren oder manuell neue hinzufügen.</li><li><b>Auf Manuskript anwenden:</b> Wenn Sie zufrieden sind, klicken Sie auf 'Gliederung auf Manuskript anwenden'. Dadurch wird ein neues Manuskript erstellt, bei dem jeder Gliederungsabschnitt ein Kapitel ist, komplett mit Ihren Beschreibungen als Schreibanregungen.</li></ol>",
-    "help.category.worldbuilding": "Charaktere & Welten",
-    "help.worldbuilding.characters.title": "Charaktere erstellen",
-    "help.worldbuilding.characters.content": "<h3>Ihren Charakteren Leben einhauchen</h3><p>In der <b>Charaktere</b>-Ansicht verwalten Sie Ihre Besetzung. Sie können:</p><ul><li><b>Manuell hinzufügen:</b> Erstellen Sie ein leeres Charakterblatt zum Selbstausfüllen.</li><li><b>Mit KI generieren:</b> Geben Sie ein einfaches Konzept an (z. B. 'ein zynischer Detektiv, der Katzen liebt'), und die KI generiert eine detaillierte Hintergrundgeschichte, Motivation, Persönlichkeit, Schwächen und mehr.</li><li><b>Ein Porträt generieren:</b> Basierend auf dem Feld 'Aussehen' kann die KI ein einzigartiges Charakterporträt erstellen. Sie können dann die Eingabe 'Porträt verfeinern' verwenden, um Änderungen vorzunehmen (z. B. 'gib ihm eine Narbe über dem linken Auge').</li><li><b>Felder neu generieren:</b> Gefällt Ihnen ein bestimmtes Detail nicht? Klicken Sie auf das Regenerieren-Symbol neben einem beliebigen Feld, um nur diesen Teil von der KI neu schreiben zu lassen.</li></ul>",
-    "help.worldbuilding.worlds.title": "Weltenbau",
-    "help.worldbuilding.worlds.content": "<h3>Ihr Universum konstruieren</h3><p>Die <b>Weltenbau</b>-Ansicht dient der Definition des Schauplatzes Ihrer Geschichte. Ähnlich wie beim Charakter-Editor können Sie:</p><ul><li><b>Mit KI generieren:</b> Erstellen Sie ein reichhaltiges Weltprofil aus einem Kernkonzept (z. B. 'eine Steampunk-Stadt, die von eingefangenem Blitz angetrieben wird').</li><li><b>Details ausarbeiten:</b> Definieren Sie manuell Geografie, Kultur und Magie-/Technologiesysteme.</li><li><b>Zeitachsen und Orte erstellen:</b> Verwenden Sie die speziellen Registerkarten im Weltatlas, um historische Ereignisse zu einer Zeitachse hinzuzufügen oder wichtige Orte in Ihrer Welt zu definieren.</li><li><b>Ein Stimmungsbild generieren:</b> Lassen Sie die KI ein wunderschönes, atmosphärisches Bild basierend auf der Beschreibung Ihrer Welt erstellen, um die Stimmung einzufangen.</li></ul>",
-    "help.category.aiStudio": "KI-Schreibstudio",
-    "help.aiStudio.overview.title": "Übersicht über das KI-Schreibstudio",
-    "help.aiStudio.overview.content": "<h3>Ihr kreativer Co-Pilot</h3><p>Das KI-Schreibstudio ist Ihr dedizierter Bereich für KI-gestütztes Schreiben. Der Arbeitsablauf ist auf Leistung und Flexibilität ausgelegt:</p><ol><li><b>Kontext auswählen:</b> Wählen Sie zuerst den Manuskriptabschnitt, an dem Sie arbeiten möchten, aus dem Dropdown-Menü im Panel 'Manuskript-Kontext'.</li><li><b>Ein Werkzeug wählen:</b> Wählen Sie eines der leistungsstarken KI-Werkzeuge oben im Panel 'KI-Werkzeuge'.</li><li><b>Eingaben machen:</b> Je nach Werkzeug müssen Sie möglicherweise Text im Editor auswählen, Charaktere auswählen oder eine Eingabeaufforderung schreiben.</li><li><b>Generieren:</b> Klicken Sie auf die Schaltfläche 'Generieren'. Die Ausgabe erscheint im 'KI-Notizblock' auf der rechten Seite.</li><li><b>Überprüfen und übernehmen:</b> Sie können den generierten Text im Notizblock bearbeiten. Sobald Sie zufrieden sind, verwenden Sie die Schaltflächen 'Einfügen' oder 'Ersetzen', um ihn auf Ihr Manuskript anzuwenden.</li></ol>",
-    "help.aiStudio.tools.title": "Die KI-Werkzeuge verstehen",
-    "help.aiStudio.tools.content": "<h3>Das richtige Werkzeug für die Aufgabe</h3><p>Jedes Werkzeug im Studio dient einem anderen Zweck:</p><ul><li><b>Weiterschreiben:</b> Perfekt bei Schreibblockaden. Platzieren Sie Ihren Cursor im Text, und die KI schreibt, was als Nächstes kommt.</li><li><b>Text verbessern:</b> Markieren Sie einen Satz oder Absatz, und die KI schreibt ihn neu. Verwenden Sie das Stil-Dropdown, um die Verbesserung zu steuern (z. B. 'filmischer' machen).</li><li><b>Ton ändern:</b> Ähnlich wie 'Text verbessern', verwendet aber das Ton-Dropdown, um die Stimmung zu ändern (z. B. 'spannender' machen).</li><li><b>Dialog generieren:</b> Wählen Sie die Charaktere in der Szene aus, beschreiben Sie das Szenario, und die KI schreibt deren Gespräch.</li><li><b>Ideen brainstormen:</b> Erhalten Sie eine Liste kreativer Handlungspunkte für die Fortsetzung.</li><li><b>Abschnitt zusammenfassen:</b> Generiert schnell eine Synopse des ausgewählten Manuskriptabschnitts, nützlich zur Überprüfung des Tempos oder zum Schreiben von Kapitelzusammenfassungen.</li></ul>",
-    "help.category.management": "Daten & Einstellungen",
-    "help.management.export.title": "Ihre Arbeit exportieren",
-    "help.management.export.content": "<h3>Vom Entwurf zum Dokument</h3><p>Die <b>Export</b>-Ansicht ist eine vollständige Publishing-Suite. Sie haben eine Live-Vorschau Ihres formatierten Dokuments auf der rechten Seite. Im Panel 'Export-Steuerung' können Sie:</p><ul><li><b>Inhalt auswählen:</b> Wählen Sie aus, welche Teile Ihres Projekts einbezogen werden sollen, wie z. B. Charakter-Dossiers oder Weltenbau-Notizen.</li><li><b>Format wählen:</b> Wir unterstützen <b>Markdown (.md)</b>, <b>reinen Text (.txt)</b> und <b>PDF (.pdf)</b>.</li><li><b>PDF anpassen:</b> Für PDFs können Sie Schriftart, Schriftgröße, Zeilenabstand einstellen und wählen, ob eine professionelle Titelseite eingefügt werden soll.</li><li><b>KI-Erweiterungen nutzen:</b> Aktivieren Sie das Kontrollkästchen 'KI-Synopse generieren', damit die KI eine professionelle einseitige Zusammenfassung Ihres gesamten Manuskripts für den Export schreibt.</li></ul>",
-    "help.management.data.title": "Datenverwaltung & Sicherungen",
-    "help.management.data.content": "<h3>Ihre Daten, Ihre Kontrolle</h3><p>Sie können Ihre Projektdaten unter <b>Einstellungen > Daten & Backups</b> verwalten. StoryCraft Studio gibt Ihnen die volle Kontrolle:</p><ul><li><b>Sicherung exportieren:</b> Dies speichert eine vollständige JSON-Sicherungsdatei Ihres gesamten Projekts (einschließlich aller Texte und Einstellungen) auf Ihrem Computer. Verwenden Sie dies, um Ihr Projekt auf ein anderes Gerät zu verschieben.</li><li><b>Sicherung importieren:</b> Laden Sie ein Projekt aus einer JSON-Sicherungsdatei.</li><li><b>Projekt zurücksetzen:</b> Dies löscht alle Ihre Daten im Browser dauerhaft und startet ein neues, leeres Projekt.</li><li><b>Projekt-Schnappschüsse:</b> Diese leistungsstarke Funktion ist Ihr Sicherheitsnetz. Die App erstellt regelmäßig automatisch Schnappschüsse Ihres Projekts. Sie können auch manuell einen benannten Schnappschuss erstellen, bevor Sie größere Änderungen vornehmen. Sie können Ihr Projekt jederzeit auf einen beliebigen Schnappschuss wiederherstellen.</li></ul>",
-    "help.category.proTips": "Profi-Tipps & erweiterte Funktionen",
-    "help.proTips.mentions.title": "Effektiver Einsatz von @Erwähnungen",
-    "help.proTips.mentions.content": "<h3>Erstellen Sie ein lebendiges Dokument</h3><p>Das <code>@mention</code>-System im Manuskript-Editor ist mehr als nur eine visuelle Hilfe; es ist eine Möglichkeit, eine tief vernetzte Story-Bibel zu erstellen. Indem Sie Charaktere konsequent mit <code>@</code> und Welten mit <code>#</code> markieren, erstellen Sie eine visuelle Karte, wie Ihre Story-Elemente innerhalb der Erzählung interagieren. Dies macht es einfach, auf einen Blick zu sehen, welche Charaktere in einer Szene aktiv sind oder wo Ihre Geschichte spielt. Es ist eine einfache Gewohnheit, die sich bei der Bearbeitung und Überarbeitung enorm auszahlt.</p>",
-    "help.proTips.snapshots.title": "Snapshot-Strategien für sicheres Schreiben",
-    "help.proTips.snapshots.content": "<h3>Schreiben ohne Angst</h3><p>Das Snapshot-System ist Ihr bester Freund bei größeren Überarbeitungen. Hier ist ein Profi-Workflow:</p><ol><li>Bevor Sie eine größere Überarbeitung eines Kapitels beginnen, gehen Sie zu <b>Einstellungen > Daten & Backups</b>.</li><li>Klicken Sie auf <b>'Schnappschuss erstellen'</b> und geben Sie ihm einen beschreibenden Namen, wie 'Vor der Überarbeitung von Akt 2'.</li><li>Jetzt können Sie frei schreiben und überarbeiten, in dem Wissen, dass Sie jederzeit zu dieser sicheren Version zurückkehren können.</li><li>Die App erstellt auch alle 30 Minuten Aktivität automatische Schnappschüsse, sodass Sie immer abgesichert sind. Sie können von jedem automatischen oder manuellen Schnappschuss wiederherstellen, wenn Sie Ihre Meinung über die Richtung, die Ihre Geschichte eingeschlagen hat, ändern.</li></ol>",
-    "help.category.faq": "Häufig gestellte Fragen",
-    "help.faq.saving.title": "Wie werden meine Projektdaten gespeichert?",
-    "help.faq.saving.content": "<p>Ihr gesamtes Projekt, einschließlich aller Texte und KI-generierten Bilder, wird automatisch und kontinuierlich im lokalen Speicher Ihres Webbrowsers (einer Datenbank namens IndexedDB) gespeichert. Das bedeutet, dass Ihre Arbeit auf Ihrem Computer zwischen den Sitzungen erhalten bleibt. Eine 'Speichern...'-Anzeige erscheint in der Kopfzeile, wenn Änderungen geschrieben werden, gefolgt von 'Alle Änderungen gespeichert'.</p><p><b>Es gibt kein Cloud-Konto oder serverseitige Speicherung.</b> Dies gewährleistet vollständige Privatsphäre, bedeutet aber auch, dass Sie für die Erstellung von Sicherungen über die Funktion 'Sicherung exportieren' in den Einstellungen verantwortlich sind.</p>",
-    "help.faq.api.title": "Benötige ich einen API-Schlüssel?",
-    "help.faq.api.content": "<p>Ja. Um die KI-gestützten Funktionen (wie Generierung, Verbesserung oder Brainstorming) nutzen zu können, benötigt die Anwendung einen Google Gemini API-Schlüssel. Sie können einen kostenlosen Schlüssel bei <a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a> erhalten.</p><p>Gehen Sie zu <b>Einstellungen → KI-Konfiguration</b> und geben Sie Ihren Schlüssel ein. Er wird mit AES-256-GCM verschlüsselt und sicher in der IndexedDB Ihres Browsers gespeichert. Ihr Schlüssel verlässt niemals Ihr Gerät und wird nie an einen Server übertragen.</p>",
-    "help.faq.privacy.title": "Ist meine Geschichte privat?",
-    "help.faq.privacy.content": "<p><b>Absolut.</b> Ihre Privatsphäre ist von größter Bedeutung. Da alle Daten lokal in Ihrem Browser gespeichert werden, haben wir niemals Zugriff auf Ihre Arbeit. Ihre Geschichte bleibt vollständig privat und unter Ihrer Kontrolle. Wenn Sie KI-Funktionen verwenden, wird nur der für diese Anfrage spezifisch benötigte Text an die Google Gemini API gesendet und nicht zum Trainieren ihrer Modelle verwendet.</p>"
+      ]
+    },
+    {
+      "id": "writing",
+      "title": "help.category.writing",
+      "icon": "DOCUMENT_TEXT",
+      "articles": [
+        { "title": "help.writing.manuscript.title", "content": "help.writing.manuscript.content" },
+        { "title": "help.writing.templates.title", "content": "help.writing.templates.content" },
+        { "title": "help.writing.outline.title", "content": "help.writing.outline.content" }
+      ]
+    },
+    {
+      "id": "worldbuilding",
+      "title": "help.category.worldbuilding",
+      "icon": "WORLD",
+      "articles": [
+        {
+          "title": "help.worldbuilding.characters.title",
+          "content": "help.worldbuilding.characters.content"
+        },
+        {
+          "title": "help.worldbuilding.worlds.title",
+          "content": "help.worldbuilding.worlds.content"
+        }
+      ]
+    },
+    {
+      "id": "ai-studio",
+      "title": "help.category.aiStudio",
+      "icon": "SPARKLES",
+      "articles": [
+        { "title": "help.aiStudio.overview.title", "content": "help.aiStudio.overview.content" },
+        { "title": "help.aiStudio.tools.title", "content": "help.aiStudio.tools.content" }
+      ]
+    },
+    {
+      "id": "management",
+      "title": "help.category.management",
+      "icon": "SETTINGS",
+      "articles": [
+        { "title": "help.management.export.title", "content": "help.management.export.content" },
+        { "title": "help.management.data.title", "content": "help.management.data.content" }
+      ]
+    },
+    {
+      "id": "pro-tips",
+      "title": "help.category.proTips",
+      "icon": "LIGHTNING_BOLT",
+      "articles": [
+        { "title": "help.proTips.mentions.title", "content": "help.proTips.mentions.content" },
+        { "title": "help.proTips.snapshots.title", "content": "help.proTips.snapshots.content" }
+      ]
+    },
+    {
+      "id": "faq",
+      "title": "help.category.faq",
+      "icon": "HELP",
+      "articles": [
+        { "title": "help.faq.saving.title", "content": "help.faq.saving.content" },
+        { "title": "help.faq.api.title", "content": "help.faq.api.content" },
+        { "title": "help.faq.privacy.title", "content": "help.faq.privacy.content" }
+      ]
+    }
+  ],
+  "help.category.gettingStarted": "Erste Schritte",
+  "help.gettingStarted.tour.title": "Eine schnelle Tour durch die Benutzeroberfläche",
+  "help.gettingStarted.tour.content": "<h3>Willkommen im StoryCraft Studio!</h3><p>Die Hauptnavigation befindet sich in der linken Seitenleiste und bietet Ihnen Zugriff auf alle wichtigen Werkzeuge:</p><ul><li><b>Dashboard:</b> Die Startseite Ihres Projekts. Verfolgen Sie Statistiken, setzen Sie Ziele und sehen Sie Ihr Projekt auf einen Blick.</li><li><b>Manuskript:</b> Eine fokussierte Drei-Fenster-Ansicht zum Schreiben und Organisieren Ihrer Kapitel.</li><li><b>KI-Schreibstudio:</b> Ihr kreativer Partner zum Generieren von Text, Verbessern von Prosa und Überwinden von Schreibblockaden.</li><li><b>Vorlagen:</b> Starten Sie Ihre Geschichte mit vorgefertigten Erzählstrukturen.</li><li><b>Gliederungsgenerator:</b> Brainstormen Sie eine komplette Handlung aus einer einfachen Idee mit KI.</li><li><b>Charaktere & Weltenbau:</b> Erstellen und verwalten Sie die Elemente Ihrer Geschichte mit reichhaltigen Details und KI-generierter Kunst.</li><li><b>Exportieren:</b> Bereiten Sie Ihr fertiges Werk zum Teilen in verschiedenen Formaten vor.</li><li><b>Einstellungen:</b> Passen Sie Ihren Arbeitsbereich an und verwalten Sie Ihre Projektdaten.</li></ul>",
+  "help.gettingStarted.firstProject.title": "Ihr erstes Projekt starten",
+  "help.gettingStarted.firstProject.content": "<h3>Wählen Sie Ihren Weg</h3><p>Das <b>Willkommensportal</b> bietet Ihnen drei leistungsstarke Möglichkeiten, um anzufangen:</p><ol><li><b>Mit einer Vorlage starten:</b> Dies ist ideal für strukturiertes Erzählen. Gehen Sie zur Ansicht <b>Vorlagen</b>, wählen Sie eine Struktur wie die 'Drei-Akte-Struktur' und nutzen Sie die Funktion 'Mit KI personalisieren', um basierend auf Ihrer Story-Idee individuelle Anregungen für jeden Abschnitt zu erhalten.</li><li><b>Mit KI generieren:</b> Wenn Sie ein Konzept, aber keine Struktur haben, verwenden Sie den <b>Gliederungsgenerator</b>. Geben Sie einfach Ihr Genre und eine Story-Idee an, und er erstellt eine vollständige, bearbeitbare Handlungsgliederung, die Sie auf Ihr Manuskript anwenden können.</li><li><b>Leer beginnen:</b> Für diejenigen, die eine komplett leere Leinwand bevorzugen, erstellt diese Option ein neues Projekt mit einem leeren ersten Kapitel, bereit, sofort mit dem Schreiben zu beginnen.</li></ol>",
+  "help.category.writing": "Schreiben & Strukturieren",
+  "help.writing.manuscript.title": "Der Drei-Fenster-Manuskript-Editor",
+  "help.writing.manuscript.content": "<h3>Eine ablenkungsfreie Schreibumgebung</h3><p>Die Manuskriptansicht ist für Fokus und Flow konzipiert. Auf dem Desktop verfügt sie über drei größenveränderbare Fenster:</p><ul><li><b>Navigator (Links):</b> Dieses Fenster listet alle Ihre Kapitel oder Abschnitte auf. Klicken Sie, um zwischen ihnen zu springen, oder ziehen Sie sie per <b>Drag-and-Drop</b>, um Ihre Geschichte neu zu ordnen.</li><li><b>Editor (Mitte):</b> Dies ist Ihr Hauptschreibbereich. Er verfügt über eine Echtzeit-Hervorhebung für Erwähnungen. Verwenden Sie die <code>@</code>-Taste, um Charaktere zu markieren (z. B. <code>@Jax</code>), und die <code>#</code>-Taste, um Welten zu markieren (z. B. <code>#Neo-Veridia</code>), um eine einfache Referenz zu schaffen.</li><li><b>Inspektor (Rechts):</b> Dieses Fenster hält die übergeordneten Details Ihres Projekts wie Titel und Logline immer griffbereit. Sie können hier sogar den KI-Assistenten verwenden, um Logline-Ideen zu generieren.</li></ul><p>Auf mobilen Geräten sind der Navigator und der Inspektor in ausziehbaren Schubladen untergebracht, um Ihren Schreibbereich zu maximieren.</p>",
+  "help.writing.templates.title": "Mit Vorlagen arbeiten",
+  "help.writing.templates.content": "<h3>Auf einem soliden Fundament bauen</h3><p>Vorlagen bieten eine Startstruktur für Ihre Geschichte. In der <b>Vorlagen</b>-Ansicht können Sie:</p><ul><li><b>Vorschau anzeigen:</b> Klicken Sie auf eine Vorlage, um deren Abschnitte zu sehen.</li><li><b>Anpassen (Remix):</b> Klicken Sie vor dem Anwenden auf 'Vorlage anpassen'. Dies ermöglicht es Ihnen, Abschnitte hinzuzufügen, zu löschen, umzubenennen und neu anzuordnen, um eine benutzerdefinierte Struktur zu erstellen.</li><li><b>Mit KI personalisieren:</b> Geben Sie Ihr zentrales Story-Konzept ein, und die KI generiert einzigartige, inspirierende Anregungen für jeden Abschnitt, um Ihr Schreiben zu leiten.</li><li><b>Anwenden:</b> Sobald Sie eine Vorlage anwenden, ersetzt sie Ihr aktuelles Manuskript und Ihre Gliederung und gibt Ihnen eine saubere, strukturierte Basis für den Erfolg.</li></ul>",
+  "help.writing.outline.title": "Den KI-Gliederungsgenerator meistern",
+  "help.writing.outline.content": "<h3>Von der Idee zum Plot in Minuten</h3><p>Dies ist eines der leistungsstärksten Werkzeuge, um eine Geschichte zu beginnen. Der Prozess ist einfach:</p><ol><li><b>Ihre Idee angeben:</b> Geben Sie ein Genre und Ihr Hauptkonzept ein.</li><li><b>Erweiterte Optionen nutzen:</b> Für bessere Ergebnisse geben Sie Schlüsselfiguren, Schauplatz und das gewünschte Tempo an. Sie können die KI sogar bitten, eine Wendung einzubauen.</li><li><b>Bearbeiten und verfeinern:</b> Die KI erstellt eine vollständige, mehrteilige Gliederung. Dies ist ein vollständig interaktiver Entwurf. Sie können Titel und Beschreibungen umschreiben, Abschnitte per Drag-and-Drop neu anordnen, einzelne Abschnitte neu generieren oder manuell neue hinzufügen.</li><li><b>Auf Manuskript anwenden:</b> Wenn Sie zufrieden sind, klicken Sie auf 'Gliederung auf Manuskript anwenden'. Dadurch wird ein neues Manuskript erstellt, bei dem jeder Gliederungsabschnitt ein Kapitel ist, komplett mit Ihren Beschreibungen als Schreibanregungen.</li></ol>",
+  "help.category.worldbuilding": "Charaktere & Welten",
+  "help.worldbuilding.characters.title": "Charaktere erstellen",
+  "help.worldbuilding.characters.content": "<h3>Ihren Charakteren Leben einhauchen</h3><p>In der <b>Charaktere</b>-Ansicht verwalten Sie Ihre Besetzung. Sie können:</p><ul><li><b>Manuell hinzufügen:</b> Erstellen Sie ein leeres Charakterblatt zum Selbstausfüllen.</li><li><b>Mit KI generieren:</b> Geben Sie ein einfaches Konzept an (z. B. 'ein zynischer Detektiv, der Katzen liebt'), und die KI generiert eine detaillierte Hintergrundgeschichte, Motivation, Persönlichkeit, Schwächen und mehr.</li><li><b>Ein Porträt generieren:</b> Basierend auf dem Feld 'Aussehen' kann die KI ein einzigartiges Charakterporträt erstellen. Sie können dann die Eingabe 'Porträt verfeinern' verwenden, um Änderungen vorzunehmen (z. B. 'gib ihm eine Narbe über dem linken Auge').</li><li><b>Felder neu generieren:</b> Gefällt Ihnen ein bestimmtes Detail nicht? Klicken Sie auf das Regenerieren-Symbol neben einem beliebigen Feld, um nur diesen Teil von der KI neu schreiben zu lassen.</li></ul>",
+  "help.worldbuilding.worlds.title": "Weltenbau",
+  "help.worldbuilding.worlds.content": "<h3>Ihr Universum konstruieren</h3><p>Die <b>Weltenbau</b>-Ansicht dient der Definition des Schauplatzes Ihrer Geschichte. Ähnlich wie beim Charakter-Editor können Sie:</p><ul><li><b>Mit KI generieren:</b> Erstellen Sie ein reichhaltiges Weltprofil aus einem Kernkonzept (z. B. 'eine Steampunk-Stadt, die von eingefangenem Blitz angetrieben wird').</li><li><b>Details ausarbeiten:</b> Definieren Sie manuell Geografie, Kultur und Magie-/Technologiesysteme.</li><li><b>Zeitachsen und Orte erstellen:</b> Verwenden Sie die speziellen Registerkarten im Weltatlas, um historische Ereignisse zu einer Zeitachse hinzuzufügen oder wichtige Orte in Ihrer Welt zu definieren.</li><li><b>Ein Stimmungsbild generieren:</b> Lassen Sie die KI ein wunderschönes, atmosphärisches Bild basierend auf der Beschreibung Ihrer Welt erstellen, um die Stimmung einzufangen.</li></ul>",
+  "help.category.aiStudio": "KI-Schreibstudio",
+  "help.aiStudio.overview.title": "Übersicht über das KI-Schreibstudio",
+  "help.aiStudio.overview.content": "<h3>Ihr kreativer Co-Pilot</h3><p>Das KI-Schreibstudio ist Ihr dedizierter Bereich für KI-gestütztes Schreiben. Der Arbeitsablauf ist auf Leistung und Flexibilität ausgelegt:</p><ol><li><b>Kontext auswählen:</b> Wählen Sie zuerst den Manuskriptabschnitt, an dem Sie arbeiten möchten, aus dem Dropdown-Menü im Panel 'Manuskript-Kontext'.</li><li><b>Ein Werkzeug wählen:</b> Wählen Sie eines der leistungsstarken KI-Werkzeuge oben im Panel 'KI-Werkzeuge'.</li><li><b>Eingaben machen:</b> Je nach Werkzeug müssen Sie möglicherweise Text im Editor auswählen, Charaktere auswählen oder eine Eingabeaufforderung schreiben.</li><li><b>Generieren:</b> Klicken Sie auf die Schaltfläche 'Generieren'. Die Ausgabe erscheint im 'KI-Notizblock' auf der rechten Seite.</li><li><b>Überprüfen und übernehmen:</b> Sie können den generierten Text im Notizblock bearbeiten. Sobald Sie zufrieden sind, verwenden Sie die Schaltflächen 'Einfügen' oder 'Ersetzen', um ihn auf Ihr Manuskript anzuwenden.</li></ol>",
+  "help.aiStudio.tools.title": "Die KI-Werkzeuge verstehen",
+  "help.aiStudio.tools.content": "<h3>Das richtige Werkzeug für die Aufgabe</h3><p>Jedes Werkzeug im Studio dient einem anderen Zweck:</p><ul><li><b>Weiterschreiben:</b> Perfekt bei Schreibblockaden. Platzieren Sie Ihren Cursor im Text, und die KI schreibt, was als Nächstes kommt.</li><li><b>Text verbessern:</b> Markieren Sie einen Satz oder Absatz, und die KI schreibt ihn neu. Verwenden Sie das Stil-Dropdown, um die Verbesserung zu steuern (z. B. 'filmischer' machen).</li><li><b>Ton ändern:</b> Ähnlich wie 'Text verbessern', verwendet aber das Ton-Dropdown, um die Stimmung zu ändern (z. B. 'spannender' machen).</li><li><b>Dialog generieren:</b> Wählen Sie die Charaktere in der Szene aus, beschreiben Sie das Szenario, und die KI schreibt deren Gespräch.</li><li><b>Ideen brainstormen:</b> Erhalten Sie eine Liste kreativer Handlungspunkte für die Fortsetzung.</li><li><b>Abschnitt zusammenfassen:</b> Generiert schnell eine Synopse des ausgewählten Manuskriptabschnitts, nützlich zur Überprüfung des Tempos oder zum Schreiben von Kapitelzusammenfassungen.</li></ul>",
+  "help.category.management": "Daten & Einstellungen",
+  "help.management.export.title": "Ihre Arbeit exportieren",
+  "help.management.export.content": "<h3>Vom Entwurf zum Dokument</h3><p>Die <b>Export</b>-Ansicht ist eine vollständige Publishing-Suite. Sie haben eine Live-Vorschau Ihres formatierten Dokuments auf der rechten Seite. Im Panel 'Export-Steuerung' können Sie:</p><ul><li><b>Inhalt auswählen:</b> Wählen Sie aus, welche Teile Ihres Projekts einbezogen werden sollen, wie z. B. Charakter-Dossiers oder Weltenbau-Notizen.</li><li><b>Format wählen:</b> Wir unterstützen <b>Markdown (.md)</b>, <b>reinen Text (.txt)</b> und <b>PDF (.pdf)</b>.</li><li><b>PDF anpassen:</b> Für PDFs können Sie Schriftart, Schriftgröße, Zeilenabstand einstellen und wählen, ob eine professionelle Titelseite eingefügt werden soll.</li><li><b>KI-Erweiterungen nutzen:</b> Aktivieren Sie das Kontrollkästchen 'KI-Synopse generieren', damit die KI eine professionelle einseitige Zusammenfassung Ihres gesamten Manuskripts für den Export schreibt.</li></ul>",
+  "help.management.data.title": "Datenverwaltung & Sicherungen",
+  "help.management.data.content": "<h3>Ihre Daten, Ihre Kontrolle</h3><p>Sie können Ihre Projektdaten unter <b>Einstellungen > Daten & Backups</b> verwalten. StoryCraft Studio gibt Ihnen die volle Kontrolle:</p><ul><li><b>Sicherung exportieren:</b> Dies speichert eine vollständige JSON-Sicherungsdatei Ihres gesamten Projekts (einschließlich aller Texte und Einstellungen) auf Ihrem Computer. Verwenden Sie dies, um Ihr Projekt auf ein anderes Gerät zu verschieben.</li><li><b>Sicherung importieren:</b> Laden Sie ein Projekt aus einer JSON-Sicherungsdatei.</li><li><b>Projekt zurücksetzen:</b> Dies löscht alle Ihre Daten im Browser dauerhaft und startet ein neues, leeres Projekt.</li><li><b>Projekt-Schnappschüsse:</b> Diese leistungsstarke Funktion ist Ihr Sicherheitsnetz. Die App erstellt regelmäßig automatisch Schnappschüsse Ihres Projekts. Sie können auch manuell einen benannten Schnappschuss erstellen, bevor Sie größere Änderungen vornehmen. Sie können Ihr Projekt jederzeit auf einen beliebigen Schnappschuss wiederherstellen.</li></ul>",
+  "help.category.proTips": "Profi-Tipps & erweiterte Funktionen",
+  "help.proTips.mentions.title": "Effektiver Einsatz von @Erwähnungen",
+  "help.proTips.mentions.content": "<h3>Erstellen Sie ein lebendiges Dokument</h3><p>Das <code>@mention</code>-System im Manuskript-Editor ist mehr als nur eine visuelle Hilfe; es ist eine Möglichkeit, eine tief vernetzte Story-Bibel zu erstellen. Indem Sie Charaktere konsequent mit <code>@</code> und Welten mit <code>#</code> markieren, erstellen Sie eine visuelle Karte, wie Ihre Story-Elemente innerhalb der Erzählung interagieren. Dies macht es einfach, auf einen Blick zu sehen, welche Charaktere in einer Szene aktiv sind oder wo Ihre Geschichte spielt. Es ist eine einfache Gewohnheit, die sich bei der Bearbeitung und Überarbeitung enorm auszahlt.</p>",
+  "help.proTips.snapshots.title": "Snapshot-Strategien für sicheres Schreiben",
+  "help.proTips.snapshots.content": "<h3>Schreiben ohne Angst</h3><p>Das Snapshot-System ist Ihr bester Freund bei größeren Überarbeitungen. Hier ist ein Profi-Workflow:</p><ol><li>Bevor Sie eine größere Überarbeitung eines Kapitels beginnen, gehen Sie zu <b>Einstellungen > Daten & Backups</b>.</li><li>Klicken Sie auf <b>'Schnappschuss erstellen'</b> und geben Sie ihm einen beschreibenden Namen, wie 'Vor der Überarbeitung von Akt 2'.</li><li>Jetzt können Sie frei schreiben und überarbeiten, in dem Wissen, dass Sie jederzeit zu dieser sicheren Version zurückkehren können.</li><li>Die App erstellt auch alle 30 Minuten Aktivität automatische Schnappschüsse, sodass Sie immer abgesichert sind. Sie können von jedem automatischen oder manuellen Schnappschuss wiederherstellen, wenn Sie Ihre Meinung über die Richtung, die Ihre Geschichte eingeschlagen hat, ändern.</li></ol>",
+  "help.category.faq": "Häufig gestellte Fragen",
+  "help.faq.saving.title": "Wie werden meine Projektdaten gespeichert?",
+  "help.faq.saving.content": "<p>Ihr gesamtes Projekt, einschließlich aller Texte und KI-generierten Bilder, wird automatisch und kontinuierlich im lokalen Speicher Ihres Webbrowsers (einer Datenbank namens IndexedDB) gespeichert. Das bedeutet, dass Ihre Arbeit auf Ihrem Computer zwischen den Sitzungen erhalten bleibt. Eine 'Speichern...'-Anzeige erscheint in der Kopfzeile, wenn Änderungen geschrieben werden, gefolgt von 'Alle Änderungen gespeichert'.</p><p><b>Es gibt kein Cloud-Konto oder serverseitige Speicherung.</b> Dies gewährleistet vollständige Privatsphäre, bedeutet aber auch, dass Sie für die Erstellung von Sicherungen über die Funktion 'Sicherung exportieren' in den Einstellungen verantwortlich sind.</p>",
+  "help.faq.api.title": "Benötige ich einen API-Schlüssel?",
+  "help.faq.api.content": "<p>Ja. Um die KI-gestützten Funktionen (wie Generierung, Verbesserung oder Brainstorming) nutzen zu können, benötigt die Anwendung einen Google Gemini API-Schlüssel. Sie können einen kostenlosen Schlüssel bei <a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a> erhalten.</p><p>Gehen Sie zu <b>Einstellungen → KI-Konfiguration</b> und geben Sie Ihren Schlüssel ein. Er wird mit AES-256-GCM verschlüsselt und sicher in der IndexedDB Ihres Browsers gespeichert. Ihr Schlüssel verlässt niemals Ihr Gerät und wird nie an einen Server übertragen.</p>",
+  "help.faq.privacy.title": "Ist meine Geschichte privat?",
+  "help.faq.privacy.content": "<p><b>Absolut.</b> Ihre Privatsphäre ist von größter Bedeutung. Da alle Daten lokal in Ihrem Browser gespeichert werden, haben wir niemals Zugriff auf Ihre Arbeit. Ihre Geschichte bleibt vollständig privat und unter Ihrer Kontrolle. Wenn Sie KI-Funktionen verwenden, wird nur der für diese Anfrage spezifisch benötigte Text an die Google Gemini API gesendet und nicht zum Trainieren ihrer Modelle verwendet.</p>"
 }

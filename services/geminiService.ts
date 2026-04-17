@@ -4,22 +4,22 @@ import type {
   AiCreativity,
   Character,
   CharacterRelationship,
-  World,
-  OutlineSection,
+  CustomTemplateParams,
   GeminiSchema,
   OutlineGenerationParams,
-  CustomTemplateParams,
+  OutlineSection,
   StoryCodex,
+  World,
 } from '../types';
-import { storageService } from './storageService';
-import { logger } from './logger';
 import {
-  sanitizePromptValue,
-  sanitizePromptBlock,
-  cleanPrompt,
   attachCause,
+  cleanPrompt,
+  sanitizePromptBlock,
+  sanitizePromptValue,
   stripJsonFences,
 } from './aiUtils';
+import { logger } from './logger';
+import { storageService } from './storageService';
 
 // === DYNAMIC API KEY MANAGEMENT ===
 // KRITISCH: Kein hardcoded API key mehr!
@@ -52,7 +52,7 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
       if (!apiKey) {
         throw new Error(
           'NO_API_KEY: No Gemini API key configured. ' +
-            'Please open Settings and add your API key.'
+            'Please open Settings and add your API key.',
         );
       }
 
@@ -121,7 +121,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
       if (is401) {
         await handleInvalidApiKey();
         const invalidApiKeyError = new Error(
-          'INVALID_API_KEY: The API key is invalid or expired. Please store a valid key in Settings.'
+          'INVALID_API_KEY: The API key is invalid or expired. Please store a valid key in Settings.',
         );
         attachCause(invalidApiKeyError, err);
         throw invalidApiKeyError;
@@ -144,7 +144,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
         }
         throw new Error(
           'RATE_LIMITED: API usage limit reached. Please wait a minute and try again.',
-          { cause: err }
+          { cause: err },
         );
       }
 
@@ -158,7 +158,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
 function assertOnline(): void {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     throw new Error(
-      'OFFLINE: No internet connection. AI features are not available offline. Local features (writing, manuscript, snapshots) continue to work.'
+      'OFFLINE: No internet connection. AI features are not available offline. Local features (writing, manuscript, snapshots) continue to work.',
     );
   }
 }
@@ -352,7 +352,7 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
       const { allSections, sectionToIndex } = p;
       const contextSections = allSections.slice(
         Math.max(0, sectionToIndex - 2),
-        sectionToIndex + 2
+        sectionToIndex + 2,
       );
       return {
         prompt: `You are regenerating a single section of a story outline.
@@ -406,9 +406,9 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
         prompt: `Based on the following story details, write a concise, one-page synopsis (3-4 paragraphs) suitable for a book proposal or query letter.\nTitle: ${sanitizePromptValue(p.project.title)}\nLogline: ${sanitizePromptBlock(p.project.logline)}\nManuscript Text:\n${sanitizePromptBlock(
           p.project.manuscript
             .map(
-              (s) => `Chapter: ${sanitizePromptValue(s.title)}\n${sanitizePromptBlock(s.content)}`
+              (s) => `Chapter: ${sanitizePromptValue(s.title)}\n${sanitizePromptBlock(s.content)}`,
             )
-            .join('\n\n')
+            .join('\n\n'),
         ).substring(0, 10000)}...\n(Text truncated for length)${langInstruction}`,
         thinkingBudget: getThinkingBudget('synopsis'),
       };
@@ -444,7 +444,7 @@ Manuscript: ${sanitizePromptBlock(
         p.manuscript
           .map((s) => `${sanitizePromptValue(s.title)}: ${sanitizePromptBlock(s.content)}`)
           .join('\n\n')
-          .substring(0, 50000)
+          .substring(0, 50000),
       )}
             `;
       const codexSummary = p.codex
@@ -491,7 +491,7 @@ export const generateText = async (
   prompt: string,
   creativity: AiCreativity,
   signal?: AbortSignal,
-  thinkingBudget?: number
+  thinkingBudget?: number,
 ): Promise<string> => {
   try {
     assertOnline();
@@ -538,7 +538,7 @@ export const generateJson = async <T>(
   creativity: AiCreativity,
   schema: GeminiSchema,
   signal?: AbortSignal,
-  thinkingBudget?: number
+  thinkingBudget?: number,
 ): Promise<T> => {
   try {
     assertOnline();
@@ -576,7 +576,7 @@ export const generateJson = async <T>(
       } catch (e) {
         logger.error('Failed to parse JSON from model:', jsonText);
         const parseError = new Error(
-          'The AI response was not in a valid format. Please try again.'
+          'The AI response was not in a valid format. Please try again.',
         );
         attachCause(parseError, e);
         throw parseError;
@@ -603,7 +603,7 @@ export const checkConsistency = async (
   relationships: CharacterRelationship[],
   creativity: AiCreativity,
   lang: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> => {
   const { prompt } = getPrompts('consistencyCheck', {
     characterId,
@@ -620,7 +620,7 @@ export const analyzeAsCritic = async (
   text: string,
   creativity: AiCreativity,
   lang: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> => {
   const { prompt } = getPrompts('criticAnalysis', { text, lang });
   return await generateText(prompt, creativity, signal);
@@ -630,7 +630,7 @@ export const detectPlotHoles = async (
   text: string,
   creativity: AiCreativity,
   lang: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> => {
   const { prompt } = getPrompts('plotHoleDetection', { text, lang });
   return await generateText(prompt, creativity, signal);
@@ -640,7 +640,7 @@ export const streamText = async (
   prompt: string,
   creativity: AiCreativity,
   onChunk: (chunk: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> => {
   try {
     assertOnline();
@@ -684,7 +684,7 @@ export const streamAiHelpResponse = async (
   question: string,
   onChunk: (chunk: string) => void,
   temperature: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> => {
   try {
     assertOnline();

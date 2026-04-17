@@ -1,5 +1,6 @@
+import type React from 'react';
 import type { ReactNode } from 'react';
-import React, { createContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useCallback, useEffect, useState } from 'react';
 import { logger } from '../services/logger';
 
 type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
@@ -13,7 +14,7 @@ interface I18nContextType {
 export const I18nContext = createContext<I18nContextType>({
   language: 'de',
   setLanguage: () => {},
-  t: <T = string,>(key: string) => key as unknown as T,
+  t: <T = string>(key: string) => key as unknown as T,
 });
 
 interface I18nProviderProps {
@@ -53,7 +54,7 @@ const getInitialLanguage = (): Language => {
 export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(getInitialLanguage);
   const [translations, setTranslations] = useState<Record<string, Record<string, unknown>> | null>(
-    null
+    null,
   );
   const [isLoading, setIsLoading] = useState(true);
 
@@ -80,15 +81,15 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
           fetch(`${base}locales/${lang}/${module}.json`).then((res) => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.json();
-          })
-        )
+          }),
+        ),
       );
       return settled.reduce(
         (acc, result) => {
           if (result.status === 'fulfilled') return { ...acc, ...result.value };
           return acc;
         },
-        {} as Record<string, unknown>
+        {} as Record<string, unknown>,
       );
     };
 
@@ -119,7 +120,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   }, []);
 
   const t = useCallback(
-    <T = string,>(key: string, replacements?: Record<string, string>): T => {
+    <T = string>(key: string, replacements?: Record<string, string>): T => {
       if (!translations) {
         return key as unknown as T;
       }
@@ -140,7 +141,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
 
       return translation as unknown as T;
     },
-    [language, translations]
+    [language, translations],
   );
 
   if (isLoading) {

@@ -1,11 +1,11 @@
-import React from 'react';
+import type React from 'react';
 import { ActionCreators as UndoAction } from 'redux-undo';
-import { ICONS } from '../constants';
-import { useTranslation } from '../hooks/useTranslation';
-import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
-import { selectCanUndo, selectCanRedo } from '../features/project/projectSelectors';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { ICONS } from '../constants';
+import { selectCanRedo, selectCanUndo } from '../features/project/projectSelectors';
+import { useTranslation } from '../hooks/useTranslation';
 import type { View } from '../types';
+import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
 
 interface HeaderProps {
   currentView: View;

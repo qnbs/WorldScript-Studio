@@ -9,18 +9,18 @@ export const selectProjectData = (state: RootState) => state.project.present?.da
 // --- Undo/Redo Selectors ---
 export const selectCanUndo = createSelector(
   [selectProjectWithHistory],
-  (project) => project.past.length > 0
+  (project) => project.past.length > 0,
 );
 
 export const selectCanRedo = createSelector(
   [selectProjectWithHistory],
-  (project) => project.future.length > 0
+  (project) => project.future.length > 0,
 );
 
 // --- Character Selectors (from adapter) ---
 const selectCharactersState = createSelector(
   [selectProjectData],
-  (data) => data?.characters || charactersAdapter.getInitialState()
+  (data) => data?.characters || charactersAdapter.getInitialState(),
 );
 
 export const {
@@ -33,7 +33,7 @@ export const {
 // --- World Selectors (from adapter) ---
 const selectWorldsState = createSelector(
   [selectProjectData],
-  (data) => data?.worlds || worldsAdapter.getInitialState()
+  (data) => data?.worlds || worldsAdapter.getInitialState(),
 );
 
 export const {
@@ -46,7 +46,7 @@ export const {
 // --- Manuscript & Outline Selectors ---
 export const selectManuscript = createSelector(
   [selectProjectData],
-  (data) => data?.manuscript || []
+  (data) => data?.manuscript || [],
 );
 
 export const selectOutline = createSelector([selectProjectData], (data) => data?.outline || []);
@@ -54,37 +54,37 @@ export const selectOutline = createSelector([selectProjectData], (data) => data?
 // --- Scene Board / Relationships ---
 export const selectRelationships = createSelector(
   [selectProjectData],
-  (data) => data?.relationships || []
+  (data) => data?.relationships || [],
 );
 
 export const selectStorySections = createSelector(
   [selectProjectData],
-  (data) => data?.manuscript || []
+  (data) => data?.manuscript || [],
 );
 
 // --- Writing History / Goals ---
 export const selectWritingHistory = createSelector(
   [selectProjectData],
-  (data) => data?.writingHistory || []
+  (data) => data?.writingHistory || [],
 );
 
 export const selectProjectGoals = createSelector(
   [selectProjectData],
-  (data) => data?.projectGoals ?? { totalWordCount: 50000, targetDate: null }
+  (data) => data?.projectGoals ?? { totalWordCount: 50000, targetDate: null },
 );
 
 // --- Aggregated Stats (verhindert Neuberechnung bei jedem Render) ---
 export const selectTotalWordCount = createSelector([selectManuscript], (manuscript) =>
   manuscript.reduce(
     (acc, s) => acc + (s.content?.trim().split(/\s+/).filter(Boolean).length ?? 0),
-    0
-  )
+    0,
+  ),
 );
 
 // Memoised character list for graph rendering
 export const selectCharactersForGraph = createSelector(
   [selectAllCharacters, selectRelationships],
-  (characters, relationships) => ({ characters, relationships })
+  (characters, relationships) => ({ characters, relationships }),
 );
 
 // --- Settings-derived selectors (re-render prevention) ---
@@ -99,5 +99,5 @@ export const selectEditorSettings = createSelector(
     lineSpacing: s.lineSpacing,
     paragraphSpacing: s.paragraphSpacing,
     indentFirstLine: s.indentFirstLine,
-  })
+  }),
 );

@@ -107,10 +107,10 @@ types.ts          → Core shared interfaces and types
 ### Git & CI
 
 - Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
-- Pre-commit: Husky runs lint-staged (Prettier + ESLint on staged `.ts`/`.tsx` files)
+- Pre-commit: `simple-git-hooks` runs Biome check on staged files
 - Before every commit and push, run the full local preflight:
   - `pnpm install --frozen-lockfile`
-  - `pnpm run lint -- --max-warnings=0`
+  - `pnpm run lint`
   - `pnpm run typecheck`
   - `pnpm run test:run`
   - `pnpm run build`
@@ -139,8 +139,9 @@ See `AUDIT.md` for the full list. Key items:
 pnpm run dev          # Start dev server on port 3000
 pnpm run build        # Production build to dist/
 pnpm run preview      # Preview production build locally
-pnpm run lint         # ESLint check (--max-warnings 0)
-pnpm run lint:fix     # ESLint auto-fix
+pnpm run lint         # Biome lint check
+pnpm run lint:fix     # Biome auto-fix (lint + format)
+pnpm run format       # Biome format
 pnpm run typecheck    # TypeScript type checking (tsc --noEmit)
 pnpm run test         # Vitest watch mode
 pnpm run test:run     # Vitest single run

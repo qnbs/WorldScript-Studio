@@ -1,12 +1,12 @@
 import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
-import type { RootState, AppDispatch } from './store';
-import { storageService } from '../services/storageService';
-import { saveStoryCodex, extractStoryCodex } from '../services/codexService';
-import { statusActions } from '../features/status/statusSlice';
-import type { PersistedRootState, Character, World } from '../types';
 import type { ProjectData } from '../features/project/projectSlice';
+import { statusActions } from '../features/status/statusSlice';
+import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { logger } from '../services/logger';
+import { storageService } from '../services/storageService';
+import type { Character, PersistedRootState, World } from '../types';
+import type { AppDispatch, RootState } from './store';
 
 type ProjectStateWithHistory = {
   present?: { data?: ProjectData };
@@ -63,7 +63,7 @@ listenerMiddleware.startListening({
         const serialized = JSON.stringify(projectDataToSave);
         if (serialized.length > 5 * 1024 * 1024) {
           logger.warn(
-            `Auto-save: Project size is ${(serialized.length / 1024 / 1024).toFixed(1)} MB. Consider exporting and archiving.`
+            `Auto-save: Project size is ${(serialized.length / 1024 / 1024).toFixed(1)} MB. Consider exporting and archiving.`,
           );
         }
       } catch {
@@ -73,7 +73,7 @@ listenerMiddleware.startListening({
       // We are saving a structure that matches { data: ProjectData } essentially, stripping history.
       // Casting to PersistedRootState['project'] (which is `PersistedProjectState`) satisfies the service.
       promises.push(
-        storageService.saveProject(projectDataToSave as NonNullable<PersistedRootState['project']>)
+        storageService.saveProject(projectDataToSave as NonNullable<PersistedRootState['project']>),
       );
       promises.push(storageService.saveSettings(state.settings));
 
@@ -94,7 +94,7 @@ listenerMiddleware.startListening({
           type: 'error',
           title: 'Auto-Save Failed',
           description: 'Your changes could not be saved to the local database.',
-        })
+        }),
       );
       listenerApi.dispatch(statusActions.setSavingStatus('idle'));
     }
@@ -142,7 +142,7 @@ listenerMiddleware.startListening({
     const errorTitle = 'Operation Failed';
     let errorDescription = 'An unexpected error occurred.';
 
-    if (action.error && action.error.message) {
+    if (action.error?.message) {
       errorDescription = action.error.message;
     }
 
@@ -156,7 +156,7 @@ listenerMiddleware.startListening({
         type: 'error',
         title: errorTitle,
         description: errorDescription,
-      })
+      }),
     );
   },
 });

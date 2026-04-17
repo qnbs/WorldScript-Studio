@@ -1,16 +1,16 @@
-import { useState, useCallback } from 'react';
-import { useTranslation } from './useTranslation';
+import { useCallback, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useToast } from '../components/ui/Toast';
 import { selectAllCharacters } from '../features/project/projectSelectors';
 import {
-  projectActions,
-  generateCharacterProfileThunk,
-  regenerateCharacterFieldThunk,
   generateCharacterPortraitThunk,
+  generateCharacterProfileThunk,
+  projectActions,
+  regenerateCharacterFieldThunk,
 } from '../features/project/projectSlice';
-import type { Character } from '../types';
 import { storageService } from '../services/storageService';
-import { useToast } from '../components/ui/Toast';
+import type { Character } from '../types';
+import { useTranslation } from './useTranslation';
 
 export const useCharacterView = () => {
   const { t, language } = useTranslation();
@@ -46,7 +46,7 @@ export const useCharacterView = () => {
     setIsAiModalOpen(false);
 
     const resultAction = await dispatch(
-      generateCharacterProfileThunk({ concept: aiConcept, lang: language })
+      generateCharacterProfileThunk({ concept: aiConcept, lang: language }),
     );
     if (generateCharacterProfileThunk.fulfilled.match(resultAction)) {
       const newChar = resultAction.payload;
@@ -73,7 +73,7 @@ export const useCharacterView = () => {
         dispatch(projectActions.updateCharacter({ id: selectedCharacter.id, changes }));
       }
     },
-    [dispatch, selectedCharacter]
+    [dispatch, selectedCharacter],
   );
 
   const handleRegenerateField = useCallback(
@@ -81,7 +81,7 @@ export const useCharacterView = () => {
       if (!selectedCharacter) return;
       setIsRegeneratingField(field);
       const resultAction = await dispatch(
-        regenerateCharacterFieldThunk({ character: selectedCharacter, field, lang: language })
+        regenerateCharacterFieldThunk({ character: selectedCharacter, field, lang: language }),
       );
       if (regenerateCharacterFieldThunk.fulfilled.match(resultAction)) {
         handleFieldChange(resultAction.payload.field, resultAction.payload.value);
@@ -90,11 +90,11 @@ export const useCharacterView = () => {
       }
       setIsRegeneratingField(null);
     },
-    [dispatch, selectedCharacter, language, handleFieldChange, toast, t]
+    [dispatch, selectedCharacter, language, handleFieldChange, toast, t],
   );
 
   const handleGeneratePortrait = useCallback(async () => {
-    if (!selectedCharacter || !selectedCharacter.appearance) return;
+    if (!selectedCharacter?.appearance) return;
     setIsGeneratingPortrait(true);
     const resultAction = await dispatch(
       generateCharacterPortraitThunk({
@@ -102,7 +102,7 @@ export const useCharacterView = () => {
         description: selectedCharacter.appearance,
         style: portraitStyle,
         lang: language,
-      })
+      }),
     );
     if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
       const errorText = t('characters.error.portraitFailed');
@@ -124,7 +124,7 @@ export const useCharacterView = () => {
         characterId: selectedCharacter.id,
         description,
         lang: language,
-      })
+      }),
     );
     if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
       const errorText = t('characters.error.portraitFailed');
@@ -142,7 +142,7 @@ export const useCharacterView = () => {
         setCharacterToDelete(char);
       }
     },
-    [characters]
+    [characters],
   );
 
   const confirmDelete = useCallback(async () => {

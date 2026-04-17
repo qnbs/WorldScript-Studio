@@ -30,7 +30,7 @@ const mockGenerateText = vi.fn<
   (...args: [string, string, Record<string, unknown>, AbortSignal?]) => Promise<string>
 >(async () => 'Consistency OK');
 const mockGetStoryCodex = vi.fn<(...args: [string]) => Promise<StoryCodex | null>>(
-  async () => null
+  async () => null,
 );
 const mockGetPrompts = vi.fn<(...args: [string, unknown]) => { prompt: string }>(() => ({
   prompt: 'check prompt',
@@ -99,7 +99,7 @@ describe('useConsistencyCheckerView', () => {
       'check prompt',
       mockState.aiCreativity,
       expect.objectContaining({ provider: expect.any(String), model: expect.any(String) }),
-      expect.any(Object)
+      expect.any(Object),
     );
 
     await waitFor(() => expect(result.current.checkResult).toBe('Consistency OK'));
@@ -151,13 +151,13 @@ describe('useConsistencyCheckerView', () => {
         _prompt: string,
         _creativity: string,
         _opts: Record<string, unknown>,
-        signal?: AbortSignal
+        signal?: AbortSignal,
       ) => {
         abortSignal = signal ?? null;
         return new Promise((resolve) => {
           setTimeout(resolve, 100);
         });
-      }
+      },
     );
 
     const { result, unmount } = renderHook(() => useConsistencyCheckerView());
@@ -198,7 +198,7 @@ describe('useConsistencyCheckerView', () => {
       expect.objectContaining({
         characterId: 'c1',
         codex: storyCodex,
-      })
+      }),
     );
   });
 

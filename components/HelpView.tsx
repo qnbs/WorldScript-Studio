@@ -1,15 +1,15 @@
-import type { FC } from 'react';
-import React, { Fragment, useRef, useEffect } from 'react';
 import DOMPurify from 'dompurify';
+import type { FC } from 'react';
+import React, { Fragment, useEffect, useRef } from 'react';
+import { useAppSelector } from '../app/hooks';
+import { ICONS } from '../constants';
+import { HelpViewContext, useHelpViewContext } from '../contexts/HelpViewContext';
+import { useHelpView } from '../hooks/useHelpView';
+import type { HelpCategory } from '../types';
+import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Input } from './ui/Input';
-import { ICONS } from '../constants';
-import type { HelpCategory } from '../types';
-import { useHelpView } from '../hooks/useHelpView';
-import { HelpViewContext, useHelpViewContext } from '../contexts/HelpViewContext';
-import { Button } from './ui/Button';
 import { Spinner } from './ui/Spinner';
-import { useAppSelector } from '../app/hooks';
 
 // --- SUB-COMPONENTS ---
 
@@ -96,15 +96,16 @@ const ArticleList: FC<{ category: HelpCategory }> = ({ category }) => {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {Array.isArray(category.articles) && category.articles.map((article) => (
-            <button
-              key={article.title}
-              onClick={() => handleSelectArticle(article)}
-              className="w-full text-left p-3 rounded-md text-base transition-colors text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)] hover:text-[var(--foreground-primary)] font-medium"
-            >
-              {t(article.title)}
-            </button>
-          ))}
+          {Array.isArray(category.articles) &&
+            category.articles.map((article) => (
+              <button
+                key={article.title}
+                onClick={() => handleSelectArticle(article)}
+                className="w-full text-left p-3 rounded-md text-base transition-colors text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)] hover:text-[var(--foreground-primary)] font-medium"
+              >
+                {t(article.title)}
+              </button>
+            ))}
         </div>
       </CardContent>
     </Card>
@@ -167,7 +168,7 @@ const AiAssistant: FC = () => {
 
   useEffect(() => {
     chatContainerRef.current?.scrollTo(0, chatContainerRef.current.scrollHeight);
-  }, [chatHistory, isAiReplying]);
+  }, []);
 
   const handleSuggestionClick = (suggestion: string) => {
     setUserInput(suggestion);
@@ -322,15 +323,16 @@ const HelpViewUI: FC = () => {
         <div className="md:col-span-1">
           {/* Mobile: horizontal scroll strip · Desktop: vertical sticky sidebar */}
           <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--background-primary)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
-            {Array.isArray(helpContent) && helpContent.map((cat) => (
-              <NavButton
-                key={cat.id}
-                icon={iconMap[cat.icon]}
-                label={t(cat.title)}
-                isActive={activeCategory === cat.id}
-                onClick={() => handleSelectCategory(cat.id)}
-              />
-            ))}
+            {Array.isArray(helpContent) &&
+              helpContent.map((cat) => (
+                <NavButton
+                  key={cat.id}
+                  icon={iconMap[cat.icon]}
+                  label={t(cat.title)}
+                  isActive={activeCategory === cat.id}
+                  onClick={() => handleSelectCategory(cat.id)}
+                />
+              ))}
             <NavButton
               key="ai"
               icon={ICONS.SPARKLES}

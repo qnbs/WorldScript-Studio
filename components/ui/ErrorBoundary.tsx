@@ -1,9 +1,9 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
-import { Card, CardHeader, CardContent } from './Card';
-import { Button } from './Button';
 import { ICONS } from '../../constants';
 import { logger } from '../../services/logger';
+import { Button } from './Button';
+import { Card, CardContent, CardHeader } from './Card';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;

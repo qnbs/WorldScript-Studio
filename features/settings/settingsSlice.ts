@@ -1,23 +1,23 @@
 import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from '@reduxjs/toolkit';
 import type {
+  AccessibilitySettings,
+  AdvancedAiSettings,
+  AdvancedEditorSettings,
+  AiCreativity,
+  BackupSettings,
+  CollaborationSettings,
+  CustomFont,
+  EditorFont,
+  IntegrationSettings,
+  KeyboardShortcut,
+  NotificationSettings,
+  PerformanceSettings,
+  PrivacySettings,
   Settings,
   Theme,
-  EditorFont,
-  AiCreativity,
-  CustomFont,
-  KeyboardShortcut,
-  WritingGoal,
-  AdvancedAiSettings,
-  AccessibilitySettings,
-  PrivacySettings,
-  PerformanceSettings,
-  NotificationSettings,
-  CollaborationSettings,
-  IntegrationSettings,
-  AdvancedEditorSettings,
-  BackupSettings,
   ThemeCustomization,
+  WritingGoal,
 } from '../../types';
 
 // Detect system preference for initial theme
@@ -166,7 +166,7 @@ const settingsSlice = createSlice({
     // Advanced Settings Reducers
     setCustomFont(state, action: PayloadAction<CustomFont | undefined>) {
       if (action.payload !== undefined) {
-        state['customFont'] = action.payload;
+        state.customFont = action.payload;
       } else {
         delete (state as Record<string, unknown>)['customFont'];
       }
@@ -179,7 +179,7 @@ const settingsSlice = createSlice({
       action: PayloadAction<{
         id: string;
         shortcut: Partial<KeyboardShortcut>;
-      }>
+      }>,
     ) {
       const index = state.keyboardShortcuts.findIndex((s) => s.id === action.payload.id);
       const shortcut = state.keyboardShortcuts[index];

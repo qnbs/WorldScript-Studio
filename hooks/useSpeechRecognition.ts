@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { ISpeechRecognition } from '../types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '../services/logger';
+import type { ISpeechRecognition } from '../types';
 
 const LANG_PREFERENCES = ['de-DE', 'de-AT', 'en-US', 'en-GB'];
 const MIC_TIMEOUT_MS = 8000; // 8 Sekunden ohne Ergebnis → Timeout
@@ -82,7 +82,7 @@ export const useSpeechRecognition = () => {
               case 'not-allowed':
               case 'permission-denied':
                 setMicError(
-                  'Microphone access denied. Please grant permission in browser settings.'
+                  'Microphone access denied. Please grant permission in browser settings.',
                 );
                 break;
               case 'no-speech':

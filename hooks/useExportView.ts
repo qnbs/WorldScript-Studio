@@ -1,8 +1,8 @@
-import { useState, useMemo, useCallback } from 'react';
-import { useTranslation } from './useTranslation';
-import { useAppSelector, useAppDispatch } from '../app/hooks';
+import { useCallback, useMemo, useState } from 'react';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { generateSynopsisThunk } from '../features/project/projectSlice';
+import { useTranslation } from './useTranslation';
 
 type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub';
 interface ContentToExport {
@@ -99,7 +99,7 @@ export const useExportView = () => {
 
     const addText = (
       text: string,
-      options: { size?: number; style?: string; isHeader?: boolean } = {}
+      options: { size?: number; style?: string; isHeader?: boolean } = {},
     ) => {
       doc.setFontSize(options.size || pdfOptions.fontSize);
       doc.setFont(pdfOptions.font, options.style || 'normal');
@@ -127,7 +127,7 @@ export const useExportView = () => {
         `Logline: ${project.logline}`,
         doc.internal.pageSize.getWidth() / 2,
         pageHeight / 2,
-        { align: 'center' }
+        { align: 'center' },
       );
       doc.addPage();
       y = margin;
@@ -160,24 +160,24 @@ export const useExportView = () => {
       new Paragraph({
         text: project.title,
         heading: HeadingLevel.TITLE,
-      })
+      }),
     );
     children.push(
       new Paragraph({
         children: [new TextRun({ text: `Logline: ${project.logline}`, italics: true })],
-      })
+      }),
     );
 
     if (aiEnhancements.synopsis && synopsis) {
       children.push(
-        new Paragraph({ text: t('export.ai.synopsisTitle'), heading: HeadingLevel.HEADING_1 })
+        new Paragraph({ text: t('export.ai.synopsisTitle'), heading: HeadingLevel.HEADING_1 }),
       );
       children.push(new Paragraph({ text: synopsis }));
     }
 
     if (contentToExport.manuscript) {
       children.push(
-        new Paragraph({ text: t('export.manuscriptLabel'), heading: HeadingLevel.HEADING_1 })
+        new Paragraph({ text: t('export.manuscriptLabel'), heading: HeadingLevel.HEADING_1 }),
       );
       project.manuscript.forEach((section) => {
         children.push(new Paragraph({ text: section.title, heading: HeadingLevel.HEADING_2 }));
@@ -222,7 +222,7 @@ export const useExportView = () => {
    <rootfiles>
       <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
    </rootfiles>
-</container>`
+</container>`,
     );
 
     // Content
@@ -252,7 +252,7 @@ export const useExportView = () => {
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>${project.title}</title></head>
-<body><h1>${project.title}</h1><p><i>${project.logline}</i></p></body></html>`
+<body><h1>${project.title}</h1><p><i>${project.logline}</i></p></body></html>`,
     );
 
     let chapterCount = 2;

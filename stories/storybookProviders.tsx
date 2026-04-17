@@ -1,9 +1,9 @@
+import type React from 'react';
 import type { ReactNode } from 'react';
-import React from 'react';
 import { Provider } from 'react-redux';
 import { setupStore } from '../app/store';
-import { I18nContext } from '../contexts/I18nContext';
 import { ToastProvider } from '../components/ui/Toast';
+import { I18nContext } from '../contexts/I18nContext';
 
 const defaultTranslations: Record<string, string> = {
   'common.close': 'Close',
@@ -12,8 +12,7 @@ const defaultTranslations: Record<string, string> = {
   'manuscript.untitledSection': 'Untitled Section',
 };
 
-const defaultT = <T = string>(key: string): T =>
-  (defaultTranslations[key] ?? key) as unknown as T;
+const defaultT = <T = string>(key: string): T => (defaultTranslations[key] ?? key) as unknown as T;
 
 const store = setupStore();
 

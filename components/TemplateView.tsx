@@ -1,18 +1,18 @@
 import type { FC } from 'react';
-import React, { useState, useEffect } from 'react';
-import type { Template, View, CommunityTemplate } from '../types';
+import React, { useEffect, useState } from 'react';
 import { ICONS } from '../constants';
-import { Card, CardContent, CardHeader } from './ui/Card';
-import { Button } from './ui/Button';
-import { Modal } from './ui/Modal';
-import { Textarea } from './ui/Textarea';
-import { Input } from './ui/Input';
-import { Spinner } from './ui/Spinner';
-import { useTemplateView } from '../hooks/useTemplateView';
 import { TemplateViewContext, useTemplateViewContext } from '../contexts/TemplateViewContext';
-import { AddNewCard } from './ui/AddNewCard';
-import { fetchCommunityTemplates } from '../services/communityTemplateService';
+import { useTemplateView } from '../hooks/useTemplateView';
 import { useTranslation } from '../hooks/useTranslation';
+import { fetchCommunityTemplates } from '../services/communityTemplateService';
+import type { CommunityTemplate, Template, View } from '../types';
+import { AddNewCard } from './ui/AddNewCard';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
+import { Spinner } from './ui/Spinner';
+import { Textarea } from './ui/Textarea';
 
 // --- SUB-COMPONENTS ---
 
@@ -54,7 +54,7 @@ const TemplateCard: FC<{ template: Template; animationIndex: number }> = React.m
         </div>
       </Card>
     );
-  }
+  },
 );
 TemplateCard.displayName = 'TemplateCard';
 
@@ -142,8 +142,12 @@ const PreviewModal: FC = () => {
                 key={sec.id}
                 role="listitem"
                 draggable={isRemixMode}
-                onDragStart={() => isRemixMode && (draggedItem.current = i)}
-                onDragEnter={() => isRemixMode && (dragOverItem.current = i)}
+                onDragStart={() => {
+                  if (isRemixMode) draggedItem.current = i;
+                }}
+                onDragEnter={() => {
+                  if (isRemixMode) dragOverItem.current = i;
+                }}
                 onDragEnd={handleDragSort}
                 onDragOver={(e) => isRemixMode && e.preventDefault()}
                 className={`flex items-center gap-2 p-2 rounded-md ${isRemixMode ? 'bg-[var(--foreground-primary)]/5 cursor-move' : 'bg-transparent'}`}
@@ -324,44 +328,46 @@ const CommunityTemplateCard: FC<{
 }> = React.memo(({ template, onApply, animationIndex }) => {
   const { t: _t } = useTranslation();
   return (
-  <Card
-    className="flex flex-col group text-left transition-all duration-200 hover:-translate-y-1 animate-in"
-    style={{ '--index': animationIndex } as React.CSSProperties}
-  >
-    <CardHeader>
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-xl font-bold text-[var(--foreground-primary)]">{template.name}</h3>
-        <span className="flex items-center gap-1 text-xs text-amber-400 flex-shrink-0">
-          ★ {template.stars ?? 0}
-        </span>
-      </div>
-      <p className="text-xs text-[var(--foreground-muted)] mt-1">von {template.author}</p>
-      <div className="flex flex-wrap gap-1 mt-2">
-        {template.tags.map((tag) => (
-          <span
-            key={tag}
-            className="px-2 py-0.5 text-xs bg-[var(--background-tertiary)]/80 text-[var(--foreground-secondary)] rounded-md"
-          >
-            {tag}
+    <Card
+      className="flex flex-col group text-left transition-all duration-200 hover:-translate-y-1 animate-in"
+      style={{ '--index': animationIndex } as React.CSSProperties}
+    >
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-xl font-bold text-[var(--foreground-primary)]">{template.name}</h3>
+          <span className="flex items-center gap-1 text-xs text-amber-400 flex-shrink-0">
+            ★ {template.stars ?? 0}
           </span>
-        ))}
-      </div>
-    </CardHeader>
-    <CardContent className="flex-grow space-y-2">
-      <p className="text-sm text-[var(--foreground-muted)]">{template.description}</p>
-      {template.arcDescription && (
-        <p className="text-xs text-[var(--foreground-secondary)] italic">
-          {template.arcDescription}
+        </div>
+        <p className="text-xs text-[var(--foreground-muted)] mt-1">von {template.author}</p>
+        <div className="flex flex-wrap gap-1 mt-2">
+          {template.tags.map((tag) => (
+            <span
+              key={tag}
+              className="px-2 py-0.5 text-xs bg-[var(--background-tertiary)]/80 text-[var(--foreground-secondary)] rounded-md"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="flex-grow space-y-2">
+        <p className="text-sm text-[var(--foreground-muted)]">{template.description}</p>
+        {template.arcDescription && (
+          <p className="text-xs text-[var(--foreground-secondary)] italic">
+            {template.arcDescription}
+          </p>
+        )}
+        <p className="text-xs text-[var(--foreground-muted)]">
+          {template.sections.length} {_t('templates.chapters')}
         </p>
-      )}
-      <p className="text-xs text-[var(--foreground-muted)]">{template.sections.length} {_t('templates.chapters')}</p>
-    </CardContent>
-    <div className="p-4 pt-0 mt-auto">
-      <Button className="w-full" onClick={() => onApply(template)}>
-        {_t('templates.applyAsProject')}
-      </Button>
-    </div>
-  </Card>
+      </CardContent>
+      <div className="p-4 pt-0 mt-auto">
+        <Button className="w-full" onClick={() => onApply(template)}>
+          {_t('templates.applyAsProject')}
+        </Button>
+      </div>
+    </Card>
   );
 });
 CommunityTemplateCard.displayName = 'CommunityTemplateCard';

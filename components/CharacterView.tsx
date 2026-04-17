@@ -1,21 +1,21 @@
 import type { FC } from 'react';
-import React, { useState, useRef, useEffect } from 'react';
-import type { Character } from '../types';
+import React, { useEffect, useRef, useState } from 'react';
+import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
+import { CharacterViewContext, useCharacterViewContext } from '../contexts/CharacterViewContext';
+import { uploadCharacterImageThunk } from '../features/project/projectSlice';
+import { useCharacterView } from '../hooks/useCharacterView';
+import { dbService } from '../services/dbService';
+import type { Character } from '../types';
+import { AddNewCard } from './ui/AddNewCard';
 import { Button } from './ui/Button';
-import { Input } from './ui/Input';
 import { Card } from './ui/Card';
-import { Spinner } from './ui/Spinner';
-import { Modal } from './ui/Modal';
 import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
-import { useCharacterView } from '../hooks/useCharacterView';
-import { CharacterViewContext, useCharacterViewContext } from '../contexts/CharacterViewContext';
+import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
 import { Select } from './ui/Select';
-import { AddNewCard } from './ui/AddNewCard';
-import { dbService } from '../services/dbService';
-import { useAppDispatch } from '../app/hooks';
-import { uploadCharacterImageThunk } from '../features/project/projectSlice';
+import { Spinner } from './ui/Spinner';
 
 // A local hook to fetch image data on-demand from IndexedDB
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
@@ -146,14 +146,14 @@ const CharacterDossier: FC = () => {
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0] && selectedCharacter) {
+    if (event.target.files?.[0] && selectedCharacter) {
       const file = event.target.files[0];
       try {
         await dispatch(
           uploadCharacterImageThunk({
             characterId: selectedCharacter.id,
             file,
-          })
+          }),
         );
       } catch {
         // Fehler anzeigen (Toast oder im Modal)
@@ -563,12 +563,16 @@ const CharacterCard: FC<{ character: Character; animationIndex: number }> = Reac
           )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-[var(--card-gradient-overlay)] to-transparent">
-          <h3 className="font-bold text-lg text-[var(--foreground-interactive)] dark:text-white truncate">{character.name}</h3>
-          <p className="text-sm text-[var(--foreground-secondary)] dark:text-gray-300 truncate">{character.personalityTraits}</p>
+          <h3 className="font-bold text-lg text-[var(--foreground-interactive)] dark:text-white truncate">
+            {character.name}
+          </h3>
+          <p className="text-sm text-[var(--foreground-secondary)] dark:text-gray-300 truncate">
+            {character.personalityTraits}
+          </p>
         </div>
       </Card>
     );
-  }
+  },
 );
 CharacterCard.displayName = 'CharacterCard';
 

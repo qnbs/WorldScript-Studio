@@ -1,6 +1,6 @@
-import type { ProjectSnapshot, Settings, StoryCodex } from '../types';
-import type { ProjectData } from '../features/project/projectSlice';
 import * as LZString from 'lz-string';
+import type { ProjectData } from '../features/project/projectSlice';
+import type { ProjectSnapshot, Settings, StoryCodex } from '../types';
 import { logger } from './logger';
 
 const DB_NAME = 'storycraft-db';
@@ -21,7 +21,7 @@ function compressData<T>(data: T): string | T {
     if (json.length < COMPRESS_THRESHOLD_BYTES) return data; // small enough, skip
     const compressed = LZString.compressToUTF16(json);
     // prefix so we can identify compressed values
-    return '\x00lz1\x00' + compressed;
+    return `\x00lz1\x00${compressed}`;
   } catch {
     return data;
   }
@@ -108,7 +108,7 @@ class IndexedDBService {
   private async getLocalCryptoKey(): Promise<CryptoKey> {
     // Generiere einen geräte-spezifischen Schlüssel basierend auf Origin
     const material = new TextEncoder().encode(
-      `${location.origin}|StoryCraftStudio|gemini-key-v1|${navigator.userAgent.slice(0, 50)}`
+      `${location.origin}|StoryCraftStudio|gemini-key-v1|${navigator.userAgent.slice(0, 50)}`,
     );
     const hash = await crypto.subtle.digest('SHA-256', material);
     return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
@@ -165,7 +165,7 @@ class IndexedDBService {
         const decrypted = await crypto.subtle.decrypt(
           { name: 'AES-GCM', iv: new Uint8Array(ivArray) },
           cryptoKey,
-          new Uint8Array(encryptedArray)
+          new Uint8Array(encryptedArray),
         );
         return new TextDecoder().decode(decrypted);
       } catch (error) {
@@ -247,7 +247,7 @@ class IndexedDBService {
         const decrypted = await crypto.subtle.decrypt(
           { name: 'AES-GCM', iv: new Uint8Array(ivArr) },
           cryptoKey,
-          new Uint8Array(encArr)
+          new Uint8Array(encArr),
         );
         return new TextDecoder().decode(decrypted);
       } catch (err) {
@@ -336,7 +336,7 @@ class IndexedDBService {
           db.close();
           this.db = null;
           logger.warn(
-            'IndexedDB: Database version changed – connection closed. Please reload the page.'
+            'IndexedDB: Database version changed – connection closed. Please reload the page.',
           );
         };
         this.db = db;
@@ -352,7 +352,7 @@ class IndexedDBService {
 
   private async getObjectStore(
     storeName: string,
-    mode: IDBTransactionMode
+    mode: IDBTransactionMode,
   ): Promise<IDBObjectStore> {
     if (!this.db) {
       await this.initDB();
@@ -363,7 +363,7 @@ class IndexedDBService {
 
   async saveSlice(
     sliceName: 'project' | 'settings',
-    data: PersistedProjectState | Settings
+    data: PersistedProjectState | Settings,
   ): Promise<void> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
     // Compress large state objects (project data can exceed 100 KB)
@@ -381,7 +381,7 @@ class IndexedDBService {
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       // We need to extract just the data part if it's the full redux state
       const projectData = data.present ? data.present.data : data.data;
-      if (projectData && projectData.manuscript) {
+      if (projectData?.manuscript) {
         this.lastAutoSnapshotTime = Date.now();
         // Fire and forget snapshot to not block UI
         this.createSnapshot(projectData).then(() => this.pruneAutoSnapshots());
@@ -552,7 +552,7 @@ class IndexedDBService {
   async createSnapshot(data: ProjectData, name?: string): Promise<void> {
     const wordCount = data.manuscript.reduce(
       (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
-      0
+      0,
     );
     const snapshotData = {
       date: new Date().toISOString(),

@@ -16,7 +16,7 @@ const sanitizeOllamaPrompt = (prompt: string): string =>
   stripControlChars(prompt).replace(/```/g, '"').replace(/\s+/g, ' ').trim();
 
 const buildOllamaPrompt = (prompt: string, systemPrompt?: string): string =>
-  systemPrompt && systemPrompt.trim()
+  systemPrompt?.trim()
     ? `${sanitizeOllamaPrompt(systemPrompt)}\n\n${sanitizeOllamaPrompt(prompt)}`
     : sanitizeOllamaPrompt(prompt);
 
@@ -50,7 +50,7 @@ export async function listOllamaModels(baseUrl?: string): Promise<string[]> {
 }
 
 export async function testOllamaConnection(
-  baseUrl?: string
+  baseUrl?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const url = `${normalizeBaseUrl(baseUrl)}/api/tags`;
   try {
@@ -69,7 +69,7 @@ export async function testOllamaConnection(
 export async function streamOllama(
   prompt: string,
   opts: OllamaRequestOptions,
-  callbacks: OllamaStreamCallbacks
+  callbacks: OllamaStreamCallbacks,
 ): Promise<void> {
   const baseUrl = normalizeBaseUrl(opts.baseUrl);
   const model = opts.model.replace(/^ollama\//, '');
@@ -94,7 +94,7 @@ export async function streamOllama(
   } catch (err) {
     const error = new Error(
       `Ollama not reachable (${baseUrl}). Make sure Ollama is running: ollama serve`,
-      { cause: err as Error }
+      { cause: err as Error },
     );
     callbacks.onError?.(error);
     throw error;

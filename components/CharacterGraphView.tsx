@@ -1,13 +1,13 @@
 import type { FC } from 'react';
-import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import type { NodeObject, LinkObject } from 'react-force-graph-2d';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { LinkObject, NodeObject } from 'react-force-graph-2d';
 import ForceGraph2D from 'react-force-graph-2d';
-import { Card, CardContent, CardHeader } from './ui/Card';
-import { useCharacterGraphView } from '../hooks/useCharacterGraphView';
 import {
   CharacterGraphViewContext,
   useCharacterGraphViewContext,
 } from '../contexts/CharacterGraphViewContext';
+import { useCharacterGraphView } from '../hooks/useCharacterGraphView';
+import { Card, CardContent, CardHeader } from './ui/Card';
 
 const RELATIONSHIP_COLORS: Record<string, string> = {
   family: '#ef4444',
@@ -60,7 +60,7 @@ const CharacterForceGraph: FC = () => {
         strength: r.strength ?? 5,
       })),
     }),
-    [characters, relationships]
+    [characters, relationships],
   );
 
   const nodeCanvasObject = useCallback(
@@ -86,14 +86,14 @@ const CharacterForceGraph: FC = () => {
       ctx.fillText(initials, x, y);
 
       if (globalScale >= 0.6) {
-        const label = n.name.length > 14 ? n.name.slice(0, 13) + '\u2026' : n.name;
+        const label = n.name.length > 14 ? `${n.name.slice(0, 13)}\u2026` : n.name;
         ctx.fillStyle = '#e2e8f0';
         ctx.font = `${Math.max(6, 10 / globalScale)}px sans-serif`;
         ctx.textBaseline = 'top';
         ctx.fillText(label, x, y + r + 3);
       }
     },
-    []
+    [],
   );
 
   if (characters.length === 0) {
@@ -128,7 +128,7 @@ const CharacterForceGraph: FC = () => {
         nodeCanvasObjectMode={() => 'replace'}
         nodeRelSize={18}
         nodeLabel={(node) => (node as GraphNode).name}
-        linkColor={(link) => getRelationshipColor((link as GraphLink).type) + 'cc'}
+        linkColor={(link) => `${getRelationshipColor((link as GraphLink).type)}cc`}
         linkWidth={(link) => Math.max(0.5, ((link as GraphLink).strength ?? 5) / 2.5)}
         linkDirectionalArrowLength={5}
         linkDirectionalArrowRelPos={1}
@@ -153,7 +153,8 @@ const CharacterGraphUI: FC = () => {
         </h1>
         <div className="flex items-center gap-2 text-xs text-[var(--foreground-muted)]">
           <span>
-            {characters.length} {t('charGraph.characters')} &middot; {relationships.length} {t('charGraph.relationships')}
+            {characters.length} {t('charGraph.characters')} &middot; {relationships.length}{' '}
+            {t('charGraph.relationships')}
           </span>
         </div>
       </div>
@@ -232,7 +233,7 @@ const CharacterGraphUI: FC = () => {
                           max="10"
                           value={rel.strength || 5}
                           onChange={(e) =>
-                            onUpdateRelationship(rel.id, { strength: parseInt(e.target.value) })
+                            onUpdateRelationship(rel.id, { strength: parseInt(e.target.value, 10) })
                           }
                           className="flex-1 h-1 accent-indigo-500"
                         />

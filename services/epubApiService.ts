@@ -15,7 +15,7 @@ export interface EpubExportOptions {
 const esc = (s: string) =>
   s.replace(
     /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
   );
 
 const toParagraphs = (text: string) =>
@@ -42,7 +42,7 @@ export async function exportEpub(options: EpubExportOptions): Promise<void> {
   <rootfiles>
     <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
   </rootfiles>
-</container>`
+</container>`,
   );
 
   const oebps = zip.folder('OEBPS')!;
@@ -57,7 +57,7 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
 .titlepage{text-align:center;padding:20% 0 5%}
 .subtitle{font-style:italic;color:#555;font-size:1.1em;margin-top:.2em}
 .synopsis-box{background:#f9f9f9;border-left:4px solid #888;padding:1em 1.4em;margin:1.5em 0;font-style:italic}
-.chapter-title{page-break-before:always}`
+.chapter-title{page-break-before:always}`,
   );
 
   const manifest: string[] = [
@@ -68,7 +68,7 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
   const tocEntries: string[] = [];
 
   // Optional cover image
-  if (coverImage && coverImage.startsWith('data:image/')) {
+  if (coverImage?.startsWith('data:image/')) {
     const coverMeta = coverImage.split(';')[0] ?? '';
     const mimeType = coverMeta.split(':')[1] ?? 'application/octet-stream';
     const ext = (mimeType.split('/')[1] ?? 'bin').replace('jpeg', 'jpg');
@@ -77,7 +77,7 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
       oebps.file(`cover.${ext}`, base64, { base64: true });
       manifest.push(
         `<item id="cover-img" href="cover.${ext}" media-type="${mimeType}" properties="cover-image"/>`,
-        `<item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`
+        `<item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`,
       );
       spine.push(`<itemref idref="cover-page"/>`);
       oebps.file(
@@ -85,7 +85,7 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
         `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head><title>Cover</title>
 <style>body{margin:0;padding:0}img{width:100%;height:100vh;object-fit:contain}</style></head>
-<body><img src="cover.${ext}" alt="Cover"/></body></html>`
+<body><img src="cover.${ext}" alt="Cover"/></body></html>`,
       );
     }
   }
@@ -97,7 +97,7 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>${esc(title)}</title><link rel="stylesheet" href="style.css"/></head>
 <body><div class="titlepage"><h1>${esc(title)}</h1>
-${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div></body></html>`
+${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div></body></html>`,
   );
   manifest.push(`<item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>`);
   spine.push(`<itemref idref="titlepage"/>`);
@@ -110,7 +110,7 @@ ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div></body></html>`
       `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>Synopsis</title><link rel="stylesheet" href="style.css"/></head>
-<body><h2>Synopsis</h2><div class="synopsis-box">${toParagraphs(synopsis)}</div></body></html>`
+<body><h2>Synopsis</h2><div class="synopsis-box">${toParagraphs(synopsis)}</div></body></html>`,
     );
     manifest.push(`<item id="synopsis" href="synopsis.xhtml" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="synopsis"/>`);
@@ -127,7 +127,7 @@ ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div></body></html>`
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>${esc(ch.title)}</title><link rel="stylesheet" href="style.css"/></head>
 <body><h2 class="chapter-title">${esc(ch.title)}</h2>
-${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Empty Chapter)</em></p>'}</body></html>`
+${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Empty Chapter)</em></p>'}</body></html>`,
     );
     manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="${id}"/>`);
@@ -140,7 +140,7 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Emp
     `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${lang}">
 <head><title>Table of Contents</title></head>
-<body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>${tocEntries.join('\n')}</ol></nav></body></html>`
+<body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>${tocEntries.join('\n')}</ol></nav></body></html>`,
   );
 
   // content.opf
@@ -163,7 +163,7 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Emp
   <spine>
     ${spine.join('\n    ')}
   </spine>
-</package>`
+</package>`,
   );
 
   const blob = await zip.generateAsync({

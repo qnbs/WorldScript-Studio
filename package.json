@@ -4,7 +4,12 @@
   "version": "1.1.1",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
   "scripts": {
+    "prepare": "simple-git-hooks",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -13,9 +18,9 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "prepare": "husky",
-    "lint": "eslint --max-warnings=0",
-    "lint:fix": "eslint --fix --max-warnings=0",
+    "lint": "biome lint --max-diagnostics=0",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write .",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -56,7 +61,7 @@
     "yjs": "^13.6.30"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
+    "@biomejs/biome": "^2.4.12",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.59.1",
     "@storybook/addon-a11y": "^10.3.5",
@@ -72,20 +77,12 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.0",
     "@vitest/coverage-v8": "^4.1.4",
-    "eslint": "^9.39.4",
-    "eslint-plugin-jsx-a11y": "^6.10.2",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "globals": "^17.5.0",
-    "husky": "^9.1.7",
     "jsdom": "^29.0.2",
-    "lint-staged": "^16.4.0",
-    "prettier": "^3.8.3",
     "rollup-plugin-visualizer": "^7.0.1",
+    "simple-git-hooks": "^2.13.1",
     "storybook": "^10.3.5",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.58.2",
     "vite": "^8.0.8",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.4",
@@ -102,6 +99,13 @@
       "allowedVersions": {
         "vite-plugin-pwa>vite": "8"
       }
-    }
+    },
+    "onlyBuiltDependencies": [
+      "simple-git-hooks"
+    ]
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true --staged",
+    "pre-push": "pnpm run typecheck"
   }
 }

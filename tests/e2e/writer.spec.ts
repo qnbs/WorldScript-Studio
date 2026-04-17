@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -14,7 +14,7 @@ test.describe('AI Writer Flow (CI-only)', () => {
     page.on('pageerror', (err) => errors.push(err.message));
     await page.waitForTimeout(2000);
     const criticalErrors = errors.filter(
-      (e) => !e.includes('service worker') && !e.includes('ServiceWorker') && !e.includes('sw.js')
+      (e) => !e.includes('service worker') && !e.includes('ServiceWorker') && !e.includes('sw.js'),
     );
     expect(criticalErrors).toHaveLength(0);
   });

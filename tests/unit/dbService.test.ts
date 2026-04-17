@@ -95,7 +95,7 @@ describe('dbService', () => {
     await dbService.saveGeminiApiKey('  test-key ');
 
     expect(storeData.get('gemini_api_key_encrypted_v1')).toEqual(
-      Array.from(new TextEncoder().encode('test-key'))
+      Array.from(new TextEncoder().encode('test-key')),
     );
     expect(storeData.get('gemini_api_key_iv_v1')).toEqual([...Array(12).keys()]);
 
@@ -114,7 +114,7 @@ describe('dbService', () => {
   it('should encrypt and decrypt generic provider API keys', async () => {
     await dbService.saveApiKey('provider', 'provider-secret');
     expect(storeData.get('api_key_provider_enc')).toEqual(
-      Array.from(new TextEncoder().encode('provider-secret'))
+      Array.from(new TextEncoder().encode('provider-secret')),
     );
     expect(storeData.get('api_key_provider_iv')).toEqual([...Array(12).keys()]);
 

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface DrawerProps {
@@ -38,13 +39,13 @@ export const Drawer: React.FC<DrawerProps> = ({
 
         const getFocusable = () =>
           drawerElement.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
           );
 
         const handleTabKey = (e: KeyboardEvent) => {
           if (e.key !== 'Tab') return;
           const focusableElements = Array.from(getFocusable()).filter(
-            (element) => !element.hasAttribute('disabled')
+            (element) => !element.hasAttribute('disabled'),
           );
           if (focusableElements.length === 0) {
             e.preventDefault();

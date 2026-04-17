@@ -1,8 +1,8 @@
-import path from 'path';
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+import path from 'node:path';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 const isAnalyze = process.env['ANALYZE'] === 'true';
 
@@ -98,7 +98,7 @@ export default defineConfig({
 
         // Code-Splitting für bessere Ladezeiten
         manualChunks: (id) => {
-          if (!id || !id.includes('node_modules')) return undefined;
+          if (!id?.includes('node_modules')) return undefined;
           if (
             id.includes('/react-dom/') ||
             id.includes('/react/') ||
@@ -122,10 +122,7 @@ export default defineConfig({
           if (id.includes('@dnd-kit') || id.includes('/dnd-kit/')) {
             return 'interaction-vendor';
           }
-          if (
-            id.includes('recharts') ||
-            id.includes('react-force-graph-2d')
-          ) {
+          if (id.includes('recharts') || id.includes('react-force-graph-2d')) {
             return 'data-vendor';
           }
           if (id.includes('/konva/') || id.includes('/react-konva/')) {
@@ -134,11 +131,7 @@ export default defineConfig({
           if (id.includes('/jspdf/')) {
             return 'export-vendor-pdf';
           }
-          if (
-            id.includes('/docx/') ||
-            id.includes('/jszip/') ||
-            id.includes('mammoth')
-          ) {
+          if (id.includes('/docx/') || id.includes('/jszip/') || id.includes('mammoth')) {
             return 'export-vendor-docx-ebook';
           }
           return undefined;

@@ -1,38 +1,38 @@
 import type React from 'react';
-import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { useTranslation } from '../hooks/useTranslation';
-import type {
-  Theme,
-  EditorFont,
-  AiCreativity,
-  StoryProject,
-  ProjectSnapshot,
-  CustomFont,
-  KeyboardShortcut,
-  WritingGoal,
-  AdvancedAiSettings,
-  AccessibilitySettings,
-  PrivacySettings,
-  PerformanceSettings,
-  NotificationSettings,
-  CollaborationSettings,
-  IntegrationSettings,
-  AdvancedEditorSettings,
-  BackupSettings,
-  ThemeCustomization,
-} from '../types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { settingsActions } from '../features/settings/settingsSlice';
-import {
-  projectActions,
-  importProjectThunk,
-  restoreSnapshotThunk,
-} from '../features/project/projectSlice';
+import type { RootState } from '../app/store';
 import { featureFlagsActions } from '../features/featureFlags/featureFlagsSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
-import { storageService } from '../services/storageService';
+import {
+  importProjectThunk,
+  projectActions,
+  restoreSnapshotThunk,
+} from '../features/project/projectSlice';
+import { settingsActions } from '../features/settings/settingsSlice';
+import { useTranslation } from '../hooks/useTranslation';
 import { logger } from '../services/logger';
-import type { RootState } from '../app/store';
+import { storageService } from '../services/storageService';
+import type {
+  AccessibilitySettings,
+  AdvancedAiSettings,
+  AdvancedEditorSettings,
+  AiCreativity,
+  BackupSettings,
+  CollaborationSettings,
+  CustomFont,
+  EditorFont,
+  IntegrationSettings,
+  KeyboardShortcut,
+  NotificationSettings,
+  PerformanceSettings,
+  PrivacySettings,
+  ProjectSnapshot,
+  StoryProject,
+  Theme,
+  ThemeCustomization,
+  WritingGoal,
+} from '../types';
 
 type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create';
 type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: number };
@@ -72,7 +72,7 @@ export const useSettingsView = () => {
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       setLanguage(e.target.value as 'en' | 'de' | 'fr' | 'es' | 'it');
     },
-    [setLanguage]
+    [setLanguage],
   );
 
   const handleSettingChange = useCallback(
@@ -116,7 +116,7 @@ export const useSettingsView = () => {
           break;
         case 'accessibility':
           dispatch(
-            settingsActions.setAccessibility(value as unknown as Partial<AccessibilitySettings>)
+            settingsActions.setAccessibility(value as unknown as Partial<AccessibilitySettings>),
           );
           break;
         case 'privacy':
@@ -124,27 +124,27 @@ export const useSettingsView = () => {
           break;
         case 'performance':
           dispatch(
-            settingsActions.setPerformance(value as unknown as Partial<PerformanceSettings>)
+            settingsActions.setPerformance(value as unknown as Partial<PerformanceSettings>),
           );
           break;
         case 'notifications':
           dispatch(
-            settingsActions.setNotifications(value as unknown as Partial<NotificationSettings>)
+            settingsActions.setNotifications(value as unknown as Partial<NotificationSettings>),
           );
           break;
         case 'collaboration':
           dispatch(
-            settingsActions.setCollaboration(value as unknown as Partial<CollaborationSettings>)
+            settingsActions.setCollaboration(value as unknown as Partial<CollaborationSettings>),
           );
           break;
         case 'integrations':
           dispatch(
-            settingsActions.setIntegrations(value as unknown as Partial<IntegrationSettings>)
+            settingsActions.setIntegrations(value as unknown as Partial<IntegrationSettings>),
           );
           break;
         case 'advancedEditor':
           dispatch(
-            settingsActions.setAdvancedEditor(value as unknown as Partial<AdvancedEditorSettings>)
+            settingsActions.setAdvancedEditor(value as unknown as Partial<AdvancedEditorSettings>),
           );
           break;
         case 'backup':
@@ -152,7 +152,7 @@ export const useSettingsView = () => {
           break;
         case 'themeCustomization':
           dispatch(
-            settingsActions.setThemeCustomization(value as unknown as Partial<ThemeCustomization>)
+            settingsActions.setThemeCustomization(value as unknown as Partial<ThemeCustomization>),
           );
           break;
         case 'enableOllama':
@@ -169,7 +169,7 @@ export const useSettingsView = () => {
           break;
       }
     },
-    [dispatch]
+    [dispatch],
   );
 
   const projectSize = useMemo(() => {
@@ -180,7 +180,7 @@ export const useSettingsView = () => {
   const currentWordCount = useMemo(() => {
     return project.manuscript.reduce(
       (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
-      0
+      0,
     );
   }, [project.manuscript]);
 
@@ -214,7 +214,7 @@ export const useSettingsView = () => {
       }
       if (event.target) event.target.value = '';
     },
-    [dispatch, t]
+    [dispatch, t],
   );
 
   const handleResetProject = useCallback(() => {
@@ -222,7 +222,7 @@ export const useSettingsView = () => {
       projectActions.resetProject({
         title: t('initialProject.title'),
         logline: t('initialProject.logline'),
-      })
+      }),
     );
     setModal({ state: 'closed', payload: {} });
   }, [dispatch, t]);

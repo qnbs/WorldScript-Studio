@@ -1,26 +1,26 @@
-import type { FC } from 'react';
-import React, { useState, useCallback, useMemo } from 'react';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { Textarea } from './ui/Textarea';
-import { Select } from './ui/Select';
-import { Spinner } from './ui/Spinner';
-import { Modal } from './ui/Modal';
-import { ICONS } from '../constants';
-import { useSceneBoardView } from '../hooks/useSceneBoardView';
-import { SceneBoardViewContext, useSceneBoardViewContext } from '../contexts/SceneBoardViewContext';
-import type { StorySection, Character } from '../types';
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import {
-  DndContext,
   closestCenter,
+  DndContext,
+  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
-  DragOverlay,
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { FC } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ICONS } from '../constants';
+import { SceneBoardViewContext, useSceneBoardViewContext } from '../contexts/SceneBoardViewContext';
+import { useSceneBoardView } from '../hooks/useSceneBoardView';
+import type { Character, StorySection } from '../types';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
+import { Select } from './ui/Select';
+import { Spinner } from './ui/Spinner';
+import { Textarea } from './ui/Textarea';
 
 // --- Status-Farben ---
 const STATUS_COLORS: Record<string, string> = {
@@ -118,7 +118,7 @@ const SortableSceneCard: FC<{
               onChange={(e) =>
                 setEditData((p) => ({
                   ...p,
-                  act: parseInt(e.target.value) as 1 | 2 | 3,
+                  act: parseInt(e.target.value, 10) as 1 | 2 | 3,
                 }))
               }
               className="text-xs"
@@ -135,11 +135,7 @@ const SortableSceneCard: FC<{
             />
           </div>
           <div className="flex justify-between">
-            <Button
-              size="sm"
-              variant="danger"
-              onClick={() => onDelete(section.id)}
-            >
+            <Button size="sm" variant="danger" onClick={() => onDelete(section.id)}>
               {t('common.delete')}
             </Button>
             <div className="flex gap-1">
@@ -324,7 +320,7 @@ const SceneBoardUI: FC = () => {
       2: sections.filter((s) => s.act === 2),
       3: sections.filter((s) => s.act === 3),
     }),
-    [sections]
+    [sections],
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -345,7 +341,7 @@ const SceneBoardUI: FC = () => {
         handleUpdateSection(active.id as string, { act: overSection.act || 1 });
       }
     },
-    [sections, handleUpdateSection]
+    [sections, handleUpdateSection],
   );
 
   const handleDragOver = useCallback(
@@ -353,14 +349,14 @@ const SceneBoardUI: FC = () => {
       // Akt-Wechsel beim Darüberfahren prüfen (Container-IDs: 'act-1', 'act-2', 'act-3')
       const { over } = event;
       if (over?.id && String(over.id).startsWith('act-')) {
-        const act = parseInt(String(over.id).replace('act-', '')) as 1 | 2 | 3;
+        const act = parseInt(String(over.id).replace('act-', ''), 10) as 1 | 2 | 3;
         const activeSection = sections.find((s) => s.id === event.active.id);
         if (activeSection && activeSection.act !== act) {
           handleUpdateSection(event.active.id as string, { act });
         }
       }
     },
-    [sections, handleUpdateSection]
+    [sections, handleUpdateSection],
   );
 
   const handleAddForAct = useCallback(
@@ -372,7 +368,7 @@ const SceneBoardUI: FC = () => {
         if (last) handleUpdateSection(last.id, { act });
       }, 100);
     },
-    [handleAddSection, sections, handleUpdateSection]
+    [handleAddSection, sections, handleUpdateSection],
   );
 
   const activeSection = activeId ? sections.find((s) => s.id === activeId) : null;

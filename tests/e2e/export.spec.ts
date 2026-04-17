@@ -1,4 +1,4 @@
-import { test, expect, type Route } from '@playwright/test';
+import { expect, type Route, test } from '@playwright/test';
 
 const isCI = process.env['CI'] === 'true';
 

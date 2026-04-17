@@ -27,7 +27,7 @@ export interface CommunityTemplateResult {
  * Falls back to an empty array on network errors.
  */
 export async function fetchCommunityTemplates(
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<CommunityTemplateResult> {
   if (cachedTemplates) return { templates: cachedTemplates };
 
@@ -121,13 +121,11 @@ function getFallbackTemplates(): CommunityTemplate[] {
     {
       id: 'community-thriller-countdown',
       name: 'Countdown Thriller',
-      description:
-        'High tension with a ticking clock — time pressure from first to last page.',
+      description: 'High tension with a ticking clock — time pressure from first to last page.',
       type: 'Structure',
       author: 'ThrillMaster',
       tags: ['Thriller', 'Action', 'Time Pressure'],
-      arcDescription:
-        'A protagonist with limited time, an antagonist operating in the shadows.',
+      arcDescription: 'A protagonist with limited time, an antagonist operating in the shadows.',
       stars: 28,
       sections: [
         { title: 'The Bomb Ticks (Setup)' },
@@ -144,13 +142,11 @@ function getFallbackTemplates(): CommunityTemplate[] {
     {
       id: 'community-cozy-mystery',
       name: 'Cozy Mystery',
-      description:
-        'A cozy puzzle in a charming small town — no blood, but lots of wit.',
+      description: 'A cozy puzzle in a charming small town — no blood, but lots of wit.',
       type: 'Genre',
       author: 'TeaAndClues',
       tags: ['Mystery', 'Cozy', 'Humor', 'Small Town'],
-      arcDescription:
-        'An amateur detective solves village mysteries between baking and gossip.',
+      arcDescription: 'An amateur detective solves village mysteries between baking and gossip.',
       stars: 19,
       sections: [
         { title: 'The Charming Small Town' },

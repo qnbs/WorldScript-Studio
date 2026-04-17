@@ -1,15 +1,15 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
 import {
+  selectAiCreativity,
   selectAllCharacters,
   selectAllWorlds,
   selectProjectData,
-  selectAiCreativity,
 } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
-import { getPrompts } from '../services/geminiService';
 import { generateText } from '../services/aiProviderService';
 import { dbService } from '../services/dbService';
+import { getPrompts } from '../services/geminiService';
 import type { CharacterRelationship, StoryCodex } from '../types';
 
 export const useConsistencyCheckerView = () => {
@@ -27,7 +27,7 @@ export const useConsistencyCheckerView = () => {
       maxTokens: aiSettings.maxTokens,
       ollamaBaseUrl: aiSettings.ollamaBaseUrl,
     }),
-    [aiSettings]
+    [aiSettings],
   );
 
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
@@ -112,7 +112,7 @@ export const useConsistencyCheckerView = () => {
         abortControllerRef.current = null;
       }
     },
-    [characters, worlds, projectData, language, aiCreativity, aiOptions, storyCodex]
+    [characters, worlds, projectData, language, aiCreativity, aiOptions, storyCodex],
   );
 
   return {

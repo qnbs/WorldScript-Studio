@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, type ReactNode, useContext } from 'react';
 import type { FeatureFlagsState } from '../features/featureFlags/featureFlagsSlice';
 
 export const FeatureFlagsContext = createContext<FeatureFlagsState | null>(null);

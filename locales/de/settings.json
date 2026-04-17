@@ -107,7 +107,6 @@
   "settings.appearance.accentColor": "Akzentfarbe",
   "settings.appearance.backgroundColor": "Hintergrundfarbe",
   "settings.appearance.customCss": "Benutzerdefiniertes CSS",
-  "settings.theme.auto": "Automatisch",
   "settings.font.custom": "Benutzerdefinierte Schriftart",
   "settings.editor.customFont": "Benutzerdefinierte Schriftarteinstellungen",
   "settings.editor.customFontName": "Schriftartname",

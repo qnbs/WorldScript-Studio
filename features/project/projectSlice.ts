@@ -1,28 +1,28 @@
-import type { PayloadAction, EntityState } from '@reduxjs/toolkit';
-import { createSlice, createAsyncThunk, createEntityAdapter } from '@reduxjs/toolkit';
+import type { EntityState, PayloadAction } from '@reduxjs/toolkit';
+import { createAsyncThunk, createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
-import { getPrompts } from '../../services/geminiService';
-import {
-  generateText,
-  generateJson,
-  generateImage,
-  streamText,
-  type AIRequestOptions,
-} from '../../services/aiProviderService';
-import { createDeduplicatedThunk } from './aiThunkUtils';
 import type { RootState } from '../../app/store';
+import {
+  type AIRequestOptions,
+  generateImage,
+  generateJson,
+  generateText,
+  streamText,
+} from '../../services/aiProviderService';
+import { getPrompts } from '../../services/geminiService';
+import { storageService } from '../../services/storageService';
 import type {
   Character,
-  World,
-  StorySection,
-  OutlineSection,
-  OutlineGenerationParams,
-  CustomTemplateParams,
   CharacterRelationship,
-  WritingSession,
+  CustomTemplateParams,
+  OutlineGenerationParams,
+  OutlineSection,
+  StorySection,
+  World,
   WritingGoal,
+  WritingSession,
 } from '../../types';
-import { storageService } from '../../services/storageService';
+import { createDeduplicatedThunk } from './aiThunkUtils';
 
 // --- Entity Adapters ---
 export const charactersAdapter = createEntityAdapter<Character>();
@@ -103,7 +103,7 @@ export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
     registerDuplicateRequest(prompt, 'logline');
     const response = await generateJson<string[]>(prompt, creativity, schema!, aiOptions, signal);
     return response;
-  }
+  },
 );
 
 export const importProjectThunk = createAsyncThunk('project/importProject', async (file: File) => {
@@ -183,14 +183,14 @@ export const restoreSnapshotThunk = createAsyncThunk(
   async (snapshotId: number) => {
     const data = await storageService.getSnapshotData(snapshotId);
     return data;
-  }
+  },
 );
 
 export const generateCharacterProfileThunk = createDeduplicatedThunk(
   'project/generateCharacterProfile',
   async (
     { concept, lang }: { concept: string; lang: string },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -205,16 +205,16 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
       state.settings.aiCreativity,
       schema!,
       aiOptions,
-      signal
+      signal,
     );
-  }
+  },
 );
 
 export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
   'project/regenerateCharacterField',
   async (
     { character, field, lang }: { character: Character; field: keyof Character; lang: string },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -226,7 +226,7 @@ export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
     registerDuplicateRequest(prompt, 'regenerateCharacterField');
     const response = await generateText(prompt, state.settings.aiCreativity, aiOptions, signal);
     return { field, value: response };
-  }
+  },
 );
 
 export const generateCharacterPortraitThunk = createDeduplicatedThunk(
@@ -243,7 +243,7 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
       style?: string;
       lang: string;
     },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const fullDescription = style ? `${description}. Style: ${style}` : description;
     const state = getState() as RootState;
@@ -256,7 +256,7 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
     const base64 = await generateImage(prompt, aiOptions, signal);
     await storageService.saveImage(characterId, base64);
     return { characterId };
-  }
+  },
 );
 
 export const uploadCharacterImageThunk = createAsyncThunk(
@@ -272,14 +272,14 @@ export const uploadCharacterImageThunk = createAsyncThunk(
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-  }
+  },
 );
 
 export const generateWorldProfileThunk = createDeduplicatedThunk(
   'project/generateWorldProfile',
   async (
     { concept, lang }: { concept: string; lang: string },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -293,16 +293,16 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
       state.settings.aiCreativity,
       schema!,
       aiOptions,
-      signal
+      signal,
     );
-  }
+  },
 );
 
 export const regenerateWorldFieldThunk = createDeduplicatedThunk(
   'project/regenerateWorldField',
   async (
     { world, field, lang }: { world: World; field: keyof World; lang: string },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -314,7 +314,7 @@ export const regenerateWorldFieldThunk = createDeduplicatedThunk(
     registerDuplicateRequest(prompt, 'regenerateWorldField');
     const response = await generateText(prompt, state.settings.aiCreativity, aiOptions, signal);
     return { field, value: response };
-  }
+  },
 );
 
 export const generateWorldImageThunk = createDeduplicatedThunk(
@@ -329,7 +329,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
       description: string;
       lang: string;
     },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -338,7 +338,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     const base64 = await generateImage(prompt, aiOptions, signal);
     await storageService.saveImage(worldId, base64);
     return { worldId };
-  }
+  },
 );
 
 export const uploadWorldImageThunk = createAsyncThunk(
@@ -354,7 +354,7 @@ export const uploadWorldImageThunk = createAsyncThunk(
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-  }
+  },
 );
 
 export const generateOutlineThunk = createDeduplicatedThunk(
@@ -369,9 +369,9 @@ export const generateOutlineThunk = createDeduplicatedThunk(
       state.settings.aiCreativity,
       schema!,
       aiOptions,
-      signal
+      signal,
     );
-  }
+  },
 );
 
 export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
@@ -382,7 +382,7 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
       sectionToIndex,
       lang,
     }: { allSections: OutlineSection[]; sectionToIndex: number; lang: string },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -397,17 +397,17 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
       state.settings.aiCreativity,
       schema!,
       aiOptions,
-      signal
+      signal,
     );
     return { index: sectionToIndex, newSection: response };
-  }
+  },
 );
 
 export const personalizeTemplateThunk = createDeduplicatedThunk(
   'project/personalizeTemplate',
   async (
     { sections, concept, lang }: { sections: { title: string }[]; concept: string; lang: string },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -422,9 +422,9 @@ export const personalizeTemplateThunk = createDeduplicatedThunk(
       state.settings.aiCreativity,
       schema!,
       aiOptions,
-      signal
+      signal,
     );
-  }
+  },
 );
 
 export const generateCustomTemplateThunk = createDeduplicatedThunk(
@@ -439,9 +439,9 @@ export const generateCustomTemplateThunk = createDeduplicatedThunk(
       state.settings.aiCreativity,
       schema!,
       aiOptions,
-      signal
+      signal,
     );
-  }
+  },
 );
 
 export const streamGenerationThunk = createDeduplicatedThunk(
@@ -456,14 +456,14 @@ export const streamGenerationThunk = createDeduplicatedThunk(
       lang: string;
       onChunk: (chunk: string) => void;
     },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const fullPrompt = `${prompt}\n\nRespond in ${lang === 'de' ? 'German' : 'English'}.`;
     registerDuplicateRequest(fullPrompt, 'streamGeneration');
     await streamText(fullPrompt, state.settings.aiCreativity, aiOptions, { onChunk }, signal);
-  }
+  },
 );
 
 export const generateSynopsisThunk = createDeduplicatedThunk(
@@ -479,14 +479,14 @@ export const generateSynopsisThunk = createDeduplicatedThunk(
     });
     registerDuplicateRequest(prompt, 'synopsis');
     return await generateText(prompt, creativity, aiOptions, signal);
-  }
+  },
 );
 
 export const proofreadTextThunk = createDeduplicatedThunk(
   'project/proofreadText',
   async (
     { text, lang }: { text: string; lang: string },
-    { getState, signal, registerDuplicateRequest }
+    { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const creativity = state.settings.aiCreativity;
@@ -501,9 +501,9 @@ export const proofreadTextThunk = createDeduplicatedThunk(
       creativity,
       schema!,
       aiOptions,
-      signal
+      signal,
     );
-  }
+  },
 );
 
 export { createDeduplicatedThunk } from './aiThunkUtils';
@@ -525,7 +525,7 @@ const projectSlice = createSlice({
       action: PayloadAction<{
         key: 'totalWordCount' | 'targetDate';
         value: number | string | null;
-      }>
+      }>,
     ) => {
       if (state.data.projectGoals) {
         if (action.payload.key === 'totalWordCount') {
@@ -564,7 +564,7 @@ const projectSlice = createSlice({
     },
     updateCharacter: (
       state,
-      action: PayloadAction<{ id: string; changes: Partial<Character> }>
+      action: PayloadAction<{ id: string; changes: Partial<Character> }>,
     ) => {
       charactersAdapter.updateOne(state.data.characters, {
         id: action.payload.id,
@@ -609,7 +609,7 @@ const projectSlice = createSlice({
     },
     updateManuscriptSection: (
       state,
-      action: PayloadAction<{ id: string; changes: Partial<StorySection> }>
+      action: PayloadAction<{ id: string; changes: Partial<StorySection> }>,
     ) => {
       const index = state.data.manuscript.findIndex((s) => s.id === action.payload.id);
       if (index !== -1) {
@@ -644,7 +644,7 @@ const projectSlice = createSlice({
       action: PayloadAction<{
         id: string;
         changes: Partial<CharacterRelationship>;
-      }>
+      }>,
     ) => {
       if (!state.data.relationships) state.data.relationships = [];
       const index = state.data.relationships.findIndex((r) => r.id === action.payload.id);
@@ -662,7 +662,7 @@ const projectSlice = createSlice({
     // --- Scene Board ---
     updateSceneBoardLayout: (
       state,
-      action: PayloadAction<{ [sectionId: string]: { x: number; y: number } }>
+      action: PayloadAction<{ [sectionId: string]: { x: number; y: number } }>,
     ) => {
       state.data.sceneBoardLayout = {
         ...state.data.sceneBoardLayout,
@@ -676,7 +676,7 @@ const projectSlice = createSlice({
     },
     updateWritingGoal: (
       state,
-      action: PayloadAction<{ id: string; changes: Partial<WritingGoal> }>
+      action: PayloadAction<{ id: string; changes: Partial<WritingGoal> }>,
     ) => {
       if (!state.data.writingGoals) state.data.writingGoals = [];
       const index = state.data.writingGoals.findIndex((g) => g.id === action.payload.id);

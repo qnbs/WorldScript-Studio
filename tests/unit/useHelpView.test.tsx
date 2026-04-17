@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useHelpView } from '../../hooks/useHelpView';
 
 const mockStreamAiHelpResponse = vi.fn<
@@ -58,7 +58,7 @@ describe('useHelpView', () => {
       'Hello AI',
       mockState.settings.aiCreativity,
       expect.objectContaining({ provider: 'gemini', model: 'gemini-1.5-flash' }),
-      expect.objectContaining({ onChunk: expect.any(Function) })
+      expect.objectContaining({ onChunk: expect.any(Function) }),
     );
     const lastHistoryItem = result.current.chatHistory[result.current.chatHistory.length - 1];
     expect(lastHistoryItem?.text).toContain('Hello from AI.');

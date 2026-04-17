@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock storageService so we control save behavior
 const mockSaveProject = vi.fn().mockResolvedValue(undefined);
