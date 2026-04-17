@@ -195,9 +195,7 @@ jobs:
 
       - name: Run Lighthouse CI
         run: |
-          mkdir -p /tmp/lhci-serve/StoryCraft-Studio
-          cp -r dist/* /tmp/lhci-serve/StoryCraft-Studio/
-          pnpm dlx serve /tmp/lhci-serve -l 4173 &
+          pnpm run preview &
           pnpm exec wait-on http://127.0.0.1:4173/StoryCraft-Studio/ --timeout 30000
           pnpm exec lhci autorun
         env:

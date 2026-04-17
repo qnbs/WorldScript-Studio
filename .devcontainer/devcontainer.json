@@ -1,6 +1,6 @@
 {
   "name": "StoryCraft Studio",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 
   "features": {

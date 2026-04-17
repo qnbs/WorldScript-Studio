@@ -79,6 +79,7 @@
     "@vitejs/plugin-react": "^6.0.0",
     "@vitest/coverage-v8": "^4.1.4",
     "jsdom": "^29.0.2",
+    "lint-staged": "^16.4.0",
     "rollup-plugin-visualizer": "^7.0.1",
     "simple-git-hooks": "^2.13.1",
     "storybook": "^10.3.5",
@@ -106,7 +107,9 @@
     ]
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true --staged",
-    "pre-push": "pnpm run typecheck"
+    "pre-commit": "pnpm exec lint-staged"
+  },
+  "lint-staged": {
+    "*": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
   }
 }
