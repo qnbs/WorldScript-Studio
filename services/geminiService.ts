@@ -13,6 +13,13 @@ import type {
 } from '../types';
 import { storageService } from './storageService';
 import { logger } from './logger';
+import {
+  sanitizePromptValue,
+  sanitizePromptBlock,
+  cleanPrompt,
+  attachCause,
+  stripJsonFences,
+} from './aiUtils';
 
 // === DYNAMIC API KEY MANAGEMENT ===
 // KRITISCH: Kein hardcoded API key mehr!
@@ -247,39 +254,6 @@ const getThinkingBudget = (type: PromptType): number => {
     default:
       return 0;
   }
-};
-
-const stripControlChars = (value: string): string => {
-  let output = '';
-  for (const char of value) {
-    const code = char.charCodeAt(0);
-    output += code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f) ? ' ' : char;
-  }
-  return output;
-};
-
-const sanitizePromptValue = (input: unknown): string =>
-  stripControlChars(String(input ?? ''))
-    .replace(/```/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const sanitizePromptBlock = (input: unknown): string =>
-  stripControlChars(String(input ?? ''))
-    .replace(/```/g, '"')
-    .replace(/\r\n?/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-const cleanPrompt = (prompt: string): string => sanitizePromptBlock(prompt);
-
-const attachCause = <T extends Error>(error: T, cause: unknown): T => {
-  Object.defineProperty(error, 'cause', {
-    value: cause,
-    enumerable: false,
-    configurable: true,
-  });
-  return error;
 };
 
 // --- PROMPT FACTORY ---
@@ -595,11 +569,7 @@ export const generateJson = async <T>(
       });
 
       const rawText = response.text || '';
-      // Robust cleaning: removes ```json or ``` at start, and ``` at end, handling optional newlines
-      let jsonText = rawText.trim();
-      if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '');
-      }
+      const jsonText = stripJsonFences(rawText);
 
       try {
         return JSON.parse(jsonText) as T;
