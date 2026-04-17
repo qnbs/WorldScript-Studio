@@ -1,7 +1,7 @@
 {
   "name": "storycraft-studio",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "packageManager": "npm@10.x",
   "scripts": {
@@ -23,6 +23,7 @@
     "test:e2e:ui": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test --ui",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
+    "analyze": "ANALYZE=true vite build",
     "dev:tauri": "tauri dev"
   },
   "dependencies": {
@@ -87,6 +88,7 @@
     "jsdom": "^28.1.0",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
+    "rollup-plugin-visualizer": "^7.0.1",
     "storybook": "^10.3.5",
     "typescript": "~5.8.2",
     "typescript-eslint": "^8.58.2",
@@ -99,6 +101,13 @@
     "@lhci/cli": {
       "chrome-launcher": "^1.2.1",
       "tmp": "^0.2.5"
+    },
+    "vite-plugin-pwa": {
+      "workbox-build": {
+        "@rollup/plugin-terser": {
+          "serialize-javascript": "^7.0.5"
+        }
+      }
     }
   }
 }
