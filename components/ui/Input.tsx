@@ -35,12 +35,12 @@ export const Input = React.memo(React.forwardRef<HTMLInputElement, React.InputHT
             className={`
                 flex h-11 w-full appearance-none rounded-xl
                 border border-[var(--border-primary)] 
-                bg-white/5 backdrop-blur-md
+                bg-[var(--glass-bg)] backdrop-blur-md
                 px-4 py-2 pr-10 text-sm 
                 text-[var(--foreground-primary)] placeholder:text-[var(--foreground-muted)] 
                 shadow-sm transition-all duration-200
                 focus:outline-none focus:border-[var(--border-interactive)] focus:ring-4 focus:ring-[var(--ring-focus)] focus:bg-[var(--background-secondary)]/50
-                hover:border-[var(--border-highlight)] hover:bg-white/10
+                hover:border-[var(--border-highlight)] hover:bg-[var(--glass-bg-hover)]
                 disabled:opacity-50 disabled:cursor-not-allowed
                 ${className}
             `}
@@ -53,7 +53,7 @@ export const Input = React.memo(React.forwardRef<HTMLInputElement, React.InputHT
             className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--ring-focus)] z-10 ${
                 isListening 
                 ? 'text-red-500 bg-red-500/10 animate-pulse ring-1 ring-red-500/50' 
-                : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-white/10'
+                : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--glass-bg-hover)]'
             }`}
             title={t('common.dictation.title')}
             aria-label={isListening ? t('common.dictation.stop') : t('common.dictation.start')}

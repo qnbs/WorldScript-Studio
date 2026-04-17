@@ -8,12 +8,12 @@ export const Select = React.memo(React.forwardRef<HTMLSelectElement, React.Selec
           className={`
             flex h-11 w-full appearance-none rounded-xl
             border border-[var(--border-primary)] 
-            bg-white/5 backdrop-blur-md
+            bg-[var(--glass-bg)] backdrop-blur-md
             px-4 py-2.5 pr-10 text-sm 
             text-[var(--foreground-primary)] 
             shadow-sm transition-all duration-200
             focus:outline-none focus:border-[var(--border-interactive)] focus:ring-4 focus:ring-[var(--ring-focus)] focus:bg-[var(--background-secondary)]/50
-            hover:border-[var(--border-highlight)] hover:bg-white/10
+            hover:border-[var(--border-highlight)] hover:bg-[var(--glass-bg-hover)]
             disabled:opacity-50 disabled:cursor-not-allowed
             cursor-pointer
             [&>option]:bg-[var(--background-secondary)] [&>option]:text-[var(--foreground-primary)]

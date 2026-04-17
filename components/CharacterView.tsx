@@ -562,9 +562,9 @@ const CharacterCard: FC<{ character: Character; animationIndex: number }> = Reac
             </svg>
           )}
         </div>
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-black/40 to-transparent">
-          <h3 className="font-bold text-lg text-white truncate">{character.name}</h3>
-          <p className="text-sm text-gray-300 truncate">{character.personalityTraits}</p>
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-[var(--card-gradient-overlay)] to-transparent">
+          <h3 className="font-bold text-lg text-[var(--foreground-interactive)] dark:text-white truncate">{character.name}</h3>
+          <p className="text-sm text-[var(--foreground-secondary)] dark:text-gray-300 truncate">{character.personalityTraits}</p>
         </div>
       </Card>
     );

@@ -369,7 +369,7 @@ const ExportPreview: FC = () => {
       <CardContent className="flex-grow flex flex-col min-h-0">
         {formattedOutput ? (
           <pre
-            className="bg-white/5 backdrop-blur-sm border border-[var(--border-primary)] p-6 rounded-xl text-[var(--foreground-secondary)] h-full overflow-y-auto whitespace-pre-wrap shadow-inner"
+            className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--border-primary)] p-6 rounded-xl text-[var(--foreground-secondary)] h-full overflow-y-auto whitespace-pre-wrap shadow-inner"
             style={editorStyles}
           >
             {formattedOutput}

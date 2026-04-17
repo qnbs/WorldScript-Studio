@@ -741,7 +741,7 @@ const SettingsViewUI: FC = () => {
               <CardContent>
                 <div
                   style={previewStyle}
-                  className="p-4 bg-white/5 rounded-md border border-[var(--border-primary)] max-h-48 overflow-y-auto text-[var(--foreground-primary)]"
+                  className="p-4 bg-[var(--glass-bg)] rounded-md border border-[var(--border-primary)] max-h-48 overflow-y-auto text-[var(--foreground-primary)]"
                 >
                   <p className="[&&]:my-0 [&&]:mb-[var(--paragraph-spacing)]">
                     {t('settings.editor.previewText1')}
@@ -855,7 +855,7 @@ const SettingsViewUI: FC = () => {
                 <p className="text-sm text-[var(--foreground-secondary)] mb-6">
                   {t('settings.data.description')}
                 </p>
-                <div className="p-4 rounded-lg bg-white/5 border border-[var(--border-primary)] space-y-3">
+                <div className="p-4 rounded-lg bg-[var(--glass-bg)] border border-[var(--border-primary)] space-y-3">
                   <h3 className="font-semibold text-[var(--foreground-primary)]">
                     {t('settings.data.actions')}
                   </h3>
@@ -909,7 +909,7 @@ const SettingsViewUI: FC = () => {
                     snapshots.map((snap) => (
                       <div
                         key={snap.id}
-                        className="flex items-center justify-between p-3 bg-white/5 rounded-md border border-[var(--border-primary)] hover:border-[var(--border-interactive)] transition-colors"
+                        className="flex items-center justify-between p-3 bg-[var(--glass-bg)] rounded-md border border-[var(--border-primary)] hover:border-[var(--border-interactive)] transition-colors"
                       >
                         <div>
                           <p className="font-semibold text-[var(--foreground-primary)]">

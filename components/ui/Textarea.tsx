@@ -51,12 +51,12 @@ export const Textarea = React.memo(
             className={`
                 flex min-h-[120px] w-full rounded-xl
                 border border-[var(--border-primary)] 
-                bg-white/5 backdrop-blur-md
+                bg-[var(--glass-bg)] backdrop-blur-md
                 px-4 py-3 pb-12 text-sm 
                 text-[var(--foreground-primary)] placeholder:text-[var(--foreground-muted)] 
                 shadow-sm transition-all duration-200
                 focus:outline-none focus:border-[var(--border-interactive)] focus:ring-4 focus:ring-[var(--ring-focus)] focus:bg-[var(--background-secondary)]/50
-                hover:border-[var(--border-highlight)] hover:bg-white/10
+                hover:border-[var(--border-highlight)] hover:bg-[var(--glass-bg-hover)]
                 disabled:opacity-50 disabled:cursor-not-allowed
                 scrollbar-thin scrollbar-thumb-rounded-md
                 ${className}
@@ -71,7 +71,7 @@ export const Textarea = React.memo(
             className={`absolute right-3 bottom-3 p-2 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[var(--ring-focus)] z-10 ${
               isListening
                 ? 'text-red-500 bg-red-500/10 animate-pulse shadow-[0_0_0_4px_rgba(239,68,68,0.3)] scale-110'
-                : 'text-[var(--foreground-muted)] bg-[var(--background-secondary)]/80 hover:text-[var(--foreground-primary)] hover:bg-white/10 shadow-sm border border-[var(--border-primary)]'
+                : 'text-[var(--foreground-muted)] bg-[var(--background-secondary)]/80 hover:text-[var(--foreground-primary)] hover:bg-[var(--glass-bg-hover)] shadow-sm border border-[var(--border-primary)]'
             }`}
             title={t('common.dictation.title')}
             aria-label={isListening ? t('common.dictation.stop') : t('common.dictation.start')}

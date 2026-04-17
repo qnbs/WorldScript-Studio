@@ -96,7 +96,7 @@ export const Drawer: React.FC<DrawerProps> = ({
     return undefined;
   }, [isOpen, onClose]);
 
-  const backdropClasses = `fixed inset-0 bg-gray-900/50 dark:bg-black/60 z-40 transition-opacity duration-300 ${isOpen ? 'backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`;
+  const backdropClasses = `fixed inset-0 bg-[var(--overlay-backdrop)] z-40 transition-opacity duration-300 ${isOpen ? 'backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`;
 
   const drawerContainerClasses = `fixed top-0 h-full w-4/5 max-w-sm bg-[var(--background-primary)] z-50 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out border-[var(--border-primary)] ${position === 'left' ? 'left-0 border-r' : 'right-0 border-l'}`;
 

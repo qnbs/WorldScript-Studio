@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Critical**: Configured Tailwind CDN dark mode to use `selector` strategy with `.dark-theme` class. Previously, all `dark:` prefixed Tailwind classes responded to OS system preference instead of the in-app theme toggle, causing broken styling when OS and app theme diverged.
+- **Light Mode Overlays**: Replaced all hardcoded `bg-black/40`, `bg-black/60`, `bg-gray-900/50` modal/drawer/panel backdrops with theme-aware `--overlay-backdrop` CSS custom property across Modal, Drawer, CommandPalette, Sidebar, CollaborationPanel, and VersionControlPanel.
+- **Light Mode Card Overlays**: Fixed CharacterView and WorldView card gradient overlays (`via-black/40`) and hardcoded `text-white`/`text-gray-300` text to use theme-aware CSS custom properties.
+- **Light Mode Glass Effects**: Replaced all `bg-white/5`, `bg-white/10`, `border-white/5`, `via-white/15` dark-mode-only glass morphism classes with theme-aware CSS custom properties (`--glass-bg`, `--glass-bg-hover`, `--glass-border`, `--glass-highlight`) across Input, Textarea, Select, Checkbox, Card, AddNewCard, Skeleton, Button, Header, Dashboard, WriterView, ExportView, SettingsView, HelpView, TemplateView, WorldView, ManuscriptView, and CommandPalette.
+- **Light Mode Aurora**: Reduced aurora blob opacity from 0.25 to 0.08 in light mode to prevent visual noise on white backgrounds.
+- **Light Mode Prose Links**: Fixed HelpView prose link color (`prose-a:text-indigo-400`) to use `prose-a:text-indigo-600 dark:prose-a:text-indigo-400` for proper contrast in both themes.
+- **Light Mode Ring/Focus Indicators**: Replaced `ring-white/10`, `ring-black/5 dark:ring-white/5` with theme-aware `--glass-border` for consistent visibility in both themes.
+
+### Added
+
+- New CSS custom properties for theme-aware glass/overlay effects: `--overlay-backdrop`, `--glass-bg`, `--glass-bg-hover`, `--glass-border`, `--glass-highlight`, `--card-gradient-overlay` with appropriate values for both dark and light themes.
+
 ## [1.1.1] - 2026-04-17
 
 ### Security

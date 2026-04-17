@@ -69,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
     "
     >
       {/* Specular highlight at top */}
-      <div className="absolute inset-x-0 top-0 h-px bg-white/10 pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-px bg-[var(--glass-bg-hover)] pointer-events-none" />
 
       <div className="flex items-center gap-4 flex-shrink-0">
         <button

@@ -220,7 +220,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-0 bg-[var(--overlay-backdrop)] z-40" onClick={onClose} aria-hidden="true" />
 
       {/* Panel */}
       <section

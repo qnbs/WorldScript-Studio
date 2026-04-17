@@ -65,7 +65,7 @@ export const AddNewCard: React.FC<AddNewCardProps> = ({
       <p className={descriptionClasses[variant]}>{description}</p>
 
       {/* Subtle highlight overlay */}
-      <div className="absolute inset-0 bg-white/0 group-hover:bg-white/5 transition-colors duration-300 pointer-events-none" />
+      <div className="absolute inset-0 bg-white/0 group-hover:bg-[var(--glass-bg)] transition-colors duration-300 pointer-events-none" />
     </button>
   );
 };

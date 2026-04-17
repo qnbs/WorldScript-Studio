@@ -397,7 +397,7 @@ const WorldAtlas: FC = () => {
               {(selectedWorld.timeline || []).map((event, _index) => (
                 <div
                   key={event.id}
-                  className="grid grid-cols-1 md:grid-cols-3 gap-2 items-start border border-[var(--border-primary)] bg-white/5 p-2 rounded-md"
+                  className="grid grid-cols-1 md:grid-cols-3 gap-2 items-start border border-[var(--border-primary)] bg-[var(--glass-bg)] p-2 rounded-md"
                 >
                   <Input
                     placeholder={t('worlds.edit.eraPlaceholder')}
@@ -443,7 +443,7 @@ const WorldAtlas: FC = () => {
               {(selectedWorld.locations || []).map((loc) => (
                 <div
                   key={loc.id}
-                  className="border border-[var(--border-primary)] bg-white/5 p-3 rounded-md space-y-2"
+                  className="border border-[var(--border-primary)] bg-[var(--glass-bg)] p-3 rounded-md space-y-2"
                 >
                   <div className="flex justify-between items-center">
                     <Input
@@ -590,9 +590,9 @@ const WorldCard: FC<{ world: World; animationIndex: number }> = React.memo(
             </svg>
           )}
         </div>
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-black/40 to-transparent">
-          <h3 className="font-bold text-lg text-white truncate">{world.name}</h3>
-          <p className="text-sm text-gray-300 truncate">{world.description}</p>
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-[var(--card-gradient-overlay)] to-transparent">
+          <h3 className="font-bold text-lg text-[var(--foreground-interactive)] dark:text-white truncate">{world.name}</h3>
+          <p className="text-sm text-[var(--foreground-secondary)] dark:text-gray-300 truncate">{world.description}</p>
         </div>
       </Card>
     );

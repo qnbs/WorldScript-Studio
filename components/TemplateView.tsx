@@ -136,7 +136,7 @@ const PreviewModal: FC = () => {
           <p className="text-sm text-[var(--foreground-muted)] mb-4">
             {isRemixMode ? t('templates.remix.description') : t('templates.remix.descriptionHint')}
           </p>
-          <div className="space-y-2 max-h-64 sm:max-h-96 overflow-y-auto bg-white/5 p-2 rounded-md border border-[var(--border-primary)]/50">
+          <div className="space-y-2 max-h-64 sm:max-h-96 overflow-y-auto bg-[var(--glass-bg)] p-2 rounded-md border border-[var(--border-primary)]/50">
             {remixedSections.map((sec, i) => (
               <div
                 key={sec.id}

@@ -187,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* ── Mobile overlay backdrop ── */}
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 md:hidden ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-[var(--overlay-backdrop)] backdrop-blur-sm z-40 transition-opacity duration-300 md:hidden ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsSidebarOpen(false)}
         aria-hidden="true"
       />

@@ -275,7 +275,7 @@ const ToolsPanel: FC = React.memo(() => {
               <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
                 {t('writer.studio.tools.dialogue.charactersLabel')}
               </label>
-              <div className="space-y-2 max-h-32 overflow-y-auto bg-white/5 p-2 rounded-md border border-[var(--border-primary)]">
+              <div className="space-y-2 max-h-32 overflow-y-auto bg-[var(--glass-bg)] p-2 rounded-md border border-[var(--border-primary)]">
                 {project.characters.map((char) => (
                   <div key={char.id}>
                     <Checkbox
@@ -398,7 +398,7 @@ const ToolsPanel: FC = React.memo(() => {
                 className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 touch-manipulation min-h-[44px] min-w-[44px] ${
                   activeTool === tool.id
                     ? 'bg-[var(--background-interactive)] text-white shadow-md transform scale-[1.02]'
-                    : 'bg-white/5 text-[var(--foreground-secondary)] hover:bg-white/10 border border-[var(--border-primary)]'
+                    : 'bg-[var(--glass-bg)] text-[var(--foreground-secondary)] hover:bg-[var(--glass-bg-hover)] border border-[var(--border-primary)]'
                 }`}
                 aria-label={tool.title}
                 aria-pressed={activeTool === tool.id}
@@ -551,7 +551,7 @@ const AiScratchpad: FC = React.memo(() => {
               ref={textareaRef}
               value={currentResult}
               onChange={(e) => handleUpdateScratchpad(e.target.value)}
-              className="flex-grow w-full resize-none whitespace-pre-wrap bg-white/5 border-[var(--border-primary)] p-4 font-mono text-sm"
+              className="flex-grow w-full resize-none whitespace-pre-wrap bg-[var(--glass-bg)] border-[var(--border-primary)] p-4 font-mono text-sm"
               placeholder={isLoading ? '' : t('writer.studio.result.placeholder')}
               disabled={isLoading}
             />
@@ -772,7 +772,7 @@ const WriterViewUI: FC = () => {
             onClick={() => setActiveMobileTab(tab)}
             className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 z-10 touch-manipulation ${
               activeMobileTab === tab
-                ? 'bg-[var(--background-secondary)] text-[var(--foreground-primary)] shadow-md transform scale-[1.02] ring-1 ring-black/5 dark:ring-white/5'
+                ? 'bg-[var(--background-secondary)] text-[var(--foreground-primary)] shadow-md transform scale-[1.02] ring-1 ring-[var(--glass-border)]'
                 : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'
             }`}
           >

@@ -77,7 +77,7 @@ const ArticleViewer: FC = () => {
       </CardHeader>
       <CardContent>
         <div
-          className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--foreground-secondary)] prose-strong:text-[var(--foreground-primary)] prose-a:text-indigo-400 prose-ul:list-disc prose-li:text-[var(--foreground-secondary)] prose-ol:text-[var(--foreground-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
+          className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--foreground-secondary)] prose-strong:text-[var(--foreground-primary)] prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-ul:list-disc prose-li:text-[var(--foreground-secondary)] prose-ol:text-[var(--foreground-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(t(selectedArticle.content)) }}
         />
       </CardContent>
@@ -151,7 +151,7 @@ const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ 
         </div>
       )}
       <div
-        className={`max-w-xl p-3 rounded-lg prose ${theme === 'dark' ? 'prose-invert' : ''} prose-p:my-0 ${isUser ? 'bg-[var(--background-interactive)] text-white shadow-lg' : 'bg-white/5 border border-[var(--border-primary)]'}`}
+        className={`max-w-xl p-3 rounded-lg prose ${theme === 'dark' ? 'prose-invert' : ''} prose-p:my-0 ${isUser ? 'bg-[var(--background-interactive)] text-white shadow-lg' : 'bg-[var(--glass-bg)] border border-[var(--border-primary)]'}`}
       >
         {parsedText}
       </div>
@@ -207,7 +207,7 @@ const AiAssistant: FC = () => {
                   </svg>
                 </div>
                 <div
-                  className={`max-w-xl p-3 rounded-lg bg-white/5 border border-[var(--border-primary)] flex space-x-2 items-center`}
+                  className={`max-w-xl p-3 rounded-lg bg-[var(--glass-bg)] border border-[var(--border-primary)] flex space-x-2 items-center`}
                 >
                   <div
                     className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"

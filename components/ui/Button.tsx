@@ -43,7 +43,7 @@ export const Button = React.memo(
           </span>
           {/* Gloss Effect for Primary to give depth */}
           {variant === 'primary' && (
-            <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[var(--glass-bg-hover)] to-transparent pointer-events-none" />
           )}
         </button>
       );

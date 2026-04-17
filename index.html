@@ -74,6 +74,7 @@
 
     <title>StoryCraft Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: ['selector', '.dark-theme'] }</script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
@@ -120,6 +121,14 @@
         /* Gradients */
         --gradient-surface: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.0) 100%);
         --background-gradient-overlay-start: rgba(2, 6, 23, 0.0);
+
+        /* Glass & Overlay */
+        --overlay-backdrop: rgba(0, 0, 0, 0.5);
+        --glass-bg: rgba(255, 255, 255, 0.05);
+        --glass-bg-hover: rgba(255, 255, 255, 0.1);
+        --glass-border: rgba(255, 255, 255, 0.05);
+        --glass-highlight: rgba(255, 255, 255, 0.15);
+        --card-gradient-overlay: rgba(0, 0, 0, 0.4);
       }
 
       .light-theme {
@@ -156,6 +165,14 @@
 
         --gradient-surface: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
         --background-gradient-overlay-start: rgba(255, 255, 255, 0.0);
+
+        /* Glass & Overlay */
+        --overlay-backdrop: rgba(0, 0, 0, 0.2);
+        --glass-bg: rgba(0, 0, 0, 0.03);
+        --glass-bg-hover: rgba(0, 0, 0, 0.05);
+        --glass-border: rgba(0, 0, 0, 0.05);
+        --glass-highlight: rgba(0, 0, 0, 0.08);
+        --card-gradient-overlay: rgba(0, 0, 0, 0.15);
       }
 
       html {
@@ -195,6 +212,7 @@
         background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
       }
       .light-theme .noise-overlay { opacity: 0.025; }
+      .light-theme .aurora-blob { opacity: 0.08; }
 
       /* Ambient Lighting - Aurora */
       .aurora-container {

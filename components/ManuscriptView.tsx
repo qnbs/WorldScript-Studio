@@ -729,7 +729,7 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
                 >
                   {item.type === 'character' ? (
                     <div
-                      className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-white/20' : 'bg-blue-500/20'}`}
+                      className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-[var(--glass-bg-hover)]' : 'bg-blue-500/20'}`}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -744,7 +744,7 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
                     </div>
                   ) : (
                     <div
-                      className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-white/20' : 'bg-emerald-500/20'}`}
+                      className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-[var(--glass-bg-hover)]' : 'bg-emerald-500/20'}`}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

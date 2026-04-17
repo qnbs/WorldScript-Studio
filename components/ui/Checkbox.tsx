@@ -17,11 +17,11 @@ export const Checkbox = React.memo(
               className={`
               peer h-5 w-5 appearance-none rounded-md
               border border-[var(--border-primary)]
-              bg-white/5 backdrop-blur-sm
+              bg-[var(--glass-bg)] backdrop-blur-sm
               checked:bg-[var(--background-interactive)] checked:border-[var(--background-interactive)]
               focus:outline-none focus:ring-2 focus:ring-[var(--ring-focus)] focus:ring-offset-1 focus:ring-offset-[var(--background-primary)]
               transition-all duration-200 cursor-pointer
-              hover:border-[var(--border-highlight)] hover:bg-white/10
+              hover:border-[var(--border-highlight)] hover:bg-[var(--glass-bg-hover)]
               ${className}
             `}
               {...props}

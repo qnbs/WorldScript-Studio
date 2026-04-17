@@ -37,6 +37,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Detect touch/mobile device to avoid auto-opening virtual keyboard
+  const isTouchDevice = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+    []
+  );
+
   // Sync voice transcript to query
   useEffect(() => {
     if (transcript && isOpen) {
@@ -50,8 +58,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
-      // Small timeout to ensure DOM is ready for focus
-      setTimeout(() => inputRef.current?.focus(), 50);
+      // Only auto-focus on non-touch devices to prevent virtual keyboard popup
+      if (!isTouchDevice) {
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -60,7 +70,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
         stopListening();
       }
     }
-  }, [isOpen, isListening, stopListening]);
+  }, [isOpen, isListening, stopListening, isTouchDevice]);
 
   // --- Define Commands ---
   const commands: CommandItem[] = useMemo(() => {
@@ -300,8 +310,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     );
   }, [query, commands]);
 
-  // --- Keyboard Handling ---
+  // --- Keyboard Handling (desktop only) ---
   useEffect(() => {
+    if (isTouchDevice) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
 
@@ -322,7 +334,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, filteredCommands, selectedIndex, onClose]);
+  }, [isOpen, isTouchDevice, filteredCommands, selectedIndex, onClose]);
 
   // Ensure selection index is valid when filtering
   useEffect(() => {
@@ -362,13 +374,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200"
+        className="fixed inset-0 bg-[var(--overlay-backdrop)] backdrop-blur-sm transition-opacity duration-200"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Modal Window */}
-      <div className="relative w-full max-w-2xl bg-[var(--background-secondary)]/90 backdrop-blur-xl border border-[var(--border-primary)] shadow-2xl rounded-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 ring-1 ring-white/10">
+      <div className="relative w-full max-w-2xl bg-[var(--background-secondary)]/90 backdrop-blur-xl border border-[var(--border-primary)] shadow-2xl rounded-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 ring-1 ring-[var(--glass-border)]">
         {/* Search Input */}
         <div className="flex items-center px-4 py-4 border-b border-[var(--border-primary)]/50">
           <svg
@@ -468,7 +480,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`p-1.5 rounded-md ${isActive ? 'text-white bg-white/20' : 'text-[var(--foreground-secondary)] bg-[var(--background-tertiary)] group-hover:bg-[var(--background-primary)]'}`}
+                          className={`p-1.5 rounded-md ${isActive ? 'text-white bg-[var(--glass-bg-hover)]' : 'text-[var(--foreground-secondary)] bg-[var(--background-tertiary)] group-hover:bg-[var(--background-primary)]'}`}
                         >
                           {cmd.icon}
                         </div>
@@ -481,7 +493,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
                           {cmd.shortcut.map((k) => (
                             <kbd
                               key={k}
-                              className={`px-1.5 py-0.5 text-xs rounded border ${isActive ? 'border-white/30 bg-white/20 text-white' : 'border-[var(--border-primary)] bg-[var(--background-primary)] text-[var(--foreground-muted)]'}`}
+                              className={`px-1.5 py-0.5 text-xs rounded border ${isActive ? 'border-[var(--glass-highlight)] bg-[var(--glass-bg-hover)] text-white' : 'border-[var(--border-primary)] bg-[var(--background-primary)] text-[var(--foreground-muted)]'}`}
                             >
                               {k}
                             </kbd>

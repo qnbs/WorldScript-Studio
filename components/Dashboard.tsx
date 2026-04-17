@@ -28,7 +28,7 @@ const StatCard: FC<{
       style={{ '--index': animationIndex } as React.CSSProperties}
     >
       <div
-        className={`p-4 rounded-2xl mr-5 flex-shrink-0 border border-white/5 group-hover:scale-110 transition-transform duration-300 shadow-sm ${colorClass}`}
+        className={`p-4 rounded-2xl mr-5 flex-shrink-0 border border-[var(--glass-border)] group-hover:scale-110 transition-transform duration-300 shadow-sm ${colorClass}`}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

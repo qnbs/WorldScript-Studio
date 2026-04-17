@@ -98,7 +98,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-gray-900/50 dark:bg-black/60 backdrop-blur-sm flex items-center sm:items-center justify-center z-50 p-0 sm:p-4"
+      className="fixed inset-0 bg-[var(--overlay-backdrop)] backdrop-blur-sm flex items-center sm:items-center justify-center z-50 p-0 sm:p-4"
       style={{ animation: 'fade-in 0.2s ease-out' }}
       aria-labelledby="modal-title"
       role="dialog"

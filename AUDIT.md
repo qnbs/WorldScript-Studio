@@ -52,6 +52,13 @@
 - One deprecation (`node-domexception`) remains as an upstream transitive dependency from the Gemini SDK stack — accepted risk, no local fix.
 - The repository is stable: build, lint, typecheck, and coverage all pass.
 
+### Light Mode Theming (Resolved 2026-04-17)
+
+- **Fixed:** Tailwind CDN `dark:` prefix was using `media` strategy (OS preference) instead of `selector` strategy (`.dark-theme` body class), causing all `dark:` classes to ignore the in-app theme toggle.
+- **Fixed:** ~65 hardcoded dark-mode-only styling patterns (`bg-white/5`, `border-white/5`, `via-white/15`, `bg-black/40`, `ring-white/10`, `via-black/40`, `text-white` on non-interactive backgrounds) replaced with theme-aware CSS custom properties.
+- **Added:** 6 new CSS custom properties (`--overlay-backdrop`, `--glass-bg`, `--glass-bg-hover`, `--glass-border`, `--glass-highlight`, `--card-gradient-overlay`) with appropriate values for both dark and light themes.
+- **Fixed:** Aurora blob opacity reduced from 0.25 to 0.08 in light mode.
+
 ### Tauri Feature Parity (Tech Debt)
 
 `fileSystemService.ts` remains behind `dbService.ts` in the following areas (deferred to a dedicated Tauri hardening sprint):
