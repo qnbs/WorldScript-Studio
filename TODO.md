@@ -10,7 +10,7 @@ Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 
 - ✅ Tauri CSP setzen (`src-tauri/tauri.conf.json`)
 - ✅ Tauri Identifier korrigieren → `com.storycraft.studio`
-- ✅ Tauri Version synchronisieren → `1.0.0`
+- ✅ Tauri Version synchronisieren → `1.1.1` (aligned with package.json, fixed build path + window config)
 - ✅ Tauri Capabilities granular einschränken
 - ✅ AbortController für alle 14+ AI-Thunks in projectSlice
 - ✅ AbortController für Hooks (ConsistencyChecker, Critic)
@@ -43,7 +43,7 @@ Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 ## Niedrig (🟢)
 
 - ⬜ Logging-Framework statt console.log/warn/error
-- ⬜ Storybook Stories erweitern (Modal, Toast, Spinner, Drawer)
+- ✅ Storybook Stories erweitern (Modal, Toast, Spinner, Drawer, ErrorBoundary)
 - ⬜ Visual Regression Tests
 
 ## Roadmap-Items (→ ROADMAP.md)

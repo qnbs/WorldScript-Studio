@@ -85,9 +85,9 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 | PWA / Offline    | ★★★★★  | Workbox, versioned caches, smart strategies                |
 | State Management | ★★★★☆  | Redux-Undo well integrated, auto-save validated            |
 | Security         | ★★★★☆  | CSP set, capabilities scoped, PSK collab, decrypt recovery |
-| Test Coverage    | ★★★☆☆  | 80 unit tests, 11 files, 50% threshold set                 |
+| Test Coverage    | ★★★★☆  | 113 unit tests, 17 files, 96% statements, 82% branches     |
 | Documentation    | ★★★★★  | README, CONTRIBUTING, ROADMAP, TODO, CHANGELOG, AUDIT      |
-| Performance      | ★★★★☆  | Code-splitting with 9 manual chunks, logger opt-in         |
+| Performance      | ★★★★☆  | Code-splitting with 10+ manual chunks, Lighthouse CI       |
 | CI/CD            | ★★★★★  | Full pipeline with hard-fail lint/typecheck + coverage     |
 
 ---
@@ -178,11 +178,11 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 **Recommendation:** Verify `deploy.yml` is not referenced elsewhere, then remove it.
 **Effort:** Low | **Priority:** Low
 
-### 13. Version Mismatch: Tauri vs npm
+### 13. ~~Version Mismatch: Tauri vs npm~~ ✅ FIXED
 
-**Files:** `src-tauri/tauri.conf.json` (version `0.1.0`), `package.json` (version `1.0.0`)
-**Impact:** Confusing version reporting in the desktop app.
-**Recommendation:** Align both to the same version, or automate version sync in CI.
+**Files:** `src-tauri/tauri.conf.json`, `package.json`
+**Issue:** Tauri had version `1.0.0`, package.json `1.1.1`. `frontendDist` pointed to `../build` instead of `../dist` (Vite default output). Window title was lowercase `storycraft-studio`.
+**Resolution:** Aligned version to `1.1.1`, fixed `frontendDist` to `../dist`, set proper product name and window title to `StoryCraft Studio`, improved window defaults (1280×800, centered, min size constraints). Narrowed CSP `connect-src` by removing overly broad `https://*.googleapis.com` wildcard.
 **Effort:** Low | **Priority:** Low
 
 ### 15. ~~No Performance Budgets~~ ✅ FIXED
@@ -210,11 +210,12 @@ No mechanism to selectively enable/disable features for rollout or testing.
 Multiple `console.log`, `console.warn`, and `console.error` calls throughout the codebase.
 **Recommendation:** Create a minimal logging utility that can be configured per-environment and optionally integrated with error tracking (e.g., Sentry).
 
-### 19. Storybook Has Only 3 Stories
+### 19. ~~Storybook Has Only 3 Stories~~ ✅ FIXED
 
 **Directory:** `stories/`
-**Current:** Button, Card, Input stories.
-**Recommendation:** Add stories for Modal, Toast, Spinner, Drawer, and PWAComponents to improve component documentation and visual testing.
+**Previous:** Button, Card, Input stories.
+**Current:** 10 stories — Button, Card, Input, Modal, Toast, Spinner, Drawer, ErrorBoundary, ManuscriptView, plus storybookProviders utility.
+**Resolution:** Stories for Modal, Toast, Spinner, Drawer, and ErrorBoundary added with a11y addon assertions.
 
 ### 20. No Request Deduplication for AI Calls
 

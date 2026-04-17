@@ -16,10 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Light Mode Aurora**: Reduced aurora blob opacity from 0.25 to 0.08 in light mode to prevent visual noise on white backgrounds.
 - **Light Mode Prose Links**: Fixed HelpView prose link color (`prose-a:text-indigo-400`) to use `prose-a:text-indigo-600 dark:prose-a:text-indigo-400` for proper contrast in both themes.
 - **Light Mode Ring/Focus Indicators**: Replaced `ring-white/10`, `ring-black/5 dark:ring-white/5` with theme-aware `--glass-border` for consistent visibility in both themes.
+- **Tauri Version Mismatch**: Aligned `src-tauri/tauri.conf.json` version from `1.0.0` to `1.1.1` (matching `package.json`).
+- **Tauri Build Path**: Fixed `frontendDist` from `../build` to `../dist` to match Vite's default output directory (was breaking `tauri build`).
+- **Hardcoded German String**: Replaced hardcoded `'EPUB-Export fehlgeschlagen: '` in ExportView with i18n key `export.error.epubFailed`.
+- **Hardcoded EPUB Language**: Replaced hardcoded `lang: 'de'` in EPUB export with dynamic `language` from user settings.
+
+### Security
+
+- **CSP Tightening**: Removed overly broad `https://*.googleapis.com` wildcard from Tauri CSP `connect-src`, retaining only the specific `https://generativelanguage.googleapis.com` domain needed for Gemini API.
+
+### Changed
+
+- **Tauri Window Defaults**: Improved window configuration from 800×600 to 1280×800 with `minWidth: 800`, `minHeight: 600`, and `center: true` for better desktop UX.
+- **Tauri Product Name**: Changed from `storycraft-studio` to `StoryCraft Studio` for proper branding in window title and system tray.
 
 ### Added
 
 - New CSS custom properties for theme-aware glass/overlay effects: `--overlay-backdrop`, `--glass-bg`, `--glass-bg-hover`, `--glass-border`, `--glass-highlight`, `--card-gradient-overlay` with appropriate values for both dark and light themes.
+- Added `export.error.epubFailed` translation key to all 5 locale files (de, en, es, fr, it).
 
 ## [1.1.1] - 2026-04-17
 

@@ -63,5 +63,6 @@
   "export.pasteSection.copyAsMarkdown": "Als Markdown für Notion / Google Docs kopieren",
   "export.pasteSection.copied": "Markdown kopiert — in Notion oder Google Docs einfügen",
   "export.pasteSection.defaultTitle": "Eingefügter Inhalt",
-  "export.format.docx": "Word Dokument (.docx)"
+  "export.format.docx": "Word Dokument (.docx)",
+  "export.error.epubFailed": "EPUB-Export fehlgeschlagen: "
 }

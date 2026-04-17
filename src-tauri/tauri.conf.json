@@ -1,10 +1,10 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "storycraft-studio",
-  "version": "1.0.0",
+  "productName": "StoryCraft Studio",
+  "version": "1.1.1",
   "identifier": "com.storycraft.studio",
   "build": {
-    "frontendDist": "../build",
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
@@ -12,15 +12,18 @@
   "app": {
     "windows": [
       {
-        "title": "storycraft-studio",
-        "width": 800,
-        "height": 600,
+        "title": "StoryCraft Studio",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true,
         "resizable": true,
         "fullscreen": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com https://api.openai.com http://localhost wss://y-webrtc-signaling.fly.dev; img-src 'self' data: blob:; media-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com http://localhost wss://y-webrtc-signaling.fly.dev; img-src 'self' data: blob:; media-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
     }
   },
   "bundle": {

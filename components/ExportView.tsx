@@ -61,6 +61,7 @@ AccordionSection.displayName = 'AccordionSection';
 const ExportControls: FC = () => {
   const {
     t,
+    language,
     project,
     format,
     setFormat,
@@ -95,11 +96,11 @@ const ExportControls: FC = () => {
         author: project.author || '',
         ...(synopsis ? { synopsis } : {}),
         chapters,
-        lang: 'de',
+        lang: language,
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      setEpubError('EPUB-Export fehlgeschlagen: ' + msg);
+      setEpubError(t('export.error.epubFailed') + msg);
     } finally {
       setEpubLoading(false);
     }

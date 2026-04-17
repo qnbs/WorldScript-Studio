@@ -1,4 +1,6 @@
+// This file redirects to .devcontainer/devcontainer.json
+// Both local Dev Containers and GitHub Codespaces use .devcontainer/devcontainer.json
+// This root file is kept only for editor awareness — the actual config lives in .devcontainer/
 {
-  "name": "StoryCraft Studio",
-  "extends": ".devcontainer/devcontainer.json"
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.base.schema.json"
 }

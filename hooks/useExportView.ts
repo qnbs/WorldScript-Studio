@@ -345,6 +345,7 @@ export const useExportView = () => {
 
   return {
     t,
+    language,
     project,
     format,
     setFormat,
