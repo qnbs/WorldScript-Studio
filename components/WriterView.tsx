@@ -68,10 +68,14 @@ const ContextPanel: FC = React.memo(() => {
         </CardHeader>
         <CardContent className="space-y-3 flex-grow flex flex-col p-4 sm:p-6 overflow-hidden">
           <div className="flex flex-col space-y-2 flex-shrink-0">
-            <label htmlFor="writer-section-select" className="text-sm font-medium text-[var(--foreground-secondary)]">
+            <label
+              htmlFor="writer-section-select"
+              className="text-sm font-medium text-[var(--foreground-secondary)]"
+            >
               {t('writer.studio.context.sectionLabel')}
             </label>
-            <Select id="writer-section-select"
+            <Select
+              id="writer-section-select"
               value={selectedSectionId || ''}
               onChange={(e) => dispatch(writerActions.setSelectedSectionId(e.target.value))}
             >
@@ -751,7 +755,9 @@ const WriterViewUI: FC = () => {
           title={collapsedPanels['tools'] ? t('writer.tools.show') : t('writer.tools.hide')}
           className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
         >
-          {collapsedPanels['tools'] ? `▷ ${t('writer.tools.label')}` : `◁ ${t('writer.tools.label')}`}
+          {collapsedPanels['tools']
+            ? `▷ ${t('writer.tools.label')}`
+            : `◁ ${t('writer.tools.label')}`}
         </button>
         <button
           type="button"

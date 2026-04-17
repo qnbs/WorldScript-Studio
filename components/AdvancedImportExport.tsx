@@ -223,10 +223,14 @@ export const AdvancedImportExport: React.FC = () => {
       >
         <div className="space-y-4">
           <div>
-            <label htmlFor="import-format" className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2">
+            <label
+              htmlFor="import-format"
+              className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+            >
               {t('export.importFormat')}
             </label>
-            <Select id="import-format"
+            <Select
+              id="import-format"
               value={importFormat}
               onChange={(e) => setImportFormat(e.target.value as 'json' | 'markdown' | 'docx')}
             >
@@ -255,10 +259,14 @@ export const AdvancedImportExport: React.FC = () => {
       >
         <div className="space-y-4">
           <div>
-            <label htmlFor="export-adv-format" className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2">
+            <label
+              htmlFor="export-adv-format"
+              className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+            >
               {t('export.exportFormat')}
             </label>
-            <Select id="export-adv-format"
+            <Select
+              id="export-adv-format"
               value={exportFormat}
               onChange={(e) => setExportFormat(e.target.value as 'json' | 'markdown' | 'docx')}
             >

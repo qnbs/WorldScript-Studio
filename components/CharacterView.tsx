@@ -82,7 +82,12 @@ const DetailField: FC<DetailFieldProps> = React.memo(({ label, field, value }) =
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
-        <label htmlFor={`character-${field}`} className="text-sm font-medium text-[var(--foreground-secondary)]">{label}</label>
+        <label
+          htmlFor={`character-${field}`}
+          className="text-sm font-medium text-[var(--foreground-secondary)]"
+        >
+          {label}
+        </label>
         <Button
           variant="ghost"
           size="sm"
@@ -463,10 +468,14 @@ const CharacterDossier: FC = () => {
               hidden={isGeneratingProfile || activeTab !== 'notes'}
               className="space-y-2"
             >
-              <label htmlFor="character-notes" className="text-sm font-medium text-[var(--foreground-secondary)]">
+              <label
+                htmlFor="character-notes"
+                className="text-sm font-medium text-[var(--foreground-secondary)]"
+              >
                 {t('characters.edit.notes')}
               </label>
-              <DebouncedTextarea id="character-notes"
+              <DebouncedTextarea
+                id="character-notes"
                 value={selectedCharacter.notes}
                 onDebouncedChange={(value) => handleFieldChange('notes', value)}
                 className="min-h-[300px]"

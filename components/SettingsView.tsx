@@ -504,10 +504,14 @@ const SettingsViewUI: FC = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="settings-primary-color" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                    <label
+                      htmlFor="settings-primary-color"
+                      className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                    >
                       {t('settings.appearance.primaryColor')}
                     </label>
-                    <input id="settings-primary-color"
+                    <input
+                      id="settings-primary-color"
                       type="color"
                       value={settings.themeCustomization.primaryColor}
                       onChange={(e) =>
@@ -520,10 +524,14 @@ const SettingsViewUI: FC = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="settings-secondary-color" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                    <label
+                      htmlFor="settings-secondary-color"
+                      className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                    >
                       {t('settings.appearance.secondaryColor')}
                     </label>
-                    <input id="settings-secondary-color"
+                    <input
+                      id="settings-secondary-color"
                       type="color"
                       value={settings.themeCustomization.secondaryColor}
                       onChange={(e) =>
@@ -536,10 +544,14 @@ const SettingsViewUI: FC = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="settings-accent-color" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                    <label
+                      htmlFor="settings-accent-color"
+                      className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                    >
                       {t('settings.appearance.accentColor')}
                     </label>
-                    <input id="settings-accent-color"
+                    <input
+                      id="settings-accent-color"
                       type="color"
                       value={settings.themeCustomization.accentColor}
                       onChange={(e) =>
@@ -552,10 +564,14 @@ const SettingsViewUI: FC = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="settings-bg-color" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                    <label
+                      htmlFor="settings-bg-color"
+                      className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                    >
                       {t('settings.appearance.backgroundColor')}
                     </label>
-                    <input id="settings-bg-color"
+                    <input
+                      id="settings-bg-color"
                       type="color"
                       value={settings.themeCustomization.backgroundColor}
                       onChange={(e) =>
@@ -569,10 +585,14 @@ const SettingsViewUI: FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="settings-custom-css" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-custom-css"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.appearance.customCss')}
                   </label>
-                  <textarea id="settings-custom-css"
+                  <textarea
+                    id="settings-custom-css"
                     value={settings.themeCustomization.customCss}
                     onChange={(e) =>
                       handleSettingChange('themeCustomization', {
@@ -1133,10 +1153,14 @@ const SettingsViewUI: FC = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <label htmlFor="settings-ai-model" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-ai-model"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.advancedAi.model')}
                   </label>
-                  <Select id="settings-ai-model"
+                  <Select
+                    id="settings-ai-model"
                     value={settings.advancedAi.model}
                     onChange={(e) =>
                       handleSettingChange('advancedAi', {
@@ -1179,10 +1203,14 @@ const SettingsViewUI: FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label htmlFor="settings-ai-temperature" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                    <label
+                      htmlFor="settings-ai-temperature"
+                      className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                    >
                       {t('settings.advancedAi.temperature')} ({settings.advancedAi.temperature})
                     </label>
-                    <input id="settings-ai-temperature"
+                    <input
+                      id="settings-ai-temperature"
                       type="range"
                       min="0"
                       max="2"
@@ -1198,10 +1226,14 @@ const SettingsViewUI: FC = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="settings-ai-max-tokens" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                    <label
+                      htmlFor="settings-ai-max-tokens"
+                      className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                    >
                       {t('settings.advancedAi.maxTokens')} ({settings.advancedAi.maxTokens})
                     </label>
-                    <input id="settings-ai-max-tokens"
+                    <input
+                      id="settings-ai-max-tokens"
                       type="range"
                       min="256"
                       max="8192"
@@ -1217,10 +1249,14 @@ const SettingsViewUI: FC = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="settings-ai-top-p" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                    <label
+                      htmlFor="settings-ai-top-p"
+                      className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                    >
                       {t('settings.advancedAi.topP')} ({settings.advancedAi.topP})
                     </label>
-                    <input id="settings-ai-top-p"
+                    <input
+                      id="settings-ai-top-p"
                       type="range"
                       min="0"
                       max="1"
@@ -1236,10 +1272,14 @@ const SettingsViewUI: FC = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="settings-ai-rate-limit" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                    <label
+                      htmlFor="settings-ai-rate-limit"
+                      className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                    >
                       {t('settings.advancedAi.rateLimit')} ({settings.advancedAi.rateLimit}/min)
                     </label>
-                    <input id="settings-ai-rate-limit"
+                    <input
+                      id="settings-ai-rate-limit"
                       type="range"
                       min="10"
                       max="120"
@@ -1347,10 +1387,14 @@ const SettingsViewUI: FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="settings-colorblind-mode" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-colorblind-mode"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.accessibility.colorBlindMode')}
                   </label>
-                  <Select id="settings-colorblind-mode"
+                  <Select
+                    id="settings-colorblind-mode"
                     value={settings.accessibility.colorBlindMode}
                     onChange={(e) =>
                       handleSettingChange('accessibility', {
@@ -1452,11 +1496,15 @@ const SettingsViewUI: FC = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <label htmlFor="settings-autosave-interval" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-autosave-interval"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.performance.autoSaveInterval')} (
                     {settings.performance.autoSaveInterval}s)
                   </label>
-                  <input id="settings-autosave-interval"
+                  <input
+                    id="settings-autosave-interval"
                     type="range"
                     min="10"
                     max="300"
@@ -1472,10 +1520,14 @@ const SettingsViewUI: FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="settings-cache-size" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-cache-size"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.performance.cacheSize')} ({settings.performance.cacheSize} MB)
                   </label>
-                  <input id="settings-cache-size"
+                  <input
+                    id="settings-cache-size"
                     type="range"
                     min="50"
                     max="500"
@@ -1579,10 +1631,14 @@ const SettingsViewUI: FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="settings-writing-reminders" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-writing-reminders"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.notifications.writingReminders')}
                   </label>
-                  <Select id="settings-writing-reminders"
+                  <Select
+                    id="settings-writing-reminders"
                     value={settings.notifications.writingReminders}
                     onChange={(e) =>
                       handleSettingChange('notifications', {
@@ -1668,10 +1724,14 @@ const SettingsViewUI: FC = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label htmlFor="settings-sync-provider" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-sync-provider"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.integrations.syncProvider')}
                   </label>
-                  <Select id="settings-sync-provider"
+                  <Select
+                    id="settings-sync-provider"
                     value={settings.integrations.syncProvider}
                     onChange={(e) =>
                       handleSettingChange('integrations', {
@@ -1770,10 +1830,14 @@ const SettingsViewUI: FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="settings-backup-frequency" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-backup-frequency"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.backup.backupFrequency')}
                   </label>
-                  <Select id="settings-backup-frequency"
+                  <Select
+                    id="settings-backup-frequency"
                     value={settings.backup.backupFrequency}
                     onChange={(e) =>
                       handleSettingChange('backup', {
@@ -1789,10 +1853,14 @@ const SettingsViewUI: FC = () => {
                   </Select>
                 </div>
                 <div>
-                  <label htmlFor="settings-backup-max" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-backup-max"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.backup.maxBackups')} ({settings.backup.maxBackups})
                   </label>
-                  <input id="settings-backup-max"
+                  <input
+                    id="settings-backup-max"
                     type="range"
                     min="5"
                     max="50"
@@ -1808,10 +1876,14 @@ const SettingsViewUI: FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="settings-backup-location" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+                  <label
+                    htmlFor="settings-backup-location"
+                    className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                  >
                     {t('settings.backup.backupLocation')}
                   </label>
-                  <Input id="settings-backup-location"
+                  <Input
+                    id="settings-backup-location"
                     value={settings.backup.backupLocation}
                     onChange={(e) =>
                       handleSettingChange('backup', {
