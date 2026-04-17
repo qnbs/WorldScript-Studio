@@ -23,20 +23,28 @@ const getRandomColor = () => USER_COLORS[Math.floor(Math.random() * USER_COLORS.
 
 // Persistent user identity for the session
 function getLocalUser(): CollaborationUser {
-  const stored = sessionStorage.getItem('collab_user');
-  if (stored) {
-    try {
-      return JSON.parse(stored) as CollaborationUser;
-    } catch {
-      /* ignore */
+  try {
+    const stored = sessionStorage.getItem('collab_user');
+    if (stored) {
+      try {
+        return JSON.parse(stored) as CollaborationUser;
+      } catch {
+        /* ignore */
+      }
     }
+  } catch {
+    /* Storage unavailable */
   }
   const user: CollaborationUser = {
     id: uuid(),
     name: 'Anonymous',
     color: getRandomColor(),
   };
-  sessionStorage.setItem('collab_user', JSON.stringify(user));
+  try {
+    sessionStorage.setItem('collab_user', JSON.stringify(user));
+  } catch {
+    /* Storage unavailable */
+  }
   return user;
 }
 
@@ -172,7 +180,11 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
 
       // Persist updated display name
       setLocalUser(user);
-      sessionStorage.setItem('collab_user', JSON.stringify(user));
+      try {
+        sessionStorage.setItem('collab_user', JSON.stringify(user));
+      } catch {
+        /* Storage unavailable */
+      }
 
       await collaborationService.connect(
         roomId,

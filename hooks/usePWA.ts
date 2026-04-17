@@ -97,7 +97,11 @@ export function usePWA(): UsePWAReturn {
   const dismissInstall = useCallback(() => {
     setIsInstallable(false);
     // Remember dismissal for this session
-    sessionStorage.setItem('pwa-install-dismissed', '1');
+    try {
+      sessionStorage.setItem('pwa-install-dismissed', '1');
+    } catch {
+      /* Storage unavailable */
+    }
   }, []);
 
   const applyUpdate = useCallback(() => {
@@ -113,7 +117,12 @@ export function usePWA(): UsePWAReturn {
   }, []);
 
   // Don't show install banner if already dismissed this session
-  const installDismissed = sessionStorage.getItem('pwa-install-dismissed') === '1';
+  let installDismissed = false;
+  try {
+    installDismissed = sessionStorage.getItem('pwa-install-dismissed') === '1';
+  } catch {
+    /* Storage unavailable */
+  }
 
   return {
     isInstallable: isInstallable && !installDismissed && !isInstalled,

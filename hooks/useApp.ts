@@ -4,7 +4,11 @@ import type { View } from '../types';
 export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   const [currentView, setCurrentView] = useState<View>(() => {
     // Read the last view from localStorage. If it doesn't exist, default to 'dashboard'.
-    return (localStorage.getItem('storycraft-last-view') as View) || 'dashboard';
+    try {
+      return (localStorage.getItem('storycraft-last-view') as View) || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPortalActive, setIsPortalActive] = useState(false);
@@ -19,7 +23,11 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
 
   // Save the current view to localStorage whenever it changes.
   useEffect(() => {
-    localStorage.setItem('storycraft-last-view', currentView);
+    try {
+      localStorage.setItem('storycraft-last-view', currentView);
+    } catch {
+      /* Storage unavailable */
+    }
   }, [currentView]);
 
   const handlePortalExit = useCallback((view?: View) => {
