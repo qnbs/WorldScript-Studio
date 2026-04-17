@@ -1,6 +1,8 @@
 export default {
   ci: {
     collect: {
+      startServerCommand: 'pnpm run preview',
+      startServerReadyPattern: 'Local',
       url: ['http://127.0.0.1:4173/StoryCraft-Studio/'],
       numberOfRuns: 3,
       settings: {
