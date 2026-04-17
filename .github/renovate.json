@@ -1,12 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":npm"],
+  "extends": ["config:recommended"],
   "dependencyDashboard": true,
   "prHourlyLimit": 5,
   "prConcurrentLimit": 10,
-  "npm": {
-    "legacy-peer-deps": true
-  },
   "packageRules": [
     {
       "matchManagers": ["npm"],

@@ -22,7 +22,7 @@ Thank you for your interest in contributing to StoryCraft Studio — an AI-power
 ### Prerequisites
 
 - **Node.js** ≥ 20 (LTS recommended)
-- **npm** ≥ 10
+- **pnpm** ≥ 10 (enabled via Corepack)
 - A **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
 ### Installation
@@ -30,7 +30,7 @@ Thank you for your interest in contributing to StoryCraft Studio — an AI-power
 ```bash
 git clone https://github.com/qnbs/StoryCraft-Studio.git
 cd StoryCraft-Studio
-npm install --legacy-peer-deps
+pnpm install
 ```
 
 ### Environment
@@ -41,8 +41,8 @@ See [`.env.example`](.env.example) for details.
 ### Running the dev server
 
 ```bash
-npm run dev          # Vite dev server on http://localhost:3000
-npm run dev:tauri    # Tauri desktop app (requires Rust)
+pnpm run dev          # Vite dev server on http://localhost:3000
+pnpm run dev:tauri    # Tauri desktop app (requires Rust)
 ```
 
 ---
@@ -123,9 +123,9 @@ chore: update dependencies
 ### Unit Tests (Vitest)
 
 ```bash
-npm run test         # Run in watch mode
-npm run test:run     # Run once (CI mode)
-npm run test:coverage  # With coverage report
+pnpm run test         # Run in watch mode
+pnpm run test:run     # Run once (CI mode)
+pnpm run test:coverage  # With coverage report
 ```
 
 ### Local CI Simulation

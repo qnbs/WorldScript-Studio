@@ -17,7 +17,7 @@ StoryCraft Studio is an AI-powered creative writing application built as an offl
 - **Storage:** IndexedDB (`dbService.ts`) with LZ-String compression, AES-256-GCM key encryption
 - **Collaboration:** Yjs + y-webrtc for P2P real-time editing
 - **Desktop:** Tauri 2 (optional)
-- **Package manager:** npm@10.x with `.npmrc` legacy-peer-deps compatibility
+- **Package manager:** pnpm@10.x
 - **Testing:** Vitest + @testing-library/react (unit), Playwright (E2E)
 
 ### Directory Structure
@@ -109,17 +109,17 @@ types.ts          → Core shared interfaces and types
 - Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - Pre-commit: Husky runs lint-staged (Prettier + ESLint on staged `.ts`/`.tsx` files)
 - Before every commit and push, run the full local preflight:
-  - `npm ci --legacy-peer-deps`
-  - `npm run lint -- --max-warnings=0`
-  - `npm run typecheck`
-  - `npm run test:run`
-  - `npm run build`
+  - `pnpm install --frozen-lockfile`
+  - `pnpm run lint -- --max-warnings=0`
+  - `pnpm run typecheck`
+  - `pnpm run test:run`
+  - `pnpm run build`
 - CI pipeline: lint → typecheck → security → test → storybook → build → lighthouse → deploy
 - The main branch must require `lint`, `typecheck`, and `test` status checks in branch protection rules.
-- CI includes dependency-review + `npm audit` on dependency file changes, Storybook artifact generation, Lighthouse budgets, and optional Tauri builds on tags/workflow dispatch
-- CI installs dependencies with `npm ci --legacy-peer-deps` to resolve current peer dependency constraints
+- CI includes dependency-review + `pnpm audit` on dependency file changes, Storybook artifact generation, Lighthouse budgets, and optional Tauri builds on tags/workflow dispatch
+- CI installs dependencies with `pnpm install --frozen-lockfile`
 - Local CI can be simulated with `act` (requires Docker); use `act pull_request` for PR flows and `act push` for tag/dispatch flows
-- Local developers should use `npm install --legacy-peer-deps` or the repo `.npmrc` configuration for compatibility
+- Local developers should use `pnpm install` to install dependencies
 - All public-facing documentation, markdown files, and GitHub-visible content must be written in English to keep the project accessible to the open-source community
 
 ## Known Technical Debt
@@ -136,15 +136,15 @@ See `AUDIT.md` for the full list. Key items:
 ## Commands
 
 ```bash
-npm run dev          # Start dev server on port 3000
-npm run build        # Production build to dist/
-npm run preview      # Preview production build locally
-npm run lint         # ESLint check (--max-warnings 0)
-npm run lint:fix     # ESLint auto-fix
-npm run typecheck    # TypeScript type checking (tsc --noEmit)
-npm run test         # Vitest watch mode
-npm run test:run     # Vitest single run
-npm run test:coverage # Vitest with V8 coverage
-npm run test:e2e     # Playwright E2E tests
-npm run storybook    # Storybook on port 6006
+pnpm run dev          # Start dev server on port 3000
+pnpm run build        # Production build to dist/
+pnpm run preview      # Preview production build locally
+pnpm run lint         # ESLint check (--max-warnings 0)
+pnpm run lint:fix     # ESLint auto-fix
+pnpm run typecheck    # TypeScript type checking (tsc --noEmit)
+pnpm run test         # Vitest watch mode
+pnpm run test:run     # Vitest single run
+pnpm run test:coverage # Vitest with V8 coverage
+pnpm run test:e2e     # Playwright E2E tests
+pnpm run storybook    # Storybook on port 6006
 ```

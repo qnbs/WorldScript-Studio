@@ -7,8 +7,8 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
 
-  "postCreateCommand": "npm ci --legacy-peer-deps",
-  "postAttachCommand": "echo '✅ StoryCraft Studio ready — run: npm run dev'",
+  "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "postAttachCommand": "echo '✅ StoryCraft Studio ready — run: pnpm run dev'",
 
   "forwardPorts": [3000, 6006],
   "portsAttributes": {

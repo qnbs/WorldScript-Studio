@@ -23,10 +23,10 @@ The workflow is optimized for fast feedback and minimal redundancy.
 
 - `lint` — ESLint + Prettier
 - `typecheck` — TypeScript `tsc --noEmit`
-- `security` — GitHub dependency review plus `npm audit` on dependency changes only
+- `security` — GitHub dependency review plus `pnpm audit` on dependency changes only
 - `test` — Vitest with coverage, JUnit output, Codecov upload if `CODECOV_TOKEN` is present, and visual regression baseline artifact upload
 - `storybook` — static Storybook build artifact
-- `build` — production `npm run build` on `lts/*`
+- `build` — production `pnpm run build` on `lts/*`
 - `build-node` — optional `node` compatibility build for tag/dispatch releases
 - `lighthouse` — LHCI budget validation against the generated production `dist`
 - `deploy` — GitHub Pages deployment on `main`
@@ -59,7 +59,7 @@ For repeated local runs, create a secret file and pass it with `--secret-file`.
 
 ## Optimization Notes
 
-- `npm audit` runs only when dependency files change (`package.json`, `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`).
+- `pnpm audit` runs only when dependency files change (`package.json`, `pnpm-lock.yaml`).
 - The shared Node setup action caches npm, `node_modules`, and Playwright browsers.
 - Artifact uploads include retention settings to avoid long-term storage growth.
 - Most jobs use `contents: read` permission only; deploy uses `pages: write`.

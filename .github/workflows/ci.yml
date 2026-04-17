@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   # ----------------------------------------------------------
-  # 0. SECURITY: npm audit + dependency review
+  # 0. SECURITY: pnpm audit + dependency review
   # ----------------------------------------------------------
   security:
     name: 🔒 Security Audit
@@ -31,16 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
 
-      - name: npm audit (high + critical)
-        run: npm audit --audit-level=high
+      - name: pnpm audit (high + critical)
+        run: pnpm audit --audit-level=high
 
       - name: Dependency review (PRs only)
         if: github.event_name == 'pull_request'
@@ -61,22 +63,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
 
       - name: Lint (ESLint)
-        run: npm run lint -- --max-warnings 0
+        run: pnpm run lint -- --max-warnings 0
 
       - name: Typecheck (tsc)
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Unit tests (Vitest)
-        run: npx vitest run --coverage
+        run: pnpm exec vitest run --coverage
 
       - name: Upload coverage report
         if: always() && matrix.node-version == 'lts/*'
@@ -92,7 +96,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
           if [ -n "$CODECOV_TOKEN" ]; then
-            npx --yes codecov -f coverage/lcov.info
+            pnpm dlx codecov -f coverage/lcov.info
           else
             echo "No CODECOV_TOKEN configured; skipping Codecov upload."
           fi
@@ -108,16 +112,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
 
       - name: Build application
-        run: npm run build
+        run: pnpm run build
         env:
           NODE_ENV: production
 
@@ -171,13 +177,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -187,9 +195,9 @@ jobs:
 
       - name: Run Lighthouse CI
         run: |
-          npx --yes serve -s dist -l 4173 &
-          npx --yes wait-on http://127.0.0.1:4173 --timeout 30000
-          npx lhci autorun
+          pnpm dlx serve -s dist -l 4173 &
+          pnpm exec wait-on http://127.0.0.1:4173 --timeout 30000
+          pnpm exec lhci autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
@@ -213,16 +221,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
 
       - name: Build Storybook
-        run: npx storybook build --output-dir storybook-static
+        run: pnpm exec storybook build --output-dir storybook-static
 
       - name: Upload Storybook artifact
         uses: actions/upload-artifact@v4

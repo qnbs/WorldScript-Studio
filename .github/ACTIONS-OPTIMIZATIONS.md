@@ -10,7 +10,7 @@ Dieses Dokument dokumentiert die finale Audit- und Optimierungsrunde für `.gith
 - Job-spezifische Permissions auf das absolute Minimum gesetzt
 - `id-token` global entfernt (nicht benötigt)
 - Caching-Action erweitert für `lockfile-path` und monorepo-freundliche Pfade
-- `npm audit` nur bei tatsächlichen Dependency-Änderungen ausgeführt
+- `pnpm audit` nur bei tatsächlichen Dependency-Änderungen ausgeführt
 - Tauri-Build nur bei Tag/`workflow_dispatch` und nur bei Tauri-relevanten Datein
 - Artefakt-Uploads mit `retention-days: 7` versehen
 - `timeout-minutes` pro Job gesetzt, um runaway ausführungen zu vermeiden
@@ -22,7 +22,7 @@ Dieses Dokument dokumentiert die finale Audit- und Optimierungsrunde für `.gith
 | ------------ | -------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `lint`       | ~4-6 min, breites Token                      | Ziel: 3-5 min, `contents: read`                     | Matrix bleibt optional, allgemeines Setup bleibt konsistent                  |
 | `typecheck`  | ~6-8 min                                     | Ziel: 3-5 min, `contents: read`                     | Matrix optional, keine unnötigen Berechtigungen                              |
-| `security`   | immer `npm audit`                            | Ziel: 1-3 min bei No-Changes, ~5 min bei Änderungen | `dependency-review` + `npm audit` nur bei Lockfile/Manifest-Änderungen       |
+| `security`   | immer `npm audit`                            | Ziel: 1-3 min bei No-Changes, ~5 min bei Änderungen | `dependency-review` + `pnpm audit` nur bei Lockfile/Manifest-Änderungen      |
 | `test`       | keine JUnit-Standardisierung, kein Retention | Ziel: 10-15 min, Coverage + JUnit + Codecov         | besser PR-Annotations, Artefaktpflege, optionaler Codecov-Upload             |
 | `storybook`  | Build ohne Artefaktpflege                    | Ziel: 3-7 min                                       | `storybook-static` wird nun als Artefakt mit `retention-days: 7` hochgeladen |
 | `build`      | breite Berechtigungen, Node-Matrix           | Ziel: 7-12 min                                      | `contents: read`, nur ein LTS-Build für schnelle Deployment-Pipeline         |
@@ -64,8 +64,8 @@ Dieses Dokument dokumentiert die finale Audit- und Optimierungsrunde für `.gith
 
 ### Path-basierte Auslöser
 
-- `security`: nur bei Änderungen an `package.json`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`
-- `tauri`: nur bei Änderungen an `src-tauri/`, `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`, `package.json`, `package-lock.json`
+- `security`: nur bei Änderungen an `package.json`, `pnpm-lock.yaml`
+- `tauri`: nur bei Änderungen an `src-tauri/`, `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`, `package.json`, `pnpm-lock.yaml`
 
 ## Empfehlungen
 

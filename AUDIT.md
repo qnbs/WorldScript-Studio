@@ -8,12 +8,12 @@
 
 ## Self-Audit Summary
 
-- `npm outdated` identified outdated dependencies that should be reviewed in a follow-up dependency refresh cycle.
-- `npm audit` baseline in this cycle reported 10 vulnerabilities (4 low, 1 moderate, 4 high, 1 critical).
-- `npm run lint:fix` completed successfully; 45 existing warnings remain from legacy `any` usage and React hook dependency concerns.
-- `npm run typecheck` passed without type errors.
-- `npm run build` completed successfully with production artifact generation.
-- `npm run test:coverage` passed with 110 tests, 96.1% statements, 81.81% branches, and 97.87% lines.
+- `pnpm outdated` identified outdated dependencies that should be reviewed in a follow-up dependency refresh cycle.
+- `pnpm audit` baseline in this cycle reported 10 vulnerabilities (4 low, 1 moderate, 4 high, 1 critical).
+- `pnpm run lint:fix` completed successfully; 45 existing warnings remain from legacy `any` usage and React hook dependency concerns.
+- `pnpm run typecheck` passed without type errors.
+- `pnpm run build` completed successfully with production artifact generation.
+- `pnpm run test:coverage` passed with 110 tests, 96.1% statements, 81.81% branches, and 97.87% lines.
 
 ### Dependency Hardening Update (2026-04-16)
 
@@ -30,24 +30,24 @@
   - `@google/genai` -> `google-auth-library` -> `gaxios` -> `node-fetch` -> `fetch-blob`.
   - This is currently an upstream dependency-chain constraint.
 - Validation after remediation:
-  - `npm run lint -- --max-warnings=0` passed.
-  - `npm run typecheck` passed.
-  - `npm run test:run` passed (113/113 tests).
-  - `npm run build` passed.
-- `npm audit` now reports 4 high vulnerabilities (down from 10 total, including 1 critical):
+  - `pnpm run lint -- --max-warnings=0` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run test:run` passed (113/113 tests).
+  - `pnpm run build` passed.
+- `pnpm audit` now reports 4 high vulnerabilities (down from 10 total, including 1 critical):
   - all remaining findings are in `vite-plugin-pwa` / `workbox-build` via `@rollup/plugin-terser` -> `serialize-javascript`.
   - npm suggests `vite-plugin-pwa@0.19.8` as a fix path, which is a major backward downgrade from the current line and not applied in this conservative cycle.
 
 ## Current Status
 
-- **`npm audit` reports 0 vulnerabilities** (0 low, 0 moderate, 0 high, 0 critical) as of 2026-04-17.
-- `protobufjs` critical vulnerability resolved via `npm audit fix` (upgraded to ≥7.5.5).
+- **`pnpm audit` reports 0 vulnerabilities** (0 low, 0 moderate, 0 high, 0 critical) as of 2026-04-17.
+- `protobufjs` critical vulnerability resolved via `pnpm audit fix` (upgraded to ≥7.5.5).
 - `serialize-javascript` high vulnerabilities resolved via npm overrides (`vite-plugin-pwa` → `workbox-build` → `@rollup/plugin-terser` → `serialize-javascript@^7.0.5`).
 - All localStorage/sessionStorage accesses are now guarded with try/catch for SSR/test safety.
 - CI pipeline extended with Security Audit, Lighthouse CI, and Storybook jobs.
 - Tauri capabilities updated: added `fs:allow-read-dir` and `fs:allow-remove` permissions.
 - AI service utilities deduplicated into shared `services/aiUtils.ts`.
-- Bundle analyzer (`rollup-plugin-visualizer`) added as opt-in devDep (`npm run analyze`).
+- Bundle analyzer (`rollup-plugin-visualizer`) added as opt-in devDep (`pnpm run analyze`).
 - `fileSystemService.ts` type-unsafe references to non-existent `StoryProject.author`/`.description` removed.
 - One deprecation (`node-domexception`) remains as an upstream transitive dependency from the Gemini SDK stack — accepted risk, no local fix.
 - The repository is stable: build, lint, typecheck, and coverage all pass.
@@ -187,7 +187,7 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 
 ### 15. ~~No Performance Budgets~~ ✅ FIXED
 
-**Resolution:** Lighthouse CI job added to CI pipeline (`.github/workflows/ci.yml`). Performance budgets defined in `.lighthouserc.js` with assertions for Performance ≥ 0.9, FCP ≤ 1800ms, LCP ≤ 2500ms, TBT ≤ 150ms, CLS ≤ 0.1. Bundle analyzer available via `npm run analyze`.
+**Resolution:** Lighthouse CI job added to CI pipeline (`.github/workflows/ci.yml`). Performance budgets defined in `.lighthouserc.js` with assertions for Performance ≥ 0.9, FCP ≤ 1800ms, LCP ≤ 2500ms, TBT ≤ 150ms, CLS ≤ 0.1. Bundle analyzer available via `pnpm run analyze`.
 
 ### 16. Potential Memory Leaks in ManuscriptView Resize
 
@@ -229,7 +229,7 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 ### CI/CD Pipeline
 
 - ✅ Full pipeline: security → lint → typecheck → test → build → lighthouse → storybook → deploy
-- ✅ Security audit job with `npm audit --audit-level=high` and `dependency-review-action`
+- ✅ Security audit job with `pnpm audit --audit-level=high` and `dependency-review-action`
 - ✅ Lighthouse CI job with performance budgets from `.lighthouserc.js`
 - ✅ Storybook build + artifact upload
 - ✅ ESLint and typecheck now run in hard-fail mode (was soft-fail)

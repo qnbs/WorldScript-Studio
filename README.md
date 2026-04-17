@@ -249,16 +249,16 @@ git clone https://github.com/qnbs/StoryCraft-Studio.git
 cd StoryCraft-Studio
 
 # Install dependencies
-npm install --legacy-peer-deps
+pnpm install
 
 # Start the development server (http://localhost:3000)
-npm run dev
+pnpm run dev
 
 # Build for production
-npm run build
+pnpm run build
 
 # Preview the production build locally
-npm run preview
+pnpm run preview
 ```
 
 > Note: The production build uses Vite manual chunking and lazy-loaded export libraries (`docx` / `jszip`) to keep the main app bundle smaller and improve load performance.
@@ -270,7 +270,7 @@ This repository uses an optimized GitHub Actions pipeline that includes:
 - `lint` + `typecheck`
 - `test` with Vitest coverage and JUnit reporting
 - `storybook` build artifact generation
-- `security` dependency-review with `npm audit` on dependency changes
+- `security` dependency-review with `pnpm audit` on dependency changes
 - `build` for production, plus optional `build-node` compatibility on tags and manual dispatch
 - `lighthouse` budget validation
 - `deploy` to GitHub Pages on `main`
@@ -445,8 +445,8 @@ Sprachauswahl dauerhaft in `localStorage` gespeichert.
 ```bash
 git clone https://github.com/qnbs/StoryCraft-Studio.git
 cd StoryCraft-Studio
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 ---

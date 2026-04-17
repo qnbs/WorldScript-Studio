@@ -2,7 +2,7 @@
 
 Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 
-> v1.1.1 audit cycle (2026-04-17): 0 npm audit vulnerabilities, CI hardened with security/lighthouse/storybook jobs, all storage guards applied, AI utils deduplicated, bundle analyzer added.
+> v1.1.1 audit cycle (2026-04-17): 0 pnpm audit vulnerabilities, CI hardened with security/lighthouse/storybook jobs, all storage guards applied, AI utils deduplicated, bundle analyzer added.
 
 ---
 
