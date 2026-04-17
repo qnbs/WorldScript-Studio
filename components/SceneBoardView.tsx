@@ -161,6 +161,7 @@ const SortableSceneCard: FC<{
               </h4>
             </div>
             <button
+              type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
@@ -261,6 +262,7 @@ const ActSwimlane: FC<{
           </p>
         </div>
         <button
+          type="button"
           onClick={() => onAddSection(act)}
           className="w-7 h-7 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] flex items-center justify-center text-lg font-light"
           title={t('sceneboard.addSceneToAct')}

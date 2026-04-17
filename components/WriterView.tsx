@@ -68,10 +68,10 @@ const ContextPanel: FC = React.memo(() => {
         </CardHeader>
         <CardContent className="space-y-3 flex-grow flex flex-col p-4 sm:p-6 overflow-hidden">
           <div className="flex flex-col space-y-2 flex-shrink-0">
-            <label className="text-sm font-medium text-[var(--foreground-secondary)]">
+            <label htmlFor="writer-section-select" className="text-sm font-medium text-[var(--foreground-secondary)]">
               {t('writer.studio.context.sectionLabel')}
             </label>
-            <Select
+            <Select id="writer-section-select"
               value={selectedSectionId || ''}
               onChange={(e) => dispatch(writerActions.setSelectedSectionId(e.target.value))}
             >
@@ -272,9 +272,9 @@ const ToolsPanel: FC = React.memo(() => {
         return (
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+              <span className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
                 {t('writer.studio.tools.dialogue.charactersLabel')}
-              </label>
+              </span>
               <div className="space-y-2 max-h-32 overflow-y-auto bg-[var(--glass-bg)] p-2 rounded-md border border-[var(--border-primary)]">
                 {project.characters.map((char) => (
                   <div key={char.id}>
@@ -392,6 +392,7 @@ const ToolsPanel: FC = React.memo(() => {
           >
             {tools.map((tool) => (
               <button
+                type="button"
                 key={tool.id}
                 title={tool.title}
                 onClick={() => dispatch(writerActions.setActiveTool(tool.id as WriterTool))}
@@ -735,6 +736,7 @@ const WriterViewUI: FC = () => {
       {/* Focus Mode Toggle + Panel Controls (Desktop) */}
       <div className="hidden md:flex items-center justify-end mb-2 gap-2">
         <button
+          type="button"
           onClick={() => togglePanel('context')}
           title={collapsedPanels['context'] ? t('writer.context.show') : t('writer.context.hide')}
           className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
@@ -744,6 +746,7 @@ const WriterViewUI: FC = () => {
             : `◁ ${t('writer.context.label')}`}
         </button>
         <button
+          type="button"
           onClick={() => togglePanel('tools')}
           title={collapsedPanels['tools'] ? t('writer.tools.show') : t('writer.tools.hide')}
           className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
@@ -751,6 +754,7 @@ const WriterViewUI: FC = () => {
           {collapsedPanels['tools'] ? `▷ ${t('writer.tools.label')}` : `◁ ${t('writer.tools.label')}`}
         </button>
         <button
+          type="button"
           onClick={() => setFocusMode((f) => !f)}
           title={focusMode ? t('writer.focusMode.exit') : t('writer.focusMode.enter')}
           className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
@@ -760,6 +764,7 @@ const WriterViewUI: FC = () => {
             : `⊡ ${t('writer.focusMode.enterLabel')}`}
         </button>
         <button
+          type="button"
           onClick={() => dispatch(versionControlActions.togglePanel())}
           title="Version Control (Branches &amp; Snapshots)"
           className={`text-xs px-2 py-1 rounded border transition-colors ${isVCPanelOpen ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
@@ -772,6 +777,7 @@ const WriterViewUI: FC = () => {
       <div className="md:hidden p-1 mx-0 mb-4 bg-[var(--background-tertiary)] rounded-xl flex items-center relative border border-[var(--border-primary)]/50 shadow-inner select-none">
         {(['context', 'tools', 'result'] as const).map((tab) => (
           <button
+            type="button"
             key={tab}
             onClick={() => setActiveMobileTab(tab)}
             className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 z-10 touch-manipulation ${

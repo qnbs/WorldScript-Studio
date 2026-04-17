@@ -26,6 +26,7 @@ const AccordionSection: FC<{
     <div className="border-b border-[var(--border-primary)] last:border-b-0">
       <h3 id={headerId} className="font-semibold text-[var(--foreground-primary)]">
         <button
+          type="button"
           onClick={() => setIsOpen(!isOpen)}
           className="w-full flex justify-between items-center p-3 text-left hover:bg-[var(--background-tertiary)]/50 transition-colors"
           aria-expanded={isOpen}
@@ -204,10 +205,10 @@ const ExportControls: FC = () => {
         <AccordionSection title={t('export.format.title')} idSuffix="format">
           <div className="space-y-4 pt-4">
             <div>
-              <label className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+              <label htmlFor="export-format" className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
                 {t('export.format.format')}
               </label>
-              <Select
+              <Select id="export-format"
                 value={format}
                 onChange={(e) =>
                   setFormat(e.target.value as 'md' | 'txt' | 'pdf' | 'docx' | 'epub')
@@ -227,10 +228,10 @@ const ExportControls: FC = () => {
                 </h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-[var(--foreground-muted)] mb-1 block">
+                    <label htmlFor="export-pdf-font" className="text-xs text-[var(--foreground-muted)] mb-1 block">
                       {t('export.format.font')}
                     </label>
-                    <Select
+                    <Select id="export-pdf-font"
                       value={pdfOptions.font}
                       onChange={(e) =>
                         setPdfOptions((o) => ({
@@ -245,10 +246,10 @@ const ExportControls: FC = () => {
                     </Select>
                   </div>
                   <div>
-                    <label className="text-xs text-[var(--foreground-muted)] mb-1 block">
+                    <label htmlFor="export-pdf-font-size" className="text-xs text-[var(--foreground-muted)] mb-1 block">
                       {t('export.format.fontSize')}
                     </label>
-                    <Select
+                    <Select id="export-pdf-font-size"
                       value={pdfOptions.fontSize}
                       onChange={(e) =>
                         setPdfOptions((o) => ({
@@ -263,10 +264,10 @@ const ExportControls: FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--foreground-muted)] mb-1 block">
+                  <label htmlFor="export-pdf-line-spacing" className="text-xs text-[var(--foreground-muted)] mb-1 block">
                     {t('export.format.lineSpacing')}
                   </label>
-                  <Select
+                  <Select id="export-pdf-line-spacing"
                     value={pdfOptions.lineSpacing}
                     onChange={(e) =>
                       setPdfOptions((o) => ({

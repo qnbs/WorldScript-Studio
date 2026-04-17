@@ -80,6 +80,7 @@ const IdeaForm: FC = () => {
         </div>
         <div className="border-t border-[var(--border-primary)] pt-4">
           <button
+            type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="text-indigo-500 dark:text-indigo-400 font-semibold w-full text-left"
             aria-expanded={showAdvanced}
@@ -265,6 +266,7 @@ const OutlineResult: FC = () => {
                   <div className="p-4 border-b border-[var(--border-primary)]/50 flex justify-between items-start gap-2 bg-white/[0.01]">
                     <div className="flex-grow flex items-center gap-2">
                       <button
+                        type="button"
                         className="cursor-move text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]"
                         title={t('outline.result.dragHandleTooltip')}
                         aria-label={t('outline.result.dragHandleTooltip')}
@@ -302,6 +304,7 @@ const OutlineResult: FC = () => {
                     </div>
                     <div className="flex items-center space-x-1 flex-shrink-0">
                       <button
+                        type="button"
                         onClick={() => handleMove(index, 'up')}
                         disabled={index === 0}
                         className="p-1 rounded-md hover:bg-[var(--background-secondary)] disabled:opacity-20"
@@ -322,6 +325,7 @@ const OutlineResult: FC = () => {
                         </svg>
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleMove(index, 'down')}
                         disabled={index === outline.length - 1}
                         className="p-1 rounded-md hover:bg-[var(--background-secondary)] disabled:opacity-20"

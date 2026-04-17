@@ -37,12 +37,17 @@
       },
       "complexity": {
         "noForEach": "off",
-        "noExcessiveCognitiveComplexity": "warn",
+        "noExcessiveCognitiveComplexity": {
+          "level": "warn",
+          "options": {
+            "maxAllowedComplexity": 50
+          }
+        },
         "useLiteralKeys": "off"
       },
       "suspicious": {
         "noExplicitAny": "error",
-        "noArrayIndexKey": "warn",
+        "noArrayIndexKey": "error",
         "noConsole": {
           "level": "warn",
           "options": {
@@ -51,20 +56,20 @@
         }
       },
       "a11y": {
-        "useKeyWithClickEvents": "warn",
+        "useKeyWithClickEvents": "error",
         "noSvgWithoutTitle": "off",
-        "useButtonType": "warn",
-        "noLabelWithoutControl": "warn",
-        "useSemanticElements": "warn",
-        "useAriaPropsForRole": "warn",
-        "useAriaPropsSupportedByRole": "warn"
+        "useButtonType": "error",
+        "noLabelWithoutControl": "error",
+        "useSemanticElements": "off",
+        "useAriaPropsForRole": "error",
+        "useAriaPropsSupportedByRole": "error"
       },
       "correctness": {
         "noUnusedVariables": "error",
         "noUnusedImports": "error"
       },
       "security": {
-        "noDangerouslySetInnerHtml": "warn"
+        "noDangerouslySetInnerHtml": "error"
       }
     }
   },

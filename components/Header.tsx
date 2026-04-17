@@ -73,6 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="flex items-center gap-4 flex-shrink-0">
         <button
+          type="button"
           onClick={() => setIsSidebarOpen(true)}
           className="md:hidden p-2 -ml-2 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors"
           aria-label={t('header.openMenu')}
@@ -113,6 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="flex-grow max-w-xl px-4 hidden sm:block">
         <button
+          type="button"
           onClick={onOpenPalette}
           className="w-full h-10 rounded-xl bg-[var(--background-tertiary)]/50 border border-[var(--border-primary)] hover:border-[var(--border-interactive)] hover:bg-[var(--background-tertiary)] hover:shadow-[var(--shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--foreground-muted)] group shadow-sm"
         >
@@ -143,6 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="flex items-center gap-2 sm:gap-4">
         <button
+          type="button"
           onClick={onOpenPalette}
           className="sm:hidden p-2 text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]"
           aria-label={t('palette.placeholder')}
@@ -170,6 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={handleUndo}
             disabled={!canUndo}
             className="p-2 rounded-lg text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
@@ -188,6 +192,7 @@ export const Header: React.FC<HeaderProps> = ({
             </svg>
           </button>
           <button
+            type="button"
             onClick={handleRedo}
             disabled={!canRedo}
             className="p-2 rounded-lg text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"

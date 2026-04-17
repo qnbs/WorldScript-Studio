@@ -86,7 +86,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
       );
       return settled.reduce(
         (acc, result) => {
-          if (result.status === 'fulfilled') return { ...acc, ...result.value };
+          if (result.status === 'fulfilled') Object.assign(acc, result.value);
           return acc;
         },
         {} as Record<string, unknown>,

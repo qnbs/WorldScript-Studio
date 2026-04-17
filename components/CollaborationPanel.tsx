@@ -58,6 +58,7 @@ const UserAvatar: FC<{ user: CollaborationUser; size?: 'sm' | 'md' }> = ({ user,
       className={`${dim} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}
       style={{ backgroundColor: user.color }}
       title={user.name}
+      role="img"
       aria-label={user.name}
     >
       {user.name.charAt(0).toUpperCase()}
@@ -268,6 +269,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               </span>
             )}
             <button
+              type="button"
               onClick={onClose}
               className="p-2 rounded-md hover:bg-[var(--background-secondary)] text-[var(--foreground-secondary)] transition-colors"
               aria-label={t('collab.close')}
@@ -325,6 +327,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               />
               {isConnected && (
                 <button
+                  type="button"
                   onClick={() => {
                     navigator.clipboard.writeText(currentRoomId).catch(() => {});
                   }}

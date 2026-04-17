@@ -122,6 +122,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             {title}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors"
             aria-label={t('common.close')}

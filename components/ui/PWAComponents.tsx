@@ -105,6 +105,7 @@ export const PWAInstallBanner: FC = () => {
       {/* Actions */}
       <div className="flex items-center gap-2 shrink-0">
         <button
+          type="button"
           onClick={dismissInstall}
           aria-label={t('pwa.closeBanner')}
           className="
@@ -125,6 +126,7 @@ export const PWAInstallBanner: FC = () => {
           </svg>
         </button>
         <button
+          type="button"
           onClick={installApp}
           className="
             px-3 py-1.5
@@ -195,6 +197,7 @@ export const PWAUpdateToast: FC = () => {
         </p>
         <div className="flex items-center gap-2 mt-3">
           <button
+            type="button"
             onClick={applyUpdate}
             className="
               px-3 py-1.5
@@ -207,6 +210,7 @@ export const PWAUpdateToast: FC = () => {
             {t('pwa.updateNow')}
           </button>
           <button
+            type="button"
             onClick={dismissUpdate}
             className="
               px-3 py-1.5
@@ -224,6 +228,7 @@ export const PWAUpdateToast: FC = () => {
 
       {/* Close */}
       <button
+        type="button"
         onClick={dismissUpdate}
         aria-label={t('pwa.closeNotification')}
         className="

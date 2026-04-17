@@ -150,9 +150,6 @@ body {
 .light-theme .noise-overlay {
   opacity: 0.025;
 }
-.light-theme .aurora-blob {
-  opacity: 0.08;
-}
 
 /* ── Ambient Lighting - Aurora ─────────────────────────── */
 .aurora-container {
@@ -169,6 +166,9 @@ body {
   border-radius: 50%;
   will-change: transform;
   animation: float 25s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+}
+.light-theme .aurora-blob {
+  opacity: 0.08;
 }
 .blob-1 {
   top: -10%;

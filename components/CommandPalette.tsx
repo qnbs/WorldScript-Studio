@@ -465,6 +465,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
 
                   return (
                     <button
+                      type="button"
                       key={cmd.id}
                       onClick={() => {
                         cmd.action();

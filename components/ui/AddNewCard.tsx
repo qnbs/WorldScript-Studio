@@ -42,7 +42,7 @@ export const AddNewCard: React.FC<AddNewCardProps> = ({
   };
 
   return (
-    <button onClick={onClick} className={`${baseClasses} ${variantClasses[variant]}`}>
+    <button type="button" onClick={onClick} className={`${baseClasses} ${variantClasses[variant]}`}>
       <div
         className={`mx-auto rounded-2xl p-5 mb-6 transition-all duration-300 ${iconContainerClasses[variant]}`}
       >

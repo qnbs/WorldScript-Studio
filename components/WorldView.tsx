@@ -49,6 +49,7 @@ const TabButton: FC<{
   controls: string;
 }> = React.memo(({ active, onClick, children, controls }) => (
   <button
+    type="button"
     role="tab"
     aria-selected={active}
     aria-controls={controls}
@@ -73,7 +74,7 @@ const DetailField: FC<DetailFieldProps> = React.memo(({ label, field, value }) =
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
-        <label className="text-sm font-medium text-[var(--foreground-secondary)]">{label}</label>
+        <label htmlFor={`world-${field}`} className="text-sm font-medium text-[var(--foreground-secondary)]">{label}</label>
         <Button
           variant="ghost"
           size="sm"
@@ -100,6 +101,7 @@ const DetailField: FC<DetailFieldProps> = React.memo(({ label, field, value }) =
         </Button>
       </div>
       <DebouncedTextarea
+        id={`world-${field}`}
         value={value}
         onDebouncedChange={(newValue) => handleFieldChange(field, newValue)}
         className="min-h-[120px]"
@@ -356,10 +358,10 @@ const WorldAtlas: FC = () => {
               hidden={isGeneratingProfile || activeTab !== 'overview'}
               className="space-y-2"
             >
-              <label className="text-sm font-medium text-[var(--foreground-secondary)]">
+              <label htmlFor="world-description" className="text-sm font-medium text-[var(--foreground-secondary)]">
                 {t('worlds.edit.description')}
               </label>
-              <DebouncedTextarea
+              <DebouncedTextarea id="world-description"
                 value={selectedWorld.description}
                 onDebouncedChange={(value) => handleFieldChange('description', value)}
                 className="min-h-[150px]"
@@ -489,10 +491,10 @@ const WorldAtlas: FC = () => {
               hidden={isGeneratingProfile || activeTab !== 'notes'}
               className="space-y-2"
             >
-              <label className="text-sm font-medium text-[var(--foreground-secondary)]">
+              <label htmlFor="world-notes" className="text-sm font-medium text-[var(--foreground-secondary)]">
                 {t('worlds.edit.notes')}
               </label>
-              <DebouncedTextarea
+              <DebouncedTextarea id="world-notes"
                 value={selectedWorld.notes}
                 onDebouncedChange={(value) => handleFieldChange('notes', value)}
                 className="min-h-[300px]"

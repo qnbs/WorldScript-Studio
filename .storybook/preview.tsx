@@ -1,5 +1,6 @@
 import type { DecoratorFunction, Preview } from '@storybook/react';
 import React, { useEffect } from 'react';
+import '../index.css';
 
 const withTheme: DecoratorFunction = (Story, context) => {
   useEffect(() => {

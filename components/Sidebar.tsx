@@ -18,6 +18,7 @@ const NavItem: React.FC<{
 }> = React.memo(({ icon, label, isActive, onClick }) => {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`relative flex items-center w-full px-4 py-3 text-left rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] overflow-hidden ${
         isActive
@@ -59,6 +60,7 @@ const BottomTabItem: React.FC<{
   onClick: () => void;
 }> = React.memo(({ icon, label, isActive, onClick }) => (
   <button
+    type="button"
     onClick={onClick}
     className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-colors duration-200 touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded-lg ${
       isActive ? 'text-[var(--nav-text-active)]' : 'text-[var(--foreground-muted)]'

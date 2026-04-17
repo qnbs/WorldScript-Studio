@@ -454,12 +454,14 @@ const TemplateViewUI: FC = () => {
       {/* Tab Switcher */}
       <div className="flex items-center gap-2 mb-6 border-b border-[var(--border-primary)] pb-4">
         <button
+          type="button"
           onClick={() => setActiveTab('local')}
           className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'local' ? 'text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'}`}
         >
           Meine Templates
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('community')}
           className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'community' ? 'text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'}`}
         >

@@ -30,6 +30,7 @@ const NavButton: FC<{
   onClick: () => void;
 }> = React.memo(({ icon, label, isActive, onClick }) => (
   <button
+    type="button"
     onClick={onClick}
     className={`flex items-center flex-shrink-0 md:flex-shrink md:w-full px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap md:whitespace-normal ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
   >
@@ -76,10 +77,12 @@ const ArticleViewer: FC = () => {
         </div>
       </CardHeader>
       <CardContent>
+        {/* biome-ignore-start lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
         <div
           className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--foreground-secondary)] prose-strong:text-[var(--foreground-primary)] prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-ul:list-disc prose-li:text-[var(--foreground-secondary)] prose-ol:text-[var(--foreground-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(t(selectedArticle.content)) }}
         />
+        {/* biome-ignore-end lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
       </CardContent>
     </Card>
   );
@@ -99,6 +102,7 @@ const ArticleList: FC<{ category: HelpCategory }> = ({ category }) => {
           {Array.isArray(category.articles) &&
             category.articles.map((article) => (
               <button
+                type="button"
                 key={article.title}
                 onClick={() => handleSelectArticle(article)}
                 className="w-full text-left p-3 rounded-md text-base transition-colors text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)] hover:text-[var(--foreground-primary)] font-medium"
@@ -119,6 +123,7 @@ const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ 
   const parsedText = text.split(/```([\s\S]*?)```/g).map((part, index) => {
     if (index % 2 === 1) {
       // It's a code block
+      // biome-ignore-start lint/suspicious/noArrayIndexKey: stable derived fragments from regex split
       return (
         <pre
           key={index}
@@ -127,11 +132,14 @@ const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ 
           <code>{part}</code>
         </pre>
       );
+      // biome-ignore-end lint/suspicious/noArrayIndexKey: stable derived fragments from regex split
     }
     const bolded = part.split(/(\*\*[\s\S]*?\*\*)/g).map((subPart, subIndex) => {
+      // biome-ignore lint/suspicious/noArrayIndexKey: stable derived render fragments from regex split
       if (subIndex % 2 === 1) return <strong key={subIndex}>{subPart.slice(2, -2)}</strong>;
       return subPart;
     });
+    // biome-ignore lint/suspicious/noArrayIndexKey: stable derived render fragments from regex split
     return <Fragment key={index}>{bolded}</Fragment>;
   });
 
@@ -189,6 +197,7 @@ const AiAssistant: FC = () => {
       <CardContent className="p-0 flex flex-col flex-grow min-h-0">
         <div ref={chatContainerRef} className="flex-grow p-4 space-y-4 overflow-y-auto">
           {chatHistory.map((msg, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: append-only chat history
             <ChatMessage key={index} {...msg} />
           ))}
           {isAiReplying &&

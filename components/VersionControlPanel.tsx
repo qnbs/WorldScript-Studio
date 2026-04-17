@@ -238,6 +238,7 @@ export const VersionControlPanel: FC = () => {
             </h2>
           </div>
           <button
+            type="button"
             onClick={() => dispatch(versionControlActions.closePanel())}
             className="p-2 rounded-md hover:bg-[var(--background-secondary)] text-[var(--foreground-secondary)] transition-colors"
             aria-label={t('vc.close')}
@@ -473,6 +474,7 @@ export const VersionControlPanel: FC = () => {
         <div className="space-y-3">
           {allBranches.map((branch) => (
             <button
+              type="button"
               key={branch.id}
               onClick={() => {
                 dispatch(versionControlActions.switchBranch(branch.id));

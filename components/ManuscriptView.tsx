@@ -138,6 +138,7 @@ const Resizer: FC<ResizerProps> = React.memo(({ onMouseDown, onKeyAdjust, label 
       role="separator"
       aria-label={label}
       aria-orientation="vertical"
+      aria-valuenow={50}
       tabIndex={0}
       onMouseDown={onMouseDown}
       onKeyDown={handleKeyDown}
@@ -215,6 +216,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
           <span className="font-medium text-sm flex-grow truncate mr-2">{section.title}</span>
           <div className="flex-shrink-0 flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onMoveUp(index);
@@ -238,6 +240,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
               </svg>
             </button>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onMoveDown(index);
@@ -262,6 +265,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
             </button>
             {canDelete && (
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(section.id);
@@ -782,6 +786,7 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
             Did you mean?
           </p>
           <button
+            type="button"
             onClick={applyCorrection}
             className="block w-full text-left px-3 py-1.5 rounded hover:bg-[var(--background-interactive)] hover:text-white text-[var(--foreground-primary)] font-medium"
           >
@@ -919,7 +924,7 @@ const InspectorPanel: FC = React.memo(() => {
               <div className="space-y-2 mt-4 max-h-60 overflow-y-auto pr-1">
                 {proofreadSuggestions.map((suggestion, idx) => (
                   <div
-                    key={idx}
+                    key={`${suggestion.original}-${suggestion.suggestion}`}
                     className="p-3 bg-[var(--background-secondary)] rounded-md border border-[var(--border-primary)] text-sm"
                   >
                     <div className="flex justify-between items-start mb-1">
@@ -961,10 +966,10 @@ const InspectorPanel: FC = React.memo(() => {
         )}
         {!isAiLoading && loglineSuggestions.length > 0 && (
           <div className="space-y-3">
-            {loglineSuggestions.map((line, idx) => (
+            {loglineSuggestions.map((line) => (
               <Card
                 as="button"
-                key={idx}
+                key={line}
                 className="hover:bg-[var(--background-tertiary)] transition-colors cursor-pointer w-full text-left"
                 onClick={() => selectLogline(line)}
               >

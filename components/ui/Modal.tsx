@@ -117,6 +117,7 @@ export const Modal: React.FC<ModalProps> = ({
             {title}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 -mr-2 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors"
             aria-label={t('common.close')}

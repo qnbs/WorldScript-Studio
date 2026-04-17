@@ -19,12 +19,14 @@ const LanguageSelector = () => {
   return (
     <div className="absolute top-4 right-4 space-x-2">
       <button
+        type="button"
         onClick={() => setLanguage('de')}
         className={`px-3 py-1 text-sm rounded-md transition-colors ${language === 'de' ? 'bg-indigo-600 text-white' : 'bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]'}`}
       >
         DE
       </button>
       <button
+        type="button"
         onClick={() => setLanguage('en')}
         className={`px-3 py-1 text-sm rounded-md transition-colors ${language === 'en' ? 'bg-indigo-600 text-white' : 'bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]'}`}
       >
@@ -177,6 +179,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   const renderNewProjectView = () => (
     <div>
       <button
+        type="button"
         onClick={() => setView('main')}
         className="flex items-center space-x-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 mb-6"
       >
@@ -222,6 +225,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   const renderOpenProjectView = () => (
     <div>
       <button
+        type="button"
         onClick={() => setView('main')}
         className="flex items-center space-x-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 mb-6"
       >

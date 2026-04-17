@@ -195,8 +195,10 @@ jobs:
 
       - name: Run Lighthouse CI
         run: |
-          pnpm dlx serve -s dist -l 4173 &
-          pnpm exec wait-on http://127.0.0.1:4173 --timeout 30000
+          mkdir -p /tmp/lhci-serve/StoryCraft-Studio
+          cp -r dist/* /tmp/lhci-serve/StoryCraft-Studio/
+          pnpm dlx serve /tmp/lhci-serve -l 4173 &
+          pnpm exec wait-on http://127.0.0.1:4173/StoryCraft-Studio/ --timeout 30000
           pnpm exec lhci autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}

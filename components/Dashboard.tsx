@@ -270,9 +270,9 @@ const GoalTracker: FC = () => {
           <Progress value={wordCountProgress} className="h-4" />
         </div>
         <div className="bg-[var(--background-primary)]/40 p-5 rounded-2xl border border-[var(--border-primary)] backdrop-blur-sm">
-          <label className="text-xs uppercase tracking-wider font-bold text-[var(--foreground-muted)] mb-1 block">
+          <span className="text-xs uppercase tracking-wider font-bold text-[var(--foreground-muted)] mb-1 block">
             {t('dashboard.goals.deadline')}
-          </label>
+          </span>
           {renderDaysLeft()}
         </div>
       </CardContent>
@@ -417,10 +417,10 @@ const DashboardModals: FC = () => {
         )}
         {!isAiLoading && loglineSuggestions.length > 0 && (
           <div className="space-y-3">
-            {loglineSuggestions.map((line, idx) => (
+            {loglineSuggestions.map((line) => (
               <Card
                 as="button"
-                key={idx}
+                key={line}
                 className="hover:bg-[var(--background-secondary)]/50 transition-colors cursor-pointer w-full text-left border-l-4 border-l-transparent hover:border-l-indigo-500 group"
                 onClick={() => selectLogline(line)}
               >
