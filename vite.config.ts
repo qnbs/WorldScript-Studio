@@ -119,13 +119,11 @@ export default defineConfig({
           if (id.includes('y-webrtc') || id.includes('yjs')) {
             return 'collaboration-vendor';
           }
-          if (id.includes('@dnd-kit') || id.includes('/dnd-kit/') || id.includes('react-flow')) {
+          if (id.includes('@dnd-kit') || id.includes('/dnd-kit/')) {
             return 'interaction-vendor';
           }
           if (
             id.includes('recharts') ||
-            id.includes('/leaflet/') ||
-            id.includes('/react-leaflet/') ||
             id.includes('react-force-graph-2d')
           ) {
             return 'data-vendor';
@@ -142,16 +140,6 @@ export default defineConfig({
             id.includes('mammoth')
           ) {
             return 'export-vendor-docx-ebook';
-          }
-          if (id.includes('/html2canvas/')) {
-            return 'html2canvas-vendor';
-          }
-          if (
-            id.includes('@tailwindcss') ||
-            id.includes('postcss') ||
-            id.includes('autoprefixer')
-          ) {
-            return 'style-vendor';
           }
           return undefined;
         },

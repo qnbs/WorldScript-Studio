@@ -155,9 +155,9 @@ Tests live in `tests/unit/`. Each UI component and core hook should have a test 
 ### E2E Tests (Playwright)
 
 ```bash
-npm run dev          # Start dev server first
-npm run test:e2e     # Run Playwright tests
-npm run test:e2e:ui  # Interactive Playwright UI
+pnpm run dev          # Start dev server first
+pnpm run test:e2e     # Run Playwright tests
+pnpm run test:e2e:ui  # Interactive Playwright UI
 ```
 
 Tests live in `tests/e2e/`. Playwright tests verify core user flows:
@@ -170,8 +170,8 @@ Tests live in `tests/e2e/`. Playwright tests verify core user flows:
 ### Storybook
 
 ```bash
-npm run storybook          # Start Storybook dev server on :6006
-npm run build-storybook    # Build static Storybook
+pnpm run storybook          # Start Storybook dev server on :6006
+pnpm run build-storybook    # Build static Storybook
 ```
 
 Stories live in `stories/`. All primitive UI components (`components/ui/`) should have a story.
@@ -185,7 +185,7 @@ Stories live in `stories/`. All primitive UI components (`components/ui/`) shoul
 - `strict: true` is enforced
 - `exactOptionalPropertyTypes: true` is enforced — do not assign `undefined` to optional properties explicitly; omit the property instead
 - When adding new code, avoid `any` — use proper types or `unknown`
-- Run: `npm run typecheck`
+- Run: `pnpm run typecheck`
 
 ### ESLint
 
@@ -195,7 +195,7 @@ ESLint 9 flat config with:
 - `eslint-plugin-react-hooks` (rules-of-hooks + exhaustive-deps)
 - `eslint-plugin-jsx-a11y` (accessibility rules)
 
-Run: `npm run lint`
+Run: `pnpm run lint`
 
 ### Rule: No API Keys in Logs
 
@@ -250,9 +250,9 @@ Contributors tackling these issues should create a dedicated PR per module.
 
 1. Fork the repository and create a feature branch
 2. Write or update tests for your changes
-3. Run the full test suite: `npm run test:run`
-4. Ensure ESLint passes: `npm run lint`
-5. Ensure the build succeeds: `npm run build`
+3. Run the full test suite: `pnpm run test:run`
+4. Ensure ESLint passes: `pnpm run lint`
+5. Ensure the build succeeds: `pnpm run build`
 6. Submit a PR against `main` with a clear description
 7. Request review from at least one maintainer
 

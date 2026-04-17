@@ -17,7 +17,7 @@
 
 ### Dependency Hardening Update (2026-04-16)
 
-- Implemented conservative dependency remediation in `package.json` and `package-lock.json`:
+- Implemented conservative dependency remediation in `package.json` and `pnpm-lock.yaml`:
   - Upgraded `jspdf` from `^2.5.1` to `^4.2.1`.
   - Added npm `overrides` for `@lhci/cli` to force modern transitive packages:
     - `chrome-launcher` -> `^1.2.1`
@@ -158,25 +158,13 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 
 ## Medium Priority Findings (🟠)
 
-### 11. No DevContainer Configuration
+### 11. ~~No DevContainer Configuration~~ ✅ FIXED
 
-**Status:** The repository runs in GitHub Codespaces without a `.devcontainer/` folder.
-**Impact:** New contributors must manually set up their environment.
-**Recommendation:** Create `.devcontainer/devcontainer.json` with:
+**Resolution:** `.devcontainer/devcontainer.json` added with Node.js LTS image, `corepack enable && pnpm install --frozen-lockfile` as `postCreateCommand`, recommended extensions (ESLint, Prettier, Tailwind CSS IntelliSense), and port forwarding for dev (3000) and Storybook (6006).
 
-- Node.js LTS image
-- `npm install` as `postCreateCommand`
-- Recommended extensions: ESLint, Prettier, Tailwind CSS IntelliSense
-- Port forwarding: 3000 (dev), 6006 (Storybook)
+### 12. ~~Redundant `deploy.yml` Workflow~~ ✅ FIXED
 
-**Effort:** Low | **Priority:** Medium
-
-### 12. Redundant `deploy.yml` Workflow
-
-**Files:** `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`
-**Issue:** `ci.yml` already handles the full pipeline including deployment. `deploy.yml` appears to be a legacy workflow.
-**Recommendation:** Verify `deploy.yml` is not referenced elsewhere, then remove it.
-**Effort:** Low | **Priority:** Low
+**Resolution:** No separate `deploy.yml` exists. `ci.yml` handles the full pipeline including deployment to GitHub Pages via `actions/deploy-pages@v4`.
 
 ### 13. ~~Version Mismatch: Tauri vs npm~~ ✅ FIXED
 

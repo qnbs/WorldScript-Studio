@@ -11,7 +11,6 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "types": ["vite/client", "react", "react-dom"],
-    "skipDefaultLibCheck": true,
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitAny": true,
