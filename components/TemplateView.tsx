@@ -12,6 +12,7 @@ import { useTemplateView } from '../hooks/useTemplateView';
 import { TemplateViewContext, useTemplateViewContext } from '../contexts/TemplateViewContext';
 import { AddNewCard } from './ui/AddNewCard';
 import { fetchCommunityTemplates } from '../services/communityTemplateService';
+import { useTranslation } from '../hooks/useTranslation';
 
 // --- SUB-COMPONENTS ---
 
@@ -320,7 +321,9 @@ const CommunityTemplateCard: FC<{
   template: CommunityTemplate;
   onApply: (t: CommunityTemplate) => void;
   animationIndex: number;
-}> = React.memo(({ template, onApply, animationIndex }) => (
+}> = React.memo(({ template, onApply, animationIndex }) => {
+  const { t: _t } = useTranslation();
+  return (
   <Card
     className="flex flex-col group text-left transition-all duration-200 hover:-translate-y-1 animate-in"
     style={{ '--index': animationIndex } as React.CSSProperties}
@@ -351,15 +354,16 @@ const CommunityTemplateCard: FC<{
           {template.arcDescription}
         </p>
       )}
-      <p className="text-xs text-[var(--foreground-muted)]">{template.sections.length} Kapitel</p>
+      <p className="text-xs text-[var(--foreground-muted)]">{template.sections.length} {_t('templates.chapters')}</p>
     </CardContent>
     <div className="p-4 pt-0 mt-auto">
       <Button className="w-full" onClick={() => onApply(template)}>
-        Als Projekt übernehmen
+        {_t('templates.applyAsProject')}
       </Button>
     </div>
   </Card>
-));
+  );
+});
 CommunityTemplateCard.displayName = 'CommunityTemplateCard';
 
 const CommunityTab: FC = () => {
@@ -406,7 +410,7 @@ const CommunityTab: FC = () => {
   if (error)
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-[var(--foreground-muted)]">
-        <p className="text-sm">Fehler beim Laden der Community-Templates.</p>
+        <p className="text-sm">{_t('templates.communityError')}</p>
         <p className="text-xs opacity-60">{error}</p>
       </div>
     );
@@ -415,8 +419,7 @@ const CommunityTab: FC = () => {
     <div>
       {isFallback && (
         <div className="mb-6 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
-          Du bist offline — zeige eingebettete Beispiel-Templates. Für das vollständige
-          Community-Angebot verbinde dich mit dem Internet.
+          {_t('templates.offlineFallback')}
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

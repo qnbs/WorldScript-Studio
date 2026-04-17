@@ -34,11 +34,9 @@ export const useSceneBoardView = () => {
 
   const handleDeleteSection = useCallback(
     (id: string) => {
-      if (confirm(t('sceneboard.confirmDelete'))) {
-        dispatch(projectActions.deleteManuscriptSection(id));
-      }
+      dispatch(projectActions.deleteManuscriptSection(id));
     },
-    [dispatch, t]
+    [dispatch]
   );
 
   const handleMoveSection = useCallback(

@@ -82,12 +82,15 @@ const WelcomePortal = lazy(() =>
   }))
 );
 
-// Fallback während eine View geladen wird
-const ViewLoader: FC = () => (
-  <div role="status" aria-label="Lädt…" className="flex h-full w-full items-center justify-center">
-    <Spinner className="w-10 h-10 text-indigo-500" label="Lädt…" />
-  </div>
-);
+// Fallback while a view is loading
+const ViewLoader: FC = () => {
+  const { t } = useTranslation();
+  return (
+    <div role="status" aria-label={t('common.loading')} className="flex h-full w-full items-center justify-center">
+      <Spinner className="w-10 h-10 text-indigo-500" label={t('common.loading')} />
+    </div>
+  );
+};
 
 interface AppProps {
   isNewUser: boolean;
@@ -203,10 +206,10 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     return (
       <div
         role="status"
-        aria-label="Anwendung wird geladen"
+        aria-label={t('common.appLoading')}
         className="flex h-[100dvh] w-screen items-center justify-center bg-[var(--background-primary)]"
       >
-        <Spinner className="w-16 h-16" label="Anwendung wird geladen" />
+        <Spinner className="w-16 h-16" label={t('common.appLoading')} />
       </div>
     );
   }
@@ -217,10 +220,10 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         fallback={
           <div
             role="status"
-            aria-label="Anwendung wird geladen"
+            aria-label={t('common.appLoading')}
             className="flex h-[100dvh] w-screen items-center justify-center bg-[var(--background-primary)]"
           >
-            <Spinner className="w-16 h-16" label="Anwendung wird geladen" />
+            <Spinner className="w-16 h-16" label={t('common.appLoading')} />
           </div>
         }
       >
@@ -237,7 +240,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[var(--background-interactive)] focus:text-white focus:rounded-lg focus:text-sm focus:font-medium focus:shadow-lg"
         >
-          Zum Hauptinhalt springen
+          {t('common.skipToContent')}
         </a>
         {/* ARIA live region: announces view changes to screen readers */}
         <div aria-live="polite" aria-atomic="true" className="sr-only">
@@ -259,7 +262,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
             />
             <main
               id="main-content"
-              aria-label="Hauptinhalt"
+              aria-label={t('common.mainContent')}
               className="flex-1 overflow-y-auto p-4 pb-20 sm:p-6 sm:pb-20 md:p-8 md:pb-8 scroll-smooth overscroll-none"
             >
               <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>

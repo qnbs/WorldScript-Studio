@@ -61,7 +61,7 @@ export async function testOllamaConnection(
     const message = error instanceof Error ? error.message : String(error);
     return {
       ok: false,
-      error: `Ollama nicht erreichbar (${normalizeBaseUrl(baseUrl)}): ${message}`,
+      error: `Ollama not reachable (${normalizeBaseUrl(baseUrl)}): ${message}`,
     };
   }
 }
@@ -93,7 +93,7 @@ export async function streamOllama(
     });
   } catch (err) {
     const error = new Error(
-      `Ollama nicht erreichbar (${baseUrl}). Stellen Sie sicher, dass Ollama läuft: ollama serve`,
+      `Ollama not reachable (${baseUrl}). Make sure Ollama is running: ollama serve`,
       { cause: err as Error }
     );
     callbacks.onError?.(error);

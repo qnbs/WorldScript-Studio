@@ -101,25 +101,25 @@ export const ApiKeySection: FC = () => {
       // Einfacher Ping: kurze Generierungsaufgabe
       const result = await generateText('Reply with exactly one word: "OK"', 'Focused');
       if (result && result.length > 0) {
-        setTestResult({ ok: true, text: `Verbindung erfolgreich! API antwortet korrekt.` });
+        setTestResult({ ok: true, text: t('apiKey.connectionSuccess') });
       } else {
-        setTestResult({ ok: false, text: 'API hat eine leere Antwort geliefert.' });
+        setTestResult({ ok: false, text: 'API returned an empty response.' });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Verbindungstest fehlgeschlagen.';
+      const msg = err instanceof Error ? err.message : t('apiKey.connectionFailed');
       if (msg.includes('INVALID_API_KEY')) {
         setTestResult({
           ok: false,
-          text: 'Ungültiger API-Key. Bitte einen gültigen Key eingeben.',
+          text: t('apiKey.invalidKey'),
         });
         setHasKey(false);
       } else if (msg.includes('RATE_LIMITED')) {
         setTestResult({
           ok: false,
-          text: 'Rate-Limit erreicht. Bitte warte kurz und versuche es erneut. (API-Key ist gültig)',
+          text: t('apiKey.rateLimited'),
         });
       } else if (msg.includes('OFFLINE')) {
-        setTestResult({ ok: false, text: 'Keine Internetverbindung. Bitte Verbindung prüfen.' });
+        setTestResult({ ok: false, text: t('apiKey.noInternet') });
       } else {
         setTestResult({ ok: false, text: msg });
       }
@@ -199,12 +199,10 @@ export const ApiKeySection: FC = () => {
             </svg>
             <div className="text-sm text-red-300">
               <p className="font-medium mb-1">
-                {t('settings.apiKey.decryptFailedTitle') ||
-                  'API-Key konnte nicht entschlüsselt werden'}
+                {t('apiKey.decryptFailed')}
               </p>
               <p className="text-red-300/80">
-                {t('settings.apiKey.decryptFailedDesc') ||
-                  'Der gespeicherte API-Key konnte nicht entschlüsselt werden (z.B. nach Browserwechsel oder gelöschten Daten). Bitte geben Sie Ihren API-Key erneut ein.'}
+                {t('apiKey.decryptFailedDetail')}
               </p>
             </div>
           </div>
@@ -247,11 +245,11 @@ export const ApiKeySection: FC = () => {
               size="sm"
               onClick={handleTestConnection}
               disabled={isTesting || isSaving}
-              title="API-Verbindung testen"
+              title={t('apiKey.testConnection')}
             >
               {isTesting ? (
                 <>
-                  <Spinner className="w-3 h-3 mr-1" /> Testen…
+                  <Spinner className="w-3 h-3 mr-1" /> {t('apiKey.testing')}
                 </>
               ) : (
                 <>
@@ -268,7 +266,7 @@ export const ApiKeySection: FC = () => {
                       d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"
                     />
                   </svg>
-                  Verbindung testen
+                  {t('apiKey.test')}
                 </>
               )}
             </Button>

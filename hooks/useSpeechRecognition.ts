@@ -82,28 +82,28 @@ export const useSpeechRecognition = () => {
               case 'not-allowed':
               case 'permission-denied':
                 setMicError(
-                  'Mikrofon-Zugriff verweigert. Bitte Berechtigung in den Browser-Einstellungen erteilen.'
+                  'Microphone access denied. Please grant permission in browser settings.'
                 );
                 break;
               case 'no-speech':
-                setMicError('Kein Sprachsignal erkannt. Bitte erneut versuchen.');
+                setMicError('No speech signal detected. Please try again.');
                 break;
               case 'audio-capture':
-                setMicError('Kein Mikrofon gefunden. Bitte Mikrofon anschließen.');
+                setMicError('No microphone found. Please connect a microphone.');
                 break;
               case 'network':
-                setMicError('Netzwerkfehler bei der Spracherkennung.');
+                setMicError('Network error during speech recognition.');
                 break;
               case 'language-not-supported':
                 if (recognitionRef.current && recognitionRef.current.lang !== 'en-US') {
                   recognitionRef.current.lang = 'en-US';
                   setMicError(null);
                 } else {
-                  setMicError('Sprache wird vom Browser nicht unterstützt.');
+                  setMicError('Language not supported by the browser.');
                 }
                 break;
               default:
-                setMicError(`Spracherkennungsfehler: ${event.error}`);
+                setMicError(`Speech recognition error: ${event.error}`);
             }
           };
         }
@@ -128,12 +128,12 @@ export const useSpeechRecognition = () => {
           if (isListeningRef.current) {
             recognitionRef.current?.stop();
             setIsListening(false);
-            setMicError('Kein Sprachsignal erkannt. Bitte sprechen Sie deutlich ins Mikrofon.');
+            setMicError('No speech signal detected. Please speak clearly into the microphone.');
           }
         }, MIC_TIMEOUT_MS);
       } catch (e) {
         logger.error('Failed to start recognition', e);
-        setMicError('Spracherkennung konnte nicht gestartet werden.');
+        setMicError('Speech recognition could not be started.');
       }
     }
   }, []);

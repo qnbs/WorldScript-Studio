@@ -132,13 +132,13 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         setTestStatus('ok');
       } else {
         setTestStatus('error');
-        setTestError(result.error ?? 'Verbindung fehlgeschlagen');
+        setTestError(result.error ?? t('settings.ai.connectionFailed'));
       }
     } catch (e) {
       setTestStatus('error');
-      setTestError(e instanceof Error ? e.message : 'Unbekannter Fehler');
+      setTestError(e instanceof Error ? e.message : t('settings.ai.unknownError'));
     }
-  }, [provider, ollamaBaseUrl]);
+  }, [provider, ollamaBaseUrl, t]);
 
   useEffect(() => {
     if (provider === 'ollama') {
@@ -157,9 +157,9 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">KI-Anbieter</h2>
+        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">{t('settings.ai.providerTitle')}</h2>
         <p className="text-sm text-[var(--foreground-muted)] mt-1">
-          Wähle, welchen KI-Anbieter StoryCraft Studio verwenden soll.
+          {t('settings.ai.providerDescription')}
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -206,8 +206,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         {/* Gemini */}
         {provider === 'gemini' && (
           <div className="p-3 rounded-lg bg-[var(--background-secondary)] text-sm text-[var(--foreground-secondary)]">
-            Google Gemini ist ausgewählt. API-Schlüssel weiter unten im Abschnitt{' '}
-            <strong>„API-Schlüssel"</strong> konfigurieren.
+            {t('settings.ai.geminiSelected')}
           </div>
         )}
 
@@ -218,7 +217,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
               htmlFor="openai-api-key"
               className="text-sm font-medium text-[var(--foreground-secondary)] block"
             >
-              OpenAI API-Schlüssel
+              {t('settings.ai.openaiKey')}
             </label>
             <div className="flex gap-2">
               <Input
@@ -230,11 +229,11 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
                 className="flex-1 font-mono text-sm"
               />
               <Button onClick={handleSaveOpenAiKey} disabled={isSavingKey} variant="secondary">
-                {isSavingKey ? <Spinner className="w-4 h-4" /> : 'Speichern'}
+                {isSavingKey ? <Spinner className="w-4 h-4" /> : t('settings.ai.save')}
               </Button>
             </div>
             <p className="text-xs text-[var(--foreground-muted)]">
-              Schlüssel werden verschlüsselt lokal gespeichert.
+              {t('settings.ai.keysEncrypted')}
             </p>
           </div>
         )}
@@ -246,7 +245,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
               htmlFor="ollama-server-url"
               className="text-sm font-medium text-[var(--foreground-secondary)] block"
             >
-              Ollama-Server URL
+              {t('settings.ai.ollamaServerUrl')}
             </label>
             <div className="flex gap-2">
               <Input
@@ -261,7 +260,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
                 disabled={isLoadingModels}
                 variant="secondary"
               >
-                {isLoadingModels ? <Spinner className="w-4 h-4" /> : 'Modelle laden'}
+                {isLoadingModels ? <Spinner className="w-4 h-4" /> : t('settings.ai.loadModels')}
               </Button>
             </div>
             {ollamaModels.length > 0 && (
@@ -277,7 +276,7 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
               </div>
             )}
             <p className="text-xs text-[var(--foreground-muted)]">
-              Stelle sicher, dass <code>ollama serve</code> läuft und CORS aktiviert ist.
+              {t('settings.ai.ollamaHint')}
             </p>
           </div>
         )}
@@ -285,10 +284,9 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         {/* Anthropic */}
         {provider === 'anthropic' && (
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
-            <p className="font-semibold mb-1">⚠️ CORS-Einschränkung</p>
+            <p className="font-semibold mb-1">⚠️ {t('settings.ai.corsRestriction')}</p>
             <p>
-              Anthropic Claude kann nicht direkt aus dem Browser aufgerufen werden. Richte einen
-              Proxy-Server ein oder nutze die Tauri-Desktop-App für Anthropic-Aufrufe.
+              {t('settings.ai.anthropicCorsNote')}
             </p>
           </div>
         )}
@@ -297,10 +295,10 @@ const AiProviderCard: FC<AiProviderCardProps> = ({
         {provider !== 'gemini' && (
           <div className="flex items-center gap-3 pt-1">
             <Button onClick={handleTest} disabled={testStatus === 'loading'} variant="secondary">
-              {testStatus === 'loading' ? <Spinner className="w-4 h-4" /> : 'Verbindung testen'}
+              {testStatus === 'loading' ? <Spinner className="w-4 h-4" /> : t('settings.ai.testConnection')}
             </Button>
             {testStatus === 'ok' && (
-              <span className="text-sm text-emerald-400">✓ Verbindung erfolgreich</span>
+              <span className="text-sm text-emerald-400">✓ {t('settings.ai.connectionSuccess')}</span>
             )}
             {testStatus === 'error' && <span className="text-sm text-red-400">✗ {testError}</span>}
           </div>
@@ -1153,7 +1151,7 @@ const SettingsViewUI: FC = () => {
                         <option value="ollama/phi-4-mini-3.8b">Phi-4 Mini 3.8B</option>
                         <option value="ollama/glm-4-9b">GLM-4 9B</option>
                         <option value="ollama/kimi-k2-instruct-32b">Kimi K2 Instruct 32B</option>
-                        <option value="ollama/custom">Benutzerdefiniertes Modell</option>
+                        <option value="ollama/custom">{t('settings.ai.customModel')}</option>
                       </>
                     ) : settings.advancedAi.provider === 'openai' ? (
                       <>

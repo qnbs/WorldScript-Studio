@@ -47,7 +47,7 @@ const getInitialLanguage = (): Language => {
   } catch {
     /* localStorage may be unavailable */
   }
-  return 'de';
+  return 'en';
 };
 
 export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {

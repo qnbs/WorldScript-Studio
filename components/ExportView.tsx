@@ -334,7 +334,7 @@ const ExportControls: FC = () => {
                 />
               </svg>
             )}
-            EPUB 3.0 exportieren
+            {t('export.epubExport')}
           </Button>
           {epubError && <p className="text-red-500 text-sm">{epubError}</p>}
         </div>

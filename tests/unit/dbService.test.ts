@@ -153,7 +153,7 @@ describe('dbService', () => {
     expect(loaded).toEqual(sampleCodex);
   });
 
-  it('should return DECRYPT_FAILED when generic provider decryption fails', async () => {
+  it('should return null when generic provider decryption fails', async () => {
     await dbService.saveApiKey('provider', 'provider-secret');
     vi.stubGlobal('crypto', {
       subtle: {
@@ -171,12 +171,12 @@ describe('dbService', () => {
     } as unknown as Crypto);
 
     const providerKey = await dbService.getApiKey('provider');
-    expect(providerKey).toBe('DECRYPT_FAILED');
+    expect(providerKey).toBeNull();
   });
 
   it('should report no saved Gemini API key after failed decryption', async () => {
     const originalGetGeminiApiKey = dbService.getGeminiApiKey;
-    dbService.getGeminiApiKey = vi.fn().mockResolvedValue('DECRYPT_FAILED');
+    dbService.getGeminiApiKey = vi.fn().mockResolvedValue(null);
 
     const result = await dbService.hasGeminiApiKey();
     expect(result).toBe(false);

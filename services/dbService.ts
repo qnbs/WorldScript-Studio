@@ -83,25 +83,25 @@ async function retryDb<T>(fn: () => Promise<T>, retries = 2, delayMs = 500): Pro
 function getUserFriendlyDbError(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === 'QuotaExceededError') {
-      return 'Speicherplatz im Browser ist erschöpft. Bitte löschen Sie alte Projekte oder Snapshots.';
+      return 'Browser storage is exhausted. Please delete old projects or snapshots.';
     }
     if (error.name === 'InvalidStateError' || error.name === 'TransactionInactiveError') {
-      return 'Interner Fehler beim Zugriff auf die Datenbank. Bitte Seite neu laden.';
+      return 'Internal error accessing the database. Please reload the page.';
     }
     if (error.name === 'AbortError') {
-      return 'Datenbankoperation wurde abgebrochen.';
+      return 'Database operation was aborted.';
     }
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return 'Unbekannter Fehler beim Zugriff auf die Datenbank.';
+  return 'Unknown error accessing the database.';
 }
 
 class IndexedDBService {
   private db: IDBDatabase | null = null;
   private lastAutoSnapshotTime = Date.now();
-  private readonly AUTO_SNAPSHOT_INTERVAL = 30 * 1000; // 30 Sekunden (War: 30 Minuten)
+  private readonly AUTO_SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5 minutes
   private readonly MAX_AUTO_SNAPSHOTS = 20;
 
   // === CRYPTO HELPERS für API Key Verschlüsselung ===
@@ -170,14 +170,14 @@ class IndexedDBService {
         return new TextDecoder().decode(decrypted);
       } catch (error) {
         logger.warn('Failed to decrypt API key:', error);
-        return 'DECRYPT_FAILED' as string;
+        return null;
       }
     });
   }
 
   async hasGeminiApiKey(): Promise<boolean> {
     const key = await this.getGeminiApiKey();
-    return Boolean(key && key.length > 0 && key !== 'DECRYPT_FAILED');
+    return Boolean(key && key.length > 0);
   }
 
   async clearGeminiApiKey(): Promise<void> {
@@ -253,7 +253,7 @@ class IndexedDBService {
       } catch (err) {
         // Distinguish between "no key stored" vs "decryption failed" (e.g. device change, cleared site data)
         logger.warn(`API key decryption failed for provider "${provider}":`, err);
-        return 'DECRYPT_FAILED' as string;
+        return null;
       }
     });
   }
@@ -336,7 +336,7 @@ class IndexedDBService {
           db.close();
           this.db = null;
           logger.warn(
-            'IndexedDB: Datenbankversion geändert – Verbindung geschlossen. Bitte Seite neu laden.'
+            'IndexedDB: Database version changed – connection closed. Please reload the page.'
           );
         };
         this.db = db;

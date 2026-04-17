@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import React, { Fragment, useRef, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Input } from './ui/Input';
 import { ICONS } from '../constants';
@@ -77,7 +78,7 @@ const ArticleViewer: FC = () => {
       <CardContent>
         <div
           className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--foreground-secondary)] prose-strong:text-[var(--foreground-primary)] prose-a:text-indigo-400 prose-ul:list-disc prose-li:text-[var(--foreground-secondary)] prose-ol:text-[var(--foreground-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
-          dangerouslySetInnerHTML={{ __html: t(selectedArticle.content) }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(t(selectedArticle.content)) }}
         />
       </CardContent>
     </Card>

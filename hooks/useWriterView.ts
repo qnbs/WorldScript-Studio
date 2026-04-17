@@ -104,7 +104,7 @@ export const useWriterView = () => {
         return `Write a concise, one-paragraph synopsis of the following text from a story. Capture the key events, character actions, and tone of the passage.\n\nText:\n"""\n${content}\n"""\n`;
       case 'grammarCheck':
         // Deutsch/Englisch automatisch, Prompt für Korrektur und Stilverbesserung
-        return `Korrigiere Grammatik, Stil und Wiederholungen im folgenden Text. Behalte die Sprache des Originals (Deutsch/Englisch) bei. Liefere nur den verbesserten Text ohne weitere Erklärungen.\n\nText:\n"""\n${selection.text || content}\n"""\n`;
+        return `Correct grammar, style, and repetitions in the following text. Keep the original language (German/English). Provide only the improved text without further explanations.\n\nText:\n"""\n${selection.text || content}\n"""\n`;
 
       case 'critic':
         return `Act as a professional literary critic and editor. Analyze the following text for writing quality, character development, pacing, dialogue, and overall effectiveness. Give specific feedback.
@@ -128,7 +128,7 @@ ${content}
         // RAG context building
         const dChars = JSON.stringify(project.characters || []).substring(0, 50000);
         const dWorlds = JSON.stringify(project.worlds || []).substring(0, 50000);
-        return `Prüfe auf Widersprüche zum bisherigen Wissen. Hier ist das Universe-Lore:
+        return `Check for contradictions against the established lore. Here is the universe lore:
 
 Characters:
 ${dChars}
@@ -136,7 +136,7 @@ ${dChars}
 Worlds:
 ${dWorlds}
 
-Prüfe diesen Text:
+Check this text:
 """
 ${content}
 """

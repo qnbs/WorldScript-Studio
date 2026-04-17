@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { useState, useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   versionControlActions,
   selectCurrentBranch,
@@ -42,7 +43,9 @@ const SnapshotCard: FC<{
   onRestore: (snapshot: VersionSnapshot) => void;
   onDelete: (id: string) => void;
   isHead: boolean;
-}> = ({ snapshot, branch, onRestore, onDelete, isHead }) => (
+}> = ({ snapshot, branch, onRestore, onDelete, isHead }) => {
+  const { t } = useTranslation();
+  return (
   <div
     className={`p-3 rounded-lg border transition-colors ${
       isHead
@@ -64,8 +67,8 @@ const SnapshotCard: FC<{
           {branch && <BranchBadge branch={branch} />}
         </div>
         <div className="flex items-center gap-3 mt-1 text-xs text-[var(--foreground-muted)]">
-          <time>{new Date(snapshot.timestamp).toLocaleString('de-DE')}</time>
-          <span>{snapshot.wordCount.toLocaleString()} Wörter</span>
+          <time>{new Date(snapshot.timestamp).toLocaleString()}</time>
+          <span>{snapshot.wordCount.toLocaleString()} {t('vc.words')}</span>
         </div>
       </div>
       <div className="flex gap-1 flex-shrink-0">
@@ -73,15 +76,15 @@ const SnapshotCard: FC<{
           variant="secondary"
           size="sm"
           onClick={() => onRestore(snapshot)}
-          aria-label={`Snapshot "${snapshot.label}" wiederherstellen`}
+          aria-label={t('vc.restoreSnapshot', { label: snapshot.label })}
         >
-          Wiederherstellen
+          {t('vc.restore')}
         </Button>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => onDelete(snapshot.id)}
-          aria-label={`Snapshot "${snapshot.label}" löschen`}
+          aria-label={t('vc.deleteSnapshot', { label: snapshot.label })}
           className="text-red-400 hover:bg-red-500/10"
         >
           ✕
@@ -89,12 +92,14 @@ const SnapshotCard: FC<{
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // ─── Main Panel ───────────────────────────────────────────────────────────────
 
 export const VersionControlPanel: FC = () => {
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
   const isOpen = useAppSelector(selectIsPanelOpen);
   const currentBranch = useAppSelector(selectCurrentBranch);
   const currentSnapshots = useAppSelector(selectCurrentBranchSnapshots);
@@ -227,13 +232,13 @@ export const VersionControlPanel: FC = () => {
               id="version-control-heading"
               className="text-lg font-bold text-[var(--foreground-primary)]"
             >
-              Versionsverlauf
+              {t('vc.title')}
             </h2>
           </div>
           <button
             onClick={() => dispatch(versionControlActions.closePanel())}
             className="p-2 rounded-md hover:bg-[var(--background-secondary)] text-[var(--foreground-secondary)] transition-colors"
-            aria-label="Versionsverlauf schließen"
+            aria-label={t('vc.close')}
           >
             <span aria-hidden="true">✕</span>
           </button>
@@ -244,7 +249,7 @@ export const VersionControlPanel: FC = () => {
           {/* Current branch */}
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
-              Aktueller Branch
+              {t('vc.currentBranch')}
             </h3>
             {currentBranch && (
               <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)]">
@@ -254,9 +259,9 @@ export const VersionControlPanel: FC = () => {
                     size="sm"
                     variant="secondary"
                     onClick={() => setModal('switchBranch')}
-                    aria-label="Branch wechseln"
+                    aria-label={t('vc.switchBranch')}
                   >
-                    Wechseln
+                    {t('vc.switch')}
                   </Button>
                   <Button
                     size="sm"
@@ -265,9 +270,9 @@ export const VersionControlPanel: FC = () => {
                       setFromSnapshotId(currentBranch.headSnapshotId);
                       setModal('createBranch');
                     }}
-                    aria-label="Neuen Branch erstellen"
+                    aria-label={t('vc.createBranch')}
                   >
-                    + Branch
+                    {t('vc.newBranch')}
                   </Button>
                 </div>
               </div>
@@ -278,21 +283,21 @@ export const VersionControlPanel: FC = () => {
           <section>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
-                Snapshots ({currentSnapshots.length})
+                {t('vc.snapshots')} ({currentSnapshots.length})
               </h3>
               <Button
                 size="sm"
                 onClick={() => setModal('createSnapshot')}
-                aria-label="Neuen Snapshot erstellen"
+                aria-label={t('vc.createSnapshot')}
               >
-                + Snapshot
+                {t('vc.newSnapshot')}
               </Button>
             </div>
             {currentSnapshots.length === 0 ? (
               <div className="text-center py-8 text-[var(--foreground-muted)] text-sm border-2 border-dashed border-[var(--border-primary)] rounded-lg">
-                <p>Noch keine Snapshots.</p>
+                <p>{t('vc.noSnapshots')}</p>
                 <p className="text-xs mt-1">
-                  Erstelle einen Snapshot, um den aktuellen Stand zu speichern.
+                  {t('vc.noSnapshotsHint')}
                 </p>
               </div>
             ) : (
@@ -318,7 +323,7 @@ export const VersionControlPanel: FC = () => {
           {/* All branches */}
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
-              Alle Branches ({allBranches.length})
+              {t('vc.allBranches')} ({allBranches.length})
             </h3>
             <div className="space-y-2">
               {allBranches.map((branch) => (
@@ -334,7 +339,7 @@ export const VersionControlPanel: FC = () => {
                       </p>
                     )}
                     <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
-                      Erstellt: {new Date(branch.createdAt).toLocaleDateString('de-DE')}
+                      {t('vc.created')}: {new Date(branch.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="flex gap-1">
@@ -344,7 +349,7 @@ export const VersionControlPanel: FC = () => {
                         variant="secondary"
                         onClick={() => dispatch(versionControlActions.switchBranch(branch.id))}
                       >
-                        Wechseln
+                        {t('vc.switch')}
                       </Button>
                     )}
                     {branch.id !== MAIN_BRANCH_ID && (
@@ -353,7 +358,7 @@ export const VersionControlPanel: FC = () => {
                         variant="ghost"
                         onClick={() => handleDeleteBranch(branch.id)}
                         className="text-red-400 hover:bg-red-500/10"
-                        aria-label={`Branch "${branch.name}" löschen`}
+                        aria-label={t('vc.deleteBranch', { name: branch.name })}
                       >
                         ✕
                       </Button>
@@ -370,14 +375,14 @@ export const VersionControlPanel: FC = () => {
       <Modal
         isOpen={modal === 'createSnapshot'}
         onClose={() => setModal('none')}
-        title="Snapshot erstellen"
+        title={t('vc.createSnapshotTitle')}
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--foreground-secondary)]">
-            Speichert den aktuellen Stand des Manuskripts als wiederherstellbaren Snapshot.
+            {t('vc.createSnapshotDescription')}
           </p>
           <Input
-            placeholder="z.B. Vor dem großen Twist"
+            placeholder={t('vc.snapshotPlaceholder')}
             value={snapshotLabel}
             onChange={(e) => setSnapshotLabel(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreateSnapshot()}
@@ -385,10 +390,10 @@ export const VersionControlPanel: FC = () => {
           />
           <div className="flex gap-3 justify-end">
             <Button variant="secondary" onClick={() => setModal('none')}>
-              Abbrechen
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleCreateSnapshot} disabled={!snapshotLabel.trim()}>
-              Snapshot erstellen
+              {t('vc.createSnapshotTitle')}
             </Button>
           </div>
         </div>
@@ -398,29 +403,29 @@ export const VersionControlPanel: FC = () => {
       <Modal
         isOpen={modal === 'createBranch'}
         onClose={() => setModal('none')}
-        title="Neuen Branch erstellen"
+        title={t('vc.createBranchTitle')}
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--foreground-secondary)]">
-            Branches erlauben alternative Handlungsverläufe (z.B. „Alternatives Ende").
+            {t('vc.createBranchDescription')}
           </p>
           <Input
-            placeholder="Branch-Name, z.B. Alternatives Ende"
+            placeholder={t('vc.branchNamePlaceholder')}
             value={newBranchName}
             onChange={(e) => setNewBranchName(e.target.value)}
             autoFocus
           />
           <Input
-            placeholder="Beschreibung (optional)"
+            placeholder={t('vc.branchDescPlaceholder')}
             value={newBranchDesc}
             onChange={(e) => setNewBranchDesc(e.target.value)}
           />
           <div className="flex gap-3 justify-end">
             <Button variant="secondary" onClick={() => setModal('none')}>
-              Abbrechen
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleCreateBranch} disabled={!newBranchName.trim()}>
-              Branch erstellen
+              {t('vc.createBranchTitle')}
             </Button>
           </div>
         </div>
@@ -433,18 +438,16 @@ export const VersionControlPanel: FC = () => {
           setModal('none');
           setPendingRestore(null);
         }}
-        title="Snapshot wiederherstellen"
+        title={t('vc.restoreTitle')}
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--foreground-secondary)]">
-            Das Manuskript wird auf den Snapshot{' '}
-            <strong className="text-[var(--foreground-primary)]">„{pendingRestore?.label}"</strong>{' '}
-            ({pendingRestore && new Date(pendingRestore.timestamp).toLocaleString('de-DE')})
-            zurückgesetzt.
+            {t('vc.restoreDescription')}{' '}
+            <strong className="text-[var(--foreground-primary)]">„{pendingRestore?.label}“</strong>{' '}
+            ({pendingRestore && new Date(pendingRestore.timestamp).toLocaleString()})
           </p>
           <p className="text-sm text-amber-400">
-            ⚠️ Der aktuelle Stand geht verloren, sofern kein Snapshot existiert. Erstelle vorher
-            einen Snapshot!
+            ⚠️ {t('vc.restoreWarning')}
           </p>
           <div className="flex gap-3 justify-end">
             <Button
@@ -454,10 +457,10 @@ export const VersionControlPanel: FC = () => {
                 setPendingRestore(null);
               }}
             >
-              Abbrechen
+              {t('common.cancel')}
             </Button>
             <Button variant="danger" onClick={confirmRestore}>
-              Wiederherstellen
+              {t('vc.restore')}
             </Button>
           </div>
         </div>
@@ -467,7 +470,7 @@ export const VersionControlPanel: FC = () => {
       <Modal
         isOpen={modal === 'switchBranch'}
         onClose={() => setModal('none')}
-        title="Branch wechseln"
+        title={t('vc.switchBranchTitle')}
       >
         <div className="space-y-3">
           {allBranches.map((branch) => (
@@ -496,7 +499,7 @@ export const VersionControlPanel: FC = () => {
                 )}
               </div>
               {branch.id === currentBranch?.id && (
-                <span className="ml-auto text-xs text-[var(--foreground-muted)]">Aktiv</span>
+                <span className="ml-auto text-xs text-[var(--foreground-muted)]">{t('vc.active')}</span>
               )}
             </button>
           ))}

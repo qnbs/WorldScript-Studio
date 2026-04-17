@@ -310,7 +310,7 @@ describe('useWriterView', () => {
       {
         tool: 'grammarCheck' as const,
         state: { selection: { text: 'bad grammar', start: 0, end: 11 } },
-        expected: 'Korrigiere Grammatik, Stil und Wiederholungen',
+        expected: 'Correct grammar, style, and repetitions',
       },
       {
         tool: 'critic' as const,
@@ -325,7 +325,7 @@ describe('useWriterView', () => {
       {
         tool: 'consistency' as const,
         state: { selection: { text: '', start: 0, end: 0 } },
-        expected: 'Prüfe auf Widersprüche zum bisherigen Wissen',
+        expected: 'Check for contradictions against the established lore',
       },
       {
         tool: 'imagePrompt' as const,

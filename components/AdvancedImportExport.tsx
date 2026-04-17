@@ -10,7 +10,7 @@ import { Modal } from './ui/Modal';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 import { useToast } from './ui/Toast';
-import mammoth from 'mammoth';
+
 
 export const AdvancedImportExport: React.FC = () => {
   const { t } = useTranslation();
@@ -119,7 +119,7 @@ export const AdvancedImportExport: React.FC = () => {
     if (!pasteText.trim() || !project) return;
     const newSection = {
       id: `paste-${Date.now()}`,
-      title: pasteTitle.trim() || 'Eingefügter Inhalt',
+      title: pasteTitle.trim() || t('export.pasteSection.defaultTitle'),
       content: pasteText.trim(),
     };
     dispatch(projectActions.setManuscript([...project.manuscript, newSection]));
@@ -133,11 +133,12 @@ export const AdvancedImportExport: React.FC = () => {
     if (!project) return;
     const md = project.manuscript.map((s) => `# ${s.title}\n\n${s.content}`).join('\n\n---\n\n');
     navigator.clipboard.writeText(md);
-    toast.success('Markdown kopiert — in Notion oder Google Docs einfügen');
+    toast.success(t('export.pasteSection.copied'));
   };
 
   const handleDocxImport = async (file: File) => {
     try {
+      const mammoth = await import('mammoth');
       const arrayBuffer = await file.arrayBuffer();
       const result = await mammoth.extractRawText({ arrayBuffer });
       const lines = result.value.split('\n').filter((l) => l.trim());
@@ -175,7 +176,7 @@ export const AdvancedImportExport: React.FC = () => {
               size="sm"
               onClick={() => setShowPasteSection(!showPasteSection)}
             >
-              {showPasteSection ? '▲ Einklappen' : '▼ Text einfügen'}
+              {showPasteSection ? `▲ ${t('export.pasteSection.collapse')}` : `▼ ${t('export.pasteSection.expand')}`}
             </Button>
           </div>
         </CardHeader>
@@ -184,20 +185,20 @@ export const AdvancedImportExport: React.FC = () => {
             <div className="space-y-3 mb-3">
               <input
                 type="text"
-                placeholder="Kapiteltitel (optional)"
+                placeholder={t('export.pasteSection.titlePlaceholder')}
                 value={pasteTitle}
                 onChange={(e) => setPasteTitle(e.target.value)}
                 className="w-full px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--input-background)] text-[var(--foreground)] text-sm"
               />
               <textarea
-                placeholder="Text aus Google Docs oder Notion hier einfügen (Strg+V)…"
+                placeholder={t('export.pasteSection.textPlaceholder')}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
                 rows={6}
                 className="w-full px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--input-background)] text-[var(--foreground)] text-sm resize-y font-mono"
               />
               <Button onClick={handlePasteImport} disabled={!pasteText.trim()} className="w-full">
-                Als Kapitel importieren
+                {t('export.pasteSection.importAsChapter')}
               </Button>
             </div>
           )}
@@ -207,7 +208,7 @@ export const AdvancedImportExport: React.FC = () => {
             disabled={!project?.manuscript.length}
             className="w-full"
           >
-            Als Markdown für Notion / Google Docs kopieren
+            {t('export.pasteSection.copyAsMarkdown')}
           </Button>
         </CardContent>
       </Card>
@@ -229,7 +230,7 @@ export const AdvancedImportExport: React.FC = () => {
             >
               <option value="json">JSON (.json)</option>
               <option value="markdown">Markdown (.md)</option>
-              <option value="docx">Word Document (.docx)</option>
+              <option value="docx">{t('export.format.docx')}</option>
             </Select>
           </div>
 
@@ -261,7 +262,7 @@ export const AdvancedImportExport: React.FC = () => {
             >
               <option value="json">JSON (.json)</option>
               <option value="markdown">Markdown (.md)</option>
-              <option value="docx">Word Document (.docx)</option>
+              <option value="docx">{t('export.format.docx')}</option>
             </Select>
           </div>
 

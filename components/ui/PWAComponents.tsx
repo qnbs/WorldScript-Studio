@@ -8,12 +8,14 @@
 
 import type { FC } from 'react';
 import { usePWA } from '../../hooks/usePWA';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // ────────────────────────────────────────────────────────────
 // OfflineIndicator
 // ────────────────────────────────────────────────────────────
 export const OfflineIndicator: FC = () => {
   const { isOffline } = usePWA();
+  const { t } = useTranslation();
 
   if (!isOffline) return null;
 
@@ -41,9 +43,9 @@ export const OfflineIndicator: FC = () => {
         <span className="font-semibold">Offline</span>
       </div>
       <p className="text-amber-300/80 leading-tight">
-        KI-Funktionen nicht verfügbar.
+        {t('pwa.offlineAiUnavailable')}
         <br />
-        Schreiben, Speichern &amp; Snapshots funktionieren weiterhin.
+        {t('pwa.offlineWorksContinue')}
       </p>
     </div>
   );
@@ -54,6 +56,7 @@ export const OfflineIndicator: FC = () => {
 // ────────────────────────────────────────────────────────────
 export const PWAInstallBanner: FC = () => {
   const { isInstallable, installApp, dismissInstall } = usePWA();
+  const { t } = useTranslation();
 
   if (!isInstallable) return null;
 
@@ -92,10 +95,10 @@ export const PWAInstallBanner: FC = () => {
       {/* Text */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-[var(--foreground-primary)] leading-tight">
-          App installieren
+          {t('pwa.installApp')}
         </p>
         <p className="text-xs text-[var(--foreground-muted)] leading-tight mt-0.5 truncate">
-          Offline verfügbar · Direktzugriff vom Homescreen
+          {t('pwa.installDescription')}
         </p>
       </div>
 
@@ -103,7 +106,7 @@ export const PWAInstallBanner: FC = () => {
       <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={dismissInstall}
-          aria-label="Banner schließen"
+          aria-label={t('pwa.closeBanner')}
           className="
             p-1.5 rounded-lg
             text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]
@@ -134,7 +137,7 @@ export const PWAInstallBanner: FC = () => {
             transition-all active:scale-95
           "
         >
-          Installieren
+          {t('pwa.install')}
         </button>
       </div>
     </div>
@@ -146,6 +149,7 @@ export const PWAInstallBanner: FC = () => {
 // ────────────────────────────────────────────────────────────
 export const PWAUpdateToast: FC = () => {
   const { isUpdateAvailable, applyUpdate, dismissUpdate } = usePWA();
+  const { t } = useTranslation();
 
   if (!isUpdateAvailable) return null;
 
@@ -184,10 +188,10 @@ export const PWAUpdateToast: FC = () => {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-[var(--foreground-primary)] leading-snug">
-          Update verfügbar
+          {t('pwa.updateAvailable')}
         </p>
         <p className="text-xs text-[var(--foreground-muted)] mt-0.5 leading-snug">
-          Eine neue Version von StoryCraft Studio ist bereit.
+          {t('pwa.updateDescription')}
         </p>
         <div className="flex items-center gap-2 mt-3">
           <button
@@ -200,7 +204,7 @@ export const PWAUpdateToast: FC = () => {
               transition-all active:scale-95
             "
           >
-            Jetzt aktualisieren
+            {t('pwa.updateNow')}
           </button>
           <button
             onClick={dismissUpdate}
@@ -213,7 +217,7 @@ export const PWAUpdateToast: FC = () => {
               transition-colors
             "
           >
-            Später
+            {t('pwa.later')}
           </button>
         </div>
       </div>
@@ -221,7 +225,7 @@ export const PWAUpdateToast: FC = () => {
       {/* Close */}
       <button
         onClick={dismissUpdate}
-        aria-label="Meldung schließen"
+        aria-label={t('pwa.closeNotification')}
         className="
           shrink-0 p-1 rounded-lg
           text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]

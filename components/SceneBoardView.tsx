@@ -5,6 +5,7 @@ import { Input } from './ui/Input';
 import { Textarea } from './ui/Textarea';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
+import { Modal } from './ui/Modal';
 import { ICONS } from '../constants';
 import { useSceneBoardView } from '../hooks/useSceneBoardView';
 import { SceneBoardViewContext, useSceneBoardViewContext } from '../contexts/SceneBoardViewContext';
@@ -34,9 +35,10 @@ const STATUS_COLORS: Record<string, string> = {
 const SortableSceneCard: FC<{
   section: StorySection;
   characters: Character[];
+  t: (key: string, replacements?: Record<string, string>) => string;
   onUpdate: (id: string, updates: Partial<StorySection>) => void;
   onDelete: (id: string) => void;
-}> = ({ section, characters, onUpdate, onDelete }) => {
+}> = React.memo(({ section, characters, t, onUpdate, onDelete }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.id,
   });
@@ -86,7 +88,7 @@ const SortableSceneCard: FC<{
           <Textarea
             value={editData.summary}
             onChange={(e) => setEditData((p) => ({ ...p, summary: e.target.value }))}
-            placeholder="Szenen-Zusammenfassung..."
+            placeholder={t('sceneboard.summary.placeholder')}
             className="text-xs h-16 resize-none"
           />
           <div className="flex items-center gap-2">
@@ -105,11 +107,11 @@ const SortableSceneCard: FC<{
               }
               className="text-xs"
             >
-              <option value="draft">Entwurf</option>
-              <option value="outline">Gliederung</option>
-              <option value="first-draft">Erster Entwurf</option>
-              <option value="revised">Überarbeitet</option>
-              <option value="final">Final</option>
+              <option value="draft">{t('sceneboard.status.draft')}</option>
+              <option value="outline">{t('sceneboard.status.outline')}</option>
+              <option value="first-draft">{t('sceneboard.status.firstDraft')}</option>
+              <option value="revised">{t('sceneboard.status.revised')}</option>
+              <option value="final">{t('sceneboard.status.final')}</option>
             </Select>
             <Select
               value={editData.act}
@@ -121,9 +123,9 @@ const SortableSceneCard: FC<{
               }
               className="text-xs"
             >
-              <option value={1}>Akt 1</option>
-              <option value={2}>Akt 2</option>
-              <option value={3}>Akt 3</option>
+              <option value={1}>{t('sceneboard.act1')}</option>
+              <option value={2}>{t('sceneboard.act2')}</option>
+              <option value={3}>{t('sceneboard.act3')}</option>
             </Select>
             <input
               type="color"
@@ -136,18 +138,16 @@ const SortableSceneCard: FC<{
             <Button
               size="sm"
               variant="danger"
-              onClick={() => {
-                if (confirm('Szene löschen?')) onDelete(section.id);
-              }}
+              onClick={() => onDelete(section.id)}
             >
-              Löschen
+              {t('common.delete')}
             </Button>
             <div className="flex gap-1">
               <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>
-                Abbrechen
+                {t('common.cancel')}
               </Button>
               <Button size="sm" onClick={handleSave}>
-                Speichern
+                {t('common.save')}
               </Button>
             </div>
           </div>
@@ -171,7 +171,7 @@ const SortableSceneCard: FC<{
                 setIsEditing(true);
               }}
               className="text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] p-0.5 rounded"
-              aria-label={`Szene bearbeiten: ${section.title}`}
+              aria-label={t('sceneboard.editScene', { title: section.title })}
             >
               <svg
                 className="w-3.5 h-3.5"
@@ -225,21 +225,23 @@ const SortableSceneCard: FC<{
       )}
     </div>
   );
-};
+});
+SortableSceneCard.displayName = 'SortableSceneCard';
 
 // --- Swimlane-Spalte (ein Akt) ---
 const ActSwimlane: FC<{
   act: 1 | 2 | 3;
   sections: StorySection[];
   characters: Character[];
+  t: (key: string, replacements?: Record<string, string>) => string;
   onUpdate: (id: string, updates: Partial<StorySection>) => void;
   onDelete: (id: string) => void;
   onAddSection: (act: 1 | 2 | 3) => void;
-}> = ({ act, sections, characters, onUpdate, onDelete, onAddSection }) => {
+}> = ({ act, sections, characters, t, onUpdate, onDelete, onAddSection }) => {
   const ACT_LABELS: Record<number, string> = {
-    1: 'Akt 1 – Einführung',
-    2: 'Akt 2 – Konflikt',
-    3: 'Akt 3 – Auflösung',
+    1: t('sceneboard.act1.label'),
+    2: t('sceneboard.act2.label'),
+    3: t('sceneboard.act3.label'),
   };
   const ACT_COLORS: Record<number, string> = {
     1: 'from-blue-500/10',
@@ -259,13 +261,13 @@ const ActSwimlane: FC<{
             {ACT_LABELS[act]}
           </h3>
           <p className="text-xs text-[var(--foreground-muted)]">
-            {sections.length} Szenen · {wordCount} Wörter
+            {sections.length} {t('sceneboard.scenes')} · {wordCount} {t('sceneboard.words')}
           </p>
         </div>
         <button
           onClick={() => onAddSection(act)}
           className="w-7 h-7 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] flex items-center justify-center text-lg font-light"
-          title="Szene in diesem Akt hinzufügen"
+          title={t('sceneboard.addSceneToAct')}
         >
           +
         </button>
@@ -274,7 +276,7 @@ const ActSwimlane: FC<{
       <div
         className="flex-grow min-h-[200px] overflow-y-auto pr-1 space-y-0"
         role="list"
-        aria-label="Szenen sortieren – Drag & Drop oder Enter zum Auswählen, Pfeiltasten zum Verschieben"
+        aria-label={t('sceneboard.dragAriaLabel')}
       >
         <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           {sections.map((section) => (
@@ -282,13 +284,14 @@ const ActSwimlane: FC<{
               key={section.id}
               section={section}
               characters={characters}
+              t={t}
               onUpdate={onUpdate}
               onDelete={onDelete}
             />
           ))}
           {sections.length === 0 && (
             <div className="text-center py-8 text-xs text-[var(--foreground-muted)] border-2 border-dashed border-[var(--border-primary)] rounded-lg">
-              Szene hierher ziehen
+              {t('sceneboard.dragEmptyHint')}
             </div>
           )}
         </SortableContext>
@@ -310,6 +313,7 @@ const SceneBoardUI: FC = () => {
     handleAddSection,
   } = useSceneBoardViewContext();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -390,7 +394,7 @@ const SceneBoardUI: FC = () => {
             {t('sceneboard.title')}
           </h1>
           <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
-            {sections.length} Szenen · {totalWords} Wörter
+            {sections.length} {t('sceneboard.scenes')} · {totalWords} {t('sceneboard.words')}
           </p>
         </div>
         <Button onClick={() => handleAddForAct(1)} size="sm">
@@ -423,8 +427,9 @@ const SceneBoardUI: FC = () => {
               act={act}
               sections={sectionsByAct[act]}
               characters={characters}
+              t={t}
               onUpdate={handleUpdateSection}
-              onDelete={handleDeleteSection}
+              onDelete={setDeleteTargetId}
               onAddSection={handleAddForAct}
             />
           ))}
@@ -445,6 +450,28 @@ const SceneBoardUI: FC = () => {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={deleteTargetId !== null}
+        onClose={() => setDeleteTargetId(null)}
+        title={t('sceneboard.confirmDelete')}
+      >
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="ghost" onClick={() => setDeleteTargetId(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (deleteTargetId) handleDeleteSection(deleteTargetId);
+              setDeleteTargetId(null);
+            }}
+          >
+            {t('common.delete')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 };

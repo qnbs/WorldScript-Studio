@@ -127,7 +127,7 @@ ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div></body></html>`
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>${esc(ch.title)}</title><link rel="stylesheet" href="style.css"/></head>
 <body><h2 class="chapter-title">${esc(ch.title)}</h2>
-${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Leeres Kapitel)</em></p>'}</body></html>`
+${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Empty Chapter)</em></p>'}</body></html>`
     );
     manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="${id}"/>`);
@@ -139,8 +139,8 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Lee
     'nav.xhtml',
     `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${lang}">
-<head><title>Inhaltsverzeichnis</title></head>
-<body><nav epub:type="toc" id="toc"><h1>Inhalt</h1><ol>${tocEntries.join('\n')}</ol></nav></body></html>`
+<head><title>Table of Contents</title></head>
+<body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>${tocEntries.join('\n')}</ol></nav></body></html>`
   );
 
   // content.opf

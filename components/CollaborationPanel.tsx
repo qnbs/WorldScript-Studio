@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { v4 as uuid } from 'uuid';
 import { collaborationService } from '../services/collaborationService';
+import { useTranslation } from '../hooks/useTranslation';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import type { CollaborationUser } from '../types';
@@ -32,7 +33,7 @@ function getLocalUser(): CollaborationUser {
   }
   const user: CollaborationUser = {
     id: uuid(),
-    name: 'Anonym',
+    name: 'Anonymous',
     color: getRandomColor(),
   };
   sessionStorage.setItem('collab_user', JSON.stringify(user));
@@ -48,7 +49,7 @@ const UserAvatar: FC<{ user: CollaborationUser; size?: 'sm' | 'md' }> = ({ user,
       className={`${dim} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}
       style={{ backgroundColor: user.color }}
       title={user.name}
-      aria-label={`Nutzer: ${user.name}`}
+      aria-label={user.name}
     >
       {user.name.charAt(0).toUpperCase()}
     </div>
@@ -76,6 +77,7 @@ const sanitizeRoomInput = (value: string): string =>
   stripControlChars(value).trim().replace(/\s+/g, ' ').slice(0, 128);
 
 export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClose, projectId }) => {
+  const { t } = useTranslation();
   const panelRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [localUser, setLocalUser] = useState<CollaborationUser>(getLocalUser);
@@ -165,7 +167,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
       const roomId = sanitizeRoomInput(customRoomId) || projectId;
       const user: CollaborationUser = {
         ...localUser,
-        name: displayName.trim() || 'Anonym',
+        name: displayName.trim() || 'Anonymous',
       };
 
       // Persist updated display name
@@ -186,11 +188,11 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
       setIsConnected(true);
       setConnectedUsers(collaborationService.getConnectedUsers());
     } catch (e) {
-      setConnectionError(e instanceof Error ? e.message : 'Verbindungsfehler');
+      setConnectionError(e instanceof Error ? e.message : t('collab.connectionError'));
     } finally {
       setIsConnecting(false);
     }
-  }, [customRoomId, projectId, localUser, displayName, roomPassword]);
+  }, [customRoomId, projectId, localUser, displayName, roomPassword, t]);
 
   const handleDisconnect = useCallback(() => {
     collaborationService.disconnect();
@@ -238,20 +240,20 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               id="collab-panel-title"
               className="text-lg font-bold text-[var(--foreground-primary)]"
             >
-              Kollaboration
+              {t('collab.title')}
             </h2>
           </div>
           <div className="flex items-center gap-2">
             {isConnected && (
               <span className="flex items-center gap-1.5 text-xs text-emerald-400">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Verbunden
+                {t('collab.connected')}
               </span>
             )}
             <button
               onClick={onClose}
               className="p-2 rounded-md hover:bg-[var(--background-secondary)] text-[var(--foreground-secondary)] transition-colors"
-              aria-label="Kollaborationspanel schließen"
+              aria-label={t('collab.close')}
             >
               <span aria-hidden="true">✕</span>
             </button>
@@ -263,24 +265,23 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           {/* How it works */}
           <div className="p-3 rounded-lg bg-[var(--background-interactive)]/10 border border-[var(--border-interactive)]/30 text-sm text-[var(--foreground-secondary)]">
             <p className="font-semibold text-[var(--foreground-primary)] mb-1">
-              🌐 P2P Echtzeit-Kollaboration
+              🌐 {t('collab.p2pTitle')}
             </p>
             <p>
-              Teile die <strong>Raum-ID</strong> mit deinen Co-Autoren. Alle im gleichen Raum sehen
-              Änderungen live — ohne Server.
+              {t('collab.p2pDescription')}
             </p>
           </div>
 
           {/* User identity */}
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
-              Deine Identität
+              {t('collab.identity')}
             </h3>
             <div className="flex items-center gap-3">
               <UserAvatar user={{ ...localUser, name: displayName || 'A' }} />
               <div className="flex-1">
                 <Input
-                  placeholder="Dein Anzeigename"
+                  placeholder={t('collab.displayName')}
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   disabled={isConnected}
@@ -289,7 +290,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               <div
                 className="w-8 h-8 rounded-full cursor-pointer border-2 border-[var(--border-primary)] flex-shrink-0"
                 style={{ backgroundColor: localUser.color }}
-                title="Farbe (zufällig bei Verbindung)"
+                title={t('collab.colorTitle')}
               />
             </div>
           </section>
@@ -297,11 +298,11 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           {/* Room ID */}
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
-              Raum-ID
+              {t('collab.roomId')}
             </h3>
             <div className="flex gap-2">
               <Input
-                placeholder={`${projectId} (Projekt-ID)`}
+                placeholder={`${projectId} (${t('collab.projectId')})`}
                 value={customRoomId}
                 onChange={(e) => setCustomRoomId(e.target.value)}
                 disabled={isConnected}
@@ -313,15 +314,15 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                     navigator.clipboard.writeText(currentRoomId).catch(() => {});
                   }}
                   className="px-3 py-2 text-xs rounded-md bg-[var(--background-secondary)] hover:bg-[var(--background-tertiary)] text-[var(--foreground-secondary)] border border-[var(--border-primary)] transition-colors"
-                  title="In Zwischenablage kopieren"
+                  title={t('collab.copyToClipboard')}
                 >
-                  Kopieren
+                  {t('collab.copy')}
                 </button>
               )}
             </div>
             {isConnected && (
               <p className="text-xs text-[var(--foreground-muted)] mt-1">
-                Raum: <code className="font-mono">{currentRoomId}</code>
+                {t('collab.room')} <code className="font-mono">{currentRoomId}</code>
               </p>
             )}
           </section>
@@ -329,11 +330,11 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           {/* Room Password (PSK) */}
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
-              Raum-Passwort (optional)
+              {t('collab.roomPassword')}
             </h3>
             <Input
               type="password"
-              placeholder="Geheimes Passwort für privaten Raum"
+              placeholder={t('collab.roomPasswordPlaceholder')}
               value={roomPassword}
               onChange={(e) => setRoomPassword(e.target.value)}
               disabled={isConnected}
@@ -341,7 +342,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               autoComplete="off"
             />
             <p className="text-xs text-[var(--foreground-muted)] mt-1">
-              Alle Teilnehmer müssen dasselbe Passwort eingeben, um dem Raum beizutreten.
+              {t('collab.passwordHint')}
             </p>
           </section>
 
@@ -356,11 +357,11 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           <div>
             {isConnected ? (
               <Button variant="danger" onClick={handleDisconnect} className="w-full">
-                Trennen
+                {t('collab.disconnect')}
               </Button>
             ) : (
               <Button onClick={handleConnect} disabled={isConnecting} className="w-full">
-                {isConnecting ? 'Verbinde …' : 'Verbinden'}
+                {isConnecting ? t('collab.connecting') : t('collab.connect')}
               </Button>
             )}
           </div>
@@ -369,11 +370,11 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           {isConnected && (
             <section>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
-                Verbundene Nutzer ({connectedUsers.length})
+                {t('collab.connectedUsers')} ({connectedUsers.length})
               </h3>
               {connectedUsers.length === 0 ? (
                 <p className="text-sm text-[var(--foreground-muted)]">
-                  Warte auf weitere Teilnehmer …
+                  {t('collab.waitingForUsers')}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -385,7 +386,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                       <UserAvatar user={user} size="sm" />
                       <span className="text-sm text-[var(--foreground-primary)]">{user.name}</span>
                       {user.id === localUser.id && (
-                        <span className="ml-auto text-xs text-[var(--foreground-muted)]">(Du)</span>
+                        <span className="ml-auto text-xs text-[var(--foreground-muted)]">({t('collab.you')})</span>
                       )}
                     </div>
                   ))}
@@ -396,11 +397,9 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
 
           {/* Technical note */}
           <div className="p-3 rounded-lg bg-[var(--background-secondary)] text-xs text-[var(--foreground-muted)]">
-            <p className="font-semibold mb-1">ℹ️ Technischer Hinweis</p>
+            <p className="font-semibold mb-1">ℹ️ {t('collab.technicalNote')}</p>
             <p>
-              Kollaboration nutzt <strong>Yjs + WebRTC</strong> für P2P-Synchronisation. Daten
-              werden direkt zwischen Browsern übertragen — kein Server speichert deinen Inhalt.
-              Signaling über öffentlichen Free-Tier-Server.
+              {t('collab.technicalDescription')}
             </p>
           </div>
         </div>

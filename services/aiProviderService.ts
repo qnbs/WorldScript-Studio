@@ -72,7 +72,7 @@ async function streamOpenAI(
 ): Promise<void> {
   const apiKey = await storageService.getApiKey('openai');
   if (!apiKey)
-    throw new Error('NO_API_KEY: OpenAI API Key fehlt. Bitte in den Einstellungen eintragen.');
+    throw new Error('NO_API_KEY: OpenAI API key missing. Please enter it in Settings.');
 
   const model = opts.model.startsWith('gpt-') ? opts.model : 'gpt-4o-mini';
   const messages = opts.systemPrompt
@@ -106,7 +106,7 @@ async function streamOpenAI(
   }
 
   const reader = res.body?.getReader();
-  if (!reader) throw new Error('OpenAI: Kein Response-Body');
+  if (!reader) throw new Error('OpenAI: No response body');
 
   const decoder = new TextDecoder();
   let buffer = '';
@@ -140,8 +140,8 @@ async function streamAnthropic(
   _callbacks: AIStreamCallbacks
 ): Promise<void> {
   throw new Error(
-    'Claude/Anthropic: Direkte Browser-Anfragen werden von Anthropic blockiert (CORS). ' +
-      'Bitte verwende einen Backend-Proxy oder wechsle zu Gemini/OpenAI/Ollama.'
+    'Claude/Anthropic: Direct browser requests are blocked by Anthropic (CORS). ' +
+      'Please use a backend proxy or switch to Gemini/OpenAI/Ollama.'
   );
 }
 
@@ -199,7 +199,7 @@ export async function generateText(
     }
     case 'anthropic':
       throw new Error(
-        'Claude/Anthropic ist derzeit im Browser nicht verfügbar. Bitte verwende Gemini, OpenAI oder Ollama.'
+        'Claude/Anthropic is currently not available in the browser. Please use Gemini, OpenAI or Ollama.'
       );
     case 'gemini':
     default:
@@ -228,7 +228,7 @@ export async function generateJson<T>(
     return JSON.parse(jsonText) as T;
   } catch (parseError) {
     const parseErr = new Error(
-      'Die Antwort des KI-Modells ist kein gültiges JSON. Bitte versuche es erneut.'
+      'The AI model response is not valid JSON. Please try again.'
     );
     attachCause(parseErr, parseError);
     throw parseErr;
@@ -245,15 +245,15 @@ export async function generateImage(
       return generateImageGemini(prompt, signal);
     case 'openai':
       throw new Error(
-        'OpenAI-Bildgenerierung ist derzeit nicht über die Browser-Version verfügbar.'
+        'OpenAI image generation is currently not available via the browser version.'
       );
     case 'ollama':
       throw new Error(
-        'Ollama-Bildgenerierung ist aktuell nicht unterstützt. Bitte nutzen Sie Gemini für Bilder.'
+        'Ollama image generation is currently not supported. Please use Gemini for images.'
       );
     case 'anthropic':
       throw new Error(
-        'Anthropic-Bildgenerierung ist nicht verfügbar. Bitte verwenden Sie Gemini oder Ollama für Bildinhalte.'
+        'Anthropic image generation is not available. Please use Gemini or Ollama for image content.'
       );
     default:
       return generateImageGemini(prompt, signal);
@@ -325,12 +325,12 @@ export async function testAIConnection(
       case 'anthropic':
         return {
           ok: false,
-          error: 'Claude benötigt einen Backend-Proxy (CORS-Einschränkung)',
+          error: 'Claude requires a backend proxy (CORS restriction)',
         };
       case 'gemini':
         return { ok: true };
       default:
-        return { ok: false, error: 'Unbekannter Provider' };
+        return { ok: false, error: 'Unknown provider' };
     }
   } catch (e) {
     return {

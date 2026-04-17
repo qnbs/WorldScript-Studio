@@ -44,8 +44,8 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
 
       if (!apiKey) {
         throw new Error(
-          'NO_API_KEY: Kein Gemini API-Key konfiguriert. ' +
-            'Bitte öffnen Sie die Einstellungen und fügen Sie Ihren API-Key hinzu.'
+          'NO_API_KEY: No Gemini API key configured. ' +
+            'Please open Settings and add your API key.'
         );
       }
 
@@ -114,7 +114,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
       if (is401) {
         await handleInvalidApiKey();
         const invalidApiKeyError = new Error(
-          'INVALID_API_KEY: Der API-Key ist ungültig oder abgelaufen. Bitte in den Einstellungen einen gültigen Key hinterlegen.'
+          'INVALID_API_KEY: The API key is invalid or expired. Please store a valid key in Settings.'
         );
         attachCause(invalidApiKeyError, err);
         throw invalidApiKeyError;
@@ -136,7 +136,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
           continue;
         }
         throw new Error(
-          'RATE_LIMITED: Das API-Nutzungslimit wurde erreicht. Bitte warte eine Minute und versuche es erneut.',
+          'RATE_LIMITED: API usage limit reached. Please wait a minute and try again.',
           { cause: err }
         );
       }
@@ -151,7 +151,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
 function assertOnline(): void {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     throw new Error(
-      'OFFLINE: Keine Internetverbindung. KI-Funktionen sind offline nicht verfügbar. Lokale Features (Schreiben, Manuskript, Snapshots) funktionieren weiterhin.'
+      'OFFLINE: No internet connection. AI features are not available offline. Local features (writing, manuscript, snapshots) continue to work.'
     );
   }
 }

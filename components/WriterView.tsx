@@ -98,7 +98,7 @@ const ContextPanel: FC = React.memo(() => {
               placeholder={t('writer.studio.context.contentPlaceholder')}
               aria-label={
                 selectedSection
-                  ? `Kapitel: ${selectedSection.title}`
+                  ? t('writer.chapter.label', { title: selectedSection.title })
                   : t('writer.studio.context.contentPlaceholder')
               }
               aria-multiline="true"
@@ -357,15 +357,13 @@ const ToolsPanel: FC = React.memo(() => {
         return (
           <div className="space-y-2">
             <p className="text-sm text-[var(--foreground-muted)]">
-              Generiert einen optimierten <strong>DALL·E 3 / Midjourney</strong>
-              -Prompt aus der aktuellen Szene oder Textauswahl.
+              {t('writer.imagePrompt.description')}
             </p>
             <div className="text-xs text-[var(--foreground-muted)] bg-[var(--background-tertiary)]/50 border border-[var(--border-primary)] rounded p-2 space-y-1">
               <p>
-                💡 <strong>Tipp:</strong> Markiere einen bestimmten Textabschnitt für einen
-                fokussierten Szenen-Prompt.
+                💡 <strong>{t('writer.imagePrompt.tip')}</strong>
               </p>
-              <p>🎨 Der generierte Prompt funktioniert direkt in DALL·E 3 und Midjourney.</p>
+              <p>🎨 {t('writer.imagePrompt.note')}</p>
             </div>
           </div>
         );
@@ -637,7 +635,7 @@ const AiScratchpad: FC = React.memo(() => {
                     onClick={() => (isSpeaking ? stop() : speak(currentResult, ttsLang))}
                     variant="ghost"
                     size="sm"
-                    title={isSpeaking ? 'Vorlesen stoppen' : 'Vorlesen'}
+                    title={isSpeaking ? t('writer.tts.stop') : t('writer.tts.start')}
                     disabled={!currentResult || isLoading}
                   >
                     {isSpeaking ? (
@@ -738,31 +736,31 @@ const WriterViewUI: FC = () => {
       <div className="hidden md:flex items-center justify-end mb-2 gap-2">
         <button
           onClick={() => togglePanel('context')}
-          title={collapsedPanels['context'] ? 'Kontext einblenden' : 'Kontext ausblenden'}
+          title={collapsedPanels['context'] ? t('writer.context.show') : t('writer.context.hide')}
           className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
         >
-          {collapsedPanels['context'] ? '▷ Kontext' : '◁ Kontext'}
+          {collapsedPanels['context'] ? `▷ ${t('writer.context.label')}` : `◁ ${t('writer.context.label')}`}
         </button>
         <button
           onClick={() => togglePanel('tools')}
-          title={collapsedPanels['tools'] ? 'Tools einblenden' : 'Tools ausblenden'}
+          title={collapsedPanels['tools'] ? t('writer.tools.show') : t('writer.tools.hide')}
           className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
         >
-          {collapsedPanels['tools'] ? '▷ Tools' : '◁ Tools'}
+          {collapsedPanels['tools'] ? `▷ ${t('writer.tools.label')}` : `◁ ${t('writer.tools.label')}`}
         </button>
         <button
           onClick={() => setFocusMode((f) => !f)}
-          title={focusMode ? 'Fokus-Modus beenden' : 'Fokus-Modus (nur Manuskript + KI)'}
+          title={focusMode ? t('writer.focusMode.exit') : t('writer.focusMode.enter')}
           className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
         >
-          {focusMode ? '⊠ Fokus beenden' : '⊡ Fokus-Modus'}
+          {focusMode ? `⊠ ${t('writer.focusMode.exitLabel')}` : `⊡ ${t('writer.focusMode.enterLabel')}`}
         </button>
         <button
           onClick={() => dispatch(versionControlActions.togglePanel())}
           title="Version Control (Branches &amp; Snapshots)"
           className={`text-xs px-2 py-1 rounded border transition-colors ${isVCPanelOpen ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
         >
-          ⎇ Versionen
+          ⎎ {t('writer.versionControl.label')}
         </button>
       </div>
 
