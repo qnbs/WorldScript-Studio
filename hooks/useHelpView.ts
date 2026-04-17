@@ -20,7 +20,9 @@ export const useHelpView = () => {
   const settings = useAppSelector((state) => state.settings);
 
   const rawHelpContent = t<HelpCategory[]>('help.categories');
-  const helpContent: HelpCategory[] = Array.isArray(rawHelpContent) ? rawHelpContent : [];
+  const helpContent: HelpCategory[] = Array.isArray(rawHelpContent)
+    ? rawHelpContent.filter((c): c is HelpCategory => c != null && typeof c === 'object' && 'id' in c)
+    : [];
 
   const [activeCategory, setActiveCategory] = useState<string>(helpContent[0]?.id || 'ai');
   const [selectedArticle, setSelectedArticle] = useState<HelpArticle | null>(null);

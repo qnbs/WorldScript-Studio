@@ -1,6 +1,6 @@
 # ============================================================
-# StoryCraft Studio – Minimal CI/CD Pipeline
-# lint → typecheck → test
+# StoryCraft Studio – CI/CD Pipeline
+# lint → typecheck → test → build → deploy
 # ============================================================
 
 name: CI / CD
@@ -21,8 +21,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: 🔍 Lint (ESLint + Prettier)
+  # ----------------------------------------------------------
+  # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)
+  # ----------------------------------------------------------
+  quality:
+    name: 🔍 Quality Gate (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -31,93 +34,34 @@ jobs:
         node-version: [lts/*, node]
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Run ESLint
+      - name: Lint (ESLint)
         run: npm run lint -- --max-warnings 0
 
-      - name: Run TypeScript typecheck
+      - name: Typecheck (tsc)
         run: npm run typecheck
 
-  typecheck:
-    name: 🏷️ TypeScript type-check
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [lts/*, node]
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Run ESLint + TypeScript typecheck
-        run: |
-          npm run lint -- --max-warnings 0
-          npm run typecheck
-
-  test:
-    name: 🧪 Unit Tests (Vitest)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [lts/*, node]
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Lint + Typecheck (strict)
-        run: |
-          npm run lint -- --max-warnings=0
-          npm run typecheck
-
-      - name: Run unit tests with coverage
+      - name: Unit tests (Vitest)
         run: npx vitest run --coverage
 
       - name: Upload coverage report
-        if: always()
+        if: always() && matrix.node-version == 'lts/*'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/
           retention-days: 7
 
-      - name: Upload JUnit test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vitest-junit-report
-          path: reports/junit.xml
-          retention-days: 7
-
       - name: Publish coverage to Codecov
-        if: always()
+        if: always() && matrix.node-version == 'lts/*'
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
@@ -126,3 +70,65 @@ jobs:
           else
             echo "No CODECOV_TOKEN configured; skipping Codecov upload."
           fi
+
+  # ----------------------------------------------------------
+  # 2. BUILD: Production build + Pages artifact upload
+  # ----------------------------------------------------------
+  build:
+    name: 🏗️ Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [quality]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: ./dist
+          retention-days: 7
+
+      - name: Setup Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  # ----------------------------------------------------------
+  # 3. DEPLOY: GitHub Pages (only on main push)
+  # ----------------------------------------------------------
+  deploy:
+    name: 🚀 Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

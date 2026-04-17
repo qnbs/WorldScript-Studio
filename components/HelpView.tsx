@@ -31,7 +31,7 @@ const NavButton: FC<{
 }> = React.memo(({ icon, label, isActive, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center w-full px-3 py-2 text-left rounded-md transition-colors ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
+    className={`flex items-center flex-shrink-0 md:flex-shrink md:w-full px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap md:whitespace-normal ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
   >
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -96,7 +96,7 @@ const ArticleList: FC<{ category: HelpCategory }> = ({ category }) => {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {category.articles.map((article) => (
+          {Array.isArray(category.articles) && category.articles.map((article) => (
             <button
               key={article.title}
               onClick={() => handleSelectArticle(article)}
@@ -318,10 +318,11 @@ const HelpViewUI: FC = () => {
 
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8">
         <div className="md:col-span-1">
-          <div className="space-y-2 sticky top-20">
-            {helpContent.map((cat) => (
+          {/* Mobile: horizontal scroll strip · Desktop: vertical sticky sidebar */}
+          <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--background-primary)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
+            {Array.isArray(helpContent) && helpContent.map((cat) => (
               <NavButton
                 key={cat.id}
                 icon={iconMap[cat.icon]}
@@ -339,7 +340,7 @@ const HelpViewUI: FC = () => {
             />
           </div>
         </div>
-        <div className="md:col-span-3 min-h-[80vh]">{renderContent()}</div>
+        <div className="md:col-span-3 min-h-[50vh] md:min-h-[80vh]">{renderContent()}</div>
       </div>
     </div>
   );
