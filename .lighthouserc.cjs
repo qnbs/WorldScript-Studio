@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   ci: {
     collect: {
       startServerCommand: 'pnpm run preview',
