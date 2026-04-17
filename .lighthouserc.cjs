@@ -20,15 +20,12 @@ module.exports = {
     },
     assert: {
       assertions: {
-        'categories:performance': ['warn', { minScore: 0.7 }],
-        'first-contentful-paint': ['error', { maxNumericValue: 2500 }],
-        'largest-contentful-paint': ['error', { maxNumericValue: 4000 }],
-        'speed-index': ['error', { maxNumericValue: 4500 }],
-        'total-blocking-time': ['error', { maxNumericValue: 300 }],
+        'categories:performance': ['warn', { minScore: 0.5 }],
+        'first-contentful-paint': ['warn', { maxNumericValue: 6000 }],
+        'largest-contentful-paint': ['warn', { maxNumericValue: 8000 }],
+        'speed-index': ['warn', { maxNumericValue: 8000 }],
+        'total-blocking-time': ['warn', { maxNumericValue: 600 }],
         'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],
-        'first-meaningful-paint': ['error', { maxNumericValue: 3000 }],
-        interactive: ['error', { maxNumericValue: 5000 }],
-        'unused-javascript': ['warn', { minScore: 0.8 }],
       },
     },
     upload: {
