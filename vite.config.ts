@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -15,6 +16,7 @@ export default defineConfig({
   },
 
   plugins: [
+    tailwindcss(),
     react(),
     VitePWA({
       // register-sw.ts übernimmt die manuelle Registrierung
