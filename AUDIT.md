@@ -1,8 +1,8 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-16
+**Date:** 2026-04-17
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation
-**Version audited:** 1.1.0 (package.json)
+**Version audited:** 1.1.0 → 1.1.1 (package.json)
 
 ---
 
@@ -40,12 +40,28 @@
 
 ## Current Status
 
-- Security posture was significantly improved in this cycle with targeted dependency remediation and lockfile cleanup.
-- `npm audit` currently reports 4 vulnerabilities (0 low, 0 moderate, 4 high, 0 critical), all linked to the PWA toolchain advisory chain.
-- Deprecated dependency footprint was reduced by removing the legacy LHCI transitive chain that introduced `inflight` and old `rimraf`.
-- One deprecation (`node-domexception`) remains as an upstream transitive dependency from the Gemini SDK stack.
+- **`npm audit` reports 0 vulnerabilities** (0 low, 0 moderate, 0 high, 0 critical) as of 2026-04-17.
+- `protobufjs` critical vulnerability resolved via `npm audit fix` (upgraded to ≥7.5.5).
+- `serialize-javascript` high vulnerabilities resolved via npm overrides (`vite-plugin-pwa` → `workbox-build` → `@rollup/plugin-terser` → `serialize-javascript@^7.0.5`).
+- All localStorage/sessionStorage accesses are now guarded with try/catch for SSR/test safety.
+- CI pipeline extended with Security Audit, Lighthouse CI, and Storybook jobs.
+- Tauri capabilities updated: added `fs:allow-read-dir` and `fs:allow-remove` permissions.
+- AI service utilities deduplicated into shared `services/aiUtils.ts`.
+- Bundle analyzer (`rollup-plugin-visualizer`) added as opt-in devDep (`npm run analyze`).
+- `fileSystemService.ts` type-unsafe references to non-existent `StoryProject.author`/`.description` removed.
+- One deprecation (`node-domexception`) remains as an upstream transitive dependency from the Gemini SDK stack — accepted risk, no local fix.
 - The repository is stable: build, lint, typecheck, and coverage all pass.
-- The version bump to `1.1.0` is documented and ready for commit.
+
+### Tauri Feature Parity (Tech Debt)
+
+`fileSystemService.ts` remains behind `dbService.ts` in the following areas (deferred to a dedicated Tauri hardening sprint):
+
+- No LZ-String compression for stored data
+- No auto-snapshot system (manual snapshots only)
+- No RAG vector store or Story Codex store
+- Snapshot ID type mismatch (`string` vs `number` in dbService)
+- No retry logic for filesystem operations
+- Missing `deleteImage()` and `hasSavedData()` implementations
 
 ## Executive Summary
 
@@ -162,11 +178,9 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 **Recommendation:** Align both to the same version, or automate version sync in CI.
 **Effort:** Low | **Priority:** Low
 
-### 15. No Performance Budgets
+### 15. ~~No Performance Budgets~~ ✅ FIXED
 
-**Issue:** No build size limits, no Web Vitals targets, no Lighthouse CI integration.
-**Recommendation:** Add `bundlesize` limits in CI and track Core Web Vitals (LCP, FID, CLS) via Lighthouse CI or `web-vitals` library.
-**Effort:** Medium | **Priority:** Medium
+**Resolution:** Lighthouse CI job added to CI pipeline (`.github/workflows/ci.yml`). Performance budgets defined in `.lighthouserc.js` with assertions for Performance ≥ 0.9, FCP ≤ 1800ms, LCP ≤ 2500ms, TBT ≤ 150ms, CLS ≤ 0.1. Bundle analyzer available via `npm run analyze`.
 
 ### 16. Potential Memory Leaks in ManuscriptView Resize
 
@@ -206,7 +220,10 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 
 ### CI/CD Pipeline
 
-- ✅ Full pipeline: lint → typecheck → test → build → deploy
+- ✅ Full pipeline: security → lint → typecheck → test → build → lighthouse → storybook → deploy
+- ✅ Security audit job with `npm audit --audit-level=high` and `dependency-review-action`
+- ✅ Lighthouse CI job with performance budgets from `.lighthouserc.js`
+- ✅ Storybook build + artifact upload
 - ✅ ESLint and typecheck now run in hard-fail mode (was soft-fail)
 - ✅ Coverage thresholds (50%) configured in vitest.config.ts
 
@@ -242,7 +259,7 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 | 7   | Increase unit test coverage to 60%+       | High   | High   | 🟡 Ongoing    |
 | 8   | Add DevContainer configuration            | Low    | Medium | 🟠 Backlog    |
 | 9   | Fix ManuscriptView resize memory leak     | Low    | Medium | 🟠 Backlog    |
-| 10  | Add performance budgets                   | Medium | Medium | 🟠 Backlog    |
+| 10  | ~~Add performance budgets~~               | Medium | Medium | ✅ Done       |
 | 11  | ~~Encrypt P2P collaboration~~             | Medium | Medium | ✅ Done (PSK) |
 | 12  | ~~Align Tauri/npm versions~~              | Low    | Low    | ✅ Done       |
 | 14  | Add logging framework                     | Medium | Low    | 🟢 Backlog    |

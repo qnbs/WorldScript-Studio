@@ -2,6 +2,9 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { visualizer } from 'rollup-plugin-visualizer';
+
+const isAnalyze = process.env['ANALYZE'] === 'true';
 
 export default defineConfig({
   base: '/StoryCraft-Studio/',
@@ -54,6 +57,16 @@ export default defineConfig({
       // Manifest bereits in public/manifest.json eingebunden
       manifest: false,
     }),
+    ...(isAnalyze
+      ? [
+          visualizer({
+            open: true,
+            filename: 'dist/bundle-analysis.html',
+            gzipSize: true,
+            brotliSize: true,
+          }),
+        ]
+      : []),
   ],
 
   resolve: {
@@ -67,7 +80,7 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
     cssCodeSplit: true,
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 600,
     reportCompressedSize: true,
     rollupOptions: {
       external: [

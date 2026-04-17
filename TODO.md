@@ -2,10 +2,7 @@
 
 Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 
-> Self-audit complete. Remaining action items include review of major-version dependency upgrades and remediation of 24 remaining vulnerabilities from `npm audit`.
-
-> Self-audit abgeschlossen: `npm outdated`, `npm audit`, `npm run lint:fix`, `npm run typecheck`, `npm run build`, `npm run test:coverage`.
-> Paketversion auf `1.1.0` angehoben; Build und Coverage erfolgreich.
+> v1.1.1 audit cycle (2026-04-17): 0 npm audit vulnerabilities, CI hardened with security/lighthouse/storybook jobs, all storage guards applied, AI utils deduplicated, bundle analyzer added.
 
 ---
 
@@ -39,7 +36,7 @@ Priorisierter Task-Tracker. Status: ✅ erledigt | 🔄 in Arbeit | ⬜ offen
 - ⬜ DevContainer-Konfiguration erstellen
 - ⬜ ManuscriptView Resize-Listener Cleanup (Potentieller Memory-Leak)
 - ⬜ Request-Deduplizierung für AI-Calls
-- ⬜ Performance Budgets (Lighthouse CI)
+- ✅ Performance Budgets (Lighthouse CI)
 - ⬜ Feature-Flag-System (localStorage-basiert)
 - ⬜ Redundante deploy.yml entfernen
 

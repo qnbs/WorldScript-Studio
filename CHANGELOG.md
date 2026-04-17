@@ -7,14 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Placeholder for future release notes.
+## [1.1.1] - 2026-04-17
 
 ### Security
 
-- Updated safe patch/minor dependency versions for CI stability and compatibility.
-- Deferred higher-risk major-version upgrades for Storybook, ESLint, TypeScript, jsPDF, docx, wait-on and related transitive dependencies until a targeted compatibility review is completed.
+- Resolved all npm audit vulnerabilities: 0 high, 0 critical (was 4 high + 1 critical).
+- Fixed `protobufjs` critical arbitrary code execution vulnerability (upgraded to ≥7.5.5).
+- Resolved `serialize-javascript` RCE + DoS vulnerabilities via npm overrides for the `vite-plugin-pwa` → `workbox-build` → `@rollup/plugin-terser` chain.
+- Guarded all unprotected `localStorage` accesses in `useApp.ts` with try/catch.
+- Guarded all unprotected `sessionStorage` accesses in `usePWA.ts` and `CollaborationPanel.tsx`.
+- Added missing Tauri capabilities: `fs:allow-read-dir`, `fs:allow-remove` (fixes runtime failures for `listProjects`, `deleteProject`, `deleteSnapshot`, `clearApiKey`).
+- Removed type-unsafe references to non-existent `StoryProject.author`/`.description` in `fileSystemService.ts`.
+
+### Added
+
+- CI security audit job: `npm audit --audit-level=high` + `dependency-review-action` on PRs.
+- CI Lighthouse job: performance budget assertions from `.lighthouserc.js` with artifact upload.
+- CI Storybook job: automated build + artifact upload.
+- Bundle analyzer: `rollup-plugin-visualizer` as opt-in devDep (`npm run analyze`).
+- Shared AI utility module `services/aiUtils.ts`: `stripControlChars`, `sanitizePromptValue`, `sanitizePromptBlock`, `cleanPrompt`, `attachCause`, `stripJsonFences`.
+
+### Changed
+
+- CI pipeline order: security → quality → build → lighthouse/storybook → deploy.
+- Reduced Vite `chunkSizeWarningLimit` from 900 KB to 600 KB for more informative dev warnings.
+
+### Fixed
+
+- Deduplicated 4 utility functions between `geminiService.ts` and `aiProviderService.ts`.
+- Documented Tauri feature parity gaps as tracked tech debt in AUDIT.md.
 
 ## [1.1.0] - 2026-04-16
 
