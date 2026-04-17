@@ -4,6 +4,7 @@ import tseslint from 'typescript-eslint';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
+import globals from 'globals';
 
 export default tseslint.config(
   // Global ignores
@@ -35,52 +36,8 @@ export default tseslint.config(
     },
     languageOptions: {
       globals: {
-        window: 'readonly',
-        document: 'readonly',
-        navigator: 'readonly',
-        console: 'readonly',
-        setTimeout: 'readonly',
-        clearTimeout: 'readonly',
-        setInterval: 'readonly',
-        clearInterval: 'readonly',
-        fetch: 'readonly',
-        crypto: 'readonly',
-        URL: 'readonly',
-        Blob: 'readonly',
-        File: 'readonly',
-        FileReader: 'readonly',
-        HTMLElement: 'readonly',
-        HTMLButtonElement: 'readonly',
-        HTMLInputElement: 'readonly',
-        HTMLTextAreaElement: 'readonly',
-        HTMLSelectElement: 'readonly',
-        HTMLDivElement: 'readonly',
-        Event: 'readonly',
-        MouseEvent: 'readonly',
-        KeyboardEvent: 'readonly',
-        SpeechSynthesisUtterance: 'readonly',
-        speechSynthesis: 'readonly',
-        ResizeObserver: 'readonly',
-        MutationObserver: 'readonly',
-        IntersectionObserver: 'readonly',
-        AbortController: 'readonly',
-        AbortSignal: 'readonly',
-        IDBDatabase: 'readonly',
-        IDBTransaction: 'readonly',
-        DOMException: 'readonly',
-        Response: 'readonly',
-        Request: 'readonly',
-        Headers: 'readonly',
-        FormData: 'readonly',
-        performance: 'readonly',
-        indexedDB: 'readonly',
-        TextEncoder: 'readonly',
-        TextDecoder: 'readonly',
-        structuredClone: 'readonly',
-        requestAnimationFrame: 'readonly',
-        cancelAnimationFrame: 'readonly',
-        queueMicrotask: 'readonly',
-        Promise: 'readonly',
+        ...globals.browser,
+        ...globals.es2021,
         process: 'readonly',
         __TAURI__: 'readonly',
       },
@@ -115,7 +72,7 @@ export default tseslint.config(
       'prefer-const': 'error',
 
       // Security: no API keys in logs
-      'no-console': ['warn', { allow: ['warn', 'error', 'group', 'groupEnd', 'groupCollapsed', 'log'] }],
+      'no-console': ['warn', { allow: ['warn', 'error', 'group', 'groupEnd', 'groupCollapsed'] }],
     },
     settings: {
       react: { version: 'detect' },

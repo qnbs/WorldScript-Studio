@@ -8,15 +8,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "predeploy": "npm run build",
     "typecheck": "tsc --noEmit",
     "lhci:assert": "lhci autorun --upload.target=temporary-public-storage",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "prepare": "husky",
-    "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix --max-warnings=0",
+    "lint": "eslint --max-warnings=0",
+    "lint:fix": "eslint --fix --max-warnings=0",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -24,8 +23,7 @@
     "test:e2e:ui": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test --ui",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "dev:tauri": "tauri dev",
-    "deploy:gh-pages": "npm run build && npx gh-pages -d dist"
+    "dev:tauri": "tauri dev"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

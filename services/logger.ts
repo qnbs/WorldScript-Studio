@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- Logger is the designated console wrapper */
 const isProd = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.PROD);
 const hasLocalStorage =
   typeof window !== 'undefined' &&
