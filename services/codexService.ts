@@ -34,8 +34,6 @@ const STOPWORDS = new Set([
   'So',
 ]);
 
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 const buildEntityId = (name: string, type: string): string =>
   `${type.toLowerCase()}-${name.toLowerCase().replace(/\s+/g, '-')}`;
 
@@ -120,7 +118,7 @@ export const extractStoryCodex = (
     const text = `${section.title}\n${section.content}`;
 
     for (const known of knownEntities) {
-      const regex = new RegExp(`\\b${escapeRegExp(known.name)}\\b`, 'gi');
+      const regex = new RegExp(`\\b${RegExp.escape(known.name)}\\b`, 'gi');
       let match: RegExpExecArray | null = regex.exec(text);
       while (match) {
         addMention(known.name, known.type, section, match.index, known.id, true);

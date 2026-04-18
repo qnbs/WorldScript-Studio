@@ -20,7 +20,8 @@
     "noUncheckedIndexedAccess": true,
     "noPropertyAccessFromIndexSignature": true,
     "noFallthroughCasesInSwitch": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "stableTypeOrdering": true
   },
   "include": ["."],
   "exclude": ["node_modules", "dist", ".storybook"]

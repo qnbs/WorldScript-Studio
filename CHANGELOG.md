@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **TypeScript 6.0 Adoption**: Enabled `stableTypeOrdering` compiler flag in `tsconfig.json` to ensure consistent type union ordering between TS 6.0 and the upcoming TS 7.0 Go-native compiler.
+- **Native RegExp.escape()**: Replaced custom `escapeRegExp()` helper in `services/codexService.ts` with native `RegExp.escape()` from ES2025 (available in TS 6.0 without polyfill).
+
 ### Refactored
 
 - **SettingsView Decomposition**: Split 2112-LOC monolith `components/SettingsView.tsx` into 8 focused section files under `components/settings/` (SettingsShared, AiProviderCard, SettingsModals, GeneralSections, EditorSections, AiSections, SystemSections, DataSection). Main component reduced to ~234 LOC.
