@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Render-Blocking Fonts**: Replaced 3 render-blocking `@import url("https://fonts.googleapis.com/...")` in `index.css` with self-hosted `@fontsource/inter`, `@fontsource/jetbrains-mono`, `@fontsource/merriweather` (woff2). Fonts are now bundled by Vite, eliminating external network requests and improving First Contentful Paint.
+
+### Security
+
+- **CSP Tightening (Fonts)**: Removed `https://fonts.googleapis.com` from `style-src` and `connect-src`, removed `https://fonts.gstatic.com` from `font-src` and `connect-src` in both `index.html` and `src-tauri/tauri.conf.json`. Fonts are now served from `'self'` only.
+
+### Changed
+
+- **Service Worker**: Removed Google Fonts Cache-First fetch handler and `CACHE_FONTS` cache bucket from `public/sw.js` (no longer needed with self-hosted fonts).
+- **Documentation Consolidation**: Merged `audit15april2026.md` into `AUDIT.md` as a collapsible baseline section. Moved completed tasks from `TODO.md` to `docs/history/completed-v1.1.md`. Cleaned up `TODO.md` (current sprint only) and `ROADMAP.md` (quarterly+) with cross-references.
+
+### Removed
+
+- `audit15april2026.md` (consolidated into `AUDIT.md`).
+- Preconnect links to `fonts.googleapis.com` and `fonts.gstatic.com` from `index.html`.
+
+### Added
+
+- `@fontsource/inter`, `@fontsource/jetbrains-mono`, `@fontsource/merriweather` as dependencies for self-hosted font loading.
+- `docs/history/completed-v1.1.md` archive for completed v1.1 sprint tasks.
+
+### Fixed
+
 - **Logger No-ops**: Fixed empty `debug()` and `info()` method bodies in `logger.ts` that silently discarded all debug/info log messages.
 - **Community Templates CSP**: Replaced GitHub raw URL fetch in `communityTemplateService.ts` with local static asset (`public/community-templates/index.json`), eliminating CSP `connect-src` violations and enabling offline support.
 - **Ollama Browser Guard**: Added `window.__TAURI__` check in `aiProviderService.ts` to prevent Ollama connection attempts in the browser (CSP blocks `localhost` in the deployed PWA). Added amber warning banner in SettingsView for non-desktop environments.

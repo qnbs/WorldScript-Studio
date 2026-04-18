@@ -4,41 +4,21 @@
 
 StoryCraft Studio soll die führende Open-Source-Plattform für KI-gestütztes kreatives Schreiben werden — offline-first, datenschutzfreundlich und erweiterbar.
 
+> Current sprint tasks → [`TODO.md`](TODO.md)
+> Completed items archive → [`docs/history/`](docs/history/)
+
 ---
 
 ## v1.1 — Stabilisierung & Härtung (aktuell)
 
-**Status:** ✅ In Arbeit
+**Status:** ✅ Abgeschlossen (siehe [docs/history/completed-v1.1.md](docs/history/completed-v1.1.md) für Details)
 
-### Sicherheit
+All critical, high, and most medium-priority items have been completed. Remaining open items tracked in [`TODO.md`](TODO.md):
 
-- [x] Tauri CSP (Content Security Policy) setzen
-- [x] Tauri Capabilities auf granulare Permissions einschränken
-- [x] AbortController für alle AI-Thunks + Hooks
-- [x] Retry-Logik in geminiService aktivieren
-- [x] Auto-Save State-Validation vor IndexedDB-Writes
-- [x] Decrypt-Fehler → expliziter Recovery-Flow mit UI-Warnung
-- [x] Collaboration PSK-basierte Room-Isolation
-
-### Code-Qualität
-
-- [x] TypeScript `any`-Casts in hooks.ts und store.ts entfernt
-- [x] Redux Logger opt-in (localStorage-Flag)
-- [x] Per-View Error Boundaries mit Recovery-Button
-- [x] generationHistory auf 50 Einträge begrenzt (FIFO)
-
-### Testing
-
-- [x] Unit-Tests für geminiService, projectSlice, writerSlice, settingsSlice, dbService, listenerMiddleware, collaborationService
-- [x] Coverage-Thresholds (50%) in vitest.config.ts
-- [ ] E2E-Test: Projekt anlegen → AI Outline → Schreiben → Export
-- [ ] E2E-Test: API-Key Eingabe, Sprache wechseln, Theme-Toggle
-
-### CI/CD
-
-- [x] ESLint + Typecheck auf Hard-Fail umgestellt
-- [x] Coverage-Gate in CI-Pipeline
-- [ ] Redundante deploy.yml prüfen und entfernen
+- E2E-Tests erweitern (Projekt-Flow, Settings)
+- ManuscriptView Resize-Listener Cleanup
+- Request-Deduplizierung für AI-Calls
+- DevContainer, Feature-Flag-System, Logging-Framework
 
 ---
 

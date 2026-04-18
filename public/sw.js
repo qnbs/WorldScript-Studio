@@ -9,8 +9,7 @@ const APP_VERSION   = '3.0.0';
 const CACHE_STATIC  = `storycraft-static-v${APP_VERSION}`;
 const CACHE_DYNAMIC = `storycraft-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `storycraft-images-v${APP_VERSION}`;
-const CACHE_FONTS   = `storycraft-fonts-v${APP_VERSION}`;
-const ALL_CACHES    = [CACHE_STATIC, CACHE_DYNAMIC, CACHE_IMAGES, CACHE_FONTS];
+const ALL_CACHES    = [CACHE_STATIC, CACHE_DYNAMIC, CACHE_IMAGES];
 
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 
@@ -146,25 +145,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Google Fonts — Cache First (long TTL, fonts rarely change)
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
-    event.respondWith(
-      caches.open(CACHE_FONTS).then(async (cache) => {
-        const cached = await cache.match(request);
-        if (cached) return cached;
-        try {
-          const response = await fetch(request);
-          if (response.ok) cache.put(request, stampedResponse(response.clone()));
-          return response;
-        } catch {
-          return offlineFallback(request);
-        }
-      })
-    );
-    return;
-  }
-
-  // 3. Image files — Cache First with expiry + offline SVG fallback
+  // 2. Image files — Cache First with expiry + offline SVG fallback
   if (
     request.destination === 'image' ||
     /\.(png|jpg|jpeg|gif|webp|avif|svg|ico)(\?|$)/i.test(url.pathname)
@@ -188,7 +169,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 4. JS / CSS bundles — Cache First (Vite hashes these; stale = always valid)
+  // 3. JS / CSS bundles — Cache First (Vite hashes these; stale = always valid)
   if (
     url.origin === self.location.origin &&
     (request.destination === 'script' || request.destination === 'style')
@@ -207,7 +188,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 5. Locale JSON — Stale-While-Revalidate (fast first paint, always fresh bg)
+  // 4. Locale JSON — Stale-While-Revalidate (fast first paint, always fresh bg)
   if (url.pathname.includes('/locales/')) {
     event.respondWith(
       caches.open(CACHE_DYNAMIC).then(async (cache) => {
@@ -222,7 +203,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 6. Navigation — Network First, SPA fallback to index.html
+  // 5. Navigation — Network First, SPA fallback to index.html
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -241,7 +222,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 7. Everything else — Stale-While-Revalidate with expiry
+  // 6. Everything else — Stale-While-Revalidate with expiry
   event.respondWith(
     caches.open(CACHE_DYNAMIC).then(async (cache) => {
       const cached  = await cache.match(request);

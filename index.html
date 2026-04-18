@@ -47,8 +47,9 @@
     <!--
       CSP-Strategie:
       - script-src: nur eigene Skripte (Vite ES modules, kein inline nötig)
-      - style-src: eigene + Fonts (unsafe-inline für React inline-styles)
-      - connect-src: Gemini API + OpenAI API + Fonts + Collaboration WebSocket
+      - style-src: eigene + unsafe-inline (React inline-styles)
+      - font-src: self only (fonts self-hosted via @fontsource)
+      - connect-src: Gemini API + OpenAI API + Collaboration WebSocket
       - img-src: data: URLs für Base64-Bilder erlaubt
       - Produktions-CSP wird über HTTP-Header des Hosts verschärft
     -->
@@ -56,20 +57,16 @@
           content="
             default-src 'self';
             script-src  'self';
-            style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
-            font-src    'self' https://fonts.gstatic.com data:;
+            style-src   'self' 'unsafe-inline';
+            font-src    'self' data:;
             img-src     'self' data: blob: https:;
-            connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com https://fonts.googleapis.com https://fonts.gstatic.com wss://y-webrtc-signaling.fly.dev;
+            connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com wss://y-webrtc-signaling.fly.dev;
             worker-src  'self' blob:;
             manifest-src 'self';
             object-src  'none';
             base-uri    'self';
             form-action 'self';
           " />
-
-    <!-- ── Performance: Preconnect to external origins ───── -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin="anonymous" />
-    <link rel="preconnect" href="https://fonts.gstatic.com"    crossorigin="anonymous" />
 
     <title>StoryCraft Studio</title>
 </head>

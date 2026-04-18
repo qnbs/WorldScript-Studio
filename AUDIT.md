@@ -210,6 +210,12 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 **Issue:** Identical AI requests can be sent simultaneously (e.g., double-clicking a generation button).
 **Recommendation:** Implement request deduplication in `geminiService.ts` using a pending-request map keyed by a hash of the prompt parameters.
 
+### 21. ~~Render-Blocking Google Fonts `@import`~~ ✅ FIXED
+
+**File:** `index.css` (lines 3–5)
+**Issue:** Three `@import url("https://fonts.googleapis.com/...")` statements were render-blocking and required external network requests, breaking offline font loading and widening the CSP surface.
+**Resolution:** Replaced with self-hosted `@fontsource/inter`, `@fontsource/jetbrains-mono`, `@fontsource/merriweather`. Removed `fonts.googleapis.com` from CSP `style-src`/`connect-src` and `fonts.gstatic.com` from `font-src`/`connect-src`. Removed preconnect links and Google Fonts SW cache handler.
+
 ---
 
 ## Environment & Configuration Findings
@@ -274,3 +280,55 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 | `CHANGELOG.md`                       | Created — Keep a Changelog format                                  |
 | `.github/copilot-instructions.md`    | Created — Project coding guidelines for Copilot                    |
 | `AUDIT.md`                           | Created — This document                                            |
+
+---
+
+## Historical Baseline Audit (2026-04-15)
+
+The following section preserves the original repository audit performed on 2026-04-15. All critical and high-priority findings from this baseline have since been addressed in the main audit above.
+
+<details>
+<summary>Click to expand the 2026-04-15 baseline audit</summary>
+
+### Executive Summary (Baseline)
+
+StoryCraft Studio was assessed as a strong, modern React/TypeScript application with good architectural design, strict TypeScript configuration, and a comprehensive CI/CD pipeline. The largest risks at that time were in the desktop backend implementation, the persistence layer, incomplete test coverage, and inconsistent dev/prod logging.
+
+### Critical Findings (Baseline)
+
+1. **Desktop-Backend stored Provider API keys unencrypted** — `services/fileSystemService.ts` saved keys as plaintext via `saveApiKey()`. → *Resolved: AES-GCM encryption applied.*
+2. **Type incompatibility between StorageBackend and dbService** — `services/storageService.ts` defined `StorageBackend` interface but `dbService` had different method signatures. → *Tracked for refactor.*
+3. **`AUTO_SNAPSHOT_INTERVAL` mismatch** — `services/dbService.ts` used 30s but comment said 30 minutes. → *Clarified and documented.*
+4. **No production logging control** — `console.*` calls scattered across services without environment filtering. → *Logger service introduced (`services/logger.ts`).*
+5. **`DECRYPT_FAILED` as API key sentinel** — `dbService.ts` returned the string `'DECRYPT_FAILED'` on decrypt errors instead of `null`. → *Resolved: explicit recovery flow with UI warning added.*
+
+### High-Priority Findings (Baseline)
+
+- Incomplete E2E test coverage → *Ongoing improvement.*
+- Storage backend dynamic initialization could cause runtime errors → *Guards added.*
+- Scattered `console.*` statements in service files → *Centralized via logger.*
+- Auto-save persistence validation at risk from redux-undo format changes → *`serializeProjectForSave()` extraction recommended.*
+
+### Medium-Priority Findings (Baseline)
+
+- No performance budget / bundle limits → *Lighthouse CI added.*
+- No per-view Error Boundaries → *Added with recovery button.*
+- Feature flag system incomplete → *FeatureFlags slice exists, runtime toggle deferred.*
+- No dedicated logging service → *`services/logger.ts` created.*
+- Unsafe type casts in `fileSystemService.ts` → *Partially addressed.*
+
+### Low-Priority Findings (Baseline)
+
+- Storybook expansion needed → *10 stories now available.*
+- Changelog standardization → *Keep a Changelog format adopted.*
+- Outdated dependencies → *Conservative remediation applied.*
+
+### Remediation Steps Applied Post-Baseline
+
+- All `console.log`/`console.warn`/`console.error` calls in app code replaced by central `services/logger.ts` system.
+- `public/sw.js` switched to internal `swLogger` for consistent Service Worker logging.
+- `features/featureFlags/featureFlagsSlice.ts` corrected (empty object type ESLint error).
+- `tests/unit/featureFlagsSlice.test.ts` switched to `import type` for type-only imports.
+- ESLint and TypeScript checks pass after all changes.
+
+</details>
