@@ -90,11 +90,7 @@ export default defineConfig({
         // Code-Splitting für bessere Ladezeiten
         manualChunks: (id) => {
           if (!id?.includes('node_modules')) return undefined;
-          if (
-            id.includes('/react-dom/') ||
-            id.includes('/react/') ||
-            id.includes('/react-router-dom/')
-          ) {
+          if (id.includes('/react-dom/') || id.includes('/react/')) {
             return 'react-vendor';
           }
           if (
@@ -115,9 +111,6 @@ export default defineConfig({
           }
           if (id.includes('recharts') || id.includes('react-force-graph-2d')) {
             return 'data-vendor';
-          }
-          if (id.includes('/konva/') || id.includes('/react-konva/')) {
-            return 'canvas-vendor';
           }
           if (id.includes('/jspdf/')) {
             return 'export-vendor-pdf';
