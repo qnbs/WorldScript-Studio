@@ -2,7 +2,7 @@
  * Collaborative Editing Service (Yjs + y-webrtc)
  *
  * P2P real-time collaboration via WebRTC — no backend required.
- * Signaling is done via a free public signaling server.
+ * Signaling uses multiple public endpoints for failover.
  *
  * Usage:
  *   collaborationService.connect(projectId, user);
@@ -15,8 +15,9 @@ import { WebrtcProvider } from 'y-webrtc';
 import * as Y from 'yjs';
 import type { CollaborationUser } from '../types';
 
-// Free public signaling servers for y-webrtc
-const SIGNALING_SERVERS = ['wss://y-webrtc-signaling.fly.dev'];
+// Public signaling servers for y-webrtc. If one endpoint is unavailable,
+// the provider can continue with the remaining ones.
+const SIGNALING_SERVERS = ['wss://y-webrtc-signaling.fly.dev', 'wss://signaling.yjs.dev'];
 
 export interface AwarenessState {
   user: CollaborationUser;

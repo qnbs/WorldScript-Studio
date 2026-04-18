@@ -233,7 +233,7 @@ const settingsSlice = createSlice({
 });
 
 // Helper function to apply initial theme on load
-const applyInitialTheme = () => {
+export const applyInitialTheme = () => {
   let settings = defaultSettings;
   const hasLocalStorage =
     typeof localStorage !== 'undefined' &&

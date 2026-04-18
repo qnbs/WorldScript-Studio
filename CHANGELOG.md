@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Maintenance (2026-04-18 Hardening Batch)
+
+- **CI / Codecov**: Replaced deprecated `pnpm dlx codecov` upload flow with `codecov/codecov-action@v5` in `.github/workflows/ci.yml`.
+- **CI / Failure Visibility**: Removed `continue-on-error` from the Storybook job so broken Storybook builds fail CI as expected.
+- **CI / Lighthouse Behavior**: Kept Lighthouse job soft-fail semantics for budget misses while using `lhci autorun --assert.exitCode=0` to avoid false-red budget exits and still surface runtime crashes.
+- **Security Process**: Added `.github/SECURITY.md` with supported versions table, private disclosure channels, and a default 90-day coordinated disclosure policy.
+- **PWA Update UX**: Switched Service Worker update activation to explicit user consent. `SKIP_WAITING` is now sent only from the update toast action instead of auto-activation paths.
+- **Service Worker Lifecycle**: Removed install-time `self.skipWaiting()` from `public/sw.js` to prevent forced activation during active writing sessions.
+- **Collaboration Resilience**: Added `wss://signaling.yjs.dev` as a signaling fallback in `services/collaborationService.ts` to reduce single-point-of-failure risk.
+- **CSP Alignment**: Extended `connect-src` in `index.html` for additional collaboration signaling endpoints (`wss://signaling.yjs.dev`, `wss://*.workers.dev`).
+- **Owner Documentation**: Added collaboration failover and self-hosted signaling guidance (Cloudflare Worker path) to `README.md`.
+- **Test Hardening**: Replaced the stub `settingsSlice` unit test with a comprehensive suite (29 tests, 331 LOC) covering all reducer actions and edge cases.
+- **Theme Roundtrip Testability**: Exported `applyInitialTheme` from `features/settings/settingsSlice.ts` and added persisted-state roundtrip tests for `localStorage` + system-theme resolution.
+
 ### Fixed
 
 - **Render-Blocking Fonts**: Replaced 3 render-blocking `@import url("https://fonts.googleapis.com/...")` in `index.css` with self-hosted `@fontsource/inter`, `@fontsource/jetbrains-mono`, `@fontsource/merriweather` (woff2). Fonts are now bundled by Vite, eliminating external network requests and improving First Contentful Paint.

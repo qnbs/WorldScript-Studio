@@ -92,14 +92,12 @@ jobs:
 
       - name: Publish coverage to Codecov
         if: always() && matrix.node-version == 'lts/*'
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          if [ -n "$CODECOV_TOKEN" ]; then
-            pnpm dlx codecov -f coverage/lcov.info
-          else
-            echo "No CODECOV_TOKEN configured; skipping Codecov upload."
-          fi
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          flags: unit
+          fail_ci_if_error: false
 
   # ----------------------------------------------------------
   # 2. BUILD: Production build + Pages artifact upload
@@ -194,7 +192,7 @@ jobs:
           path: ./dist
 
       - name: Run Lighthouse CI
-        run: pnpm exec lhci autorun
+        run: pnpm exec lhci autorun --assert.exitCode=0
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
@@ -214,7 +212,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [quality]
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
 

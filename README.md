@@ -151,6 +151,21 @@ A keyboard-first command palette (⌘K / Ctrl+K) for instant navigation, AI acti
 - **App shortcuts** for quick access from the home screen icon
 - Update notifications and background sync support
 
+### 🤝 Real-Time Collaboration Resilience
+
+- Collaboration uses Yjs + y-webrtc with multiple signaling endpoints for failover.
+- Default signaling endpoints: `wss://y-webrtc-signaling.fly.dev`, `wss://signaling.yjs.dev`.
+- Room IDs are derived from a hash, but signaling operators can still observe connection metadata (timing and room identifier traffic patterns).
+
+For production or sensitive collaboration environments, host your own signaling server.
+
+#### Self-host signaling (Cloudflare Worker)
+
+1. Deploy a y-webrtc-compatible signaling worker using an established open-source recipe.
+2. Add your endpoint to `SIGNALING_SERVERS` in `services/collaborationService.ts`.
+3. Allow your endpoint in the CSP `connect-src` directive in `index.html`.
+4. Keep at least one fallback endpoint during migration to avoid downtime.
+
 ### 🌐 Full Multi-Language Support
 
 Fully localized to:

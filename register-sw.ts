@@ -3,7 +3,7 @@ import { logger as appLogger } from './services/logger';
 // ============================================================
 // StoryCraft Studio — Service Worker Registration v3.0
 // Features:
-//   • Update detection + postMessage → skipWaiting
+//   • Update detection + explicit user-triggered skipWaiting
 //   • beforeinstallprompt capture  → window.storyCraftPWA
 //   • appinstalled tracking
 //   • Periodic background sync registration
@@ -107,19 +107,25 @@ const registerServiceWorker = async (): Promise<void> => {
     appLogger.info('[SW] Registered, scope:', registration.scope);
 
     // ── Detect and announce SW updates ───────────────────────
+    let userInitiatedUpdate = false;
+
+    const announceUpdateAvailable = (worker: ServiceWorker) => {
+      window.dispatchEvent(
+        new CustomEvent('sw-update-available', {
+          detail: {
+            applyUpdate: () => {
+              userInitiatedUpdate = true;
+              worker.postMessage({ type: 'SKIP_WAITING' });
+            },
+          },
+        }),
+      );
+    };
+
     const onNewWorkerReady = (worker: ServiceWorker) => {
       worker.addEventListener('statechange', () => {
         if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-          window.dispatchEvent(
-            new CustomEvent('sw-update-available', {
-              detail: {
-                applyUpdate: () => {
-                  worker.postMessage({ type: 'SKIP_WAITING' });
-                  window.location.reload();
-                },
-              },
-            }),
-          );
+          announceUpdateAvailable(worker);
         }
       });
     };
@@ -129,10 +135,16 @@ const registerServiceWorker = async (): Promise<void> => {
       if (newWorker) onNewWorkerReady(newWorker);
     });
 
+    // If a worker is already waiting (e.g. user clicked "Later" earlier),
+    // surface the same toast again on next app start.
+    if (registration.waiting && navigator.serviceWorker.controller) {
+      announceUpdateAvailable(registration.waiting);
+    }
+
     // Handle SW controller change (after skipWaiting)
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
+      if (userInitiatedUpdate && !refreshing) {
         refreshing = true;
         window.location.reload();
       }

@@ -98,11 +98,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_STATIC)
       .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
       .catch((err) => {
         // Some precache entries (e.g. offline.html) may not exist yet; continue anyway
         swLogger.warn('Precache partial failure (non-fatal):', err);
-        return self.skipWaiting();
       })
   );
 });
