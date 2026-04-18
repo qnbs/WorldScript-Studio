@@ -789,6 +789,7 @@
   "export.pasteSection.defaultTitle": "Pasted content",
   "export.format.docx": "Word Document (.docx)",
   "export.error.epubFailed": "Échec de l'export EPUB : ",
+  "export.error.exportFailed": "Échec de l'export",
   "settings.title": "Settings",
   "settings.description": "Customize your workspace, writing preferences, and AI behavior.",
   "settings.categories.general": "General",

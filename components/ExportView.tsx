@@ -79,6 +79,7 @@ const ExportControls: FC = () => {
     copied,
     handleDownload,
     handleCopyToClipboard,
+    isExportLoading,
   } = useExportViewContext();
   const [epubLoading, setEpubLoading] = React.useState(false);
   const [epubError, setEpubError] = React.useState<string | null>(null);
@@ -312,27 +313,36 @@ const ExportControls: FC = () => {
           </div>
         </AccordionSection>
         <div className="p-4 space-y-3">
-          <Button onClick={handleDownload} className="w-full">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5 mr-2"
-            >
-              {ICONS.EXPORT}
-            </svg>
+          <Button onClick={handleDownload} className="w-full" disabled={isExportLoading}>
+            {isExportLoading ? (
+              <Spinner className="w-5 h-5 mr-2" />
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5 mr-2"
+              >
+                {ICONS.EXPORT}
+              </svg>
+            )}
             {t('export.options.downloadButton')}
           </Button>
-          <Button onClick={handleCopyToClipboard} variant="secondary" className="w-full">
+          <Button
+            onClick={handleCopyToClipboard}
+            variant="secondary"
+            className="w-full"
+            disabled={isExportLoading}
+          >
             {copied ? t('export.options.copied') : t('common.copyToClipboard')}
           </Button>
           <Button
             onClick={handleEpubExport}
             variant="secondary"
             className="w-full"
-            disabled={epubLoading}
+            disabled={epubLoading || isExportLoading}
           >
             {epubLoading ? (
               <Spinner className="w-4 h-4 mr-2" />

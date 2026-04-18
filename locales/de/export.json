@@ -64,5 +64,6 @@
   "export.pasteSection.copied": "Markdown kopiert — in Notion oder Google Docs einfügen",
   "export.pasteSection.defaultTitle": "Eingefügter Inhalt",
   "export.format.docx": "Word Dokument (.docx)",
-  "export.error.epubFailed": "EPUB-Export fehlgeschlagen: "
+  "export.error.epubFailed": "EPUB-Export fehlgeschlagen: ",
+  "export.error.exportFailed": "Export fehlgeschlagen"
 }

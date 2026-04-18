@@ -64,5 +64,6 @@
   "export.pasteSection.copied": "Markdown copied — paste into Notion or Google Docs",
   "export.pasteSection.defaultTitle": "Pasted content",
   "export.format.docx": "Word Document (.docx)",
-  "export.error.epubFailed": "Error en la exportación EPUB: "
+  "export.error.epubFailed": "Error en la exportación EPUB: ",
+  "export.error.exportFailed": "Error en la exportación"
 }
