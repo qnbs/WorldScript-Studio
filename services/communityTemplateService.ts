@@ -21,8 +21,8 @@ export interface CommunityTemplateResult {
 }
 
 /**
- * Fetch the community template index from GitHub.
- * Falls back to an empty array on network errors.
+ * Fetch the community template index from the bundled static asset.
+ * Falls back to embedded templates on network/fetch errors.
  */
 export async function fetchCommunityTemplates(
   signal?: AbortSignal,
@@ -38,7 +38,7 @@ export async function fetchCommunityTemplates(
     if (!res.ok) {
       return {
         templates: getFallbackTemplates(),
-        error: `GitHub API: HTTP ${res.status}`,
+        error: `Failed to load community templates: HTTP ${res.status}`,
       };
     }
 
@@ -64,7 +64,7 @@ export function clearCommunityTemplateCache(): void {
 }
 
 // ─── Fallback Templates (embedded) ───────────────────────────────────────────
-// Displayed when GitHub is unreachable.
+// Displayed when the bundled asset cannot be fetched (e.g. offline / first load).
 
 function getFallbackTemplates(): CommunityTemplate[] {
   return [

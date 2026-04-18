@@ -129,8 +129,7 @@ export const extractStoryCodex = (
     }
 
     const properNounRegex = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
-    let match: RegExpExecArray | null = properNounRegex.exec(text);
-    while (match) {
+    for (const match of text.matchAll(properNounRegex)) {
       const candidate = normalizeCandidate(match[1] ?? '');
       const normalized = candidate.toLowerCase();
       if (STOPWORDS.has(candidate) || normalized.length < 3) continue;
@@ -138,7 +137,6 @@ export const extractStoryCodex = (
       if (entityMap.has(normalized) && entityMap.get(normalized)!.known) continue;
 
       addMention(candidate, 'unknown', section, match.index, undefined, false);
-      match = properNounRegex.exec(text);
     }
   }
 

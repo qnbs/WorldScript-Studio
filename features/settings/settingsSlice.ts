@@ -240,11 +240,24 @@ export const applyInitialTheme = () => {
     localStorage !== null &&
     typeof localStorage.getItem === 'function';
 
+  // Fast path: read simple theme string mirrored by App.tsx
+  const directTheme = hasLocalStorage ? localStorage.getItem('storycraft-theme') : null;
+  if (directTheme === 'dark' || directTheme === 'light') {
+    document.body.classList.remove('light-theme', 'dark-theme', 'auto-theme');
+    document.body.classList.add(`${directTheme}-theme`);
+    return;
+  }
+
+  // Fallback: read from legacy serialized state (used in tests)
   const storedState = hasLocalStorage ? localStorage.getItem('storycraft-state') : null;
   if (storedState) {
-    const persistedState = JSON.parse(storedState);
-    if (persistedState.settings) {
-      settings = persistedState.settings;
+    try {
+      const persistedState = JSON.parse(storedState);
+      if (persistedState.settings) {
+        settings = persistedState.settings;
+      }
+    } catch {
+      // Corrupted localStorage — fall through to defaults
     }
   }
   const theme = settings.theme === 'auto' ? getSystemThemePreference() : settings.theme;

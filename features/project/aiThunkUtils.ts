@@ -68,6 +68,3 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
     options,
   );
 };
-
-export const buildDeduplicationKey = (prompt: string, viewType: string): string =>
-  `${prompt}|${viewType}|${Date.now()}`;

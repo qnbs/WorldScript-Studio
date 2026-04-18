@@ -122,25 +122,25 @@ const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ 
 
   const parsedText = text.split(/```([\s\S]*?)```/g).map((part, index) => {
     if (index % 2 === 1) {
-      // It's a code block
-      // biome-ignore-start lint/suspicious/noArrayIndexKey: stable derived fragments from regex split
       return (
         <pre
-          key={index}
+          // biome-ignore lint/suspicious/noArrayIndexKey: deterministic regex split of immutable text
+          key={`code-${index}`}
           className="bg-[var(--background-primary)] p-3 rounded-md text-sm whitespace-pre-wrap"
         >
           <code>{part}</code>
         </pre>
       );
-      // biome-ignore-end lint/suspicious/noArrayIndexKey: stable derived fragments from regex split
     }
     const bolded = part.split(/(\*\*[\s\S]*?\*\*)/g).map((subPart, subIndex) => {
-      // biome-ignore lint/suspicious/noArrayIndexKey: stable derived render fragments from regex split
-      if (subIndex % 2 === 1) return <strong key={subIndex}>{subPart.slice(2, -2)}</strong>;
+      if (subIndex % 2 === 1) {
+        // biome-ignore lint/suspicious/noArrayIndexKey: deterministic regex split of immutable text
+        return <strong key={`b-${index}-${subIndex}`}>{subPart.slice(2, -2)}</strong>;
+      }
       return subPart;
     });
-    // biome-ignore lint/suspicious/noArrayIndexKey: stable derived render fragments from regex split
-    return <Fragment key={index}>{bolded}</Fragment>;
+    // biome-ignore lint/suspicious/noArrayIndexKey: deterministic regex split of immutable text
+    return <Fragment key={`t-${index}`}>{bolded}</Fragment>;
   });
 
   return (
@@ -196,10 +196,10 @@ const AiAssistant: FC = () => {
       </CardHeader>
       <CardContent className="p-0 flex flex-col flex-grow min-h-0">
         <div ref={chatContainerRef} className="flex-grow p-4 space-y-4 overflow-y-auto">
-          {chatHistory.map((msg, index) => (
+          {chatHistory.map((msg, index) => {
             // biome-ignore lint/suspicious/noArrayIndexKey: append-only chat history
-            <ChatMessage key={index} {...msg} />
-          ))}
+            return <ChatMessage key={`${msg.role}-${index}`} {...msg} />;
+          })}
           {isAiReplying &&
             chatHistory.length > 0 &&
             chatHistory[chatHistory.length - 1]?.text === '' && (

@@ -22,70 +22,69 @@ export const Modal: React.FC<ModalProps> = ({
   const previouslyFocusedElement = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    if (!isOpen) return undefined;
+
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
       }
     };
 
-    if (isOpen) {
-      previouslyFocusedElement.current = document.activeElement as HTMLElement;
-      window.addEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    previouslyFocusedElement.current = document.activeElement as HTMLElement;
+    window.addEventListener('keydown', handleEsc);
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
 
-      // Focus trapping logic
-      const modalElement = modalRef.current;
-      if (modalElement) {
-        const focusableElements = Array.from(
-          modalElement.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-          ),
-        ).filter((element) => !element.hasAttribute('disabled'));
-        const firstElement = focusableElements[0];
-        const lastElement = focusableElements[focusableElements.length - 1];
+    // Focus trapping logic
+    const modalElement = modalRef.current;
+    let handleTabKey: ((e: KeyboardEvent) => void) | undefined;
 
-        if (firstElement) {
-          firstElement.focus();
-        } else {
-          modalElement.focus();
+    if (modalElement) {
+      const focusableElements = Array.from(
+        modalElement.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute('disabled'));
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (firstElement) {
+        firstElement.focus();
+      } else {
+        modalElement.focus();
+      }
+
+      handleTabKey = (e: KeyboardEvent) => {
+        if (e.key !== 'Tab') return;
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          return;
         }
 
-        const handleTabKey = (e: KeyboardEvent) => {
-          if (e.key !== 'Tab') return;
-          if (focusableElements.length === 0) {
+        if (e.shiftKey) {
+          // Shift+Tab
+          if (document.activeElement === firstElement && lastElement) {
+            lastElement.focus();
             e.preventDefault();
-            return;
           }
-
-          if (e.shiftKey) {
-            // Shift+Tab
-            if (document.activeElement === firstElement && lastElement) {
-              lastElement.focus();
-              e.preventDefault();
-            }
-          } else {
-            // Tab
-            if (document.activeElement === lastElement && firstElement) {
-              firstElement.focus();
-              e.preventDefault();
-            }
+        } else {
+          // Tab
+          if (document.activeElement === lastElement && firstElement) {
+            firstElement.focus();
+            e.preventDefault();
           }
-        };
+        }
+      };
 
-        modalElement.addEventListener('keydown', handleTabKey);
-
-        return () => {
-          document.body.style.overflow = '';
-          window.removeEventListener('keydown', handleEsc);
-          modalElement.removeEventListener('keydown', handleTabKey);
-          previouslyFocusedElement.current?.focus();
-        };
-      }
+      modalElement.addEventListener('keydown', handleTabKey);
     }
 
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleEsc);
+      if (modalElement && handleTabKey) {
+        modalElement.removeEventListener('keydown', handleTabKey);
+      }
+      previouslyFocusedElement.current?.focus();
     };
   }, [isOpen, onClose]);
 

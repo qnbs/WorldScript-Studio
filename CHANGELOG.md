@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+
+- **SettingsView Decomposition**: Split 2112-LOC monolith `components/SettingsView.tsx` into 8 focused section files under `components/settings/` (SettingsShared, AiProviderCard, SettingsModals, GeneralSections, EditorSections, AiSections, SystemSections, DataSection). Main component reduced to ~234 LOC.
+- **Constants Split**: Split 506-LOC `constants.tsx` into `constants/icons.tsx` (SVG paths), `constants/defaults.ts` (STORY_TEMPLATES), and `constants/index.ts` (barrel). All 18 existing imports resolve via barrel.
+- **Listener Separation**: Split combined auto-save listener in `listenerMiddleware.ts` into separate project and settings listeners to prevent full project serialization on theme toggle.
+- **StorageBackend Interface**: Unified `StorageManager` backend typing — removed `typeof dbService` union, typed as `StorageBackend` with `as unknown as StorageBackend` casts. Fixed `listSnapshots()` return type from `string[]` to `ProjectSnapshot[]`.
+
+### Fixed
+
+- **HelpView Array Keys**: Replaced bare array index keys with prefixed keys (`code-${index}`, `t-${index}`, `b-${index}-${subIndex}`) and added biome-ignore comments for deterministic regex-split patterns.
+- **Collaboration Awareness Validation**: Added runtime validation for remote peer awareness state (type checks for id/name/color, length limits) to prevent malicious data injection.
+- **Lighthouse CI**: Changed `continue-on-error` from `true` to `false` for Lighthouse job in CI.
+- **codexService Infinite Loop**: Replaced `while` + `exec()` loop with `for...of matchAll()` to prevent browser freeze on English manuscripts.
+- **Modal Focus-Trap**: Consolidated cleanup into single function with early return for `!isOpen`.
+- **FOUC Theme Init**: Added inline theme script in `<head>` reading from localStorage.
+- **dbService Decrypt**: Added missing `await` before `decryptWithMigration()` in try/catch blocks.
+
+### Security
+
+- **CryptoKey**: Replaced reconstructible key derivation with `crypto.subtle.generateKey()` non-extractable CryptoKey.
+- **CSP img-src**: Tightened from `https:` wildcard to `'self' data: blob:` only. Added `frame-ancestors 'none'` and `upgrade-insecure-requests`.
+- **Import Validation**: Added Valibot schema validation for imported project JSON.
+
+### Changed
+
+- **AI Provider**: `testAIConnection('gemini')` now makes real API validation call. OpenAI non-gpt models throw descriptive error instead of silent downgrade. OpenAI stream loop checks `signal.aborted`.
+- **Coverage Config**: Replaced curated file list with glob patterns for honest all-up coverage.
+- **Community Templates**: Updated error messages to reflect local static asset source instead of GitHub API references.
+
 ### Maintenance (2026-04-18 Hardening Batch)
 
 - **CI / Codecov**: Replaced deprecated `pnpm dlx codecov` upload flow with `codecov/codecov-action@v5` in `.github/workflows/ci.yml`.

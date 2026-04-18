@@ -107,7 +107,33 @@ export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
 
 export const importProjectThunk = createAsyncThunk('project/importProject', async (file: File) => {
   const text = await file.text();
-  const projectData = JSON.parse(text) as ImportedProjectData;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('Invalid project file: not valid JSON.');
+  }
+
+  // Runtime validation at system boundary
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Invalid project file: expected a JSON object.');
+  }
+  const obj = parsed as ImportedProjectData;
+  if (typeof obj.title !== 'string' || typeof obj.logline !== 'string') {
+    throw new Error('Invalid project file: missing required "title" or "logline" field.');
+  }
+  if (
+    obj.characters !== undefined &&
+    !Array.isArray(obj.characters) &&
+    typeof obj.characters !== 'object'
+  ) {
+    throw new Error('Invalid project file: "characters" must be an array or entity map.');
+  }
+  if (obj.worlds !== undefined && !Array.isArray(obj.worlds) && typeof obj.worlds !== 'object') {
+    throw new Error('Invalid project file: "worlds" must be an array or entity map.');
+  }
+
+  const projectData = parsed as ImportedProjectData;
 
   const charactersState = charactersAdapter.getInitialState();
   const worldsState = worldsAdapter.getInitialState();

@@ -84,8 +84,8 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 | i18n             | ★★★★★  | Modular, 5 languages, persistent selection                 |
 | PWA / Offline    | ★★★★★  | Workbox, versioned caches, smart strategies                |
 | State Management | ★★★★☆  | Redux-Undo well integrated, auto-save validated            |
-| Security         | ★★★★☆  | CSP set, capabilities scoped, PSK collab, decrypt recovery |
-| Test Coverage    | ★★★★☆  | 113 unit tests, 17 files, 96% statements, 82% branches     |
+| Security         | ★★★★☆  | CSP hardened, non-extractable CryptoKey, PSK collab, import validation |
+| Test Coverage    | ★★★☆☆  | 113+ unit tests, glob-based coverage, honest all-up thresholds |
 | Documentation    | ★★★★★  | README, CONTRIBUTING, ROADMAP, TODO, CHANGELOG, AUDIT      |
 | Performance      | ★★★★☆  | Code-splitting with 10+ manual chunks, Lighthouse CI       |
 | CI/CD            | ★★★★★  | Full pipeline with hard-fail lint/typecheck + coverage     |
@@ -177,12 +177,122 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 
 **Resolution:** Lighthouse CI job added to CI pipeline (`.github/workflows/ci.yml`). Performance budgets defined in `.lighthouserc.js` with assertions for Performance ≥ 0.9, FCP ≤ 1800ms, LCP ≤ 2500ms, TBT ≤ 150ms, CLS ≤ 0.1. Bundle analyzer available via `pnpm run analyze`.
 
-### 16. Potential Memory Leaks in ManuscriptView Resize
+### 16. ~~Potential Memory Leaks in ManuscriptView Resize~~ ✅ FIXED
 
-**File:** `components/ManuscriptView.tsx` (line ~67-79)
-**Issue:** Resize event listeners are added in `useCallback` but cleanup depends on `stopResizing` being called. If the component unmounts during a resize, listeners may not be removed.
-**Recommendation:** Move listeners to `useEffect` with proper cleanup functions.
-**Effort:** Low | **Priority:** Medium
+**File:** `components/ManuscriptView.tsx`
+**Issue:** Resize event listeners were added in `useCallback` without guaranteed cleanup on unmount.
+**Resolution:** Refactored to `useEffect` with `AbortController` + `{ signal }` option and throttled handlers. Cleanup runs on unmount via `controller.abort()`.
+
+---
+
+## New Findings (2026-04-18 Audit)
+
+### 17. ~~Feature-Flag-System~~ ✅ FIXED
+
+**Files:** `features/featureFlags/featureFlagsSlice.ts`, `contexts/FeatureFlagsContext.tsx`, `components/SettingsView.tsx`
+**Resolution:** Fully implemented with 3 flags (`enableOllama`, `enablePerformanceBudgets`, `enableVisualRegression`), localStorage persistence via `featureFlagsPersistenceMiddleware`, UI toggle in SettingsView, and `useFeatureFlags()` hook.
+
+### 18. Infinite Loop in codexService.extractStoryCodex ✅ FIXED (v1.1.2)
+
+**File:** `services/codexService.ts` (line 118-127)
+**Issue:** `while` loop with `exec()` and three `continue` statements skipped the `match = regex.exec(text)` re-assignment, causing an infinite loop when any matched proper noun was a stopword (e.g. "The"), shorter than 3 chars, or already a known entity. Triggered on virtually every English manuscript.
+**Impact:** Browser tab freeze after 1.2s debounced codex extraction on every manuscript edit.
+**Resolution:** Replaced `while` + manual `exec()` with `for (const match of text.matchAll(...))` pattern.
+
+### 19. Modal Focus-Trap Cleanup Fragility ✅ FIXED (v1.1.2)
+
+**File:** `components/ui/Modal.tsx`
+**Issue:** `useEffect` had two conditional return paths for cleanup. While React's cleanup semantics prevent actual leaks, the pattern was fragile and hard to reason about.
+**Resolution:** Consolidated into single cleanup function with early return for `!isOpen`. Added test for body overflow restoration.
+
+### 20. FOUC Theme Initialization ✅ FIXED (v1.1.2)
+
+**File:** `features/settings/settingsSlice.ts`, `index.html`
+**Issue:** `applyInitialTheme()` read `localStorage.getItem('storycraft-state')` — a key never written in production (only in tests). `JSON.parse` had no try/catch. Result: flash of wrong theme on every page load.
+**Resolution:** Added inline `<script>` in `<head>` reading `storycraft-theme` from localStorage. Theme mirrored to localStorage on save. Wrapped `JSON.parse` in try/catch. Removed dead `storycraft-state` read.
+
+### 21. Untranslated FR/ES/IT Locales ✅ FIXED (v1.1.2)
+
+**Issue:** French, Spanish, Italian locale files contained 96% English strings verbatim. Language selector offered all 5 languages, giving users untranslated UI.
+**Resolution:** Removed FR/ES/IT from language selector. Locale files retained for future translation work.
+
+### 22. CryptoKey Derived From Public Inputs ✅ FIXED (v1.2.0)
+
+**File:** `services/dbService.ts`
+**Issue:** AES-256-GCM encryption key was derived from `location.origin + hardcoded string + navigator.userAgent` — all publicly reconstructible. Anyone with IndexedDB access could decrypt API keys.
+**Resolution:** Replaced with `crypto.subtle.generateKey()` producing a non-extractable `CryptoKey` stored directly in IndexedDB via structured clone. Migration path re-encrypts existing keys automatically.
+
+### 23. CSP img-src Too Permissive ✅ FIXED (v1.2.0)
+
+**File:** `index.html`
+**Issue:** `img-src 'self' data: blob: https:` allowed any HTTPS host, enabling image-beacon exfiltration via XSS.
+**Resolution:** Tightened to `img-src 'self' data: blob:`. Added `frame-ancestors 'none'` and `upgrade-insecure-requests`.
+
+### 24. Import JSON Without Schema Validation ✅ FIXED (v1.2.0)
+
+**File:** `features/project/projectSlice.ts`
+**Issue:** `JSON.parse(text) as ImportedProjectData` — compile-time-only assertion with zero runtime validation. Malformed imports could corrupt state or enable XSS via injected content.
+**Resolution:** Added Valibot schema validation before dispatch. Invalid imports show user-facing error toast.
+
+### 25. Dead Code in aiThunkUtils and store ✅ FIXED (v1.1.2)
+
+**Files:** `features/project/aiThunkUtils.ts`, `app/store.ts`
+**Issue:** `buildDeduplicationKey` was never imported (dead code). `'persist/PERSIST'` in `ignoredActions` referenced non-existent redux-persist.
+**Resolution:** Removed both.
+
+### 26. Coverage Config Vanity Metric ✅ FIXED (v1.2.0)
+
+**File:** `vitest.config.ts`
+**Issue:** Coverage included only 24 specific files (those with tests), not the full project. Thresholds measured a curated island, not real coverage.
+**Resolution:** Replaced with glob patterns covering all source directories. Thresholds lowered to honest all-up baseline.
+
+### 27. _tempStore Type Derivation — Kept (v1.2.0)
+
+**File:** `app/store.ts`
+**Issue:** A second `configureStore()` call at module-import just to derive `RootState`/`AppDispatch` types. Runs serializable check middleware, doubles side effects.
+**Resolution:** Investigated — deriving types from `setupStore` return type causes `RootState` to resolve to `unknown` because `storeOptions` is typed as `Parameters<typeof configureStore>[0]` which widens the inferred state. The `_tempStore` approach is the recommended RTK pattern for factory-based store setup. Added clarifying comment. Removed dead `'persist/PERSIST'` from `ignoredActions`.
+
+### 28. Settings Change Triggers Full Project Save ✅ FIXED (v1.2.0)
+
+**File:** `app/listenerMiddleware.ts`
+**Issue:** Auto-save listener fired on both project and settings changes, always saving both. Toggling a theme slider triggered full multi-MB project serialization.
+**Resolution:** Split into separate listeners: project changes → `saveProject`, settings changes → `saveSettings`.
+
+### 29. testAIConnection('gemini') Returns Fake Success ✅ FIXED (v1.2.0)
+
+**File:** `services/aiProviderService.ts`
+**Issue:** `case 'gemini': return { ok: true }` — no actual API call. Users got "connected" confirmation with invalid API keys.
+**Resolution:** Added real lightweight API validation call with timeout.
+
+### 30. Silent Model Downgrade in OpenAI Provider ✅ FIXED (v1.2.0)
+
+**File:** `services/aiProviderService.ts`
+**Issue:** Non-gpt-prefixed models (e.g. `o1-preview`, `claude-sonnet-4-5`) silently replaced with `gpt-4o-mini`. No warning to user.
+**Resolution:** Throws descriptive error instead of silent fallback.
+
+### 31. OpenAI Stream Loop Missing Abort Check ✅ FIXED (v1.2.0)
+
+**File:** `services/aiProviderService.ts`
+**Issue:** `while(true) { reader.read() }` loop never checked `signal.aborted`. Cancel action continued streaming until server closed connection.
+**Resolution:** Added `signal.aborted` check at loop start.
+
+### 32. communityTemplateService Misleading Error Messages ✅ FIXED (v1.2.0)
+
+**File:** `services/communityTemplateService.ts`
+**Issue:** Error messages and comments referenced "GitHub API" but the service fetches local static assets.
+**Resolution:** Updated all references to reflect bundled static asset source.
+
+### 33. Collaboration Awareness State Without Validation ✅ FIXED (v1.2.0)
+
+**File:** `services/collaborationService.ts`
+**Issue:** Remote peer awareness state cast directly to `CollaborationUser` without validation. Malicious peers could inject arbitrary data.
+**Resolution:** Added validation for user id (string, max length), name (string, max 100 chars), and color (hex format).
+
+### 34. SettingsView.tsx 2116 LOC Monolith ✅ FIXED (v1.2.0)
+
+**File:** `components/SettingsView.tsx`
+**Issue:** Single 2116-line component — untestable, unreviewable.
+**Resolution:** Decomposed into section sub-components (Appearance, AI, Accessibility, Data, Collaboration, FeatureFlags).
 
 ---
 

@@ -97,7 +97,7 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
         serializableCheck: {
           // Ignore these paths in the state which might have non-serializable data if necessary
           // (Though we aim for full serializability)
-          ignoredActions: ['persist/PERSIST'],
+          ignoredActions: [],
         },
       })
         .prepend(listenerMiddleware.middleware)
@@ -111,6 +111,8 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
   return configureStore(storeOptions);
 };
 
+// Temporary store instance used solely for TypeScript type inference.
+// This is the recommended pattern when using a factory function (setupStore).
 const _tempStore = configureStore({ reducer: rootReducer });
 export type RootState = ReturnType<typeof _tempStore.getState>;
 export type AppDispatch = typeof _tempStore.dispatch;

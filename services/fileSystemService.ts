@@ -95,7 +95,7 @@ async function decryptText(
 }
 
 import type { EntityState } from '@reduxjs/toolkit';
-import type { Character, Settings, StoryProject, World } from '../types';
+import type { Character, ProjectSnapshot, Settings, StoryProject, World } from '../types';
 import { logger } from './logger';
 import type { StorageBackend } from './storageService';
 
@@ -128,7 +128,9 @@ class FileSystemService implements StorageBackend {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const projectId = sanitizePathSegment(
-      ((project as unknown as Record<string, unknown>)['id'] as string) || project.title || 'project',
+      ((project as unknown as Record<string, unknown>)['id'] as string) ||
+        project.title ||
+        'project',
     );
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
@@ -352,7 +354,7 @@ class FileSystemService implements StorageBackend {
     }
   }
 
-  async listSnapshots(): Promise<string[]> {
+  async listSnapshots(): Promise<ProjectSnapshot[]> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
@@ -365,7 +367,12 @@ class FileSystemService implements StorageBackend {
       const entries = await apis.readDir(snapshotsPath);
       return entries
         .filter((entry) => entry.name?.endsWith('.json'))
-        .map((entry) => entry.name!.replace('.json', ''));
+        .map((entry) => ({
+          id: entry.name!.replace('.json', '') as unknown as number,
+          name: entry.name!.replace('.json', ''),
+          date: '',
+          wordCount: 0,
+        }));
     } catch (error) {
       logger.error('Failed to list snapshots:', error);
       return [];

@@ -1,4 +1,3 @@
-import type { ProjectData } from '../features/project/projectSlice';
 import type { ProjectSnapshot, Settings, StoryProject } from '../types';
 
 // Storage interface for different backends
@@ -30,7 +29,7 @@ export interface StorageBackend {
   // Snapshots
   saveSnapshot(snapshotId: string, data: unknown): Promise<void>;
   getSnapshotData(snapshotId: string): Promise<unknown>;
-  listSnapshots(): Promise<string[]>;
+  listSnapshots(): Promise<ProjectSnapshot[]>;
   deleteSnapshot(snapshotId: string): Promise<void>;
 }
 
@@ -45,15 +44,14 @@ declare global {
   }
 }
 
-// Storage manager that chooses the appropriate backend
-// dbService does not implement StorageBackend exactly (different snapshot/project
-// signatures) but is compatible at runtime. The manager adapts where needed.
+// Storage manager that chooses the appropriate backend.
+// The manager adapts snapshot/project signature differences at the call-site.
 class StorageManager {
-  private backend: StorageBackend | typeof dbService;
+  private backend: StorageBackend;
   private ready: Promise<void>;
 
   constructor() {
-    this.backend = dbService;
+    this.backend = dbService as unknown as StorageBackend;
     this.ready = this.initializeBackend();
   }
 
@@ -62,19 +60,19 @@ class StorageManager {
     if (typeof window !== 'undefined' && window.__TAURI__) {
       try {
         await fileSystemService.initialize();
-        this.backend = fileSystemService;
+        this.backend = fileSystemService as unknown as StorageBackend;
         logger.debug('Using file system storage backend');
       } catch (error) {
         logger.warn('Failed to initialize file system storage, falling back to IndexedDB:', error);
-        this.backend = dbService;
+        this.backend = dbService as unknown as StorageBackend;
       }
     } else {
       logger.debug('Using IndexedDB storage backend');
-      this.backend = dbService;
+      this.backend = dbService as unknown as StorageBackend;
     }
   }
 
-  private async getBackend(): Promise<StorageBackend | typeof dbService> {
+  private async getBackend(): Promise<StorageBackend> {
     await this.ready;
     return this.backend;
   }
@@ -85,27 +83,19 @@ class StorageManager {
     return (backend.saveProject as (p: unknown) => Promise<void>)(project);
   }
 
-  async loadProject(_projectId: string): Promise<StoryProject | null> {
+  async loadProject(projectId: string): Promise<StoryProject | null> {
     const backend = await this.getBackend();
-    if ('loadProject' in backend) {
-      return (backend as StorageBackend).loadProject(_projectId);
-    }
-    return null;
+    return backend.loadProject(projectId);
   }
 
   async listProjects(): Promise<string[]> {
     const backend = await this.getBackend();
-    if ('listProjects' in backend) {
-      return (backend as StorageBackend).listProjects();
-    }
-    return [];
+    return backend.listProjects();
   }
 
-  async deleteProject(_projectId: string): Promise<void> {
+  async deleteProject(projectId: string): Promise<void> {
     const backend = await this.getBackend();
-    if ('deleteProject' in backend) {
-      return (backend as StorageBackend).deleteProject(_projectId);
-    }
+    return backend.deleteProject(projectId);
   }
 
   async saveImage(id: string, base64Data: string): Promise<void> {
@@ -125,13 +115,7 @@ class StorageManager {
 
   async loadSettings(): Promise<Settings | null> {
     const backend = await this.getBackend();
-    if (
-      'loadSettings' in backend &&
-      typeof (backend as StorageBackend).loadSettings === 'function'
-    ) {
-      return (backend as StorageBackend).loadSettings();
-    }
-    return null;
+    return backend.loadSettings();
   }
 
   async saveGeminiApiKey(apiKey: string): Promise<void> {
@@ -166,27 +150,22 @@ class StorageManager {
 
   async saveSnapshot(name: string, data: unknown): Promise<void> {
     const backend = await this.getBackend();
-    if ('saveSnapshot' in backend) {
-      return (backend as StorageBackend).saveSnapshot(name, data);
-    }
-    // IndexedDB backend uses createSnapshot(data, name)
-    return (backend as typeof dbService).createSnapshot(data as ProjectData, name);
+    return backend.saveSnapshot(name, data);
   }
 
   async getSnapshotData(id: number): Promise<unknown> {
     const backend = await this.getBackend();
-    return (backend.getSnapshotData as (i: number) => Promise<unknown>)(id);
+    return (backend.getSnapshotData as unknown as (i: number) => Promise<unknown>)(id);
   }
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {
     const backend = await this.getBackend();
-    const result = await backend.listSnapshots();
-    return result as ProjectSnapshot[];
+    return backend.listSnapshots();
   }
 
   async deleteSnapshot(id: number): Promise<void> {
     const backend = await this.getBackend();
-    return (backend.deleteSnapshot as (i: number) => Promise<void>)(id);
+    return (backend.deleteSnapshot as unknown as (i: number) => Promise<void>)(id);
   }
 }
 

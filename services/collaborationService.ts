@@ -118,7 +118,26 @@ class CollaborationService {
     if (!this.provider) return [];
     const users: CollaborationUser[] = [];
     this.provider.awareness.getStates().forEach((state: Record<string, unknown>) => {
-      if (state['user']) users.push(state['user'] as CollaborationUser);
+      const raw = state['user'];
+      if (raw && typeof raw === 'object') {
+        const u = raw as Record<string, unknown>;
+        if (
+          typeof u['id'] === 'string' &&
+          typeof u['name'] === 'string' &&
+          typeof u['color'] === 'string' &&
+          u['name'].length <= 100
+        ) {
+          const user: CollaborationUser = {
+            id: u['id'].slice(0, 64),
+            name: u['name'].slice(0, 100),
+            color: u['color'].slice(0, 20),
+          };
+          if (typeof u['cursor'] === 'number') {
+            user.cursor = u['cursor'];
+          }
+          users.push(user);
+        }
+      }
     });
     return users;
   }

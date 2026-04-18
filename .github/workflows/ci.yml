@@ -171,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [build]
-    continue-on-error: true
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v5
 

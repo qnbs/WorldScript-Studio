@@ -61,4 +61,23 @@ describe('Modal', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-labelledby');
   });
+
+  it('restores body overflow when closed', () => {
+    const { rerender } = render(<Modal {...defaultProps} isOpen={true} />);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    rerender(<Modal {...defaultProps} isOpen={false} />);
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('cleans up ESC listener when closed', () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<Modal {...defaultProps} isOpen={true} onClose={onClose} />);
+
+    rerender(<Modal {...defaultProps} isOpen={false} onClose={onClose} />);
+    onClose.mockClear();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

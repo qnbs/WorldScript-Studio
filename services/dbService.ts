@@ -42,6 +42,7 @@ function decompressData<T>(raw: unknown): T {
 // Secure API Key Storage Records
 const GEMINI_API_KEY_RECORD = 'gemini_api_key_encrypted_v1';
 const GEMINI_API_KEY_IV_RECORD = 'gemini_api_key_iv_v1';
+const CRYPTO_KEY_RECORD = 'local_crypto_key_v2';
 
 // Define structure of state stored in DB
 interface PersistedProjectState {
@@ -105,13 +106,98 @@ class IndexedDBService {
   private readonly MAX_AUTO_SNAPSHOTS = 20;
 
   // === CRYPTO HELPERS für API Key Verschlüsselung ===
-  private async getLocalCryptoKey(): Promise<CryptoKey> {
-    // Generiere einen geräte-spezifischen Schlüssel basierend auf Origin
+
+  /** Legacy key derivation — used only for migrating existing encrypted data. */
+  private async getLegacyCryptoKey(): Promise<CryptoKey> {
     const material = new TextEncoder().encode(
       `${location.origin}|StoryCraftStudio|gemini-key-v1|${navigator.userAgent.slice(0, 50)}`,
     );
     const hash = await crypto.subtle.digest('SHA-256', material);
     return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  }
+
+  /**
+   * Get or create a random non-extractable CryptoKey stored in IndexedDB.
+   * On first call a new key is generated and persisted; subsequent calls
+   * return the stored key via structured-clone.
+   */
+  private async getLocalCryptoKey(): Promise<CryptoKey> {
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
+    const existing = await new Promise<CryptoKey | undefined>((resolve, reject) => {
+      const req = store.get(CRYPTO_KEY_RECORD);
+      req.onsuccess = () => resolve(req.result as CryptoKey | undefined);
+      req.onerror = () => reject(getUserFriendlyDbError(req.error));
+    });
+    if (existing) return existing;
+
+    // Generate a new random non-extractable key
+    const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+      'encrypt',
+      'decrypt',
+    ]);
+
+    const writeStore = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    await new Promise<void>((resolve, reject) => {
+      const req = writeStore.put(key, CRYPTO_KEY_RECORD);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(getUserFriendlyDbError(req.error));
+    });
+
+    return key;
+  }
+
+  /**
+   * Decrypt data, falling back to the legacy derived key for migration.
+   * If the legacy key succeeds, re-encrypts with the new stored key.
+   */
+  private async decryptWithMigration(
+    encrypted: Uint8Array,
+    iv: Uint8Array,
+    reEncryptRecordKey: string,
+    reEncryptIvKey: string,
+  ): Promise<string> {
+    const newKey = await this.getLocalCryptoKey();
+    try {
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
+        newKey,
+        encrypted as Uint8Array<ArrayBuffer>,
+      );
+      return new TextDecoder().decode(decrypted);
+    } catch {
+      // Try legacy key for migration
+      const legacyKey = await this.getLegacyCryptoKey();
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
+        legacyKey,
+        encrypted as Uint8Array<ArrayBuffer>,
+      );
+      const plaintext = new TextDecoder().decode(decrypted);
+
+      // Re-encrypt with the new key
+      const newIv = crypto.getRandomValues(new Uint8Array(12));
+      const reEncrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: newIv },
+        newKey,
+        new TextEncoder().encode(plaintext),
+      );
+      const ws = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+      await new Promise<void>((resolve, reject) => {
+        const r1 = ws.put(Array.from(new Uint8Array(reEncrypted)), reEncryptRecordKey);
+        const r2 = ws.put(Array.from(newIv), reEncryptIvKey);
+        let done = 0;
+        const ok = () => {
+          done++;
+          if (done === 2) resolve();
+        };
+        r1.onsuccess = ok;
+        r2.onsuccess = ok;
+        r1.onerror = () => reject(getUserFriendlyDbError(r1.error));
+        r2.onerror = () => reject(getUserFriendlyDbError(r2.error));
+      });
+
+      return plaintext;
+    }
   }
 
   async saveGeminiApiKey(apiKey: string): Promise<void> {
@@ -161,13 +247,12 @@ class IndexedDBService {
         if (!encryptedArray || !ivArray) {
           return null;
         }
-        const cryptoKey = await this.getLocalCryptoKey();
-        const decrypted = await crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv: new Uint8Array(ivArray) },
-          cryptoKey,
+        return await this.decryptWithMigration(
           new Uint8Array(encryptedArray),
+          new Uint8Array(ivArray),
+          GEMINI_API_KEY_RECORD,
+          GEMINI_API_KEY_IV_RECORD,
         );
-        return new TextDecoder().decode(decrypted);
       } catch (error) {
         logger.warn('Failed to decrypt API key:', error);
         return null;
@@ -243,13 +328,12 @@ class IndexedDBService {
           }),
         ]);
         if (!encArr || !ivArr) return null;
-        const cryptoKey = await this.getLocalCryptoKey();
-        const decrypted = await crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv: new Uint8Array(ivArr) },
-          cryptoKey,
+        return await this.decryptWithMigration(
           new Uint8Array(encArr),
+          new Uint8Array(ivArr),
+          `api_key_${provider}_enc`,
+          `api_key_${provider}_iv`,
         );
-        return new TextDecoder().decode(decrypted);
       } catch (err) {
         // Distinguish between "no key stored" vs "decryption failed" (e.g. device change, cleared site data)
         logger.warn(`API key decryption failed for provider "${provider}":`, err);

@@ -122,6 +122,11 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       if (themeColorMeta) {
         themeColorMeta.setAttribute('content', isDark ? '#020617' : '#ffffff');
       }
+      try {
+        localStorage.setItem('storycraft-theme', isDark ? 'dark' : 'light');
+      } catch {
+        // localStorage may be unavailable (SSR, quota exceeded)
+      }
     };
 
     if (settings.theme === 'auto') {

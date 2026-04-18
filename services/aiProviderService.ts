@@ -53,7 +53,12 @@ async function streamOpenAI(
   const apiKey = await storageService.getApiKey('openai');
   if (!apiKey) throw new Error('NO_API_KEY: OpenAI API key missing. Please enter it in Settings.');
 
-  const model = opts.model.startsWith('gpt-') ? opts.model : 'gpt-4o-mini';
+  if (!opts.model.startsWith('gpt-')) {
+    throw new Error(
+      `OpenAI: Model "${opts.model}" is not a valid OpenAI model. Please select a GPT model (e.g. gpt-4o, gpt-4o-mini) in Settings.`,
+    );
+  }
+  const model = opts.model;
   const messages = opts.systemPrompt
     ? [
         { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
@@ -91,6 +96,7 @@ async function streamOpenAI(
   let buffer = '';
 
   while (true) {
+    if (opts.signal?.aborted) break;
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
@@ -308,8 +314,16 @@ export async function testAIConnection(
           ok: false,
           error: 'Claude requires a backend proxy (CORS restriction)',
         };
-      case 'gemini':
+      case 'gemini': {
+        const geminiKey = await storageService.getGeminiApiKey();
+        if (!geminiKey) return { ok: false, error: 'No Gemini API key set' };
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`,
+          { signal: AbortSignal.timeout(8000) },
+        );
+        if (!res.ok) return { ok: false, error: `Gemini API: HTTP ${res.status}` };
         return { ok: true };
+      }
       default:
         return { ok: false, error: 'Unknown provider' };
     }

@@ -76,7 +76,12 @@ describe('dbService', () => {
     vi.stubGlobal('crypto', {
       subtle: {
         digest: vi.fn(async () => new Uint8Array(32).buffer),
-        importKey: vi.fn(async () => ({})),
+        importKey: vi.fn(async () => ({ type: 'secret', algorithm: { name: 'AES-GCM' } })),
+        generateKey: vi.fn(async () => ({
+          type: 'secret',
+          algorithm: { name: 'AES-GCM' },
+          extractable: false,
+        })),
         encrypt: vi.fn(async (_algo, _key, data) => data),
         decrypt: vi.fn(async (_algo, _key, data) => data),
       },

@@ -9,22 +9,56 @@ StoryCraft Studio soll die führende Open-Source-Plattform für KI-gestütztes k
 
 ---
 
-## v1.1 — Stabilisierung & Härtung (aktuell)
+## v1.1 — Stabilisierung & Härtung
 
 **Status:** ✅ Abgeschlossen (siehe [docs/history/completed-v1.1.md](docs/history/completed-v1.1.md) für Details)
 
-All critical, high, and most medium-priority items have been completed. Remaining open items tracked in [`TODO.md`](TODO.md):
+All critical, high, and most medium-priority items have been completed, including:
 
-- E2E-Tests erweitern (Projekt-Flow, Settings)
-- ManuscriptView Resize-Listener Cleanup
-- Request-Deduplizierung für AI-Calls
-- DevContainer, Feature-Flag-System, Logging-Framework
+- ManuscriptView Resize-Listener Cleanup (AbortController + throttle)
+- Feature-Flag-System (localStorage-basiert, UI in Settings)
+- DevContainer-Konfiguration
+- Request-Deduplizierung (abort-previous Pattern in aiThunkUtils.ts)
+- Self-hosted Fonts (kein CDN, kein Google Fonts)
 
 ---
 
-## v1.2 — Local AI & erweiterte Werkzeuge
+## v1.1.2 — Hotfix: Kritische Bugs
+
+**Status:** ✅ Abgeschlossen
+
+- codexService Infinite-Loop Fix (while+continue → for...of matchAll)
+- Modal Focus-Trap Cleanup konsolidiert (fragile 2-return → single cleanup)
+- FOUC Theme-Init behoben (inline script + localStorage mirror)
+- Unübersetzte Sprachen (FR/ES/IT) aus Selector entfernt
+- Dead Code entfernt (buildDeduplicationKey, persist/PERSIST)
+
+---
+
+## v1.2 — Security, Quality & Local AI
 
 **Status:** 📋 Geplant
+
+### Security Hardening
+
+- CryptoKey non-extractable (ersetze öffentliche Key-Derivation durch echte Krypto)
+- CSP img-src hardening (https: entfernt, frame-ancestors 'none', upgrade-insecure-requests)
+- Import-JSON Schema-Validation mit Valibot
+- Collaboration Awareness-State Validation (XSS-Prävention)
+- communityTemplateService irreführende Fehlermeldungen korrigiert
+- OpenAI Stream Abort-Check, silent Model-Downgrade gestoppt
+- Gemini Connection Test (echter API-Call statt fake { ok: true })
+
+### Code Quality
+
+- Coverage-Config auf Glob-Patterns umgestellt (ehrliche Metriken)
+- TypeScript-Version auf reale Stable gepinnt
+- _tempStore entfernt, Typen von setupStore abgeleitet
+- Project/Settings-Save-Listener getrennt (Performance)
+- SettingsView.tsx in Sektions-Komponenten aufgeteilt (2116 LOC → ~6×300 LOC)
+- StorageBackend-Interface strikt durchgesetzt
+- Lighthouse CI hard-fail aktiviert
+- HelpView biome-ignore cleanup, constants.tsx split
 
 ### Ollama / Local-AI Integration
 
