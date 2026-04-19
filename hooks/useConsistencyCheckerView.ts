@@ -8,7 +8,7 @@ import {
 } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
 import { generateText } from '../services/aiProviderService';
-import { dbService } from '../services/dbService';
+import { loadStoryCodex } from '../services/codexService';
 import { getPrompts } from '../services/geminiService';
 import type { CharacterRelationship, StoryCodex } from '../types';
 
@@ -52,7 +52,7 @@ export const useConsistencyCheckerView = () => {
         return;
       }
       try {
-        const codex = await dbService.getStoryCodex(projectId);
+        const codex = await loadStoryCodex(projectId);
         if (!cancelled) {
           setStoryCodex(codex);
         }

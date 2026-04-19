@@ -1,5 +1,5 @@
 import type { Character, StoryCodex, StoryCodexEntity, StorySection, World } from '../types';
-import { dbService } from './dbService';
+import { storageService } from './storageService';
 
 const STOPWORDS = new Set([
   'The',
@@ -161,9 +161,9 @@ export const extractStoryCodex = (
 };
 
 export const saveStoryCodex = async (codex: StoryCodex): Promise<void> => {
-  await dbService.saveStoryCodex(codex);
+  await storageService.saveStoryCodex(codex);
 };
 
 export const loadStoryCodex = async (projectId: string): Promise<StoryCodex | null> => {
-  return dbService.getStoryCodex(projectId);
+  return storageService.getStoryCodex(projectId);
 };

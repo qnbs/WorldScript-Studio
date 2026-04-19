@@ -1,4 +1,4 @@
-import type { ProjectSnapshot, Settings, StoryProject } from '../types';
+import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
 
 // Storage interface for different backends
 export interface StorageBackend {
@@ -37,6 +37,16 @@ export interface StorageBackend {
 
   // First-launch detection
   hasSavedData(): Promise<boolean>;
+
+  // Story Codex (extracted entity index per project)
+  saveStoryCodex(codex: StoryCodex): Promise<void>;
+  getStoryCodex(projectId: string): Promise<StoryCodex | null>;
+  deleteStoryCodex(projectId: string): Promise<void>;
+
+  // RAG vectors (embedding store per project — file-per-project, compressed)
+  saveRagVectors(projectId: string, vectors: unknown[]): Promise<void>;
+  getRagVectors(projectId: string): Promise<unknown[]>;
+  deleteRagVectors(projectId: string): Promise<void>;
 }
 
 // Import existing services
@@ -182,6 +192,36 @@ class StorageManager {
   async hasSavedData(): Promise<boolean> {
     const backend = await this.getBackend();
     return backend.hasSavedData();
+  }
+
+  async saveStoryCodex(codex: StoryCodex): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.saveStoryCodex(codex);
+  }
+
+  async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
+    const backend = await this.getBackend();
+    return backend.getStoryCodex(projectId);
+  }
+
+  async deleteStoryCodex(projectId: string): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.deleteStoryCodex(projectId);
+  }
+
+  async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.saveRagVectors(projectId, vectors);
+  }
+
+  async getRagVectors(projectId: string): Promise<unknown[]> {
+    const backend = await this.getBackend();
+    return backend.getRagVectors(projectId);
+  }
+
+  async deleteRagVectors(projectId: string): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.deleteRagVectors(projectId);
   }
 }
 

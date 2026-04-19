@@ -513,6 +513,50 @@ class IndexedDBService {
     });
   }
 
+  // --- RAG Vector Methods ---
+
+  async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
+    const store = await this.getObjectStore(RAG_VECTORS_STORE, 'readwrite');
+    // Clear existing vectors for this project then write the full set
+    const index = store.index('projectId');
+    const keysToDelete: IDBValidKey[] = [];
+    await new Promise<void>((resolve, reject) => {
+      const req = index.getAllKeys(projectId);
+      req.onsuccess = () => {
+        keysToDelete.push(...(req.result as IDBValidKey[]));
+        resolve();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    for (const key of keysToDelete) {
+      await new Promise<void>((resolve, reject) => {
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+    for (const vector of vectors) {
+      await new Promise<void>((resolve, reject) => {
+        const req = store.put({ ...(vector as object), projectId });
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+  }
+
+  async getRagVectors(projectId: string): Promise<unknown[]> {
+    const store = await this.getObjectStore(RAG_VECTORS_STORE, 'readonly');
+    return new Promise((resolve, reject) => {
+      const req = store.index('projectId').getAll(projectId);
+      req.onsuccess = () => resolve(req.result as unknown[]);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async deleteRagVectors(projectId: string): Promise<void> {
+    await this.saveRagVectors(projectId, []);
+  }
+
   // Helper to validate state structure and fix common issues
   private validateAndFixState(project: unknown, settings: unknown): PersistedState | undefined {
     // If project is missing but we have settings, return partial to allow new user flow
