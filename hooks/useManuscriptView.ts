@@ -6,11 +6,11 @@ import {
   selectAllWorlds,
   selectProjectData,
 } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
 import {
   generateLoglineSuggestionsThunk,
-  projectActions,
   proofreadTextThunk,
-} from '../features/project/projectSlice';
+} from '../features/project/thunks/writingThunks';
 import type { Character, View, World } from '../types';
 import { useTranslation } from './useTranslation';
 

@@ -5,7 +5,8 @@ import {
   selectManuscript,
   selectProjectData,
 } from '../features/project/projectSelectors';
-import { projectActions, streamGenerationThunk } from '../features/project/projectSlice';
+import { projectActions } from '../features/project/projectSlice';
+import { streamGenerationThunk } from '../features/project/thunks/writingThunks';
 import { writerActions } from '../features/writer/writerSlice';
 import { logger } from '../services/logger';
 import { useTranslation } from './useTranslation';

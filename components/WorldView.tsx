@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
 import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
-import { uploadWorldImageThunk } from '../features/project/projectSlice';
+import { uploadWorldImageThunk } from '../features/project/thunks/worldThunks';
 import { useWorldView } from '../hooks/useWorldView';
 import { dbService } from '../services/dbService';
 import type { World } from '../types';

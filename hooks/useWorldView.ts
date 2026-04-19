@@ -3,12 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import { selectAllWorlds } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
 import {
   generateWorldImageThunk,
   generateWorldProfileThunk,
-  projectActions,
   regenerateWorldFieldThunk,
-} from '../features/project/projectSlice';
+} from '../features/project/thunks/worldThunks';
 import { storageService } from '../services/storageService';
 import type { World, WorldLocation, WorldTimelineEvent } from '../types';
 import { useTranslation } from './useTranslation';

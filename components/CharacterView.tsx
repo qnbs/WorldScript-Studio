@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
 import { CharacterViewContext, useCharacterViewContext } from '../contexts/CharacterViewContext';
-import { uploadCharacterImageThunk } from '../features/project/projectSlice';
+import { uploadCharacterImageThunk } from '../features/project/thunks/characterThunks';
 import { useCharacterView } from '../hooks/useCharacterView';
 import { dbService } from '../services/dbService';
 import type { Character } from '../types';

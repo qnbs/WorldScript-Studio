@@ -114,6 +114,8 @@ vi.mock('../../features/project/projectSlice', () => ({
   projectActions: {
     updateManuscriptSection: (payload: unknown) => ({ type: 'updateManuscriptSection', payload }),
   },
+}));
+vi.mock('../../features/project/thunks/writingThunks', () => ({
   streamGenerationThunk: (payload: unknown) => ({
     type: 'streamGenerationThunk',
     payload,

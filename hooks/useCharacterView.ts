@@ -2,12 +2,12 @@ import { useCallback, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import { selectAllCharacters } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
 import {
   generateCharacterPortraitThunk,
   generateCharacterProfileThunk,
-  projectActions,
   regenerateCharacterFieldThunk,
-} from '../features/project/projectSlice';
+} from '../features/project/thunks/characterThunks';
 import { storageService } from '../services/storageService';
 import type { Character } from '../types';
 import { useTranslation } from './useTranslation';

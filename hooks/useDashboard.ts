@@ -6,7 +6,8 @@ import {
   selectAllWorlds,
   selectProjectData,
 } from '../features/project/projectSelectors';
-import { generateLoglineSuggestionsThunk, projectActions } from '../features/project/projectSlice';
+import { projectActions } from '../features/project/projectSlice';
+import { generateLoglineSuggestionsThunk } from '../features/project/thunks/writingThunks';
 import type { View } from '../types';
 import { useTranslation } from './useTranslation';
 

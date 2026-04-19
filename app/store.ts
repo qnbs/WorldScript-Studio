@@ -4,11 +4,11 @@ import undoable from 'redux-undo';
 import featureFlagsReducer, {
   featureFlagsPersistenceMiddleware,
 } from '../features/featureFlags/featureFlagsSlice';
-import projectReducer, {
+import projectReducer, { projectActions } from '../features/project/projectSlice';
+import {
   importProjectThunk,
-  projectActions,
   restoreSnapshotThunk,
-} from '../features/project/projectSlice';
+} from '../features/project/thunks/projectManagementThunks';
 import settingsReducer from '../features/settings/settingsSlice';
 import statusReducer from '../features/status/statusSlice';
 import writerReducer from '../features/writer/writerSlice';

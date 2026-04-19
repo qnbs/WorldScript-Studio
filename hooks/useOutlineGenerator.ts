@@ -2,11 +2,11 @@ import { useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import { selectManuscript, selectOutline } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
 import {
   generateOutlineThunk,
-  projectActions,
   regenerateOutlineSectionThunk,
-} from '../features/project/projectSlice';
+} from '../features/project/thunks/outlineThunks';
 import type { OutlineSection, StorySection, View } from '../types';
 import { useTranslation } from './useTranslation';
 

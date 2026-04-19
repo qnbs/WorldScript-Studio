@@ -1,32 +1,53 @@
 import type { EntityState, PayloadAction } from '@reduxjs/toolkit';
-import { createAsyncThunk, createEntityAdapter, createSlice } from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
-import type { RootState } from '../../app/store';
-import type { AIRequestOptions } from '../../services/aiProviderService';
-import { storageService } from '../../services/storageService';
 import type {
   Character,
   CharacterRelationship,
-  CustomTemplateParams,
-  OutlineGenerationParams,
   OutlineSection,
   StorySection,
   World,
   WritingGoal,
   WritingSession,
 } from '../../types';
-import { createDeduplicatedThunk } from './aiThunkUtils';
+import { charactersAdapter, worldsAdapter } from './adapters';
+import {
+  generateCharacterPortraitThunk,
+  uploadCharacterImageThunk,
+} from './thunks/characterThunks';
+import { importProjectThunk, restoreSnapshotThunk } from './thunks/projectManagementThunks';
+import { generateWorldImageThunk, uploadWorldImageThunk } from './thunks/worldThunks';
 
-// --- Lazy AI Service Loaders (keeps @google/genai out of the eager chunk graph) ---
-const loadAiProvider = () => import('../../services/aiProviderService');
-const loadPrompts = () => import('../../services/geminiService');
+// --- Re-exports for consumers ---
+export { charactersAdapter, worldsAdapter } from './adapters';
+export { createDeduplicatedThunk } from './aiThunkUtils';
+export {
+  generateCharacterPortraitThunk,
+  generateCharacterProfileThunk,
+  regenerateCharacterFieldThunk,
+  uploadCharacterImageThunk,
+} from './thunks/characterThunks';
+export {
+  generateCustomTemplateThunk,
+  generateOutlineThunk,
+  personalizeTemplateThunk,
+  regenerateOutlineSectionThunk,
+} from './thunks/outlineThunks';
+export { importProjectThunk, restoreSnapshotThunk } from './thunks/projectManagementThunks';
+export {
+  generateWorldImageThunk,
+  generateWorldProfileThunk,
+  regenerateWorldFieldThunk,
+  uploadWorldImageThunk,
+} from './thunks/worldThunks';
+export {
+  generateLoglineSuggestionsThunk,
+  generateSynopsisThunk,
+  proofreadTextThunk,
+  streamGenerationThunk,
+} from './thunks/writingThunks';
 
-// --- Entity Adapters ---
-export const charactersAdapter = createEntityAdapter<Character>();
-
-export const worldsAdapter = createEntityAdapter<World>();
-
-// --- Initial State ---
+// --- Types ---
 export interface ProjectData {
   id?: string;
   title: string;
@@ -50,18 +71,7 @@ export interface ProjectData {
   sceneBoardLayout?: { [sectionId: string]: { x: number; y: number } };
 }
 
-// Helper interface for importing legacy or current formats
-interface ImportedProjectData {
-  title: string;
-  logline: string;
-  characters: Character[] | { ids: string[]; entities: Record<string, Character> };
-  worlds: World[] | { ids: string[]; entities: Record<string, World> };
-  outline?: OutlineSection[];
-  manuscript?: StorySection[];
-  projectGoals?: ProjectData['projectGoals'];
-  writingHistory?: ProjectData['writingHistory'];
-}
-
+// --- Initial State ---
 const initialState: { data: ProjectData } = {
   data: {
     id: 'default',
@@ -78,485 +88,6 @@ const initialState: { data: ProjectData } = {
     writingHistory: [],
   },
 };
-
-// --- Async Thunks ---
-const buildAiOptions = (state: RootState): AIRequestOptions => ({
-  provider: state.settings.advancedAi.provider,
-  model: state.settings.advancedAi.model,
-  temperature: state.settings.advancedAi.temperature,
-  maxTokens: state.settings.advancedAi.maxTokens,
-  ollamaBaseUrl: state.settings.advancedAi.ollamaBaseUrl,
-});
-
-export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
-  'project/generateLogline',
-  async (lang: string, { getState, signal, registerDuplicateRequest }) => {
-    const state = getState() as RootState;
-    const project = state.project.present.data;
-    const creativity = state.settings.aiCreativity;
-    const aiOptions = buildAiOptions(state);
-
-    const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    const { prompt, schema } = getPrompts('logline', { project, lang });
-    registerDuplicateRequest(prompt, 'logline');
-    const response = await generateJson<string[]>(prompt, creativity, schema!, aiOptions, signal);
-    return response;
-  },
-);
-
-export const importProjectThunk = createAsyncThunk('project/importProject', async (file: File) => {
-  const text = await file.text();
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error('Invalid project file: not valid JSON.');
-  }
-
-  // Runtime validation at system boundary
-  if (!parsed || typeof parsed !== 'object') {
-    throw new Error('Invalid project file: expected a JSON object.');
-  }
-  const obj = parsed as ImportedProjectData;
-  if (typeof obj.title !== 'string' || typeof obj.logline !== 'string') {
-    throw new Error('Invalid project file: missing required "title" or "logline" field.');
-  }
-  if (
-    obj.characters !== undefined &&
-    !Array.isArray(obj.characters) &&
-    typeof obj.characters !== 'object'
-  ) {
-    throw new Error('Invalid project file: "characters" must be an array or entity map.');
-  }
-  if (obj.worlds !== undefined && !Array.isArray(obj.worlds) && typeof obj.worlds !== 'object') {
-    throw new Error('Invalid project file: "worlds" must be an array or entity map.');
-  }
-
-  const projectData = parsed as ImportedProjectData;
-
-  const charactersState = charactersAdapter.getInitialState();
-  const worldsState = worldsAdapter.getInitialState();
-
-  const charactersToSet: Character[] = [];
-  const worldsToSet: World[] = [];
-
-  let characterArray: (Character & { avatarBase64?: string })[] = [];
-  if (Array.isArray(projectData.characters)) {
-    characterArray = projectData.characters;
-  } else if (
-    projectData.characters &&
-    'ids' in projectData.characters &&
-    'entities' in projectData.characters
-  ) {
-    const { ids, entities } = projectData.characters;
-    characterArray = ids
-      .map((id: string) => entities[id])
-      .filter((item): item is Character & { avatarBase64?: string } => Boolean(item));
-  }
-
-  for (const char of characterArray) {
-    const newChar = { ...char };
-    if (newChar.avatarBase64) {
-      await storageService.saveImage(newChar.id, newChar.avatarBase64);
-      newChar.hasAvatar = true;
-      delete newChar.avatarBase64;
-    }
-    charactersToSet.push(newChar);
-  }
-  charactersAdapter.setAll(charactersState, charactersToSet);
-
-  let worldArray: (World & { ambianceImageBase64?: string })[] = [];
-  if (Array.isArray(projectData.worlds)) {
-    worldArray = projectData.worlds;
-  } else if (
-    projectData.worlds &&
-    'ids' in projectData.worlds &&
-    'entities' in projectData.worlds
-  ) {
-    const { ids, entities } = projectData.worlds;
-    worldArray = ids
-      .map((id: string) => entities[id])
-      .filter((item): item is World & { ambianceImageBase64?: string } => Boolean(item));
-  }
-
-  for (const world of worldArray) {
-    const newWorld = { ...world };
-    if (newWorld.ambianceImageBase64) {
-      await storageService.saveImage(newWorld.id, newWorld.ambianceImageBase64);
-      newWorld.hasAmbianceImage = true;
-      delete newWorld.ambianceImageBase64;
-    }
-    worldsToSet.push(newWorld);
-  }
-  worldsAdapter.setAll(worldsState, worldsToSet);
-
-  return {
-    title: projectData.title,
-    logline: projectData.logline,
-    characters: charactersState,
-    worlds: worldsState,
-    outline: projectData.outline || [],
-    manuscript: projectData.manuscript || [],
-    projectGoals: projectData.projectGoals || initialState.data.projectGoals,
-    writingHistory: projectData.writingHistory || [],
-  } as ProjectData;
-});
-
-export const restoreSnapshotThunk = createAsyncThunk(
-  'project/restoreSnapshot',
-  async (snapshotId: number) => {
-    const data = await storageService.getSnapshotData(snapshotId);
-    return data;
-  },
-);
-
-export const generateCharacterProfileThunk = createDeduplicatedThunk(
-  'project/generateCharacterProfile',
-  async (
-    { concept, lang }: { concept: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    // Pass thinking budget indirectly via prompt type config in geminiService
-    const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    const { prompt, schema } = getPrompts('characterProfile', {
-      concept,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'characterProfile');
-    return await generateJson<Omit<Character, 'id'>>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
-  },
-);
-
-export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
-  'project/regenerateCharacterField',
-  async (
-    { character, field, lang }: { character: Character; field: keyof Character; lang: string },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateText } = await loadAiProvider();
-    const { prompt } = getPrompts('regenerateCharacterField', {
-      character,
-      field,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'regenerateCharacterField');
-    const response = await generateText(prompt, state.settings.aiCreativity, aiOptions, signal);
-    return { field, value: response };
-  },
-);
-
-export const generateCharacterPortraitThunk = createDeduplicatedThunk(
-  'project/generateCharacterPortrait',
-  async (
-    {
-      characterId,
-      description,
-      style,
-      lang,
-    }: {
-      characterId: string;
-      description: string;
-      style?: string;
-      lang: string;
-    },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const fullDescription = style ? `${description}. Style: ${style}` : description;
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateImage } = await loadAiProvider();
-    const { prompt } = getPrompts('characterPortrait', {
-      description: fullDescription,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'characterPortrait');
-    const base64 = await generateImage(prompt, aiOptions, signal);
-    await storageService.saveImage(characterId, base64);
-    return { characterId };
-  },
-);
-
-export const uploadCharacterImageThunk = createAsyncThunk(
-  'project/uploadCharacterImage',
-  async ({ characterId, file }: { characterId: string; file: File }) => {
-    return new Promise<{ characterId: string }>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).replace(/^data:image\/\w+;base64,/, '');
-        await storageService.saveImage(characterId, base64);
-        resolve({ characterId });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  },
-);
-
-export const generateWorldProfileThunk = createDeduplicatedThunk(
-  'project/generateWorldProfile',
-  async (
-    { concept, lang }: { concept: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    const { prompt, schema } = getPrompts('worldProfile', {
-      concept,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'worldProfile');
-    return await generateJson<Omit<World, 'id'>>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
-  },
-);
-
-export const regenerateWorldFieldThunk = createDeduplicatedThunk(
-  'project/regenerateWorldField',
-  async (
-    { world, field, lang }: { world: World; field: keyof World; lang: string },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateText } = await loadAiProvider();
-    const { prompt } = getPrompts('regenerateWorldField', {
-      world,
-      field,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'regenerateWorldField');
-    const response = await generateText(prompt, state.settings.aiCreativity, aiOptions, signal);
-    return { field, value: response };
-  },
-);
-
-export const generateWorldImageThunk = createDeduplicatedThunk(
-  'project/generateWorldImage',
-  async (
-    {
-      worldId,
-      description,
-      lang,
-    }: {
-      worldId: string;
-      description: string;
-      lang: string;
-    },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateImage } = await loadAiProvider();
-    const { prompt } = getPrompts('worldImage', { description, lang });
-    registerDuplicateRequest(prompt, 'worldImage');
-    const base64 = await generateImage(prompt, aiOptions, signal);
-    await storageService.saveImage(worldId, base64);
-    return { worldId };
-  },
-);
-
-export const uploadWorldImageThunk = createAsyncThunk(
-  'project/uploadWorldImage',
-  async ({ worldId, file }: { worldId: string; file: File }) => {
-    return new Promise<{ worldId: string }>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).replace(/^data:image\/\w+;base64,/, '');
-        await storageService.saveImage(worldId, base64);
-        resolve({ worldId });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  },
-);
-
-export const generateOutlineThunk = createDeduplicatedThunk(
-  'project/generateOutline',
-  async (params: OutlineGenerationParams, { getState, signal, registerDuplicateRequest }) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    const { prompt, schema } = getPrompts('outline', params);
-    registerDuplicateRequest(prompt, 'outline');
-    return await generateJson<OutlineSection[]>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
-  },
-);
-
-export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
-  'project/regenerateOutlineSection',
-  async (
-    {
-      allSections,
-      sectionToIndex,
-      lang,
-    }: { allSections: OutlineSection[]; sectionToIndex: number; lang: string },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    const { prompt, schema } = getPrompts('regenerateOutlineSection', {
-      allSections,
-      sectionToIndex,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'regenerateOutlineSection');
-    const response = await generateJson<OutlineSection>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
-    return { index: sectionToIndex, newSection: response };
-  },
-);
-
-export const personalizeTemplateThunk = createDeduplicatedThunk(
-  'project/personalizeTemplate',
-  async (
-    { sections, concept, lang }: { sections: { title: string }[]; concept: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    const { prompt, schema } = getPrompts('personalizeTemplate', {
-      sections,
-      concept,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'personalizeTemplate');
-    return await generateJson<{ title: string; prompt: string }[]>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
-  },
-);
-
-export const generateCustomTemplateThunk = createDeduplicatedThunk(
-  'project/generateCustomTemplate',
-  async (params: CustomTemplateParams, { getState, signal, registerDuplicateRequest }) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    const { prompt, schema } = getPrompts('customTemplate', params);
-    registerDuplicateRequest(prompt, 'customTemplate');
-    return await generateJson<{ title: string }[]>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
-  },
-);
-
-export const streamGenerationThunk = createDeduplicatedThunk(
-  'project/streamGeneration',
-  async (
-    {
-      prompt,
-      lang,
-      onChunk,
-    }: {
-      prompt: string;
-      lang: string;
-      onChunk: (chunk: string) => void;
-    },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const aiOptions = buildAiOptions(state);
-    const fullPrompt = `${prompt}\n\nRespond in ${lang === 'de' ? 'German' : 'English'}.`;
-    registerDuplicateRequest(fullPrompt, 'streamGeneration');
-    const { streamText } = await loadAiProvider();
-    await streamText(fullPrompt, state.settings.aiCreativity, aiOptions, { onChunk }, signal);
-  },
-);
-
-export const generateSynopsisThunk = createDeduplicatedThunk(
-  'project/generateSynopsis',
-  async (lang: string, { getState, signal, registerDuplicateRequest }) => {
-    const state = getState() as RootState;
-    const project = state.project.present.data;
-    const creativity = state.settings.aiCreativity;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateText } = await loadAiProvider();
-    const { prompt } = getPrompts('synopsis', {
-      project,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'synopsis');
-    return await generateText(prompt, creativity, aiOptions, signal);
-  },
-);
-
-export const proofreadTextThunk = createDeduplicatedThunk(
-  'project/proofreadText',
-  async (
-    { text, lang }: { text: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
-  ) => {
-    const state = getState() as RootState;
-    const creativity = state.settings.aiCreativity;
-    const aiOptions = buildAiOptions(state);
-    const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    const { prompt, schema } = getPrompts('proofread', {
-      text,
-      lang,
-    });
-    registerDuplicateRequest(prompt, 'proofread');
-    return await generateJson<{ original: string; suggestion: string; explanation: string }[]>(
-      prompt,
-      creativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
-  },
-);
-
-export { createDeduplicatedThunk } from './aiThunkUtils';
 
 // --- Slice Definition ---
 const projectSlice = createSlice({

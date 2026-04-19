@@ -2,11 +2,11 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import { STORY_TEMPLATES } from '../constants';
+import { projectActions } from '../features/project/projectSlice';
 import {
   generateCustomTemplateThunk,
   personalizeTemplateThunk,
-  projectActions,
-} from '../features/project/projectSlice';
+} from '../features/project/thunks/outlineThunks';
 import type { OutlineSection, StorySection, Template } from '../types';
 import { useTranslation } from './useTranslation';
 

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
-import { generateSynopsisThunk } from '../features/project/projectSlice';
+import { generateSynopsisThunk } from '../features/project/thunks/writingThunks';
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from './useTranslation';
 

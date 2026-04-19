@@ -4,11 +4,11 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import type { RootState } from '../app/store';
 import { featureFlagsActions } from '../features/featureFlags/featureFlagsSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
 import {
   importProjectThunk,
-  projectActions,
   restoreSnapshotThunk,
-} from '../features/project/projectSlice';
+} from '../features/project/thunks/projectManagementThunks';
 import { settingsActions } from '../features/settings/settingsSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import { logger } from '../services/logger';
