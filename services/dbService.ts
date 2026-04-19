@@ -633,7 +633,7 @@ class IndexedDBService {
 
   // --- Snapshot Methods ---
 
-  async createSnapshot(data: ProjectData, name?: string): Promise<void> {
+  async createSnapshot(data: ProjectData, name?: string): Promise<number> {
     const wordCount = data.manuscript.reduce(
       (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
       0,
@@ -649,12 +649,12 @@ class IndexedDBService {
     const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.add(snapshotData);
-      request.onsuccess = () => resolve();
+      request.onsuccess = () => resolve(request.result as number);
       request.onerror = () => reject(request.error);
     });
   }
 
-  async saveSnapshot(name: string, data: ProjectData): Promise<void> {
+  async saveSnapshot(name: string, data: ProjectData): Promise<number> {
     return this.createSnapshot(data, name);
   }
 

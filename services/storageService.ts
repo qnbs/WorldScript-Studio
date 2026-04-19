@@ -26,11 +26,17 @@ export interface StorageBackend {
   getApiKey(provider: string): Promise<string | null>;
   clearApiKey(provider: string): Promise<void>;
 
-  // Snapshots
-  saveSnapshot(snapshotId: string, data: unknown): Promise<void>;
-  getSnapshotData(snapshotId: string): Promise<unknown>;
+  // Snapshots — IDs are numeric (Date.now() in FS backend, autoIncrement in IndexedDB)
+  saveSnapshot(snapshotLabel: string, data: unknown): Promise<number>;
+  getSnapshotData(snapshotId: number): Promise<unknown>;
   listSnapshots(): Promise<ProjectSnapshot[]>;
-  deleteSnapshot(snapshotId: string): Promise<void>;
+  deleteSnapshot(snapshotId: number): Promise<void>;
+
+  // Image deletion
+  deleteImage(id: string): Promise<void>;
+
+  // First-launch detection
+  hasSavedData(): Promise<boolean>;
 }
 
 // Import existing services
@@ -148,14 +154,14 @@ class StorageManager {
     return backend.clearApiKey(provider);
   }
 
-  async saveSnapshot(name: string, data: unknown): Promise<void> {
+  async saveSnapshot(name: string, data: unknown): Promise<number> {
     const backend = await this.getBackend();
     return backend.saveSnapshot(name, data);
   }
 
   async getSnapshotData(id: number): Promise<unknown> {
     const backend = await this.getBackend();
-    return (backend.getSnapshotData as unknown as (i: number) => Promise<unknown>)(id);
+    return backend.getSnapshotData(id);
   }
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {
@@ -165,7 +171,17 @@ class StorageManager {
 
   async deleteSnapshot(id: number): Promise<void> {
     const backend = await this.getBackend();
-    return (backend.deleteSnapshot as unknown as (i: number) => Promise<void>)(id);
+    return backend.deleteSnapshot(id);
+  }
+
+  async deleteImage(id: string): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.deleteImage(id);
+  }
+
+  async hasSavedData(): Promise<boolean> {
+    const backend = await this.getBackend();
+    return backend.hasSavedData();
   }
 }
 

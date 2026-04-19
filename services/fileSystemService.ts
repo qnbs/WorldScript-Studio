@@ -1,3 +1,5 @@
+import LZString from 'lz-string';
+
 // Dynamic imports for Tauri v2 plugin APIs — fail gracefully in browser
 let tauriApis: {
   readTextFile: (path: string) => Promise<string>;
@@ -41,6 +43,47 @@ async function loadTauriApis() {
   }
 }
 
+// --- Retry helper for transient filesystem errors ---
+async function retryFs<T>(fn: () => Promise<T>, retries = 2, delayMs = 500): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message.toLowerCase() : '';
+      const isTransient =
+        msg.includes('busy') ||
+        msg.includes('temporarily') ||
+        msg.includes('locked') ||
+        msg.includes('try again') ||
+        msg.includes('resource unavailable');
+      if (!isTransient || attempt >= retries) break;
+      await new Promise((res) => setTimeout(res, delayMs));
+    }
+  }
+  throw lastError;
+}
+
+// --- LZ-String compression (mirrors dbService threshold and prefix) ---
+const COMPRESS_THRESHOLD = 10_240;
+const LZ_PREFIX = '\x00lz1\x00';
+
+function compressData<T>(data: T): string {
+  const json = JSON.stringify(data);
+  if (json.length < COMPRESS_THRESHOLD) return json;
+  return LZ_PREFIX + LZString.compressToUTF16(json);
+}
+
+function decompressData<T>(raw: string): T {
+  if (raw.startsWith(LZ_PREFIX)) {
+    const decompressed = LZString.decompressFromUTF16(raw.slice(LZ_PREFIX.length));
+    return JSON.parse(decompressed ?? '{}') as T;
+  }
+  return JSON.parse(raw) as T;
+}
+
+// --- Crypto helpers ---
 async function deriveFileSystemCryptoKey(secretMaterial: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const material = encoder.encode(secretMaterial);
@@ -94,13 +137,38 @@ async function decryptText(
   return new TextDecoder().decode(decrypted);
 }
 
+function countProjectWords(projectData: unknown): number {
+  try {
+    const proj = projectData as { manuscript?: { content?: string }[] };
+    if (!Array.isArray(proj?.manuscript)) return 0;
+    const fullText = proj.manuscript.map((s) => s.content ?? '').join(' ');
+    return fullText.split(/\s+/).filter(Boolean).length;
+  } catch {
+    return 0;
+  }
+}
+
 import type { EntityState } from '@reduxjs/toolkit';
 import type { Character, ProjectSnapshot, Settings, StoryProject, World } from '../types';
 import { logger } from './logger';
 import type { StorageBackend } from './storageService';
 
+// Envelope stored in each snapshot file — outer shell is plain JSON, `data` field is compressed.
+interface SnapshotEnvelope {
+  id: number;
+  name: string;
+  date: string;
+  wordCount: number;
+  data: string; // compressData(projectData)
+}
+
 class FileSystemService implements StorageBackend {
   private appDataPath: string | null = null;
+
+  // --- Auto-snapshot state ---
+  private lastAutoSnapshotTime = Date.now();
+  private readonly AUTO_SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  private readonly MAX_AUTO_SNAPSHOTS = 20;
 
   async initialize(): Promise<void> {
     try {
@@ -125,6 +193,14 @@ class FileSystemService implements StorageBackend {
 
   // Project management
   async saveProject(project: StoryProject): Promise<void> {
+    // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
+    if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
+      this.lastAutoSnapshotTime = Date.now();
+      this.saveSnapshot('auto', project)
+        .then(() => this.pruneAutoSnapshots())
+        .catch(() => {});
+    }
+
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const projectId = sanitizePathSegment(
@@ -134,13 +210,12 @@ class FileSystemService implements StorageBackend {
     );
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
-    // Ensure project directory exists
     if (!(await apis.exists(projectPath))) {
       await apis.mkdir(projectPath, { recursive: true });
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    await apis.writeTextFile(projectFile, JSON.stringify(project, null, 2));
+    await retryFs(() => apis.writeTextFile(projectFile, compressData(project)));
   }
 
   async loadProject(projectId: string): Promise<StoryProject | null> {
@@ -154,8 +229,8 @@ class FileSystemService implements StorageBackend {
         return null;
       }
 
-      const content = await apis.readTextFile(projectFile);
-      return JSON.parse(content);
+      const content = await retryFs(() => apis.readTextFile(projectFile));
+      return decompressData<StoryProject>(content);
     } catch (error) {
       logger.error('Failed to load project:', error);
       return null;
@@ -172,7 +247,7 @@ class FileSystemService implements StorageBackend {
         return [];
       }
 
-      const entries = await apis.readDir(projectsPath);
+      const entries = await retryFs(() => apis.readDir(projectsPath));
       return entries.filter((entry) => entry.name).map((entry) => entry.name as string);
     } catch (error) {
       logger.error('Failed to list projects:', error);
@@ -186,9 +261,8 @@ class FileSystemService implements StorageBackend {
     const safeProjectId = sanitizePathSegment(projectId);
     const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
 
-    // For simplicity, we'll just remove the project.json file
     if (await apis.exists(projectPath)) {
-      await apis.remove(projectPath, { recursive: true });
+      await retryFs(() => apis.remove(projectPath, { recursive: true }));
     }
   }
 
@@ -203,9 +277,8 @@ class FileSystemService implements StorageBackend {
     }
 
     const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
-    // Remove data URL prefix if present
     const cleanBase64 = base64Data.replace(/^data:image\/png;base64,/, '');
-    await apis.writeTextFile(imageFile, cleanBase64);
+    await retryFs(() => apis.writeTextFile(imageFile, cleanBase64));
   }
 
   async getImage(id: string): Promise<string | null> {
@@ -222,11 +295,41 @@ class FileSystemService implements StorageBackend {
         return null;
       }
 
-      const base64Data = await apis.readTextFile(imageFile);
+      const base64Data = await retryFs(() => apis.readTextFile(imageFile));
       return `data:image/png;base64,${base64Data}`;
     } catch (error) {
       logger.error('Failed to load image:', error);
       return null;
+    }
+  }
+
+  async deleteImage(id: string): Promise<void> {
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const imageFile = await apis.join(
+        appDataPath,
+        'images',
+        `${sanitizePathSegment(id, 'image')}.png`,
+      );
+      if (await apis.exists(imageFile)) {
+        await retryFs(() => apis.remove(imageFile));
+      }
+    } catch (error) {
+      logger.error('Failed to delete image:', error);
+    }
+  }
+
+  async hasSavedData(): Promise<boolean> {
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const projectsPath = await apis.join(appDataPath, 'projects');
+      if (!(await apis.exists(projectsPath))) return false;
+      const entries = await retryFs(() => apis.readDir(projectsPath));
+      return entries.length > 0;
+    } catch {
+      return false;
     }
   }
 
@@ -241,7 +344,7 @@ class FileSystemService implements StorageBackend {
     }
 
     const settingsFile = await apis.join(configPath, 'settings.json');
-    await apis.writeTextFile(settingsFile, JSON.stringify(settings, null, 2));
+    await retryFs(() => apis.writeTextFile(settingsFile, JSON.stringify(settings, null, 2)));
   }
 
   async loadSettings(): Promise<Settings | null> {
@@ -254,7 +357,7 @@ class FileSystemService implements StorageBackend {
         return null;
       }
 
-      const content = await apis.readTextFile(settingsFile);
+      const content = await retryFs(() => apis.readTextFile(settingsFile));
       return JSON.parse(content);
     } catch (error) {
       logger.error('Failed to load settings:', error);
@@ -291,7 +394,7 @@ class FileSystemService implements StorageBackend {
       `${appDataPath}|${provider}|StoryCraftStudio|v1`,
     );
     const filePath = await apis.join(configPath, `${provider}_key.enc.json`);
-    await apis.writeTextFile(filePath, JSON.stringify(encrypted));
+    await retryFs(() => apis.writeTextFile(filePath, JSON.stringify(encrypted)));
   }
 
   async getApiKey(provider: string): Promise<string | null> {
@@ -300,7 +403,7 @@ class FileSystemService implements StorageBackend {
       const appDataPath = await this.ensureAppDataPath();
       const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
       if (!(await apis.exists(keyFile))) return null;
-      const content = await apis.readTextFile(keyFile);
+      const content = await retryFs(() => apis.readTextFile(keyFile));
       const payload = JSON.parse(content) as { iv: string; data: string };
       return await decryptText(payload, `${appDataPath}|${provider}|StoryCraftStudio|v1`);
     } catch (error) {
@@ -314,14 +417,14 @@ class FileSystemService implements StorageBackend {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
       const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
-      if (await apis.exists(keyFile)) await apis.remove(keyFile);
+      if (await apis.exists(keyFile)) await retryFs(() => apis.remove(keyFile));
     } catch {
       /* ignore */
     }
   }
 
   // Snapshot operations
-  async saveSnapshot(snapshotId: string, data: unknown): Promise<void> {
+  async saveSnapshot(snapshotLabel: string, data: unknown): Promise<number> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const snapshotsPath = await apis.join(appDataPath, 'snapshots');
@@ -330,24 +433,37 @@ class FileSystemService implements StorageBackend {
       await apis.mkdir(snapshotsPath, { recursive: true });
     }
 
-    const safeSnapshotId = sanitizePathSegment(snapshotId, 'snapshot');
-    const snapshotFile = await apis.join(snapshotsPath, `${safeSnapshotId}.json`);
-    await apis.writeTextFile(snapshotFile, JSON.stringify(data, null, 2));
+    const id = Date.now();
+    const envelope: SnapshotEnvelope = {
+      id,
+      name: snapshotLabel,
+      date: new Date().toISOString(),
+      wordCount: countProjectWords(data),
+      data: compressData(data),
+    };
+    const snapshotFile = await apis.join(snapshotsPath, `${id}.json`);
+    await retryFs(() => apis.writeTextFile(snapshotFile, JSON.stringify(envelope)));
+    return id;
   }
 
-  async getSnapshotData(snapshotId: string): Promise<unknown> {
+  async getSnapshotData(snapshotId: number): Promise<unknown> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeSnapshotId = sanitizePathSegment(snapshotId, 'snapshot');
-      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${safeSnapshotId}.json`);
+      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${snapshotId}.json`);
 
       if (!(await apis.exists(snapshotFile))) {
         return null;
       }
 
-      const content = await apis.readTextFile(snapshotFile);
-      return JSON.parse(content);
+      const content = await retryFs(() => apis.readTextFile(snapshotFile));
+      const envelope = JSON.parse(content) as SnapshotEnvelope;
+      // New format: envelope with compressed data field
+      if (envelope && typeof envelope.data === 'string') {
+        return decompressData(envelope.data);
+      }
+      // Legacy format: raw project data stored directly
+      return envelope;
     } catch (error) {
       logger.error('Failed to load snapshot:', error);
       return null;
@@ -364,33 +480,58 @@ class FileSystemService implements StorageBackend {
         return [];
       }
 
-      const entries = await apis.readDir(snapshotsPath);
-      return entries
-        .filter((entry) => entry.name?.endsWith('.json'))
-        .map((entry) => ({
-          id: entry.name!.replace('.json', '') as unknown as number,
-          name: entry.name!.replace('.json', ''),
-          date: '',
-          wordCount: 0,
-        }));
+      const entries = await retryFs(() => apis.readDir(snapshotsPath));
+      const jsonFiles = entries.filter((e) => e.name?.endsWith('.json'));
+
+      const snapshots = await Promise.all(
+        jsonFiles.map(async (entry) => {
+          try {
+            const filePath = await apis.join(snapshotsPath, entry.name!);
+            const content = await retryFs(() => apis.readTextFile(filePath));
+            const envelope = JSON.parse(content) as Partial<SnapshotEnvelope>;
+            const numericId = parseInt(entry.name!.replace('.json', ''), 10);
+            return {
+              id: Number.isFinite(numericId) ? numericId : 0,
+              name: envelope.name ?? entry.name!.replace('.json', ''),
+              date: envelope.date ?? '',
+              wordCount: envelope.wordCount ?? 0,
+            } as ProjectSnapshot;
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      return (snapshots.filter(Boolean) as ProjectSnapshot[]).sort((a, b) => b.id - a.id);
     } catch (error) {
       logger.error('Failed to list snapshots:', error);
       return [];
     }
   }
 
-  async deleteSnapshot(snapshotId: string): Promise<void> {
+  async deleteSnapshot(snapshotId: number): Promise<void> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeSnapshotId = sanitizePathSegment(snapshotId, 'snapshot');
-      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${safeSnapshotId}.json`);
+      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${snapshotId}.json`);
 
       if (await apis.exists(snapshotFile)) {
-        await apis.remove(snapshotFile);
+        await retryFs(() => apis.remove(snapshotFile));
       }
     } catch (error) {
       logger.error('Failed to delete snapshot:', error);
+    }
+  }
+
+  private async pruneAutoSnapshots(): Promise<void> {
+    try {
+      const snapshots = await this.listSnapshots();
+      if (snapshots.length <= this.MAX_AUTO_SNAPSHOTS) return;
+      const sorted = [...snapshots].sort((a, b) => a.id - b.id);
+      const toDelete = sorted.slice(0, snapshots.length - this.MAX_AUTO_SNAPSHOTS);
+      await Promise.all(toDelete.map((s) => this.deleteSnapshot(s.id)));
+    } catch (error) {
+      logger.warn('Failed to prune auto snapshots:', error);
     }
   }
 
@@ -416,7 +557,6 @@ class FileSystemService implements StorageBackend {
         extension = 'md';
         break;
       case 'docx':
-        // For docx, we'll save as markdown for now and handle conversion later
         fileName = `${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
         content = this.convertToMarkdown(project);
         extension = 'md';
@@ -427,16 +567,11 @@ class FileSystemService implements StorageBackend {
 
     const filePath = await apis.save({
       defaultPath: `${fileName}.${extension}`,
-      filters: [
-        {
-          name: format.toUpperCase(),
-          extensions: [extension],
-        },
-      ],
+      filters: [{ name: format.toUpperCase(), extensions: [extension] }],
     });
 
     if (filePath) {
-      await apis.writeTextFile(filePath, content);
+      await retryFs(() => apis.writeTextFile(filePath, content));
     }
   }
 
@@ -455,7 +590,7 @@ class FileSystemService implements StorageBackend {
       return null;
     }
 
-    const content = await apis.readTextFile(filePath);
+    const content = await retryFs(() => apis.readTextFile(filePath));
 
     if (filePath.endsWith('.json')) {
       return JSON.parse(content);
@@ -524,7 +659,6 @@ ${project.manuscript || 'No manuscript content yet.'}
   }
 
   private parseMarkdownProject(content: string): StoryProject {
-    // Simple markdown parser - in a real implementation, you'd use a proper markdown parser
     const lines = content.split('\n');
     let title = 'Imported Project';
     let description = '';
@@ -559,13 +693,7 @@ ${project.manuscript || 'No manuscript content yet.'}
 
     const logline = description || (author ? `Imported by ${author}` : 'Imported project');
     const manuscriptSections = manuscript
-      ? [
-          {
-            id: 'imported-manuscript-1',
-            title: 'Imported Manuscript',
-            content: manuscript.trim(),
-          },
-        ]
+      ? [{ id: 'imported-manuscript-1', title: 'Imported Manuscript', content: manuscript.trim() }]
       : [
           {
             id: 'imported-manuscript-1',
