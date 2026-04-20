@@ -167,23 +167,26 @@ export type Theme = 'dark' | 'light' | 'auto';
 export type EditorFont = 'serif' | 'sans-serif' | 'monospace' | 'custom';
 export type AiCreativity = 'Focused' | 'Balanced' | 'Imaginative';
 export type AiModel =
+  // Gemini – current generation
+  | 'gemini-2.5-flash'
+  | 'gemini-2.5-pro'
+  | 'gemini-2.0-flash'
+  | 'gemini-2.0-flash-lite'
+  // Gemini – legacy (still available)
   | 'gemini-1.5-flash'
   | 'gemini-1.5-pro'
-  | 'claude-3-haiku'
+  // Anthropic – Claude 4.x
+  | 'claude-opus-4-7'
+  | 'claude-sonnet-4-6'
+  | 'claude-haiku-4-5'
+  // Anthropic – Claude 3.x (backward compat for stored values)
   | 'claude-3-sonnet'
-  | 'gpt-4o-mini'
+  | 'claude-3-haiku'
+  // OpenAI
   | 'gpt-4o'
-  | 'ollama/gemma3'
-  | 'ollama/llama3'
-  | 'ollama/mistral'
-  | 'ollama/qwen3-8b'
-  | 'ollama/deepseek-v3.2-7b'
-  | 'ollama/llama4-scout-17b'
-  | 'ollama/mistral-small-3.2-24b'
-  | 'ollama/phi-4-mini-3.8b'
-  | 'ollama/glm-4-9b'
-  | 'ollama/kimi-k2-instruct-32b'
-  | 'ollama/custom';
+  | 'gpt-4o-mini'
+  // Ollama – any local model (e.g. "ollama/gemma3" or "ollama/qwen3:8b")
+  | `ollama/${string}`;
 export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama';
 export type NotificationFrequency = 'never' | 'daily' | 'weekly' | 'monthly';
 export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';

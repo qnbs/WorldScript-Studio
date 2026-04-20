@@ -99,7 +99,8 @@ const creativityToTemperature: Record<AiCreativity, number> = {
   Imaginative: 1.0,
 };
 
-const getModelForText = () => 'gemini-2.5-flash';
+const getModelForText = (model?: string): string =>
+  model?.startsWith('gemini-') ? model : 'gemini-2.5-flash';
 const getModelForImage = () => 'gemini-2.5-flash-image';
 
 // --- Hilfsfunktion für Retry mit 401/429-Handling ---
@@ -492,6 +493,7 @@ export const generateText = async (
   creativity: AiCreativity,
   signal?: AbortSignal,
   thinkingBudget?: number,
+  model?: string,
 ): Promise<string> => {
   try {
     assertOnline();
@@ -514,7 +516,7 @@ export const generateText = async (
       }
 
       const response: GenerateContentResponse = await ai.models.generateContent({
-        model: getModelForText(),
+        model: getModelForText(model),
         contents: cleanPrompt(prompt),
         config: config,
       });
@@ -539,6 +541,7 @@ export const generateJson = async <T>(
   schema: GeminiSchema,
   signal?: AbortSignal,
   thinkingBudget?: number,
+  model?: string,
 ): Promise<T> => {
   try {
     assertOnline();
@@ -563,7 +566,7 @@ export const generateJson = async <T>(
       }
 
       const response: GenerateContentResponse = await ai.models.generateContent({
-        model: getModelForText(),
+        model: getModelForText(model),
         contents: cleanPrompt(prompt),
         config: config,
       });
@@ -641,6 +644,7 @@ export const streamText = async (
   creativity: AiCreativity,
   onChunk: (chunk: string) => void,
   signal?: AbortSignal,
+  model?: string,
 ): Promise<void> => {
   try {
     assertOnline();
@@ -651,7 +655,7 @@ export const streamText = async (
     const ai = await getAiClient();
 
     const responseStream = await ai.models.generateContentStream({
-      model: getModelForText(),
+      model: getModelForText(model),
       contents: cleanPrompt(prompt),
       config: {
         temperature: creativityToTemperature[creativity],

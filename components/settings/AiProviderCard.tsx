@@ -14,6 +14,7 @@ interface AiProviderCardProps {
   ollamaBaseUrl: string;
   onProviderChange: (p: AIProvider) => void;
   onOllamaUrlChange: (url: string) => void;
+  onModelSelect?: (model: string) => void;
 }
 
 export const AiProviderCard: FC<AiProviderCardProps> = ({
@@ -21,6 +22,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   ollamaBaseUrl,
   onProviderChange,
   onOllamaUrlChange,
+  onModelSelect,
 }) => {
   const { t } = useTranslation();
   const isDesktop = typeof window !== 'undefined' && Boolean(window.__TAURI__);
@@ -211,15 +213,22 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               </Button>
             </div>
             {ollamaModels.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {ollamaModels.map((m) => (
-                  <span
-                    key={m}
-                    className="px-2 py-1 text-xs rounded-full bg-[var(--background-tertiary)] text-[var(--foreground-secondary)]"
-                  >
-                    {m}
-                  </span>
-                ))}
+              <div className="space-y-1">
+                <p className="text-xs text-[var(--foreground-muted)]">
+                  {t('settings.ai.ollamaModelHint')}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {ollamaModels.map((m) => (
+                    <button
+                      type="button"
+                      key={m}
+                      onClick={() => onModelSelect?.(`ollama/${m}`)}
+                      className="px-2 py-1 text-xs rounded-full bg-[var(--background-tertiary)] text-[var(--foreground-secondary)] hover:bg-[var(--background-interactive)] hover:text-white transition-colors"
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             <p className="text-xs text-[var(--foreground-muted)]">{t('settings.ai.ollamaHint')}</p>

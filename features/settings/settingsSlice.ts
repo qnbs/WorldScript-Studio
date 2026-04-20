@@ -50,7 +50,7 @@ const defaultSettings: Settings = {
     { type: 'time', target: 120, period: 'daily', enabled: false },
   ],
   advancedAi: {
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
     provider: 'gemini',
     temperature: 0.7,
     maxTokens: 4096,

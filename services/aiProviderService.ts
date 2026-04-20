@@ -152,6 +152,7 @@ async function streamProvider(
         creativity,
         callbacks.onChunk,
         signal,
+        opts.model,
       );
   }
 }
@@ -186,7 +187,7 @@ export async function generateText(
         'Claude/Anthropic is currently not available in the browser. Please use Gemini, OpenAI or Ollama.',
       );
     default:
-      return generateTextGemini(prompt, creativity, signal);
+      return generateTextGemini(prompt, creativity, signal, undefined, opts.model);
   }
 }
 
@@ -198,7 +199,7 @@ export async function generateJson<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   if (opts.provider === 'gemini') {
-    return generateJsonGemini(prompt, creativity, schema, signal);
+    return generateJsonGemini(prompt, creativity, schema, signal, undefined, opts.model);
   }
 
   const raw = await generateText(prompt, creativity, opts, signal);
