@@ -2,6 +2,40 @@
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, vi } from 'vitest';
 
+// Node 24 exposes a native localStorage that lacks .clear(), overriding jsdom's version.
+// Replace it with a proper in-memory mock when the native one is broken.
+const makeStorageMock = (): Storage => {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    key(i: number) {
+      return Array.from(store.keys())[i] ?? null;
+    },
+    getItem(k: string) {
+      return store.get(k) ?? null;
+    },
+    setItem(k: string, v: string) {
+      store.set(k, String(v));
+    },
+    removeItem(k: string) {
+      store.delete(k);
+    },
+    clear() {
+      store.clear();
+    },
+  } as Storage;
+};
+
+if (typeof localStorage === 'undefined' || typeof localStorage.clear !== 'function') {
+  Object.defineProperty(window, 'localStorage', {
+    value: makeStorageMock(),
+    writable: true,
+    configurable: true,
+  });
+}
+
 // Mock Web APIs not available in jsdom
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
