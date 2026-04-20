@@ -67,7 +67,7 @@ class StorageManager {
   private ready: Promise<void>;
 
   constructor() {
-    this.backend = dbService as unknown as StorageBackend;
+    this.backend = dbService;
     this.ready = this.initializeBackend();
   }
 
@@ -76,15 +76,15 @@ class StorageManager {
     if (typeof window !== 'undefined' && window.__TAURI__) {
       try {
         await fileSystemService.initialize();
-        this.backend = fileSystemService as unknown as StorageBackend;
+        this.backend = fileSystemService;
         logger.debug('Using file system storage backend');
       } catch (error) {
         logger.warn('Failed to initialize file system storage, falling back to IndexedDB:', error);
-        this.backend = dbService as unknown as StorageBackend;
+        this.backend = dbService;
       }
     } else {
       logger.debug('Using IndexedDB storage backend');
-      this.backend = dbService as unknown as StorageBackend;
+      this.backend = dbService;
     }
   }
 
@@ -96,7 +96,7 @@ class StorageManager {
   // Delegate all methods to the current backend
   async saveProject(project: unknown): Promise<void> {
     const backend = await this.getBackend();
-    return (backend.saveProject as (p: unknown) => Promise<void>)(project);
+    return backend.saveProject(project as StoryProject);
   }
 
   async loadProject(projectId: string): Promise<StoryProject | null> {

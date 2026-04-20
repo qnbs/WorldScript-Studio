@@ -1,7 +1,8 @@
 import * as LZString from 'lz-string';
 import type { ProjectData } from '../features/project/projectSlice';
-import type { ProjectSnapshot, Settings, StoryCodex } from '../types';
+import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
 import { logger } from './logger';
+import type { StorageBackend } from './storageService';
 
 const DB_NAME = 'storycraft-db';
 const DB_VERSION = 6; // v6: Story Codex store added
@@ -99,7 +100,7 @@ function getUserFriendlyDbError(error: unknown): string {
   return 'Unknown error accessing the database.';
 }
 
-class IndexedDBService {
+class IndexedDBService implements StorageBackend {
   private db: IDBDatabase | null = null;
   private lastAutoSnapshotTime = Date.now();
   private readonly AUTO_SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -460,18 +461,19 @@ class IndexedDBService {
   }
 
   // Helper methods for explicit saving
-  async saveProject(data: PersistedProjectState): Promise<void> {
+  async saveProject(data: StoryProject | PersistedProjectState): Promise<void> {
     // Check auto-snapshot condition during save
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
-      // We need to extract just the data part if it's the full redux state
-      const projectData = data.present ? data.present.data : data.data;
+      // data may arrive as a Redux-undo envelope (PersistedProjectState) or plain StoryProject
+      const persisted = data as PersistedProjectState;
+      const projectData = persisted.present ? persisted.present.data : persisted.data;
       if (projectData?.manuscript) {
         this.lastAutoSnapshotTime = Date.now();
         // Fire and forget snapshot to not block UI
         this.createSnapshot(projectData).then(() => this.pruneAutoSnapshots());
       }
     }
-    return this.saveSlice('project', data);
+    return this.saveSlice('project', data as PersistedProjectState);
   }
 
   async saveSettings(data: Settings): Promise<void> {
@@ -741,6 +743,41 @@ class IndexedDBService {
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  // --- StorageBackend: per-project methods (browser = single-project mode) ---
+
+  async loadSettings(): Promise<Settings | null> {
+    const state = await this.loadState();
+    return state?.settings ?? null;
+  }
+
+  async loadProject(projectId: string): Promise<StoryProject | null> {
+    const state = await this.loadState();
+    if (!state?.project) return null;
+    const raw = state.project.present ? state.project.present.data : state.project.data;
+    if (!raw) return null;
+    // In browser mode there is exactly one active project; return it if the ID matches
+    // (or if no ID is set yet, return it for any query — single-project behaviour).
+    if (raw.id && raw.id !== projectId) return null;
+    return raw as unknown as StoryProject;
+  }
+
+  async listProjects(): Promise<string[]> {
+    const state = await this.loadState();
+    if (!state?.project) return [];
+    const raw = state.project.present ? state.project.present.data : state.project.data;
+    if (!raw) return [];
+    return [raw.id ?? 'browser-project'];
+  }
+
+  async deleteProject(_projectId: string): Promise<void> {
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    return new Promise((resolve, reject) => {
+      const req = store.delete('project');
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
     });
   }
 
