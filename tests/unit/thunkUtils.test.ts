@@ -30,7 +30,7 @@ describe('buildAiOptions', () => {
     const opts = buildAiOptions(state);
 
     expect(opts.provider).toBe('gemini');
-    expect(opts.model).toBe('gemini-1.5-flash');
+    expect(opts.model).toBe('gemini-2.5-flash');
     expect(opts.temperature).toBe(0.7);
     expect(opts.maxTokens).toBe(4096);
     expect(opts.ollamaBaseUrl).toBe('http://localhost:11434');

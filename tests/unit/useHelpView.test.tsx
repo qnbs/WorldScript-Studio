@@ -15,7 +15,7 @@ const mockState = {
     aiCreativity: 'Balanced',
     advancedAi: {
       provider: 'gemini',
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       temperature: 0.7,
       maxTokens: 4096,
       ollamaBaseUrl: 'http://localhost:11434',
@@ -57,7 +57,7 @@ describe('useHelpView', () => {
     expect(mockStreamAiHelpResponse).toHaveBeenCalledWith(
       'Hello AI',
       mockState.settings.aiCreativity,
-      expect.objectContaining({ provider: 'gemini', model: 'gemini-1.5-flash' }),
+      expect.objectContaining({ provider: 'gemini', model: 'gemini-2.5-flash' }),
       expect.objectContaining({ onChunk: expect.any(Function) }),
     );
     const lastHistoryItem = result.current.chatHistory[result.current.chatHistory.length - 1];

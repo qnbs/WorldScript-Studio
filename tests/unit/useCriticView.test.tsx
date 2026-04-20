@@ -13,7 +13,7 @@ const mockState = {
   settings: {
     advancedAi: {
       provider: 'gemini',
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       temperature: 0.7,
       maxTokens: 4096,
       ollamaBaseUrl: 'http://localhost:11434',
@@ -73,7 +73,7 @@ describe('useCriticView', () => {
     expect(mockGenerateText).toHaveBeenCalledWith(
       'mock-prompt',
       mockState.aiCreativity,
-      expect.objectContaining({ provider: 'gemini', model: 'gemini-1.5-flash' }),
+      expect.objectContaining({ provider: 'gemini', model: 'gemini-2.5-flash' }),
       expect.any(AbortSignal),
     );
     expect(result.current.analysisResult).toBe('AI critique result');

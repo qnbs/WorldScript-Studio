@@ -34,7 +34,7 @@ import {
 import * as geminiService from '../../services/geminiService';
 import { storageService } from '../../services/storageService';
 
-const defaultOpts = { provider: 'gemini' as const, model: 'gemini-1.5-flash' as const };
+const defaultOpts = { provider: 'gemini' as const, model: 'gemini-2.5-flash' as const };
 
 beforeEach(() => {
   vi.clearAllMocks();
