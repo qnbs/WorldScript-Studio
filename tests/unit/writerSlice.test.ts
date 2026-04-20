@@ -146,7 +146,7 @@ describe('writerSlice', () => {
     it('adds a character when not present', () => {
       state = writerReducer(state, { type: 'writer/toggleDialogueCharacter', payload: char });
       expect(state.dialogueCharacters).toHaveLength(1);
-      expect(state.dialogueCharacters[0].id).toBe('c1');
+      expect(state.dialogueCharacters[0]?.id).toBe('c1');
     });
 
     it('removes a character when already present', () => {

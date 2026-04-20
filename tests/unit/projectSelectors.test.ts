@@ -29,21 +29,26 @@ import writerReducer from '../../features/writer/writerSlice';
 const makeChar = (id: string, name: string) => ({
   id,
   name,
-  role: 'protagonist' as const,
-  description: '',
-  traits: [],
   backstory: '',
+  motivation: '',
+  appearance: '',
+  personalityTraits: [],
+  flaws: '',
+  notes: '',
+  characterArc: '',
+  relationships: [],
 });
 
 const makeWorld = (id: string, name: string) => ({
   id,
   name,
   description: '',
-  history: '',
   geography: '',
+  magicSystem: '',
   culture: '',
-  magic: '',
-  technology: '',
+  notes: '',
+  timeline: [],
+  locations: [],
 });
 
 function buildState(override: Partial<ProjectData> = {}): RootState {
@@ -151,7 +156,7 @@ describe('character selectors', () => {
     ]);
     const state = buildState({ characters });
     expect(selectAllCharacters(state)).toHaveLength(2);
-    expect(selectAllCharacters(state)[0].name).toBe('Alice');
+    expect(selectAllCharacters(state)[0]?.name).toBe('Alice');
   });
 });
 

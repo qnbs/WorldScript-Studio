@@ -111,7 +111,7 @@ describe('streamOllama', () => {
 
     await streamOllama('prompt', { model: 'ollama/mistral' }, { onChunk: vi.fn() });
 
-    const bodyStr = vi.mocked(fetch).mock.calls[0][1]?.body as string;
+    const bodyStr = vi.mocked(fetch).mock.calls[0][1]!.body as string;
     expect(JSON.parse(bodyStr).model).toBe('mistral');
   });
 

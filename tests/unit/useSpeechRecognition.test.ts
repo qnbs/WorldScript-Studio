@@ -58,16 +58,16 @@ describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
   it('startListening sets isListening to true', () => {
     const started = { called: false };
     function MockSpeechRecognition(this: Record<string, unknown>) {
-      this.continuous = false;
-      this.interimResults = false;
-      this.lang = '';
-      this.onresult = null;
-      this.onend = null;
-      this.onerror = null;
-      this.start = () => {
+      this['continuous'] = false;
+      this['interimResults'] = false;
+      this['lang'] = '';
+      this['onresult'] = null;
+      this['onend'] = null;
+      this['onerror'] = null;
+      this['start'] = () => {
         started.called = true;
       };
-      this.stop = vi.fn();
+      this['stop'] = vi.fn();
     }
     (window as { SpeechRecognition?: unknown }).SpeechRecognition = MockSpeechRecognition;
 

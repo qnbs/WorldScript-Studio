@@ -10,7 +10,6 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
     testTimeout: 30000,
-    minWorkers: 1,
     maxWorkers: 1,
     include: ['tests/**/*.{test,spec}.{ts,tsx}', 'components/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['tests/e2e/**'],

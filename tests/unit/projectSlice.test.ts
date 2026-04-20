@@ -205,13 +205,15 @@ describe('projectSlice', () => {
       const store = createTestStore();
       store.dispatch(
         projectActions.addWritingSession({
+          id: 'ws-1',
           date: '2026-04-20',
-          wordCount: 500,
-          duration: 30,
+          startTime: '09:00',
+          endTime: '09:30',
+          wordsWritten: 500,
         }),
       );
       expect(store.getState().project.present.data.writingSessions).toHaveLength(1);
-      expect(store.getState().project.present.data.writingSessions?.[0]?.wordCount).toBe(500);
+      expect(store.getState().project.present.data.writingSessions?.[0]?.wordsWritten).toBe(500);
     });
 
     it('should update a writing goal', () => {
