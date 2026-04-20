@@ -26,4 +26,20 @@ describe('featureFlagsSlice', () => {
     state = featureFlagsReducer(state, featureFlagsActions.setEnableVisualRegression(true));
     expect(state.enableVisualRegression).toBe(true);
   });
+
+  it('setFeatureFlags replaces entire state', () => {
+    const next: FeatureFlagsState = {
+      enableOllama: true,
+      enablePerformanceBudgets: true,
+      enableVisualRegression: false,
+    };
+    const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
+    expect(state).toEqual(next);
+  });
+
+  it('disabling a flag sets it back to false', () => {
+    let state = featureFlagsReducer(undefined, featureFlagsActions.setEnableOllama(true));
+    state = featureFlagsReducer(state, featureFlagsActions.setEnableOllama(false));
+    expect(state.enableOllama).toBe(false);
+  });
 });

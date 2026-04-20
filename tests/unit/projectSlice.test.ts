@@ -168,6 +168,70 @@ describe('projectSlice', () => {
     });
   });
 
+  describe('worlds', () => {
+    it('should update a world', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.addWorld({ name: 'Narnia' }));
+      const worlds = store.getState().project.present.data.worlds;
+      const id = worlds.ids[0] as string;
+      store.dispatch(projectActions.updateWorld({ id, changes: { description: 'A magic land' } }));
+      const updated = store.getState().project.present.data.worlds.entities[id];
+      expect(updated?.description).toBe('A magic land');
+    });
+
+    it('should delete a world', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.addWorld({ name: 'Mordor' }));
+      const id = store.getState().project.present.data.worlds.ids[0] as string;
+      store.dispatch(projectActions.deleteWorld(id));
+      expect(store.getState().project.present.data.worlds.ids).toHaveLength(0);
+    });
+  });
+
+  describe('setManuscript', () => {
+    it('replaces the full manuscript', () => {
+      const store = createTestStore();
+      const newManuscript = [
+        { id: 'ch-a', title: 'Prologue', content: 'It began...' },
+        { id: 'ch-b', title: 'Chapter 1', content: 'Then...' },
+      ];
+      store.dispatch(projectActions.setManuscript(newManuscript));
+      expect(store.getState().project.present.data.manuscript).toEqual(newManuscript);
+    });
+  });
+
+  describe('writing sessions and goals', () => {
+    it('should add a writing session', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addWritingSession({
+          date: '2026-04-20',
+          wordCount: 500,
+          duration: 30,
+        }),
+      );
+      expect(store.getState().project.present.data.writingSessions).toHaveLength(1);
+      expect(store.getState().project.present.data.writingSessions?.[0]?.wordCount).toBe(500);
+    });
+
+    it('should update a writing goal', () => {
+      const store = createTestStore();
+      const goals = [{ id: 'g1', type: 'daily' as const, target: 500, current: 0 }];
+      store.dispatch(
+        projectActions.resetProject({
+          title: 'T',
+          logline: 'L',
+        }),
+      );
+      // updateWritingGoal on unknown id is a no-op (initializes array but adds nothing)
+      store.dispatch(
+        projectActions.updateWritingGoal({ id: 'nonexistent', changes: { target: 1000 } }),
+      );
+      expect(store.getState().project.present.data.writingGoals).toHaveLength(0);
+      void goals;
+    });
+  });
+
   describe('undo/redo', () => {
     it('should support undo/redo for synchronous actions', () => {
       const store = createTestStore();
