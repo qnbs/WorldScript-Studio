@@ -51,3 +51,36 @@ describe('logger', () => {
     expect(localStorage.getItem('debug')).toBeNull();
   });
 });
+
+describe('logger ring buffer', () => {
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('getRecentLogs returns entries logged via warn/error', async () => {
+    const { logger, getRecentLogs, clearLogs } = await import('../../services/logger');
+    clearLogs();
+    logger.warn('ring-warn');
+    logger.error('ring-error');
+    const logs = getRecentLogs();
+    expect(logs.some((e) => e.level === 'warn' && e.message.includes('ring-warn'))).toBe(true);
+    expect(logs.some((e) => e.level === 'error' && e.message.includes('ring-error'))).toBe(true);
+  });
+
+  it('clearLogs empties the buffer', async () => {
+    const { logger, getRecentLogs, clearLogs } = await import('../../services/logger');
+    logger.error('before clear');
+    clearLogs();
+    expect(getRecentLogs()).toHaveLength(0);
+  });
+
+  it('formatLogsForReport returns ISO-timestamp lines', async () => {
+    const { logger, clearLogs, formatLogsForReport } = await import('../../services/logger');
+    clearLogs();
+    logger.warn('report-test');
+    const report = formatLogsForReport();
+    expect(report).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(report).toContain('[WARN]');
+    expect(report).toContain('report-test');
+  });
+});
