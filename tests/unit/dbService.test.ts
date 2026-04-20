@@ -188,4 +188,36 @@ describe('dbService', () => {
 
     dbService.getGeminiApiKey = originalGetGeminiApiKey;
   });
+
+  it('hasGeminiApiKey returns true when a valid key is stored', async () => {
+    await dbService.saveGeminiApiKey('valid-key');
+    const result = await dbService.hasGeminiApiKey();
+    expect(result).toBe(true);
+  });
+
+  it('should delete a story codex entry', async () => {
+    const codex = {
+      projectId: 'proj-del',
+      extractedAt: new Date().toISOString(),
+      summary: '',
+      entities: [],
+    };
+    await dbService.saveStoryCodex(codex);
+    expect(await dbService.getStoryCodex('proj-del')).not.toBeNull();
+
+    const db = dbService as unknown as { deleteStoryCodex: (id: string) => Promise<void> };
+    await db.deleteStoryCodex('proj-del');
+    expect(await dbService.getStoryCodex('proj-del')).toBeNull();
+  });
+
+  it('clearApiKey removes the provider key from storage', async () => {
+    await dbService.saveApiKey('openai', 'sk-test');
+    expect(storeData.has('api_key_openai_enc')).toBe(true);
+
+    const db = dbService as unknown as { clearApiKey: (p: string) => Promise<void> };
+    await db.clearApiKey('openai');
+
+    expect(storeData.has('api_key_openai_enc')).toBe(false);
+    expect(storeData.has('api_key_openai_iv')).toBe(false);
+  });
 });
