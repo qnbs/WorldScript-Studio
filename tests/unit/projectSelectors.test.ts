@@ -32,11 +32,11 @@ const makeChar = (id: string, name: string) => ({
   backstory: '',
   motivation: '',
   appearance: '',
-  personalityTraits: [],
+  personalityTraits: '',
   flaws: '',
   notes: '',
   characterArc: '',
-  relationships: [],
+  relationships: '',
 });
 
 const makeWorld = (id: string, name: string) => ({
