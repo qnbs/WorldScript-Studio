@@ -17,7 +17,6 @@ import {
   PerformanceSection,
   PrivacySection,
 } from './settings/SystemSections';
-import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 
 // --- SUB-COMPONENTS ---
@@ -32,7 +31,7 @@ const NavButton: FC<{
     type="button"
     onClick={onClick}
     aria-current={isActive ? 'page' : undefined}
-    className={`flex items-center w-full px-3 py-2 text-left rounded-md transition-colors ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
+    className={`flex items-center flex-shrink-0 md:flex-shrink md:w-full px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap md:whitespace-normal ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
   >
     <svg
       aria-hidden="true"
@@ -180,32 +179,10 @@ const SettingsViewUI: FC = () => {
 
   return (
     <div>
-      {/* Mobile Navigation */}
-      <div className="md:hidden mb-6">
-        <label
-          htmlFor="settings-category"
-          className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
-        >
-          Category
-        </label>
-        <Select
-          id="settings-category"
-          value={activeCategory}
-          onChange={(e) => setActiveCategory(e.target.value)}
-          className="w-full"
-        >
-          {navCategories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-        {/* Desktop Navigation */}
-        <div className="hidden md:block md:col-span-1">
-          <div className="space-y-2 sticky top-20">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8">
+        <div className="md:col-span-1">
+          {/* Mobile: horizontal scroll strip · Desktop: vertical sticky sidebar */}
+          <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--background-primary)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
             {navCategories.map((cat) => (
               <NavButton
                 key={cat.id}
@@ -217,7 +194,7 @@ const SettingsViewUI: FC = () => {
             ))}
           </div>
         </div>
-        <div className="md:col-span-3">{renderContent()}</div>
+        <div className="md:col-span-3 min-h-[50vh] md:min-h-[80vh]">{renderContent()}</div>
       </div>
       <SettingsModals />
     </div>
