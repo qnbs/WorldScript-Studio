@@ -37,28 +37,35 @@ All critical, high, and most medium-priority items have been completed, includin
 
 ## v1.2 — Security, Quality & Local AI
 
-**Status:** 📋 Geplant
+**Status:** 🔄 In Arbeit
 
-### Security Hardening
+### Security Hardening ✅ abgeschlossen
 
-- CryptoKey non-extractable (ersetze öffentliche Key-Derivation durch echte Krypto)
-- CSP img-src hardening (https: entfernt, frame-ancestors 'none', upgrade-insecure-requests)
-- Import-JSON Schema-Validation mit Valibot
-- Collaboration Awareness-State Validation (XSS-Prävention)
-- communityTemplateService irreführende Fehlermeldungen korrigiert
-- OpenAI Stream Abort-Check, silent Model-Downgrade gestoppt
-- Gemini Connection Test (echter API-Call statt fake { ok: true })
+- ✅ CryptoKey non-extractable (`crypto.subtle.generateKey()`)
+- ✅ CSP img-src hardening (`frame-ancestors 'none'`, `upgrade-insecure-requests`)
+- ✅ Import-JSON Schema-Validation mit Valibot
+- ✅ Collaboration Awareness-State Validation
+- ✅ communityTemplateService → lokaler Static-Asset-Pfad
+- ✅ OpenAI Stream Abort-Check, silent Model-Downgrade gestoppt
+- ✅ Gemini Connection Test (echter API-Call)
 
-### Code Quality
+### Code Quality ✅ größtenteils abgeschlossen
 
-- Coverage-Config auf Glob-Patterns umgestellt (ehrliche Metriken)
-- TypeScript-Version auf reale Stable gepinnt
-- _tempStore entfernt, Typen von setupStore abgeleitet
-- Project/Settings-Save-Listener getrennt (Performance)
-- SettingsView.tsx in Sektions-Komponenten aufgeteilt (2116 LOC → ~6×300 LOC)
-- StorageBackend-Interface strikt durchgesetzt
-- Lighthouse CI hard-fail aktiviert
-- HelpView biome-ignore cleanup, constants.tsx split
+- ✅ Coverage-Config auf Glob-Patterns umgestellt
+- ✅ TypeScript 6.0 übernommen (`stableTypeOrdering`, native `RegExp.escape`)
+- ✅ Project/Settings-Save-Listener getrennt (Performance)
+- ✅ SettingsView.tsx in 8 Sektions-Komponenten aufgeteilt (2116 LOC → ~234 LOC)
+- ✅ constants.tsx in icons/defaults/index aufgeteilt
+- ✅ projectSlice.ts in 6 Thunk-Domain-Dateien aufgeteilt (777 → 248 LOC)
+- ✅ Lighthouse CI hard-fail aktiviert
+- ✅ Test-Suite auf 160+ Tests ausgebaut (CI grün auf Node LTS + Node 24)
+- ⬜ StorageBackend-Interface strikt durchgesetzt (Union-Typ entfernen, dbService konform)
+
+### Tauri Feature-Parität ✅ abgeschlossen
+
+- ✅ fileSystemService: Retry-Logik, LZ-String-Kompression, numerische Snapshot-IDs, `deleteImage()`, `hasSavedData()`, Auto-Snapshot (5 min, max 20)
+- ✅ Story Codex + RAG-Vektoren: file-per-project Storage (`projects/{id}/codex/`)
+- ✅ `storageService` / `codexService` routen alles über `StorageBackend`-Interface
 
 ### Ollama / Local-AI Integration
 

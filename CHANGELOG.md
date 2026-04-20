@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+
+- **projectSlice Decomposition**: Split monolithic `projectSlice.ts` (777 → 248 lines) by extracting all 14 AI thunks into per-domain files under `features/project/thunks/`: `characterThunks.ts`, `worldThunks.ts`, `outlineThunks.ts`, `writingThunks.ts`, `projectManagementThunks.ts`. Shared lazy service loaders + `buildAiOptions` extracted to `thunks/thunkUtils.ts`; entity adapters to `adapters.ts` to break circular deps. `projectSlice` re-exports everything for backward compatibility.
+
+### Added
+
+- **Tauri fileSystemService Parity** (5 of 6 gaps closed): Added retry logic (`retryFs()` with 2 retries + 500 ms backoff), LZ-String compression matching dbService algorithm (10 KB threshold, `\x00lz1\x00` prefix), numeric snapshot IDs with metadata envelope, `deleteImage()`, `hasSavedData()`, and auto-snapshot every 5 min (max 20, FIFO pruning) to `fileSystemService.ts`.
+- **Tauri Story Codex + RAG Parity** (Gap 3): Implemented file-per-project storage for Story Codex (`projects/{id}/codex/codex.snap`) and RAG vectors (`projects/{id}/codex/vectors.snap`) in the Tauri FS backend. Extended `StorageBackend` interface and `StorageManager` proxy with 6 new methods. `codexService` and `useConsistencyCheckerView` now route through `storageService` instead of calling `dbService` directly.
+
+### Added (Tests)
+
+- Expanded unit test suite from ~80 to ~160+ tests across 12 new test files: `aiUtils` (20 tests), `projectSelectors` (15 tests), `logger` (6 tests), `communityTemplateService` (6 tests), `thunkUtils` (2 tests), `aiThunkUtils` (4 tests), `ollamaService` (12 tests), `aiProviderService` (17 tests), `storageService` (11 tests), `useApp` (9 tests), `usePWA` (9 tests), `useSpeechRecognition` (6 tests). Extended `writerSlice` (+8), `featureFlagsSlice` (+2), `projectSlice` (+5), `dbService` (+3).
+- **Node 24 localStorage Polyfill**: Added in-memory `localStorage` mock in `tests/setup.ts` for full CI compatibility across Node LTS and current (Node 24) versions. Node 24 exposes a native `localStorage` without `.clear()`; the polyfill activates only when `.clear` is absent.
+- **Vitest Config Hardening**: Added `testTimeout: 30000`, `maxWorkers: 1` (RAM-constrained environments), lowered coverage thresholds to 15%/10% for honest baselines. JUnit reporter output to `reports/junit.xml`.
+
 ### Changed
 
 - **TypeScript 6.0 Adoption**: Enabled `stableTypeOrdering` compiler flag in `tsconfig.json` to ensure consistent type union ordering between TS 6.0 and the upcoming TS 7.0 Go-native compiler.

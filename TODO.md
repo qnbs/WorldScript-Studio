@@ -13,13 +13,11 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 ### Hoch (🟡)
 
 - ⬜ E2E-Tests erweitern (Projekt-Import, Charakter-CRUD, Snapshot-Flow)
-- ⬜ Tauri-Parität: 6 fehlende Features (Kompression, Auto-Snapshot, Retry, deleteImage, hasSavedData, Snapshot-ID-Typ)
 - ⬜ StorageBackend-Interface strikt durchsetzen (Union-Typ entfernen, dbService konform machen)
 - ⬜ Logger mit Ringbuffer + Sink für Crash-Diagnose
 
 ### Mittel (🟠)
 
-- ⬜ projectSlice.ts in Thunk-Module splitten (14 AI-Thunks → thunks/ Verzeichnis)
 - ⬜ Signaling-URL für Collaboration in Settings konfigurierbar machen
 - ⬜ Yjs E2E-Verschlüsselung (libsodium SecretBox, deferred to v2.0)
 
@@ -31,6 +29,13 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ⬜ Renovate Auto-Merge für Patch-Updates konfigurieren
 
 ---
+
+## Archiviert (v1.2.0 Sprint — erledigt)
+
+- ✅ projectSlice.ts in Thunk-Module splitten (14 AI-Thunks → `features/project/thunks/`)
+- ✅ Tauri-Parität: 6 fehlende Features — fileSystemService Retry/Kompression/Snapshot-ID/deleteImage/hasSavedData/Auto-Snapshot + Story Codex & RAG vectors (Gap 3)
+- ✅ Test-Suite von ~80 auf ~160+ Tests ausgebaut (12 neue Test-Dateien)
+- ✅ Node 24 localStorage-Polyfill (CI grün auf Node LTS + current)
 
 ## Archiviert (v1.1.2 Hotfix — erledigt)
 
