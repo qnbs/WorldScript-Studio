@@ -4,11 +4,11 @@
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
   <img src="https://img.shields.io/badge/Redux_Toolkit-6.x-764ABC?logo=redux" alt="Redux Toolkit">
   <img src="https://img.shields.io/badge/Vite-6.x-646CFF?logo=vite&logoColor=white" alt="Vite 6">
-  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5">
-  <img src="https://img.shields.io/badge/AI-Google_Gemini-4285F4?logo=google" alt="Google Gemini">
+  <img src="https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript 6">
+  <img src="https://img.shields.io/badge/AI-Gemini_%7C_Ollama-4285F4?logo=google" alt="Gemini + Ollama">
   <img src="https://img.shields.io/badge/Storage-IndexedDB-F59E0B" alt="IndexedDB">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_|_EN-0EA5E9" alt="i18n DE EN">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT-0EA5E9" alt="i18n DE EN FR ES IT">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
@@ -123,6 +123,16 @@ Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-f
 
 A keyboard-first command palette (⌘K / Ctrl+K) for instant navigation, AI actions, and project management — all without leaving the keyboard.
 
+### 🦙 Local AI via Ollama _(Privacy-First)_
+
+Run all AI features entirely on your own hardware — no API key, no internet, no data leaving your machine.
+
+- Auto-detects installed models via Ollama's `/api/tags` endpoint
+- Default model: **Qwen3 8B** (multilingual, reasoning-optimized, 6 GB VRAM)
+- Configurable server URL (default `http://localhost:11434`)
+- Automatic fallback to Gemini if Ollama is unreachable and a Gemini key is set
+- Real-time connection status indicator in Settings
+
 ### 🎨 Highly Customizable Workspace
 
 - **Dark / Light** themes
@@ -196,6 +206,7 @@ Language selection persists across sessions via `localStorage`.
 | **State Management** | Redux Toolkit + Redux-Undo           | Predictable global state with 100-step undo history                  |
 | **Styling**          | Tailwind CSS + CSS Variables         | Utility-first design with theme-aware custom properties              |
 | **AI Integration**   | Google Gemini API (`@google/genai`)  | Multimodal generative AI for all creative features                   |
+| **Local AI**         | Ollama HTTP client (`ollamaService`) | Privacy-first local inference; auto-detects models via `/api/tags`   |
 | **Storage**          | IndexedDB (custom `dbService`)       | Large-capacity, async, offline-first local persistence               |
 | **Encryption**       | Web Crypto API (AES-256-GCM)         | Client-side API key encryption before IndexedDB storage              |
 | **PDF Export**       | jsPDF                                | Client-side, configurable PDF document generation                    |
@@ -233,21 +244,27 @@ StoryCraft-Studio/
 
 A modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+) is all you need — no installation required.
 
-### 🔐 Setting Up Your Gemini API Key
+### 🔐 Setting Up AI
 
-All AI features require a free Google Gemini API key.
+StoryCraft Studio supports two AI providers — choose what fits your privacy needs:
+
+#### Option A: Google Gemini (cloud, free tier available)
 
 1. **Get your key** at [Google AI Studio](https://aistudio.google.com/app/apikey) — it's free
-2. **Open Settings** in the app (gear icon in the sidebar)
-3. **Enter your API key** under "Gemini API Key"
-4. **Click Save** — the key is encrypted with AES-256-GCM and stored only in your browser's IndexedDB
+2. **Open Settings** → AI Provider → select **Gemini**
+3. **Enter your API key** — encrypted with AES-256-GCM and stored only in your browser's IndexedDB
 
 **Security best practices:**
-
 - ✅ Your key never leaves your device
 - ✅ Encrypted at rest via the Web Crypto API
-- ✅ No key is ever stored in source code or build artifacts
 - 🔒 **Recommended:** Restrict your key to `*.github.io` in Google AI Studio
+
+#### Option B: Ollama (local, fully private)
+
+1. **Install Ollama** and pull a model: `ollama pull qwen3:8b`
+2. **Open Settings** → AI Provider → select **Ollama**
+3. **Set server URL** (default `http://localhost:11434`) — models are auto-detected
+4. All inference runs on your machine; no internet required
 
 ### 🚀 Deploying to GitHub Pages
 
@@ -280,30 +297,32 @@ pnpm run preview
 
 ### 🧪 CI & Local Validation
 
-This repository uses an optimized GitHub Actions pipeline that includes:
+This repository uses an optimized GitHub Actions pipeline:
 
-- `lint` + `typecheck`
-- `test` with Vitest coverage and JUnit reporting
-- `storybook` build artifact generation
-- `security` dependency-review with `pnpm audit` on dependency changes
-- `build` for production, plus optional `build-node` compatibility on tags and manual dispatch
-- `lighthouse` budget validation
-- `deploy` to GitHub Pages on `main`
+| Job           | Trigger              | What it does                                                    |
+| ------------- | -------------------- | --------------------------------------------------------------- |
+| `security`    | every push / PR      | `pnpm audit --audit-level=high` + dependency-review (PRs)       |
+| `quality`     | after security       | Biome lint + `tsc --noEmit` + Vitest coverage (Node LTS + current matrix) |
+| `e2e`         | after quality        | Playwright E2E tests (Chromium, CI=true)                        |
+| `build`       | after quality        | Vite production build; uploads Pages artifact on `main`         |
+| `lighthouse`  | after build          | LHCI budget assertions (hard-fail)                              |
+| `storybook`   | after quality        | Storybook static build artifact                                 |
+| `deploy`      | main push only       | Deploys to GitHub Pages (needs both `build` and `e2e` to pass)  |
 
-You can simulate the pipeline locally using [Act](https://github.com/nektos/act):
+You can simulate individual jobs locally using [Act](https://github.com/nektos/act):
 
 ```bash
 # Install Act (requires Docker)
 npm install -g act
 
-# Run the CI workflow locally for pull request simulation
-act pull_request --job lint --job typecheck --job test --job storybook --job build
+# Run quality checks (lint + typecheck + unit tests)
+act pull_request --job quality
 
-# Run the full CI workflow locally for a tag/dispatch build
-act push --job build --job build-node --job lighthouse --job deploy
+# Run the build job
+act push --job build
 ```
 
-If you use Codecov locally, provide the token with `-s CODECOV_TOKEN=<token>`. For faster local runs, you can skip external upload steps by using `--secret-file .github/act.secrets` or disabling `CODECOV_TOKEN`.
+If you use Codecov locally, provide the token with `-s CODECOV_TOKEN=<token>`.
 
 ### 🌐 Custom Domain Setup
 
@@ -439,7 +458,8 @@ Sprachauswahl dauerhaft in `localStorage` gespeichert.
 | Build              | Vite 6                                             |
 | Zustandsverwaltung | Redux Toolkit + Redux-Undo                         |
 | Styling            | Tailwind CSS + CSS-Variablen                       |
-| KI                 | Google Gemini API                                  |
+| KI (Cloud)         | Google Gemini API (`@google/genai`)                |
+| KI (Lokal)         | Ollama HTTP-Client (localhost:11434)               |
 | Speicher           | IndexedDB (eigener dbService)                      |
 | Verschlüsselung    | Web Crypto API (AES-256-GCM)                       |
 | PDF-Export         | jsPDF                                              |

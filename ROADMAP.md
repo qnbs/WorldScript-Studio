@@ -131,6 +131,18 @@ Vereinfachte automatische Konsistenzprüfung:
 
 ---
 
+## v1.2.1 — Release Blockers
+
+**Status:** 📋 Geplant (vor erstem Tauri-Release erforderlich)
+
+- ⬜ StorageBackend-Interface strikt durchgesetzt (Union-Typ entfernen, dbService konform)
+- ⬜ Onboarding-Tour / Demo-Projekt beim ersten App-Start (Welcome-Portal)
+- ⬜ Tauri v2 Release-Pipeline: Auto-Update (`tauri-plugin-updater`) + Code-Signing + GitHub Release Artifacts
+- ⬜ FR/ES/IT Übersetzungen vervollständigen + CI-Gate (Lint-Fehler, wenn Key fehlt)
+- ⬜ Bundle-Size-Budgets: rollup-plugin-visualizer als CI-Artifact + `performance.budget` in LHCI
+
+---
+
 ## v1.3 — UX & Accessibility
 
 **Status:** 📋 Geplant
@@ -139,7 +151,7 @@ Vereinfachte automatische Konsistenzprüfung:
 - AI-Creativity-Presets pro Projekt (nicht global)
 - Erweiterte Keyboard Navigation
 - High-Contrast-Mode Verbesserungen
-- Performance Budgets (Lighthouse CI)
+- Visual Regression Tests (Playwright Screenshots + Storybook chromatic)
 
 ---
 
@@ -152,7 +164,7 @@ Vereinfachte automatische Konsistenzprüfung:
 - Plugin-System für benutzerdefinierte AI-Tools
 - Fine-Tuning/LoRA-Support für personalisierte Schreibstile
 - Cloud-Sync Option (optional, E2E-verschlüsselt)
-- Tauri Release-Pipeline (Auto-Update, Code-Signing)
+- Tauri Release-Pipeline — in v1.2.1 vorgezogen (Auto-Update, Code-Signing)
 
 ---
 

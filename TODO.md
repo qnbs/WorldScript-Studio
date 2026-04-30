@@ -27,6 +27,8 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ⬜ Bundle-Size-Budgets pro Chunk (rollup-plugin-visualizer in CI)
 - ⬜ FR/ES/IT Übersetzungen vervollständigen + CI-Gate
 - ⬜ Renovate Auto-Merge für Patch-Updates konfigurieren
+- ⬜ Onboarding-Tour / Demo-Projekt beim ersten App-Start (Welcome-Portal-Erweiterung)
+- ⬜ Tauri v2 Release-Pipeline: auto-update + code-signing + GitHub Release Artifacts
 
 ---
 
