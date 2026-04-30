@@ -12,9 +12,9 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ### Hoch (🟡)
 
-- ⬜ E2E-Tests erweitern (Projekt-Import, Charakter-CRUD, Snapshot-Flow)
+- ✅ E2E-Tests erweitern (Projekt-Import, Charakter-CRUD, Snapshot-Flow + Auto-Snapshot)
 - ⬜ StorageBackend-Interface strikt durchsetzen (Union-Typ entfernen, dbService konform machen)
-- ⬜ Logger mit Ringbuffer + Sink für Crash-Diagnose
+- ✅ Logger mit Ringbuffer + Sink für Crash-Diagnose
 
 ### Mittel (🟠)
 
@@ -32,6 +32,8 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ## Archiviert (v1.2.0 Sprint — erledigt)
 
+- ✅ E2E-Tests erweitern: project-import.spec.ts (3 Tests), characters.spec.ts (4 Tests), snapshots.spec.ts (4 Tests)
+- ✅ Ollama / Local-AI Integration: ollamaService.ts + aiProviderService.ts + Settings-UI vollständig, Default-Modell auf Qwen3 8B
 - ✅ projectSlice.ts in Thunk-Module splitten (14 AI-Thunks → `features/project/thunks/`)
 - ✅ Tauri-Parität: 6 fehlende Features — fileSystemService Retry/Kompression/Snapshot-ID/deleteImage/hasSavedData/Auto-Snapshot + Story Codex & RAG vectors (Gap 3)
 - ✅ Test-Suite von ~80 auf ~160+ Tests ausgebaut (12 neue Test-Dateien)

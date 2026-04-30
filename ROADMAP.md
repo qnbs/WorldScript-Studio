@@ -67,7 +67,7 @@ All critical, high, and most medium-priority items have been completed, includin
 - ✅ Story Codex + RAG-Vektoren: file-per-project Storage (`projects/{id}/codex/`)
 - ✅ `storageService` / `codexService` routen alles über `StorageBackend`-Interface
 
-### Ollama / Local-AI Integration
+### Ollama / Local-AI Integration ✅ abgeschlossen
 
 **Architektur:** `aiProviderService.ts` → `ollamaService.ts` (HTTP-Client für localhost:11434)
 
@@ -97,13 +97,14 @@ Einstellungen → AI Provider → [Gemini Cloud | Ollama Local]
   ↳ Status-Indikator: 🟢 Verbunden / 🔴 Nicht erreichbar
 ```
 
-**Implementation-Schritte:**
+**Implementation-Schritte:** ✅ alle abgeschlossen
 
-1. `services/ollamaService.ts` — HTTP-Client (`/api/generate`, `/api/chat`, `/api/tags`)
-2. `aiProviderService.ts` erweitern — Provider-Registry mit Fallback-Chain
-3. `features/settings/settingsSlice.ts` — `aiProvider: 'gemini' | 'ollama'`, `ollamaModel`, `ollamaUrl`
-4. `components/SettingsView.tsx` — Provider-Toggle UI
-5. Prompt-Adapter: Gemini-Prompts → Ollama-kompatibles Format transformieren
+1. ✅ `services/ollamaService.ts` — HTTP-Client (`/api/generate`, `/api/chat`, `/api/tags`)
+2. ✅ `aiProviderService.ts` — Provider-Registry mit Fallback-Chain (Gemini-Fallback bei Ollama-Fehler)
+3. ✅ `features/settings/settingsSlice.ts` — `advancedAi.provider`, `advancedAi.model`, `advancedAi.ollamaBaseUrl`
+4. ✅ `components/settings/AiProviderCard.tsx` + `AiSections.tsx` — Provider-Toggle, Modell-Auto-Detect, Status-Indikator
+5. ✅ Prompt-Adapter — `sanitizeOllamaPrompt` + `buildOllamaPrompt` in `ollamaService.ts`
+6. ✅ Default-Modell: Qwen3 8B (`ollama/qwen3:8b`)
 
 ### Codex Auto-Tracking (Story Codex)
 
