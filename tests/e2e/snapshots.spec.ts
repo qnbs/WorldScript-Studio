@@ -32,10 +32,10 @@ test.describe('Snapshot Flow (CI-only)', () => {
     if (await startBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await startBtn.click();
       await page
-        .getByRole('button', { name: /Skip|Manual/i })
+        .getByRole('button', { name: /Blank Manuscript/i })
         .first()
-        .click()
-        .catch(() => {});
+        .click();
+      await page.waitForLoadState('networkidle');
     }
   });
 
