@@ -95,7 +95,8 @@
     "overrides": {
       "serialize-javascript": ">=7.0.3",
       "chrome-launcher": "^1.2.1",
-      "tmp": "^0.2.5"
+      "tmp": "^0.2.5",
+      "@xmldom/xmldom": ">=0.8.13"
     },
     "peerDependencyRules": {
       "allowedVersions": {
