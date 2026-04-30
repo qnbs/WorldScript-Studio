@@ -47,7 +47,7 @@ export const AiSection: FC = () => {
             p === 'ollama'
               ? currentModel.startsWith('ollama/')
                 ? currentModel
-                : 'ollama/gemma3'
+                : 'ollama/qwen3:8b'
               : p === 'gemini'
                 ? currentModel.startsWith('ollama/')
                   ? 'gemini-2.5-flash'

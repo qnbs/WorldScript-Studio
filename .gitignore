@@ -30,3 +30,6 @@ src-tauri/target/
 .env
 
 test-results/
+
+# Graphify knowledge graph output
+graphify-out/

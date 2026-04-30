@@ -1,0 +1,53 @@
+# Build outputs
+dist/
+dist-ssr/
+src-tauri/target/
+
+# Dependencies
+node_modules/
+
+# Test artifacts
+coverage/
+reports/
+test-results/
+playwright-report/
+
+# GraphiPy output (don't re-index the graph itself)
+graphify-out/
+
+# Generated / lock files
+pnpm-lock.yaml
+*.lock
+
+# Logs
+*.log
+ts-fail.log
+
+# Binary / media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.woff
+*.woff2
+*.ttf
+*.eot
+
+# Tauri / Rust binaries
+*.so
+*.dll
+*.dylib
+*.rlib
+
+# Storybook
+storybook-static/
+
+# IDE
+.vscode/
+.idea/
+
+# Secrets / env
+.env
+.env.*
