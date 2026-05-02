@@ -179,11 +179,12 @@ For production or sensitive collaboration environments, host your own signaling 
 
 ### 🌐 Full Multi-Language Support
 
-Fully localized to:
+Shipped UI locales (selector):
 
 - 🇩🇪 **German** (Deutsch) — complete
 - 🇬🇧 **English** — complete
-- 🇫🇷 French, 🇪🇸 Spanish, 🇮🇹 Italian _(in progress)_
+
+Locale packs for 🇫🇷 French, 🇪🇸 Spanish, and 🇮🇹 Italian remain in `locales/` for future activation.
 
 Language selection persists across sessions via `localStorage`.
 
@@ -447,9 +448,9 @@ Installierbar auf Desktop und Smartphone. Offline-fähig. App-Shortcuts vom Home
 
 ### 🌐 Mehrsprachigkeit
 
-- 🇩🇪 **Deutsch** — vollständig
-- 🇬🇧 **Englisch** — vollständig
-- 🇫🇷 Französisch, 🇪🇸 Spanisch, 🇮🇹 Italienisch _(in Bearbeitung)_
+- 🇩🇪 **Deutsch** — vollständig (in der App wählbar)
+- 🇬🇧 **Englisch** — vollständig (in der App wählbar)
+- 🇫🇷 Französisch, 🇪🇸 Spanisch, 🇮🇹 Italienisch — Locale-Dateien für spätere Aktivierung vorhanden
 
 Sprachauswahl dauerhaft in `localStorage` gespeichert.
 
