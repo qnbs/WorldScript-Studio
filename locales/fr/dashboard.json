@@ -32,6 +32,7 @@
   "dashboard.loglineModal.title": "AI Logline Suggestions",
   "dashboard.noLogline": "No logline yet. Add one in the manuscript inspector!",
   "dashboard.onboarding.dismiss": "Got it",
+  "dashboard.onboarding.startTour": "Visite guidée",
   "dashboard.onboarding.tip1": "Use the sidebar to switch between Manuscript, Characters, Worlds, and Export.",
   "dashboard.onboarding.tip2": "Add an API key in Settings to unlock cloud AI, or choose Ollama for local models.",
   "dashboard.onboarding.tip3": "Your work saves automatically to this device — snapshots are available under Version Control.",

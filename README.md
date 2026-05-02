@@ -179,14 +179,19 @@ For production or sensitive collaboration environments, host your own signaling 
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales (selector):
+Shipped UI locales (selector in Settings, Welcome Portal, and Command Palette):
 
-- 🇩🇪 **German** (Deutsch) — complete
-- 🇬🇧 **English** — complete
+- 🇩🇪 **German** (Deutsch)
+- 🇬🇧 **English**
+- 🇫🇷 **French** (Français)
+- 🇪🇸 **Spanish** (Español)
+- 🇮🇹 **Italian** (Italiano)
 
-Locale packs for 🇫🇷 French, 🇪🇸 Spanish, and 🇮🇹 Italian remain in `locales/` for future activation.
+All five trees stay in key parity (`pnpm run i18n:check`). Copy is tuned per locale; ongoing polish via community PRs is welcome.
 
 Language selection persists across sessions via `localStorage`.
+
+**Spotlight tour:** After first launch, a short guided tour (driver.js) highlights navigation, optional desktop command palette, and Settings; restart it anytime from the Dashboard (“Guided tour”) or Help.
 
 ---
 
@@ -363,7 +368,7 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 
 - **🐛 Report Bugs** — Open a GitHub Issue with details and reproduction steps
 - **💡 Suggest Features** — Open a Discussion or Issue
-- **🌍 Improve Translations** — `locales/` contains all i18n JSON files; PRs for FR/ES/IT are especially welcome
+- **🌍 Improve Translations** — five locale trees (`en` reference); native polish for FR/ES/IT especially welcome in PRs
 
 ---
 
@@ -449,9 +454,9 @@ Installierbar auf Desktop und Smartphone. Offline-fähig. App-Shortcuts vom Home
 
 ### 🌐 Mehrsprachigkeit
 
-- 🇩🇪 **Deutsch** — vollständig (in der App wählbar)
-- 🇬🇧 **Englisch** — vollständig (in der App wählbar)
-- 🇫🇷 Französisch, 🇪🇸 Spanisch, 🇮🇹 Italienisch — Locale-Dateien für spätere Aktivierung vorhanden
+Fünf Oberflächensprachen in der App wählbar (Einstellungen, Willkommensportal, Befehlspalette): **Deutsch**, **Englisch**, **Französisch**, **Spanisch**, **Italienisch**. Schlüsselparität wird per CI geprüft (`pnpm run i18n:check`).
+
+**Spotlight-Tour:** Kurze geführte Tour nach dem ersten Start; erneut startbar über das Dashboard („Geführte Tour“) oder Hilfe.
 
 Sprachauswahl dauerhaft in `localStorage` gespeichert.
 

@@ -5,6 +5,7 @@ import { useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { HelpViewContext, useHelpViewContext } from '../contexts/HelpViewContext';
 import { useHelpView } from '../hooks/useHelpView';
+import { startSpotlightTour } from '../services/spotlightTour';
 import type { HelpCategory } from '../types';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
@@ -309,6 +310,10 @@ const HelpViewUI: FC = () => {
   const { t, helpContent, activeCategory, selectedArticle, handleSelectCategory } =
     useHelpViewContext();
 
+  const handleStartTour = () => {
+    startSpotlightTour((key) => t(key));
+  };
+
   const renderContent = () => {
     if (selectedArticle) {
       return <ArticleViewer />;
@@ -349,6 +354,14 @@ const HelpViewUI: FC = () => {
               isActive={activeCategory === 'ai'}
               onClick={() => handleSelectCategory('ai')}
             />
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-2 w-full max-w-full shrink-0"
+              onClick={handleStartTour}
+            >
+              {t('tour.help.startButton')}
+            </Button>
           </div>
         </div>
         <div className="md:col-span-3 min-h-[50vh] md:min-h-[80vh]">{renderContent()}</div>

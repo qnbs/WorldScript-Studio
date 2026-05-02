@@ -74,7 +74,7 @@ StoryCraft-Studio/
 ├── contexts/         # React contexts for each view
 ├── features/         # Redux slices (project, settings, writer, status)
 ├── hooks/            # Custom React hooks per view + shared hooks
-├── locales/          # i18n source JSON (de, en; fr/es/it files reserved)
+├── locales/          # i18n source JSON (de, en, fr, es, it — key parity vs en)
 ├── services/         # Adapters: Gemini, Ollama, DB, storage, collaboration, EPUB…
 ├── stories/          # Storybook stories for UI components
 ├── docs/             # Deep-dive docs (CI reference, history, graphify)
@@ -245,7 +245,7 @@ Authoritative list: [`AUDIT.md`](AUDIT.md) and [`TODO.md`](TODO.md). Short point
 1. **`StorageBackend` contract** — implement `services/storageBackend.ts` on both backends; use `storageService` in UI (not `dbService` directly) so Tauri and browser stay consistent.
 2. **`app/listenerMiddleware.ts`** — occasional TypeScript friction with `redux-undo`'s `StateWithHistory` (typed carefully at boundaries).
 3. **Collaboration** — optional configurable signaling URL; E2E encryption deferred (roadmap).
-4. **i18n** — All five locale trees must share the same keys as English (`pnpm run i18n:check`). The in-app selector currently exposes **de** and **en** (see README); FR/ES/IT strings may still mirror EN until translated.
+4. **i18n** — All five locale trees must share the same keys as English (`pnpm run i18n:check`). The in-app selector exposes **de**, **en**, **fr**, **es**, and **it**; prefer native copy over English placeholders in PRs.
 
 Open a **focused PR per theme** (storage vs. i18n vs. collaboration) to keep review manageable.
 
@@ -345,7 +345,7 @@ case 'yourNewTool':
 
 ### 3. Add i18n Keys
 
-Add translation keys at least to **`locales/de/`** and **`locales/en/`** (and mirror to `fr`/`es`/`it` when those locales are re-enabled in the selector):
+Add translation keys to **`locales/en/`** first (reference), then **`locales/de/`** and **`locales/fr/`**, **`locales/es/`**, **`locales/it/`** (or run `node scripts/check-i18n-keys.mjs --fix` and translate):
 
 ```json
 {

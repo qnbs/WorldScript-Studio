@@ -122,6 +122,7 @@
   "palette.export": "/export – Exporter et télécharger",
   "palette.footer.navigate": "Navigate",
   "palette.footer.select": "Select",
+  "palette.lang.switchTo": "Afficher l’interface en {{name}}",
   "palette.noResults": "No results found.",
   "palette.placeholder": "Type a command or search...",
   "palette.voice.start": "Start voice search",

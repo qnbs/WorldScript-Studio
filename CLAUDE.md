@@ -55,7 +55,7 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 ### i18n
 
-Custom React Context in `I18nContext.tsx` — not i18next. Locale files exist for de, en, es, fr, it (14 modules); the **in-app selector** currently exposes **de** and **en** (see README). All user-facing strings must use `t('key.path')` from `useTranslation()` — no hardcoded text. New keys: add to **de** and **en** at minimum; mirror to fr/es/it when those locales return to the selector. English is the fallback.
+Custom React Context in `I18nContext.tsx` — not i18next. Locale files exist for de, en, es, fr, it (14 modules); the **in-app selector** exposes **de**, **en**, **fr**, **es**, and **it** (Settings, Welcome Portal, Command Palette). All user-facing strings must use `t('key.path')` from `useTranslation()` — no hardcoded text. New keys: add to **all five** locale trees (run `node scripts/check-i18n-keys.mjs --fix` then translate). English is the fallback.
 
 ### Cursor (QNBS)
 

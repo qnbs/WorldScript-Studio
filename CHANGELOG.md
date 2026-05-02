@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Spotlight onboarding tour:** `driver.js` + `services/spotlightTour.ts` — guided steps (nav, header / optional command palette, Settings); completion stored locally; entry points on Dashboard and Help.
+- **Five UI locales:** French, Spanish, and Italian enabled alongside German and English (Settings, Welcome Portal, Command Palette); FR/ES/IT copy brought to parity with EN keys (native sidebar/portal/tour/settings strings where applicable).
 - **i18n CI gate:** `pnpm run i18n:check` (`scripts/check-i18n-keys.mjs`) enforces identical translation keys across `en`/`de`/`fr`/`es`/`it`; runs in the quality job. Optional `--fix` fills missing keys from English.
 - **Dashboard onboarding:** Dismissible “Quick tips” banner (sidebar, AI settings, auto-save / snapshots) stored per device via `localStorage`.
-- **Tauri workflow:** [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) builds desktop bundles on `workflow_dispatch` and `v*` tags (Ubuntu/Windows/macOS artifacts). Documented in [`docs/TAURI-CI.md`](docs/TAURI-CI.md).
+- **Tauri workflow:** [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) builds desktop bundles on `workflow_dispatch` and `v*` tags (Ubuntu/Windows/macOS artifacts); **on `v*` tags**, installers are attached to the matching **GitHub Release**. Documented in [`docs/TAURI-CI.md`](docs/TAURI-CI.md).
 - **Welcome portal:** Localized demo project (outline + first chapter) loadable as in-app import; first-visit hint and CTA. `hasSavedData` now uses `storageService` so the welcome flow matches the active backend (browser IndexedDB or Tauri FS).
 - **Storage contract module:** `StorageBackend` + `SaveProjectInput` (flat `StoryProject` or Redux `{ data }` / `{ present }` envelope) in `services/storageBackend.ts`; Tauri FS unwraps to flat JSON on disk.
 
@@ -22,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Documentation:** CI accurately documented in [`docs/CI.md`](docs/CI.md) (job ids, `.lighthouserc.cjs`, Node 22); [`README.md`](README.md) CI section + **Documentation Hub** + shipped vs future **i18n** selector; [`CONTRIBUTING.md`](CONTRIBUTING.md) aligned with Biome, Vite 8, hooks, Act, E2E env; [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) disclaimer for historical vs current pipeline; [`AUDIT.md`](AUDIT.md) follow-up entry **2026-05-02**.
+- **Documentation:** [`README.md`](README.md) / [`CONTRIBUTING.md`](CONTRIBUTING.md) / [`CLAUDE.md`](CLAUDE.md) — five UI locales, spotlight tour, Tauri → GitHub Releases on tags; [`docs/CI.md`](docs/CI.md) + [`docs/TAURI-CI.md`](docs/TAURI-CI.md) aligned. Earlier: CI job ids, `.lighthouserc.cjs`, Node 22; [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) disclaimer; [`AUDIT.md`](AUDIT.md) follow-up **2026-05-02**.
 
 ### Refactored
 

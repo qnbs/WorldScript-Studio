@@ -258,8 +258,18 @@ const getThinkingBudget = (type: PromptType): number => {
 };
 
 // --- PROMPT FACTORY ---
+/** Full UI language → model instruction (Gemini / shared prompts). */
+const PROMPT_LANG_LABEL: Record<string, string> = {
+  en: 'English',
+  de: 'German',
+  fr: 'French',
+  es: 'Spanish',
+  it: 'Italian',
+};
+
 export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMap[T]) => {
-  const langInstruction = `\n\nVERY IMPORTANT: Your entire response must be in the following language: ${params.lang === 'de' ? 'German' : 'English'}. Do not use any other language. For JSON responses, only translate the string values, not the keys.`;
+  const langLabel = PROMPT_LANG_LABEL[params.lang] ?? 'English';
+  const langInstruction = `\n\nVERY IMPORTANT: Your entire response must be in the following language: ${langLabel}. Do not use any other language. For JSON responses, only translate the string values, not the keys.`;
 
   switch (type) {
     case 'logline': {

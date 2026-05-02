@@ -5,8 +5,25 @@ import { selectAllCharacters, selectAllWorlds } from '../features/project/projec
 import { projectActions } from '../features/project/projectSlice';
 import { settingsActions } from '../features/settings/settingsSlice';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import type { Language } from '../contexts/I18nContext';
 import { useTranslation } from '../hooks/useTranslation';
 import type { View } from '../types';
+
+const PALETTE_LANG_OPTIONS: {
+  code: Language;
+  labelKey:
+    | 'settings.language.english'
+    | 'settings.language.german'
+    | 'settings.language.french'
+    | 'settings.language.spanish'
+    | 'settings.language.italian';
+}[] = [
+  { code: 'en', labelKey: 'settings.language.english' },
+  { code: 'de', labelKey: 'settings.language.german' },
+  { code: 'fr', labelKey: 'settings.language.french' },
+  { code: 'es', labelKey: 'settings.language.spanish' },
+  { code: 'it', labelKey: 'settings.language.italian' },
+];
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -280,20 +297,20 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
         dispatch(settingsActions.setTheme(settings.theme === 'dark' ? 'light' : 'dark')),
     });
 
-    cmds.push({
-      id: 'set-lang',
-      title:
-        language === 'en'
-          ? t('palette.action.switchLanguageToDe')
-          : t('palette.action.switchLanguageToEn'),
-      icon: (
-        <span className="font-bold text-xs border border-current rounded px-1">
-          {language === 'en' ? 'DE' : 'EN'}
-        </span>
-      ),
-      category: t('palette.category.settings'),
-      action: () => setLanguage(language === 'en' ? 'de' : 'en'),
-    });
+    for (const { code, labelKey } of PALETTE_LANG_OPTIONS) {
+      if (code === language) continue;
+      cmds.push({
+        id: `set-lang-${code}`,
+        title: t('palette.lang.switchTo', { name: t(labelKey) }),
+        icon: (
+          <span className="font-bold text-xs border border-current rounded px-1 uppercase">
+            {code}
+          </span>
+        ),
+        category: t('palette.category.settings'),
+        action: () => setLanguage(code),
+      });
+    }
 
     return cmds;
   }, [t, onNavigate, dispatch, settings.theme, language, setLanguage, characters, worlds]);

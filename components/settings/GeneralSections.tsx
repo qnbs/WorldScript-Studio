@@ -22,6 +22,9 @@ export const GeneralSection: FC = () => {
         <Select id="language-select" value={language} onChange={handleLanguageChange}>
           <option value="en">{t('settings.language.english')}</option>
           <option value="de">{t('settings.language.german')}</option>
+          <option value="fr">{t('settings.language.french')}</option>
+          <option value="es">{t('settings.language.spanish')}</option>
+          <option value="it">{t('settings.language.italian')}</option>
         </Select>
       </CardContent>
     </Card>

@@ -137,8 +137,8 @@ Vereinfachte automatische Konsistenzprüfung:
 **Status:** 📋 Geplant (vor erstem Tauri-Release erforderlich)
 
 - ✅ StorageBackend-Interface — `storageBackend.ts`, strikte `StoryProject`-Typen am Proxy
-- ⬜ Geführte Tour (Spotlight / mehrstufig); Demo + Welcome ✅; Dashboard-Tipps-Banner ✅
-- ⬜ Tauri v2 Release-Pipeline: Auto-Update (`tauri-plugin-updater`) + Code-Signing + Release-Artefakte an GH Releases — CI-Vorstufe: [`docs/TAURI-CI.md`](docs/TAURI-CI.md)
+- ✅ Geführte Tour (Spotlight mit `driver.js`, Dashboard + Hilfe als Einstieg)
+- ⬜ Tauri v2 Release-Pipeline: Auto-Update (`tauri-plugin-updater`) + Code-Signing — **GitHub Release mit Installern bei `v*`-Tags:** [`docs/TAURI-CI.md`](docs/TAURI-CI.md) / [`tauri-build.yml`](.github/workflows/tauri-build.yml)
 - ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — qualitative Übersetzungen iterativ
 - ⬜ Bundle-Size-Budgets: rollup-plugin-visualizer als CI-Artifact + `performance.budget` in LHCI
 

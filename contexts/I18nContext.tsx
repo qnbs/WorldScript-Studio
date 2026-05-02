@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '../services/logger';
 
-type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
+export type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
 
 interface I18nContextType {
   language: Language;

@@ -11,6 +11,10 @@ Workflow: [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build
 
 Each matrix job uploads **`tauri-bundle-<os>`** containing `src-tauri/target/release/bundle/` (`.deb`, `.msi`/`.exe`, `.dmg`/`.app` depending on OS).
 
+### GitHub Releases (tags only)
+
+When the workflow runs on a **`v*`** tag (not on manual `workflow_dispatch` alone), a follow-up **`release`** job downloads all `tauri-bundle-*` artifacts, collects `.deb`, `.AppImage`, `.rpm`, `.msi`, `.exe`, and `.dmg` files, and publishes them on a **GitHub Release** for that tag (`softprops/action-gh-release`). If no matching bundle files are found, the release step is skipped with a warning.
+
 This workflow is **independent** of the web PWA pipeline ([`docs/CI.md`](CI.md)); it does not gate GitHub Pages deploy.
 
 ## Local parity
@@ -25,4 +29,4 @@ Linux dev deps match the Ubuntu job (WebKitGTK 4.1, AppIndicator, librsvg, patch
 
 ## Follow-ups (not automated here)
 
-- Code signing (Windows/macOS), `tauri-plugin-updater`, and attaching artifacts to a GitHub Release are tracked in [`ROADMAP.md`](../ROADMAP.md) / [`TODO.md`](../TODO.md).
+- Code signing (Windows/macOS) and `tauri-plugin-updater` (auto-update) remain tracked in [`ROADMAP.md`](../ROADMAP.md) / [`TODO.md`](../TODO.md).

@@ -49,6 +49,7 @@
   "palette.action.lightMode": "Hellmodus aktivieren",
   "palette.action.switchLanguageToDe": "Sprache zu Deutsch wechseln",
   "palette.action.switchLanguageToEn": "Sprache zu Englisch wechseln",
+  "palette.lang.switchTo": "Oberfläche auf {{name}} umstellen",
   "palette.footer.navigate": "Navigieren",
   "palette.footer.select": "Auswählen",
   "palette.voice.start": "Sprachsuche starten",

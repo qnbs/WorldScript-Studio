@@ -15,11 +15,14 @@ const NavItem: React.FC<{
   label: string;
   isActive: boolean;
   onClick: () => void;
-}> = React.memo(({ icon, label, isActive, onClick }) => {
+  /** Spotlight tour anchor (`data-tour`) */
+  dataTour?: string;
+}> = React.memo(({ icon, label, isActive, onClick, dataTour }) => {
   return (
     <button
       type="button"
       onClick={onClick}
+      data-tour={dataTour}
       className={`relative flex items-center w-full px-4 py-3 text-left rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] overflow-hidden ${
         isActive
           ? 'bg-gradient-to-r from-[var(--nav-background-active)] to-transparent text-[var(--nav-text-active)] shadow-sm font-semibold'
@@ -165,6 +168,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* ── Mobile bottom navbar ── */}
       <nav
+        data-tour="nav-mobile"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--background-secondary)]/95 backdrop-blur-xl border-t border-[var(--border-primary)] flex items-center safe-bottom"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-label="Mobile navigation"
@@ -227,6 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               label={item.label}
               isActive={currentView === item.id}
               onClick={() => handleNavigation(item.id as View)}
+              {...(item.id === 'settings' ? { dataTour: 'nav-settings' as const } : {})}
             />
           ))}
         </div>
@@ -235,6 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* ── Desktop sidebar (unchanged) ── */}
       <aside
         id="sidebar"
+        data-tour="sidebar-desktop"
         aria-label="Hauptnavigation"
         className={`
         hidden md:flex
@@ -269,6 +275,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               label={item.label}
               isActive={currentView === item.id}
               onClick={() => handleNavigation(item.id as View)}
+              {...(item.id === 'settings' ? { dataTour: 'nav-settings' as const } : {})}
             />
           ))}
         </nav>

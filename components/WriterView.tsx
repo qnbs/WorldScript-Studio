@@ -9,6 +9,7 @@ import {
 } from '../features/versionControl/versionControlSlice';
 import type { WriterTool } from '../features/writer/writerSlice';
 import { writerActions } from '../features/writer/writerSlice';
+import type { Language } from '../contexts/I18nContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { useTTS } from '../hooks/useTTS';
 import { useWriterView } from '../hooks/useWriterView';
@@ -532,7 +533,14 @@ const AiScratchpad: FC = React.memo(() => {
   const { generationHistory, activeHistoryIndex, isLoading, activeTool } = writerState;
   const currentResult = generationHistory[activeHistoryIndex] || '';
   const { speak, stop, isSpeaking, isSupported: ttsSupported } = useTTS();
-  const ttsLang = language === 'de' ? 'de-DE' : 'en-US';
+  const TTS_LOCALE: Record<Language, string> = {
+    de: 'de-DE',
+    en: 'en-US',
+    fr: 'fr-FR',
+    es: 'es-ES',
+    it: 'it-IT',
+  };
+  const ttsLang = TTS_LOCALE[language] ?? 'en-US';
 
   // Auto-scroll logic
   const textareaRef = useRef<HTMLTextAreaElement>(null);

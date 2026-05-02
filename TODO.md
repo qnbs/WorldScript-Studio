@@ -28,8 +28,8 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ⬜ Bundle-Size-Budgets pro Chunk (rollup-plugin-visualizer in CI)
 - ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — inhaltliche Übersetzungen können iterativ verbessert werden
 - ⬜ Renovate Auto-Merge für Patch-Updates konfigurieren
-- ⬜ Onboarding-Tour (Spotlight / mehrstufig) — Demo + Welcome-Hinweis ✅; Dashboard-Tipps-Banner ✅
-- ⬜ Tauri v2 Release-Pipeline: auto-update + code-signing + Release an GH anbinden (Basis: [`docs/TAURI-CI.md`](docs/TAURI-CI.md) Workflow)
+- ✅ Onboarding-Spotlight-Tour (`driver.js`, Dashboard + Hilfe)
+- ⬜ Tauri v2 Release-Pipeline: auto-update + code-signing — **Installer an GitHub Releases** bei `v*`-Tags ✅ ([`docs/TAURI-CI.md`](docs/TAURI-CI.md))
 
 ---
 

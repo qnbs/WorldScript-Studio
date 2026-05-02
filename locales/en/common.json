@@ -49,6 +49,7 @@
   "palette.action.lightMode": "Switch to Light Mode",
   "palette.action.switchLanguageToDe": "Switch Language to German",
   "palette.action.switchLanguageToEn": "Switch Language to English",
+  "palette.lang.switchTo": "Switch interface to {{name}}",
   "palette.footer.navigate": "Navigate",
   "palette.footer.select": "Select",
   "palette.voice.start": "Start voice search",

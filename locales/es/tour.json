@@ -1,0 +1,16 @@
+{
+  "tour.btn.done": "Hecho",
+  "tour.btn.next": "Siguiente",
+  "tour.btn.prev": "Atrás",
+  "tour.help.startButton": "Iniciar tour guiado",
+  "tour.intro.body": "Un recorrido breve por StoryCraft Studio: navegación, paleta de comandos y ajustes.",
+  "tour.intro.title": "Te damos la bienvenida",
+  "tour.nav.body": "Usa la barra lateral en escritorio o la barra inferior en el móvil para abrir el panel, el manuscrito, personajes, exportación y más.",
+  "tour.nav.title": "Muévete por la app",
+  "tour.outro.body": "Tu trabajo se guarda automáticamente en este dispositivo. Abre Ayuda para repetir este tour cuando quieras.",
+  "tour.outro.title": "Listo para escribir",
+  "tour.palette.body": "Pulsa Ctrl+K (⌘K en Mac) para buscar comandos, cambiar tema o idioma y saltar a cualquier vista.",
+  "tour.palette.title": "Paleta de comandos",
+  "tour.settings.body": "Configura claves API, proveedor de IA (Gemini en la nube u Ollama local), apariencia, editor, copias de seguridad y exportación.",
+  "tour.settings.title": "Ajustes"
+}

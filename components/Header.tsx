@@ -60,6 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header
+      data-tour="app-header"
       className="
         fixed top-0 left-0 right-0 z-30 h-16
         bg-[var(--background-secondary)]/80 backdrop-blur-2xl
@@ -115,6 +116,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex-grow max-w-xl px-4 hidden sm:block">
         <button
           type="button"
+          data-tour="command-palette-trigger"
           onClick={onOpenPalette}
           className="w-full h-10 rounded-xl bg-[var(--background-tertiary)]/50 border border-[var(--border-primary)] hover:border-[var(--border-interactive)] hover:bg-[var(--background-tertiary)] hover:shadow-[var(--shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--foreground-muted)] group shadow-sm"
         >

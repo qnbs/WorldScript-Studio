@@ -64,3 +64,48 @@ jobs:
           path: src-tauri/target/release/bundle/
           if-no-files-found: warn
           retention-days: 14
+
+  # -----------------------------------------------------------------
+  # GitHub Release: attach Linux / Windows / macOS installers (tags v* only)
+  # -----------------------------------------------------------------
+  release:
+    name: GitHub Release
+    needs: [bundle]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Download all bundle artifacts
+        uses: actions/download-artifact@v6
+        with:
+          pattern: tauri-bundle-*
+          path: downloaded
+          merge-multiple: true
+
+      - name: Collect release assets
+        id: collect
+        run: |
+          mkdir -p release-assets
+          find downloaded -type f \( \
+            -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \
+            -o -name '*.msi' -o -name '*.exe' \
+            -o -name '*.dmg' \
+            \) -exec cp {} release-assets/ \;
+          echo "Files to upload:" && ls -la release-assets/ || true
+          if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
+            echo "has_assets=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No bundle files found to attach. Check Tauri bundle output paths."
+          else
+            echo "has_assets=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.collect.outputs.has_assets == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -52,7 +52,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 | `storybook` | `quality` | Static Storybook → artifact |
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
-> **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); see [`docs/TAURI-CI.md`](TAURI-CI.md). They do not block the web deploy graph above.
+> **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
 
 ---
 
@@ -105,7 +105,7 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | File | Role |
 |------|------|
 | `.github/workflows/ci.yml` | Pipeline definition |
-| `.github/workflows/tauri-build.yml` | Optional desktop bundle builds |
+| `.github/workflows/tauri-build.yml` | Optional desktop bundle builds + GitHub Release assets on `v*` tags |
 | `.nvmrc` | Node version for Actions and dev |
 | `.lighthouserc.cjs` | Lighthouse assertions and collect URL |
 | `vitest.config.ts` | Coverage thresholds, reporters |

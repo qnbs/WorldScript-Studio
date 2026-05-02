@@ -22,6 +22,7 @@ const root = join(__dirname, '..');
 const langs = ['en', 'de', 'fr', 'es', 'it'];
 const modules = [
   'common',
+  'tour',
   'sidebar',
   'portal',
   'dashboard',

@@ -47,6 +47,7 @@
     "@tauri-apps/plugin-fs": "^2.5.0",
     "docx": "^9.6.1",
     "dompurify": "^3.4.0",
+    "driver.js": "^1.4.0",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lz-string": "^1.5.0",

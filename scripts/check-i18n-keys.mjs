@@ -14,6 +14,7 @@ const root = join(__dirname, '..');
 const LANGS = ['en', 'de', 'fr', 'es', 'it'];
 const MODULES = [
   'common',
+  'tour',
   'sidebar',
   'portal',
   'dashboard',

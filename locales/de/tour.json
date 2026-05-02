@@ -1,0 +1,16 @@
+{
+  "tour.intro.title": "Willkommen",
+  "tour.intro.body": "Eine kurze Tour durch StoryCraft Studio: Navigation, Befehlspalette und Einstellungen.",
+  "tour.nav.title": "In der App navigieren",
+  "tour.nav.body": "Nutzen Sie auf dem Desktop die Seitenleiste oder auf dem Smartphone die untere Leiste für Dashboard, Manuskript, Charaktere, Export und mehr.",
+  "tour.palette.title": "Befehlspalette",
+  "tour.palette.body": "Drücken Sie Strg+K (⌘K auf dem Mac), um Befehle zu suchen, Theme oder Sprache zu wechseln und Ansichten zu öffnen.",
+  "tour.settings.title": "Einstellungen",
+  "tour.settings.body": "Hier legen Sie API-Schlüssel, KI-Anbieter (Gemini in der Cloud oder lokales Ollama), Erscheinungsbild, Editor, Backups und Exporte fest.",
+  "tour.outro.title": "Los geht's",
+  "tour.outro.body": "Ihre Arbeit wird automatisch auf diesem Gerät gespeichert. Unter Hilfe können Sie diese Tour jederzeit erneut starten.",
+  "tour.btn.next": "Weiter",
+  "tour.btn.prev": "Zurück",
+  "tour.btn.done": "Fertig",
+  "tour.help.startButton": "Geführte Tour starten"
+}

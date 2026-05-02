@@ -50,5 +50,6 @@
   "dashboard.onboarding.tip1": "Wechseln Sie über die Seitenleiste zwischen Manuskript, Charakteren, Welten und Export.",
   "dashboard.onboarding.tip2": "Legen Sie in den Einstellungen einen API-Schlüssel für Cloud-KI fest oder wählen Sie Ollama für lokale Modelle.",
   "dashboard.onboarding.tip3": "Ihre Arbeit wird automatisch auf diesem Gerät gespeichert — Schnappschüsse finden Sie unter Versionskontrolle.",
-  "dashboard.onboarding.dismiss": "Verstanden"
+  "dashboard.onboarding.dismiss": "Verstanden",
+  "dashboard.onboarding.startTour": "Geführte Tour"
 }

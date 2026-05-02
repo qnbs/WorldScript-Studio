@@ -4,6 +4,7 @@ import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
 import { projectActions } from '../features/project/projectSlice';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
+import type { Language } from '../contexts/I18nContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { storageService } from '../services/storageService';
 import type { View } from '../types';
@@ -15,24 +16,32 @@ interface WelcomePortalProps {
 
 type PortalView = 'main' | 'new_project' | 'open_project';
 
+const WELCOME_LANGS: { code: Language; label: string }[] = [
+  { code: 'de', label: 'DE' },
+  { code: 'en', label: 'EN' },
+  { code: 'fr', label: 'FR' },
+  { code: 'es', label: 'ES' },
+  { code: 'it', label: 'IT' },
+];
+
 const LanguageSelector = () => {
   const { language, setLanguage } = useTranslation();
   return (
-    <div className="absolute top-4 right-4 space-x-2">
-      <button
-        type="button"
-        onClick={() => setLanguage('de')}
-        className={`px-3 py-1 text-sm rounded-md transition-colors ${language === 'de' ? 'bg-indigo-600 text-white' : 'bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]'}`}
-      >
-        DE
-      </button>
-      <button
-        type="button"
-        onClick={() => setLanguage('en')}
-        className={`px-3 py-1 text-sm rounded-md transition-colors ${language === 'en' ? 'bg-indigo-600 text-white' : 'bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]'}`}
-      >
-        EN
-      </button>
+    <div
+      className="absolute top-4 right-4 flex flex-wrap justify-end gap-1 max-w-[min(100%,14rem)]"
+      role="group"
+      aria-label="Language"
+    >
+      {WELCOME_LANGS.map(({ code, label }) => (
+        <button
+          key={code}
+          type="button"
+          onClick={() => setLanguage(code)}
+          className={`px-2.5 py-1 text-xs sm:text-sm rounded-md transition-colors ${language === code ? 'bg-indigo-600 text-white' : 'bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]'}`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { ICONS } from '../constants';
 import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
 import { useDashboard } from '../hooks/useDashboard';
 import { useTranslation } from '../hooks/useTranslation';
+import { startSpotlightTour } from '../services/spotlightTour';
 import type { View } from '../types';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
@@ -534,14 +535,19 @@ const OnboardingTipsBanner: FC = () => {
             <li>{t('dashboard.onboarding.tip3')}</li>
           </ul>
         </div>
-        <Button
-          type="button"
-          variant="primary"
-          className="shrink-0 self-start"
-          onClick={dismiss}
-        >
-          {t('dashboard.onboarding.dismiss')}
-        </Button>
+        <div className="flex flex-col gap-2 shrink-0 sm:flex-row sm:items-center">
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full sm:w-auto"
+            onClick={() => startSpotlightTour((key) => t(key))}
+          >
+            {t('dashboard.onboarding.startTour')}
+          </Button>
+          <Button type="button" variant="primary" className="w-full sm:w-auto" onClick={dismiss}>
+            {t('dashboard.onboarding.dismiss')}
+          </Button>
+        </div>
       </div>
     </div>
   );
