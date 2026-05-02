@@ -39,6 +39,13 @@ export interface AIStreamCallbacks {
   onError?: (error: Error) => void;
 }
 
+function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AIRequestOptions {
+  // QNBS-v3: Standalone AbortSignal from callers now reaches OpenAI/Ollama (parity with Gemini streaming / cancellation).
+  if (signal === undefined) return opts;
+  if (opts.signal === signal) return opts;
+  return { ...opts, signal };
+}
+
 // ─── Gemini Provider ──────────────────────────────────────────────────────────
 // Gemini streaming is handled by the existing geminiService.ts.
 // We re-export a compatible interface here.
@@ -137,22 +144,23 @@ async function streamProvider(
   callbacks: AIStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  switch (opts.provider) {
+  const o = withMergedAbortSignal(opts, signal);
+  switch (o.provider) {
     case 'openai':
-      return streamOpenAI(prompt, opts, callbacks);
+      return streamOpenAI(prompt, o, callbacks);
     case 'ollama':
-      return streamOllama(prompt, opts, callbacks);
+      return streamOllama(prompt, o, callbacks);
     case 'anthropic':
-      return streamAnthropic(prompt, opts, callbacks);
+      return streamAnthropic(prompt, o, callbacks);
     default:
       return streamTextGemini(
-        opts.systemPrompt
-          ? `${sanitizePromptValue(opts.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
+        o.systemPrompt
+          ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
           : prompt,
         creativity,
         callbacks.onChunk,
-        signal,
-        opts.model,
+        o.signal,
+        o.model,
       );
   }
 }
@@ -163,10 +171,11 @@ export async function generateText(
   opts: AIRequestOptions,
   signal?: AbortSignal,
 ): Promise<string> {
-  switch (opts.provider) {
+  const o = withMergedAbortSignal(opts, signal);
+  switch (o.provider) {
     case 'openai': {
       let result = '';
-      await streamOpenAI(prompt, opts, {
+      await streamOpenAI(prompt, o, {
         onChunk: (text) => {
           result += text;
         },
@@ -175,7 +184,7 @@ export async function generateText(
     }
     case 'ollama': {
       let result = '';
-      await streamOllama(prompt, opts, {
+      await streamOllama(prompt, o, {
         onChunk: (text) => {
           result += text;
         },
@@ -187,7 +196,7 @@ export async function generateText(
         'Claude/Anthropic is currently not available in the browser. Please use Gemini, OpenAI or Ollama.',
       );
     default:
-      return generateTextGemini(prompt, creativity, signal, undefined, opts.model);
+      return generateTextGemini(prompt, creativity, o.signal, undefined, o.model);
   }
 }
 

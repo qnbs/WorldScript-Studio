@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **AI providers:** `generateText` and `streamText` now merge a standalone `AbortSignal` into `AIRequestOptions` for **OpenAI** and **Ollama**, matching cancellation behavior already relied upon for Gemini (`services/aiProviderService.ts`; tests in `tests/unit/aiProviderService.test.ts`).
+
+### Changed
+
+- **Documentation:** CI accurately documented in [`docs/CI.md`](docs/CI.md) (job ids, `.lighthouserc.cjs`, Node 22); [`README.md`](README.md) CI section + **Documentation Hub**; [`CONTRIBUTING.md`](CONTRIBUTING.md) aligned with Biome, Vite 8, hooks, Act, E2E env; [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) disclaimer for historical vs current pipeline; [`AUDIT.md`](AUDIT.md) follow-up entry **2026-05-02**.
+
 ### Refactored
 
 - **projectSlice Decomposition**: Split monolithic `projectSlice.ts` (777 → 248 lines) by extracting all 14 AI thunks into per-domain files under `features/project/thunks/`: `characterThunks.ts`, `worldThunks.ts`, `outlineThunks.ts`, `writingThunks.ts`, `projectManagementThunks.ts`. Shared lazy service loaders + `buildAiOptions` extracted to `thunks/thunkUtils.ts`; entity adapters to `adapters.ts` to break circular deps. `projectSlice` re-exports everything for backward compatibility.
@@ -157,7 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - CI security audit job: `npm audit --audit-level=high` + `dependency-review-action` on PRs.
-- CI Lighthouse job: performance budget assertions from `.lighthouserc.js` with artifact upload.
+- CI Lighthouse job: performance budget assertions from `.lighthouserc.cjs` with artifact upload.
 - CI Storybook job: automated build + artifact upload.
 - Bundle analyzer: `rollup-plugin-visualizer` as opt-in devDep (`npm run analyze`).
 - Shared AI utility module `services/aiUtils.ts`: `stripControlChars`, `sanitizePromptValue`, `sanitizePromptBlock`, `cleanPrompt`, `attachCause`, `stripJsonFences`.

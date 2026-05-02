@@ -1,82 +1,115 @@
-# CI Reference for StoryCraft Studio
+# CI Reference — StoryCraft Studio
 
-This document summarizes the current GitHub Actions workflow for StoryCraft Studio, including local simulation with `act`, job behavior, and optimization details.
+This document describes the **current** GitHub Actions pipeline (`/.github/workflows/ci.yml`) for StoryCraft Studio: job graph, tooling, and how to approximate runs locally.
 
-## Pipeline Overview
+For historical optimization notes (targets may predate the live workflow), see [`.github/ACTIONS-OPTIMIZATIONS.md`](../.github/ACTIONS-OPTIMIZATIONS.md).
 
-The repository uses a single main workflow:
+---
 
-- `.github/workflows/ci.yml`
+## Toolchain (CI parity)
 
-It runs on:
+| Requirement | Source |
+|-------------|--------|
+| Node.js | [`.nvmrc`](../.nvmrc) (currently **22**) |
+| Package manager | **pnpm** 10.x ([`package.json`](../package.json) `packageManager`) |
+| Lint / format | **Biome** (`pnpm run lint`, `lint:fix`) |
+| Types | **TypeScript** `pnpm run typecheck` |
+| Unit tests | **Vitest** with V8 coverage (`pnpm exec vitest run --coverage`) |
+| E2E | **Playwright** (`pnpm run test:e2e` with `CI=true`) |
+| Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs`) |
 
-- `push` to `main`
-- `pull_request` against `main`
+---
+
+## Workflow triggers
+
+- `push` to `main` and tags (`'*'`)
+- `pull_request` to `main`
 - `workflow_dispatch`
-- `push` to tags for release-style jobs
 
-## Included Jobs
+**Concurrency:** one run per workflow + branch/PR (`cancel-in-progress: true`).
 
-The workflow is optimized for fast feedback and minimal redundancy.
+---
 
-### Main jobs
+## Job graph
 
-- `lint` — ESLint + Prettier
-- `typecheck` — TypeScript `tsc --noEmit`
-- `security` — GitHub dependency review plus `pnpm audit` on dependency changes only
-- `test` — Vitest with coverage, JUnit output, Codecov upload if `CODECOV_TOKEN` is present, and visual regression baseline artifact upload
-- `storybook` — static Storybook build artifact
-- `build` — production `pnpm run build` on `lts/*`
-- `build-node` — optional `node` compatibility build for tag/dispatch releases
-- `lighthouse` — LHCI budget validation against the generated production `dist`
-- `deploy` — GitHub Pages deployment on `main`
-- `tauri` — optional Tauri desktop build on tags or manual dispatch with path-based filtering
+```text
+security ──► quality ──┬──► build ──► lighthouse
+                       ├──► e2e
+                       └──► storybook
 
-## Local CI Simulation with Act
+build (main, non-PR) ──► upload-pages-artifact
+deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
+```
 
-You can run the main pipeline locally with [Act](https://github.com/nektos/act). This is especially useful for validating workflow logic before pushing.
+| Job | Needs | Purpose |
+|-----|--------|---------|
+| `security` | — | `pnpm audit --audit-level=high`; on PRs: `dependency-review-action` |
+| `quality` | `security` | Matrix **Node `lts/*`** and **`node` (current)** → Biome lint, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
+| `build` | `quality` | Production `pnpm run build`, `dist` artifact; on `main` (non-PR): Pages artifact |
+| `e2e` | `quality` | Playwright Chromium, `CI=true` |
+| `lighthouse` | `build` | LHCI against downloaded `dist` (hard-fail: `assert.exitCode=0`) |
+| `storybook` | `quality` | Static Storybook → artifact |
+| `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
+
+> **Note:** There is **no** separate `tauri` or `build-node` job in the checked-in workflow; desktop/release builds are documented in [`README.md`](../README.md) / [`CONTRIBUTING.md`](../CONTRIBUTING.md) for local or future automation.
+
+---
+
+## Permissions
+
+- Global default: `contents: read`
+- `deploy` job: `pages: write`, `id-token: write` (OIDC for Pages)
+
+---
+
+## Local checks (without Act)
+
+```bash
+pnpm install --frozen-lockfile
+pnpm run lint
+pnpm run typecheck
+pnpm exec vitest run --coverage
+pnpm run build
+CI=true pnpm run test:e2e
+pnpm exec lhci autorun --assert.exitCode=0   # after build + serve/preview as configured in .lighthouserc.cjs
+```
+
+---
+
+## Local simulation with Act
+
+[Act](https://github.com/nektos/act) approximates runners; use **job ids from `ci.yml`**:
 
 ```bash
 npm install -g act
 
-# Simulate PR jobs locally
-act pull_request --job lint --job typecheck --job test --job storybook --job build
+# Typical PR-equivalent slice
+act pull_request --job security --job quality
 
-# Simulate release-style jobs on tag/dispatch
-act push --job build --job build-node --job lighthouse
+# Jobs that depend on artifacts may need extra setup inside Act
+act push --job build --job e2e --job lighthouse --job storybook
 ```
 
-### Secrets with Act
-
-If you need to test Codecov locally, provide the token using `-s`:
+Codecov (optional):
 
 ```bash
-export CODECOV_TOKEN="your_token_here"
-act pull_request -s CODECOV_TOKEN=${CODECOV_TOKEN}
+act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 ```
 
-For repeated local runs, create a secret file and pass it with `--secret-file`.
+---
 
-## Optimization Notes
+## Related files
 
-- `pnpm audit` runs only when dependency files change (`package.json`, `pnpm-lock.yaml`).
-- The shared Node setup action caches npm, `node_modules`, and Playwright browsers.
-- Artifact uploads include retention settings to avoid long-term storage growth.
-- Most jobs use `contents: read` permission only; deploy uses `pages: write`.
-- The Tauri job only runs on relevant file changes and on explicit tag or manual dispatch triggers.
+| File | Role |
+|------|------|
+| `.github/workflows/ci.yml` | Pipeline definition |
+| `.nvmrc` | Node version for Actions and dev |
+| `.lighthouserc.cjs` | Lighthouse assertions and collect URL |
+| `vitest.config.ts` | Coverage thresholds, reporters |
+| `playwright.config.ts` | E2E browser and reporter paths |
 
-## Workflow File Location
+---
 
-- Workflow: `.github/workflows/ci.yml`
-- Shared Node setup action: `.github/actions/setup-node/action.yml`
-- Lighthouse config: `.lighthouserc.json`
-- Optimization summary: `.github/ACTIONS-OPTIMIZATIONS.md`
+## Commit messages
 
-## Commit message guidance
-
-The repository follows Conventional Commits. Use commit messages like:
-
-- `feat: add X`
-- `fix: resolve Y`
-- `ci: update workflow`
-- `docs: add CI reference`
+Conventional Commits are encouraged, for example: `feat:`, `fix:`, `docs:`, `ci:`, `test:`.

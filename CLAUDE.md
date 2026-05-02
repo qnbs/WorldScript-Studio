@@ -12,7 +12,7 @@ pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # TypeScript type check (tsc --noEmit)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
-pnpm run test:coverage # Vitest with V8 coverage (15% minimum threshold)
+pnpm run test:coverage # Vitest with V8 coverage (see thresholds in vitest.config.ts)
 pnpm run test:e2e      # Playwright E2E tests (requires CI=true)
 pnpm run storybook     # Storybook on port 6006
 pnpm run tauri:dev     # Tauri desktop app (requires Rust)
@@ -55,7 +55,11 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 ### i18n
 
-Custom React Context in `I18nContext.tsx` — not i18next. 5 languages (de, en, es, fr, it), 14 modules. All user-facing strings must use `t('key.path')` from `useTranslation()` — no hardcoded text. New translation keys must be added to all 5 language files. English is the fallback.
+Custom React Context in `I18nContext.tsx` — not i18next. Locale files exist for de, en, es, fr, it (14 modules); the **in-app selector** currently exposes **de** and **en** (see README). All user-facing strings must use `t('key.path')` from `useTranslation()` — no hardcoded text. New keys: add to **de** and **en** at minimum; mirror to fr/es/it when those locales return to the selector. English is the fallback.
+
+### Cursor (QNBS)
+
+Repo-root **`.cursorrules`** defines the **QNBS Master Prompt v3** (“Creative AI Architect”): analyse this repo in its own narrative-writing domain, respect Biome/Redux/Vite patterns, prefer substantive `// QNBS-v3:` notes on non-trivial edits, and give short before/after context when proposing changes. Use alongside this file for IDE agents.
 
 ## Key Constraints
 
@@ -68,17 +72,16 @@ Custom React Context in `I18nContext.tsx` — not i18next. 5 languages (de, en, 
 
 ## Known Technical Debt
 
-See `AUDIT.md` for the full list. Key items to be aware of:
+See `AUDIT.md` and `TODO.md`. Key items:
 
-- `services/dbService.ts` — `loadProject`/`listProjects` need full `StorageBackend` interface implementation
-- `services/fileSystemService.ts` — references `StoryProject.author`/`.description` which don't exist on the interface
-- `components/AdvancedImportExport.tsx` — DOCX export is Tauri-only (browser path not yet implemented)
-- `app/listenerMiddleware.ts` — TypeScript workarounds for redux-undo's `StateWithHistory` type
-- Several hooks use `as any` casts that need proper generics
+- **`StorageBackend` parity** across `dbService` / `fileSystemService` / `storageService`
+- `components/AdvancedImportExport.tsx` — keep browser vs Tauri export paths explicit
+- `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
+- Several hooks still need removal of `as any` casts
 
 ## graphify
 
-This project has a graphify knowledge graph at graphify-out/.
+This project has an optional [graphify](https://github.com/safishamsi/graphify) knowledge graph at `graphify-out/`. See [`docs/graphify.md`](docs/graphify.md) for setup. Full doc index: [`README.md` § Documentation Hub](README.md#-documentation-hub).
 
 Rules:
 - Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure

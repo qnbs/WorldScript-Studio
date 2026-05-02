@@ -84,6 +84,17 @@ describe('generateText', () => {
     expect(text).toBe('result text');
   });
 
+  it('passes standalone AbortSignal to ollama stream', async () => {
+    const { streamOllama } = await import('../../services/ollamaService');
+    const ac = new AbortController();
+    vi.mocked(streamOllama).mockImplementationOnce(async (_p, o, cb) => {
+      expect(o.signal).toBe(ac.signal);
+      cb.onChunk('ok');
+    });
+    const text = await generateText('prompt', 'Balanced', { ...defaultOpts, provider: 'ollama' }, ac.signal);
+    expect(text).toBe('ok');
+  });
+
   it('throws for anthropic provider', async () => {
     await expect(
       generateText('prompt', 'Balanced', { ...defaultOpts, provider: 'anthropic' }),
@@ -160,7 +171,50 @@ describe('testAIConnection', () => {
   });
 });
 
-// ─── streamText (Ollama→Gemini fallback) ─────────────────────────────────────
+// ─── streamText (OpenAI signal + Ollama→Gemini fallback) ────────────────────
+
+describe('streamText OpenAI', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('forwards merged AbortSignal to OpenAI fetch', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"choices":[{"delta":{"content":"z"}}]}\n\n'),
+          );
+          controller.enqueue(encoder.encode('data: [DONE]\n'));
+          controller.close();
+        },
+      }),
+    } as Response);
+
+    const chunks: string[] = [];
+    await streamText(
+      'hello',
+      'Balanced',
+      { provider: 'openai', model: 'gpt-4o-mini' },
+      { onChunk: (t) => chunks.push(t) },
+      ac.signal,
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/chat/completions',
+      expect.objectContaining({ signal: ac.signal }),
+    );
+    expect(chunks.join('')).toContain('z');
+  });
+});
 
 describe('streamText ollama→gemini fallback', () => {
   it('falls back to gemini when ollama fails and fallbackProviders includes gemini', async () => {

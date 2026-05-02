@@ -23,6 +23,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ### Niedrig (🟢)
 
+- ✅ Dokumentations-Audit (CI.md, README Hub, CONTRIBUTING, AUDIT-Follow-up, Copilot/CLAUDE/SECURITY/Graphify) — 2026-05-02
 - ⬜ Visual Regression Tests (Playwright Screenshots + Storybook)
 - ⬜ Bundle-Size-Budgets pro Chunk (rollup-plugin-visualizer in CI)
 - ⬜ FR/ES/IT Übersetzungen vervollständigen + CI-Gate

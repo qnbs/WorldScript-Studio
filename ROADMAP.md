@@ -51,6 +51,7 @@ All critical, high, and most medium-priority items have been completed, includin
 
 ### Code Quality ✅ größtenteils abgeschlossen
 
+- ✅ **Dokumentation 2026-05:** `docs/CI.md`, README „Documentation Hub“, CONTRIBUTING (Biome/Node 22/Vite 8), Copilot/CLAUDE/AUDIT mit aktuellem Workflow synchronisiert
 - ✅ Coverage-Config auf Glob-Patterns umgestellt
 - ✅ TypeScript 6.0 übernommen (`stableTypeOrdering`, native `RegExp.escape`)
 - ✅ Project/Settings-Save-Listener getrennt (Performance)

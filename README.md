@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
   <img src="https://img.shields.io/badge/Redux_Toolkit-6.x-764ABC?logo=redux" alt="Redux Toolkit">
-  <img src="https://img.shields.io/badge/Vite-6.x-646CFF?logo=vite&logoColor=white" alt="Vite 6">
+  <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
   <img src="https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript 6">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_Ollama-4285F4?logo=google" alt="Gemini + Ollama">
   <img src="https://img.shields.io/badge/Storage-IndexedDB-F59E0B" alt="IndexedDB">
@@ -45,6 +45,7 @@
 - [CI & Local Validation](#-ci--local-validation)
 - [A Creative Workflow](#-a-creative-workflow)
 - [Contributing](#-contributing)
+- [Documentation Hub](#-documentation-hub)
 - [Deutsche Version (German)](#-storycraft-studio-deutsch)
 
 ---
@@ -202,7 +203,7 @@ Language selection persists across sessions via `localStorage`.
 | Layer                | Technology                           | Purpose                                                              |
 | -------------------- | ------------------------------------ | -------------------------------------------------------------------- |
 | **UI Framework**     | React 19 + TypeScript                | Component-based, fully type-safe UI                                  |
-| **Build Tool**       | Vite 6                               | Instant dev server, optimized production builds with manual chunking |
+| **Build Tool**       | Vite 8                               | Instant dev server, optimized production builds with manual chunking |
 | **State Management** | Redux Toolkit + Redux-Undo           | Predictable global state with 100-step undo history                  |
 | **Styling**          | Tailwind CSS + CSS Variables         | Utility-first design with theme-aware custom properties              |
 | **AI Integration**   | Google Gemini API (`@google/genai`)  | Multimodal generative AI for all creative features                   |
@@ -297,32 +298,27 @@ pnpm run preview
 
 ### 🧪 CI & Local Validation
 
-This repository uses an optimized GitHub Actions pipeline:
+This repository uses a **single** workflow, [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Authoritative job graph and local parity commands: **[`docs/CI.md`](docs/CI.md)**.
 
-| Job           | Trigger              | What it does                                                    |
-| ------------- | -------------------- | --------------------------------------------------------------- |
-| `security`    | every push / PR      | `pnpm audit --audit-level=high` + dependency-review (PRs)       |
-| `quality`     | after security       | Biome lint + `tsc --noEmit` + Vitest coverage (Node LTS + current matrix) |
-| `e2e`         | after quality        | Playwright E2E tests (Chromium, CI=true)                        |
-| `build`       | after quality        | Vite production build; uploads Pages artifact on `main`         |
-| `lighthouse`  | after build          | LHCI budget assertions (hard-fail)                              |
-| `storybook`   | after quality        | Storybook static build artifact                                 |
-| `deploy`      | main push only       | Deploys to GitHub Pages (needs both `build` and `e2e` to pass)  |
+| Job          | When / needs        | What it does |
+| ------------ | -------------------- | ------------ |
+| `security`   | every run            | `pnpm audit --audit-level=high`; PRs: dependency review |
+| `quality`    | after `security`     | Biome, `tsc`, Vitest + coverage (Node **LTS** + **current**) |
+| `build`      | after `quality`      | Production Vite build; on `main` (non-PR): Pages artifact |
+| `e2e`        | after `quality`      | Playwright (Chromium, `CI=true`) |
+| `lighthouse` | after `build`        | LHCI against `dist` (assertions in **`.lighthouserc.cjs`**) |
+| `storybook`  | after `quality`      | Static Storybook build artifact |
+| `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 
-You can simulate individual jobs locally using [Act](https://github.com/nektos/act):
+Simulate parts of the pipeline with [Act](https://github.com/nektos/act) (job ids must match `ci.yml`):
 
 ```bash
-# Install Act (requires Docker)
 npm install -g act
-
-# Run quality checks (lint + typecheck + unit tests)
-act pull_request --job quality
-
-# Run the build job
-act push --job build
+act pull_request --job security --job quality
+act push --job build --job e2e
 ```
 
-If you use Codecov locally, provide the token with `-s CODECOV_TOKEN=<token>`.
+Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 
 ### 🌐 Custom Domain Setup
 
@@ -370,6 +366,24 @@ If you use Codecov locally, provide the token with `-s CODECOV_TOKEN=<token>`.
 
 ---
 
+## 📚 Documentation Hub
+
+| Document | Description |
+| -------- | ----------- |
+| [`README.md`](README.md) | Product overview, features, getting started (this file) |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, Biome/Vitest/Playwright, architecture notes |
+| [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
+| [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
+| [`ROADMAP.md`](ROADMAP.md) / [`TODO.md`](TODO.md) | Planning and sprint tasks |
+| [`CHANGELOG.md`](CHANGELOG.md) | Keep a Changelog–style release notes |
+| [`docs/graphify.md`](docs/graphify.md) | Optional knowledge-graph (Graphify) setup |
+| [`.cursorrules`](.cursorrules) | **QNBS v3** — Cursor AI behavior for qnbs repos (context-first, StoryCraft “soul”) |
+| [`CLAUDE.md`](CLAUDE.md) | Guidance for Claude Code |
+| [`.github/copilot-instructions.md`](.github/copilot-instructions.md) | GitHub Copilot Chat context |
+| [`.github/SECURITY.md`](.github/SECURITY.md) | Vulnerability reporting |
+
+---
+
 # 📖 StoryCraft Studio (Deutsch)
 
 StoryCraft Studio ist eine hochmoderne, KI-gestützte Anwendung für Autoren, Drehbuchautoren und Kreative. Sie verwandelt das Schreiben in eine nahtlose, inspirierende Reise — von der ersten Idee bis zum fertigen Manuskript. Durch die Integration der Google Gemini API mit einer intuitiven, offline-fähigen Benutzeroberfläche ist StoryCraft Studio Ihr kreativer All-in-One-Copilot.
@@ -402,7 +416,7 @@ Detaillierte, interaktive Kapitelgliederung aus einer Idee — mit Genre, Tempo,
 
 ### 👥 Charakter-Dossiers
 
-KI-Profilgenerator, `@Beziehungen, Charakterentwicklung, KI-generierte Porträts in verschiedenen Stilen.
+KI-Profilgenerator, Beziehungen & Charakterentwicklung, KI-generierte Porträts in verschiedenen Stilen.
 
 ### 🌍 Weltenbau-Atlas
 
@@ -455,7 +469,7 @@ Sprachauswahl dauerhaft in `localStorage` gespeichert.
 | Schicht            | Technologie                                        |
 | ------------------ | -------------------------------------------------- |
 | UI-Framework       | React 19 + TypeScript                              |
-| Build              | Vite 6                                             |
+| Build              | Vite 8                                             |
 | Zustandsverwaltung | Redux Toolkit + Redux-Undo                         |
 | Styling            | Tailwind CSS + CSS-Variablen                       |
 | KI (Cloud)         | Google Gemini API (`@google/genai`)                |
@@ -504,6 +518,8 @@ pnpm run dev
 - **🐛 Fehler melden** — GitHub Issue mit Beschreibung
 - **💡 Features vorschlagen** — GitHub Issue oder Discussion
 - **🌍 Übersetzungen verbessern** — `locales/`-Ordner; PRs für FR/ES/IT willkommen
+
+**Entwickler-Dokumentation (engl.):** Siehe den Abschnitt *Documentation Hub* im englischen Teil dieser README sowie [`CONTRIBUTING.md`](CONTRIBUTING.md) und [`docs/CI.md`](docs/CI.md) für CI-Details.
 
 ---
 

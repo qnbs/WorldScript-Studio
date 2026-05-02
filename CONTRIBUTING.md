@@ -21,9 +21,9 @@ Thank you for your interest in contributing to StoryCraft Studio — an AI-power
 
 ### Prerequisites
 
-- **Node.js** ≥ 20 (LTS recommended)
-- **pnpm** ≥ 10 (enabled via Corepack)
-- A **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- **Node.js** ≥ 22 (see [`.nvmrc`](.nvmrc); matches `engines` in [`package.json`](package.json))
+- **pnpm** ≥ 10 (see `packageManager` in `package.json`; Corepack: `corepack enable`)
+- A **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey) (optional if using **Ollama** in the desktop app only)
 
 ### Installation
 
@@ -51,15 +51,16 @@ pnpm run dev:tauri    # Tauri desktop app (requires Rust)
 
 | Layer     | Technology                                                 |
 | --------- | ---------------------------------------------------------- |
-| Frontend  | React 19, TypeScript (strict + exactOptionalPropertyTypes) |
+| Frontend  | React 19, TypeScript (strict + exactOptionalPropertyTypes)   |
 | State     | Redux Toolkit 2.x + redux-undo                             |
-| Styling   | Tailwind CSS 4 via CDN                                     |
-| AI        | Google Gemini API (`@google/genai`)                        |
-| Storage   | IndexedDB (browser) / File system (Tauri)                  |
-| Build     | Vite 6 + vite-plugin-pwa                                   |
-| Tests     | Vitest + React Testing Library + Playwright                |
-| Desktop   | Tauri 2 (optional)                                         |
-| Storybook | Storybook 10 with `@storybook/react-vite`                  |
+| Styling   | Tailwind CSS 4 via `@tailwindcss/vite` + CSS custom props    |
+| AI        | Gemini (`@google/genai`), OpenAI, Ollama via `aiProviderService.ts` |
+| Storage   | IndexedDB (`dbService`) / Tauri filesystem (`fileSystemService`)   |
+| Build     | Vite 8 + vite-plugin-pwa                                     |
+| Lint      | Biome (`pnpm run lint` / `lint:fix`)                         |
+| Tests     | Vitest + Testing Library + Playwright                        |
+| Desktop   | Tauri 2 (optional)                                           |
+| Storybook | Storybook 10 with `@storybook/react-vite`                    |
 
 ---
 
@@ -73,17 +74,18 @@ StoryCraft-Studio/
 ├── contexts/         # React contexts for each view
 ├── features/         # Redux slices (project, settings, writer, status)
 ├── hooks/            # Custom React hooks per view + shared hooks
-├── locales/          # i18n translations (de, en, es, fr, it)
-├── services/         # API services (Gemini, storage, EPUB, TTS…)
+├── locales/          # i18n source JSON (de, en; fr/es/it files reserved)
+├── services/         # Adapters: Gemini, Ollama, DB, storage, collaboration, EPUB…
 ├── stories/          # Storybook stories for UI components
+├── docs/             # Deep-dive docs (CI reference, history, graphify)
 ├── tests/
 │   ├── unit/         # Vitest unit tests
 │   ├── e2e/          # Playwright end-to-end tests
 │   └── setup.ts      # Test setup (jsdom, mocks)
-├── types/            # Global TypeScript types
+├── types.ts          # Core shared TypeScript types (plus collocated types in features)
 └── .github/
     └── workflows/
-        ├── ci.yml    # Full CI pipeline (lint → test → build → deploy with security, Storybook, Lighthouse, and optional Tauri)
+        └── ci.yml    # security → quality → build / e2e / storybook → lighthouse → deploy (main)
 ```
 
 ---
@@ -98,10 +100,9 @@ StoryCraft-Studio/
 
 ### Pre-commit Hooks
 
-Husky + lint-staged runs automatically on commit:
+[`simple-git-hooks`](https://github.com/toplenboren/simple-git-hooks) + [`lint-staged`](https://github.com/lint-staged/lint-staged) run on commit:
 
-- ESLint (`--fix`) on `.ts`/`.tsx` files
-- Prettier on `.ts`/`.tsx`/`.json`/`.md` files
+- **Biome** `check --write` on staged files (`biome.json` policy)
 
 ### Commit Message Format
 
@@ -134,13 +135,13 @@ You can simulate the GitHub Actions pipeline locally using [Act](https://github.
 
 ```bash
 npm install -g act
-act pull_request --job lint --job typecheck --job test --job storybook --job build
+act pull_request --job security --job quality
 ```
 
-For release-style checks including `build-node` and `lighthouse`, run:
+Build, E2E, Storybook, and Lighthouse (artifact-dependent steps) may need extra Act configuration:
 
 ```bash
-act push --job build --job build-node --job lighthouse
+act push --job build --job e2e --job storybook --job lighthouse
 ```
 
 If you need Codecov support locally, export the token first:
@@ -154,10 +155,13 @@ Tests live in `tests/unit/`. Each UI component and core hook should have a test 
 
 ### E2E Tests (Playwright)
 
+CI sets `CI=true` (required by `package.json` scripts). Locally:
+
 ```bash
-pnpm run dev          # Start dev server first
-pnpm run test:e2e     # Run Playwright tests
-pnpm run test:e2e:ui  # Interactive Playwright UI
+pnpm run dev          # Optional: dev server for manual exploration
+$env:CI='true'; pnpm run test:e2e    # PowerShell
+# CI=true pnpm run test:e2e         # bash
+$env:CI='true'; pnpm run test:e2e:ui
 ```
 
 Tests live in `tests/e2e/`. Playwright tests verify core user flows:
@@ -187,15 +191,15 @@ Stories live in `stories/`. All primitive UI components (`components/ui/`) shoul
 - When adding new code, avoid `any` — use proper types or `unknown`
 - Run: `pnpm run typecheck`
 
-### ESLint
+### Biome
 
-ESLint 9 flat config with:
+Single toolchain for **lint** and **format** ([`biome.json`](biome.json)):
 
-- `typescript-eslint` recommended rules
-- `eslint-plugin-react-hooks` (rules-of-hooks + exhaustive-deps)
-- `eslint-plugin-jsx-a11y` (accessibility rules)
-
-Run: `pnpm run lint`
+```bash
+pnpm run lint       # check (CI-hard-fail)
+pnpm run lint:fix   # check --write (lint + format)
+pnpm run format     # format only
+```
 
 ### Rule: No API Keys in Logs
 
@@ -233,16 +237,14 @@ When adding new components:
 
 ## Known Technical Debt
 
-The following TypeScript issues are tracked and need resolution:
+Authoritative list: [`AUDIT.md`](AUDIT.md) and [`TODO.md`](TODO.md). Short pointers:
 
-1. **`services/dbService.ts`**: `IndexedDBService` partially implements `StorageBackend` — methods like `loadProject`/`listProjects` need proper implementation
-2. **`services/fileSystemService.ts`**: References `StoryProject.author/description` which don't exist in the current `StoryProject` interface
-3. **`components/AdvancedImportExport.tsx`**: DOCX export uses `fileSystemService` (Tauri-only) instead of a browser-compatible approach
-4. **`app/listenerMiddleware.ts`**: Complex Redux type issues with `redux-undo`'s `StateWithHistory`
-5. **`features/project/projectSlice.ts`**: `GeminiSchema` type mismatches in async thunks — needs schema type refinement
-6. **Various components**: `errorMessage` property referenced but not defined in context types
+1. **`StorageBackend` strictness** — enforce single backend typing across `dbService` / `fileSystemService` / `storageService` (see TODO).
+2. **`app/listenerMiddleware.ts`** — occasional TypeScript friction with `redux-undo`'s `StateWithHistory` (typed carefully at boundaries).
+3. **Collaboration** — optional configurable signaling URL; E2E encryption deferred (roadmap).
+4. **i18n** — FR/ES/IT locale files exist for future work; the in-app selector currently exposes **de** and **en** (see README).
 
-Contributors tackling these issues should create a dedicated PR per module.
+Open a **focused PR per theme** (storage vs. i18n vs. collaboration) to keep review manageable.
 
 ---
 
@@ -251,7 +253,7 @@ Contributors tackling these issues should create a dedicated PR per module.
 1. Fork the repository and create a feature branch
 2. Write or update tests for your changes
 3. Run the full test suite: `pnpm run test:run`
-4. Ensure ESLint passes: `pnpm run lint`
+4. Ensure Biome passes: `pnpm run lint`
 5. Ensure the build succeeds: `pnpm run build`
 6. Submit a PR against `main` with a clear description
 7. Request review from at least one maintainer
@@ -338,7 +340,7 @@ case 'yourNewTool':
 
 ### 3. Add i18n Keys
 
-Add translation keys in all 5 locale files (`locales/{de,en,es,fr,it}/writer.json`):
+Add translation keys at least to **`locales/de/`** and **`locales/en/`** (and mirror to `fr`/`es`/`it` when those locales are re-enabled in the selector):
 
 ```json
 {

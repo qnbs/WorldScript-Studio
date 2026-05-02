@@ -10,7 +10,7 @@ StoryCraft Studio is an AI-powered creative writing application built as an offl
 
 ### Tech Stack
 
-- **Frontend:** React 19 + TypeScript 5 (strict mode), Vite 6
+- **Frontend:** React 19 + TypeScript (strict mode), Vite 8
 - **State:** Redux Toolkit 2.x + Redux-Undo, feature-sliced design
 - **Styling:** Tailwind CSS 4.x with CSS custom properties for theming
 - **AI:** Google Gemini API via `@google/genai`, multi-provider abstraction (`aiProviderService.ts`)
@@ -27,7 +27,7 @@ app/              → Redux store, hooks (useAppDispatch/useAppSelector), listen
 components/       → React view components (one per view)
   ui/             → Reusable design system primitives (Button, Modal, Card, Toast, etc.)
 contexts/         → React context providers (one per major view + I18nContext)
-features/         → Redux Toolkit slices: project, settings, status, writer, versionControl
+features/         → Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
 hooks/            → Custom hooks with view business logic (one hook per view)
 services/         → External adapters: geminiService, dbService, storageService, collaborationService, epubApiService
 locales/          → i18n source files (de, en, es, fr, it) × 14 modules
@@ -102,7 +102,7 @@ types.ts          → Core shared interfaces and types
 - Translation files are in `locales/{lang}/{module}.json`
 - 14 modules: common, sidebar, dashboard, writer, characters, worlds, outline, templates, manuscript, export, settings, help, tags, portal
 - English is the fallback language
-- New keys must be added to ALL 5 language files (de, en, es, fr, it)
+- New keys: add to **`locales/de/`** and **`locales/en/`** at minimum; fr/es/it files are kept for future UI activation
 
 ### Git & CI
 
@@ -114,24 +114,23 @@ types.ts          → Core shared interfaces and types
   - `pnpm run typecheck`
   - `pnpm run test:run`
   - `pnpm run build`
-- CI pipeline: lint → typecheck → security → test → storybook → build → lighthouse → deploy
-- The main branch must require `lint`, `typecheck`, and `test` status checks in branch protection rules.
-- CI includes dependency-review + `pnpm audit` on dependency file changes, Storybook artifact generation, Lighthouse budgets, and optional Tauri builds on tags/workflow dispatch
+- CI pipeline (see [`docs/CI.md`](../docs/CI.md)): **`security` → `quality`** (Biome + `tsc` + Vitest matrix) **→ `build` / `e2e` / `storybook` in parallel** → **`lighthouse`** after build → **`deploy`** on `main` after build+e2e
+- Branch protection should require the **`quality`** job (and other checks your team enables); job ids match `.github/workflows/ci.yml`
+- CI runs **`pnpm audit`** every workflow; **dependency-review** on pull requests
 - CI installs dependencies with `pnpm install --frozen-lockfile`
-- Local CI can be simulated with `act` (requires Docker); use `act pull_request` for PR flows and `act push` for tag/dispatch flows
+- Local CI can be simulated with `act` (requires Docker), e.g. `act pull_request --job security --job quality`
 - Local developers should use `pnpm install` to install dependencies
-- All public-facing documentation, markdown files, and GitHub-visible content must be written in English to keep the project accessible to the open-source community
+- Most repo-facing markdown is English for accessibility; user-facing app strings remain fully i18n-driven
 
 ## Known Technical Debt
 
-See `AUDIT.md` for the full list. Key items:
+See `AUDIT.md` and `TODO.md`. Key items:
 
-- `services/dbService.ts` — `loadProject`/`listProjects` need full `StorageBackend` implementation
-- `services/fileSystemService.ts` — References `StoryProject.author`/`.description` which don't exist in the interface
-- `components/AdvancedImportExport.tsx` — DOCX export uses Tauri-only `fileSystemService`
-- `app/listenerMiddleware.ts` — Complex TypeScript workarounds for redux-undo's `StateWithHistory`
-- Several hooks use `as any` casts that should be replaced with proper generics
-- `hooks/useExportView.ts` / `components/ExportView.tsx` — export document libraries are lazy-loaded at runtime and should remain optional to preserve bundle size
+- **`StorageBackend` parity** — tighten typings across `dbService` / `fileSystemService` / `storageService`
+- `components/AdvancedImportExport.tsx` — some export paths remain Tauri-centric; keep browser fallbacks explicit
+- `app/listenerMiddleware.ts` — occasional TypeScript friction with redux-undo `StateWithHistory`
+- Several hooks still use `as any` casts that should be replaced with proper generics
+- `hooks/useExportView.ts` / `components/ExportView.tsx` — keep `docx` / `jszip` lazy for bundle size
 
 ## Commands
 
@@ -146,7 +145,7 @@ pnpm run typecheck    # TypeScript type checking (tsc --noEmit)
 pnpm run test         # Vitest watch mode
 pnpm run test:run     # Vitest single run
 pnpm run test:coverage # Vitest with V8 coverage
-pnpm run test:e2e     # Playwright E2E tests
+pnpm run test:e2e     # Playwright E2E (requires CI=true per package.json scripts)
 pnpm run storybook    # Storybook on port 6006
 ```
 

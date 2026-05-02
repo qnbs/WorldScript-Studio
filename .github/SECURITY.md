@@ -18,10 +18,9 @@ Use one of these private channels instead:
 
 1. Preferred: GitHub Private Vulnerability Reporting (Security Advisories)
    - URL: https://github.com/qnbs/StoryCraft-Studio/security/advisories/new
-2. Encrypted email (fallback): `security@REPLACE-WITH-REAL-ADDRESS.example`
-   - OpenPGP fingerprint: `REPLACE WITH REAL 40-HEX FINGERPRINT`
+2. Encrypted email (fallback): maintainers may publish a dedicated address in organization docs; until then, **use GitHub Private Vulnerability Reporting only**.
 
-If the email channel is not yet configured, use GitHub Private Vulnerability Reporting.
+If the email channel is not configured, use GitHub Private Vulnerability Reporting.
 
 ## Disclosure and Embargo Policy
 

@@ -1,8 +1,28 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17
-**Scope:** Full application, repository configuration, CI/CD, documentation, release validation
-**Version audited:** 1.1.0 → 1.1.1 (package.json)
+**Date:** 2026-04-17 (baseline); **follow-up:** 2026-05-02  
+**Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
+**Version audited:** 1.1.0 → 1.1.1 (package.json); tooling docs synced with **Node 22**, **Vite 8**, **Biome**, current `ci.yml`
+
+---
+
+## Follow-up Audit — 2026-05-02
+
+### Documentation & DX alignment
+
+- **CI reference** [`docs/CI.md`](docs/CI.md) rewritten to match the live workflow (`security` → `quality` → `build` / `e2e` / `storybook` → `lighthouse`; `deploy` needs `build` + `e2e`). Removed stale references to non-existent jobs (`lint`, `typecheck`, `test` as separate ids; `build-node`; default `tauri` job).
+- **Lighthouse config path** standardized to **`.lighthouserc.cjs`** across docs (replacing `.js`/`.json` mentions where incorrect).
+- **[`CONTRIBUTING.md`](CONTRIBUTING.md)** updated: Node ≥ 22, **Biome** (not ESLint), **simple-git-hooks** + lint-staged, **Vite 8**, Tailwind via Vite plugin, Act examples with real job names, E2E `CI=true` note, i18n selector reality (de/en).
+- **[`README.md`](README.md)** CI table + Act examples aligned; new **Documentation Hub** section linking all first-class `.md` guides and **`.cursorrules` (QNBS v3)**.
+- **[`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md)** prefixed with an explicit “historical vs current” disclaimer pointing at `docs/CI.md`.
+
+### Code fix (AI provider)
+
+- **`services/aiProviderService.ts`:** `withMergedAbortSignal()` merges a standalone `AbortSignal` argument into `AIRequestOptions` for **`streamProvider`** and **`generateText`**, so **OpenAI** and **Ollama** honor cancellation the same way as Gemini streaming when callers pass `thunkAPI.signal` (or equivalent) as the optional parameter. Unit tests extended in `tests/unit/aiProviderService.test.ts`.
+
+### Outstanding
+
+- Local validation in this environment requires `pnpm install`; CI remains the canonical full gate (quality matrix, E2E, Lighthouse).
 
 ---
 
@@ -175,7 +195,7 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 
 ### 15. ~~No Performance Budgets~~ ✅ FIXED
 
-**Resolution:** Lighthouse CI job added to CI pipeline (`.github/workflows/ci.yml`). Performance budgets defined in `.lighthouserc.js` with assertions for Performance ≥ 0.9, FCP ≤ 1800ms, LCP ≤ 2500ms, TBT ≤ 150ms, CLS ≤ 0.1. Bundle analyzer available via `pnpm run analyze`.
+**Resolution:** Lighthouse CI job added to CI pipeline (`.github/workflows/ci.yml`). Performance budgets defined in `.lighthouserc.cjs` with assertions for Performance ≥ 0.9, FCP ≤ 1800ms, LCP ≤ 2500ms, TBT ≤ 150ms, CLS ≤ 0.1. Bundle analyzer available via `pnpm run analyze`.
 
 ### 16. ~~Potential Memory Leaks in ManuscriptView Resize~~ ✅ FIXED
 
@@ -334,7 +354,7 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 
 - ✅ Full pipeline: security → lint → typecheck → test → build → lighthouse → storybook → deploy
 - ✅ Security audit job with `pnpm audit --audit-level=high` and `dependency-review-action`
-- ✅ Lighthouse CI job with performance budgets from `.lighthouserc.js`
+- ✅ Lighthouse CI job with performance budgets from `.lighthouserc.cjs`
 - ✅ Storybook build + artifact upload
 - ✅ ESLint and typecheck now run in hard-fail mode (was soft-fail)
 - ✅ Coverage thresholds (50%) configured in vitest.config.ts
@@ -342,19 +362,19 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 ### Git Configuration
 
 - ✅ `.gitignore` properly configured (fixed: now includes `src-tauri/target/`)
-- ✅ Husky pre-commit hooks with lint-staged (Prettier + ESLint)
+- ✅ Pre-commit: simple-git-hooks + lint-staged (Biome)
 - ✅ Conventional Commits recommended in CONTRIBUTING.md
 
-### Prettier Configuration
+### Biome (lint + format)
 
-- ✅ `.prettierrc.json` is authoritative (fixed: removed empty duplicate `.prettierrc`)
-- Config: `semi: true`, `singleQuote: true`, `trailingComma: "es5"`, `printWidth: 100`, `tabWidth: 2`
+- ✅ **Biome** is authoritative ([`biome.json`](biome.json)); `pnpm run lint` / `lint:fix` / Prettier-era duplicates removed from contributor docs
+- Pre-commit: **simple-git-hooks** + **lint-staged** → `biome check --write` on staged files
 
 ### Package.json
 
 - ✅ `"type": "module"` for ES modules
 - ✅ `"private": true` prevents accidental npm publishing
-- ⚠️ `--legacy-peer-deps` required in CI — indicates dependency resolution conflicts
+- ⚠️ Watch `pnpm.peerDependencyRules` / overrides when upgrading Vite or vite-plugin-pwa (documented in `package.json`)
 
 ---
 

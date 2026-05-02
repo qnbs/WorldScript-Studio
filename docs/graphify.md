@@ -3,6 +3,8 @@
 StoryCraft Studio has a fully configured [graphify](https://github.com/safishamsi/graphify) knowledge graph.  
 Graph lives at `graphify-out/` (not committed to git).
 
+**Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*.
+
 ---
 
 ## What's installed

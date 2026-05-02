@@ -25,7 +25,7 @@ Archived from `TODO.md` on 2026-04-18. These items were completed during the v1.
 - ✅ Collaboration PSK-basierte Room-Isolation
 - ✅ Unit-Tests für kritische Services (geminiService, dbService, projectSlice, writerSlice, settingsSlice, listenerMiddleware, collaborationService)
 - ✅ Coverage-Thresholds (50%) konfiguriert
-- ✅ CI: ESLint + Typecheck auf Hard-Fail
+- ✅ CI: Lint (Biome) + Typecheck auf Hard-Fail
 - ✅ manualChunks erweitert (leaflet, konva, recharts)
 
 ## Medium (🟠) — Completed Items
