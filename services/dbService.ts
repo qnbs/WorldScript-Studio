@@ -2,7 +2,7 @@ import * as LZString from 'lz-string';
 import type { ProjectData } from '../features/project/projectSlice';
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
 import { logger } from './logger';
-import type { StorageBackend } from './storageService';
+import type { SaveProjectInput, StorageBackend } from './storageBackend';
 
 const DB_NAME = 'storycraft-db';
 const DB_VERSION = 6; // v6: Story Codex store added
@@ -461,7 +461,7 @@ class IndexedDBService implements StorageBackend {
   }
 
   // Helper methods for explicit saving
-  async saveProject(data: StoryProject | PersistedProjectState): Promise<void> {
+  async saveProject(data: SaveProjectInput): Promise<void> {
     // Check auto-snapshot condition during save
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       // data may arrive as a Redux-undo envelope (PersistedProjectState) or plain StoryProject

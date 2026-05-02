@@ -74,7 +74,7 @@ Repo-root **`.cursorrules`** defines the **QNBS Master Prompt v3** (“Creative 
 
 See `AUDIT.md` and `TODO.md`. Key items:
 
-- **`StorageBackend` parity** across `dbService` / `fileSystemService` / `storageService`
+- **`StorageBackend` + `SaveProjectInput`** — contract in `services/storageBackend.ts`; use `storageService` in app code; backends implement the same `saveProject` union (Redux envelope or flat `StoryProject`).
 - `components/AdvancedImportExport.tsx` — keep browser vs Tauri export paths explicit
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
 - Several hooks still need removal of `as any` casts

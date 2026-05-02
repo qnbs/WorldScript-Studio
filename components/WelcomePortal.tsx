@@ -5,7 +5,7 @@ import { ICONS } from '../constants';
 import { projectActions } from '../features/project/projectSlice';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
 import { useTranslation } from '../hooks/useTranslation';
-import { dbService } from '../services/dbService';
+import { storageService } from '../services/storageService';
 import type { View } from '../types';
 import { Button } from './ui/Button';
 
@@ -85,7 +85,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
 
   useEffect(() => {
     const checkDb = async () => {
-      const hasData = await dbService.hasSavedData();
+      const hasData = await storageService.hasSavedData();
       setHasExistingSession(hasData);
     };
     checkDb();
@@ -131,6 +131,50 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
     }
   };
 
+  const buildDemoProjectFile = (): File => {
+    const chapterId = `demo-ch-${Date.now()}`;
+    const payload = {
+      title: t('portal.demo.title'),
+      logline: t('portal.demo.logline'),
+      characters: [] as const,
+      worlds: [] as const,
+      outline: [
+        {
+          id: 'demo-o1',
+          title: t('portal.demo.outline1Title'),
+          description: t('portal.demo.outline1Desc'),
+        },
+        {
+          id: 'demo-o2',
+          title: t('portal.demo.outline2Title'),
+          description: t('portal.demo.outline2Desc'),
+        },
+      ],
+      manuscript: [
+        {
+          id: chapterId,
+          title: t('portal.demo.chapterTitle'),
+          content: t('portal.demo.chapterContent'),
+        },
+      ],
+      projectGoals: { totalWordCount: 15000, targetDate: null },
+      writingHistory: [] as const,
+    };
+    return new File([JSON.stringify(payload)], 'storycraft-demo.json', {
+      type: 'application/json',
+    });
+  };
+
+  const handleLoadDemo = async () => {
+    const resultAction = await dispatch(importProjectThunk(buildDemoProjectFile()));
+    if (importProjectThunk.fulfilled.match(resultAction)) {
+      alert(t('settings.data.importSuccess'));
+      onExit('manuscript');
+    } else {
+      alert(t('settings.data.importError'));
+    }
+  };
+
   const renderMainView = () => (
     <div className="text-center">
       <svg
@@ -146,9 +190,26 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       <h1 className="text-4xl md:text-5xl font-bold text-[var(--foreground-primary)]">
         {t('portal.welcome.title')}
       </h1>
-      <p className="text-lg text-[var(--foreground-muted)] mt-2 mb-8">
+      <p className="text-lg text-[var(--foreground-muted)] mt-2 mb-6">
         {t('portal.welcome.subtitle')}
       </p>
+      {!hasExistingSession && (
+        <div
+          className="mb-8 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)]/60 px-4 py-3 text-left text-sm text-[var(--foreground-secondary)]"
+          role="region"
+          aria-label={t('portal.welcome.demoHint')}
+        >
+          <p className="mb-3">{t('portal.welcome.demoHint')}</p>
+          <Button
+            type="button"
+            onClick={() => void handleLoadDemo()}
+            variant="primary"
+            className="w-full sm:w-auto"
+          >
+            {t('portal.welcome.tryDemo')}
+          </Button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row gap-4 justify-center">
         {hasExistingSession && (
           <Button
@@ -201,6 +262,12 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       </h2>
       <p className="text-[var(--foreground-muted)] mb-8">{t('portal.new.description')}</p>
       <div className="space-y-4">
+        <NewProjectOption
+          icon={ICONS.OUTLINE}
+          title={t('portal.new.demo.title')}
+          description={t('portal.new.demo.description')}
+          onClick={() => void handleLoadDemo()}
+        />
         <NewProjectOption
           icon={ICONS.TEMPLATES}
           title={t('portal.new.template.title')}

@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Welcome portal:** Localized demo project (outline + first chapter) loadable as in-app import; first-visit hint and CTA. `hasSavedData` now uses `storageService` so the welcome flow matches the active backend (browser IndexedDB or Tauri FS).
+- **Storage contract module:** `StorageBackend` + `SaveProjectInput` (flat `StoryProject` or Redux `{ data }` / `{ present }` envelope) in `services/storageBackend.ts`; Tauri FS unwraps to flat JSON on disk.
+
 ### Fixed
 
+- **Codex extraction:** `escapeRegExpLiteral()` wraps native `RegExp.escape` when present and falls back for runtimes without it (restores Vitest/jsdom compatibility for `extractStoryCodex`).
 - **AI providers:** `generateText` and `streamText` now merge a standalone `AbortSignal` into `AIRequestOptions` for **OpenAI** and **Ollama**, matching cancellation behavior already relied upon for Gemini (`services/aiProviderService.ts`; tests in `tests/unit/aiProviderService.test.ts`).
 
 ### Changed
@@ -17,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Refactored
 
+- **StorageManager:** `saveProject` accepts `StoryProject` (not `unknown`).
 - **projectSlice Decomposition**: Split monolithic `projectSlice.ts` (777 → 248 lines) by extracting all 14 AI thunks into per-domain files under `features/project/thunks/`: `characterThunks.ts`, `worldThunks.ts`, `outlineThunks.ts`, `writingThunks.ts`, `projectManagementThunks.ts`. Shared lazy service loaders + `buildAiOptions` extracted to `thunks/thunkUtils.ts`; entity adapters to `adapters.ts` to break circular deps. `projectSlice` re-exports everything for backward compatibility.
 
 ### Added

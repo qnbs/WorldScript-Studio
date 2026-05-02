@@ -24,6 +24,11 @@
 
 - Local validation in this environment requires `pnpm install`; CI remains the canonical full gate (quality matrix, E2E, Lighthouse).
 
+### Follow-up — 2026-05-02 (storage + welcome)
+
+- **`StorageBackend`:** Interface extracted to [`services/storageBackend.ts`](services/storageBackend.ts) to remove the `storageService` ↔ `dbService` circular type dependency; `StorageManager.saveProject` is strictly `StoryProject`.
+- **Welcome portal:** `hasSavedData` uses `storageService` (correct backend on Tauri). Localized **demo project** import (outline + chapter) for first-time onboarding.
+
 ---
 
 ## Self-Audit Summary
@@ -427,7 +432,7 @@ StoryCraft Studio was assessed as a strong, modern React/TypeScript application 
 ### Critical Findings (Baseline)
 
 1. **Desktop-Backend stored Provider API keys unencrypted** — `services/fileSystemService.ts` saved keys as plaintext via `saveApiKey()`. → *Resolved: AES-GCM encryption applied.*
-2. **Type incompatibility between StorageBackend and dbService** — `services/storageService.ts` defined `StorageBackend` interface but `dbService` had different method signatures. → *Tracked for refactor.*
+2. ~~**Type incompatibility between StorageBackend and dbService**~~ — Addressed: contract in `services/storageBackend.ts`; IndexedDB + Tauri FS both implement it; proxy uses `StoryProject` for `saveProject`.
 3. **`AUTO_SNAPSHOT_INTERVAL` mismatch** — `services/dbService.ts` used 30s but comment said 30 minutes. → *Clarified and documented.*
 4. **No production logging control** — `console.*` calls scattered across services without environment filtering. → *Logger service introduced (`services/logger.ts`).*
 5. **`DECRYPT_FAILED` as API key sentinel** — `dbService.ts` returned the string `'DECRYPT_FAILED'` on decrypt errors instead of `null`. → *Resolved: explicit recovery flow with UI warning added.*

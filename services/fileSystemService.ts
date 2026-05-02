@@ -158,7 +158,7 @@ import type {
   World,
 } from '../types';
 import { logger } from './logger';
-import type { StorageBackend } from './storageService';
+import type { SaveProjectInput, StorageBackend } from './storageBackend';
 
 // Envelope stored in each snapshot file — outer shell is plain JSON, `data` field is compressed.
 interface SnapshotEnvelope {
@@ -167,6 +167,17 @@ interface SnapshotEnvelope {
   date: string;
   wordCount: number;
   data: string; // compressData(projectData)
+}
+
+/** Normalize Redux `{ data }` / undo envelope to flat project JSON on disk. */
+function flattenSaveProjectInput(project: SaveProjectInput): StoryProject {
+  if ('present' in project && project.present?.data) {
+    return project.present.data as StoryProject;
+  }
+  if ('data' in project && project.data) {
+    return project.data as StoryProject;
+  }
+  return project as StoryProject;
 }
 
 class FileSystemService implements StorageBackend {
@@ -199,11 +210,13 @@ class FileSystemService implements StorageBackend {
   }
 
   // Project management
-  async saveProject(project: StoryProject): Promise<void> {
+  async saveProject(project: SaveProjectInput): Promise<void> {
+    const flat = flattenSaveProjectInput(project);
+
     // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       this.lastAutoSnapshotTime = Date.now();
-      this.saveSnapshot('auto', project)
+      this.saveSnapshot('auto', flat)
         .then(() => this.pruneAutoSnapshots())
         .catch(() => {});
     }
@@ -211,8 +224,8 @@ class FileSystemService implements StorageBackend {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const projectId = sanitizePathSegment(
-      ((project as unknown as Record<string, unknown>)['id'] as string) ||
-        project.title ||
+      ((flat as unknown as Record<string, unknown>)['id'] as string) ||
+        flat.title ||
         'project',
     );
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
@@ -222,7 +235,7 @@ class FileSystemService implements StorageBackend {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    await retryFs(() => apis.writeTextFile(projectFile, compressData(project)));
+    await retryFs(() => apis.writeTextFile(projectFile, compressData(flat)));
   }
 
   async loadProject(projectId: string): Promise<StoryProject | null> {

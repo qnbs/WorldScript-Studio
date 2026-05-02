@@ -4,8 +4,9 @@ import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { logger } from '../services/logger';
+import type { SaveProjectInput } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
-import type { Character, PersistedRootState, World } from '../types';
+import type { Character, World } from '../types';
 import type { AppDispatch, RootState } from './store';
 
 type ProjectStateWithHistory = {
@@ -54,9 +55,7 @@ listenerMiddleware.startListening({
         /* non-critical — proceed with save */
       }
 
-      await storageService.saveProject(
-        projectDataToSave as NonNullable<PersistedRootState['project']>,
-      );
+      await storageService.saveProject(projectDataToSave as SaveProjectInput);
 
       listenerApi.dispatch(statusActions.setSavingStatus('saved'));
       await listenerApi.delay(2000);

@@ -60,7 +60,7 @@ All critical, high, and most medium-priority items have been completed, includin
 - ✅ projectSlice.ts in 6 Thunk-Domain-Dateien aufgeteilt (777 → 248 LOC)
 - ✅ Lighthouse CI hard-fail aktiviert
 - ✅ Test-Suite auf 160+ Tests ausgebaut (CI grün auf Node LTS + Node 24)
-- ⬜ StorageBackend-Interface strikt durchgesetzt (Union-Typ entfernen, dbService konform)
+- ✅ StorageBackend-Interface — `storageBackend.ts`, strikte `StoryProject`-Typen am Proxy
 
 ### Tauri Feature-Parität ✅ abgeschlossen
 
@@ -136,8 +136,8 @@ Vereinfachte automatische Konsistenzprüfung:
 
 **Status:** 📋 Geplant (vor erstem Tauri-Release erforderlich)
 
-- ⬜ StorageBackend-Interface strikt durchgesetzt (Union-Typ entfernen, dbService konform)
-- ⬜ Onboarding-Tour / Demo-Projekt beim ersten App-Start (Welcome-Portal)
+- ✅ StorageBackend-Interface — `storageBackend.ts`, strikte `StoryProject`-Typen am Proxy
+- ⬜ Onboarding-Tour (geführt); Demo-Projekt + Welcome-Hinweis ✅
 - ⬜ Tauri v2 Release-Pipeline: Auto-Update (`tauri-plugin-updater`) + Code-Signing + GitHub Release Artifacts
 - ⬜ FR/ES/IT Übersetzungen vervollständigen + CI-Gate (Lint-Fehler, wenn Key fehlt)
 - ⬜ Bundle-Size-Budgets: rollup-plugin-visualizer als CI-Artifact + `performance.budget` in LHCI

@@ -239,7 +239,7 @@ When adding new components:
 
 Authoritative list: [`AUDIT.md`](AUDIT.md) and [`TODO.md`](TODO.md). Short pointers:
 
-1. **`StorageBackend` strictness** — enforce single backend typing across `dbService` / `fileSystemService` / `storageService` (see TODO).
+1. **`StorageBackend` contract** — implement `services/storageBackend.ts` on both backends; use `storageService` in UI (not `dbService` directly) so Tauri and browser stay consistent.
 2. **`app/listenerMiddleware.ts`** — occasional TypeScript friction with `redux-undo`'s `StateWithHistory` (typed carefully at boundaries).
 3. **Collaboration** — optional configurable signaling URL; E2E encryption deferred (roadmap).
 4. **i18n** — FR/ES/IT locale files exist for future work; the in-app selector currently exposes **de** and **en** (see README).

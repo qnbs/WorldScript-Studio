@@ -13,7 +13,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 ### Hoch (🟡)
 
 - ✅ E2E-Tests erweitern (Projekt-Import, Charakter-CRUD, Snapshot-Flow + Auto-Snapshot)
-- ⬜ StorageBackend-Interface strikt durchsetzen (Union-Typ entfernen, dbService konform machen)
+- ✅ StorageBackend-Interface — `services/storageBackend.ts` als Kontrakt, `StorageManager.saveProject(StoryProject)`
 - ✅ Logger mit Ringbuffer + Sink für Crash-Diagnose
 
 ### Mittel (🟠)
@@ -28,7 +28,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ⬜ Bundle-Size-Budgets pro Chunk (rollup-plugin-visualizer in CI)
 - ⬜ FR/ES/IT Übersetzungen vervollständigen + CI-Gate
 - ⬜ Renovate Auto-Merge für Patch-Updates konfigurieren
-- ⬜ Onboarding-Tour / Demo-Projekt beim ersten App-Start (Welcome-Portal-Erweiterung)
+- ⬜ Onboarding-Tour (geführte Schritte) — Demo-Projekt + Hinweis im Welcome-Portal ✅
 - ⬜ Tauri v2 Release-Pipeline: auto-update + code-signing + GitHub Release Artifacts
 
 ---

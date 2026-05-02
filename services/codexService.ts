@@ -60,6 +60,13 @@ const getExcerpt = (text: string, index: number, length = 40): string => {
 
 const normalizeCandidate = (candidate: string): string => candidate.trim().replace(/\s+/g, ' ');
 
+// QNBS-v3: ES2025 `RegExp.escape` is missing in some test runtimes (Vitest/jsdom); fallback mirrors core escaping.
+const escapeRegExpLiteral = (s: string): string => {
+  const R = RegExp as unknown as { escape?: (input: string) => string };
+  if (typeof R.escape === 'function') return R.escape(s);
+  return s.replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
+};
+
 export const extractStoryCodex = (
   projectId: string,
   manuscript: StorySection[],
@@ -118,7 +125,7 @@ export const extractStoryCodex = (
     const text = `${section.title}\n${section.content}`;
 
     for (const known of knownEntities) {
-      const regex = new RegExp(`\\b${RegExp.escape(known.name)}\\b`, 'gi');
+      const regex = new RegExp(`\\b${escapeRegExpLiteral(known.name)}\\b`, 'gi');
       let match: RegExpExecArray | null = regex.exec(text);
       while (match) {
         addMention(known.name, known.type, section, match.index, known.id, true);
