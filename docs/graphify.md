@@ -1,21 +1,61 @@
 # Graphify — Knowledge Graph Setup
 
 StoryCraft Studio has a fully configured [graphify](https://github.com/safishamsi/graphify) knowledge graph.  
-Graph lives at `graphify-out/` (not committed to git).
+Graph output lives at `graphify-out/` (not committed to git).
 
 **Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*.
 
+**Official PyPI name:** `graphifyy` (double **y**). The CLI is still `graphify`. `pip install graphify` can pull an **unrelated** package — always use `graphifyy`.
+
 ---
 
-## What's installed
+## Installation (Python)
+
+Pick **one** install path; all provide the `graphify` command (or `python -m graphify`).
+
+| Method | Command | Notes |
+|--------|---------|--------|
+| **pip** (common) | `pip install graphifyy` | On Windows, `graphify.exe` may land in `%APPDATA%\Python\Python3xx\Scripts` — often **not** on `PATH` until you add it. |
+| **pipx** | `pipx install graphifyy` | Isolated env; run `pipx ensurepath` if the CLI is missing. |
+| **uv** | `uv tool install graphifyy` | Often keeps tools on `PATH` without extra setup. |
+
+### One-time setup in this repo
+
+From the repository root (after Node deps: `pnpm install`):
+
+```bash
+pnpm run graphify:install   # registers Claude / VS Code / Copilot integrations (upstream `graphify install`)
+pnpm run graphify:hooks     # optional: install post-commit / post-checkout hooks that run `graphify update .`
+pnpm run graphify:update    # generate AST graph under graphify-out/ (no API cost)
+```
+
+**pnpm wrappers:** [`scripts/graphify-cli.mjs`](../scripts/graphify-cli.mjs) tries `graphify` on `PATH`, then `py -m graphify` / `python -m graphify`, so **`pnpm run graphify:*` works even when Windows did not add pip’s `Scripts` folder to `PATH`**.
+
+### VS Code
+
+Tasks are pre-defined in [`.vscode/tasks.json`](../.vscode/tasks.json) (e.g. **Graphify: update graph (AST)**).
+
+---
+
+## What's in the repo
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | `.graphifyignore` | repo root | Excludes `node_modules/`, `dist/`, `coverage/`, `graphify-out/`, binaries, `.env` |
 | `graphify-out/` in `.gitignore` | `.gitignore` | Generated output not committed |
-| Claude Code integration | `CLAUDE.md` + `~/.claude/settings.json` | PreToolUse hook + CLAUDE.md section |
+| `graphify-cli.mjs` | `scripts/` | PATH-independent launcher used by `pnpm run graphify:*` |
+| Claude Code integration | `CLAUDE.md` + `graphify install` | PreToolUse hook + instructions |
 | VS Code Copilot integration | `.github/copilot-instructions.md` | Copilot Chat reads the graph |
-| Git hooks | `.git/hooks/post-commit`, `post-checkout` | Graph auto-rebuilt on every commit |
+| Git hooks | optional, via `pnpm run graphify:hooks` | Auto `graphify update .` after commit/checkout |
+
+### npm/pnpm scripts
+
+| Script | Purpose |
+|--------|---------|
+| `pnpm run graphify:install` | `graphify install` (skills / editor hooks) |
+| `pnpm run graphify:update` | `graphify update .` — refresh AST graph |
+| `pnpm run graphify:hooks` | `graphify hook install` — git hooks for auto-update |
+| `pnpm run graphify:status` | `graphify hook status` |
 
 ---
 
@@ -48,6 +88,8 @@ Graph lives at `graphify-out/` (not committed to git).
 ### After code changes (no API cost)
 
 ```bash
+pnpm run graphify:update
+# or, if `graphify` is on your PATH:
 graphify update .
 ```
 
@@ -67,6 +109,8 @@ graphify path "ollamaService" "settingsSlice"
 graphify explain "aiThunkUtils"
 graphify explain "StorageManager"
 ```
+
+If `graphify` is not on `PATH`, prefix with `pnpm run graphify --` (e.g. `pnpm run graphify -- query "…"`).
 
 ### Full semantic rebuild (uses LLM, costs tokens)
 
@@ -90,11 +134,10 @@ Open `graphify-out/graph.html` in any browser — interactive D3 visualization o
 
 ## Automatic updates
 
-The `post-commit` and `post-checkout` git hooks run `graphify update .` automatically. Nothing to do manually after committing.
+After **`pnpm run graphify:hooks`**, Graphify can refresh the graph on **post-commit** and **post-checkout** (see `graphify hook status`). Without hooks, run **`pnpm run graphify:update`** after larger refactors.
 
-To verify hooks are active:
 ```bash
-graphify hook status
+pnpm run graphify:status
 ```
 
 ---
@@ -118,7 +161,8 @@ storybook-static/                   .vscode/  .idea/
 ## Optional: Obsidian vault
 
 ```bash
-graphify . --obsidian
+pnpm run graphify -- . --obsidian
+# or: graphify . --obsidian
 ```
 
 Generates a full Obsidian-compatible vault in `graphify-out/obsidian/` with wiki-links between nodes.
@@ -141,7 +185,7 @@ pip install 'graphifyy[video]'
 
 | Scenario | Action |
 |----------|--------|
-| You edited code | `graphify update .` (or auto via git hook) |
+| You edited code | `pnpm run graphify:update` or `graphify update .` (or auto via `pnpm run graphify:hooks`) |
 | You added docs/PDFs | `/graphify --update` in Claude Code or Copilot Chat |
 | Cross-module question | `graphify query "..."` or `graphify path "A" "B"` |
 | Architecture overview | Read `graphify-out/GRAPH_REPORT.md` |
@@ -168,8 +212,9 @@ The CLAUDE.md section also instructs Claude to:
 
 | Problem | Fix |
 |---------|-----|
-| **Windows:** `graphify` / `uv` not found after install | Add the tool bin directory to **PATH** (uv: `%USERPROFILE%\.local\bin` or `uv tool dir` output); open a **new** terminal. Prefer **PowerShell** or **Git Bash** for running `graphify update .`. |
-| `graphify: command not found` | `uv tool install graphifyy && graphify install` |
+| **Windows:** `graphify` not recognized after `pip install graphifyy` | Pip installs `graphify.exe` under **`%APPDATA%\Python\Python3xx\Scripts`** (see pip’s warning). Add that folder to your **user PATH**, open a new terminal, **or** use `pnpm run graphify:*` / `py -m graphify …` (see [`scripts/graphify-cli.mjs`](../scripts/graphify-cli.mjs)). |
+| **`graphify` / `uv` not on PATH** (uv/pipx) | Add uv’s bin (`uv tool dir` / `%USERPROFILE%\.local\bin`) or run `pipx ensurepath`; restart the terminal. |
+| `graphify: command not found` | Prefer **`pnpm run graphify:update`** / **`pnpm run graphify:install`**, or install via **`pipx install graphifyy`** / **`uv tool install graphifyy`**. |
 | Graph is stale | `graphify update .` |
 | Hook not firing | `graphify hook install` |
 | VS Code Copilot not reading graph | `graphify vscode install` |

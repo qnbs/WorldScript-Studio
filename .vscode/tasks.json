@@ -1,0 +1,37 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Graphify: install integrations",
+      "type": "npm",
+      "script": "graphify:install",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "group": "none"
+    },
+    {
+      "label": "Graphify: update graph (AST)",
+      "type": "npm",
+      "script": "graphify:update",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "group": { "kind": "build", "isDefault": false }
+    },
+    {
+      "label": "Graphify: hook status",
+      "type": "npm",
+      "script": "graphify:status",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "group": "none"
+    },
+    {
+      "label": "Graphify: install git hooks",
+      "type": "npm",
+      "script": "graphify:hooks",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "group": "none"
+    }
+  ]
+}

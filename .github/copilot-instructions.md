@@ -153,4 +153,6 @@ pnpm run storybook    # Storybook on port 6006
 
 Before answering architecture or codebase questions, read `graphify-out/GRAPH_REPORT.md` if it exists.
 If `graphify-out/wiki/index.md` exists, navigate it for deep questions.
-Type `/graphify` in Copilot Chat to build or update the knowledge graph.
+Type `/graphify` in Copilot Chat to build or update the knowledge graph (semantic / LLM-backed).
+
+From the repo shell, **`pnpm run graphify:update`** refreshes the AST-only graph (works even when `graphify` is not on `PATH`, e.g. after `pip install graphifyy` on Windows); see `docs/graphify.md` and `scripts/graphify-cli.mjs`.

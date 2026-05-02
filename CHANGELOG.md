@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Graphify (pip-friendly):** [`scripts/graphify-cli.mjs`](scripts/graphify-cli.mjs) plus `pnpm run graphify` / `graphify:install` / `graphify:update` / `graphify:hooks` / `graphify:status`; [`.vscode/tasks.json`](.vscode/tasks.json) tasks; [`docs/graphify.md`](docs/graphify.md) + [`CONTRIBUTING.md`](CONTRIBUTING.md) updated for `pip install graphifyy` and Windows `Scripts` PATH.
+
 ## [1.2.0] - 2026-05-02
 
 ### Added

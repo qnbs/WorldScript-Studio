@@ -36,11 +36,19 @@ If `corepack` is not recognized, reinstall Node or enable the “Tools for Nativ
 
 ### Graphify (optional, Python)
 
-Graphify is a **CLI** (Python/`uv`), not an npm package — see [`docs/graphify.md`](docs/graphify.md). On Windows: install [**uv**](https://docs.astral.sh/uv/getting-started/installation/) or Python 3.10+, then:
+Graphify is the **`graphifyy`** package on PyPI (CLI command `graphify`), not an npm package — see [`docs/graphify.md`](docs/graphify.md).
 
-`uv tool install graphifyy && graphify install`
+**Recommended install (matches many setups):**
 
-Ensure the directory where `graphify.exe` / scripts are placed is on `PATH` (uv prints the location). Verify with `graphify --help`.
+```bash
+pip install graphifyy
+pnpm run graphify:install    # registers IDE/git integrations (run once per machine)
+pnpm run graphify:hooks      # optional: auto `graphify update .` on commit/checkout
+```
+
+If `graphify` is not on your `PATH` (common on Windows after plain `pip`), use **`pnpm run graphify:*`** — they call [`scripts/graphify-cli.mjs`](scripts/graphify-cli.mjs), which falls back to `py -m graphify` / `python -m graphify`.
+
+**Alternatives:** `pipx install graphifyy` or `uv tool install graphifyy` (often put `graphify` on `PATH` automatically). On Windows, pip user scripts often live under `%APPDATA%\Python\Python3xx\Scripts` — add that directory to your user `PATH` if you want the bare `graphify` command everywhere.
 
 ### Installation
 

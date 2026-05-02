@@ -383,7 +383,7 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
 | [`ROADMAP.md`](ROADMAP.md) / [`TODO.md`](TODO.md) | Planning and sprint tasks |
 | [`CHANGELOG.md`](CHANGELOG.md) | Keep a Changelog–style release notes |
-| [`docs/graphify.md`](docs/graphify.md) | Optional knowledge-graph (Graphify) setup |
+| [`docs/graphify.md`](docs/graphify.md) | Optional Graphify graph (`pnpm run graphify:update`, `pip install graphifyy`) |
 | [`.cursorrules`](.cursorrules) | **QNBS v3** — Cursor AI behavior for qnbs repos (context-first, StoryCraft “soul”) |
 | [`CLAUDE.md`](CLAUDE.md) | Guidance for Claude Code |
 | [`.github/copilot-instructions.md`](.github/copilot-instructions.md) | GitHub Copilot Chat context |
