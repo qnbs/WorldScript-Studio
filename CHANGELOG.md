@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Documentation:** CI accurately documented in [`docs/CI.md`](docs/CI.md) (job ids, `.lighthouserc.cjs`, Node 22); [`README.md`](README.md) CI section + **Documentation Hub**; [`CONTRIBUTING.md`](CONTRIBUTING.md) aligned with Biome, Vite 8, hooks, Act, E2E env; [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) disclaimer for historical vs current pipeline; [`AUDIT.md`](AUDIT.md) follow-up entry **2026-05-02**.
+- **Documentation:** CI accurately documented in [`docs/CI.md`](docs/CI.md) (job ids, `.lighthouserc.cjs`, Node 22); [`README.md`](README.md) CI section + **Documentation Hub** + shipped vs future **i18n** selector; [`CONTRIBUTING.md`](CONTRIBUTING.md) aligned with Biome, Vite 8, hooks, Act, E2E env; [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) disclaimer for historical vs current pipeline; [`AUDIT.md`](AUDIT.md) follow-up entry **2026-05-02**.
 
 ### Refactored
 
