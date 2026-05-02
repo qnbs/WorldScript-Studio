@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-02
+
 ### Added
 
 - **Spotlight onboarding tour:** `driver.js` + `services/spotlightTour.ts` — guided steps (nav, header / optional command palette, Settings); completion stored locally; entry points on Dashboard and Help.
@@ -24,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Lint / DX:** `pnpm run lint` is warning-free — driver.js spotlight popover uses higher CSS specificity instead of `!important`; template literals in `scripts/check-i18n-keys.mjs` and `tests/unit/ollamaService.test.ts`; `biome.json` overrides turn off `noConsole` for `scripts/**/*.mjs`, `services/logger.ts`, and `tests/**`. Release version **1.2.0** aligned in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`. CONTRIBUTING adds Windows Corepack/pnpm and Graphify setup; [`docs/graphify.md`](docs/graphify.md) troubleshooting notes Windows PATH.
 - **Documentation:** [`README.md`](README.md) / [`CONTRIBUTING.md`](CONTRIBUTING.md) / [`CLAUDE.md`](CLAUDE.md) — five UI locales, spotlight tour, Tauri → GitHub Releases on tags; [`docs/CI.md`](docs/CI.md) + [`docs/TAURI-CI.md`](docs/TAURI-CI.md) aligned. Earlier: CI job ids, `.lighthouserc.cjs`, Node 22; [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) disclaimer; [`AUDIT.md`](AUDIT.md) follow-up **2026-05-02**.
 
 ### Refactored

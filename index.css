@@ -334,26 +334,27 @@ select option {
 }
 
 /* ── driver.js spotlight tour ─────────────────────────── */
+/* QNBS-v3: Two-class selectors beat driver.js `.driver-popover` (one class); no !important. */
 .driver-popover.storycraft-driver-popover {
-  background: var(--background-secondary) !important;
-  color: var(--foreground-primary) !important;
-  border: 1px solid var(--border-primary) !important;
-  box-shadow: var(--shadow-md, 0 12px 40px rgba(0, 0, 0, 0.35)) !important;
+  background: var(--background-secondary);
+  color: var(--foreground-primary);
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-md, 0 12px 40px rgba(0, 0, 0, 0.35));
 }
 .driver-popover.storycraft-driver-popover .driver-popover-title {
-  color: var(--foreground-primary) !important;
+  color: var(--foreground-primary);
 }
 .driver-popover.storycraft-driver-popover .driver-popover-description {
-  color: var(--foreground-secondary) !important;
+  color: var(--foreground-secondary);
 }
 .driver-popover.storycraft-driver-popover .driver-popover-navigation-btns button {
-  text-shadow: none !important;
+  text-shadow: none;
 }
 .driver-popover.storycraft-driver-popover button.driver-popover-next-btn {
-  background: var(--background-interactive) !important;
-  color: var(--foreground-interactive) !important;
+  background: var(--background-interactive);
+  color: var(--foreground-interactive);
 }
 .driver-popover.storycraft-driver-popover button.driver-popover-prev-btn,
 .driver-popover.storycraft-driver-popover button.driver-popover-close-btn {
-  color: var(--foreground-secondary) !important;
+  color: var(--foreground-secondary);
 }

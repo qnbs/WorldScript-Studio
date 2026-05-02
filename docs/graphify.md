@@ -168,6 +168,7 @@ The CLAUDE.md section also instructs Claude to:
 
 | Problem | Fix |
 |---------|-----|
+| **Windows:** `graphify` / `uv` not found after install | Add the tool bin directory to **PATH** (uv: `%USERPROFILE%\.local\bin` or `uv tool dir` output); open a **new** terminal. Prefer **PowerShell** or **Git Bash** for running `graphify update .`. |
 | `graphify: command not found` | `uv tool install graphifyy && graphify install` |
 | Graph is stale | `graphify update .` |
 | Hook not firing | `graphify hook install` |

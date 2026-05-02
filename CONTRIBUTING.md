@@ -22,8 +22,25 @@ Thank you for your interest in contributing to StoryCraft Studio — an AI-power
 ### Prerequisites
 
 - **Node.js** ≥ 22 (see [`.nvmrc`](.nvmrc); matches `engines` in [`package.json`](package.json))
-- **pnpm** ≥ 10 (see `packageManager` in `package.json`; Corepack: `corepack enable`)
+- **pnpm** ≥ 10 (see `packageManager` in `package.json`; recommended via **Corepack**, ships with Node)
 - A **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey) (optional if using **Ollama** in the desktop app only)
+
+### Windows: Node, Corepack, and pnpm
+
+1. Install **Node.js 22+** LTS from [nodejs.org](https://nodejs.org/) (includes Corepack) or use **nvm-windows** and install `22` from [`.nvmrc`](.nvmrc).
+2. Open **PowerShell or CMD as Administrator** once and run: `corepack enable`
+3. In the repo folder: `corepack prepare pnpm@10.33.0 --activate` (version matches `packageManager` in [`package.json`](package.json); adjust if that field changes).
+4. Confirm: `pnpm -v` — then `pnpm install` and use `pnpm run …` for all scripts (hooks expect `pnpm` on `PATH`).
+
+If `corepack` is not recognized, reinstall Node or enable the “Tools for Native Modules” / standard installation so `corepack.cmd` is on `PATH`.
+
+### Graphify (optional, Python)
+
+Graphify is a **CLI** (Python/`uv`), not an npm package — see [`docs/graphify.md`](docs/graphify.md). On Windows: install [**uv**](https://docs.astral.sh/uv/getting-started/installation/) or Python 3.10+, then:
+
+`uv tool install graphifyy && graphify install`
+
+Ensure the directory where `graphify.exe` / scripts are placed is on `PATH` (uv prints the location). Verify with `graphify --help`.
 
 ### Installation
 
