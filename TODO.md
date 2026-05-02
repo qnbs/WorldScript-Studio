@@ -26,10 +26,10 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ✅ Dokumentations-Audit (CI.md, README Hub, CONTRIBUTING, AUDIT-Follow-up, Copilot/CLAUDE/SECURITY/Graphify) — 2026-05-02
 - ⬜ Visual Regression Tests (Playwright Screenshots + Storybook)
 - ⬜ Bundle-Size-Budgets pro Chunk (rollup-plugin-visualizer in CI)
-- ⬜ FR/ES/IT Übersetzungen vervollständigen + CI-Gate
+- ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — inhaltliche Übersetzungen können iterativ verbessert werden
 - ⬜ Renovate Auto-Merge für Patch-Updates konfigurieren
-- ⬜ Onboarding-Tour (geführte Schritte) — Demo-Projekt + Hinweis im Welcome-Portal ✅
-- ⬜ Tauri v2 Release-Pipeline: auto-update + code-signing + GitHub Release Artifacts
+- ⬜ Onboarding-Tour (Spotlight / mehrstufig) — Demo + Welcome-Hinweis ✅; Dashboard-Tipps-Banner ✅
+- ⬜ Tauri v2 Release-Pipeline: auto-update + code-signing + Release an GH anbinden (Basis: [`docs/TAURI-CI.md`](docs/TAURI-CI.md) Workflow)
 
 ---
 

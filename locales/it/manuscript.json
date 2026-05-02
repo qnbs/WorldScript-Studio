@@ -1,17 +1,17 @@
 {
-  "manuscript.navigator.title": "Navigator",
-  "manuscript.inspector.title": "Inspector",
-  "manuscript.select": "Select a section from the navigator to begin writing.",
+  "manuscript.addSection": "Add New Section",
   "manuscript.contentPlaceholder": "Write content for {{title}}...",
-  "manuscript.mention.characters": "Characters",
-  "manuscript.mention.worlds": "Worlds",
-  "manuscript.mention.suggestions": "Suggestions",
-  "manuscript.inspector.statsTitle": "Section Stats",
+  "manuscript.deleteSection": "Delete Section",
   "manuscript.inspector.charCount": "Character Count",
   "manuscript.inspector.readTime": "Est. Reading Time",
   "manuscript.inspector.readTimeValue": "~{{time}} min",
-  "manuscript.addSection": "Add New Section",
-  "manuscript.untitledSection": "Untitled Section",
-  "manuscript.deleteSection": "Delete Section",
-  "manuscript.titlePlaceholder": "Section Title"
+  "manuscript.inspector.statsTitle": "Section Stats",
+  "manuscript.inspector.title": "Inspector",
+  "manuscript.mention.characters": "Characters",
+  "manuscript.mention.suggestions": "Suggestions",
+  "manuscript.mention.worlds": "Worlds",
+  "manuscript.navigator.title": "Navigator",
+  "manuscript.select": "Select a section from the navigator to begin writing.",
+  "manuscript.titlePlaceholder": "Section Title",
+  "manuscript.untitledSection": "Untitled Section"
 }

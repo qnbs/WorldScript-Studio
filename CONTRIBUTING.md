@@ -197,9 +197,12 @@ Single toolchain for **lint** and **format** ([`biome.json`](biome.json)):
 
 ```bash
 pnpm run lint       # check (CI-hard-fail)
+pnpm run i18n:check # locale JSON key parity vs English (CI-hard-fail)
 pnpm run lint:fix   # check --write (lint + format)
 pnpm run format     # format only
 ```
+
+Missing keys (e.g. after adding strings to `locales/en/*.json`): run `node scripts/check-i18n-keys.mjs --fix` to copy English placeholders into other languages, then translate in a follow-up.
 
 ### Rule: No API Keys in Logs
 
@@ -242,7 +245,7 @@ Authoritative list: [`AUDIT.md`](AUDIT.md) and [`TODO.md`](TODO.md). Short point
 1. **`StorageBackend` contract** — implement `services/storageBackend.ts` on both backends; use `storageService` in UI (not `dbService` directly) so Tauri and browser stay consistent.
 2. **`app/listenerMiddleware.ts`** — occasional TypeScript friction with `redux-undo`'s `StateWithHistory` (typed carefully at boundaries).
 3. **Collaboration** — optional configurable signaling URL; E2E encryption deferred (roadmap).
-4. **i18n** — FR/ES/IT locale files exist for future work; the in-app selector currently exposes **de** and **en** (see README).
+4. **i18n** — All five locale trees must share the same keys as English (`pnpm run i18n:check`). The in-app selector currently exposes **de** and **en** (see README); FR/ES/IT strings may still mirror EN until translated.
 
 Open a **focused PR per theme** (storage vs. i18n vs. collaboration) to keep review manageable.
 
@@ -254,11 +257,13 @@ Open a **focused PR per theme** (storage vs. i18n vs. collaboration) to keep rev
 2. Write or update tests for your changes
 3. Run the full test suite: `pnpm run test:run`
 4. Ensure Biome passes: `pnpm run lint`
-5. Ensure the build succeeds: `pnpm run build`
-6. Submit a PR against `main` with a clear description
-7. Request review from at least one maintainer
+5. Ensure i18n parity: `pnpm run i18n:check`
+6. Ensure types compile: `pnpm run typecheck`
+7. Ensure the build succeeds: `pnpm run build`
+8. Submit a PR against `main` with a clear description
+9. Request review from at least one maintainer
 
-The CI pipeline will automatically run lint, typecheck, tests, and build on every PR.
+The CI pipeline will automatically run lint, i18n check, typecheck, tests, and build on every PR.
 
 ---
 

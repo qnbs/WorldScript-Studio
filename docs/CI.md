@@ -13,6 +13,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 | Node.js | [`.nvmrc`](../.nvmrc) (currently **22**) |
 | Package manager | **pnpm** 10.x ([`package.json`](../package.json) `packageManager`) |
 | Lint / format | **Biome** (`pnpm run lint`, `lint:fix`) |
+| i18n parity | **`pnpm run i18n:check`** — every locale must expose the same keys as `locales/en/*.json` (see [`scripts/check-i18n-keys.mjs`](../scripts/check-i18n-keys.mjs); optional `--fix` copies missing strings from EN) |
 | Types | **TypeScript** `pnpm run typecheck` |
 | Unit tests | **Vitest** with V8 coverage (`pnpm exec vitest run --coverage`) |
 | E2E | **Playwright** (`pnpm run test:e2e` with `CI=true`) |
@@ -51,7 +52,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 | `storybook` | `quality` | Static Storybook → artifact |
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
-> **Note:** There is **no** separate `tauri` or `build-node` job in the checked-in workflow; desktop/release builds are documented in [`README.md`](../README.md) / [`CONTRIBUTING.md`](../CONTRIBUTING.md) for local or future automation.
+> **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); see [`docs/TAURI-CI.md`](TAURI-CI.md). They do not block the web deploy graph above.
 
 ---
 
@@ -67,6 +68,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 ```bash
 pnpm install --frozen-lockfile
 pnpm run lint
+pnpm run i18n:check
 pnpm run typecheck
 pnpm exec vitest run --coverage
 pnpm run build
@@ -103,6 +105,7 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | File | Role |
 |------|------|
 | `.github/workflows/ci.yml` | Pipeline definition |
+| `.github/workflows/tauri-build.yml` | Optional desktop bundle builds |
 | `.nvmrc` | Node version for Actions and dev |
 | `.lighthouserc.cjs` | Lighthouse assertions and collect URL |
 | `vitest.config.ts` | Coverage thresholds, reporters |

@@ -76,6 +76,9 @@ jobs:
       - name: Lint (Biome)
         run: pnpm run lint
 
+      - name: i18n key parity (vs en)
+        run: pnpm run i18n:check
+
       - name: Typecheck (tsc)
         run: pnpm run typecheck
 

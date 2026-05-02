@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **i18n CI gate:** `pnpm run i18n:check` (`scripts/check-i18n-keys.mjs`) enforces identical translation keys across `en`/`de`/`fr`/`es`/`it`; runs in the quality job. Optional `--fix` fills missing keys from English.
+- **Dashboard onboarding:** Dismissible “Quick tips” banner (sidebar, AI settings, auto-save / snapshots) stored per device via `localStorage`.
+- **Tauri workflow:** [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) builds desktop bundles on `workflow_dispatch` and `v*` tags (Ubuntu/Windows/macOS artifacts). Documented in [`docs/TAURI-CI.md`](docs/TAURI-CI.md).
 - **Welcome portal:** Localized demo project (outline + first chapter) loadable as in-app import; first-visit hint and CTA. `hasSavedData` now uses `storageService` so the welcome flow matches the active backend (browser IndexedDB or Tauri FS).
 - **Storage contract module:** `StorageBackend` + `SaveProjectInput` (flat `StoryProject` or Redux `{ data }` / `{ present }` envelope) in `services/storageBackend.ts`; Tauri FS unwraps to flat JSON on disk.
 

@@ -299,12 +299,12 @@ pnpm run preview
 
 ### 🧪 CI & Local Validation
 
-This repository uses a **single** workflow, [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Authoritative job graph and local parity commands: **[`docs/CI.md`](docs/CI.md)**.
+The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Optional **desktop** bundles: [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) (`workflow_dispatch` / `v*` tags). Full reference: **[`docs/CI.md`](docs/CI.md)** and **[`docs/TAURI-CI.md`](docs/TAURI-CI.md)**.
 
 | Job          | When / needs        | What it does |
 | ------------ | -------------------- | ------------ |
 | `security`   | every run            | `pnpm audit --audit-level=high`; PRs: dependency review |
-| `quality`    | after `security`     | Biome, `tsc`, Vitest + coverage (Node **LTS** + **current**) |
+| `quality`    | after `security`     | Biome, **i18n key check**, `tsc`, Vitest + coverage (Node **LTS** + **current**) |
 | `build`      | after `quality`      | Production Vite build; on `main` (non-PR): Pages artifact |
 | `e2e`        | after `quality`      | Playwright (Chromium, `CI=true`) |
 | `lighthouse` | after `build`        | LHCI against `dist` (assertions in **`.lighthouserc.cjs`**) |
@@ -374,6 +374,7 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | [`README.md`](README.md) | Product overview, features, getting started (this file) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, Biome/Vitest/Playwright, architecture notes |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
+| [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow (manual/tag builds, artifacts) |
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
 | [`ROADMAP.md`](ROADMAP.md) / [`TODO.md`](TODO.md) | Planning and sprint tasks |
 | [`CHANGELOG.md`](CHANGELOG.md) | Keep a Changelog–style release notes |

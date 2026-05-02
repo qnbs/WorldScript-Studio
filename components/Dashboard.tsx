@@ -1,8 +1,9 @@
 import type { FC } from 'react';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ICONS } from '../constants';
 import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
 import { useDashboard } from '../hooks/useDashboard';
+import { useTranslation } from '../hooks/useTranslation';
 import type { View } from '../types';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
@@ -491,11 +492,67 @@ const DashboardModals: FC = () => {
   );
 };
 
+const DASHBOARD_ONBOARDING_KEY = 'storycraft-dashboard-onboarding-dismissed';
+
+const OnboardingTipsBanner: FC = () => {
+  const { t } = useTranslation();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(DASHBOARD_ONBOARDING_KEY)) setVisible(true);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+
+  const dismiss = () => {
+    try {
+      localStorage.setItem(DASHBOARD_ONBOARDING_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div
+      role="region"
+      aria-label={t('dashboard.onboarding.title')}
+      className="rounded-xl border border-[var(--border-primary)] bg-[var(--background-secondary)]/80 p-5 shadow-sm"
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--foreground-primary)]">
+            {t('dashboard.onboarding.title')}
+          </h2>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[var(--foreground-secondary)]">
+            <li>{t('dashboard.onboarding.tip1')}</li>
+            <li>{t('dashboard.onboarding.tip2')}</li>
+            <li>{t('dashboard.onboarding.tip3')}</li>
+          </ul>
+        </div>
+        <Button
+          type="button"
+          variant="primary"
+          className="shrink-0 self-start"
+          onClick={dismiss}
+        >
+          {t('dashboard.onboarding.dismiss')}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 // --- Main Composition ---
 
 const DashboardUI: FC = () => {
   return (
     <div className="space-y-10 pb-16 max-w-7xl mx-auto">
+      <OnboardingTipsBanner />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-[minmax(340px,auto)]">
         <ProjectDetails />
         <GoalTracker />

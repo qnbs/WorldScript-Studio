@@ -28,6 +28,7 @@
 
 - **`StorageBackend`:** Interface extracted to [`services/storageBackend.ts`](services/storageBackend.ts) to remove the `storageService` ↔ `dbService` circular type dependency; `StorageManager.saveProject` is strictly `StoryProject`.
 - **Welcome portal:** `hasSavedData` uses `storageService` (correct backend on Tauri). Localized **demo project** import (outline + chapter) for first-time onboarding.
+- **i18n gate:** `scripts/check-i18n-keys.mjs` + `pnpm run i18n:check` in CI (key parity vs `en`). **Tauri:** `.github/workflows/tauri-build.yml` + [`docs/TAURI-CI.md`](docs/TAURI-CI.md) for tag/manual desktop artifacts.
 
 ---
 

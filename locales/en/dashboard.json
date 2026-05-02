@@ -45,5 +45,10 @@
   "dashboard.details.loglinePlaceholder": "A one-sentence summary of your story.",
   "dashboard.details.aiLoglineButton": "AI Logline Assistant",
   "dashboard.loglineModal.title": "AI Logline Suggestions",
-  "dashboard.loglineModal.loading": "Generating brilliant loglines..."
+  "dashboard.loglineModal.loading": "Generating brilliant loglines...",
+  "dashboard.onboarding.title": "Quick tips",
+  "dashboard.onboarding.tip1": "Use the sidebar to switch between Manuscript, Characters, Worlds, and Export.",
+  "dashboard.onboarding.tip2": "Add an API key in Settings to unlock cloud AI, or choose Ollama for local models.",
+  "dashboard.onboarding.tip3": "Your work saves automatically to this device — snapshots are available under Version Control.",
+  "dashboard.onboarding.dismiss": "Got it"
 }

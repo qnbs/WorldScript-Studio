@@ -12,6 +12,7 @@
     "prepare": "simple-git-hooks",
     "dev": "vite",
     "prebuild": "node scripts/build-i18n.mjs",
+    "i18n:check": "node scripts/check-i18n-keys.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
