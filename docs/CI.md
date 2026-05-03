@@ -18,6 +18,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 | Unit tests | **Vitest** with V8 coverage (`pnpm exec vitest run --coverage`) |
 | E2E | **Playwright** (`pnpm run test:e2e` with `CI=true`) |
 | Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs`) |
+| Bundle guardrails | **`pnpm run bundle:budget`** (max chunk KB) + **`pnpm run analyze`** (rollup visualizer → `dist/bundle-analysis.html`, artifact in CI) |
 
 ---
 
@@ -46,7 +47,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; on PRs: `dependency-review-action` |
 | `quality` | `security` | Matrix **Node `lts/*`** and **`node` (current)** → Biome lint, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
-| `build` | `quality` | Production `pnpm run build`, `dist` artifact; on `main` (non-PR): Pages artifact |
+| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact |
 | `e2e` | `quality` | Playwright Chromium, `CI=true` |
 | `lighthouse` | `build` | LHCI against downloaded `dist` (hard-fail: `assert.exitCode=0`) |
 | `storybook` | `quality` | Static Storybook → artifact |
@@ -72,6 +73,8 @@ pnpm run i18n:check
 pnpm run typecheck
 pnpm exec vitest run --coverage
 pnpm run build
+pnpm run bundle:budget
+pnpm run analyze   # optional locally; CI uploads HTML report
 CI=true pnpm run test:e2e
 pnpm exec lhci autorun --assert.exitCode=0   # after build + serve/preview as configured in .lighthouserc.cjs
 ```
@@ -109,6 +112,8 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | `.nvmrc` | Node version for Actions and dev |
 | `.lighthouserc.cjs` | Lighthouse assertions and collect URL |
 | `vitest.config.ts` | Coverage thresholds, reporters |
+| `scripts/check-bundle-budget.mjs` | Chunk size budget after `pnpm run build` |
+| `renovate.json` | Renovate Bot: patch auto-merge policy |
 | `playwright.config.ts` | E2E browser and reporter paths |
 
 ---

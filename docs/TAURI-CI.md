@@ -27,6 +27,11 @@ pnpm exec tauri build
 
 Linux dev deps match the Ubuntu job (WebKitGTK 4.1, AppIndicator, librsvg, patchelf).
 
+## Auto-update & signing
+
+- Updater plugin is wired in Rust + `tauri.conf.json`; full operational steps (keys, `latest.json`, CI secrets) are in [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md).
+- The **Tauri desktop build** workflow passes `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` when configured in repository secrets (optional — omit until keys exist).
+
 ## Follow-ups (not automated here)
 
-- Code signing (Windows/macOS) and `tauri-plugin-updater` (auto-update) remain tracked in [`ROADMAP.md`](../ROADMAP.md) / [`TODO.md`](../TODO.md).
+- Production code signing (especially macOS notarization) and publishing `latest.json` for each release remain maintainer-specific; track progress in [`ROADMAP.md`](../ROADMAP.md) / [`TODO.md`](../TODO.md).

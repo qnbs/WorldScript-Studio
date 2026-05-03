@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { charactersAdapter, worldsAdapter } from '../../features/project/adapters';
+import { saveEnvelopeFromProjectData } from '../../services/storageBackend';
 
 // Mock both backends before importing storageService
 const mockDb = {
@@ -51,8 +53,17 @@ describe('storageService (IndexedDB backend in browser)', () => {
   });
 
   it('delegates saveProject to dbService', async () => {
-    await storageService.saveProject({} as never);
-    expect(mockDb.saveProject).toHaveBeenCalledWith({});
+    const payload = saveEnvelopeFromProjectData({
+      id: 'p1',
+      title: 'T',
+      logline: 'L',
+      characters: charactersAdapter.getInitialState(),
+      worlds: worldsAdapter.getInitialState(),
+      outline: [],
+      manuscript: [],
+    });
+    await storageService.saveProject(payload);
+    expect(mockDb.saveProject).toHaveBeenCalledWith(payload);
   });
 
   it('delegates loadProject to dbService', async () => {

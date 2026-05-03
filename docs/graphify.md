@@ -24,10 +24,13 @@ Pick **one** install path; all provide the `graphify` command (or `python -m gra
 From the repository root (after Node deps: `pnpm install`):
 
 ```bash
+pnpm run graphify:bootstrap # pip install graphifyy (first machine only; requires Python 3.11+ with pip)
 pnpm run graphify:install   # registers Claude / VS Code / Copilot integrations (upstream `graphify install`)
 pnpm run graphify:hooks     # optional: install post-commit / post-checkout hooks that run `graphify update .`
 pnpm run graphify:update    # generate AST graph under graphify-out/ (no API cost)
 ```
+
+**Windows:** If `python` opens the Microsoft Store or `graphify` is “not found”, install Python from **python.org** (tick **Add to PATH**), then run `pnpm run graphify:bootstrap` again.
 
 **pnpm wrappers:** [`scripts/graphify-cli.mjs`](../scripts/graphify-cli.mjs) tries `graphify` on `PATH`, then `py -m graphify` / `python -m graphify`, so **`pnpm run graphify:*` works even when Windows did not add pip’s `Scripts` folder to `PATH`**.
 
@@ -52,6 +55,7 @@ Tasks are pre-defined in [`.vscode/tasks.json`](../.vscode/tasks.json) (e.g. **G
 
 | Script | Purpose |
 |--------|---------|
+| `pnpm run graphify:bootstrap` | `pip install graphifyy` via Python (first-time setup) |
 | `pnpm run graphify:install` | `graphify install` (skills / editor hooks) |
 | `pnpm run graphify:update` | `graphify update .` — refresh AST graph |
 | `pnpm run graphify:hooks` | `graphify hook install` — git hooks for auto-update |

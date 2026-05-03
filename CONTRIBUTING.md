@@ -41,12 +41,13 @@ Graphify is the **`graphifyy`** package on PyPI (CLI command `graphify`), not an
 **Recommended install (matches many setups):**
 
 ```bash
-pip install graphifyy
+pnpm run graphify:bootstrap  # pip install/upgrade graphifyy (needs Python 3.11+ with pip)
 pnpm run graphify:install    # registers IDE/git integrations (run once per machine)
 pnpm run graphify:hooks      # optional: auto `graphify update .` on commit/checkout
+pnpm run graphify:update     # refresh graphify-out/ (AST-only)
 ```
 
-If `graphify` is not on your `PATH` (common on Windows after plain `pip`), use **`pnpm run graphify:*`** — they call [`scripts/graphify-cli.mjs`](scripts/graphify-cli.mjs), which falls back to `py -m graphify` / `python -m graphify`.
+If `graphify` is not on your `PATH` (common on Windows after plain `pip`), use **`pnpm run graphify:*`** — they call [`scripts/graphify-cli.mjs`](scripts/graphify-cli.mjs). On **Windows** the launcher prefers **`python -m graphify`** (then `python3`, then `py`) so it works when `graphify.exe` lives under the pip user `Scripts` folder but that folder is not on `PATH`.
 
 **Alternatives:** `pipx install graphifyy` or `uv tool install graphifyy` (often put `graphify` on `PATH` automatically). On Windows, pip user scripts often live under `%APPDATA%\Python\Python3xx\Scripts` — add that directory to your user `PATH` if you want the bare `graphify` command everywhere.
 
@@ -152,6 +153,15 @@ chore: update dependencies
 pnpm run test         # Run in watch mode
 pnpm run test:run     # Run once (CI mode)
 pnpm run test:coverage  # With coverage report
+```
+
+### Bundle size (matches CI `build` job)
+
+After a production build:
+
+```bash
+pnpm run bundle:budget   # fails if any dist/assets/*.js chunk exceeds default cap (see script)
+pnpm run analyze         # writes dist/bundle-analysis.html (visualizer does not auto-open when CI=true)
 ```
 
 ### Local CI Simulation

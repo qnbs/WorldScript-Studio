@@ -1,6 +1,8 @@
 # ============================================================
 # StoryCraft Studio – CI/CD Pipeline
-# security → lint → typecheck → test → build → lighthouse → storybook → deploy
+# security → quality (lint, i18n, tsc, vitest+coverage) → build (+chunk budget, rollup analyze)
+#   ├→ e2e | storybook (parallel) ; lighthouse after build
+# deploy (main): needs build + e2e → GitHub Pages
 # ============================================================
 
 name: CI / CD
@@ -128,6 +130,21 @@ jobs:
         env:
           NODE_ENV: production
 
+      - name: Bundle chunk size budget
+        run: pnpm run bundle:budget
+
+      - name: Bundle analysis (rollup visualizer)
+        run: pnpm run analyze
+        env:
+          NODE_ENV: production
+
+      - name: Upload bundle analysis HTML
+        uses: actions/upload-artifact@v6
+        with:
+          name: bundle-analysis
+          path: dist/bundle-analysis.html
+          retention-days: 14
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v6
         with:
@@ -226,7 +243,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v6
         with:
           name: dist
           path: ./dist

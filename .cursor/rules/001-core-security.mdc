@@ -1,0 +1,30 @@
+---
+description: Protect secrets and logs when touching any project file
+globs: **/*
+alwaysApply: false
+---
+
+# Core Security & Betrieb
+
+## Secrets & Konfiguration
+
+- API-Schlüssel (Gemini u. a.), Tokens und Passwörter **niemals** committen oder in Quelltext hardcoden. Konvention: `.env` / `.env.local` (nicht versioniert), nur `import.meta.env.VITE_*` für explizit exponierte Client-Variablen.
+- Verschlüsselte Nutzer-Keys folgen dem bestehenden **IndexedDB**-Muster (`services/dbService.ts`); keine zweite „Geheimablage“ erfinden ohne Abstimmung.
+
+## Fehlerbehandlung
+
+- Nutzer sichtbare Fehler: kurz, handlungsorientiert; technische Details nur in `services/logger.ts` oder für Dev (`warn`/`error` gemäß Biome).
+- Async-Pfade: sinnvolle `try/catch` oder Result-Patterns; keine stillen Swallows außer dokumentiert (z. B. erwarteter Abort).
+
+## Logging
+
+- Kein `console.log` in Produktionspfaden (Biome `noConsole` außer Allowlist). Für Diagnose `logger` oder erlaubte `console.warn`/`console.error`.
+- **Niemals** Schlüssel, IVs oder Klartext-Payloads in Logs ausgeben.
+
+<example>
+API-Key aus UI speichern: nur über bestehende DB-/Settings-Pfade; Validierung und Speicherung wie in `dbService`/`settingsSlice`.
+</example>
+
+<example type="invalid">
+`const key = 'AIza...'` im TSX oder Log-Zeile `console.log('gemini key', key)`.
+</example>

@@ -95,6 +95,10 @@ const defaultSettings: Settings = {
     publicSharing: false,
     commentSystem: false,
     versionHistory: true,
+    webrtcSignalingUrls: [
+      'wss://y-webrtc-signaling.fly.dev',
+      'wss://signaling.yjs.dev',
+    ],
   },
   integrations: {
     syncProvider: 'none',

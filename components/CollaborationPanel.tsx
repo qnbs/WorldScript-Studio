@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
+import { useAppSelector } from '../app/hooks';
 import { useTranslation } from '../hooks/useTranslation';
 import { collaborationService } from '../services/collaborationService';
 import type { CollaborationUser } from '../types';
@@ -88,6 +89,9 @@ const sanitizeRoomInput = (value: string): string =>
 
 export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClose, projectId }) => {
   const { t } = useTranslation();
+  const webrtcSignalingUrls = useAppSelector(
+    (s) => s.settings.collaboration.webrtcSignalingUrls,
+  );
   const panelRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [localUser, setLocalUser] = useState<CollaborationUser>(getLocalUser);
@@ -192,6 +196,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
         roomId,
         user,
         sanitizeRoomInput(roomPassword) || undefined,
+        webrtcSignalingUrls,
       );
 
       cleanupRef.current = () => collaborationService.disconnect();
@@ -206,7 +211,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
     } finally {
       setIsConnecting(false);
     }
-  }, [customRoomId, projectId, localUser, displayName, roomPassword, t]);
+  }, [customRoomId, projectId, localUser, displayName, roomPassword, t, webrtcSignalingUrls]);
 
   const handleDisconnect = useCallback(() => {
     collaborationService.disconnect();

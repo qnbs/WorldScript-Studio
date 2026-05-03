@@ -310,7 +310,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | ------------ | -------------------- | ------------ |
 | `security`   | every run            | `pnpm audit --audit-level=high`; PRs: dependency review |
 | `quality`    | after `security`     | Biome, **i18n key check**, `tsc`, Vitest + coverage (Node **LTS** + **current**) |
-| `build`      | after `quality`      | Production Vite build; on `main` (non-PR): Pages artifact |
+| `build`      | after `quality`      | Production Vite build, **chunk budget** (`bundle:budget`), **rollup analyze** artifact; on `main` (non-PR): Pages artifact |
 | `e2e`        | after `quality`      | Playwright (Chromium, `CI=true`) |
 | `lighthouse` | after `build`        | LHCI against `dist` (assertions in **`.lighthouserc.cjs`**) |
 | `storybook`  | after `quality`      | Static Storybook build artifact |

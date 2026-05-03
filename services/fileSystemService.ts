@@ -158,7 +158,12 @@ import type {
   World,
 } from '../types';
 import { logger } from './logger';
-import type { SaveProjectInput, StorageBackend } from './storageBackend';
+import { DEFAULT_WEBRTC_SIGNALING_URLS } from './collaborationService';
+import {
+  normalizeSaveProjectInputToStoryProject,
+  type SaveProjectInput,
+  type StorageBackend,
+} from './storageBackend';
 
 // Envelope stored in each snapshot file — outer shell is plain JSON, `data` field is compressed.
 interface SnapshotEnvelope {
@@ -167,17 +172,6 @@ interface SnapshotEnvelope {
   date: string;
   wordCount: number;
   data: string; // compressData(projectData)
-}
-
-/** Normalize Redux `{ data }` / undo envelope to flat project JSON on disk. */
-function flattenSaveProjectInput(project: SaveProjectInput): StoryProject {
-  if ('present' in project && project.present?.data) {
-    return project.present.data as StoryProject;
-  }
-  if ('data' in project && project.data) {
-    return project.data as StoryProject;
-  }
-  return project as StoryProject;
 }
 
 class FileSystemService implements StorageBackend {
@@ -211,7 +205,7 @@ class FileSystemService implements StorageBackend {
 
   // Project management
   async saveProject(project: SaveProjectInput): Promise<void> {
-    const flat = flattenSaveProjectInput(project);
+    const flat = normalizeSaveProjectInputToStoryProject(project);
 
     // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
@@ -378,7 +372,25 @@ class FileSystemService implements StorageBackend {
       }
 
       const content = await retryFs(() => apis.readTextFile(settingsFile));
-      return JSON.parse(content);
+      const parsed = JSON.parse(content) as Settings;
+      const collabDefaults = {
+        realTimeCollaboration: false,
+        publicSharing: false,
+        commentSystem: false,
+        versionHistory: true,
+        webrtcSignalingUrls: [...DEFAULT_WEBRTC_SIGNALING_URLS],
+      };
+      parsed.collaboration = {
+        ...collabDefaults,
+        ...(parsed.collaboration ?? {}),
+      };
+      if (
+        !parsed.collaboration.webrtcSignalingUrls ||
+        parsed.collaboration.webrtcSignalingUrls.length === 0
+      ) {
+        parsed.collaboration.webrtcSignalingUrls = [...DEFAULT_WEBRTC_SIGNALING_URLS];
+      }
+      return parsed;
     } catch (error) {
       logger.error('Failed to load settings:', error);
       return null;

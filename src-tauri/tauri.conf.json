@@ -23,12 +23,13 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com http://localhost:11434 http://127.0.0.1:11434 wss://y-webrtc-signaling.fly.dev; img-src 'self' data: blob:; media-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com http://localhost:11434 http://127.0.0.1:11434 wss://y-webrtc-signaling.fly.dev wss: ws:; img-src 'self' data: blob:; media-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -36,5 +37,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": false,
+      "endpoints": [
+        "https://github.com/qnbs/StoryCraft-Studio/releases/latest/download/latest.json"
+      ],
+      "pubkey": "RWSVi1D8cuV1UPD9tbeeJeRkwzLZZl3naVlIs8/5YJ0fLOUfz/46xUsi"
+    }
   }
 }

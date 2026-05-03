@@ -2,6 +2,7 @@ import * as LZString from 'lz-string';
 import type { ProjectData } from '../features/project/projectSlice';
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
 import { logger } from './logger';
+import { DEFAULT_WEBRTC_SIGNALING_URLS } from './collaborationService';
 import type { SaveProjectInput, StorageBackend } from './storageBackend';
 
 const DB_NAME = 'storycraft-db';
@@ -595,6 +596,24 @@ class IndexedDBService implements StorageBackend {
         indentFirstLine: false,
         ...incoming,
       } as Settings;
+      const incomingCollab = incoming['collaboration'] as Partial<Settings['collaboration']> | undefined;
+      const collabDefaults: Settings['collaboration'] = {
+        realTimeCollaboration: false,
+        publicSharing: false,
+        commentSystem: false,
+        versionHistory: true,
+        webrtcSignalingUrls: [...DEFAULT_WEBRTC_SIGNALING_URLS],
+      };
+      validSettings.collaboration = {
+        ...collabDefaults,
+        ...(incomingCollab ?? {}),
+      };
+      if (
+        !validSettings.collaboration.webrtcSignalingUrls ||
+        validSettings.collaboration.webrtcSignalingUrls.length === 0
+      ) {
+        validSettings.collaboration.webrtcSignalingUrls = [...DEFAULT_WEBRTC_SIGNALING_URLS];
+      }
     }
 
     const result: PersistedState = {};

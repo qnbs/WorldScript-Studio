@@ -85,16 +85,11 @@
 - **Added:** 6 new CSS custom properties (`--overlay-backdrop`, `--glass-bg`, `--glass-bg-hover`, `--glass-border`, `--glass-highlight`, `--card-gradient-overlay`) with appropriate values for both dark and light themes.
 - **Fixed:** Aurora blob opacity reduced from 0.25 to 0.08 in light mode.
 
-### Tauri Feature Parity (Tech Debt)
+### Tauri Feature Parity (historical baseline vs current — 2026-05)
 
-`fileSystemService.ts` remains behind `dbService.ts` in the following areas (deferred to a dedicated Tauri hardening sprint):
+The bullet list below described **pre-v1.2** gaps between `fileSystemService.ts` and `dbService.ts`. **As of v1.2.0**, parity work is **completed** (see `ROADMAP.md`, `TODO.md`, archive): LZ-String compression, auto-snapshots with numeric IDs aligned with IDB, retry around filesystem ops, `deleteImage()` / `hasSavedData()`, Story Codex + RAG vectors under per-project paths, and routing via the shared `StorageBackend` contract (`services/storageBackend.ts`).
 
-- No LZ-String compression for stored data
-- No auto-snapshot system (manual snapshots only)
-- No RAG vector store or Story Codex store
-- Snapshot ID type mismatch (`string` vs `number` in dbService)
-- No retry logic for filesystem operations
-- Missing `deleteImage()` and `hasSavedData()` implementations
+**Remaining desktop release items** are **not** feature-parity gaps but **v1.2.1 release engineering**: Tauri v2 **auto-update** (`tauri-plugin-updater`), **code-signing**, and CI/release docs (`docs/TAURI-CI.md`, `.github/workflows/tauri-build.yml`).
 
 ## Executive Summary
 
@@ -111,10 +106,10 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 | PWA / Offline    | ★★★★★  | Workbox, versioned caches, smart strategies                |
 | State Management | ★★★★☆  | Redux-Undo well integrated, auto-save validated            |
 | Security         | ★★★★☆  | CSP hardened, non-extractable CryptoKey, PSK collab, import validation |
-| Test Coverage    | ★★★☆☆  | 113+ unit tests, glob-based coverage, honest all-up thresholds |
+| Test Coverage    | ★★★★☆  | 300+ Vitest-Tests (Unit), Playwright-E2E, glob-basierte Coverage-Floors in `vitest.config.ts` |
 | Documentation    | ★★★★★  | README, CONTRIBUTING, ROADMAP, TODO, CHANGELOG, AUDIT      |
 | Performance      | ★★★★☆  | Code-splitting with 10+ manual chunks, Lighthouse CI       |
-| CI/CD            | ★★★★★  | Full pipeline with hard-fail lint/typecheck + coverage     |
+| CI/CD            | ★★★★★  | security→quality→build (inkl. i18n-Gate, bundle:budget, analyze-Artifact), e2e, Lighthouse, Storybook, Pages-Deploy |
 
 ---
 

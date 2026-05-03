@@ -2,14 +2,34 @@ import type { ProjectData } from '../features/project/projectSlice';
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
 
 /**
+ * Redux-undo / auto-save shape (not a flat `StoryProject` export).
+ * Kept separate from `StoryProject` so call-sites can type auto-save without casts.
+ */
+export interface SaveProjectEnvelope {
+  data?: ProjectData;
+  present?: { data: ProjectData };
+}
+
+/**
  * Payload from auto-save / Redux (`{ data }` envelope) or a flat exported `StoryProject`.
  */
-export type SaveProjectInput =
-  | StoryProject
-  | {
-      data?: ProjectData;
-      present?: { data: ProjectData };
-    };
+export type SaveProjectInput = StoryProject | SaveProjectEnvelope;
+
+/** Auto-save from the current `ProjectData` (listener middleware) — returns a properly typed envelope. */
+export function saveEnvelopeFromProjectData(data: ProjectData): SaveProjectEnvelope {
+  return { data };
+}
+
+/** Single normalization path for filesystem / UI: flat `StoryProject` from any save input. */
+export function normalizeSaveProjectInputToStoryProject(project: SaveProjectInput): StoryProject {
+  if ('present' in project && project.present?.data) {
+    return project.present.data as StoryProject;
+  }
+  if ('data' in project && project.data) {
+    return project.data as StoryProject;
+  }
+  return project as StoryProject;
+}
 
 /**
  * Contract implemented by IndexedDB (`dbService`) and Tauri filesystem (`fileSystemService`).

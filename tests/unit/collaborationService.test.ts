@@ -28,7 +28,11 @@ if (!globalThis.crypto?.subtle) {
   globalThis.crypto.subtle.digest = mockDigest as unknown as SubtleCrypto['digest'];
 }
 
-import { collaborationService } from '../../services/collaborationService';
+import {
+  collaborationService,
+  DEFAULT_WEBRTC_SIGNALING_URLS,
+  resolveWebRtcSignalingUrls,
+} from '../../services/collaborationService';
 
 // Mock y-webrtc and yjs
 vi.mock('y-webrtc', () => {
@@ -60,6 +64,18 @@ vi.mock('yjs', () => {
 describe('collaborationService', () => {
   beforeEach(() => {
     collaborationService.disconnect();
+  });
+
+  describe('resolveWebRtcSignalingUrls', () => {
+    it('returns defaults when empty or invalid', () => {
+      expect(resolveWebRtcSignalingUrls(undefined)).toEqual([...DEFAULT_WEBRTC_SIGNALING_URLS]);
+      expect(resolveWebRtcSignalingUrls([])).toEqual([...DEFAULT_WEBRTC_SIGNALING_URLS]);
+      expect(resolveWebRtcSignalingUrls(['http://bad'])).toEqual([...DEFAULT_WEBRTC_SIGNALING_URLS]);
+    });
+
+    it('keeps valid ws URLs', () => {
+      expect(resolveWebRtcSignalingUrls(['wss://a.example/ws'])).toEqual(['wss://a.example/ws']);
+    });
   });
 
   describe('initial state', () => {

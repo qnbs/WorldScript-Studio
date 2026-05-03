@@ -16,6 +16,7 @@
     "graphify": "node scripts/graphify-cli.mjs",
     "graphify:install": "node scripts/graphify-cli.mjs install",
     "graphify:update": "node scripts/graphify-cli.mjs update .",
+    "graphify:bootstrap": "node scripts/graphify-bootstrap.mjs",
     "graphify:hooks": "node scripts/graphify-cli.mjs hook install",
     "graphify:status": "node scripts/graphify-cli.mjs hook status",
     "build": "vite build",
@@ -36,6 +37,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "analyze": "ANALYZE=true vite build",
+    "bundle:budget": "node scripts/check-bundle-budget.mjs",
     "dev:tauri": "tauri dev"
   },
   "dependencies": {

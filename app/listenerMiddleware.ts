@@ -4,7 +4,7 @@ import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { logger } from '../services/logger';
-import type { SaveProjectInput } from '../services/storageBackend';
+import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
 import type { Character, World } from '../types';
 import type { AppDispatch, RootState } from './store';
@@ -42,7 +42,7 @@ listenerMiddleware.startListening({
         return;
       }
 
-      const projectDataToSave = { data: presentData };
+      const projectDataToSave = saveEnvelopeFromProjectData(presentData);
 
       try {
         const serialized = JSON.stringify(projectDataToSave);
@@ -55,7 +55,7 @@ listenerMiddleware.startListening({
         /* non-critical — proceed with save */
       }
 
-      await storageService.saveProject(projectDataToSave as SaveProjectInput);
+      await storageService.saveProject(projectDataToSave);
 
       listenerApi.dispatch(statusActions.setSavingStatus('saved'));
       await listenerApi.delay(2000);

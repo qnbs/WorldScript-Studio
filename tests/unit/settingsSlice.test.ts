@@ -239,6 +239,7 @@ describe('settingsSlice', () => {
     expect(state.collaboration.realTimeCollaboration).toBe(true);
     expect(state.collaboration.commentSystem).toBe(true);
     expect(state.collaboration.versionHistory).toBe(true);
+    expect(state.collaboration.webrtcSignalingUrls.length).toBeGreaterThan(0);
   });
 
   it('setIntegrations merges integration settings', () => {

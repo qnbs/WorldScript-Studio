@@ -1,0 +1,30 @@
+---
+description: Keep files small and logic reusable across the TypeScript codebase
+globs: **/*
+alwaysApply: false
+---
+
+# Architektur: KISS, DRY, Dateigrößen
+
+## Prinzipien
+
+- **KISS:** Einfachste Lösung, die Typesafety und Tests nicht bricht.
+- **DRY:** Wiederholte Logik in `services/`, `hooks/` oder `features/*/thunks` auslagern, nicht copy-paste über Views.
+
+## Dateigrößen
+
+- **Ziel:** 200–700 Zeilen pro Datei. **Unter** 200 ist unkritisch; **über** 700: zwanghaft splitten (Untermodul, Hook, Selektoren, Tests).
+- Komplexe UI- oder Reducer-Logik in Hilfsfunktionen mit klaren Signaturen extrahieren.
+
+## Aufteilung
+
+- Neue Schnittstellen an `types.ts` oder Feature-Typdateien andocken, nicht „any“-Workarounds.
+- Redux: Slices schlank halten; schwere Nebenwirkungen in Thunks (`features/project/thunks`).
+
+<example>
+Manuskript-View >700 Zeilen: View splitten, Hilfen nach `hooks/useManuscript*.ts` oder Präsentationskomponenten unter `components/`.
+</example>
+
+<example type="invalid">
+700+ Zeilen Datei nur mit Inline-Kommentaren „Abschnitt 5“ markieren, ohne echte Modulaufteilung.
+</example>

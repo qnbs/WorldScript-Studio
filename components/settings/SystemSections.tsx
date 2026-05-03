@@ -1,8 +1,10 @@
 import type { FC } from 'react';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../../services/collaborationService';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
+import { Textarea } from '../ui/Textarea';
 import { ToggleSwitch } from './SettingsShared';
 
 export const AccessibilitySection: FC = () => {
@@ -369,6 +371,38 @@ export const CollaborationSection: FC = () => {
                 })
               }
             />
+          </div>
+          <div>
+            <label
+              htmlFor="settings-webrtc-signaling-urls"
+              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+            >
+              {t('settings.collaboration.webrtcSignalingUrls')}
+            </label>
+            <Textarea
+              id="settings-webrtc-signaling-urls"
+              className="min-h-[5.5rem] font-mono text-sm"
+              value={settings.collaboration.webrtcSignalingUrls.join('\n')}
+              onChange={(e) => {
+                const lines = e.target.value
+                  .split('\n')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                handleSettingChange('collaboration', {
+                  ...settings.collaboration,
+                  webrtcSignalingUrls:
+                    lines.length > 0 ? lines : [...DEFAULT_WEBRTC_SIGNALING_URLS],
+                });
+              }}
+              placeholder={t('settings.collaboration.webrtcSignalingUrlsPlaceholder')}
+              aria-describedby="settings-webrtc-signaling-help"
+            />
+            <p
+              id="settings-webrtc-signaling-help"
+              className="mt-1 text-xs text-[var(--foreground-tertiary)]"
+            >
+              {t('settings.collaboration.webrtcSignalingUrlsHelp')}
+            </p>
           </div>
         </CardContent>
       </Card>

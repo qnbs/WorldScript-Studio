@@ -1,0 +1,28 @@
+---
+description: Use PRD notes and MCP config when planning cross-cutting product or integration work
+globs: ~
+alwaysApply: false
+---
+
+# PRD, Bewusstseins-Stream & MCP-Bereitschaft
+
+## Product Requirements
+
+- Vor **architektonischen** oder produktweiten Änderungen das jeweilige Product Requirements Document konsultieren: `instructions.md` oder `PRD.md` im Repo-Root (anlegen/pflegen, sobald das Team diese Dateien nutzt). Keine großen Richtungswechsel ohne Abgleich mit diesem Dokument.
+
+## Consciousness Stream
+
+- Kontextuelle Erinnerungen, Beschlüsse und Meeting-Hinweise in **`.notes/meeting_notes.md`** festhalten (kurz, chronologisch oder nach Thema), damit spätere Sessions denselben Stand haben.
+
+## Model Context Protocol (Platzhalter)
+
+Projektbezogene MCP-Server bei Bedarf aktivieren und in Cursor konfigurieren:
+
+| Bereich | Beispiel-MCP / Rolle |
+|--------|------------------------|
+| Repository | GitHub-/Git-MCP für Issues, PRs, Diff-Kontext |
+| Qualität | CI/Test- oder Coverage-Einbindung falls verfügbar |
+| Dokumentation | Wiki-/Docs-MCP falls vorhanden |
+| Datenbank | Nur relevant, sobald ein serverseitiger DB-Stack existiert (aktuell primär IndexedDB im Client) |
+
+Konkrete Server-Namen und Secrets bleiben **lokal** in der Cursor-Konfiguration; nicht ins Repo committen.

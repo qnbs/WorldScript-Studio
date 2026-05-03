@@ -1,0 +1,39 @@
+---
+description: Enforce accessible React UI patterns in shared components
+globs: components/**/*.tsx
+alwaysApply: false
+---
+
+# UI-Komponenten (React 19 + Vite)
+
+## Paradigma
+
+- Funktionale Komponenten; State über Redux oder lokales UI-State wo angemessen. Kein Class-Component-Muster neu einführen.
+- Wiederverwendbare Primitive unter `components/ui/*`; fachliche Views bleiben composable.
+
+## Props & Namen
+
+- Props explizit typisieren; optional mit `?`, konsistent mit `exactOptionalPropertyTypes`.
+- Event-Handler `onX`-Präfix; booleans `is*/has*`.
+
+## Accessibility (Biome + Produkt)
+
+- Klickbare Flächen: `button` oder `role` + **Tastatur** (`onKeyDown`/`tabIndex` wo nötig); Regel `useKeyWithClickEvents`.
+- Formulare: Labels mit `htmlFor`/aria; `useButtonType` für Buttons.
+- `dangerouslySetInnerHtml` nur mit sanitisiertem Inhalt (DomPurify o. ä.) — sonst verboten.
+
+## Styling
+
+- Tailwind-Klassen bevorzugen; keine Inline-Styles außer dynamischen Werten (Größen, Position aus Messung).
+
+## Tauri vs. Web
+
+- Keine direkten `@tauri-apps/api`-Imports in reinen UI-Atoms; Abstraktion über Services/Hooks, damit Web-Build stabil bleibt.
+
+<example>
+Neuer Dialog: `Modal`/`Button` aus `components/ui`, Fokus-Falle und ESC schließen wie bestehende Modale.
+</example>
+
+<example type="invalid">
+`<div onClick={...}>` ohne Tastaturbedienung für eine primäre Aktion; oder rohes `dangerouslySetInnerHtml` ohne Sanitizer.
+</example>

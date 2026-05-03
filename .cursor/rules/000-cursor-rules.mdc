@@ -1,0 +1,25 @@
+---
+description: ALWAYS use when asked to CREATE A RULE or UPDATE A RULE or when taught a lesson to RETAIN AS NEW RULE
+globs: ~
+alwaysApply: false
+---
+
+# Meta-Regeln für neue oder geänderte Cursor-Regeln (.mdc)
+
+## Verpflichtend
+
+- Wenn der Nutzer mich anweist, eine Regel zu erstellen oder ich aus einer Korrektur lerne, **MUSS** ich eine `.mdc`-Datei im Verzeichnis `.cursor/rules/` erstellen oder modifizieren.
+- Ich **MUSS** die dreistellige Kebab-Case-Nomenklatur nutzen: `001–099` Core/Security, `100–199` Integrations/APIs, `200–299` Architektur/Patterns, `300–399` UI/Styling, `800–899` Workflows/Testing.
+- Ich **MUSS** für das Frontmatter-Feld `description` das **ATO-Format** (Action, Trigger, Outcome) anwenden und **unter 120 Zeichen** bleiben.
+- Beim Feld `globs` **keine Leerzeichen nach Kommas** und **keine Anführungszeichen** (korrekt: `globs: *.ts,src/**/*.tsx`).
+- **Token-Footprint:** Regeln **niemals länger als 200 Zeilen**. Statt Code zu duplizieren, verweise ich auf kanonische Dateien (z. B. „Siehe `@services/logger.ts`“).
+- Zur Veranschaulichung nutze ich **zwingend** `<example>` und `<example type="invalid">` Blöcke.
+- Zum Schreiben von Regeldateien den **Standard-Texteditor** nutzen (MDC-Editor-Bugs vermeiden).
+
+<example>
+Neue Integrationsregel für Gemini: Datei `101-gemini-services.mdc`, `description: Document Gemini env usage when editing services`, `globs: services/**/*.ts,features/**/*.ts`.
+</example>
+
+<example type="invalid">
+`globs: *.ts, *.tsx` (Leerzeichen nach Kommas), oder `description` mit >120 Zeichen und ohne klaren Trigger/Outcome.
+</example>

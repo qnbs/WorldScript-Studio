@@ -1,0 +1,33 @@
+---
+description: Apply Gemini,Ollama,and IndexedDB patterns when editing integration paths
+globs: services/**/*.ts,features/**/*.ts
+alwaysApply: false
+---
+
+# AI-Anbieter & lokale Speicherung
+
+## Google GenAI (`@google/genai`)
+
+- Nutze bestehende Facade `services/geminiService.ts` und Typen aus `types.ts`; keine parallele SDK-Initialisierung ohne Grund.
+- Modelle/Parameter zentral halten; Streaming und Schema (`Schema`/`Type`) wie im bestehenden Code.
+
+## Ollama & weitere Provider
+
+- Lokale Endpunkte über `services/ollamaService.ts` / `aiProviderService.ts`; Annahmen zu Host und Ports nicht hart verdrahten, wo bereits Settings existieren.
+
+## IndexedDB & Schlüssel
+
+- Datenzugriff nur über etablierte Services (`dbService.ts`, Thunks). Migrationen und Record-Keys nicht willkürlich umbenennen.
+- Kollaboration: `collaborationService.ts` + Yjs — keine zweite CRDT-Schicht. Signaling-URLs aus Redux `settings.collaboration.webrtcSignalingUrls` (Settings-UI); CSP erlaubt `wss:`/`ws:` für benutzerdefinierte Server.
+
+## Netzwerk & Privacy
+
+- Offline-first nicht untergraben: keine stillen Cloud-Uploads; neue Aufrufe dokumentieren und Nutzerkontrolle respektieren.
+
+<example>
+Neues KI-Feature: Thunk in `features/project/thunks/`, Aufruf über `geminiService`/`aiProviderService`, Fehler über Logger.
+</example>
+
+<example type="invalid">
+Direkt `new GoogleGenAI({ apiKey: '…' })` in einer Komponente oder Roh-`fetch` zu Gemini ohne bestehende Fehler-/Retry-Politik.
+</example>

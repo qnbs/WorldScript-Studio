@@ -15,9 +15,22 @@ import { WebrtcProvider } from 'y-webrtc';
 import * as Y from 'yjs';
 import type { CollaborationUser } from '../types';
 
-// Public signaling servers for y-webrtc. If one endpoint is unavailable,
-// the provider can continue with the remaining ones.
-const SIGNALING_SERVERS = ['wss://y-webrtc-signaling.fly.dev', 'wss://signaling.yjs.dev'];
+/** Default public signaling servers for y-webrtc (failover list). */
+export const DEFAULT_WEBRTC_SIGNALING_URLS: readonly string[] = [
+  'wss://y-webrtc-signaling.fly.dev',
+  'wss://signaling.yjs.dev',
+];
+
+/** Normalize and validate signaling URLs; falls back to defaults if none valid. */
+export function resolveWebRtcSignalingUrls(configured?: readonly string[]): string[] {
+  const raw =
+    configured && configured.length > 0 ? [...configured] : [...DEFAULT_WEBRTC_SIGNALING_URLS];
+  const cleaned = raw
+    .map((u) => u.trim())
+    .filter(Boolean)
+    .filter((u) => u.startsWith('wss://') || u.startsWith('ws://'));
+  return cleaned.length > 0 ? cleaned : [...DEFAULT_WEBRTC_SIGNALING_URLS];
+}
 
 export interface AwarenessState {
   user: CollaborationUser;
@@ -59,14 +72,21 @@ class CollaborationService {
   }
 
   /** Connect to a collaboration room for the given project. */
-  async connect(projectId: string, user: CollaborationUser, password?: string): Promise<void> {
+  async connect(
+    projectId: string,
+    user: CollaborationUser,
+    password?: string,
+    signalingUrls?: readonly string[],
+  ): Promise<void> {
     if (this.provider) this.disconnect();
 
     this._roomId = await this.deriveRoomId(projectId, password);
     this.doc = new Y.Doc();
 
+    const signaling = resolveWebRtcSignalingUrls(signalingUrls);
+
     this.provider = new WebrtcProvider(this._roomId, this.doc, {
-      signaling: SIGNALING_SERVERS,
+      signaling,
     });
 
     // Publish our identity to peers

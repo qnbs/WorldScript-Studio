@@ -1,0 +1,35 @@
+---
+description: Require deterministic Vitest tests with mocks; forbid silent green-washing skips
+globs: tests/**/*.test.ts,tests/**/*.test.tsx,tests/**/*.spec.ts,tests/**/*.spec.tsx,components/**/*.test.ts,components/**/*.test.tsx
+alwaysApply: false
+---
+
+# Testing (Vitest + Testing Library)
+
+## Determinismus
+
+- Jeder Test läuft **isoliert**: keine Abhängigkeit von Reihenfolge, echter Netzwerkzeit oder `Date.now()` ohne Mock/Fake-Timer.
+- Globale Zustände (Redux-Store, localStorage, IndexedDB) vor/nach Bedarf zurücksetzen oder mit Setup aus `tests/setup.ts` alignen.
+
+## Mocks
+
+- Externe Module (`@google/genai`, Tauri-API, `fetch`) **mocken** (`vi.mock`), wie in bestehenden Unit-Tests.
+- Keine echten API-Keys oder Produktions-Endpunkte in Tests.
+
+## Verbotene „Grün-Tricks“
+
+- **Streng verboten:** fehlschlagende Tests auskommentieren, Assertions entfernen oder flakys dauerhaft ignorieren, um CI grün zu tricksen.
+- **`it.skip` / `describe.skip`:** nur mit **Dateikommentar** (Grund, Ticket/TODO) und nur für bewusst **deaktivierte** Suites (z. B. Platzhalter-Visual-Regression bis Baselines existieren). Kein Skip statt Fix bei Unit-Tests.
+- Stattdessen: Root Cause fixen oder Test präzisieren.
+
+## Assertions
+
+- Nutzerinteraktion mit `@testing-library/user-event`; async mit `findBy*`/`waitFor` wo nötig.
+
+<example>
+`geminiService`: `@google/genai` mit `vi.mock` stubben; Antworten fest verdrahtet, Snapshot nur wenn stabil.
+</example>
+
+<example type="invalid">
+`// test('…')` auskommentieren, weil flaky — ohne Issue/Ticket und ohne Retry/Mock-Fix.
+</example>

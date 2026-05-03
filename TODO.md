@@ -18,16 +18,16 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ### Mittel (🟠)
 
-- ⬜ Signaling-URL für Collaboration in Settings konfigurierbar machen
+- ✅ Signaling-URL für Collaboration in Settings konfigurierbar machen (`webrtcSignalingUrls`, Einstellungen → Zusammenarbeit)
 - ⬜ Yjs E2E-Verschlüsselung (libsodium SecretBox, deferred to v2.0)
 
 ### Niedrig (🟢)
 
 - ✅ Dokumentations-Audit (CI.md, README Hub, CONTRIBUTING, AUDIT-Follow-up, Copilot/CLAUDE/SECURITY/Graphify) — 2026-05-02
-- ⬜ Visual Regression Tests (Playwright Screenshots + Storybook)
-- ⬜ Bundle-Size-Budgets pro Chunk (rollup-plugin-visualizer in CI)
+- ⬜ Visual Regression Tests (Playwright Screenshots + Storybook) — Stub `tests/e2e/visual-regression.spec.ts` (`describe.skip`, Baselines optional)
+- ✅ Bundle-Size-Budgets + rollup-Analyse in CI (`pnpm run bundle:budget`, `pnpm run analyze`, Artifact `bundle-analysis`)
 - ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — inhaltliche Übersetzungen können iterativ verbessert werden
-- ⬜ Renovate Auto-Merge für Patch-Updates konfigurieren
+- ✅ Renovate Auto-Merge für Patch-Updates ([`renovate.json`](renovate.json))
 - ✅ Onboarding-Spotlight-Tour (`driver.js`, Dashboard + Hilfe)
 - ⬜ Tauri v2 Release-Pipeline: auto-update + code-signing — **Installer an GitHub Releases** bei `v*`-Tags ✅ ([`docs/TAURI-CI.md`](docs/TAURI-CI.md))
 

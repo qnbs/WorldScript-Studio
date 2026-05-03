@@ -44,7 +44,7 @@ export default defineConfig({
     ...(isAnalyze
       ? [
           visualizer({
-            open: true,
+            open: process.env['CI'] !== 'true',
             filename: 'dist/bundle-analysis.html',
             gzipSize: true,
             brotliSize: true,

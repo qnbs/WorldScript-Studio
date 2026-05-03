@@ -54,6 +54,7 @@ Kurz und konkret:
 ## Cursor & Zusammenarbeit mit Nutzerregeln
 
 - Wenn der Nutzer **Deutsch** wünscht: Antworten auf **Deutsch**; Code- und API-Bezeichner unverändert nach Repo-Konvention.
+- Zusätzliche Repo-Leitplanken: **`.cursor/rules/*.mdc`** (modular) und **`.cursor/index.mdc`** (Manifest); nach Code-Änderungen optional **`pnpm run graphify:update`** bzw. `graphify:bootstrap` für die Python-CLI.
 - Bestehende Projekt-Tools (z. B. **Biome**, **Vitest**, **Playwright**, **Vite**) vor neuen Hilfsmitteln bevorzugen.
 - Keine unnötigen neuen Markdown-Dateien; Ausnahme: ausdrücklich gewünschte Doku (z. B. diese Rules).
 

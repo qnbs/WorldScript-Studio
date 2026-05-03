@@ -1,0 +1,34 @@
+---
+description: Project Manifest and Global Architecture
+alwaysApply: true
+---
+
+# StoryCraft Studio — Manifest
+
+**Zweck:** Offline-first Schreib- und Erzählwerkzeug: Dashboard, Manuskript, Szenenboard, Charaktergraph, KI-Copilot (kein Ghostwriting-Fokus). Datenhaltung lokal; Privacy-first.
+
+**Frontend:** React 19, Vite 8, TypeScript 6 (`strict`, `exactOptionalPropertyTypes`, restrike Index/Switch-Regeln). Alias `@` → Repo-Root. Paketmanager: pnpm 10; Node ≥22.
+
+**State & Daten:** Redux Toolkit, `redux-undo`; Persistenz/Krypto über IndexedDB (`services/dbService.ts` u. a.). Kein serverseitiges ORM; keine Prisma/SQL-DB im Web-Stack.
+
+**KI & APIs:** `@google/genai` (Gemini), lokale Ollama-Integration (`services/ollamaService.ts`); Thunks unter `features/project/`. API-Schlüssel niemals hardcoden; Nutzerkonfiguration/lokale Speicherung beachten.
+
+**Desktop:** Tauri 2 (`src-tauri`): Rust-Backend, `@tauri-apps/api` im Vite-Bundle als `external`. Desktop-spezifische FS/Dialog-Pfade von Web trennen.
+
+**Realtime / Kollaboration:** Yjs, `y-webrtc` (`services/collaborationService.ts`); konfigurierbare **WebRTC-Signaling-URLs** in Settings → Zusammenarbeit (`settings.collaboration.webrtcSignalingUrls`).
+
+**UI:** Tailwind CSS 4 (`@tailwindcss/vite`), Komponenten unter `components/` (u. a. `components/ui/*`). Storybook 10. Biome 2: Lint+Format, `lineWidth` 100, Single Quotes, A11y-Regeln (u. a. `useKeyWithClickEvents`, `noDangerouslySetInnerHtml`).
+
+**PWA:** `vite-plugin-pwa`, `injectManifest`, Service Worker unter `public/sw.js`.
+
+**i18n:** Build-Skripte `build-i18n`, `check-i18n-keys`; Locale-Bundles unter `public/locales`.
+
+**Tests:** Vitest 4 + jsdom, `@testing-library/react`, Setup `tests/setup.ts`; Tests unter `tests/**/*` und `components/**/*.{test,spec}.*`. E2E: Playwright (Skripte CI-gated). Coverage-Schwellen in `vitest.config.ts` (u. a. Zeilen ~15 %).
+
+**Qualität:** `pnpm lint` / `biome`, `pnpm typecheck`, `pnpm test:run`. CI-Build: `bundle:budget` + `analyze` (rollup visualizer). Graphify: `graphify:bootstrap` → `graphify:update`; Git-Hooks optional via `simple-git-hooks` + lint-staged.
+
+**Storage:** Auto-Save nutzt `saveEnvelopeFromProjectData()` aus `services/storageBackend.ts` (typisiertes Redux-Envelope, kein Cast im Listener).
+
+**Pfad-Konventionen:** `app/` (Einstieg), `components/`, `features/*`, `hooks/`, `services/`, `types.ts`, `tests/`.
+
+**Cursor-Regeln:** QNBS-Masterprompt in [`.cursorrules`](../.cursorrules); fachliche Leitplanken in **`.cursor/rules/*.mdc`** (modular, `alwaysApply` je Datei).

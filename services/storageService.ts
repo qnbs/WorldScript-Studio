@@ -1,7 +1,15 @@
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
 import type { SaveProjectInput, StorageBackend } from './storageBackend';
 
-export type { SaveProjectInput, StorageBackend } from './storageBackend';
+export type {
+  SaveProjectEnvelope,
+  SaveProjectInput,
+  StorageBackend,
+} from './storageBackend';
+export {
+  normalizeSaveProjectInputToStoryProject,
+  saveEnvelopeFromProjectData,
+} from './storageBackend';
 
 // Import existing services
 import { dbService } from './dbService';

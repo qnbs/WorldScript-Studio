@@ -16,25 +16,31 @@ function run(command, commandArgs) {
   });
 }
 
-const primary = run('graphify', args);
-if (primary.status === 0) {
-  process.exit(0);
-}
-
-const notFound =
-  primary.error?.code === 'ENOENT' ||
-  primary.status === 9009 ||
-  primary.status === 127;
-
-if (!notFound && primary.status != null) {
-  process.exit(primary.status);
-}
+/** Prefer `python -m graphify` on Windows — pip puts graphify.exe in Scripts/, often not on PATH. */
+const tryPythonFirst = process.platform === 'win32';
 
 const pyLaunchers =
-  process.platform === 'win32' ? ['py', 'python', 'python3'] : ['python3', 'python'];
+  process.platform === 'win32' ? ['python', 'python3', 'py'] : ['python3', 'python'];
+
+if (!tryPythonFirst) {
+  const primary = run('graphify', args);
+  if (primary.status === 0) {
+    process.exit(0);
+  }
+
+  const notFound =
+    primary.error?.code === 'ENOENT' ||
+    primary.status === 9009 ||
+    primary.status === 127;
+
+  if (!notFound && primary.status != null) {
+    process.exit(primary.status);
+  }
+}
 
 for (const py of pyLaunchers) {
-  const fallback = run(py, ['-m', 'graphify', ...args]);
+  const pyArgs = py === 'py' ? ['-3', '-m', 'graphify', ...args] : ['-m', 'graphify', ...args];
+  const fallback = run(py, pyArgs);
   if (fallback.status === 0) {
     process.exit(0);
   }
@@ -48,10 +54,28 @@ for (const py of pyLaunchers) {
   }
 }
 
+if (tryPythonFirst) {
+  const primary = run('graphify', args);
+  if (primary.status === 0) {
+    process.exit(0);
+  }
+
+  const notFound =
+    primary.error?.code === 'ENOENT' ||
+    primary.status === 9009 ||
+    primary.status === 127;
+
+  if (!notFound && primary.status != null) {
+    process.exit(primary.status);
+  }
+}
+
 process.stderr.write(
-  `[graphify-cli] Could not run Graphify. Install the official PyPI package:\n` +
-    `  pip install graphifyy\n` +
-    `On Windows, add Python Scripts to PATH (often %APPDATA%\\Python\\Python3xx\\Scripts)\n` +
-    `or run: py -m graphify ${args.join(' ')}\n`,
+  `[graphify-cli] Could not run Graphify. Official PyPI package: graphifyy (two y’s).\n` +
+    `  pnpm run graphify:bootstrap\n` +
+    `  # or: python -m pip install --upgrade graphifyy\n` +
+    `On Windows, add Python Scripts to PATH (often %APPDATA%\\Python\\Python3xx\\Scripts),\n` +
+    `avoid the Microsoft Store “python” stub (use python.org installer), then:\n` +
+    `  py -m graphify ${args.join(' ')}\n`,
 );
-process.exit(primary.status ?? 1);
+process.exit(1);
