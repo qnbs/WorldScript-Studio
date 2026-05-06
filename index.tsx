@@ -2,9 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Provider } from 'react-redux';
 import App from './App';
+import type { RootState } from './app/store';
 import { setupStore } from './app/store';
 import { dbService } from './services/dbService';
 import { logger } from './services/logger';
+import { saveEnvelopeFromProjectData, storageService } from './services/storageService';
 import type { PersistedRootState } from './types';
 /* ── Self-hosted fonts (@fontsource) ── */
 import '@fontsource/inter/300.css';
@@ -81,6 +83,19 @@ const root = ReactDOM.createRoot(rootElement);
     // --------------------------------
 
     const store = setupStore(preloadedState);
+
+    // QNBS-v3: visibilitychange-Flush reduziert Datenverlust, wenn Tabs abrupt in den Hintergrund wechseln.
+    const flushOnHidden = () => {
+      if (document.visibilityState !== 'hidden') return;
+      const state = store.getState() as RootState;
+      const presentData = state.project.present?.data;
+      if (!presentData) return;
+      void Promise.allSettled([
+        storageService.saveProject(saveEnvelopeFromProjectData(presentData)),
+        storageService.saveSettings(state.settings),
+      ]);
+    };
+    document.addEventListener('visibilitychange', flushOnHidden);
 
     root.render(
       <React.StrictMode>

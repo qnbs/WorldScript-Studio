@@ -11,6 +11,7 @@
   "scripts": {
     "prepare": "simple-git-hooks",
     "dev": "vite",
+    "dev:turbo": "turbo run dev --parallel",
     "prebuild": "node scripts/build-i18n.mjs",
     "i18n:check": "node scripts/check-i18n-keys.mjs",
     "graphify": "node scripts/graphify-cli.mjs",
@@ -20,16 +21,20 @@
     "graphify:hooks": "node scripts/graphify-cli.mjs hook install",
     "graphify:status": "node scripts/graphify-cli.mjs hook status",
     "build": "vite build",
+    "build:turbo": "turbo run build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "typecheck:turbo": "turbo run typecheck",
     "lhci:assert": "lhci autorun --upload.target=temporary-public-storage",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "lint": "biome lint --max-diagnostics=0",
+    "lint:turbo": "turbo run lint",
     "lint:fix": "biome check --write",
     "format": "biome format --write .",
     "test": "vitest",
+    "test:turbo": "turbo run test",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test",
@@ -41,6 +46,8 @@
     "dev:tauri": "tauri dev"
   },
   "dependencies": {
+    "@domain/ai-core": "workspace:*",
+    "@domain/ui": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -66,10 +73,13 @@
     "recharts": "^3.8.1",
     "redux-undo": "^1.1.0",
     "uuid": "^13.0.0",
+    "zod": "^4.1.5",
     "y-webrtc": "^10.3.0",
-    "yjs": "^13.6.30"
+    "yjs": "^13.6.30",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "turbo": "^2.5.6",
     "@biomejs/biome": "^2.4.12",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.59.1",

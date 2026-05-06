@@ -187,7 +187,7 @@ export type AiModel =
   | 'gpt-4o-mini'
   // Ollama – any local model (e.g. "ollama/gemma3" or "ollama/qwen3:8b")
   | `ollama/${string}`;
-export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama';
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'grok' | 'ollama';
 export type NotificationFrequency = 'never' | 'daily' | 'weekly' | 'monthly';
 export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
 export type SyncProvider = 'none' | 'google-drive' | 'dropbox' | 'onedrive' | 'icloud';
@@ -242,6 +242,7 @@ export interface PrivacySettings {
   dataEncryption: boolean;
   localStorageOnly: boolean;
   shareUsageData: boolean;
+  euDataResidency: boolean;
 }
 
 export interface PerformanceSettings {

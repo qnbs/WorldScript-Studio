@@ -98,6 +98,31 @@ class CollaborationService {
     });
   }
 
+  async connectWithBackoff(
+    projectId: string,
+    user: CollaborationUser,
+    options?: {
+      password?: string;
+      signalingUrls?: readonly string[];
+      maxRetries?: number;
+      baseDelayMs?: number;
+    },
+  ): Promise<void> {
+    const maxRetries = options?.maxRetries ?? 4;
+    const baseDelayMs = options?.baseDelayMs ?? 500;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      try {
+        await this.connect(projectId, user, options?.password, options?.signalingUrls);
+        return;
+      } catch (error) {
+        if (attempt >= maxRetries) throw error;
+        const delay = baseDelayMs * 2 ** attempt;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
   /** Disconnect and clean up. */
   disconnect(): void {
     this.provider?.disconnect();

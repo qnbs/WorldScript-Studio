@@ -107,6 +107,29 @@ jobs:
   # ----------------------------------------------------------
   # 2. BUILD: Production build + Pages artifact upload
   # ----------------------------------------------------------
+  mutation:
+    name: 🧬 Mutation Tests (Stryker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [quality]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run Stryker if configured
+        run: |
+          if [ -f "stryker.config.json" ] || [ -f "stryker.conf.json" ]; then
+            pnpm exec stryker run
+          else
+            echo "No Stryker config found, skipping mutation testing."
+          fi
+
   build:
     name: 🏗️ Build
     runs-on: ubuntu-latest

@@ -1,11 +1,12 @@
 import * as LZString from 'lz-string';
 import type { ProjectData } from '../features/project/projectSlice';
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
-import { logger } from './logger';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from './collaborationService';
+import { logger } from './logger';
 import type { SaveProjectInput, StorageBackend } from './storageBackend';
 
-const DB_NAME = 'storycraft-db';
+const STATE_DB_NAME = 'storycraft-state-db';
+const DATA_DB_NAME = 'storycraft-data-db';
 const DB_VERSION = 6; // v6: Story Codex store added
 const APP_DATA_STORE = 'app-data-store';
 const SNAPSHOTS_STORE = 'snapshots-store';
@@ -102,10 +103,21 @@ function getUserFriendlyDbError(error: unknown): string {
 }
 
 class IndexedDBService implements StorageBackend {
-  private db: IDBDatabase | null = null;
+  private stateDb: IDBDatabase | null = null;
+  private dataDb: IDBDatabase | null = null;
   private lastAutoSnapshotTime = Date.now();
   private readonly AUTO_SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5 minutes
   private readonly MAX_AUTO_SNAPSHOTS = 20;
+
+  private isStateStore(storeName: string): boolean {
+    return storeName === APP_DATA_STORE || storeName === SNAPSHOTS_STORE;
+  }
+
+  private isDataStore(storeName: string): boolean {
+    return (
+      storeName === IMAGES_STORE || storeName === RAG_VECTORS_STORE || storeName === CODEX_STORE
+    );
+  }
 
   // === CRYPTO HELPERS für API Key Verschlüsselung ===
 
@@ -365,85 +377,82 @@ class IndexedDBService implements StorageBackend {
 
   // === EXISTING DB METHODS ===
 
-  async initDB(): Promise<void> {
+  private openStateDb(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-
+      const request = indexedDB.open(STATE_DB_NAME, DB_VERSION);
       request.onupgradeneeded = (event) => {
         const db = request.result;
-        // v1: Basis-Store
-        if (event.oldVersion < 1) {
-          if (!db.objectStoreNames.contains(APP_DATA_STORE)) {
-            db.createObjectStore(APP_DATA_STORE);
-          }
+        if (event.oldVersion < 1 && !db.objectStoreNames.contains(APP_DATA_STORE)) {
+          db.createObjectStore(APP_DATA_STORE);
         }
-        // v2: Snapshot-Store
-        if (event.oldVersion < 2) {
-          if (!db.objectStoreNames.contains(SNAPSHOTS_STORE)) {
-            db.createObjectStore(SNAPSHOTS_STORE, {
-              keyPath: 'id',
-              autoIncrement: true,
-            });
-          }
-        }
-        // v3: Bilder-Store
-        if (event.oldVersion < 3) {
-          if (!db.objectStoreNames.contains(IMAGES_STORE)) {
-            db.createObjectStore(IMAGES_STORE);
-          }
-        }
-        // v4: API-Key-Verschlüsselung (kein neuer Store – Daten in APP_DATA_STORE)
-        // v5: RAG-Vektoren-Store für Konsistenzprüfung & semantische Suche
-        if (event.oldVersion < 5) {
-          if (!db.objectStoreNames.contains(RAG_VECTORS_STORE)) {
-            const vectorStore = db.createObjectStore(RAG_VECTORS_STORE, {
-              keyPath: 'id',
-            });
-            vectorStore.createIndex('projectId', 'projectId', {
-              unique: false,
-            });
-            vectorStore.createIndex('type', 'type', { unique: false });
-          }
-        }
-        // v6: Story Codex store für automatische Entitätenextraktion
-        if (event.oldVersion < 6) {
-          if (!db.objectStoreNames.contains(CODEX_STORE)) {
-            db.createObjectStore(CODEX_STORE, {
-              keyPath: 'projectId',
-            });
-          }
+        if (event.oldVersion < 2 && !db.objectStoreNames.contains(SNAPSHOTS_STORE)) {
+          db.createObjectStore(SNAPSHOTS_STORE, { keyPath: 'id', autoIncrement: true });
         }
       };
-
-      // Verbindungs-Abbruch bei versionchange (anderer Tab öffnet neue Version)
       request.onsuccess = () => {
         const db = request.result;
         db.onversionchange = () => {
           db.close();
-          this.db = null;
-          logger.warn(
-            'IndexedDB: Database version changed – connection closed. Please reload the page.',
-          );
+          this.stateDb = null;
         };
-        this.db = db;
+        this.stateDb = db;
         resolve();
       };
-
-      request.onerror = () => {
-        logger.error('IndexedDB error:', request.error);
-        reject(request.error);
-      };
+      request.onerror = () => reject(request.error);
     });
+  }
+
+  private openDataDb(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DATA_DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (event) => {
+        const db = request.result;
+        if (event.oldVersion < 3 && !db.objectStoreNames.contains(IMAGES_STORE)) {
+          db.createObjectStore(IMAGES_STORE);
+        }
+        if (event.oldVersion < 5 && !db.objectStoreNames.contains(RAG_VECTORS_STORE)) {
+          const vectorStore = db.createObjectStore(RAG_VECTORS_STORE, {
+            keyPath: 'id',
+          });
+          vectorStore.createIndex('projectId', 'projectId', {
+            unique: false,
+          });
+          vectorStore.createIndex('type', 'type', { unique: false });
+        }
+        if (event.oldVersion < 6 && !db.objectStoreNames.contains(CODEX_STORE)) {
+          db.createObjectStore(CODEX_STORE, { keyPath: 'projectId' });
+        }
+      };
+      request.onsuccess = () => {
+        const db = request.result;
+        db.onversionchange = () => {
+          db.close();
+          this.dataDb = null;
+        };
+        this.dataDb = db;
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async initDB(): Promise<void> {
+    await Promise.all([this.openStateDb(), this.openDataDb()]);
   }
 
   private async getObjectStore(
     storeName: string,
     mode: IDBTransactionMode,
   ): Promise<IDBObjectStore> {
-    if (!this.db) {
+    if (!this.stateDb || !this.dataDb) {
       await this.initDB();
     }
-    const transaction = this.db!.transaction(storeName, mode);
+
+    const targetDb = this.isStateStore(storeName) ? this.stateDb : this.dataDb;
+    if (!targetDb || (!this.isStateStore(storeName) && !this.isDataStore(storeName))) {
+      throw new Error(`Unknown object store "${storeName}"`);
+    }
+    const transaction = targetDb.transaction(storeName, mode);
     return transaction.objectStore(storeName);
   }
 
@@ -596,7 +605,18 @@ class IndexedDBService implements StorageBackend {
         indentFirstLine: false,
         ...incoming,
       } as Settings;
-      const incomingCollab = incoming['collaboration'] as Partial<Settings['collaboration']> | undefined;
+      validSettings.privacy = {
+        analyticsEnabled: false,
+        crashReporting: false,
+        dataEncryption: true,
+        localStorageOnly: true,
+        shareUsageData: false,
+        euDataResidency: true,
+        ...(incoming['privacy'] as Partial<Settings['privacy']> | undefined),
+      };
+      const incomingCollab = incoming['collaboration'] as
+        | Partial<Settings['collaboration']>
+        | undefined;
       const collabDefaults: Settings['collaboration'] = {
         realTimeCollaboration: false,
         publicSharing: false,

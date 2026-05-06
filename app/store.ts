@@ -14,6 +14,7 @@ import statusReducer from '../features/status/statusSlice';
 import writerReducer from '../features/writer/writerSlice';
 import { logger } from '../services/logger';
 import type { PersistedRootState } from '../types';
+import { aiApi } from './aiApi';
 import { listenerMiddleware } from './listenerMiddleware';
 
 // A sophisticated filter to prevent async thunk actions from populating the undo history.
@@ -56,6 +57,7 @@ const combinedReducer = combineReducers({
   writer: writerReducer,
   versionControl: versionControlReducer,
   featureFlags: featureFlagsReducer,
+  [aiApi.reducerPath]: aiApi.reducer,
 });
 
 // A sophisticated higher-order reducer to augment redux-undo's behavior
@@ -101,7 +103,11 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
         },
       })
         .prepend(listenerMiddleware.middleware)
-        .concat(featureFlagsPersistenceMiddleware, loggerMiddleware),
+        .concat(
+          featureFlagsPersistenceMiddleware,
+          loggerMiddleware,
+          aiApi.middleware as Middleware,
+        ),
   };
 
   if (preloadedState) {

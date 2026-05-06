@@ -6,6 +6,7 @@
  * Streaming is supported for all providers.
  */
 
+import { z } from 'zod';
 import type { AIProvider, AiCreativity, AiModel, GeminiSchema } from '../types';
 import { attachCause, sanitizePromptValue, stripJsonFences } from './aiUtils';
 import {
@@ -15,12 +16,29 @@ import {
   streamAiHelpResponse as streamAiHelpResponseGemini,
   streamText as streamTextGemini,
 } from './geminiService';
+import { generateLocalText } from './localAiFacade';
 import {
   listOllamaModels as listOllamaModelsFromService,
   streamOllama,
   testOllamaConnection,
 } from './ollamaService';
 import { storageService } from './storageService';
+
+const providerTextSchema = z.object({
+  text: z.string().min(1),
+});
+
+async function enforceCloudPolicy(provider: AIProvider): Promise<void> {
+  if (provider === 'ollama') return;
+  const settings = await storageService.loadSettings();
+  if (!settings) return;
+  if (settings.privacy.localStorageOnly) {
+    throw new Error('Cloud provider blocked: local-only mode is active.');
+  }
+  if (settings.privacy.euDataResidency && (provider === 'grok' || provider === 'openai')) {
+    throw new Error(`Cloud provider blocked by EU residency policy: ${provider}`);
+  }
+}
 
 export interface AIRequestOptions {
   model: AiModel;
@@ -137,6 +155,35 @@ async function streamAnthropic(
   );
 }
 
+async function streamGrok(
+  prompt: string,
+  opts: AIRequestOptions,
+  callbacks: AIStreamCallbacks,
+): Promise<void> {
+  const apiKey = await storageService.getApiKey('grok');
+  if (!apiKey) throw new Error('NO_API_KEY: Grok API key missing. Please enter it in Settings.');
+  const res = await fetch('https://api.x.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: opts.model,
+      stream: false,
+      messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
+      temperature: opts.temperature ?? 0.7,
+      max_tokens: opts.maxTokens ?? 2048,
+    }),
+    signal: opts.signal ?? null,
+  });
+  if (!res.ok) throw new Error(`Grok API Error ${res.status}: ${res.statusText}`);
+  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const text = json.choices?.[0]?.message?.content ?? '';
+  if (text) callbacks.onChunk(text);
+  callbacks.onDone?.();
+}
+
 async function streamProvider(
   prompt: string,
   creativity: AiCreativity,
@@ -145,6 +192,7 @@ async function streamProvider(
   signal?: AbortSignal,
 ): Promise<void> {
   const o = withMergedAbortSignal(opts, signal);
+  await enforceCloudPolicy(o.provider);
   switch (o.provider) {
     case 'openai':
       return streamOpenAI(prompt, o, callbacks);
@@ -152,6 +200,8 @@ async function streamProvider(
       return streamOllama(prompt, o, callbacks);
     case 'anthropic':
       return streamAnthropic(prompt, o, callbacks);
+    case 'grok':
+      return streamGrok(prompt, o, callbacks);
     default:
       return streamTextGemini(
         o.systemPrompt
@@ -172,31 +222,48 @@ export async function generateText(
   signal?: AbortSignal,
 ): Promise<string> {
   const o = withMergedAbortSignal(opts, signal);
-  switch (o.provider) {
-    case 'openai': {
-      let result = '';
-      await streamOpenAI(prompt, o, {
-        onChunk: (text) => {
-          result += text;
-        },
-      });
-      return result;
+  await enforceCloudPolicy(o.provider);
+  try {
+    switch (o.provider) {
+      case 'openai': {
+        let result = '';
+        await streamOpenAI(prompt, o, {
+          onChunk: (text) => {
+            result += text;
+          },
+        });
+        return providerTextSchema.parse({ text: result }).text;
+      }
+      case 'ollama': {
+        let result = '';
+        await streamOllama(prompt, o, {
+          onChunk: (text) => {
+            result += text;
+          },
+        });
+        return providerTextSchema.parse({ text: result }).text;
+      }
+      case 'anthropic':
+        throw new Error(
+          'Claude/Anthropic is currently not available in the browser. Please use Gemini, OpenAI or Ollama.',
+        );
+      case 'grok': {
+        let result = '';
+        await streamGrok(prompt, o, {
+          onChunk: (text) => {
+            result += text;
+          },
+        });
+        return providerTextSchema.parse({ text: result }).text;
+      }
+      default: {
+        const text = await generateTextGemini(prompt, creativity, o.signal, undefined, o.model);
+        return providerTextSchema.parse({ text }).text;
+      }
     }
-    case 'ollama': {
-      let result = '';
-      await streamOllama(prompt, o, {
-        onChunk: (text) => {
-          result += text;
-        },
-      });
-      return result;
-    }
-    case 'anthropic':
-      throw new Error(
-        'Claude/Anthropic is currently not available in the browser. Please use Gemini, OpenAI or Ollama.',
-      );
-    default:
-      return generateTextGemini(prompt, creativity, o.signal, undefined, o.model);
+  } catch {
+    const local = await generateLocalText(prompt);
+    return providerTextSchema.parse({ text: local.text }).text;
   }
 }
 
@@ -324,6 +391,16 @@ export async function testAIConnection(
           ok: false,
           error: 'Claude requires a backend proxy (CORS restriction)',
         };
+      case 'grok': {
+        const apiKey = await storageService.getApiKey('grok');
+        if (!apiKey) return { ok: false, error: 'Kein Grok API Key gesetzt' };
+        const res = await fetch('https://api.x.ai/v1/models', {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+        return { ok: true };
+      }
       case 'gemini': {
         const geminiKey = await storageService.getGeminiApiKey();
         if (!geminiKey) return { ok: false, error: 'No Gemini API key set' };

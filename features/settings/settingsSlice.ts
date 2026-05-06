@@ -75,6 +75,7 @@ const defaultSettings: Settings = {
     dataEncryption: true,
     localStorageOnly: true,
     shareUsageData: false,
+    euDataResidency: true,
   },
   performance: {
     autoSaveInterval: 30,
@@ -95,10 +96,7 @@ const defaultSettings: Settings = {
     publicSharing: false,
     commentSystem: false,
     versionHistory: true,
-    webrtcSignalingUrls: [
-      'wss://y-webrtc-signaling.fly.dev',
-      'wss://signaling.yjs.dev',
-    ],
+    webrtcSignalingUrls: ['wss://y-webrtc-signaling.fly.dev', 'wss://signaling.yjs.dev'],
   },
   integrations: {
     syncProvider: 'none',
