@@ -55,7 +55,8 @@ const fakeDb = {
 };
 
 type TestDbService = {
-  db?: typeof fakeDb;
+  stateDb?: typeof fakeDb;
+  dataDb?: typeof fakeDb;
   saveGeminiApiKey: (key: string) => Promise<void>;
   getGeminiApiKey: () => Promise<string>;
   clearGeminiApiKey: () => Promise<void>;
@@ -93,7 +94,8 @@ describe('dbService', () => {
 
     const mod = await import('../../services/dbService');
     dbService = mod.dbService as unknown as TestDbService;
-    dbService.db = fakeDb;
+    dbService.stateDb = fakeDb;
+    dbService.dataDb = fakeDb;
   });
 
   it('should encrypt and decrypt Gemini API keys', async () => {

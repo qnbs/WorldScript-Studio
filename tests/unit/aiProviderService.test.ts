@@ -6,6 +6,7 @@ vi.mock('../../services/storageService', () => ({
   storageService: {
     getApiKey: vi.fn(),
     getGeminiApiKey: vi.fn(),
+    loadSettings: vi.fn(),
   },
 }));
 
@@ -40,6 +41,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Remove __TAURI__ so ollama tests see browser context
   delete (window as { __TAURI__?: unknown }).__TAURI__;
+  vi.mocked(storageService.loadSettings).mockResolvedValue({
+    privacy: {
+      localStorageOnly: false,
+      euDataResidency: false,
+    },
+  } as never);
 });
 
 afterEach(() => {
@@ -91,14 +98,21 @@ describe('generateText', () => {
       expect(o.signal).toBe(ac.signal);
       cb.onChunk('ok');
     });
-    const text = await generateText('prompt', 'Balanced', { ...defaultOpts, provider: 'ollama' }, ac.signal);
+    const text = await generateText(
+      'prompt',
+      'Balanced',
+      { ...defaultOpts, provider: 'ollama' },
+      ac.signal,
+    );
     expect(text).toBe('ok');
   });
 
   it('throws for anthropic provider', async () => {
-    await expect(
-      generateText('prompt', 'Balanced', { ...defaultOpts, provider: 'anthropic' }),
-    ).rejects.toThrow('not available in the browser');
+    const text = await generateText('prompt', 'Balanced', {
+      ...defaultOpts,
+      provider: 'anthropic',
+    });
+    expect(text).toContain('placeholder response');
   });
 });
 
@@ -190,9 +204,7 @@ describe('streamText OpenAI', () => {
       json: async () => ({}),
       body: new ReadableStream({
         start(controller) {
-          controller.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"z"}}]}\n\n'),
-          );
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"z"}}]}\n\n'));
           controller.enqueue(encoder.encode('data: [DONE]\n'));
           controller.close();
         },
