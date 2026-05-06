@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Graphify (pip-friendly):** [`scripts/graphify-cli.mjs`](scripts/graphify-cli.mjs) plus `pnpm run graphify` / `graphify:install` / `graphify:update` / `graphify:hooks` / `graphify:status`; [`.vscode/tasks.json`](.vscode/tasks.json) tasks; [`docs/graphify.md`](docs/graphify.md) + [`CONTRIBUTING.md`](CONTRIBUTING.md) updated for `pip install graphifyy` and Windows `Scripts` PATH.
+- **Monorepo foundation:** Added Turborepo pipeline (`turbo.json`), workspace package layout (`packages/ai-core`, `packages/ui`), and turbo script variants in root `package.json`.
+- **State tri-layer:** Added RTK Query AI API slice (`app/aiApi.ts`) and transient Zustand store (`app/transientUiStore.ts`), wired into Redux store.
+- **Local AI facade:** Added `@domain/ai-core` WorkerBus + prompt sanitization + layered local response fallback and app adapter (`services/localAiFacade.ts`).
+- **Security/data:** Added EXIF stripping utility (`services/imageSanitizer.ts`) and EU-residency privacy flag (`types.ts`, `features/settings/settingsSlice.ts`).
+
+### Changed
+
+- **Persistence architecture:** Refactored IndexedDB backend to dual databases (`storycraft-state-db`, `storycraft-data-db`) and added `visibilitychange` save flush in `index.tsx`.
+- **AI providers:** Extended provider set with Grok support and policy guardrails (local-only and EU-residency blocking), plus Zod response validation in `services/aiProviderService.ts`.
+- **Collaboration resilience:** Added exponential backoff connection path in `services/collaborationService.ts`.
+- **CI quality gates:** Added mutation-testing stage scaffold (`Stryker`) in `.github/workflows/ci.yml`.
 
 ## [1.2.0] - 2026-05-02
 

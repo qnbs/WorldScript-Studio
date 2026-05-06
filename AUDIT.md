@@ -32,6 +32,53 @@
 
 ---
 
+## Follow-up Audit — 2026-05-06
+
+### Architecture and platform
+
+- Migrated from single-package layout to **pnpm workspace + Turborepo** baseline:
+  - `pnpm-workspace.yaml` now includes `packages/*`
+  - `turbo.json` defines orchestrated `build`, `dev`, `lint`, `typecheck`, `test` tasks
+  - Created `@domain/ai-core` and `@domain/ui` workspace packages
+- Added tri-layer state model:
+  - Persistent: existing Redux + listener middleware
+  - Cached: RTK Query slice (`app/aiApi.ts`)
+  - Transient: Zustand store (`app/transientUiStore.ts`)
+
+### Storage and integrity
+
+- Refactored IndexedDB backend into **dual DB topology**:
+  - `storycraft-state-db` for app/snapshot state
+  - `storycraft-data-db` for images, codex, rag vectors
+- Added `visibilitychange` persistence flush in `index.tsx` to reduce hidden-tab data loss windows.
+
+### AI, sync, and security
+
+- Added local AI facade integration (`services/localAiFacade.ts`) on top of `@domain/ai-core` WorkerBus abstractions.
+- Added BYOK provider hardening in `services/aiProviderService.ts`:
+  - Grok provider integration
+  - Zod response shape validation
+  - local-only mode cloud blocking
+  - EU residency guardrail for restricted providers
+- Added collaboration exponential backoff path in `services/collaborationService.ts`.
+- Added EXIF stripping utility (`services/imageSanitizer.ts`) for media hygiene.
+
+### CI and verification
+
+- Added mutation testing stage scaffold (Stryker) in `.github/workflows/ci.yml`.
+- Local validation executed:
+  - `pnpm run typecheck` ✅
+  - `pnpm run lint` ✅
+  - `pnpm run graphify:update` ✅
+
+### Residual risks / next audit targets
+
+- Local AI layers currently include placeholder fallback behavior; full WebLLM + Transformers runtime path should be completed in a dedicated performance validation cycle.
+- Dual-DB migration from legacy `storycraft-db` should be covered by explicit migration tests with fixture snapshots from previous releases.
+- CI mutation stage is scaffolded and conditional; repository-level Stryker config should be finalized to make mutation thresholds enforceable.
+
+---
+
 ## Self-Audit Summary
 
 - `pnpm outdated` identified outdated dependencies that should be reviewed in a follow-up dependency refresh cycle.

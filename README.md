@@ -209,12 +209,12 @@ Language selection persists across sessions via `localStorage`.
 | Layer                | Technology                           | Purpose                                                              |
 | -------------------- | ------------------------------------ | -------------------------------------------------------------------- |
 | **UI Framework**     | React 19 + TypeScript                | Component-based, fully type-safe UI                                  |
-| **Build Tool**       | Vite 8                               | Instant dev server, optimized production builds with manual chunking |
-| **State Management** | Redux Toolkit + Redux-Undo           | Predictable global state with 100-step undo history                  |
+| **Build Tool**       | Vite 8 + Turborepo                   | App build + workspace orchestration (`turbo.json`)                   |
+| **State Management** | Redux Toolkit + Redux-Undo + RTK Query + Zustand | Persistent, cached, and transient state layers              |
 | **Styling**          | Tailwind CSS + CSS Variables         | Utility-first design with theme-aware custom properties              |
-| **AI Integration**   | Google Gemini API (`@google/genai`)  | Multimodal generative AI for all creative features                   |
-| **Local AI**         | Ollama HTTP client (`ollamaService`) | Privacy-first local inference; auto-detects models via `/api/tags`   |
-| **Storage**          | IndexedDB (custom `dbService`)       | Large-capacity, async, offline-first local persistence               |
+| **AI Integration**   | Gemini / OpenAI / Claude / Grok (BYOK) | Provider routing with policy guardrails and schema validation      |
+| **Local AI**         | `@domain/ai-core` facade + WorkerBus  | 3-layer local fallback (WebGPU → CPU model layer → heuristics)       |
+| **Storage**          | Dual IndexedDB (`StateDB` + `DataDB`) | Split state/data persistence for resilience and migration clarity     |
 | **Encryption**       | Web Crypto API (AES-256-GCM)         | Client-side API key encryption before IndexedDB storage              |
 | **PDF Export**       | jsPDF                                | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                         | Word-compatible `.docx` generation (lazy-loaded for export actions)  |
@@ -228,18 +228,22 @@ Language selection persists across sessions via `localStorage`.
 
 ```text
 StoryCraft-Studio/
+├── packages/
+│   ├── ai-core/          # Local AI facade (WorkerBus, sanitizing, fallback layers)
+│   └── ui/               # Shared design tokens + tailwind preset
+├── app/                  # Redux store, RTK Query API slices, transient ui state
 ├── components/           # All UI view components
 │   └── ui/               # Reusable generic components (Button, Modal, Toast, …)
 ├── features/             # Redux Toolkit slices (project, settings, status, writer)
 ├── hooks/                # Custom hooks with all view business logic
 ├── contexts/             # React Context providers (i18n, per-view state sharing)
-├── services/             # External API & storage adapters (gemini, db, storage)
+├── services/             # External API & storage adapters (ai providers, db, storage)
 ├── locales/              # i18n source files (per language × per module)
 ├── public/
 │   ├── locales/          # i18n runtime files (copied from locales/ at build)
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest
-├── app/                  # Redux store, listener middleware, utilities
+├── turbo.json            # Turborepo pipeline
 └── types.ts              # Shared TypeScript interfaces and types
 ```
 
@@ -253,12 +257,12 @@ A modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+) is all you need
 
 ### 🔐 Setting Up AI
 
-StoryCraft Studio supports two AI providers — choose what fits your privacy needs:
+StoryCraft Studio supports local AI plus BYOK cloud providers:
 
-#### Option A: Google Gemini (cloud, free tier available)
+#### Option A: Google Gemini / OpenAI / Claude / Grok (BYOK cloud)
 
 1. **Get your key** at [Google AI Studio](https://aistudio.google.com/app/apikey) — it's free
-2. **Open Settings** → AI Provider → select **Gemini**
+2. **Open Settings** → AI Provider → select your provider
 3. **Enter your API key** — encrypted with AES-256-GCM and stored only in your browser's IndexedDB
 
 **Security best practices:**
@@ -266,12 +270,12 @@ StoryCraft Studio supports two AI providers — choose what fits your privacy ne
 - ✅ Encrypted at rest via the Web Crypto API
 - 🔒 **Recommended:** Restrict your key to `*.github.io` in Google AI Studio
 
-#### Option B: Ollama (local, fully private)
+#### Option B: Local AI (offline-first)
 
 1. **Install Ollama** and pull a model: `ollama pull qwen3:8b`
-2. **Open Settings** → AI Provider → select **Ollama**
-3. **Set server URL** (default `http://localhost:11434`) — models are auto-detected
-4. All inference runs on your machine; no internet required
+2. Local facade uses layered execution (WebGPU-preferred, then CPU-compatible layer, then heuristic fallback)
+3. Optional Ollama endpoint can still be used for local model serving (default `http://localhost:11434`)
+4. All local inference runs on your machine; no internet required
 
 ### 🚀 Deploying to GitHub Pages
 
