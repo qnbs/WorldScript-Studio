@@ -105,6 +105,15 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 
 ---
 
+## E2E authoring (Playwright)
+
+- Specs run **only** when `CI=true` (`pnpm run test:e2e`). CI installs **Chromium**; locally you may also run Firefox projects (`playwright.config.ts`).
+- Shared utilities: **[`tests/e2e/helpers.ts`](../tests/e2e/helpers.ts)** — replace brittle `networkidle` waits with `waitForSpaReady()`, bootstrap projects via `ensureBlankProject()`, and prefer **sidebar-scoped** locators (`#sidebar`) so desktop navigation is unambiguous.
+- The **Version Control** drawer uses a modal backdrop; close it (**Escape** when no nested modal is open) before clicking other chrome.
+- Visual baselines live under `tests/e2e/*-snapshots/`; `snapshotPathTemplate` omits the OS segment so one PNG can serve Linux CI and Windows/macOS dev machines.
+
+---
+
 ## Related files
 
 | File | Role |

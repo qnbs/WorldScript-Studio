@@ -8,6 +8,14 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## v1.3.x — Nacharbeiten & Qualität
+
+### Niedrig (🟢)
+
+- ✅ Vollständige Markdown-Doku-Synchronisation (README Hub, CONTRIBUTING, docs/CI, AUDIT, Copilot, CLAUDE, SECURITY, TAURI/graphify, CHANGELOG/ROADMAP/TODO) — 2026-05-06
+
+---
+
 ## v1.2.0 — Security & Quality
 
 ### Hoch (🟡)

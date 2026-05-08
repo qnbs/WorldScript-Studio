@@ -90,8 +90,8 @@ types.ts          → Core shared interfaces and types
 
 ### Testing
 
-- Unit tests: Vitest + @testing-library/react in `tests/` directory
-- E2E tests: Playwright in `tests/` with `.spec.ts` suffix
+- Unit tests: Vitest + @testing-library/react in `tests/unit/` (see `tests/setup.ts`)
+- E2E tests: Playwright in **`tests/e2e/*.spec.ts`** — **`CI=true`** is required (`pnpm run test:e2e`). Shared waits/bootstrap live in **`tests/e2e/helpers.ts`**; do **not** use `networkidle` against the Vite dev server (HMR keeps sockets open). Scope sidebar navigation via **`#sidebar`** when both mobile and desktop nav exist.
 - Test file naming: `ComponentName.test.tsx` or `serviceName.test.ts`
 - Mock external services (Gemini API, IndexedDB) in unit tests
 - Verify accessibility: assert `role`, `aria-*` attributes in component tests
@@ -99,10 +99,10 @@ types.ts          → Core shared interfaces and types
 ### i18n
 
 - All user-facing strings must use `t('key.path')` from `useTranslation()`
-- Translation files are in `locales/{lang}/{module}.json`
-- 14 modules: common, sidebar, dashboard, writer, characters, worlds, outline, templates, manuscript, export, settings, help, tags, portal
+- Translation files are in `locales/{lang}/{module}.json` (and mirrored under `public/locales/` for runtime)
+- 14 modules per language; **the in-app selector exposes five locales:** **de**, **en**, **fr**, **es**, **it** — keep key parity with English (`pnpm run i18n:check` in CI)
 - English is the fallback language
-- New keys: add to **`locales/de/`** and **`locales/en/`** at minimum; fr/es/it files are kept for future UI activation
+- New keys: add to **`locales/en/`** first, then **de**, **fr**, **es**, **it** (or run `node scripts/check-i18n-keys.mjs --fix` and translate)
 
 ### Git & CI
 

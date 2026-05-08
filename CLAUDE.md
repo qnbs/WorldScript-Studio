@@ -15,7 +15,7 @@ pnpm run test:run      # Vitest single run (CI mode)
 pnpm run test:coverage # Vitest with V8 coverage (see thresholds in vitest.config.ts)
 pnpm run i18n:check    # Locale key parity (runs in CI quality job)
 pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
-pnpm run test:e2e      # Playwright E2E tests (requires CI=true)
+pnpm run test:e2e      # Playwright E2E tests (requires CI=true); specs use tests/e2e/helpers.ts — never rely on networkidle with Vite
 pnpm run storybook     # Storybook on port 6006
 pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 ```

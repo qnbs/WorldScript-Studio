@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing queued for the next tag yet; see **[1.3.0]** for the latest shipped release.
+### Documentation
+
+- Full repository markdown sweep (curated sources only): synchronized **README** Documentation Hub, **CONTRIBUTING**, **docs/CI.md** (E2E authoring), **AUDIT**, **CHANGELOG**, **ROADMAP** / **TODO**, **CLAUDE.md**, **`.github/copilot-instructions.md`**, **`.github/SECURITY.md`**, **`.github/ACTIONS-OPTIMIZATIONS.md`**, **docs/TAURI-CI.md**, **docs/TAURI-UPDATER.md**, **docs/graphify.md** — references to Playwright helpers (`tests/e2e/helpers.ts`), Version Control overlay/Escape behavior, and memoized `selectCurrentBranchSnapshots` where relevant. Generated folders (`tests/e2e/html-report/`, `.stryker-tmp/`) are not documentation sources.
+
+Nothing queued for the next tagged release beyond doc maintenance; see **[1.3.0]** for the latest shipped release.
 
 ---
 

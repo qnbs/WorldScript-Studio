@@ -6,6 +6,22 @@
 
 ---
 
+## Follow-up Audit — 2026-05-06 (documentation inventory)
+
+### Markdown corpus (maintainer-curated)
+
+Aligned **all first-class** repository `.md` files with the current toolchain and UX: **README** (Documentation Hub expanded), **CONTRIBUTING** (Playwright helpers / backdrop caveat), **docs/CI.md** (E2E authoring section), **CHANGELOG** `[Unreleased]` doc notes, **ROADMAP** / **TODO**, **CLAUDE.md**, **`.github/copilot-instructions.md`** (testing + i18n reality), **`.github/SECURITY.md`**, **`.github/ACTIONS-OPTIMIZATIONS.md`**, **docs/TAURI-CI.md**, **docs/TAURI-UPDATER.md**, **docs/graphify.md**.  
+
+**Excluded by design:** generated Playwright HTML exports (`tests/e2e/html-report/**`), Stryker sandboxes (`.stryker-tmp/**`), and IDE-only plans under `.cursor/plans/` — not treated as product documentation.
+
+### Cross-links to recent engineering fixes
+
+- **E2E:** [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) documents SPA-ready waits and Welcome Portal bootstrap; avoids `networkidle` under Vite.
+- **Version Control UI:** Escape closes the panel when no nested modal is open ([`components/VersionControlPanel.tsx`](components/VersionControlPanel.tsx)); prevents backdrop from blocking sidebar clicks in tests and manual use.
+- **Redux:** [`selectCurrentBranchSnapshots`](features/versionControl/versionControlSlice.ts) memoized with `createSelector` to stop unstable array references tripping `useSelector` warnings.
+
+---
+
 ## Follow-up Audit — 2026-05-02
 
 ### Documentation & DX alignment
@@ -48,7 +64,7 @@
 
 ---
 
-## Follow-up Audit — 2026-05-06
+## Follow-up Audit — 2026-05-06 (architecture stack)
 
 ### Architecture and platform
 

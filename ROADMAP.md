@@ -40,6 +40,7 @@ All critical, high, and most medium-priority items have been completed, includin
 **Status:** ✅ Released as **v1.3.0** (2026-05-08) — siehe [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md) (Follow-up 2026-05-08).
 
 - Legacy → dual IndexedDB migration, Story Bible / Codex feature flags, scene visualization, `@google/genai` v2, Stryker + Playwright visual/a11y harness, Biome `--error-on-warnings`.
+- **Documentation (2026-05-06):** Full curated `.md` inventory aligned with Playwright helpers (`tests/e2e/helpers.ts`), CI reference, and agent onboarding files — siehe [`AUDIT.md`](AUDIT.md) Abschnitt „2026-05-06 (documentation inventory)“.
 
 ---
 

@@ -32,3 +32,4 @@ Dokumentation einer Audit-Runde für `.github/workflows/ci.yml` und zugehörige 
 
 - [`docs/CI.md`](../docs/CI.md) — aktuelle Pipeline-Beschreibung (englisch, CI-parity-fokussiert)
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — lokale Entwicklung und Qualitätskommandos
+- [`tests/e2e/helpers.ts`](../tests/e2e/helpers.ts) — Playwright-Helfer (SPA-ready waits; kein `networkidle` unter Vite)

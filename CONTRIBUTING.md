@@ -207,6 +207,14 @@ $env:CI='true'; pnpm run test:e2e:ui
 $env:CI='true'; pnpm exec playwright test tests/e2e/visual-regression.spec.ts --update-snapshots --project=chromium
 ```
 
+#### Shared helpers (`tests/e2e/helpers.ts`)
+
+- **Never** `waitForLoadState('networkidle')` against the Vite dev server — HMR/WebSocket traffic prevents a stable idle state. Use `waitForSpaReady()` / DOM anchors instead.
+- **`selectEnglish()`** — welcome-portal language toggle so assertions match English copy.
+- **`ensureBlankProject()`** — exits the Welcome Portal with a blank manuscript so the main shell (`#sidebar` or mobile tab bar) exists (fresh CI contexts start as “new users” with no IndexedDB).
+- **`sidebar(page)`** — scopes clicks to `#sidebar` to avoid matching duplicate nav controls (desktop vs mobile).
+- **Version History panel** — when open, a full-screen backdrop intercepts pointer events; press **Escape** (panel closes when no inner modal is open) or use the close control before navigating elsewhere.
+
 Tests live in `tests/e2e/`. Playwright tests verify core user flows:
 
 - Navigation between views

@@ -396,6 +396,9 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | [`ROADMAP.md`](ROADMAP.md) / [`TODO.md`](TODO.md) | Planning and sprint tasks |
 | [`CHANGELOG.md`](CHANGELOG.md) | Keep a Changelog–style release notes |
 | [`docs/graphify.md`](docs/graphify.md) | Optional Graphify graph (`pnpm run graphify:update`, `pip install graphifyy`) |
+| [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Tauri plugin-updater: keys, signing secrets, `latest.json` |
+| [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md) | Archivierte Release-Notizen (v1.1.x) |
+| [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) | Playwright-Helfer (kein `networkidle` unter Vite, Portal-Bootstrap, Sidebar-Scope) |
 | [`.cursorrules`](.cursorrules) | **QNBS v3** — Cursor AI behavior for qnbs repos (context-first, StoryCraft “soul”) |
 | [`CLAUDE.md`](CLAUDE.md) | Guidance for Claude Code |
 | [`.github/copilot-instructions.md`](.github/copilot-instructions.md) | GitHub Copilot Chat context |
