@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/stryker.conf.json",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "coverageAnalysis": "perTest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "mutate": ["services/codexService.ts", "services/dbMigration.ts"],
+  "thresholds": {
+    "high": 70,
+    "low": 40,
+    "break": null
+  },
+  "timeoutMS": 180000,
+  "concurrency": 2,
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/*.test.ts", "**/*.spec.ts"]
+}

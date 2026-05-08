@@ -13,5 +13,10 @@
   "manuscript.addSection": "Neuen Abschnitt hinzufügen",
   "manuscript.untitledSection": "Unbenannter Abschnitt",
   "manuscript.deleteSection": "Abschnitt löschen",
-  "manuscript.titlePlaceholder": "Kapiteltitel"
+  "manuscript.titlePlaceholder": "Kapiteltitel",
+  "manuscript.visualize.title": "Szenen-Illustration",
+  "manuscript.visualize.button": "Aktuelle Szene visualisieren",
+  "manuscript.visualize.hint": "Gemini (oder ein bildfähiger Anbieter) erzeugt ein Bild aus diesem Abschnitt. Lokal pro Abschnitt gespeichert.",
+  "manuscript.visualize.successTitle": "Szenenbild fertig",
+  "manuscript.visualize.successBody": "Vorschau unten; das vollständige Bild liegt im lokalen Speicher."
 }

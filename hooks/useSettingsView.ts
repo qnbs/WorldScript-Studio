@@ -164,6 +164,12 @@ export const useSettingsView = () => {
         case 'enableVisualRegression':
           dispatch(featureFlagsActions.setEnableVisualRegression(Boolean(value)));
           break;
+        case 'enableCodexAutoTracking':
+          dispatch(featureFlagsActions.setEnableCodexAutoTracking(Boolean(value)));
+          break;
+        case 'enableStoryBibleAdvanced':
+          dispatch(featureFlagsActions.setEnableStoryBibleAdvanced(Boolean(value)));
+          break;
         default:
           logger.warn(`Unknown setting key: ${key}`);
           break;

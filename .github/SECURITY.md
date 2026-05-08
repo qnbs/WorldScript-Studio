@@ -7,8 +7,9 @@ The project currently supports security fixes for the following versions:
 | Version | Supported |
 | --- | --- |
 | `main` (latest commit) | Yes |
-| `1.1.x` | Yes |
-| `< 1.1.0` | No |
+| `1.3.x` | Yes |
+| `1.2.x` | Best effort (upgrade recommended) |
+| `< 1.2.0` | No |
 
 ## Reporting a Vulnerability
 

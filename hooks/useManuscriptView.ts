@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import {
@@ -9,6 +9,7 @@ import {
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateLoglineSuggestionsThunk,
+  generateSceneImageThunk,
   proofreadTextThunk,
 } from '../features/project/thunks/writingThunks';
 import type { Character, View, World } from '../types';
@@ -92,6 +93,8 @@ export const useManuscriptView = ({
   const [proofreadSuggestions, setProofreadSuggestions] = useState<
     { original: string; suggestion: string; explanation: string }[]
   >([]);
+  const [isSceneVisualizing, setIsSceneVisualizing] = useState(false);
+  const [sceneImagePreviewUrl, setSceneImagePreviewUrl] = useState<string | null>(null);
 
   // Drag and drop state
   const draggedItem = useRef<number | null>(null);
@@ -111,6 +114,11 @@ export const useManuscriptView = ({
     const currentActiveId = activeSectionId || manuscript?.[0]?.id;
     return manuscript.find((s) => s.id === currentActiveId) || manuscript?.[0];
   }, [activeSectionId, manuscript]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset preview on active section change
+  useEffect(() => {
+    setSceneImagePreviewUrl(null);
+  }, [activeSectionId]);
 
   const activeSectionStats = useMemo(() => {
     if (!activeSection) return { wordCount: 0, charCount: 0, readTime: 0 };
@@ -295,6 +303,28 @@ export const useManuscriptView = ({
     setIsProofreading(false);
   };
 
+  const handleVisualizeScene = useCallback(async () => {
+    if (!activeSection?.content?.trim() || !project) return;
+    setIsSceneVisualizing(true);
+    try {
+      const result = await dispatch(
+        generateSceneImageThunk({
+          sectionId: activeSection.id,
+          sectionTitle: activeSection.title,
+          sectionContent: activeSection.content,
+          projectTitle: project.title,
+          lang: language,
+        }),
+      ).unwrap();
+      setSceneImagePreviewUrl(result.dataUrl);
+      toast.success(t('manuscript.visualize.successTitle'), t('manuscript.visualize.successBody'));
+    } catch {
+      toast.error(t('error.apiErrorTitle'));
+    } finally {
+      setIsSceneVisualizing(false);
+    }
+  }, [activeSection, dispatch, language, project, t, toast]);
+
   const applyProofreadSuggestion = (index: number) => {
     if (!activeSection) return;
     const suggestion = proofreadSuggestions[index];
@@ -343,6 +373,10 @@ export const useManuscriptView = ({
     handleProofread,
     proofreadSuggestions,
     applyProofreadSuggestion,
+    // Scene visualization (Gemini image)
+    isSceneVisualizing,
+    handleVisualizeScene,
+    sceneImagePreviewUrl,
   };
 };
 

@@ -35,9 +35,17 @@ All critical, high, and most medium-priority items have been completed, includin
 
 ---
 
+## v1.3 — Dual persistence, Codex hardening, quality gates
+
+**Status:** ✅ Released as **v1.3.0** (2026-05-08) — siehe [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md) (Follow-up 2026-05-08).
+
+- Legacy → dual IndexedDB migration, Story Bible / Codex feature flags, scene visualization, `@google/genai` v2, Stryker + Playwright visual/a11y harness, Biome `--error-on-warnings`.
+
+---
+
 ## v1.2 — Security, Quality & Local AI
 
-**Status:** 🔄 In Arbeit
+**Status:** ✅ Abgeschlossen (Security-Härting, Tauri-Parität, i18n×5, Spotlight-Tour — siehe CHANGELOG **[1.2.0]**)
 
 ### Security Hardening ✅ abgeschlossen
 

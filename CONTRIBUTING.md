@@ -190,7 +190,9 @@ Tests live in `tests/unit/`. Each UI component and core hook should have a test 
 
 ### E2E Tests (Playwright)
 
-CI sets `CI=true` (required by `package.json` scripts). Locally:
+CI sets `CI=true` (required by `package.json` scripts). **GitHub Actions only installs Chromium**; `playwright.config.ts` runs the **Firefox** project when not in CI.
+
+Locally:
 
 ```bash
 pnpm run dev          # Optional: dev server for manual exploration
@@ -199,12 +201,26 @@ $env:CI='true'; pnpm run test:e2e    # PowerShell
 $env:CI='true'; pnpm run test:e2e:ui
 ```
 
+**Visual regression** (`tests/e2e/visual-regression.spec.ts`) stores baselines under `tests/e2e/*-snapshots/`. The config uses a shared `snapshotPathTemplate` (no per-OS suffix) so one committed PNG can match Linux CI and local dev. After intentional UI changes:
+
+```bash
+$env:CI='true'; pnpm exec playwright test tests/e2e/visual-regression.spec.ts --update-snapshots --project=chromium
+```
+
 Tests live in `tests/e2e/`. Playwright tests verify core user flows:
 
 - Navigation between views
 - Export functionality
 - Keyboard accessibility
 - Mobile viewport behavior
+
+### Mutation testing (Stryker)
+
+Targets `services/codexService.ts` and `services/dbMigration.ts` (see [`stryker.conf.json`](stryker.conf.json)). HTML report: `reports/mutation/`. `thresholds.break` is `null` until kill-rate improves; the CI mutation job uses `continue-on-error: true`.
+
+```bash
+pnpm run mutation
+```
 
 ### Storybook
 

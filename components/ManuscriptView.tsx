@@ -804,6 +804,7 @@ const InspectorPanel: FC = React.memo(() => {
     t,
     project,
     dispatch,
+    activeSection,
     activeSectionStats,
     isLoglineModalOpen,
     setIsLoglineModalOpen,
@@ -815,6 +816,9 @@ const InspectorPanel: FC = React.memo(() => {
     handleProofread,
     proofreadSuggestions,
     applyProofreadSuggestion,
+    isSceneVisualizing,
+    handleVisualizeScene,
+    sceneImagePreviewUrl,
   } = useManuscriptViewContext();
   return (
     <>
@@ -892,6 +896,51 @@ const InspectorPanel: FC = React.memo(() => {
                 })}
               </span>
             </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex justify-between items-center pb-2">
+            <h3 className="text-base font-semibold">{t('manuscript.visualize.title')}</h3>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              type="button"
+              onClick={handleVisualizeScene}
+              disabled={isSceneVisualizing || !activeSection?.content?.trim()}
+              variant="ghost"
+              className="w-full justify-start text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/10 dark:hover:bg-indigo-900/80 p-2"
+            >
+              {isSceneVisualizing ? (
+                <Spinner className="mr-2" />
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-5 h-5 mr-2"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008H15V10.5z"
+                  />
+                </svg>
+              )}
+              {t('manuscript.visualize.button')}
+            </Button>
+            <p className="text-xs text-[var(--foreground-muted)]">
+              {t('manuscript.visualize.hint')}
+            </p>
+            {sceneImagePreviewUrl ? (
+              <img
+                src={sceneImagePreviewUrl}
+                alt=""
+                className="w-full rounded-lg border border-[var(--border-primary)] max-h-64 object-contain bg-black/20"
+              />
+            ) : null}
           </CardContent>
         </Card>
         <Card>

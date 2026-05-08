@@ -4,6 +4,10 @@ export interface FeatureFlagsState {
   enableOllama: boolean;
   enablePerformanceBudgets: boolean;
   enableVisualRegression: boolean;
+  /** When false, manuscript Codex extraction listener is skipped (default: true). */
+  enableCodexAutoTracking: boolean;
+  /** Story Bible Light: graph edges + consistency hints in Codex (default: false). */
+  enableStoryBibleAdvanced: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -12,6 +16,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableOllama: false,
   enablePerformanceBudgets: false,
   enableVisualRegression: false,
+  enableCodexAutoTracking: true,
+  enableStoryBibleAdvanced: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -62,6 +68,12 @@ const featureFlagsSlice = createSlice({
     setEnableVisualRegression(state, action: PayloadAction<boolean>) {
       state.enableVisualRegression = action.payload;
     },
+    setEnableCodexAutoTracking(state, action: PayloadAction<boolean>) {
+      state.enableCodexAutoTracking = action.payload;
+    },
+    setEnableStoryBibleAdvanced(state, action: PayloadAction<boolean>) {
+      state.enableStoryBibleAdvanced = action.payload;
+    },
   },
 });
 
@@ -74,6 +86,10 @@ export const selectEnablePerformanceBudgets = (state: { featureFlags: FeatureFla
   state.featureFlags.enablePerformanceBudgets;
 export const selectEnableVisualRegression = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableVisualRegression;
+export const selectEnableCodexAutoTracking = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableCodexAutoTracking;
+export const selectEnableStoryBibleAdvanced = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableStoryBibleAdvanced;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

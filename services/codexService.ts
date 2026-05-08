@@ -1,4 +1,12 @@
-import type { Character, StoryCodex, StoryCodexEntity, StorySection, World } from '../types';
+import type {
+  Character,
+  StoryCodex,
+  StoryCodexConsistencyHint,
+  StoryCodexEntity,
+  StoryCodexRelationshipEdge,
+  StorySection,
+  World,
+} from '../types';
 import { storageService } from './storageService';
 
 const STOPWORDS = new Set([
@@ -60,6 +68,85 @@ const getExcerpt = (text: string, index: number, length = 40): string => {
 
 const normalizeCandidate = (candidate: string): string => candidate.trim().replace(/\s+/g, ' ');
 
+export type ExtractCodexOptions = {
+  /** Adds co-mention graph edges + rule-based consistency hints (Story Bible Light). */
+  advanced?: boolean;
+};
+
+function buildRelationshipEdges(entities: StoryCodexEntity[]): StoryCodexRelationshipEdge[] {
+  const sectionToIds = new Map<string, Set<string>>();
+  for (const ent of entities) {
+    for (const m of ent.mentions) {
+      if (!sectionToIds.has(m.sectionId)) {
+        sectionToIds.set(m.sectionId, new Set());
+      }
+      sectionToIds.get(m.sectionId)!.add(ent.id);
+    }
+  }
+
+  const pairMap = new Map<
+    string,
+    { source: string; target: string; weight: number; sections: Set<string> }
+  >();
+
+  for (const [sectionId, idSet] of sectionToIds) {
+    const ids = [...idSet].sort();
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i]!;
+        const b = ids[j]!;
+        const source = a < b ? a : b;
+        const target = a < b ? b : a;
+        const key = `${source}::${target}`;
+        const edge = pairMap.get(key) ?? {
+          source,
+          target,
+          weight: 0,
+          sections: new Set<string>(),
+        };
+        edge.weight += 1;
+        edge.sections.add(sectionId);
+        pairMap.set(key, edge);
+      }
+    }
+  }
+
+  return [...pairMap.values()]
+    .map((e) => ({
+      sourceEntityId: e.source,
+      targetEntityId: e.target,
+      weight: e.weight,
+      sectionIds: [...e.sections],
+    }))
+    .sort((x, y) => y.weight - x.weight)
+    .slice(0, 200);
+}
+
+function buildConsistencyHints(entities: StoryCodexEntity[]): StoryCodexConsistencyHint[] {
+  const hints: StoryCodexConsistencyHint[] = [];
+
+  for (const ent of entities) {
+    if (ent.type === 'unknown' && ent.mentionCount >= 8) {
+      hints.push({
+        id: `unknown-heavy-${ent.id}`,
+        severity: 'warn',
+        message: `"${ent.name}" appears often but is not linked to a character or world — consider defining it in your bible.`,
+        entityIds: [ent.id],
+      });
+    }
+    if (ent.known && ent.type === 'character' && ent.mentionCount === 0) {
+      hints.push({
+        id: `absent-char-${ent.id}`,
+        severity: 'info',
+        message: `Character "${ent.name}" is defined but never mentioned in the manuscript.`,
+        entityIds: [ent.id],
+      });
+    }
+  }
+
+  return hints.slice(0, 50);
+}
+
 // QNBS-v3: ES2025 `RegExp.escape` is missing in some test runtimes (Vitest/jsdom); fallback mirrors core escaping.
 const escapeRegExpLiteral = (s: string): string => {
   const R = RegExp as unknown as { escape?: (input: string) => string };
@@ -72,6 +159,7 @@ export const extractStoryCodex = (
   manuscript: StorySection[],
   characters: Character[],
   worlds: World[],
+  options?: ExtractCodexOptions,
 ): StoryCodex => {
   const entityMap = new Map<string, StoryCodexEntity>();
 
@@ -159,11 +247,21 @@ export const extractStoryCodex = (
     .map((entity) => `${entity.type}: ${entity.name} (${entity.mentionCount} mentions)`)
     .join('\n');
 
-  return {
+  const base: StoryCodex = {
     projectId,
     extractedAt: new Date().toISOString(),
     entities,
     summary: summary || 'No story codex entries could be extracted from the manuscript yet.',
+  };
+
+  if (!options?.advanced) {
+    return base;
+  }
+
+  return {
+    ...base,
+    relationshipEdges: buildRelationshipEdges(entities),
+    consistencyHints: buildConsistencyHints(entities),
   };
 };
 

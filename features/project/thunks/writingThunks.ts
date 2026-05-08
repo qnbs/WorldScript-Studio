@@ -1,4 +1,5 @@
 import type { RootState } from '../../../app/store';
+import { storageService } from '../../../services/storageService';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
 import { buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
@@ -52,6 +53,37 @@ export const proofreadTextThunk = createDeduplicatedThunk(
       aiOptions,
       signal,
     );
+  },
+);
+
+export const generateSceneImageThunk = createDeduplicatedThunk(
+  'project/generateSceneImage',
+  async (
+    payload: {
+      sectionId: string;
+      sectionTitle: string;
+      sectionContent: string;
+      projectTitle: string;
+      lang: string;
+    },
+    { getState, signal, registerDuplicateRequest },
+  ) => {
+    const state = getState() as RootState;
+    const aiOptions = buildAiOptions(state);
+    const { getPrompts } = await loadPrompts();
+    const { generateImage } = await loadAiProvider();
+    const { prompt } = getPrompts('sceneVisualization', {
+      sectionTitle: payload.sectionTitle,
+      sectionContent: payload.sectionContent,
+      projectTitle: payload.projectTitle,
+      lang: payload.lang,
+    });
+    registerDuplicateRequest(prompt, 'sceneVisualization');
+    const base64 = await generateImage(prompt, aiOptions, signal);
+    const imageKey = `scene-${payload.sectionId}`;
+    await storageService.saveImage(imageKey, base64);
+    const dataUrl = base64.includes('data:image') ? base64 : `data:image/png;base64,${base64}`;
+    return { imageKey, dataUrl };
   },
 );
 

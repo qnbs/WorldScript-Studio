@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Character } from '../types';
+import type { Character, StoryCodex } from '../types';
 
 interface ConsistencyCheckerViewContextType {
   t: (key: string) => string;
@@ -9,6 +9,7 @@ interface ConsistencyCheckerViewContextType {
   checkResult: string;
   isChecking: boolean;
   runCheck: (characterId: string) => void;
+  storyCodex: StoryCodex | null;
 }
 
 export const ConsistencyCheckerViewContext =

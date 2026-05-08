@@ -123,5 +123,6 @@ export const useConsistencyCheckerView = () => {
     checkResult,
     isChecking,
     runCheck,
+    storyCodex,
   };
 };
