@@ -10,6 +10,8 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ## v1.3.x — Nacharbeiten & Qualität
 
+> Vollständige **`.md`-Inventur** (15 Quellen): [`AUDIT.md`](AUDIT.md) § *Markdown corpus*; Navigation: [`README.md`](README.md#-documentation-hub).
+
 ### Niedrig (🟢)
 
 - ✅ Vollständige Markdown-Doku-Synchronisation (README Hub, CONTRIBUTING, docs/CI, AUDIT, Copilot, CLAUDE, SECURITY, TAURI/graphify, CHANGELOG/ROADMAP/TODO) — 2026-05-06
