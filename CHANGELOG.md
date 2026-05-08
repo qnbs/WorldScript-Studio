@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Full repository markdown sweep (curated sources only): synchronized **README** Documentation Hub, **CONTRIBUTING**, **docs/CI.md** (E2E authoring), **AUDIT**, **CHANGELOG**, **ROADMAP** / **TODO**, **CLAUDE.md**, **`.github/copilot-instructions.md`**, **`.github/SECURITY.md`**, **`.github/ACTIONS-OPTIMIZATIONS.md`**, **docs/TAURI-CI.md**, **docs/TAURI-UPDATER.md**, **docs/graphify.md** — references to Playwright helpers (`tests/e2e/helpers.ts`), Version Control overlay/Escape behavior, and memoized `selectCurrentBranchSnapshots` where relevant. Generated folders (`tests/e2e/html-report/`, `.stryker-tmp/`) are not documentation sources.
+- **Complete curated markdown pass (15 `.md` sources):** explicit inventory and cross-links in **[`AUDIT.md`](AUDIT.md)**; **README** Documentation Hub now includes **`.github/ACTIONS-OPTIMIZATIONS.md`** and every maintainer-facing guide; **`docs/CI.md`** related-files table links the historical Actions doc; **`.github/copilot-instructions.md`** storage wording aligned with **dual IndexedDB** + `storageService` (browser vs Tauri). References throughout: Playwright **[`tests/e2e/helpers.ts`](tests/e2e/helpers.ts)** (no `networkidle` under Vite), Version Control overlay / **Escape**, memoized **`selectCurrentBranchSnapshots`**. Generated paths (`tests/e2e/html-report/`, `.stryker-tmp/`) remain non-doc.
 
 Nothing queued for the next tagged release beyond doc maintenance; see **[1.3.0]** for the latest shipped release.
 

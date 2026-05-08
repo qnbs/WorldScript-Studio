@@ -119,6 +119,7 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | File | Role |
 |------|------|
 | `.github/workflows/ci.yml` | Pipeline definition |
+| `.github/ACTIONS-OPTIMIZATIONS.md` | Historical runner optimization notes (see this file for **current** graph) |
 | `.github/workflows/tauri-build.yml` | Optional desktop bundle builds + GitHub Release assets on `v*` tags |
 | `.nvmrc` | Node version for Actions and dev |
 | `.lighthouserc.cjs` | Lighthouse assertions and collect URL |

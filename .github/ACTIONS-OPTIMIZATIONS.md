@@ -1,6 +1,6 @@
 # GitHub Actions — Optimierungs-Historie
 
-> **Stand Hinweis (2026-05):** Die nachfolgende Tabelle und Detailabschnitte beschreiben eine **Optimierungs-Runde und Zielgrößen**. Die **aktuell gültige** Job-Struktur, Trigger und Tooling sind in [**`docs/CI.md`**](../docs/CI.md) und [`.github/workflows/ci.yml`](./workflows/ci.yml) dokumentiert. Abweichungen (z. B. fehlende `tauri`-/`build-node`-Jobs im Haupt-Workflow) sind normal, sobald die Pipeline weiter vereinfacht wurde.
+> **Stand Hinweis (2026-05):** Die nachfolgende Tabelle und Detailabschnitte beschreiben eine **Optimierungs-Runde und Zielgrößen**. Die **aktuell gültige** Job-Struktur, Trigger und Tooling sind in [**`docs/CI.md`**](../docs/CI.md) und [`.github/workflows/ci.yml`](./workflows/ci.yml) dokumentiert. Abweichungen (z. B. fehlende `tauri`-/`build-node`-Jobs im Haupt-Workflow) sind normal, sobald die Pipeline weiter vereinfacht wurde. Diese Datei ist im **[README § Documentation Hub](../README.md#-documentation-hub)** verlinkt.
 
 ## Ziel
 

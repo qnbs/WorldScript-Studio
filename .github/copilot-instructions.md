@@ -14,7 +14,7 @@ StoryCraft Studio is an AI-powered creative writing application built as an offl
 - **State:** Redux Toolkit 2.x + Redux-Undo, feature-sliced design
 - **Styling:** Tailwind CSS 4.x with CSS custom properties for theming
 - **AI:** Google Gemini API via `@google/genai`, multi-provider abstraction (`aiProviderService.ts`)
-- **Storage:** IndexedDB (`dbService.ts`) with LZ-String compression, AES-256-GCM key encryption
+- **Storage:** Dual IndexedDB (`storycraft-state-db`, `storycraft-data-db`) via `dbService.ts` (LZ-String compression, AES-256-GCM key encryption); `storageService.ts` switches browser vs Tauri filesystem
 - **Collaboration:** Yjs + y-webrtc for P2P real-time editing
 - **Desktop:** Tauri 2 (optional)
 - **Package manager:** pnpm@10.x
@@ -29,7 +29,7 @@ components/       → React view components (one per view)
 contexts/         → React context providers (one per major view + I18nContext)
 features/         → Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
 hooks/            → Custom hooks with view business logic (one hook per view)
-services/         → External adapters: geminiService, dbService, storageService, collaborationService, epubApiService
+services/         → External adapters: geminiService, dbService (dual IndexedDB + migration), storageService, collaborationService, epubApiService
 locales/          → i18n source files (de, en, es, fr, it) × 14 modules
 public/locales/   → i18n runtime files served at BASE_URL
 tests/            → Unit + E2E tests (Vitest + Playwright)
@@ -49,7 +49,7 @@ types.ts          → Core shared interfaces and types
 
 3. **AI Service:** `geminiService.ts` is the primary AI adapter. It handles API key loading/caching, retry logic (2 retries, exponential backoff for 429s), and prompt construction. All AI calls should go through this service or `aiProviderService.ts`.
 
-4. **Storage:** `dbService.ts` wraps IndexedDB with compression (LZ-String for payloads > 10KB) and encryption (AES-256-GCM for API keys). `storageService.ts` provides a unified interface that auto-detects whether to use IndexedDB or Tauri filesystem.
+4. **Storage:** `dbService.ts` wraps **dual** IndexedDB (state vs data stores, legacy migration) with compression (LZ-String for payloads > 10KB) and encryption (AES-256-GCM for API keys). `storageService.ts` provides a unified interface that auto-detects IndexedDB vs Tauri filesystem.
 
 5. **i18n:** Custom React Context system in `I18nContext.tsx`. Translation keys use dot notation (`common.save`, `dashboard.wordCount`). All user-facing strings MUST be translation keys, never hardcoded text.
 

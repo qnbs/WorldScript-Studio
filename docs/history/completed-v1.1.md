@@ -2,6 +2,8 @@
 
 Archived from `TODO.md` on 2026-04-18. These items were completed during the v1.1 stabilisation and hardening cycle.
 
+For the **current** documentation map (all `.md` guides), see [`README.md`](../README.md#-documentation-hub) § Documentation Hub and [`AUDIT.md`](../AUDIT.md).
+
 ---
 
 ## Critical (🔴) — All Completed

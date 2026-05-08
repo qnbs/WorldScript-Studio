@@ -114,6 +114,8 @@ StoryCraft-Studio/
         └── ci.yml    # security → quality → build / e2e / storybook → lighthouse → deploy (main)
 ```
 
+**Documentation index:** [`README.md`](README.md) § **Documentation Hub** lists every maintainer-facing `.md` (15 sources), [`AUDIT.md`](AUDIT.md) § *Markdown corpus* repeats the inventory; canonical CI details → [`docs/CI.md`](docs/CI.md).
+
 ---
 
 ## Development Workflow

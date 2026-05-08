@@ -398,6 +398,7 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | [`docs/graphify.md`](docs/graphify.md) | Optional Graphify graph (`pnpm run graphify:update`, `pip install graphifyy`) |
 | [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Tauri plugin-updater: keys, signing secrets, `latest.json` |
 | [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md) | Archivierte Release-Notizen (v1.1.x) |
+| [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) | Historische CI-Optimierungsnotizen — **kanonisch:** [`docs/CI.md`](docs/CI.md) + [`ci.yml`](.github/workflows/ci.yml) |
 | [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) | Playwright-Helfer (kein `networkidle` unter Vite, Portal-Bootstrap, Sidebar-Scope) |
 | [`.cursorrules`](.cursorrules) | **QNBS v3** — Cursor AI behavior for qnbs repos (context-first, StoryCraft “soul”) |
 | [`CLAUDE.md`](CLAUDE.md) | Guidance for Claude Code |

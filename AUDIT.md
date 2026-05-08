@@ -10,7 +10,9 @@
 
 ### Markdown corpus (maintainer-curated)
 
-Aligned **all first-class** repository `.md` files with the current toolchain and UX: **README** (Documentation Hub expanded), **CONTRIBUTING** (Playwright helpers / backdrop caveat), **docs/CI.md** (E2E authoring section), **CHANGELOG** `[Unreleased]` doc notes, **ROADMAP** / **TODO**, **CLAUDE.md**, **`.github/copilot-instructions.md`** (testing + i18n reality), **`.github/SECURITY.md`**, **`.github/ACTIONS-OPTIMIZATIONS.md`**, **docs/TAURI-CI.md**, **docs/TAURI-UPDATER.md**, **docs/graphify.md**.  
+**Inventory (15 files):** [`README.md`](README.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md), [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md), [`CLAUDE.md`](CLAUDE.md), [`docs/CI.md`](docs/CI.md), [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), [`docs/graphify.md`](docs/graphify.md), [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md), [`.github/SECURITY.md`](.github/SECURITY.md), [`.github/copilot-instructions.md`](.github/copilot-instructions.md), [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md).
+
+Aligned with the current toolchain and UX: **README** Documentation Hub lists every entry above plus [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) and [`.cursorrules`](.cursorrules); **CONTRIBUTING** documents Playwright helpers and Version Control backdrop behavior; **docs/CI.md** holds E2E authoring notes; agent files (**CLAUDE**, **copilot-instructions**) reference dual IndexedDB + `tests/e2e/helpers.ts`; **SECURITY** supported-version table matches **1.3.x**; **CHANGELOG** `[Unreleased]` carries doc-maintenance notes; **ACTIONS-OPTIMIZATIONS** remains explicitly historical vs **`docs/CI.md`**.
 
 **Excluded by design:** generated Playwright HTML exports (`tests/e2e/html-report/**`), Stryker sandboxes (`.stryker-tmp/**`), and IDE-only plans under `.cursor/plans/` — not treated as product documentation.
 
