@@ -1,5 +1,7 @@
 import { expect, type Route, test } from '@playwright/test';
 
+import { waitForSpaReady } from './helpers';
+
 const isCI = process.env['CI'] === 'true';
 
 const mockGemini = async (route: Route) => {
@@ -37,7 +39,7 @@ test.describe('End-to-end project flow (CI-only)', () => {
     test.skip(!isCI, 'CI-only E2E suite');
     await page.route('**/generativelanguage.googleapis.com/**', mockGemini);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await waitForSpaReady(page);
   });
 
   test('full project flow navigates from AI outline to export and settings', async ({ page }) => {

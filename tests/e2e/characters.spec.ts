@@ -1,33 +1,24 @@
 import { expect, test } from '@playwright/test';
+import { ensureBlankProject, selectEnglish, sidebar, waitForSpaReady } from './helpers';
 
 const isCI = process.env['CI'] === 'true';
-
-/** Ensure a project exists by starting a blank one from the welcome portal. */
-async function ensureProject(page: import('@playwright/test').Page): Promise<void> {
-  const startBtn = page.getByRole('button', { name: /Start a New Project/i });
-  if (await startBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await startBtn.click();
-    await page
-      .getByRole('button', { name: /Blank Manuscript/i })
-      .first()
-      .click();
-    await page.waitForLoadState('networkidle');
-  }
-}
 
 test.describe('Character CRUD (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    const enBtn = page.getByRole('button', { name: /^EN$/i }).first();
-    if (await enBtn.isVisible()) await enBtn.click();
-    await ensureProject(page);
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
   });
 
   test('creates a character manually and it appears in the list', async ({ page }) => {
-    await page.getByRole('button', { name: /Characters/i }).click();
-    await page.waitForLoadState('networkidle');
+    await sidebar(page)
+      .getByRole('button', { name: /Characters/i })
+      .click();
+    await page
+      .getByRole('button', { name: /Add Manually/i })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     // "Add Manually" is an AddNewCard rendered as <button>
     await page.getByRole('button', { name: /Add Manually/i }).click();
@@ -47,8 +38,12 @@ test.describe('Character CRUD (CI-only)', () => {
   });
 
   test('edits a character name and the change persists', async ({ page }) => {
-    await page.getByRole('button', { name: /Characters/i }).click();
-    await page.waitForLoadState('networkidle');
+    await sidebar(page)
+      .getByRole('button', { name: /Characters/i })
+      .click();
+    await page
+      .getByRole('button', { name: /Add Manually/i })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     await page.getByRole('button', { name: /Add Manually/i }).click();
     const nameInput = page.getByRole('textbox', { name: /^Name$/i });
@@ -73,8 +68,12 @@ test.describe('Character CRUD (CI-only)', () => {
   });
 
   test('deletes a character and it disappears from the list', async ({ page }) => {
-    await page.getByRole('button', { name: /Characters/i }).click();
-    await page.waitForLoadState('networkidle');
+    await sidebar(page)
+      .getByRole('button', { name: /Characters/i })
+      .click();
+    await page
+      .getByRole('button', { name: /Add Manually/i })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     await page.getByRole('button', { name: /Add Manually/i }).click();
     const nameInput = page.getByRole('textbox', { name: /^Name$/i });
@@ -98,8 +97,12 @@ test.describe('Character CRUD (CI-only)', () => {
   });
 
   test('adding two characters shows both in the list', async ({ page }) => {
-    await page.getByRole('button', { name: /Characters/i }).click();
-    await page.waitForLoadState('networkidle');
+    await sidebar(page)
+      .getByRole('button', { name: /Characters/i })
+      .click();
+    await page
+      .getByRole('button', { name: /Add Manually/i })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     for (const name of ['Alpha Char', 'Beta Char']) {
       await page.getByRole('button', { name: /Add Manually/i }).click();

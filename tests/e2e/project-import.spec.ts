@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { ensureBlankProject, selectEnglish, sidebar, waitForSpaReady } from './helpers';
+
 const isCI = process.env['CI'] === 'true';
 
 const MINIMAL_PROJECT = JSON.stringify({
@@ -16,16 +18,19 @@ test.describe('Project Import (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    // Select EN language if language picker is visible
-    const enBtn = page.getByRole('button', { name: /^EN$/i }).first();
-    if (await enBtn.isVisible()) await enBtn.click();
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
   });
 
   test('imports a JSON project and reflects title + manuscript', async ({ page }) => {
     // Navigate to Export/Import view
-    await page.getByRole('button', { name: /Export/i }).click();
-    await page.waitForLoadState('networkidle');
+    await sidebar(page)
+      .getByRole('button', { name: /^Export$/i })
+      .click();
+    await page
+      .getByRole('button', { name: /Import Project/i })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     // The Import Project button triggers a file chooser
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -45,7 +50,9 @@ test.describe('Project Import (CI-only)', () => {
     });
 
     // Navigate to Writer to verify manuscript section landed
-    await page.getByRole('button', { name: /Writer|AI Writing Studio/i }).click();
+    await sidebar(page)
+      .getByRole('button', { name: /AI Writing Studio/i })
+      .click();
     const sectionSelect = page.getByRole('combobox').first();
     await expect(sectionSelect).toBeVisible({ timeout: 8000 });
     await expect(sectionSelect.locator('option', { hasText: /Chapter One/i })).toBeAttached();
@@ -53,7 +60,9 @@ test.describe('Project Import (CI-only)', () => {
 
   test('import survives a page reload (IndexedDB persistence)', async ({ page }) => {
     // Import first
-    await page.getByRole('button', { name: /Export/i }).click();
+    await sidebar(page)
+      .getByRole('button', { name: /^Export$/i })
+      .click();
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /Import Project/i }).click();
     const fileChooser = await fileChooserPromise;
@@ -68,12 +77,14 @@ test.describe('Project Import (CI-only)', () => {
 
     // Reload and check title is still present
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await waitForSpaReady(page);
     await expect(page.getByText(/Imported Test Novel/i)).toBeVisible({ timeout: 8000 });
   });
 
   test('rejects a malformed JSON file gracefully', async ({ page }) => {
-    await page.getByRole('button', { name: /Export/i }).click();
+    await sidebar(page)
+      .getByRole('button', { name: /^Export$/i })
+      .click();
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /Import Project/i }).click();
     const fileChooser = await fileChooserPromise;
