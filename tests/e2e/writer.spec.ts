@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test';
 
+import { ensureBlankProject, selectEnglish, sidebar, waitForSpaReady } from './helpers';
+
 const isCI = process.env['CI'] === 'true';
 
 test.describe('AI Writer Flow (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await waitForSpaReady(page);
   });
 
   test('app renders without JavaScript errors', async ({ page }) => {
@@ -25,7 +27,9 @@ test.describe('AI Writer Flow (CI-only)', () => {
   });
 
   test('Writer view can be reached and edited', async ({ page }) => {
-    const writerButton = page.getByRole('button', { name: /write|writer|schreiben/i }).first();
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    const writerButton = sidebar(page).getByRole('button', { name: /AI Writing Studio|Writer/i });
     await writerButton.click();
     await page.waitForURL('**/');
 
@@ -51,7 +55,7 @@ test.describe('AI Writer Flow (CI-only)', () => {
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await waitForSpaReady(page);
     await expect(page.locator('body')).toBeVisible();
   });
 });

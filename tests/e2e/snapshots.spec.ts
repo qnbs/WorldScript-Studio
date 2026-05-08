@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
 
+import { ensureBlankProject, selectEnglish, sidebar, waitForSpaReady } from './helpers';
+
 const isCI = process.env['CI'] === 'true';
 
 /** Navigate to Writer view and add some content so snapshots have something to capture. */
 async function seedManuscriptContent(page: import('@playwright/test').Page): Promise<void> {
-  // Try to reach the writer view
-  const writerBtn = page.getByRole('button', { name: /Writer|AI Writing Studio/i }).first();
+  const writerBtn = sidebar(page).getByRole('button', { name: /AI Writing Studio/i });
   await writerBtn.click();
   const sectionSelect = page.getByRole('combobox').first();
   await expect(sectionSelect).toBeVisible({ timeout: 8000 });
@@ -23,20 +24,9 @@ test.describe('Snapshot Flow (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    const enBtn = page.getByRole('button', { name: /^EN$/i }).first();
-    if (await enBtn.isVisible()) await enBtn.click();
-
-    // Ensure a project exists
-    const startBtn = page.getByRole('button', { name: /Start a New Project/i });
-    if (await startBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await startBtn.click();
-      await page
-        .getByRole('button', { name: /Blank Manuscript/i })
-        .first()
-        .click();
-      await page.waitForLoadState('networkidle');
-    }
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
   });
 
   test('creates a manual snapshot and it appears in the panel', async ({ page }) => {
@@ -92,8 +82,12 @@ test.describe('Snapshot Flow (CI-only)', () => {
       .click();
     await expect(page.getByText('Restore Target')).toBeVisible({ timeout: 10000 });
 
+    await page.keyboard.press('Escape');
+
     // Now change the manuscript
-    const writerBtn = page.getByRole('button', { name: /Writer|AI Writing Studio/i }).first();
+    const writerBtn = sidebar(page)
+      .getByRole('button', { name: /AI Writing Studio/i })
+      .first();
     await writerBtn.click();
     const textarea = page.getByRole('textbox').first();
     await expect(textarea).toBeVisible({ timeout: 6000 });
@@ -114,9 +108,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
     }
 
     // Manuscript should reflect seed content again
-    await page
-      .getByRole('button', { name: /Writer|AI Writing Studio/i })
-      .first()
+    await sidebar(page)
+      .getByRole('button', { name: /AI Writing Studio/i })
       .click();
     const restoredTextarea = page.getByRole('textbox').first();
     await expect(restoredTextarea).toHaveValue(/Snapshot seed content/i, { timeout: 10000 });
@@ -145,9 +138,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
   });
 
   test('snapshot panel closes on pressing Escape', async ({ page }) => {
-    await page
-      .getByRole('button', { name: /Writer|AI Writing Studio/i })
-      .first()
+    await sidebar(page)
+      .getByRole('button', { name: /AI Writing Studio/i })
       .click();
     const vcBtn = page.getByRole('button', { name: /Versions/i }).first();
     await expect(vcBtn).toBeVisible({ timeout: 8000 });

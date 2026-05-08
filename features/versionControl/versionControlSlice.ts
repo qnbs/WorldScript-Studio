@@ -1,5 +1,4 @@
-import type { PayloadAction } from '@reduxjs/toolkit';
-import { createSlice } from '@reduxjs/toolkit';
+import { createSelector, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import * as LZString from 'lz-string';
 import { v4 as uuid } from 'uuid';
 import type { StorySection, VersionBranch, VersionSnapshot } from '../../types';
@@ -168,10 +167,16 @@ export default versionControlSlice.reducer;
 export const selectCurrentBranch = (state: { versionControl: VersionControlState }) =>
   state.versionControl.branches.find((b) => b.id === state.versionControl.currentBranchId);
 
-export const selectCurrentBranchSnapshots = (state: { versionControl: VersionControlState }) =>
-  state.versionControl.snapshots
-    .filter((s) => s.branchId === state.versionControl.currentBranchId)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+export const selectCurrentBranchSnapshots = createSelector(
+  [
+    (state: { versionControl: VersionControlState }) => state.versionControl.snapshots,
+    (state: { versionControl: VersionControlState }) => state.versionControl.currentBranchId,
+  ],
+  (snapshots, branchId) =>
+    [...snapshots]
+      .filter((s) => s.branchId === branchId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+);
 
 export const selectAllBranches = (state: { versionControl: VersionControlState }) =>
   state.versionControl.branches;

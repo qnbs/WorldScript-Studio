@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -116,6 +116,17 @@ export const VersionControlPanel: FC = () => {
     'none' | 'createSnapshot' | 'createBranch' | 'restore' | 'switchBranch'
   >('none');
   const [pendingRestore, setPendingRestore] = useState<VersionSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (modal !== 'none') return;
+      dispatch(versionControlActions.closePanel());
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dispatch, isOpen, modal]);
 
   const manuscript = useMemo(
     () => (Array.isArray(project?.manuscript) ? (project.manuscript as StorySection[]) : []),

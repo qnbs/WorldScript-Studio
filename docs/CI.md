@@ -117,6 +117,7 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | `scripts/check-bundle-budget.mjs` | Chunk size budget after `pnpm run build` |
 | `renovate.json` | Renovate Bot: patch auto-merge policy |
 | `playwright.config.ts` | E2E projects (Chromium in CI; Chromium + Firefox locally), `snapshotPathTemplate`, reporters |
+| `tests/e2e/helpers.ts` | SPA-ready waits (avoid `networkidle` with Vite/HMR), EN locale, blank project bootstrap, `#sidebar` scope |
 | `stryker.conf.json` | Mutation testing targets + thresholds (`break: null` until score improves) |
 
 ---
