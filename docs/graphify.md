@@ -3,7 +3,7 @@
 StoryCraft Studio has a fully configured [graphify](https://github.com/safishamsi/graphify) knowledge graph.  
 Graph output lives at `graphify-out/` (not committed to git).
 
-**Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*.
+**Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*; inventory of all 15 maintainer `.md` files → [`AUDIT.md`](../AUDIT.md).
 
 **Official PyPI name:** `graphifyy` (double **y**). The CLI is still `graphify`. `pip install graphify` can pull an **unrelated** package — always use `graphifyy`.
 

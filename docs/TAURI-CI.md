@@ -2,6 +2,8 @@
 
 Workflow: [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build.yml)
 
+> **Documentation:** Full `.md` index → [`README.md`](../README.md#-documentation-hub) § Documentation Hub; [`AUDIT.md`](../AUDIT.md) lists all 15 maintainer guides.
+
 ## Triggers
 
 - **Manual:** Actions → “Tauri desktop build” → Run workflow  

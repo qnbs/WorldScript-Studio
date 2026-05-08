@@ -63,6 +63,10 @@ Custom React Context in `I18nContext.tsx` — not i18next. Locale files exist fo
 
 Repo-root **`.cursorrules`** defines the **QNBS Master Prompt v3** (“Creative AI Architect”): analyse this repo in its own narrative-writing domain, respect Biome/Redux/Vite patterns, prefer substantive `// QNBS-v3:` notes on non-trivial edits, and give short before/after context when proposing changes. Use alongside this file for IDE agents.
 
+## Documentation index
+
+All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* duplicates the 15-file inventory.
+
 ## Key Constraints
 
 - `strict: true` + `exactOptionalPropertyTypes: true` — no `any` types; use `undefined` explicitly for optional props

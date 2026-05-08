@@ -11,6 +11,8 @@ The project currently supports security fixes for the following versions:
 | `1.2.x` | Best effort (upgrade recommended) |
 | `< 1.2.0` | No |
 
+Maintainer-facing documentation (CI, contributing, architecture) is indexed in [`README.md`](README.md#-documentation-hub) and enumerated in [`AUDIT.md`](AUDIT.md).
+
 ## Reporting a Vulnerability
 
 Please do not open public GitHub issues for security vulnerabilities.
