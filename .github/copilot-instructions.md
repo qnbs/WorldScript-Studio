@@ -6,6 +6,8 @@ StoryCraft Studio is an AI-powered creative writing application built as an offl
 
 **Live:** `https://qnbs.github.io/StoryCraft-Studio/`
 
+**Documentation map:** [`README.md`](../README.md#-documentation-hub) § Documentation Hub lists every maintainer `.md` guide (see also [`AUDIT.md`](../AUDIT.md)).
+
 ## Architecture
 
 ### Tech Stack

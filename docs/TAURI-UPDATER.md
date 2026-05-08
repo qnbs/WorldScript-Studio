@@ -2,6 +2,8 @@
 
 The desktop app ships with [`tauri-plugin-updater`](https://v2.tauri.app/plugin/updater/) registered in [`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs). Configuration lives in [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) under `plugins.updater`.
 
+> **Documentation:** Full `.md` index → [`README.md`](../README.md#-documentation-hub) § Documentation Hub.
+
 ## Enable updates for end users
 
 1. **Generate a minisign key pair** (once per product line — store the private key as a GitHub secret; never commit it):
