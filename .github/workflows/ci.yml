@@ -125,7 +125,7 @@ jobs:
       - name: Run Stryker if configured
         run: |
           if [ -f "stryker.config.json" ] || [ -f "stryker.conf.json" ]; then
-            pnpm exec stryker run
+            pnpm run mutation
           else
             echo "No Stryker config found, skipping mutation testing."
           fi

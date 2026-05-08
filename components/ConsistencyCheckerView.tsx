@@ -19,6 +19,7 @@ const ConsistencyCheckerUI: FC = () => {
     checkResult,
     isChecking,
     runCheck,
+    storyCodex,
   } = useConsistencyCheckerViewContext();
 
   const handleCheck = useCallback(() => {
@@ -59,6 +60,7 @@ const ConsistencyCheckerUI: FC = () => {
                 onClick={handleCheck}
                 disabled={!selectedCharacterId || isChecking}
                 className="w-full"
+                type="button"
               >
                 {isChecking ? <Spinner className="w-4 h-4 mr-2" /> : null}
                 {t('consistencyChecker.checkButton')}
@@ -67,7 +69,62 @@ const ConsistencyCheckerUI: FC = () => {
           </Card>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
+          {storyCodex ? (
+            <Card>
+              <CardHeader>
+                <h3 className="text-lg font-semibold">
+                  {t('consistencyChecker.storyBible.title')}
+                </h3>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {storyCodex.consistencyHints && storyCodex.consistencyHints.length > 0 ? (
+                  <div>
+                    <h4 className="text-sm font-medium text-[var(--foreground-secondary)] mb-2">
+                      {t('consistencyChecker.storyBible.hintsTitle')}
+                    </h4>
+                    <ul className="list-disc pl-5 space-y-1 text-sm">
+                      {storyCodex.consistencyHints.map((h) => (
+                        <li
+                          key={h.id}
+                          className={
+                            h.severity === 'warn' ? 'text-amber-600 dark:text-amber-400' : ''
+                          }
+                        >
+                          {h.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {storyCodex.relationshipEdges && storyCodex.relationshipEdges.length > 0 ? (
+                  <div>
+                    <h4 className="text-sm font-medium text-[var(--foreground-secondary)] mb-2">
+                      {t('consistencyChecker.storyBible.edgesTitle')}
+                    </h4>
+                    <ul className="space-y-1 text-sm font-mono">
+                      {storyCodex.relationshipEdges.slice(0, 12).map((e) => {
+                        const name = (id: string) =>
+                          storyCodex.entities.find((x) => x.id === id)?.name ?? id;
+                        const key = `${e.sourceEntityId}-${e.targetEntityId}-${e.sectionIds.slice().sort().join(',')}`;
+                        return (
+                          <li key={key}>
+                            {name(e.sourceEntityId)} ↔ {name(e.targetEntityId)} · {e.weight}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
+                {!storyCodex.consistencyHints?.length && !storyCodex.relationshipEdges?.length ? (
+                  <p className="text-sm text-[var(--foreground-muted)]">
+                    {t('consistencyChecker.storyBible.empty')}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card className="h-full">
             <CardHeader>
               <h3 className="text-lg font-semibold">{t('consistencyChecker.results')}</h3>

@@ -1,0 +1,18 @@
+/** Shared IndexedDB names and store identifiers — keep in sync with upgrade paths in `dbService.ts`. */
+
+export const LEGACY_DB_NAME = 'storycraft-db';
+
+export const STATE_DB_NAME = 'storycraft-state-db';
+export const DATA_DB_NAME = 'storycraft-data-db';
+
+/** Current schema version for both state and data DBs. */
+export const DB_VERSION = 6;
+
+export const APP_DATA_STORE = 'app-data-store';
+export const SNAPSHOTS_STORE = 'snapshots-store';
+export const IMAGES_STORE = 'images-store';
+export const RAG_VECTORS_STORE = 'rag-vectors-store';
+export const CODEX_STORE = 'codex-store';
+
+/** Written to `APP_DATA_STORE` after a successful legacy → dual-DB copy (idempotency). */
+export const LEGACY_DB_MIGRATION_MARKER_KEY = '__legacy_storycraft_db_migrated__';

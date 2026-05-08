@@ -172,6 +172,7 @@ type PromptType =
   | 'worldProfile'
   | 'regenerateWorldField'
   | 'worldImage'
+  | 'sceneVisualization'
   | 'outline'
   | 'regenerateOutlineSection'
   | 'personalizeTemplate'
@@ -196,6 +197,11 @@ type CharacterPortraitParams = BasePromptParams & { description: string; style?:
 type WorldProfileParams = BasePromptParams & { concept: string };
 type RegenerateWorldFieldParams = BasePromptParams & { world: World; field: keyof World };
 type WorldImageParams = BasePromptParams & { description: string };
+type SceneVisualizationParams = BasePromptParams & {
+  sectionTitle: string;
+  sectionContent: string;
+  projectTitle: string;
+};
 type RegenerateOutlineSectionParams = BasePromptParams & {
   allSections: OutlineSection[];
   sectionToIndex: number;
@@ -227,6 +233,7 @@ type PromptParamsMap = {
   worldProfile: WorldProfileParams;
   regenerateWorldField: RegenerateWorldFieldParams;
   worldImage: WorldImageParams;
+  sceneVisualization: SceneVisualizationParams;
   outline: OutlineGenerationParams;
   regenerateOutlineSection: RegenerateOutlineSectionParams;
   personalizeTemplate: PersonalizeTemplateParams;
@@ -337,6 +344,13 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
       const p = params as WorldImageParams;
       return {
         prompt: `Generate a breathtaking, atmospheric, digital painting of a fantasy/sci-fi landscape that captures the essence of this description: "${p.description}". Focus on the mood, lighting, and key geographical features. Do not include any text or watermarks.${langInstruction}`,
+      };
+    }
+    case 'sceneVisualization': {
+      const p = params as SceneVisualizationParams;
+      const excerpt = sanitizePromptBlock(p.sectionContent).slice(0, 6000);
+      return {
+        prompt: `Create a single cinematic illustration for this scene from the story "${sanitizePromptValue(p.projectTitle)}".\nScene title: ${sanitizePromptValue(p.sectionTitle)}\nManuscript excerpt (use for mood, characters, setting):\n${excerpt}\n\nRules: one coherent image, no overlaid text, captions, logos, or watermarks.${langInstruction}`,
       };
     }
     case 'outline': {

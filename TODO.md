@@ -24,7 +24,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 ### Niedrig (🟢)
 
 - ✅ Dokumentations-Audit (CI.md, README Hub, CONTRIBUTING, AUDIT-Follow-up, Copilot/CLAUDE/SECURITY/Graphify) — 2026-05-02
-- ⬜ Visual Regression Tests (Playwright Screenshots + Storybook) — Stub `tests/e2e/visual-regression.spec.ts` (`describe.skip`, Baselines optional)
+- ✅ Visual Regression (`tests/e2e/visual-regression.spec.ts`) — Chromium-Baseline unter `tests/e2e/*-snapshots/` (`snapshotPathTemplate` ohne OS-Suffix)
 - ✅ Bundle-Size-Budgets + rollup-Analyse in CI (`pnpm run bundle:budget`, `pnpm run analyze`, Artifact `bundle-analysis`)
 - ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — inhaltliche Übersetzungen können iterativ verbessert werden
 - ✅ Renovate Auto-Merge für Patch-Updates ([`renovate.json`](renovate.json))

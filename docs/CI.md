@@ -37,7 +37,8 @@ For historical optimization notes (targets may predate the live workflow), see [
 ```text
 security ──► quality ──┬──► build ──► lighthouse
                        ├──► e2e
-                       └──► storybook
+                       ├──► storybook
+                       └──► mutation (Stryker; optional score gate)
 
 build (main, non-PR) ──► upload-pages-artifact
 deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
@@ -46,9 +47,10 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 | Job | Needs | Purpose |
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; on PRs: `dependency-review-action` |
-| `quality` | `security` | Matrix **Node `lts/*`** and **`node` (current)** → Biome lint, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
+| `quality` | `security` | Matrix **Node `lts/*`** and **`node` (current)** → Biome lint, **`pnpm run i18n:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact |
-| `e2e` | `quality` | Playwright Chromium, `CI=true` |
+| `e2e` | `quality` | Playwright **Chromium only** (`playwright install --with-deps chromium`), `CI=true`. Firefox runs only in local Playwright (see `playwright.config.ts`). |
+| `mutation` | `quality` | **`pnpm run mutation`** if `stryker.conf.json` exists — HTML report in-repo locally; **`continue-on-error: true`** so score does not block merges while targets grow |
 | `lighthouse` | `build` | LHCI against downloaded `dist` (hard-fail: `assert.exitCode=0`) |
 | `storybook` | `quality` | Static Storybook → artifact |
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
@@ -114,7 +116,8 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | `vitest.config.ts` | Coverage thresholds, reporters |
 | `scripts/check-bundle-budget.mjs` | Chunk size budget after `pnpm run build` |
 | `renovate.json` | Renovate Bot: patch auto-merge policy |
-| `playwright.config.ts` | E2E browser and reporter paths |
+| `playwright.config.ts` | E2E projects (Chromium in CI; Chromium + Firefox locally), `snapshotPathTemplate`, reporters |
+| `stryker.conf.json` | Mutation testing targets + thresholds (`break: null` until score improves) |
 
 ---
 

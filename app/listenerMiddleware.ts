@@ -24,10 +24,10 @@ listenerMiddleware.startListening({
     return currentRoot.project.present !== prevRoot.project.present;
   },
   effect: async (_action, listenerApi) => {
+    const originalState = listenerApi.getOriginalState() as RootState;
     await listenerApi.delay(1000);
 
     const state = listenerApi.getState() as RootState;
-    const originalState = listenerApi.getOriginalState() as RootState;
     if (state.project.present === originalState.project.present) return;
 
     listenerApi.dispatch(statusActions.setSavingStatus('saving'));
@@ -84,10 +84,10 @@ listenerMiddleware.startListening({
     return currentRoot.settings !== prevRoot.settings;
   },
   effect: async (_action, listenerApi) => {
+    const originalState = listenerApi.getOriginalState() as RootState;
     await listenerApi.delay(1000);
 
     const state = listenerApi.getState() as RootState;
-    const originalState = listenerApi.getOriginalState() as RootState;
     if (state.settings === originalState.settings) return;
 
     try {
@@ -112,6 +112,8 @@ listenerMiddleware.startListening({
     await listenerApi.delay(1200);
 
     const state = listenerApi.getState() as RootState;
+    if (!state.featureFlags.enableCodexAutoTracking) return;
+
     const project = state.project.present?.data;
     if (!project) return;
 
@@ -120,7 +122,9 @@ listenerMiddleware.startListening({
     const worlds = Object.values(project.worlds.entities).filter(Boolean) as World[];
 
     try {
-      const codex = extractStoryCodex(projectId, project.manuscript, characters, worlds);
+      const codex = extractStoryCodex(projectId, project.manuscript, characters, worlds, {
+        advanced: state.featureFlags.enableStoryBibleAdvanced,
+      });
       await saveStoryCodex(codex);
     } catch (error) {
       logger.warn('Story Codex auto-tracking failed:', error);

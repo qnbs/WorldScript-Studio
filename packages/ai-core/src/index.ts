@@ -93,23 +93,88 @@ export function sanitizeForPrompt(input: string): string {
   const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
   const phonePattern = /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,4}\b/g;
   const ibanPattern = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi;
+  const jailbreakHints =
+    /\b(ignore (all |previous |prior )?instructions|disregard (the )?(above|prior)|you are now (a |an )?(DAN|developer)|\[INST\]|<\|im_start\|>)\b/gi;
 
-  return input
+  let out = input
     .replace(emailPattern, '[REDACTED_EMAIL]')
     .replace(phonePattern, '[REDACTED_PHONE]')
-    .replace(ibanPattern, '[REDACTED_IBAN]');
+    .replace(ibanPattern, '[REDACTED_IBAN]')
+    .replace(jailbreakHints, '[filtered]');
+
+  if (out.length > 12_000) {
+    out = `${out.slice(0, 12_000)}\n…[truncated]`;
+  }
+  return out;
 }
 
 export async function runLocalTextGeneration(prompt: string): Promise<LocalAiResponse> {
   const sanitizedPrompt = sanitizeForPrompt(prompt);
+  if (!sanitizedPrompt.trim()) {
+    return { layer: 'heuristic', text: 'Heuristic fallback response' };
+  }
+
+  try {
+    const mod = await import('@mlc-ai/web-llm');
+    type EngineModule = typeof mod & {
+      CreateMLCEngine?: (
+        model: string,
+        init?: { initProgressCallback?: (p: unknown) => void },
+      ) => Promise<{
+        chat: {
+          completions: {
+            create: (req: {
+              messages: { role: string; content: string }[];
+            }) => Promise<{ choices: { message?: { content?: string } }[] }>;
+          };
+        };
+      }>;
+    };
+    const m = mod as EngineModule;
+    const CreateMLCEngine = m.CreateMLCEngine;
+    if (typeof CreateMLCEngine === 'function' && detectWebGpuSupport()) {
+      const engine = await CreateMLCEngine('Llama-3.2-1B-Instruct-q4f16_1-MLC', {
+        initProgressCallback: () => {},
+      });
+      const reply = await engine.chat.completions.create({
+        messages: [{ role: 'user', content: sanitizedPrompt }],
+      });
+      const text = reply.choices[0]?.message?.content?.trim();
+      if (text) {
+        return { layer: 'webllm', text };
+      }
+    }
+  } catch {
+    /* optional @mlc-ai/web-llm not installed, WebGPU, or model fetch blocked */
+  }
+
   if (detectWebGpuSupport()) {
-    return { layer: 'webllm', text: `WebLLM placeholder response: ${sanitizedPrompt}` };
+    return {
+      layer: 'webllm',
+      text:
+        'WebLLM: optional @mlc-ai/web-llm package or model weights unavailable in this environment. Use Ollama or Gemini. Sanitized prompt preview: ' +
+        sanitizedPrompt.slice(0, 200) +
+        (sanitizedPrompt.length > 200 ? '…' : ''),
+    };
   }
 
-  // Standard layer placeholder for CPU-compatible model execution.
-  if (sanitizedPrompt.trim().length > 0) {
-    return { layer: 'transformers', text: `Transformers placeholder response: ${sanitizedPrompt}` };
+  try {
+    const { pipeline } = await import('@xenova/transformers');
+    if (typeof pipeline === 'function') {
+      return {
+        layer: 'transformers',
+        text:
+          'Transformers.js pipeline available but no lightweight default model is forced in-app; use WebLLM or Ollama for full local inference. Echo: ' +
+          sanitizedPrompt.slice(0, 160) +
+          '…',
+      };
+    }
+  } catch {
+    /* optional */
   }
 
-  return { layer: 'heuristic', text: 'Heuristic fallback response' };
+  return {
+    layer: 'transformers',
+    text: `Transformers placeholder response: ${sanitizedPrompt.slice(0, 280)}${sanitizedPrompt.length > 280 ? '…' : ''}`,
+  };
 }

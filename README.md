@@ -29,6 +29,11 @@
 
 ✨ _Try it right now — no installation, no account required. All data is saved securely in your browser's IndexedDB._ ✨
 
+### PWA & Desktop
+
+- **Install as PWA:** In Chromium/Edge, open the Live Demo → use the install icon in the address bar (or browser menu) for an offline-capable app shortcut.
+- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — see [`docs/TAURI-CI.md`](docs/TAURI-CI.md) for signing secrets and artifact layout.
+
 ---
 
 **StoryCraft Studio is a cutting-edge, AI-enhanced application meticulously engineered for authors, screenwriters, and creators.** It transforms the daunting task of writing into a seamless, inspiring journey from a fleeting idea to a polished manuscript. By integrating the power of Google's Gemini API with an intuitive, offline-first interface, StoryCraft Studio acts as your all-in-one creative co-pilot — empowering you to build, write, and refine your narrative universe without compromise.
@@ -315,7 +320,8 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `security`   | every run            | `pnpm audit --audit-level=high`; PRs: dependency review |
 | `quality`    | after `security`     | Biome, **i18n key check**, `tsc`, Vitest + coverage (Node **LTS** + **current**) |
 | `build`      | after `quality`      | Production Vite build, **chunk budget** (`bundle:budget`), **rollup analyze** artifact; on `main` (non-PR): Pages artifact |
-| `e2e`        | after `quality`      | Playwright (Chromium, `CI=true`) |
+| `e2e`        | after `quality`      | Playwright **Chromium**, `CI=true` (Firefox optional locally — see `playwright.config.ts`) |
+| `mutation`   | after `quality`      | Stryker (`pnpm run mutation` if `stryker.conf.json` exists); **does not fail** the workflow (`continue-on-error`) |
 | `lighthouse` | after `build`        | LHCI against `dist` (assertions in **`.lighthouserc.cjs`**) |
 | `storybook`  | after `quality`      | Static Storybook build artifact |
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
@@ -485,7 +491,7 @@ Sprachauswahl dauerhaft in `localStorage` gespeichert.
 | Styling            | Tailwind CSS + CSS-Variablen                       |
 | KI (Cloud)         | Google Gemini API (`@google/genai`)                |
 | KI (Lokal)         | Ollama HTTP-Client (localhost:11434)               |
-| Speicher           | IndexedDB (eigener dbService)                      |
+| Speicher           | Dual IndexedDB (`storycraft-state-db` / `storycraft-data-db`), Migration aus Legacy-DB |
 | Verschlüsselung    | Web Crypto API (AES-256-GCM)                       |
 | PDF-Export         | jsPDF                                              |
 | PWA                | Service Worker + Manifest v3                       |

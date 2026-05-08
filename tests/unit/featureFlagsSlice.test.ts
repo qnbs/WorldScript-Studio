@@ -9,9 +9,11 @@ describe('featureFlagsSlice', () => {
     enableOllama: false,
     enablePerformanceBudgets: false,
     enableVisualRegression: false,
+    enableCodexAutoTracking: true,
+    enableStoryBibleAdvanced: false,
   };
 
-  it('should have default false feature flags', () => {
+  it('should match default feature flag state on init', () => {
     const state = featureFlagsReducer(undefined, { type: '@@INIT' });
     expect(state).toEqual(initialState);
   });
@@ -32,6 +34,8 @@ describe('featureFlagsSlice', () => {
       enableOllama: true,
       enablePerformanceBudgets: true,
       enableVisualRegression: false,
+      enableCodexAutoTracking: true,
+      enableStoryBibleAdvanced: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

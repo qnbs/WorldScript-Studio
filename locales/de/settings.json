@@ -134,6 +134,8 @@
   "settings.featureFlags.enableOllama": "Ollama-Unterstützung aktivieren",
   "settings.featureFlags.enablePerformanceBudgets": "Performance-Budgets aktivieren",
   "settings.featureFlags.enableVisualRegression": "Visuelle Regressionstools aktivieren",
+  "settings.featureFlags.enableCodexAutoTracking": "Codex Auto-Tracking (Manuskript)",
+  "settings.featureFlags.enableStoryBibleAdvanced": "Story Bible erweitert (Graph + Hinweise im Codex)",
   "settings.accessibility.title": "Barrierefreiheitseinstellungen",
   "settings.accessibility.highContrast": "Hoher Kontrast",
   "settings.accessibility.reducedMotion": "Reduzierte Bewegung",

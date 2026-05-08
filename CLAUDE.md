@@ -13,6 +13,8 @@ pnpm run typecheck     # TypeScript type check (tsc --noEmit)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
 pnpm run test:coverage # Vitest with V8 coverage (see thresholds in vitest.config.ts)
+pnpm run i18n:check    # Locale key parity (runs in CI quality job)
+pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
 pnpm run test:e2e      # Playwright E2E tests (requires CI=true)
 pnpm run storybook     # Storybook on port 6006
 pnpm run tauri:dev     # Tauri desktop app (requires Rust)
@@ -47,7 +49,7 @@ Every major view follows this three-file structure:
 
 ### Storage
 
-`dbService.ts` wraps IndexedDB with LZ-String compression (payloads > 10 KB) and AES-256-GCM encryption (API keys). `storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Never use `localStorage` for sensitive data.
+`dbService.ts` wraps **dual** IndexedDB databases (`storycraft-state-db`, `storycraft-data-db`) with LZ-String compression (payloads > 10 KB) and AES-256-GCM encryption (API keys). `storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Never use `localStorage` for sensitive data.
 
 ### Code Splitting
 

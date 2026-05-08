@@ -2,13 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storeData = new Map<string, unknown>();
 const createFakeStore = () => ({
-  put: (value: unknown, key: IDBValidKey) => {
+  put: (value: unknown, key?: IDBValidKey) => {
     const request = {
       onsuccess: null as (() => void) | null,
       onerror: null as (() => void) | null,
     };
+    const id =
+      key !== undefined && key !== null
+        ? String(key)
+        : value &&
+            typeof value === 'object' &&
+            value !== null &&
+            'projectId' in value &&
+            typeof (value as { projectId: unknown }).projectId === 'string'
+          ? (value as { projectId: string }).projectId
+          : String(key);
     Promise.resolve().then(() => {
-      storeData.set(String(key), value);
+      storeData.set(id, value);
       request.onsuccess?.();
     });
     return request;

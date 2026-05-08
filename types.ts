@@ -143,6 +143,25 @@ export interface StoryCodex {
   extractedAt: string;
   entities: StoryCodexEntity[];
   summary: string;
+  /** Co-mention edges between entities (Story Bible advanced). */
+  relationshipEdges?: StoryCodexRelationshipEdge[];
+  /** Rule-based consistency hints (Story Bible advanced). */
+  consistencyHints?: StoryCodexConsistencyHint[];
+}
+
+/** Undirected co-appearance edge derived from shared scene/section mentions. */
+export interface StoryCodexRelationshipEdge {
+  sourceEntityId: string;
+  targetEntityId: string;
+  weight: number;
+  sectionIds: string[];
+}
+
+export interface StoryCodexConsistencyHint {
+  id: string;
+  severity: 'info' | 'warn';
+  message: string;
+  entityIds?: string[];
 }
 
 export interface Template {

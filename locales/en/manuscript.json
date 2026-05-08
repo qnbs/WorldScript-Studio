@@ -13,5 +13,10 @@
   "manuscript.addSection": "Add New Section",
   "manuscript.untitledSection": "Untitled Section",
   "manuscript.deleteSection": "Delete Section",
-  "manuscript.titlePlaceholder": "Section Title"
+  "manuscript.titlePlaceholder": "Section Title",
+  "manuscript.visualize.title": "Scene illustration",
+  "manuscript.visualize.button": "Visualize current scene",
+  "manuscript.visualize.hint": "Gemini (or your configured image-capable provider) generates one illustration from this section. Stored locally per section.",
+  "manuscript.visualize.successTitle": "Scene image ready",
+  "manuscript.visualize.successBody": "Preview below; full image saved in local storage."
 }

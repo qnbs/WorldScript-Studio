@@ -416,6 +416,16 @@ export const AdvancedAiSection: FC = () => {
                 checked={featureFlags.enableVisualRegression}
                 onChange={(v) => handleSettingChange('enableVisualRegression', v)}
               />
+              <ToggleSwitch
+                label={t('settings.featureFlags.enableCodexAutoTracking')}
+                checked={featureFlags.enableCodexAutoTracking}
+                onChange={(v) => handleSettingChange('enableCodexAutoTracking', v)}
+              />
+              <ToggleSwitch
+                label={t('settings.featureFlags.enableStoryBibleAdvanced')}
+                checked={featureFlags.enableStoryBibleAdvanced}
+                onChange={(v) => handleSettingChange('enableStoryBibleAdvanced', v)}
+              />
             </div>
             <p className="text-sm text-[var(--foreground-muted)] mt-3">
               {t('settings.featureFlags.description')}

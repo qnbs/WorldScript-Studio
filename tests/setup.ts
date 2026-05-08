@@ -2,6 +2,11 @@
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, vi } from 'vitest';
 
+// `@vitest-environment node` (e.g. dbMigration tests) has no `window`; mirror globalThis.
+if (typeof globalThis.window === 'undefined') {
+  (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
+}
+
 // Node 24 exposes a native localStorage that lacks .clear(), overriding jsdom's version.
 // Replace it with a proper in-memory mock when the native one is broken.
 const makeStorageMock = (): Storage => {

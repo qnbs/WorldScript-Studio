@@ -2,17 +2,19 @@ import * as LZString from 'lz-string';
 import type { ProjectData } from '../features/project/projectSlice';
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from './collaborationService';
+import {
+  APP_DATA_STORE,
+  CODEX_STORE,
+  DATA_DB_NAME,
+  DB_VERSION,
+  IMAGES_STORE,
+  RAG_VECTORS_STORE,
+  SNAPSHOTS_STORE,
+  STATE_DB_NAME,
+} from './dbConstants';
+import { migrateLegacyStorycraftDbIfNeeded } from './dbMigration';
 import { logger } from './logger';
 import type { SaveProjectInput, StorageBackend } from './storageBackend';
-
-const STATE_DB_NAME = 'storycraft-state-db';
-const DATA_DB_NAME = 'storycraft-data-db';
-const DB_VERSION = 6; // v6: Story Codex store added
-const APP_DATA_STORE = 'app-data-store';
-const SNAPSHOTS_STORE = 'snapshots-store';
-const IMAGES_STORE = 'images-store';
-const RAG_VECTORS_STORE = 'rag-vectors-store';
-const CODEX_STORE = 'codex-store';
 
 // LZ-String threshold: compress payloads >10 KB
 const COMPRESS_THRESHOLD_BYTES = 10_240;
@@ -438,6 +440,16 @@ class IndexedDBService implements StorageBackend {
 
   async initDB(): Promise<void> {
     await Promise.all([this.openStateDb(), this.openDataDb()]);
+    if (this.stateDb && this.dataDb) {
+      try {
+        const result = await migrateLegacyStorycraftDbIfNeeded(this.stateDb, this.dataDb);
+        if (result.migrated) {
+          logger.info('Migrated legacy IndexedDB (storycraft-db) to dual-database layout.');
+        }
+      } catch (error) {
+        logger.warn('Legacy IndexedDB migration step failed:', error);
+      }
+    }
   }
 
   private async getObjectStore(
@@ -492,9 +504,13 @@ class IndexedDBService implements StorageBackend {
 
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
     const store = await this.getObjectStore(CODEX_STORE, 'readwrite');
-    const payload = compressData(codex);
+    const processed = compressData(codex);
+    const record =
+      typeof processed === 'string'
+        ? { projectId: codex.projectId, compressedUtf16: processed }
+        : processed;
     return new Promise((resolve, reject) => {
-      const request = store.put(payload, codex.projectId);
+      const request = store.put(record);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
@@ -508,6 +524,15 @@ class IndexedDBService implements StorageBackend {
         const raw = request.result;
         if (!raw) {
           resolve(null);
+          return;
+        }
+        if (
+          typeof raw === 'object' &&
+          raw !== null &&
+          'compressedUtf16' in raw &&
+          typeof (raw as { compressedUtf16: unknown }).compressedUtf16 === 'string'
+        ) {
+          resolve(decompressData<StoryCodex>((raw as { compressedUtf16: string }).compressedUtf16));
           return;
         }
         resolve(decompressData<StoryCodex>(raw));
