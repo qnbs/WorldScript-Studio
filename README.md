@@ -326,6 +326,8 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `storybook`  | after `quality`      | Static Storybook build artifact |
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 
+Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, sidebar-scoped clicks) live in **`tests/e2e/helpers.ts`** — **do not** rely on `networkidle` with the Vite dev server (HMR/WebSocket). Details: **`docs/CI.md`**.
+
 Simulate parts of the pipeline with [Act](https://github.com/nektos/act) (job ids must match `ci.yml`):
 
 ```bash
