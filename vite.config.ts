@@ -10,6 +10,11 @@ const isAnalyze = process.env['ANALYZE'] === 'true';
 export default defineConfig({
   base: '/StoryCraft-Studio/',
 
+  // Default dependency crawl uses every *.html under the repo; reports (Playwright, Storybook, etc.) are not app entries and can break `vite dev`.
+  optimizeDeps: {
+    entries: [path.resolve(__dirname, 'index.html')],
+  },
+
   server: {
     port: 3000,
     host: '0.0.0.0',
