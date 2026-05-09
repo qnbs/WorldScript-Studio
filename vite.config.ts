@@ -32,6 +32,8 @@ export default defineConfig({
       srcDir: 'public',
       filename: 'sw.js',
       injectManifest: {
+        // Default Workbox limit is 2 MiB; onnx/transformers vendor chunk exceeds it (CI build fails otherwise).
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: [
           '**/*.{js,css,html,svg,ico,woff,woff2,png,webp}',
           'community-templates/**/*.json',
