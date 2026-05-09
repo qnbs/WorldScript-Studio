@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Fail CI if any emitted JS chunk under dist/assets exceeds --max-kb (default 950).
- * Run after `pnpm run build`. Intended as a coarse guardrail; tune thresholds in CI if needed.
+ * Fail CI if any emitted JS chunk under dist/assets exceeds --max-kb (default 7000).
+ * Local ML stacks (@mlc-ai/web-llm, onnxruntime-web, @xenova/transformers) routinely emit multi‑MB
+ * vendor chunks; keep this ceiling above that bundle while still catching accidental regressions.
+ * Run after `pnpm run build`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,7 +14,7 @@ const root = path.join(__dirname, '..');
 const assetsDir = path.join(root, 'dist', 'assets');
 
 const argv = process.argv.slice(2);
-let maxKb = 950;
+let maxKb = 7000;
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--max-kb' && argv[i + 1]) {
     maxKb = Number(argv[i + 1]);
