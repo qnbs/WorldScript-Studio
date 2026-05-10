@@ -2,13 +2,19 @@ import type React from 'react';
 import type { FC } from 'react';
 import { createContext, useContext, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { useCommandExecutor } from '../../contexts/CommandExecutorContext';
 import type { Notification, NotificationType } from '../../features/status/statusSlice';
 import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
 
 // Context remains to provide a convenient hook API for components
 interface ToastContextType {
-  addToast: (type: NotificationType, title: string, description?: string) => void;
+  addToast: (
+    type: NotificationType,
+    title: string,
+    description?: string,
+    options?: { actionLabel?: string; commandId?: string },
+  ) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -23,10 +29,21 @@ export const useToast = () => {
   }
 
   return {
-    success: (title: string, description?: string) =>
-      context.addToast('success', title, description),
-    error: (title: string, description?: string) => context.addToast('error', title, description),
-    info: (title: string, description?: string) => context.addToast('info', title, description),
+    success: (
+      title: string,
+      description?: string,
+      options?: { actionLabel?: string; commandId?: string },
+    ) => context.addToast('success', title, description, options),
+    error: (
+      title: string,
+      description?: string,
+      options?: { actionLabel?: string; commandId?: string },
+    ) => context.addToast('error', title, description, options),
+    info: (
+      title: string,
+      description?: string,
+      options?: { actionLabel?: string; commandId?: string },
+    ) => context.addToast('info', title, description, options),
   };
 };
 
@@ -35,6 +52,7 @@ const ToastItem: FC<{
   onDismiss: (id: string) => void;
 }> = ({ message, onDismiss }) => {
   const { t } = useTranslation();
+  const runCommand = useCommandExecutor();
   useEffect(() => {
     const timer = setTimeout(() => {
       onDismiss(message.id);
@@ -107,6 +125,18 @@ const ToastItem: FC<{
                 {message.description}
               </p>
             )}
+            {message.actionLabel && message.commandId ? (
+              <button
+                type="button"
+                className="mt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                onClick={() => {
+                  runCommand(message.commandId as string);
+                  onDismiss(message.id);
+                }}
+              >
+                {message.actionLabel}
+              </button>
+            ) : null}
           </div>
           <div className="ml-4 flex-shrink-0 flex">
             <button
@@ -159,12 +189,19 @@ export const ToastProvider: FC<{ children: React.ReactNode }> = ({ children }) =
   const dispatch = useAppDispatch();
   const notifications = useAppSelector((state) => state.status.notifications);
 
-  const addToast = (type: NotificationType, title: string, description?: string) => {
+  const addToast = (
+    type: NotificationType,
+    title: string,
+    description?: string,
+    options?: { actionLabel?: string; commandId?: string },
+  ) => {
     dispatch(
       statusActions.addNotification({
         type,
         title,
         ...(description !== undefined ? { description } : {}),
+        ...(options?.actionLabel ? { actionLabel: options.actionLabel } : {}),
+        ...(options?.commandId ? { commandId: options.commandId } : {}),
       }),
     );
   };

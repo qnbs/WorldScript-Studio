@@ -1,12 +1,20 @@
-import type { FC } from 'react';
+import type { ChangeEventHandler, FC } from 'react';
+import { useRef } from 'react';
+import { useAppDispatch } from '../../app/hooks';
 import { ICONS } from '../../constants';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { settingsActions } from '../../features/settings/settingsSlice';
+import {
+  buildSettingsExportEnvelope,
+  parseSettingsImportEnvelope,
+} from '../../services/settingsExchange';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 
 export const DataSection: FC = () => {
   const {
     t,
+    settings,
     handleExport,
     handleImport,
     importFileRef,
@@ -15,6 +23,37 @@ export const DataSection: FC = () => {
     snapshots,
     setSnapshotName,
   } = useSettingsViewContext();
+  const dispatch = useAppDispatch();
+  const settingsImportRef = useRef<HTMLInputElement>(null);
+
+  const handleExportSettingsJson = () => {
+    const envelope = buildSettingsExportEnvelope(settings);
+    const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'storycraft-settings.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSettingsFile: ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result ?? ''));
+        const partial = parseSettingsImportEnvelope(parsed);
+        if (!partial) return;
+        dispatch(settingsActions.setSettings({ ...settings, ...partial }));
+      } catch {
+        /* invalid file */
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  };
 
   return (
     <div className="space-y-6">
@@ -53,6 +92,33 @@ export const DataSection: FC = () => {
           </div>
           <div className="text-xs text-center text-[var(--foreground-muted)] pt-2">
             {t('settings.data.projectSize', { size: projectSize })}
+          </div>
+          <div className="mt-6 pt-6 border-t border-[var(--border-primary)] space-y-3">
+            <h3 className="font-semibold text-[var(--foreground-primary)]">
+              {t('settings.data.settingsFile.title')}
+            </h3>
+            <p className="text-sm text-[var(--foreground-secondary)]">
+              {t('settings.data.settingsFile.description')}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button type="button" variant="secondary" onClick={handleExportSettingsJson}>
+                {t('settings.data.settingsFile.export')}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => settingsImportRef.current?.click()}
+              >
+                {t('settings.data.settingsFile.import')}
+              </Button>
+              <input
+                ref={settingsImportRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleImportSettingsFile}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -10,6 +10,9 @@ export interface Notification {
   type: NotificationType;
   title: string;
   description?: string;
+  /** Optional toast action — runs a registered command id */
+  actionLabel?: string;
+  commandId?: string;
 }
 
 export interface StatusState {

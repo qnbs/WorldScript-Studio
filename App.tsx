@@ -1,6 +1,9 @@
 import type { FC } from 'react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useStore } from 'react-redux';
 import { useAppDispatch, useAppSelector } from './app/hooks';
+import type { RootState } from './app/store';
+import { useTransientUiStore } from './app/transientUiStore';
 import { CollaborationPanel } from './components/CollaborationPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { Header } from './components/Header';
@@ -11,13 +14,22 @@ import { Spinner } from './components/ui/Spinner';
 import { ToastProvider } from './components/ui/Toast';
 import { VersionControlPanel } from './components/VersionControlPanel';
 import { AppContext } from './contexts/AppContext';
+import { CommandExecutorProvider } from './contexts/CommandExecutorContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { I18nProvider } from './contexts/I18nContext';
 import { selectFeatureFlags } from './features/featureFlags/featureFlagsSlice';
-import { selectProjectData } from './features/project/projectSelectors';
+import {
+  selectAllCharacters,
+  selectAllWorlds,
+  selectProjectData,
+} from './features/project/projectSelectors';
 import { projectActions } from './features/project/projectSlice';
 import { useApp } from './hooks/useApp';
+import { useGlobalKeyboardShortcuts } from './hooks/useGlobalKeyboardShortcuts';
 import { useTranslation } from './hooks/useTranslation';
+import { runCommandById } from './services/commands/commandBuilder';
+import { getEffectiveTheme } from './services/commands/effectiveTheme';
+import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
 
 // ── Lazy-geladene Views (Code-Splitting → separate JS-Chunks) ─────────────────
 const Dashboard = lazy(() =>
@@ -107,10 +119,13 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const project = useAppSelector(selectProjectData);
   const featureFlags = useAppSelector(selectFeatureFlags);
   const dispatch = useAppDispatch();
-  const { t } = useTranslation();
+  const store = useStore();
+  const { t, language, setLanguage } = useTranslation();
+  const characters = useAppSelector(selectAllCharacters);
+  const worlds = useAppSelector(selectAllWorlds);
 
-  // Command Palette State
-  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const isPaletteOpen = useTransientUiStore((s) => s.isCommandPaletteOpen);
+  const setCommandPaletteOpen = useTransientUiStore((s) => s.setCommandPaletteOpen);
   // Collaboration Panel State
   const [isCollabPanelOpen, setIsCollabPanelOpen] = useState(false);
 
@@ -197,17 +212,58 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     }
   }, [project, isPortalActive, dispatch, t]);
 
-  // Handle Global Keyboard Shortcut for Palette
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsPaletteOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+  const wordCountApprox = useMemo(() => approximateManuscriptWordCount(project), [project]);
+
+  const togglePalette = useCallback(() => {
+    const open = useTransientUiStore.getState().isCommandPaletteOpen;
+    useTransientUiStore.getState().setCommandPaletteOpen(!open);
   }, []);
+
+  const shortcutApi = useMemo(
+    () => ({
+      dispatch,
+      getState: () => store.getState() as RootState,
+      navigate: handleNavigate,
+      togglePalette,
+      translate: t,
+    }),
+    [dispatch, store, handleNavigate, togglePalette, t],
+  );
+
+  useGlobalKeyboardShortcuts({
+    shortcuts: settings.keyboardShortcuts,
+    api: shortcutApi,
+  });
+
+  const executeCommand = useCallback(
+    (id: string) =>
+      runCommandById(id, {
+        dispatch,
+        navigate: handleNavigate,
+        setLanguage,
+        t,
+        theme: getEffectiveTheme(settings.theme),
+        language,
+        characters: characters.map((c) => ({ id: c.id, name: c.name })),
+        worlds: worlds.map((w) => ({ id: w.id, name: w.name })),
+        currentView,
+        wordCountApprox,
+        featureFlags,
+      }),
+    [
+      dispatch,
+      handleNavigate,
+      setLanguage,
+      t,
+      settings.theme,
+      language,
+      characters,
+      worlds,
+      currentView,
+      wordCountApprox,
+      featureFlags,
+    ],
+  );
 
   const renderView = () => {
     switch (currentView) {
@@ -276,67 +332,70 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
   return (
     <FeatureFlagsProvider value={featureFlags}>
-      <AppContext.Provider value={appState}>
-        {/* Skip-to-main-content link for keyboard users */}
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[var(--background-interactive)] focus:text-white focus:rounded-lg focus:text-sm focus:font-medium focus:shadow-lg"
-        >
-          {t('common.skipToContent')}
-        </a>
-        {/* ARIA live region: announces view changes to screen readers */}
-        <div aria-live="polite" aria-atomic="true" className="sr-only">
-          {currentView}
-        </div>
-        <div className="flex h-[100dvh] bg-[var(--background-primary)] text-[var(--foreground-primary)] overflow-hidden touch-none md:touch-auto">
-          <Sidebar
-            currentView={currentView}
-            onNavigate={handleNavigate}
-            isSidebarOpen={appState.isSidebarOpen}
-            setIsSidebarOpen={appState.setIsSidebarOpen}
-          />
-          <div className="flex-1 flex flex-col h-full overflow-hidden pt-16 transition-all duration-300 ease-in-out md:ml-64">
-            <Header
-              currentView={currentView}
-              setIsSidebarOpen={appState.setIsSidebarOpen}
-              isSidebarOpen={appState.isSidebarOpen}
-              onOpenPalette={() => setIsPaletteOpen(true)}
-            />
-            <main
-              id="main-content"
-              aria-label={t('common.mainContent')}
-              className="flex-1 overflow-y-auto p-4 pb-20 sm:p-6 sm:pb-20 md:p-8 md:pb-8 scroll-smooth overscroll-none"
+      <CommandExecutorProvider execute={executeCommand}>
+        <ToastProvider>
+          <AppContext.Provider value={appState}>
+            {/* Skip-to-main-content link for keyboard users */}
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[var(--background-interactive)] focus:text-white focus:rounded-lg focus:text-sm focus:font-medium focus:shadow-lg"
             >
-              <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>
-                <Suspense fallback={<ViewLoader />}>{renderView()}</Suspense>
-              </ErrorBoundary>
-            </main>
-          </div>
-          <CommandPalette
-            isOpen={isPaletteOpen}
-            onClose={() => setIsPaletteOpen(false)}
-            onNavigate={handleNavigate}
-          />
-          <VersionControlPanel />
-          <CollaborationPanel
-            isOpen={isCollabPanelOpen}
-            onClose={() => setIsCollabPanelOpen(false)}
-            projectId={project?.id ?? 'default'}
-          />
-          <PWAUpdateToast />
-          <PWAInstallBanner />
-          <OfflineIndicator />
-        </div>
-      </AppContext.Provider>
+              {t('common.skipToContent')}
+            </a>
+            {/* ARIA live region: announces view changes to screen readers */}
+            <div aria-live="polite" aria-atomic="true" className="sr-only">
+              {currentView}
+            </div>
+            <div className="flex h-[100dvh] bg-[var(--background-primary)] text-[var(--foreground-primary)] overflow-hidden touch-none md:touch-auto">
+              <Sidebar
+                currentView={currentView}
+                onNavigate={handleNavigate}
+                isSidebarOpen={appState.isSidebarOpen}
+                setIsSidebarOpen={appState.setIsSidebarOpen}
+              />
+              <div className="flex-1 flex flex-col h-full overflow-hidden pt-16 transition-all duration-300 ease-in-out md:ml-64">
+                <Header
+                  currentView={currentView}
+                  setIsSidebarOpen={appState.setIsSidebarOpen}
+                  isSidebarOpen={appState.isSidebarOpen}
+                  onOpenPalette={() => setCommandPaletteOpen(true)}
+                />
+                <main
+                  id="main-content"
+                  aria-label={t('common.mainContent')}
+                  className="flex-1 overflow-y-auto p-4 pb-20 sm:p-6 sm:pb-20 md:p-8 md:pb-8 scroll-smooth overscroll-none"
+                >
+                  <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>
+                    <Suspense fallback={<ViewLoader />}>{renderView()}</Suspense>
+                  </ErrorBoundary>
+                </main>
+              </div>
+              <CommandPalette
+                isOpen={isPaletteOpen}
+                onClose={() => setCommandPaletteOpen(false)}
+                onNavigate={handleNavigate}
+                currentView={currentView}
+              />
+              <VersionControlPanel />
+              <CollaborationPanel
+                isOpen={isCollabPanelOpen}
+                onClose={() => setIsCollabPanelOpen(false)}
+                projectId={project?.id ?? 'default'}
+              />
+              <PWAUpdateToast />
+              <PWAInstallBanner />
+              <OfflineIndicator />
+            </div>
+          </AppContext.Provider>
+        </ToastProvider>
+      </CommandExecutorProvider>
     </FeatureFlagsProvider>
   );
 };
 
 const AppWrapper: FC<AppProps> = (props) => (
   <I18nProvider>
-    <ToastProvider>
-      <App {...props} />
-    </ToastProvider>
+    <App {...props} />
   </I18nProvider>
 );
 

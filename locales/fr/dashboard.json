@@ -35,6 +35,8 @@
   "dashboard.goals.title": "Project Goals",
   "dashboard.goals.wordCount": "Word Count",
   "dashboard.greeting": "Welcome back to",
+  "dashboard.healthScore.body": "A lightweight blend of goal progress, cast depth, and worldbuilding coverage.",
+  "dashboard.healthScore.title": "Project health",
   "dashboard.loglineModal.loading": "Generating brilliant loglines...",
   "dashboard.loglineModal.title": "AI Logline Suggestions",
   "dashboard.noLogline": "No logline yet. Add one in the manuscript inspector!",

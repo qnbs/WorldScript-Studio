@@ -709,7 +709,7 @@ export const streamText = async (
 };
 
 export const streamAiHelpResponse = async (
-  question: string,
+  promptBody: string,
   onChunk: (chunk: string) => void,
   temperature: number,
   signal?: AbortSignal,
@@ -722,7 +722,7 @@ export const streamAiHelpResponse = async (
 
     const ai = await getAiClient();
 
-    const prompt = `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptBlock(question)}`;
+    const prompt = `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown.\n\n${sanitizePromptBlock(promptBody)}`;
     const responseStream = await ai.models.generateContentStream({
       model: getModelForText(),
       contents: prompt,

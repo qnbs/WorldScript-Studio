@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAppSelector } from '../app/hooks';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { ICONS } from '../constants';
 import { ManuscriptViewContext, useManuscriptViewContext } from '../contexts/ManuscriptViewContext';
@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader } from './ui/Card';
 import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { Drawer } from './ui/Drawer';
+import { EmptyState } from './ui/EmptyState';
 import { Modal } from './ui/Modal';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
@@ -1126,6 +1127,7 @@ const InspectorPanel: FC = React.memo(() => {
 InspectorPanel.displayName = 'InspectorPanel';
 
 const ManuscriptViewUI: FC = () => {
+  const dispatch = useAppDispatch();
   const { project, activeSection, t } = useManuscriptViewContext();
   const enableBinder = useAppSelector(selectEnableBinderResearch);
   const manuscriptResearchSplitOpen = useTransientUiStore((s) => s.manuscriptResearchSplitOpen);
@@ -1160,6 +1162,22 @@ const ManuscriptViewUI: FC = () => {
       <div className="flex h-[80vh] w-full items-center justify-center">
         <Spinner className="w-16 h-16" />
       </div>
+    );
+  }
+
+  if (project.manuscript.length === 0) {
+    return (
+      <EmptyState
+        title={t('empty.manuscript.title')}
+        description={t('empty.manuscript.description')}
+        primaryAction={{
+          label: t('manuscript.addSection'),
+          onClick: () =>
+            dispatch(
+              projectActions.addManuscriptSection({ title: t('outline.result.newSectionTitle') }),
+            ),
+        }}
+      />
     );
   }
 

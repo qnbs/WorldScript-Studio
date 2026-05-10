@@ -97,11 +97,11 @@ StoryCraft-Studio/
 ├── app/              # Redux store, hooks, listenerMiddleware
 ├── components/       # React UI components
 │   └── ui/           # Primitive design-system components (Button, Card, Modal…)
-├── contexts/         # React contexts for each view
-├── features/         # Redux slices (project, settings, writer, status)
-├── hooks/            # Custom React hooks per view + shared hooks
+├── contexts/         # React contexts per view + I18n + CommandExecutor
+├── features/         # Redux slices (project, settings, writer, status, featureFlags)
+├── hooks/            # Custom React hooks per view + shared hooks (e.g. useGlobalKeyboardShortcuts)
 ├── locales/          # i18n source JSON (de, en, fr, es, it — key parity vs en)
-├── services/         # Adapters: Gemini, Ollama, DB, storage, collaboration, EPUB…
+├── services/         # Adapters: AI, DB, storage, collaboration, EPUB; commands/, keyboard/, help/, settingsExchange
 ├── stories/          # Storybook stories for UI components
 ├── docs/             # Deep-dive docs (CI reference, history, graphify)
 ├── tests/

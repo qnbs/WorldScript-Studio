@@ -31,6 +31,8 @@
   "dashboard.stats.worlds": "Worlds",
   "dashboard.stats.outlineSections": "Outline Sections",
   "dashboard.stats.totalWordCount": "Words",
+  "dashboard.healthScore.title": "Project health",
+  "dashboard.healthScore.body": "A lightweight blend of goal progress, cast depth, and worldbuilding coverage.",
   "dashboard.quickAccess.title": "Quick Actions",
   "dashboard.quickAccess.manuscriptDesc": "Jump into the manuscript editor to write and organize.",
   "dashboard.quickAccess.writerDesc": "Use the AI Writing Studio to overcome writer's block.",

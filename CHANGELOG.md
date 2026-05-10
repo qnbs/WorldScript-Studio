@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Command Center:** Central **`services/commands/`** registry consumed by **`components/CommandPalette.tsx`** — fuzzy search with highlights, sections, **recent/pinned** commands (persisted), optional on-device **AI-suggested** rows, voice query unchanged; **`CommandExecutorProvider`** (`contexts/CommandExecutorContext.tsx`) + **`runCommandById`** for Help „Try it“ and toast **`commandId`** actions.
+- **Global shortcuts:** **`hooks/useGlobalKeyboardShortcuts.ts`**, **`services/keyboard/`** (matching + conflict hints), expanded defaults in **`features/settings/keyboardShortcutsDefaults.ts`**, **Settings → Shortcuts** (`components/settings/ShortcutsSection.tsx`); palette visibility via **`app/transientUiStore.ts`**.
+- **Settings hub:** Top-of-view **search** over registered control hints (`services/settingsSearchHints.ts`); **settings JSON import/export** (Zod, non-sensitive subset) in **Data** (`services/settingsExchange.ts`).
+- **Help:** **RAG-lite** static retrieval (`services/help/helpDocRetrieval.ts`) injected into **`streamAiHelpResponse`**; locale articles support **`tryActionId`**; **`spotlightTour`** accepts **`tourId`** (e.g. navigation preset).
+- **UI / polish:** **`components/ui/Tooltip.tsx`**, **`EmptyState.tsx`**; manuscript empty state; **ErrorBoundary** „Report issue“ GitHub link; dashboard **Project Health** card behind **`enableProjectHealthScore`**; **`enableCrossProjectSearch`** stub for future cross-project search.
+
 - **Hybrid-AI settings:** Local backend **presets** (Ollama/LM Studio/vLLM/custom URLs), optional **OpenAI-compatible base URL** + OpenRouter-style attribution headers, configurable **fallback chain** for legacy AI thunks; desktop **local port scan** for `/v1/models`; model recommendation hints for Ollama.
 - **Gold-Standard author pipeline (offline-first):** Binder blob storage + import/GC; manuscript research split; compile profile / norm-page TXT / EPUB matter; optional **Tauri Pandoc** EPUB (`pandoc_markdown_to_epub`) with JS fallback; VC snapshot **word-level diff** (bounded rows); scene **timeline** UI + rule engine (capped hints); dashboard **readability** sampling + timeline summaries (bounded text samples); optional **LanguageTool** (user URL + privacy gate); **local RAG** index rebuild → `saveRagVectors`; WebGPU tab **leader election** for WebLLM; settings **local RAG rebuild** control.
 
@@ -27,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **README / CLAUDE / CONTRIBUTING / `.cursor/index.mdc` / `.github/copilot-instructions.md` / `docs/Design-System.md` / AUDIT:** Documented **Command Center** stack (registry, palette, executor context, transient store, keyboard layer), Settings search + JSON exchange, Help RAG-lite + `tryActionId` + tours, Tooltip/EmptyState/toast command actions, and feature flags **`enableProjectHealthScore`** / **`enableCrossProjectSearch`**.
 - **`docs/DEPLOYMENT.md`** + root **`vercel.json`:** GitHub Pages and **Vercel** documented as equal static-SPA paths; privacy note for API keys (client-side only).
 - **README / AUDIT / CLAUDE / copilot-instructions:** Hybrid-AI architecture; **i18n runtime bundles** (`public/locales/*/bundle.json`) must stay in sync via **`pnpm run i18n:bundle`** / **`i18n:check`** / **`predev`** — fixes missing-translation **key placeholders** in the UI after editing `locales/**/*.json`.
 - **README / AUDIT:** CI vs local validation (typecheck, lint, i18n; defer heavy E2E to cloud CI); Gold-Standard audit section dated **2026-05-10**.

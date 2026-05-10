@@ -586,6 +586,16 @@ export const AdvancedAiSection: FC = () => {
                 checked={featureFlags.enableCompileWizard}
                 onChange={(v) => handleSettingChange('enableCompileWizard', v)}
               />
+              <ToggleSwitch
+                label={t('settings.featureFlags.enableProjectHealthScore')}
+                checked={featureFlags.enableProjectHealthScore}
+                onChange={(v) => handleSettingChange('enableProjectHealthScore', v)}
+              />
+              <ToggleSwitch
+                label={t('settings.featureFlags.enableCrossProjectSearch')}
+                checked={featureFlags.enableCrossProjectSearch}
+                onChange={(v) => handleSettingChange('enableCrossProjectSearch', v)}
+              />
             </div>
             <p className="text-sm text-[var(--foreground-muted)] mt-3">
               {t('settings.featureFlags.description')}

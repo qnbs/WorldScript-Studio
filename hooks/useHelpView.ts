@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
 import { streamAiHelpResponse } from '../services/aiProviderService';
+import { retrieveHelpDocContext } from '../services/help/helpDocRetrieval';
 import type { AiCreativity, HelpArticle, HelpCategory } from '../types';
 import { useTranslation } from './useTranslation';
 
@@ -61,6 +62,8 @@ export const useHelpView = () => {
 
     try {
       const temperature = creativityToTemperature[settings.aiCreativity];
+      const docContext = retrieveHelpDocContext(question);
+
       await streamAiHelpResponse(
         question,
         settings.aiCreativity,
@@ -88,6 +91,7 @@ export const useHelpView = () => {
             });
           },
         },
+        { docContext },
       );
     } catch {
       setChatHistory((prev) => {

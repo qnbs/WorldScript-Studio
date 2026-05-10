@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ICONS } from '../constants';
 import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useDashboard } from '../hooks/useDashboard';
 import { useTranslation } from '../hooks/useTranslation';
 import { startSpotlightTour } from '../services/spotlightTour';
@@ -391,6 +392,40 @@ const StatsGrid: FC = () => {
   );
 };
 
+const ProjectHealthCard: FC = () => {
+  const { enableProjectHealthScore } = useFeatureFlags();
+  const { t, wordCount, characters, worlds, project } = useDashboardContext();
+
+  if (!enableProjectHealthScore) return null;
+
+  const goal = project.projectGoals?.totalWordCount ?? 0;
+  const writingPct =
+    goal > 0 ? Math.min(100, (wordCount / goal) * 100) : Math.min(100, (wordCount / 2500) * 100);
+  const castPct = Math.min(100, characters.length * 10);
+  const worldPct = Math.min(100, worlds.length * 15);
+  const score = Math.round(writingPct * 0.55 + castPct * 0.225 + worldPct * 0.225);
+
+  return (
+    <Card
+      className="animate-in border-[var(--border-primary)]"
+      style={{ '--index': 2 } as React.CSSProperties}
+    >
+      <CardHeader className="border-b border-[var(--border-primary)] pb-4">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--foreground-muted)]">
+          {t('dashboard.healthScore.title')}
+        </h2>
+      </CardHeader>
+      <CardContent className="pt-4 space-y-3">
+        <p className="text-5xl font-black tabular-nums text-[var(--foreground-primary)]">{score}</p>
+        <p className="text-sm text-[var(--foreground-secondary)]">
+          {t('dashboard.healthScore.body')}
+        </p>
+        <Progress value={score} className="h-2" />
+      </CardContent>
+    </Card>
+  );
+};
+
 const QuickActions: FC = () => {
   const { t, onNavigate } = useDashboardContext();
 
@@ -637,6 +672,7 @@ const DashboardUI: FC = () => {
         <GoalTracker />
       </div>
       <StatsGrid />
+      <ProjectHealthCard />
       <AuthorInsightsCard />
       <QuickActions />
       <DashboardModals />

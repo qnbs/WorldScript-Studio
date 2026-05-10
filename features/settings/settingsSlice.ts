@@ -20,6 +20,7 @@ import type {
   ThemeCustomization,
   WritingGoal,
 } from '../../types';
+import { getDefaultKeyboardShortcuts } from './keyboardShortcutsDefaults';
 
 // Detect system preference for initial theme
 const getSystemThemePreference = (): Theme => {
@@ -41,12 +42,7 @@ const defaultSettings: Settings = {
   indentFirstLine: false,
 
   // Advanced Settings
-  keyboardShortcuts: [
-    { id: 'save', keys: ['Ctrl', 'S'], action: 'save' },
-    { id: 'new-section', keys: ['Ctrl', 'N'], action: 'newSection' },
-    { id: 'search', keys: ['Ctrl', 'F'], action: 'search' },
-    { id: 'export', keys: ['Ctrl', 'E'], action: 'export' },
-  ],
+  keyboardShortcuts: getDefaultKeyboardShortcuts(),
   writingGoals: [
     { type: 'words', target: 2000, period: 'daily', enabled: false },
     { type: 'time', target: 120, period: 'daily', enabled: false },

@@ -65,6 +65,7 @@ describe('useHelpView', () => {
       mockState.settings.aiCreativity,
       expect.objectContaining({ provider: 'gemini', model: 'gemini-2.5-flash' }),
       expect.objectContaining({ onChunk: expect.any(Function) }),
+      expect.objectContaining({ docContext: expect.any(String) }),
     );
     const lastHistoryItem = result.current.chatHistory[result.current.chatHistory.length - 1];
     expect(lastHistoryItem?.text).toContain('Hello from AI.');

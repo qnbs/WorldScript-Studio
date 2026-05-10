@@ -125,9 +125,18 @@ A dedicated view using **Retrieval-Augmented Generation (RAG)** to give the AI d
 
 Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor.
 
-### ⌨️ Command Palette
+### ⌨️ Command Palette & productivity hub
 
-A keyboard-first command palette (⌘K / Ctrl+K) for instant navigation, AI actions, and project management — all without leaving the keyboard.
+A keyboard-first **command palette** (⌘K / Ctrl+K, plus configurable bindings in **Settings → Shortcuts**) drives navigation, AI actions, editor helpers, and project tools from one surface:
+
+- **Typed command registry** (`services/commands/`) — fuzzy scoring with highlighted matches, category sections, optional AI-suggested rows from lightweight project signals (no extra network call required).
+- **Recent & pinned commands** — persisted preferences (versioned local storage); pin/unpin from the palette context menu.
+- **Voice input** — unchanged Web Speech integration for dictating palette queries where supported.
+- **Global shortcuts** — `hooks/useGlobalKeyboardShortcuts.ts` + `services/keyboard/` evaluate Redux-backed shortcut bindings (save, new section, search, export, theme toggle, palette, and more); conflicts surface in the Shortcuts editor.
+- **Settings** — filter controls via the Settings search bar (`services/settingsSearchHints.ts`); **Import / Export** of a Zod-validated, privacy-conscious settings JSON subset (**Settings → Data** via `services/settingsExchange.ts`).
+- **Help** — client-side help doc chunks feed optional **RAG-lite** context into `streamAiHelpResponse`; articles can expose **„Try it“** actions (`tryActionId`) that execute registry commands; spotlight tours support multiple **`tourId`** presets (`services/spotlightTour.ts`).
+- **UI primitives** — shared **`Tooltip`**, **`EmptyState`**, and toast rows that can trigger a **registered command** via `commandId` (see `features/status/statusSlice.ts`).
+- **Feature flags** — e.g. **`enableProjectHealthScore`** (dashboard card) and **`enableCrossProjectSearch`** (stub / future wiring) live in `features/featureFlags/featureFlagsSlice.ts`.
 
 ### 🦙 Local AI via Ollama _(Privacy-First)_
 
@@ -242,7 +251,7 @@ StoryCraft-Studio/
 ├── features/             # Redux Toolkit slices (project, settings, status, writer)
 ├── hooks/                # Custom hooks with all view business logic
 ├── contexts/             # React Context providers (i18n, per-view state sharing)
-├── services/             # External API & storage adapters (ai providers, db, storage)
+├── services/             # External API & storage adapters (ai, db, storage, commands, keyboard, help)
 ├── locales/              # i18n source files (per language × per module)
 ├── public/
 │   ├── locales/          # i18n runtime files (copied from locales/ at build)

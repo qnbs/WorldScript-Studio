@@ -3,6 +3,7 @@ import type { FC } from 'react';
 import React, { Fragment, useEffect, useRef } from 'react';
 import { useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
+import { useCommandExecutor } from '../contexts/CommandExecutorContext';
 import { HelpViewContext, useHelpViewContext } from '../contexts/HelpViewContext';
 import { useHelpView } from '../hooks/useHelpView';
 import { startSpotlightTour } from '../services/spotlightTour';
@@ -52,29 +53,48 @@ NavButton.displayName = 'NavButton';
 
 const ArticleViewer: FC = () => {
   const { t, selectedArticle, handleBackToList } = useHelpViewContext();
+  const executeCommand = useCommandExecutor();
   const theme = useAppSelector((state) => state.settings.theme);
 
   if (!selectedArticle) return null;
 
+  const tryId = selectedArticle.tryActionId;
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center">
-          <Button variant="ghost" size="sm" onClick={handleBackToList} className="mr-2 -ml-2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5"
+        <div className="flex items-center flex-wrap gap-2 justify-between">
+          <div className="flex items-center min-w-0">
+            <Button variant="ghost" size="sm" onClick={handleBackToList} className="mr-2 -ml-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.75 19.5L8.25 12l7.5-7.5"
+                />
+              </svg>
+            </Button>
+            <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+              {t(selectedArticle.title)}
+            </h2>
+          </div>
+          {tryId ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => executeCommand(tryId)}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
-          </Button>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-            {t(selectedArticle.title)}
-          </h2>
+              {t('help.article.tryItNow')}
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent>
@@ -361,6 +381,14 @@ const HelpViewUI: FC = () => {
               onClick={handleStartTour}
             >
               {t('tour.help.startButton')}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="mt-1 w-full max-w-full shrink-0 text-sm"
+              onClick={() => startSpotlightTour((key) => t(key), 'navigation')}
+            >
+              {t('tour.navigationOnly.startButton')}
             </Button>
           </div>
         </div>

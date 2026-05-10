@@ -13,6 +13,7 @@
   "help.ai.suggestion2": "Explain the AI Writing Studio",
   "help.ai.suggestion3": "How are my snapshots saved?",
   "help.article.selectPrompt": "Select an article on the left to read it, or ask our AI assistant for help.",
+  "help.article.tryItNow": "Try it now",
   "help.categories": [
     {
       "id": "getting-started",
@@ -34,7 +35,11 @@
       "title": "help.category.writing",
       "icon": "DOCUMENT_TEXT",
       "articles": [
-        { "title": "help.writing.manuscript.title", "content": "help.writing.manuscript.content" },
+        {
+          "title": "help.writing.manuscript.title",
+          "content": "help.writing.manuscript.content",
+          "tryActionId": "nav-manuscript"
+        },
         { "title": "help.writing.templates.title", "content": "help.writing.templates.content" },
         { "title": "help.writing.outline.title", "content": "help.writing.outline.content" }
       ]

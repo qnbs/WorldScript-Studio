@@ -371,18 +371,25 @@ export async function streamAiHelpResponse(
   creativity: AiCreativity,
   opts: AIRequestOptions,
   callbacks: AIStreamCallbacks,
+  extras?: { docContext?: string },
 ): Promise<void> {
-  const helpPrompt = `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptValue(question)}`;
+  const doc = extras?.docContext?.trim();
+  const mergedBody = doc
+    ? `${doc}\n\n---\n\nUser question:\n${sanitizePromptValue(question)}`
+    : sanitizePromptValue(question);
+  const helpPromptWithDocs = doc
+    ? `You are a helpful assistant for StoryCraft Studio. Prefer the documentation excerpts below when they answer the question; otherwise give concise general guidance. Format using Markdown.\n\n${mergedBody}`
+    : `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptValue(question)}`;
   if (opts.provider === 'gemini') {
     return streamAiHelpResponseGemini(
-      question,
+      mergedBody,
       callbacks.onChunk,
       opts.temperature ?? 0.7,
       opts.signal,
     );
   }
   // QNBS-v3: Hilfe-Chat nutzt dieselbe Hybrid-Fallback-Kette wie Projekt-Streaming.
-  return streamText(helpPrompt, creativity, opts, callbacks, opts.signal);
+  return streamText(helpPromptWithDocs, creativity, opts, callbacks, opts.signal);
 }
 
 export async function listOllamaModels(baseUrl = 'http://localhost:11434'): Promise<string[]> {

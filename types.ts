@@ -437,6 +437,8 @@ export interface Settings {
 export interface HelpArticle {
   title: string;
   content: string;
+  /** Optional command id from the command registry (e.g. nav-manuscript). */
+  tryActionId?: string;
 }
 
 // ─── Version Control Types ──────────────────────────────────────────────────

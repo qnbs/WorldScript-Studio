@@ -12,6 +12,10 @@ export interface FeatureFlagsState {
   enableBinderResearch: boolean;
   /** Guided compile wizard on Export view (default: false). */
   enableCompileWizard: boolean;
+  /** Experimental: Project health insights from dashboard (default: false). */
+  enableProjectHealthScore: boolean;
+  /** Experimental: Search across projects (default: false). */
+  enableCrossProjectSearch: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -24,6 +28,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
+  enableProjectHealthScore: false,
+  enableCrossProjectSearch: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -86,6 +92,12 @@ const featureFlagsSlice = createSlice({
     setEnableCompileWizard(state, action: PayloadAction<boolean>) {
       state.enableCompileWizard = action.payload;
     },
+    setEnableProjectHealthScore(state, action: PayloadAction<boolean>) {
+      state.enableProjectHealthScore = action.payload;
+    },
+    setEnableCrossProjectSearch(state, action: PayloadAction<boolean>) {
+      state.enableCrossProjectSearch = action.payload;
+    },
   },
 });
 
@@ -106,6 +118,10 @@ export const selectEnableBinderResearch = (state: { featureFlags: FeatureFlagsSt
   state.featureFlags.enableBinderResearch;
 export const selectEnableCompileWizard = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableCompileWizard;
+export const selectEnableProjectHealthScore = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableProjectHealthScore;
+export const selectEnableCrossProjectSearch = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableCrossProjectSearch;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

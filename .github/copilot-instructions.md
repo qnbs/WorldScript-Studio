@@ -28,10 +28,10 @@ StoryCraft Studio is an AI-powered creative writing application built as an offl
 app/              → Redux store, hooks (useAppDispatch/useAppSelector), listener middleware, utils
 components/       → React view components (one per view)
   ui/             → Reusable design system primitives (Button, Modal, Card, Toast, etc.)
-contexts/         → React context providers (one per major view + I18nContext)
+contexts/         → React context providers (one per major view + I18nContext + CommandExecutorContext)
 features/         → Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
 hooks/            → Custom hooks with view business logic (one hook per view)
-services/         → External adapters: geminiService, dbService (dual IndexedDB + migration), storageService, collaborationService, epubApiService
+services/         → External adapters: geminiService, aiProviderService, dbService (dual IndexedDB + migration), storageService, collaborationService, epubApiService; **commands/** (palette registry), **keyboard/** (shortcut matching), **help/** (doc retrieval for AI), **settingsExchange** (settings JSON)
 locales/          → i18n source files (de, en, es, fr, it) × 14 modules
 public/locales/   → i18n runtime files served at BASE_URL
 tests/            → Unit + E2E tests (Vitest + Playwright)
@@ -56,6 +56,8 @@ types.ts          → Core shared interfaces and types
 5. **i18n:** Custom React Context system in `I18nContext.tsx`. Translation keys use dot notation (`common.save`, `dashboard.wordCount`). All user-facing strings MUST be translation keys, never hardcoded text.
 
 6. **Code Splitting:** All views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy dependencies (Konva, Leaflet, react-force-graph) are in separate Vite manual chunks. The export stack also uses dynamic imports for `docx` and `jszip` so large document libraries are only loaded when export actions are executed.
+
+7. **Command Center:** Palette commands live in **`services/commands/`** (i18n keys, fuzzy search, recent/pinned). **`CommandExecutorProvider`** exposes execution for Help „Try it“ (`tryActionId`) and toasts with **`commandId`**. **`useGlobalKeyboardShortcuts`** reads Redux shortcut bindings; **`app/transientUiStore`** toggles palette visibility.
 
 ## Coding Standards
 

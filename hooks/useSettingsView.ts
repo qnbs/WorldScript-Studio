@@ -180,6 +180,12 @@ export const useSettingsView = () => {
         case 'enableCompileWizard':
           dispatch(featureFlagsActions.setEnableCompileWizard(Boolean(value)));
           break;
+        case 'enableProjectHealthScore':
+          dispatch(featureFlagsActions.setEnableProjectHealthScore(Boolean(value)));
+          break;
+        case 'enableCrossProjectSearch':
+          dispatch(featureFlagsActions.setEnableCrossProjectSearch(Boolean(value)));
+          break;
         default:
           logger.warn(`Unknown setting key: ${key}`);
           break;

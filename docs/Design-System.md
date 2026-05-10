@@ -45,3 +45,15 @@ When touching UI:
 ## Storybook
 
 Global decorators switch `body` theme classes; use the toolbar **Theme** and **Appearance** for regression checks of primitives.
+
+## Helper UI primitives
+
+Shared productivity components (use semantic tokens above):
+
+| Primitive | Path | Notes |
+|-----------|------|--------|
+| **Tooltip** | `components/ui/Tooltip.tsx` | Prefer over raw `title` for keyboard-accessible hints; delay and positioning props. |
+| **EmptyState** | `components/ui/EmptyState.tsx` | Primary/secondary actions + optional help links for manuscript and other views. |
+| **Toast** | `components/ui/Toast.tsx` + `features/status/statusSlice.ts` | Optional **`actionLabel`** + **`commandId`** — action dispatches via command registry when present. |
+
+Command Palette and Settings Shortcuts should reuse the same focus-ring and motion tokens (`--sc-ring-focus`, reduced-motion classes).

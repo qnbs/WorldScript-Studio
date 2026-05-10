@@ -36,6 +36,24 @@
 
 ---
 
+## Follow-up Audit — 2026-05-10 (Command Center & Helper UX)
+
+### Product / architecture
+
+- **Command registry & palette:** `services/commands/` (definitions, fuzzy scoring, recent/pinned persistence, AI suggestions); `components/CommandPalette.tsx` — single consumer for ⌘/Ctrl+K flow; execution via `runCommandById` / `CommandExecutorProvider` (`contexts/CommandExecutorContext.tsx`).
+- **Transient UI:** `app/transientUiStore.ts` owns **`isCommandPaletteOpen`** — palette must not duplicate unrelated React-local open flags.
+- **Keyboard:** `hooks/useGlobalKeyboardShortcuts.ts`, `services/keyboard/` (matching, conflict hints); defaults `features/settings/keyboardShortcutsDefaults.ts`; UI `components/settings/ShortcutsSection.tsx`.
+- **Settings hub:** Search metadata `services/settingsSearchHints.ts`; JSON subset import/export `services/settingsExchange.ts` (Data section).
+- **Help:** Static chunk retrieval `services/help/helpDocRetrieval.ts` → doc context in `streamAiHelpResponse`; locale **`tryActionId`** on articles; `services/spotlightTour.ts` **`tourId`** for multiple guided flows.
+- **UI primitives:** `components/ui/Tooltip.tsx`, `EmptyState.tsx`; `features/status/statusSlice.ts` toast fields **`commandId`** / **`actionLabel`**; ErrorBoundary GitHub issue link.
+- **Feature flags:** `enableProjectHealthScore` (dashboard health card), `enableCrossProjectSearch` (stub) in `features/featureFlags/featureFlagsSlice.ts`.
+
+### Documentation
+
+- **README, CLAUDE, CONTRIBUTING, copilot-instructions, `.cursor/index.mdc`, `docs/Design-System.md`, CHANGELOG `[Unreleased]`:** aligned with the stack above.
+
+---
+
 ## Follow-up Audit — 2026-05-06 (documentation inventory)
 
 ### Markdown corpus (maintainer-curated)

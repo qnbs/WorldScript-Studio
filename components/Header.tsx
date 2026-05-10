@@ -6,6 +6,7 @@ import { selectCanRedo, selectCanUndo } from '../features/project/projectSelecto
 import { useTranslation } from '../hooks/useTranslation';
 import type { View } from '../types';
 import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
+import { Tooltip } from './ui/Tooltip';
 
 interface HeaderProps {
   currentView: View;
@@ -114,35 +115,37 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex-grow max-w-xl px-4 hidden sm:block">
-        <button
-          type="button"
-          data-tour="command-palette-trigger"
-          onClick={onOpenPalette}
-          className="w-full h-10 rounded-xl bg-[var(--background-tertiary)]/50 border border-[var(--border-primary)] hover:border-[var(--border-interactive)] hover:bg-[var(--background-tertiary)] hover:shadow-[var(--shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--foreground-muted)] group shadow-sm"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-4 h-4 mr-3 group-hover:text-[var(--foreground-primary)] transition-colors"
+        <Tooltip label={t('tooltip.commandPalette')} shortcut={t('tooltip.commandPaletteShortcut')}>
+          <button
+            type="button"
+            data-tour="command-palette-trigger"
+            onClick={onOpenPalette}
+            className="w-full h-10 rounded-xl bg-[var(--background-tertiary)]/50 border border-[var(--border-primary)] hover:border-[var(--border-interactive)] hover:bg-[var(--background-tertiary)] hover:shadow-[var(--shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--foreground-muted)] group shadow-sm"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 001.061 1.061z"
-            />
-          </svg>
-          <span className="flex-grow text-left group-hover:text-[var(--foreground-secondary)] transition-colors">
-            {t('palette.placeholder')}...
-          </span>
-          <div className="flex gap-1 items-center">
-            <kbd className="hidden md:inline-flex items-center h-5 px-2 text-[10px] font-mono font-bold text-[var(--foreground-muted)] bg-[var(--background-primary)] rounded border border-[var(--border-primary)] shadow-sm group-hover:border-[var(--border-highlight)] transition-colors">
-              Ctrl K
-            </kbd>
-          </div>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-4 h-4 mr-3 group-hover:text-[var(--foreground-primary)] transition-colors"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 001.061 1.061z"
+              />
+            </svg>
+            <span className="flex-grow text-left group-hover:text-[var(--foreground-secondary)] transition-colors">
+              {t('palette.placeholder')}...
+            </span>
+            <div className="flex gap-1 items-center">
+              <kbd className="hidden md:inline-flex items-center h-5 px-2 text-[10px] font-mono font-bold text-[var(--foreground-muted)] bg-[var(--background-primary)] rounded border border-[var(--border-primary)] shadow-sm group-hover:border-[var(--border-highlight)] transition-colors">
+                Ctrl K
+              </kbd>
+            </div>
+          </button>
+        </Tooltip>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">

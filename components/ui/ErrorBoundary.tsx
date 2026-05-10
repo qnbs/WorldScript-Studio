@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 view. If the problem persists, the application state might be corrupted. You may
                 need to reset the project from the settings menu.
               </p>
-              <div className="flex gap-2 justify-center">
+              <div className="flex flex-wrap gap-2 justify-center">
                 {this.props.onReset && (
                   <Button
                     onClick={() => {
@@ -67,6 +67,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 )}
                 <Button onClick={() => window.location.reload()} variant="secondary">
                   Reload Page
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    window.open(
+                      'https://github.com/qnbs/StoryCraft-Studio/issues/new',
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                >
+                  Report issue
                 </Button>
               </div>
             </CardContent>

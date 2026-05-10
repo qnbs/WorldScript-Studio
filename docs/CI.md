@@ -130,6 +130,8 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | `renovate.json` | Renovate Bot: patch auto-merge policy |
 | `playwright.config.ts` | E2E projects (Chromium in CI; Chromium + Firefox locally), `snapshotPathTemplate`, reporters |
 | `tests/e2e/helpers.ts` | SPA-ready waits (avoid `networkidle` with Vite/HMR), EN locale, blank project bootstrap, `#sidebar` scope |
+| `services/commands/` | Command registry backing the palette (fuzzy search — regression-sensitive if E2E targets palette copy) |
+| `hooks/useGlobalKeyboardShortcuts.ts` | Global shortcut listener — keep in sync with **Settings → Shortcuts** defaults |
 | `stryker.conf.json` | Mutation testing targets + thresholds (`break: null` until score improves) |
 
 ---
