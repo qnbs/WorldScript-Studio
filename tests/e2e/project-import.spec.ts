@@ -88,10 +88,16 @@ test.describe('Project Import (CI-only)', () => {
       timeout: 15000,
     });
 
-    // Reload and check title is still present
+    // Reload and check title is still present (Dashboard shows project title input)
     await page.reload();
     await waitForSpaReady(page);
-    await expect(page.getByText(/Imported Test Novel/i)).toBeVisible({ timeout: 8000 });
+    await selectEnglish(page);
+    await sidebar(page)
+      .getByRole('button', { name: /Dashboard/i })
+      .click();
+    await expect(page.locator('#projectTitle')).toHaveValue('Imported Test Novel', {
+      timeout: 15000,
+    });
   });
 
   test('rejects a malformed JSON file gracefully', async ({ page }) => {
