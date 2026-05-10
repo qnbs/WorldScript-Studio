@@ -136,6 +136,8 @@
   "settings.featureFlags.enableVisualRegression": "Enable visual regression tooling",
   "settings.featureFlags.enableCodexAutoTracking": "Codex auto-tracking (manuscript)",
   "settings.featureFlags.enableStoryBibleAdvanced": "Story Bible advanced (graph + hints in Codex)",
+  "settings.featureFlags.enableBinderResearch": "Research binder (Manuscript sidebar)",
+  "settings.featureFlags.enableCompileWizard": "Compile wizard (Export)",
   "settings.accessibility.title": "Accessibility Settings",
   "settings.accessibility.highContrast": "High Contrast Mode",
   "settings.accessibility.reducedMotion": "Reduced Motion",

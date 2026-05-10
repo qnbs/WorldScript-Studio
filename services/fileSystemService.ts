@@ -157,8 +157,9 @@ import type {
   StoryProject,
   World,
 } from '../types';
-import { logger } from './logger';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from './collaborationService';
+import { logger } from './logger';
+import { parseImportedProjectJson } from './projectImportSchema';
 import {
   normalizeSaveProjectInputToStoryProject,
   type SaveProjectInput,
@@ -218,9 +219,7 @@ class FileSystemService implements StorageBackend {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const projectId = sanitizePathSegment(
-      ((flat as unknown as Record<string, unknown>)['id'] as string) ||
-        flat.title ||
-        'project',
+      ((flat as unknown as Record<string, unknown>)['id'] as string) || flat.title || 'project',
     );
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
@@ -701,7 +700,61 @@ class FileSystemService implements StorageBackend {
     const content = await retryFs(() => apis.readTextFile(filePath));
 
     if (filePath.endsWith('.json')) {
-      return JSON.parse(content);
+      const parsed = parseImportedProjectJson(content);
+      type CharRow = Character & { avatarBase64?: string };
+      type WorldRow = World & { ambianceImageBase64?: string };
+      let characterArray: CharRow[] = [];
+      if (Array.isArray(parsed.characters)) {
+        characterArray = parsed.characters as CharRow[];
+      } else if (parsed.characters && 'ids' in parsed.characters) {
+        const { ids, entities } = parsed.characters;
+        characterArray = ids
+          .map((id: string) => entities[id])
+          .filter((item): item is CharRow => Boolean(item));
+      }
+      const charactersOut: Character[] = [];
+      for (const char of characterArray) {
+        const row = { ...char };
+        if (row.avatarBase64) {
+          await this.saveImage(row.id, row.avatarBase64);
+          row.hasAvatar = true;
+          delete row.avatarBase64;
+        }
+        charactersOut.push(row);
+      }
+
+      let worldArray: WorldRow[] = [];
+      if (Array.isArray(parsed.worlds)) {
+        worldArray = parsed.worlds as WorldRow[];
+      } else if (parsed.worlds && 'ids' in parsed.worlds) {
+        const { ids, entities } = parsed.worlds;
+        worldArray = ids
+          .map((id: string) => entities[id])
+          .filter((item): item is WorldRow => Boolean(item));
+      }
+      const worldsOut: World[] = [];
+      for (const world of worldArray) {
+        const row = { ...world };
+        if (row.ambianceImageBase64) {
+          await this.saveImage(row.id, row.ambianceImageBase64);
+          row.hasAmbianceImage = true;
+          delete row.ambianceImageBase64;
+        }
+        worldsOut.push(row);
+      }
+
+      return {
+        title: parsed.title,
+        logline: parsed.logline,
+        characters: charactersOut,
+        worlds: worldsOut,
+        outline: parsed.outline,
+        manuscript: parsed.manuscript ?? [],
+        binderNodes: parsed.binderNodes,
+        projectGoals: parsed.projectGoals,
+        writingHistory: parsed.writingHistory,
+        // QNBS-v3: Parse-Ergebnis angleichen — Zod optional vs. StoryProject exactOptionalPropertyTypes.
+      } as StoryProject;
     } else if (filePath.endsWith('.md') || filePath.endsWith('.markdown')) {
       return this.parseMarkdownProject(content);
     }

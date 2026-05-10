@@ -2,9 +2,11 @@ import type { EntityState, PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
 import type {
+  BinderNode,
   Character,
   CharacterRelationship,
   OutlineSection,
+  PersistedVersionControlState,
   StorySection,
   World,
   WritingGoal,
@@ -69,6 +71,9 @@ export interface ProjectData {
   writingSessions?: WritingSession[];
   writingGoals?: WritingGoal[];
   sceneBoardLayout?: { [sectionId: string]: { x: number; y: number } };
+  binderNodes?: BinderNode[];
+  /** Saved with project so version branches/snapshots survive reload (Embedded VC). */
+  persistedVersionControl?: PersistedVersionControlState;
 }
 
 // --- Initial State ---
@@ -86,6 +91,7 @@ const initialState: { data: ProjectData } = {
       targetDate: null,
     },
     writingHistory: [],
+    binderNodes: [],
   },
 };
 
@@ -124,6 +130,7 @@ const projectSlice = createSlice({
         characters: charactersAdapter.getInitialState(),
         worlds: worldsAdapter.getInitialState(),
         manuscript: [{ id: `sec-${Date.now()}`, title: 'Chapter 1', content: '' }],
+        binderNodes: [],
       };
     },
     // --- Characters ---
@@ -267,6 +274,39 @@ const projectSlice = createSlice({
           Object.assign(goal, action.payload.changes);
         }
       }
+    },
+    // QNBS-v3: Binder / Research-Knoten offline-first im Projekt — ergänzt klassische Autoren-Pipeline ohne Cloud.
+    setBinderNodes: (state, action: PayloadAction<BinderNode[]>) => {
+      state.data.binderNodes = action.payload;
+    },
+    addBinderNode: (state, action: PayloadAction<BinderNode>) => {
+      if (!state.data.binderNodes) state.data.binderNodes = [];
+      state.data.binderNodes.push(action.payload);
+    },
+    updateBinderNode: (
+      state,
+      action: PayloadAction<{ id: string; changes: Partial<BinderNode> }>,
+    ) => {
+      const nodes = state.data.binderNodes;
+      if (!nodes) return;
+      const idx = nodes.findIndex((n) => n.id === action.payload.id);
+      if (idx === -1) return;
+      const node = nodes[idx];
+      if (node) Object.assign(node, action.payload.changes);
+    },
+    deleteBinderNode: (state, action: PayloadAction<string>) => {
+      const rootId = action.payload;
+      const nodes = state.data.binderNodes;
+      if (!nodes?.length) return;
+      const toRemove = new Set<string>();
+      const collect = (pid: string) => {
+        toRemove.add(pid);
+        for (const n of nodes) {
+          if (n.parentId === pid) collect(n.id);
+        }
+      };
+      collect(rootId);
+      state.data.binderNodes = nodes.filter((n) => !toRemove.has(n.id));
     },
   },
   extraReducers: (builder) => {

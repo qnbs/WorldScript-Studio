@@ -3,9 +3,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { ManuscriptViewContext, useManuscriptViewContext } from '../contexts/ManuscriptViewContext';
+import { selectEnableBinderResearch } from '../features/featureFlags/featureFlagsSlice';
 import { projectActions } from '../features/project/projectSlice';
+import { partialStorySectionFromSnapshot } from '../features/project/sectionRestoreHelpers';
+import {
+  decompressManuscript,
+  selectCurrentBranchSnapshots,
+  versionControlActions,
+} from '../features/versionControl/versionControlSlice';
 import { useManuscriptView } from '../hooks/useManuscriptView';
 import { useTranslation } from '../hooks/useTranslation';
+import { BinderPanel } from './BinderPanel';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { DebouncedInput } from './ui/DebouncedInput';
@@ -804,6 +812,8 @@ const InspectorPanel: FC = React.memo(() => {
     t,
     project,
     dispatch,
+    manuscript,
+    activeSectionId,
     activeSection,
     activeSectionStats,
     isLoglineModalOpen,
@@ -820,6 +830,12 @@ const InspectorPanel: FC = React.memo(() => {
     handleVisualizeScene,
     sceneImagePreviewUrl,
   } = useManuscriptViewContext();
+  const sectionSnapshots = useAppSelector((state) =>
+    activeSectionId
+      ? selectCurrentBranchSnapshots(state).filter((s) => s.sectionId === activeSectionId)
+      : [],
+  );
+
   return (
     <>
       <div className="space-y-4 p-4">
@@ -898,6 +914,73 @@ const InspectorPanel: FC = React.memo(() => {
             </div>
           </CardContent>
         </Card>
+        {activeSection ? (
+          <Card>
+            <CardHeader className="flex justify-between items-center pb-2">
+              <h3 className="text-base font-semibold">{t('manuscript.sectionHistory.title')}</h3>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                onClick={() =>
+                  dispatch(
+                    versionControlActions.createSnapshot({
+                      label: t('manuscript.sectionHistory.snapshotLabel', {
+                        title: activeSection.title,
+                      }),
+                      sections: manuscript,
+                      sectionId: activeSection.id,
+                    }),
+                  )
+                }
+              >
+                {t('manuscript.sectionHistory.saveSnapshot')}
+              </Button>
+              {sectionSnapshots.length === 0 ? (
+                <p className="text-xs text-[var(--foreground-muted)]">
+                  {t('manuscript.sectionHistory.empty')}
+                </p>
+              ) : (
+                <ul className="space-y-2 max-h-48 overflow-y-auto">
+                  {sectionSnapshots.map((snap) => (
+                    <li
+                      key={snap.id}
+                      className="flex flex-col gap-1 rounded border border-[var(--border-primary)] p-2"
+                    >
+                      <span className="font-medium truncate">{snap.label}</span>
+                      <time className="text-xs text-[var(--foreground-muted)]">
+                        {new Date(snap.timestamp).toLocaleString()}
+                      </time>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="self-start h-7 text-xs"
+                        onClick={() => {
+                          const sections = decompressManuscript(snap.manuscriptSnapshot);
+                          const patch = sections[0];
+                          if (patch && activeSectionId) {
+                            dispatch(
+                              projectActions.updateManuscriptSection({
+                                id: activeSectionId,
+                                changes: partialStorySectionFromSnapshot(patch),
+                              }),
+                            );
+                          }
+                        }}
+                      >
+                        {t('manuscript.sectionHistory.restore')}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
         <Card>
           <CardHeader className="flex justify-between items-center pb-2">
             <h3 className="text-base font-semibold">{t('manuscript.visualize.title')}</h3>
@@ -1042,6 +1125,8 @@ InspectorPanel.displayName = 'InspectorPanel';
 
 const ManuscriptViewUI: FC = () => {
   const { project, activeSection, t } = useManuscriptViewContext();
+  const enableBinder = useAppSelector(selectEnableBinderResearch);
+  const [leftNavTab, setLeftNavTab] = useState<'chapters' | 'binder'>('chapters');
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isInspectorDrawerOpen, setIsInspectorDrawerOpen] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
@@ -1066,27 +1151,56 @@ const ManuscriptViewUI: FC = () => {
     <div className="h-full flex flex-col">
       {/* Mobile Header */}
       <header className="md:hidden flex-shrink-0 flex justify-between items-center p-2 mb-2 bg-[var(--background-secondary)]/80 backdrop-blur-md border-b border-[var(--border-primary)] sticky top-0 z-20">
-        <Button
-          variant="ghost"
-          onClick={() => setIsNavDrawerOpen(true)}
-          size="sm"
-          className="-ml-1"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-6 h-6"
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {enableBinder ? (
+            <>
+              <Button
+                type="button"
+                variant={leftNavTab === 'chapters' ? 'secondary' : 'ghost'}
+                onClick={() => setLeftNavTab('chapters')}
+                size="sm"
+                className="px-2 min-w-[2.5rem]"
+                aria-pressed={leftNavTab === 'chapters'}
+                aria-label={t('manuscript.navigator.title')}
+              >
+                {t('manuscript.leftPanel.mobileChapters')}
+              </Button>
+              <Button
+                type="button"
+                variant={leftNavTab === 'binder' ? 'secondary' : 'ghost'}
+                onClick={() => setLeftNavTab('binder')}
+                size="sm"
+                className="px-2 min-w-[2.5rem]"
+                aria-pressed={leftNavTab === 'binder'}
+                aria-label={t('manuscript.binder.tab')}
+              >
+                {t('manuscript.leftPanel.mobileBinder')}
+              </Button>
+            </>
+          ) : null}
+          <Button
+            variant="ghost"
+            onClick={() => setIsNavDrawerOpen(true)}
+            size="sm"
+            className="-ml-1"
+            aria-label={t('manuscript.leftPanel.openDrawer')}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-            />
-          </svg>
-        </Button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-6 h-6"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+              />
+            </svg>
+          </Button>
+        </div>
         <h1 className="text-sm font-bold truncate px-2 text-center flex-grow text-[var(--foreground-primary)]">
           {activeSection?.title || project.title}
         </h1>
@@ -1157,12 +1271,47 @@ const ManuscriptViewUI: FC = () => {
         >
           <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
             <CardHeader className="py-3 min-h-[50px]">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--foreground-muted)]">
-                {t('manuscript.navigator.title')}
-              </h2>
+              {enableBinder ? (
+                <div
+                  className="flex rounded-lg border border-[var(--border-primary)] p-0.5 gap-0.5"
+                  role="tablist"
+                  aria-label={t('manuscript.leftPanel.tabsAria')}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={leftNavTab === 'chapters'}
+                    className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                      leftNavTab === 'chapters'
+                        ? 'bg-[var(--background-interactive)] text-white'
+                        : 'text-[var(--foreground-muted)] hover:bg-[var(--background-tertiary)]'
+                    }`}
+                    onClick={() => setLeftNavTab('chapters')}
+                  >
+                    {t('manuscript.navigator.title')}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={leftNavTab === 'binder'}
+                    className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                      leftNavTab === 'binder'
+                        ? 'bg-[var(--background-interactive)] text-white'
+                        : 'text-[var(--foreground-muted)] hover:bg-[var(--background-tertiary)]'
+                    }`}
+                    onClick={() => setLeftNavTab('binder')}
+                  >
+                    {t('manuscript.binder.tab')}
+                  </button>
+                </div>
+              ) : (
+                <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--foreground-muted)]">
+                  {t('manuscript.navigator.title')}
+                </h2>
+              )}
             </CardHeader>
-            <div className="flex-grow overflow-y-auto">
-              <StoryNavigator />
+            <div className="flex-grow overflow-y-auto min-h-0">
+              {enableBinder && leftNavTab === 'binder' ? <BinderPanel /> : <StoryNavigator />}
             </div>
           </Card>
         </div>
@@ -1219,10 +1368,18 @@ const ManuscriptViewUI: FC = () => {
       <Drawer
         isOpen={isNavDrawerOpen}
         onClose={() => setIsNavDrawerOpen(false)}
-        title={t('manuscript.navigator.title')}
+        title={
+          enableBinder && leftNavTab === 'binder'
+            ? t('manuscript.binder.tab')
+            : t('manuscript.navigator.title')
+        }
         position="left"
       >
-        <StoryNavigator onSectionSelect={() => setIsNavDrawerOpen(false)} />
+        {enableBinder && leftNavTab === 'binder' ? (
+          <BinderPanel />
+        ) : (
+          <StoryNavigator onSectionSelect={() => setIsNavDrawerOpen(false)} />
+        )}
       </Drawer>
       <Drawer
         isOpen={isInspectorDrawerOpen}

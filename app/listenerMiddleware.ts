@@ -6,7 +6,7 @@ import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
-import type { Character, World } from '../types';
+import type { Character, StorySection, World } from '../types';
 import type { AppDispatch, RootState } from './store';
 
 type ProjectStateWithHistory = {
@@ -21,14 +21,25 @@ listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
     const currentRoot = currentState as RootState;
     const prevRoot = previousState as RootState;
-    return currentRoot.project.present !== prevRoot.project.present;
+    const projectChanged = currentRoot.project.present !== prevRoot.project.present;
+    const vcChanged =
+      currentRoot.versionControl.snapshots !== prevRoot.versionControl.snapshots ||
+      currentRoot.versionControl.branches !== prevRoot.versionControl.branches ||
+      currentRoot.versionControl.currentBranchId !== prevRoot.versionControl.currentBranchId;
+    return projectChanged || vcChanged;
   },
   effect: async (_action, listenerApi) => {
     const originalState = listenerApi.getOriginalState() as RootState;
     await listenerApi.delay(1000);
 
     const state = listenerApi.getState() as RootState;
-    if (state.project.present === originalState.project.present) return;
+    const orig = originalState as RootState;
+    const unchangedProject = state.project.present === orig.project.present;
+    const unchangedVc =
+      state.versionControl.snapshots === orig.versionControl.snapshots &&
+      state.versionControl.branches === orig.versionControl.branches &&
+      state.versionControl.currentBranchId === orig.versionControl.currentBranchId;
+    if (unchangedProject && unchangedVc) return;
 
     listenerApi.dispatch(statusActions.setSavingStatus('saving'));
 
@@ -42,7 +53,16 @@ listenerMiddleware.startListening({
         return;
       }
 
-      const projectDataToSave = saveEnvelopeFromProjectData(presentData);
+      const enriched: ProjectData = {
+        ...presentData,
+        persistedVersionControl: {
+          branches: state.versionControl.branches,
+          snapshots: state.versionControl.snapshots,
+          currentBranchId: state.versionControl.currentBranchId,
+        },
+      };
+
+      const projectDataToSave = saveEnvelopeFromProjectData(enriched);
 
       try {
         const serialized = JSON.stringify(projectDataToSave);
@@ -121,10 +141,30 @@ listenerMiddleware.startListening({
     const characters = Object.values(project.characters.entities).filter(Boolean) as Character[];
     const worlds = Object.values(project.worlds.entities).filter(Boolean) as World[];
 
+    const binderResearchSections: StorySection[] = (project.binderNodes ?? [])
+      .filter(
+        (n) =>
+          (n.type === 'note' || n.type === 'text') &&
+          typeof n.content === 'string' &&
+          n.content.trim(),
+      )
+      .map((n) => ({
+        id: `binder-${n.id}`,
+        title: `Research: ${n.title}`,
+        content: n.content ?? '',
+      }));
+
     try {
-      const codex = extractStoryCodex(projectId, project.manuscript, characters, worlds, {
-        advanced: state.featureFlags.enableStoryBibleAdvanced,
-      });
+      const codex = extractStoryCodex(
+        projectId,
+        project.manuscript,
+        characters,
+        worlds,
+        {
+          advanced: state.featureFlags.enableStoryBibleAdvanced,
+        },
+        binderResearchSections,
+      );
       await saveStoryCodex(codex);
     } catch (error) {
       logger.warn('Story Codex auto-tracking failed:', error);

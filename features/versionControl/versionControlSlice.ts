@@ -1,7 +1,12 @@
 import { createSelector, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import * as LZString from 'lz-string';
 import { v4 as uuid } from 'uuid';
-import type { StorySection, VersionBranch, VersionSnapshot } from '../../types';
+import type {
+  PersistedVersionControlState,
+  StorySection,
+  VersionBranch,
+  VersionSnapshot,
+} from '../../types';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -78,24 +83,46 @@ export const versionControlSlice = createSlice({
         label: string;
         sections: StorySection[];
         parentId?: string;
+        /** When set, only this section is captured and restored in isolation. */
+        sectionId?: string;
       }>,
     ) {
-      const { label, sections, parentId } = action.payload;
+      const { label, sections, parentId, sectionId } = action.payload;
+      const toStore =
+        sectionId !== undefined && sectionId !== ''
+          ? sections.filter((s) => s.id === sectionId)
+          : sections;
+      if (sectionId && toStore.length === 0) {
+        return;
+      }
+      const storedSections = toStore.length > 0 ? toStore : sections;
       const id = uuid();
       const snapshot: VersionSnapshot = {
         id,
         branchId: state.currentBranchId,
         label,
         timestamp: new Date().toISOString(),
-        manuscriptSnapshot: compressManuscript(sections),
-        wordCount: countWords(sections),
+        manuscriptSnapshot: compressManuscript(storedSections),
+        wordCount: countWords(storedSections),
         ...(parentId ? { parentId } : {}),
+        ...(sectionId ? { sectionId } : {}),
       };
       state.snapshots.push(snapshot);
 
       // Update branch head
       const branch = state.branches.find((b) => b.id === state.currentBranchId);
       if (branch) branch.headSnapshotId = id;
+    },
+
+    // QNBS-v3: VC aus Projekt-Payload rehydrieren — Snapshots überleben App-Neustart ohne zweiten Store.
+    hydrateFromPersisted(state, action: PayloadAction<PersistedVersionControlState>) {
+      const { branches, snapshots, currentBranchId } = action.payload;
+      if (!branches?.length) return;
+      state.branches = branches;
+      state.snapshots = snapshots ?? [];
+      if (state.branches.some((b) => b.id === currentBranchId)) {
+        state.currentBranchId = currentBranchId;
+      }
     },
 
     /** Create a new branch (optionally from an existing snapshot) */

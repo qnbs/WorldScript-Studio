@@ -4,6 +4,8 @@ import { Provider } from 'react-redux';
 import App from './App';
 import type { RootState } from './app/store';
 import { setupStore } from './app/store';
+import type { ProjectData } from './features/project/projectSlice';
+import { versionControlActions } from './features/versionControl/versionControlSlice';
 import { dbService } from './services/dbService';
 import { logger } from './services/logger';
 import { saveEnvelopeFromProjectData, storageService } from './services/storageService';
@@ -84,14 +86,28 @@ const root = ReactDOM.createRoot(rootElement);
 
     const store = setupStore(preloadedState);
 
+    // QNBS-v3: RootState cast — configureStore mit PersistedRootState ergibt sonst zu breites getState().
+    const pdata = (store.getState() as RootState).project.present?.data;
+    if (pdata?.persistedVersionControl?.branches?.length) {
+      store.dispatch(versionControlActions.hydrateFromPersisted(pdata.persistedVersionControl));
+    }
+
     // QNBS-v3: visibilitychange-Flush reduziert Datenverlust, wenn Tabs abrupt in den Hintergrund wechseln.
     const flushOnHidden = () => {
       if (document.visibilityState !== 'hidden') return;
       const state = store.getState() as RootState;
       const presentData = state.project.present?.data;
       if (!presentData) return;
+      const enriched: ProjectData = {
+        ...presentData,
+        persistedVersionControl: {
+          branches: state.versionControl.branches,
+          snapshots: state.versionControl.snapshots,
+          currentBranchId: state.versionControl.currentBranchId,
+        },
+      };
       void Promise.allSettled([
-        storageService.saveProject(saveEnvelopeFromProjectData(presentData)),
+        storageService.saveProject(saveEnvelopeFromProjectData(enriched)),
         storageService.saveSettings(state.settings),
       ]);
     };

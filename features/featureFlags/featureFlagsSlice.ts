@@ -8,6 +8,10 @@ export interface FeatureFlagsState {
   enableCodexAutoTracking: boolean;
   /** Story Bible Light: graph edges + consistency hints in Codex (default: false). */
   enableStoryBibleAdvanced: boolean;
+  /** Research binder sidebar in Manuscript (default: false). */
+  enableBinderResearch: boolean;
+  /** Guided compile wizard on Export view (default: false). */
+  enableCompileWizard: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -18,6 +22,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableVisualRegression: false,
   enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
+  enableBinderResearch: false,
+  enableCompileWizard: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -74,6 +80,12 @@ const featureFlagsSlice = createSlice({
     setEnableStoryBibleAdvanced(state, action: PayloadAction<boolean>) {
       state.enableStoryBibleAdvanced = action.payload;
     },
+    setEnableBinderResearch(state, action: PayloadAction<boolean>) {
+      state.enableBinderResearch = action.payload;
+    },
+    setEnableCompileWizard(state, action: PayloadAction<boolean>) {
+      state.enableCompileWizard = action.payload;
+    },
   },
 });
 
@@ -90,6 +102,10 @@ export const selectEnableCodexAutoTracking = (state: { featureFlags: FeatureFlag
   state.featureFlags.enableCodexAutoTracking;
 export const selectEnableStoryBibleAdvanced = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableStoryBibleAdvanced;
+export const selectEnableBinderResearch = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableBinderResearch;
+export const selectEnableCompileWizard = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableCompileWizard;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

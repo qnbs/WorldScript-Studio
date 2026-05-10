@@ -1,10 +1,13 @@
 import type { FC } from 'react';
 import React from 'react';
 import { useAppSelector } from '../app/hooks';
+import { useTransientUiStore } from '../app/transientUiStore';
 import { ICONS } from '../constants';
 import { ExportViewContext, useExportViewContext } from '../contexts/ExportViewContext';
+import { selectEnableCompileWizard } from '../features/featureFlags/featureFlagsSlice';
 import { useExportView } from '../hooks/useExportView';
 import { AdvancedImportExport } from './AdvancedImportExport';
+import { CompileWizardModal } from './CompileWizardModal';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Checkbox } from './ui/Checkbox';
@@ -429,7 +432,9 @@ const ExportPreview: FC = () => {
 };
 
 const ExportViewUI: FC = () => {
-  const { project } = useExportViewContext();
+  const { project, t } = useExportViewContext();
+  const enableCompileWizard = useAppSelector(selectEnableCompileWizard);
+  const setCompileWizardOpen = useTransientUiStore((s) => s.setCompileWizardOpen);
   if (!project)
     return (
       <div className="flex h-[80vh] w-full items-center justify-center">
@@ -439,10 +444,23 @@ const ExportViewUI: FC = () => {
 
   return (
     <div className="h-full">
+      <CompileWizardModal />
       {/* Advanced Import/Export */}
       <div className="mb-6">
         <AdvancedImportExport />
       </div>
+      {enableCompileWizard ? (
+        <div className="mb-4">
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full md:w-auto"
+            onClick={() => setCompileWizardOpen(true)}
+          >
+            {t('export.compileWizard.openButton')}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
         <div className="lg:col-span-1 h-full overflow-y-auto">

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
+import { partialStorySectionFromSnapshot } from '../features/project/sectionRestoreHelpers';
 import {
   decompressManuscript,
   MAIN_BRANCH_ID,
@@ -64,6 +65,11 @@ const SnapshotCard: FC<{
                 HEAD
               </span>
             )}
+            {snapshot.sectionId ? (
+              <span className="px-1.5 py-0.5 text-xs rounded bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                {t('vc.scopeSection')}
+              </span>
+            ) : null}
             {branch && <BranchBadge branch={branch} />}
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-[var(--foreground-muted)]">
@@ -171,20 +177,19 @@ export const VersionControlPanel: FC = () => {
   const confirmRestore = useCallback(() => {
     if (!pendingRestore) return;
     const sections = decompressManuscript(pendingRestore.manuscriptSnapshot);
-    // Restore by setting all sections via Redux
-    sections.forEach((section, idx) => {
-      if (idx === 0) {
-        // Update the first section to trigger re-render
+    if (pendingRestore.sectionId) {
+      const patch = sections[0];
+      if (patch) {
         dispatch(
           projectActions.updateManuscriptSection({
-            id: section.id,
-            changes: { content: section.content },
+            id: pendingRestore.sectionId,
+            changes: partialStorySectionFromSnapshot(patch),
           }),
         );
       }
-    });
-    // Full manuscript restore
-    dispatch(projectActions.setManuscript(sections));
+    } else {
+      dispatch(projectActions.setManuscript(sections));
+    }
     dispatch(versionControlActions.closePanel());
     setPendingRestore(null);
     setModal('none');

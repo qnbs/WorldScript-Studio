@@ -88,6 +88,20 @@ export interface World {
   relationships?: CharacterRelationship[]; // Character relationships in this world
 }
 
+/** Hierarchical research / reference tree (Binder); stored with project data. */
+export type BinderNodeType = 'folder' | 'text' | 'note' | 'image' | 'pdf' | 'link';
+
+export interface BinderNode {
+  id: string;
+  parentId: string | null;
+  type: BinderNodeType;
+  title: string;
+  linkedSectionId?: string;
+  content?: string;
+  imageAssetId?: string;
+  sortIndex: number;
+}
+
 export interface StorySection {
   id: string;
   title: string;
@@ -111,6 +125,8 @@ export interface StoryProject {
   worlds: World[] | EntityState<World, string>;
   outline?: OutlineSection[];
   manuscript: StorySection[];
+  /** Optional research binder (feature-flagged UI). */
+  binderNodes?: BinderNode[];
   projectGoals?: {
     totalWordCount: number;
     targetDate: string | null;
@@ -373,6 +389,8 @@ export interface VersionSnapshot {
   manuscriptSnapshot: string; // LZ-string compressed JSON of StorySection[]
   wordCount: number;
   parentId?: string;
+  /** When set, snapshot restores a single manuscript section only. */
+  sectionId?: string;
 }
 
 export interface VersionBranch {
@@ -382,6 +400,13 @@ export interface VersionBranch {
   color: string;
   createdAt: string;
   headSnapshotId?: string;
+}
+
+/** Serialized alongside project payload for offline persistence of branches/snapshots. */
+export interface PersistedVersionControlState {
+  branches: VersionBranch[];
+  snapshots: VersionSnapshot[];
+  currentBranchId: string;
 }
 
 // ─── Community Template Types ────────────────────────────────────────────────

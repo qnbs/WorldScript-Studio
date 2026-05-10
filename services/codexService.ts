@@ -154,12 +154,15 @@ const escapeRegExpLiteral = (s: string): string => {
   return s.replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
 };
 
+// QNBS-v3: Binder-Research in Codex einbeziehen — konsistente Story-Bible auch jenseits des Manuskripts.
 export const extractStoryCodex = (
   projectId: string,
   manuscript: StorySection[],
   characters: Character[],
   worlds: World[],
   options?: ExtractCodexOptions,
+  /** Binder/research text nodes (e.g. id prefix binder-) scanned like manuscript sections. */
+  extraSections: StorySection[] = [],
 ): StoryCodex => {
   const entityMap = new Map<string, StoryCodexEntity>();
 
@@ -209,7 +212,9 @@ export const extractStoryCodex = (
     knownNameIndex.set(entity.name.toLowerCase(), entity);
   }
 
-  for (const section of manuscript) {
+  const sectionsToScan = [...manuscript, ...extraSections];
+
+  for (const section of sectionsToScan) {
     const text = `${section.title}\n${section.content}`;
 
     for (const known of knownEntities) {

@@ -4,6 +4,7 @@ import undoable from 'redux-undo';
 import featureFlagsReducer, {
   featureFlagsPersistenceMiddleware,
 } from '../features/featureFlags/featureFlagsSlice';
+import type { ProjectData } from '../features/project/projectSlice';
 import projectReducer, { projectActions } from '../features/project/projectSlice';
 import {
   importProjectThunk,
@@ -86,7 +87,26 @@ export const rootReducer: Reducer<ReturnType<typeof combinedReducer>, AnyAction>
     }
   }
 
-  return combinedReducer(nextState, action);
+  const reduced = combinedReducer(nextState, action);
+
+  if (action.type === importProjectThunk.fulfilled.type) {
+    // QNBS-v3: AnyAction ohne payload-Typ — nach fulfilled casten, damit VC aus Import-Payload gemerged werden kann.
+    const payload = (action as unknown as { payload: ProjectData }).payload;
+    const pvc = payload.persistedVersionControl;
+    if (pvc?.branches?.length) {
+      return {
+        ...reduced,
+        versionControl: {
+          ...reduced.versionControl,
+          branches: pvc.branches,
+          snapshots: pvc.snapshots,
+          currentBranchId: pvc.currentBranchId,
+        },
+      };
+    }
+  }
+
+  return reduced;
 };
 
 // The store is now configured and created in index.tsx after async state loading.
