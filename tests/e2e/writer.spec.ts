@@ -41,7 +41,7 @@ test.describe('AI Writer Flow (CI-only)', () => {
 
     await selectFirstEnabledWriterSection(page);
 
-    const writerTextbox = page.getByRole('textbox').first();
+    const writerTextbox = page.getByTestId('writer-studio-editor');
     await expect(writerTextbox).toBeVisible();
     await writerTextbox.fill('This is the first AI-assisted draft paragraph.');
     await expect(writerTextbox).toHaveValue(/first AI-assisted draft paragraph/i);

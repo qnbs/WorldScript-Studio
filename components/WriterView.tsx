@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
+import type { Language } from '../contexts/I18nContext';
 import { useWriterViewContext, WriterViewContext } from '../contexts/WriterViewContext';
 import {
   selectIsPanelOpen,
@@ -9,7 +10,6 @@ import {
 } from '../features/versionControl/versionControlSlice';
 import type { WriterTool } from '../features/writer/writerSlice';
 import { writerActions } from '../features/writer/writerSlice';
-import type { Language } from '../contexts/I18nContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { useTTS } from '../hooks/useTTS';
 import { useWriterView } from '../hooks/useWriterView';
@@ -91,7 +91,9 @@ const ContextPanel: FC = React.memo(() => {
             </Select>
           </div>
           <div className="relative flex-grow border rounded-md border-[var(--border-primary)] bg-[var(--background-primary)] overflow-hidden min-h-[300px]">
+            {/* QNBS-v3: data-testid disambiguates Writer vs Manuscript textareas in Playwright (shared aria labelling). */}
             <DebouncedTextarea
+              data-testid="writer-studio-editor"
               value={selectedSection?.content || ''}
               onDebouncedChange={(content) =>
                 selectedSectionIndex > -1 && handleContentChange(selectedSectionIndex, content)

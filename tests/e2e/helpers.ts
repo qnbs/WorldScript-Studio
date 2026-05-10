@@ -20,6 +20,20 @@ export async function selectFirstEnabledWriterSection(page: Page): Promise<void>
   if (value) await sel.selectOption(value);
 }
 
+/** Outline / AI flows call Gemini only when a key exists in encrypted storage — seed before mocked HTTP in CI. */
+export async function seedGeminiApiKey(page: Page): Promise<void> {
+  await sidebar(page)
+    .getByRole('button', { name: /Settings/i })
+    .click();
+  await page.getByRole('button', { name: /AI Configuration|KI-Konfiguration/i }).click();
+  await page
+    .getByLabel(/Enter your Gemini API Key|Geben Sie Ihren Gemini API-Schlüssel ein/i)
+    .fill('AIzaTestKey123456789012345678901234');
+  await page.getByRole('button', { name: /Save Key|Speichern/i }).click();
+  await expect(page.getByText(/Configured|Konfiguriert/i)).toBeVisible({ timeout: 15000 });
+  await page.keyboard.press('Escape');
+}
+
 /**
  * Vite dev server keeps the HMR/WebSocket busy → `networkidle` often never settles.
  * Wait for either the welcome portal primary action or the desktop sidebar shell.

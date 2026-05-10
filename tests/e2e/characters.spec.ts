@@ -64,7 +64,7 @@ test.describe('Character CRUD (CI-only)', () => {
     await page.keyboard.press('Escape');
 
     await expect(page.getByText('Braxton Hale Jr.')).toBeVisible({ timeout: 8000 });
-    await expect(page.getByText('Braxton Hale').first()).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Braxton Hale', { exact: true })).toHaveCount(0);
   });
 
   test('deletes a character and it disappears from the list', async ({ page }) => {
@@ -83,12 +83,17 @@ test.describe('Character CRUD (CI-only)', () => {
     await page.waitForTimeout(900);
 
     // Delete button is inside the dossier, aria-label = "Delete Doomed Character"
-    const deleteBtn = page.getByRole('button', { name: /Delete Doomed Character/i });
+    const deleteBtn = page
+      .getByRole('dialog')
+      .getByRole('button', { name: /Delete Doomed Character/i });
     await expect(deleteBtn).toBeVisible({ timeout: 6000 });
     await deleteBtn.click();
 
-    // Confirmation modal — confirm button text is "Delete"
-    const confirmBtn = page.getByRole('button', { name: /^Delete$/i });
+    // Confirmation modal — confirm button text is "Delete" (second dialog)
+    const confirmBtn = page
+      .getByRole('dialog')
+      .last()
+      .getByRole('button', { name: /^Delete$/i });
     await expect(confirmBtn).toBeVisible({ timeout: 5000 });
     await confirmBtn.click();
 

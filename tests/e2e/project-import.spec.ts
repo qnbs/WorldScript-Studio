@@ -28,7 +28,9 @@ async function importJsonViaModal(
   await sidebar(page)
     .getByRole('button', { name: /^Export$/i })
     .click();
-  await page.getByRole('button', { name: /Import Project/i }).click();
+  const importProjectBtn = page.getByRole('button', { name: /Import Project/i });
+  await importProjectBtn.scrollIntoViewIfNeeded();
+  await importProjectBtn.click();
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15000 });
   const fileChooserPromise = page.waitForEvent('filechooser');
   await page
@@ -61,7 +63,7 @@ test.describe('Project Import (CI-only)', () => {
 
     // Success toast or heading should reflect the imported title
     await expect(page.getByText(/imported successfully|Imported Test Novel/i)).toBeVisible({
-      timeout: 10000,
+      timeout: 15000,
     });
 
     // Navigate to Writer to verify manuscript section landed
@@ -80,7 +82,7 @@ test.describe('Project Import (CI-only)', () => {
       buffer: Buffer.from(MINIMAL_PROJECT, 'utf-8'),
     });
     await expect(page.getByText(/imported successfully|Imported Test Novel/i)).toBeVisible({
-      timeout: 10000,
+      timeout: 15000,
     });
 
     // Reload and check title is still present

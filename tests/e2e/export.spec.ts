@@ -1,6 +1,11 @@
 import { expect, type Route, test } from '@playwright/test';
 
-import { selectFirstEnabledWriterSection, waitForSpaReady } from './helpers';
+import {
+  seedGeminiApiKey,
+  selectFirstEnabledWriterSection,
+  sidebar,
+  waitForSpaReady,
+} from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -59,6 +64,11 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await page.getByRole('button', { name: /Start a New Project/i }).click();
     await page.getByRole('button', { name: /Generate with AI/i }).click();
 
+    await seedGeminiApiKey(page);
+    await sidebar(page)
+      .getByRole('button', { name: /Outline Generator/i })
+      .click();
+
     await page.getByLabel(/Genre/i).fill('Fantasy');
     await page.getByLabel(/Prompt|Idea/i).fill('A reluctant hero discovers an ancient secret.');
     await page.getByRole('button', { name: /Generate Outline|Generiere Gliederung/i }).click();
@@ -72,7 +82,7 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await page.getByRole('button', { name: /AI Writing Studio|Writer|Schreiben/i }).click();
     await selectFirstEnabledWriterSection(page);
 
-    const writerTextbox = page.getByRole('textbox').first();
+    const writerTextbox = page.getByTestId('writer-studio-editor');
     await expect(writerTextbox).toBeVisible();
     await writerTextbox.fill('The first chapter opens on a quiet village under a strange moon.');
     await expect(writerTextbox).toHaveValue(/quiet village under a strange moon/i);

@@ -15,7 +15,7 @@ async function seedManuscriptContent(page: import('@playwright/test').Page): Pro
   const writerBtn = sidebar(page).getByRole('button', { name: /AI Writing Studio/i });
   await writerBtn.click();
   await selectFirstEnabledWriterSection(page);
-  const textarea = page.getByRole('textbox').first();
+  const textarea = page.getByTestId('writer-studio-editor');
   await expect(textarea).toBeVisible();
   await textarea.fill('Snapshot seed content — this text will be captured in a snapshot.');
 }
@@ -89,7 +89,7 @@ test.describe('Snapshot Flow (CI-only)', () => {
       .getByRole('button', { name: /AI Writing Studio/i })
       .first();
     await writerBtn.click();
-    const textarea = page.getByRole('textbox').first();
+    const textarea = page.getByTestId('writer-studio-editor');
     await expect(textarea).toBeVisible({ timeout: 6000 });
     await textarea.fill('Completely different content after the snapshot.');
 
@@ -111,7 +111,7 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await sidebar(page)
       .getByRole('button', { name: /AI Writing Studio/i })
       .click();
-    const restoredTextarea = page.getByRole('textbox').first();
+    const restoredTextarea = page.getByTestId('writer-studio-editor');
     await expect(restoredTextarea).toHaveValue(/Snapshot seed content/i, { timeout: 10000 });
   });
 
