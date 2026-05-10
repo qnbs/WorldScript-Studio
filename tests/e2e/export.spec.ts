@@ -104,12 +104,16 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await expect(exportPreview).toContainText(/quiet village under a strange moon/i);
 
     await page.getByRole('button', { name: /Settings|Einstellungen/i }).click();
-    await page.getByRole('button', { name: /AI Configuration|AI Configuration/i }).click();
-    await page
-      .getByLabel(/Enter your Gemini API Key|Geben Sie Ihren Gemini API-Schlüssel ein/i)
-      .fill('AIzaTestKey12345');
-    await page.getByRole('button', { name: /Save Key|Save Key|Speichern/i }).click();
-    await expect(page.getByText(/Configured|Konfiguriert/i)).toBeVisible({ timeout: 15000 });
+    await page.getByRole('button', { name: /AI Configuration|KI-Konfiguration/i }).click();
+    // QNBS-v3: Nach seedGeminiApiKey zeigt ApiKeySection nur „configured“ — Input fehlt; nur füllen wenn noch kein Key.
+    const geminiInput = page.locator('#gemini-api-key');
+    if (await geminiInput.isVisible({ timeout: 2500 }).catch(() => false)) {
+      await geminiInput.fill('AIzaTestKey12345');
+      await page.getByRole('button', { name: /Save Key|Speichern/i }).click();
+    }
+    await expect(page.getByText(/API Key Configured|Konfiguriert/i).first()).toBeVisible({
+      timeout: 15000,
+    });
 
     await page.getByRole('button', { name: /Dark/i }).click();
     await expect(page.locator('body')).toHaveClass(/dark-theme/);

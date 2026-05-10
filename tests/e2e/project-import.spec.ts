@@ -88,6 +88,15 @@ test.describe('Project Import (CI-only)', () => {
       timeout: 15000,
     });
 
+    // QNBS-v3: listenerMiddleware debounced save ~1000ms — Reload vor IndexedDB-Write lädt „My Untitled Story“.
+    await sidebar(page)
+      .getByRole('button', { name: /Dashboard/i })
+      .click();
+    await expect(page.locator('#projectTitle')).toHaveValue('Imported Test Novel', {
+      timeout: 10000,
+    });
+    await page.waitForTimeout(1800);
+
     // Reload and check title is still present (Dashboard shows project title input)
     await page.reload();
     await waitForSpaReady(page);
