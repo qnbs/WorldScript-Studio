@@ -6,6 +6,7 @@
  * Streaming is supported for all providers.
  */
 
+import { detectWebGpuSupport } from '@domain/ai-core';
 import { z } from 'zod';
 import type { AIProvider, AiCreativity, AiModel, GeminiSchema } from '../types';
 import { assertCloudAiAllowed } from './ai/aiPolicy';
@@ -207,6 +208,15 @@ async function streamProvider(
       return streamAnthropic(prompt, o, callbacks);
     case 'grok':
       return streamGrok(prompt, o, callbacks);
+    case 'webllm': {
+      const merged = o.systemPrompt?.trim()
+        ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
+        : sanitizePromptValue(prompt);
+      const local = await generateLocalText(merged);
+      callbacks.onChunk(local.text);
+      callbacks.onDone?.();
+      return;
+    }
     default:
       return streamTextGemini(
         o.systemPrompt
@@ -257,6 +267,13 @@ async function generateTextSingleProvider(
         },
       });
       return providerTextSchema.parse({ text: result }).text;
+    }
+    case 'webllm': {
+      const merged = o.systemPrompt?.trim()
+        ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
+        : sanitizePromptValue(prompt);
+      const local = await generateLocalText(merged);
+      return providerTextSchema.parse({ text: local.text }).text;
     }
     default: {
       const text = await generateTextGemini(prompt, creativity, o.signal, undefined, o.model);
@@ -331,6 +348,8 @@ export async function generateImage(
       throw new Error(
         'Ollama image generation is currently not supported. Please use Gemini for images.',
       );
+    case 'webllm':
+      throw new Error('WebLLM text-only path: use Gemini for image generation in the browser.');
     case 'anthropic':
       throw new Error(
         'Anthropic image generation is not available. Please use Gemini or Ollama for image content.',
@@ -472,6 +491,14 @@ export async function testAIConnection(
         if (!res.ok) return { ok: false, error: `Gemini API: HTTP ${res.status}` };
         return { ok: true };
       }
+      case 'webllm':
+        return detectWebGpuSupport()
+          ? { ok: true }
+          : {
+              ok: false,
+              error:
+                'WebGPU unavailable in this browser — WebLLM needs WebGPU (try Chrome/Edge or enable flags).',
+            };
       default:
         return { ok: false, error: 'Unknown provider' };
     }

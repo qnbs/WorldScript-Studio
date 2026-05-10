@@ -782,11 +782,14 @@ const WriterViewUI: FC = () => {
             ? `⊠ ${t('writer.focusMode.exitLabel')}`
             : `⊡ ${t('writer.focusMode.enterLabel')}`}
         </button>
+        {/* QNBS-v3: Aria + Mindest-Touch-Ziel für VC-Toggle — axe/E2E und mobile Writer-Stabilität. */}
         <button
           type="button"
           onClick={() => dispatch(versionControlActions.togglePanel())}
           title="Version Control (Branches &amp; Snapshots)"
-          className={`text-xs px-2 py-1 rounded border transition-colors ${isVCPanelOpen ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
+          aria-label={t('writer.versionControl.label')}
+          aria-expanded={isVCPanelOpen}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>
@@ -799,7 +802,7 @@ const WriterViewUI: FC = () => {
             type="button"
             key={tab}
             onClick={() => setActiveMobileTab(tab)}
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 z-10 touch-manipulation ${
+            className={`flex-1 min-h-[44px] py-2 text-sm font-semibold rounded-lg transition-all duration-200 z-10 touch-manipulation ${
               activeMobileTab === tab
                 ? 'bg-[var(--background-secondary)] text-[var(--foreground-primary)] shadow-md transform scale-[1.02] ring-1 ring-[var(--glass-border)]'
                 : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'

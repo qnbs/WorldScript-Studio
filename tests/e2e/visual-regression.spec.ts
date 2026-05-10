@@ -7,7 +7,12 @@ import { expect, test } from '@playwright/test';
 test.describe('Visual regression', () => {
   test.use({ viewport: { width: 1280, height: 720 } });
 
-  test('home loads for screenshot baseline', async ({ page }) => {
+  test('home loads for screenshot baseline', async ({ page }, testInfo) => {
+    // QNBS-v3: Nur Desktop-Chromium-Baseline — Mobile-Projekt würde zweite PNG-Sets und Flakiness erzwingen.
+    test.skip(
+      testInfo.project.name !== 'chromium',
+      'Desktop 1280×720 baseline only (see playwright.config projects)',
+    );
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('load');
     await page.evaluate(async () => {

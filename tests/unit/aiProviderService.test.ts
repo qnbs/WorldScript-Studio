@@ -10,6 +10,14 @@ vi.mock('../../services/storageService', () => ({
   },
 }));
 
+vi.mock('@domain/ai-core', async () => {
+  const actual = await vi.importActual<typeof import('@domain/ai-core')>('@domain/ai-core');
+  return {
+    ...actual,
+    detectWebGpuSupport: vi.fn(() => true),
+  };
+});
+
 vi.mock('../../services/geminiService', () => ({
   generateText: vi.fn(),
   generateJson: vi.fn(),
@@ -33,6 +41,7 @@ import {
   testAIConnection,
 } from '../../services/aiProviderService';
 import * as geminiService from '../../services/geminiService';
+import * as localAiFacade from '../../services/localAiFacade';
 import { storageService } from '../../services/storageService';
 
 const defaultOpts = { provider: 'gemini' as const, model: 'gemini-2.5-flash' as const };
@@ -80,6 +89,12 @@ describe('generateImage', () => {
       'not available',
     );
   });
+
+  it('throws for webllm provider', async () => {
+    await expect(generateImage('a cat', { ...defaultOpts, provider: 'webllm' })).rejects.toThrow(
+      'WebLLM text-only',
+    );
+  });
 });
 
 // ─── generateText ─────────────────────────────────────────────────────────────
@@ -113,6 +128,20 @@ describe('generateText', () => {
       provider: 'anthropic',
     });
     expect(text).toContain('placeholder response');
+  });
+
+  it('delegates to local facade for webllm provider', async () => {
+    const spy = vi.spyOn(localAiFacade, 'generateLocalText').mockResolvedValueOnce({
+      layer: 'webllm',
+      text: 'browser-local-text',
+    });
+    const text = await generateText('hello', 'Balanced', {
+      ...defaultOpts,
+      provider: 'webllm',
+      model: 'webllm/browser',
+    });
+    expect(text).toBe('browser-local-text');
+    spy.mockRestore();
   });
 });
 
@@ -182,6 +211,19 @@ describe('testAIConnection', () => {
   it('returns ok:false for unknown provider', async () => {
     const result = await testAIConnection('unknown' as never, {});
     expect(result.ok).toBe(false);
+  });
+
+  it('returns ok:true for webllm when WebGPU is available', async () => {
+    const result = await testAIConnection('webllm', {});
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns ok:false for webllm without WebGPU', async () => {
+    const aiCore = await import('@domain/ai-core');
+    vi.spyOn(aiCore, 'detectWebGpuSupport').mockReturnValueOnce(false);
+    const result = await testAIConnection('webllm', {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('WebGPU');
   });
 });
 

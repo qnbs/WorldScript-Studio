@@ -114,7 +114,7 @@ StoryCraft-Studio/
         └── ci.yml    # security → quality → build / e2e / storybook → lighthouse → deploy (main)
 ```
 
-**Documentation index:** [`README.md`](README.md) § **Documentation Hub** lists every maintainer-facing `.md` (15 sources), [`AUDIT.md`](AUDIT.md) § *Markdown corpus* repeats the inventory; canonical CI details → [`docs/CI.md`](docs/CI.md).
+**Documentation index:** [`README.md`](README.md) § **Documentation Hub** lists every maintainer-facing `.md`; [`AUDIT.md`](AUDIT.md) § *Markdown corpus* lists the **19** curated sources; canonical CI details → [`docs/CI.md`](docs/CI.md) (including **Cloud CI-first** — heavy E2E, coverage, Lighthouse run on GitHub Actions).
 
 ---
 
@@ -149,12 +149,19 @@ chore: update dependencies
 
 ## Testing
 
+### Local vs CI (low-end friendly)
+
+- **Before every push (recommended):** `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`. Optional: `pnpm exec vitest run` **without** `--coverage` for a quick smoke.
+- **Full gate:** GitHub Actions runs Vitest **with** coverage thresholds, Playwright (desktop + mobile emulation in CI), Lighthouse, etc. A **green CI run** is the merge bar — you are **not** required to pass full E2E or LHCI on a weak laptop.
+- **Optional local E2E:** `CI=true pnpm run test:e2e` when debugging; optional mobile project: `RUN_MOBILE_E2E=1` (see [`docs/CI.md`](docs/CI.md)).
+- **CI artifacts:** When Playwright, coverage, or Lighthouse fails remotely, open **GitHub Actions → the workflow run → Artifacts** and inspect the uploaded reports locally — faster than reproducing the full heavy stack on low-end hardware.
+
 ### Unit Tests (Vitest)
 
 ```bash
 pnpm run test         # Run in watch mode
 pnpm run test:run     # Run once (CI mode)
-pnpm run test:coverage  # With coverage report
+pnpm run test:coverage  # With coverage report (same as CI quality job — heavier)
 ```
 
 ### Bundle size (matches CI `build` job)
@@ -192,7 +199,7 @@ Tests live in `tests/unit/`. Each UI component and core hook should have a test 
 
 ### E2E Tests (Playwright)
 
-CI sets `CI=true` (required by `package.json` scripts). **GitHub Actions only installs Chromium**; `playwright.config.ts` runs the **Firefox** project when not in CI.
+CI sets `CI=true` (required by `package.json` scripts). **GitHub Actions installs Chromium** and runs **desktop + mobile-emulated** projects (still Chromium). Locally, **Firefox** is included when `CI` is not `true`; mobile emulation locally only if `RUN_MOBILE_E2E=1`.
 
 Locally:
 

@@ -259,8 +259,17 @@ export type AiModel =
   | 'gpt-4o'
   | 'gpt-4o-mini'
   // Ollama – any local model (e.g. "ollama/gemma3" or "ollama/qwen3:8b")
-  | `ollama/${string}`;
-export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'grok' | 'ollama';
+  | `ollama/${string}`
+  /** Browser-only WebGPU path via @mlc-ai/web-llm (see packages/ai-core). */
+  | 'webllm/browser';
+export type AIProvider =
+  | 'gemini'
+  | 'openai'
+  | 'anthropic'
+  | 'grok'
+  | 'ollama'
+  /** Fully in-browser inference (WebLLM / Transformers.js stack in @domain/ai-core). */
+  | 'webllm';
 export type NotificationFrequency = 'never' | 'daily' | 'weekly' | 'monthly';
 export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
 export type SyncProvider = 'none' | 'google-drive' | 'dropbox' | 'onedrive' | 'icloud';

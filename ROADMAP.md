@@ -149,18 +149,19 @@ Vereinfachte automatische Konsistenzprüfung:
 - ✅ Geführte Tour (Spotlight mit `driver.js`, Dashboard + Hilfe als Einstieg)
 - ⬜ Tauri v2 Release-Pipeline: Auto-Update (`tauri-plugin-updater`) + Code-Signing — **GitHub Release mit Installern bei `v*`-Tags:** [`docs/TAURI-CI.md`](docs/TAURI-CI.md) / [`tauri-build.yml`](.github/workflows/tauri-build.yml)
 - ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — qualitative Übersetzungen iterativ
-- ⬜ Bundle-Size-Budgets: rollup-plugin-visualizer als CI-Artifact + `performance.budget` in LHCI
+- ✅ Bundle-Size-Budgets + rollup-Analyse als CI (`pnpm run bundle:budget`, `analyze` Artifact — siehe [`docs/CI.md`](docs/CI.md)); optionales LHCI-Performance-Budget weiterhin roadmap-offen
 
 ---
 
-## v1.3 — UX & Accessibility
+## Post-v1.3.0 / v1.4 — UX, Touch & weitere Qualität
 
-**Status:** 📋 Geplant
+**Status:** 📋 Geplant (Web-Release **v1.3.0** vom 2026-05-08 ist geshippt — siehe [`CHANGELOG.md`](CHANGELOG.md); Branch `main` kann Neufeatures vor dem nächsten Tag enthalten.)
 
-- Mobile-First Touch-Optimierungen (Swipe-Navigation, Touch-DnD)
+- Fortschritte am **Autoren-Gold-Standard** (u. a. Binder, VC-Diff, Timeline, Pandoc) siehe [`CHANGELOG.md`](CHANGELOG.md) *Unreleased* / Integrations-Branches — Release-Schnitt bei nächstem Tag
+- Mobile-First Touch-Optimierungen (Swipe-Navigation, Touch-DnD); **responsive E2E primär in CI** ([`docs/CI.md`](docs/CI.md))
 - AI-Creativity-Presets pro Projekt (nicht global)
 - Erweiterte Keyboard Navigation
-- High-Contrast-Mode Verbesserungen
+- High-Contrast-Mode Verbesserungen (teilweise durch Accessibility-Hub ergänzt — iterativ)
 - Visual Regression Tests (Playwright Screenshots + Storybook chromatic)
 
 ---

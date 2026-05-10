@@ -1,15 +1,19 @@
 import type { ChangeEventHandler, FC } from 'react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useAppDispatch } from '../../app/hooks';
 import { ICONS } from '../../constants';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { settingsActions } from '../../features/settings/settingsSlice';
+import { statusActions } from '../../features/status/statusSlice';
+import { buildEncryptedLibraryZipBlob } from '../../services/libraryBackupService';
 import {
   buildSettingsExportEnvelope,
   parseSettingsImportEnvelope,
 } from '../../services/settingsExchange';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
+import { Input } from '../ui/Input';
+import { Modal } from '../ui/Modal';
 
 export const DataSection: FC = () => {
   const {
@@ -25,6 +29,43 @@ export const DataSection: FC = () => {
   } = useSettingsViewContext();
   const dispatch = useAppDispatch();
   const settingsImportRef = useRef<HTMLInputElement>(null);
+  const [libraryModalOpen, setLibraryModalOpen] = useState(false);
+  const [libraryPassphrase, setLibraryPassphrase] = useState('');
+  const [libraryBusy, setLibraryBusy] = useState(false);
+
+  const handleEncryptedLibraryExport = async () => {
+    const pass = libraryPassphrase.trim();
+    if (!pass) return;
+    setLibraryBusy(true);
+    try {
+      const blob = await buildEncryptedLibraryZipBlob(pass);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `storycraft-library-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      dispatch(
+        statusActions.addNotification({
+          type: 'success',
+          title: t('settings.data.libraryExport.successTitle'),
+          description: t('settings.data.libraryExport.successBody'),
+        }),
+      );
+      setLibraryModalOpen(false);
+      setLibraryPassphrase('');
+    } catch {
+      dispatch(
+        statusActions.addNotification({
+          type: 'error',
+          title: t('settings.data.libraryExport.errorTitle'),
+          description: t('settings.data.libraryExport.errorBody'),
+        }),
+      );
+    } finally {
+      setLibraryBusy(false);
+    }
+  };
 
   const handleExportSettingsJson = () => {
     const envelope = buildSettingsExportEnvelope(settings);
@@ -95,6 +136,22 @@ export const DataSection: FC = () => {
           </div>
           <div className="mt-6 pt-6 border-t border-[var(--border-primary)] space-y-3">
             <h3 className="font-semibold text-[var(--foreground-primary)]">
+              {t('settings.data.libraryExport.title')}
+            </h3>
+            <p className="text-sm text-[var(--foreground-secondary)]">
+              {t('settings.data.libraryExport.description')}
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setLibraryModalOpen(true)}
+              disabled={libraryBusy}
+            >
+              {t('settings.data.libraryExport.button')}
+            </Button>
+          </div>
+          <div className="mt-6 pt-6 border-t border-[var(--border-primary)] space-y-3">
+            <h3 className="font-semibold text-[var(--foreground-primary)]">
               {t('settings.data.settingsFile.title')}
             </h3>
             <p className="text-sm text-[var(--foreground-secondary)]">
@@ -122,6 +179,59 @@ export const DataSection: FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* QNBS-v3: Vollständiger Library-Export AES-GCM im ZIP — Schlüssel nur als Nutzer-Passphrase. */}
+      <Modal
+        isOpen={libraryModalOpen}
+        onClose={() => {
+          if (!libraryBusy) {
+            setLibraryModalOpen(false);
+            setLibraryPassphrase('');
+          }
+        }}
+        title={t('settings.data.libraryExport.title')}
+      >
+        <div className="space-y-4">
+          <label
+            htmlFor="library-backup-passphrase"
+            className="text-sm font-medium text-[var(--foreground-secondary)] block"
+          >
+            {t('settings.data.libraryExport.passphraseLabel')}
+          </label>
+          <Input
+            id="library-backup-passphrase"
+            type="password"
+            autoComplete="new-password"
+            value={libraryPassphrase}
+            onChange={(e) => setLibraryPassphrase(e.target.value)}
+            placeholder={t('settings.data.libraryExport.passphrasePlaceholder')}
+            className="w-full"
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={libraryBusy}
+              onClick={() => {
+                setLibraryModalOpen(false);
+                setLibraryPassphrase('');
+              }}
+            >
+              {t('settings.data.libraryExport.cancel')}
+            </Button>
+            <Button
+              type="button"
+              disabled={libraryBusy || !libraryPassphrase.trim()}
+              onClick={() => void handleEncryptedLibraryExport()}
+            >
+              {libraryBusy
+                ? t('settings.data.libraryExport.busy')
+                : t('settings.data.libraryExport.confirm')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Card>
         <CardHeader className="flex justify-between items-center">
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">

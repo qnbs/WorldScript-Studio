@@ -24,8 +24,11 @@ export function resolveProviderFallbackChain(opts: FallbackOpts): AIProvider[] {
     }
     return out;
   }
-  if (opts.provider === 'ollama' && opts.fallbackProviders?.includes('gemini')) {
-    return ['ollama', 'gemini'];
+  if (
+    (opts.provider === 'ollama' || opts.provider === 'webllm') &&
+    opts.fallbackProviders?.includes('gemini')
+  ) {
+    return opts.provider === 'webllm' ? ['webllm', 'gemini'] : ['ollama', 'gemini'];
   }
   return [opts.provider];
 }

@@ -6,7 +6,7 @@ export function assertCloudAiAllowedSync(
   provider: AIProvider,
   privacy: PrivacySettings | undefined,
 ): void {
-  if (provider === 'ollama') return;
+  if (provider === 'ollama' || provider === 'webllm') return;
   if (!privacy) return;
   if (privacy.localStorageOnly) {
     throw new Error('Cloud provider blocked: local-only mode is active.');
@@ -18,7 +18,7 @@ export function assertCloudAiAllowedSync(
 
 /** Async-Pfad wie früher `enforceCloudPolicy` — lädt aktuelle Privacy-Einstellungen aus dem Speicher. */
 export async function assertCloudAiAllowed(provider: AIProvider): Promise<void> {
-  if (provider === 'ollama') return;
+  if (provider === 'ollama' || provider === 'webllm') return;
   const settings = await storageService.loadSettings();
   assertCloudAiAllowedSync(provider, settings?.privacy);
 }

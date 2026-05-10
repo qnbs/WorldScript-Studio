@@ -1,13 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const isCi = process.env['CI'] === 'true';
+const runMobileLocal = process.env['RUN_MOBILE_E2E'] === '1';
 
-/** CI installs Chromium only (`playwright install --with-deps chromium`); local dev may run Firefox too. */
+const desktopChrome = { name: 'chromium', use: { ...devices['Desktop Chrome'] } };
+const mobileChrome = { name: 'Mobile Chrome', use: { ...devices['Pixel 5'] } };
+
+// QNBS-v3: CI = Desktop + Mobile Chromium (ein Browser-Install); lokal optional Mobile nur mit RUN_MOBILE_E2E=1 für Low-End-Rechner.
 const e2eProjects = isCi
-  ? [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
+  ? [desktopChrome, mobileChrome]
   : [
-      { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+      desktopChrome,
       { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+      ...(runMobileLocal ? [mobileChrome] : []),
     ];
 
 export default defineConfig({

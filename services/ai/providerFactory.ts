@@ -84,6 +84,8 @@ export function providerToKind(
       return 'openai';
     case 'ollama':
       return 'openaiCompatible';
+    case 'webllm':
+      return 'unsupported';
     case 'anthropic':
     case 'grok':
       return 'unsupported';

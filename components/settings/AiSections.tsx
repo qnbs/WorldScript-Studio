@@ -52,24 +52,18 @@ export const AiSection: FC = () => {
         }
         onProviderChange={(p) => {
           const currentModel = settings.advancedAi?.model ?? 'gemini-2.5-flash';
-          const newModel =
-            p === 'ollama'
-              ? currentModel.startsWith('ollama/')
-                ? currentModel
-                : 'ollama/qwen3:8b'
-              : p === 'gemini'
-                ? currentModel.startsWith('ollama/')
-                  ? 'gemini-2.5-flash'
-                  : currentModel
-                : p === 'openai'
-                  ? currentModel.startsWith('gpt-')
-                    ? currentModel
-                    : 'gpt-4o-mini'
-                  : p === 'anthropic'
-                    ? currentModel.startsWith('claude-')
-                      ? currentModel
-                      : 'claude-haiku-4-5'
-                    : currentModel;
+          let newModel = currentModel;
+          if (p === 'ollama') {
+            newModel = currentModel.startsWith('ollama/') ? currentModel : 'ollama/qwen3:8b';
+          } else if (p === 'gemini') {
+            newModel = currentModel.startsWith('ollama/') ? 'gemini-2.5-flash' : currentModel;
+          } else if (p === 'openai') {
+            newModel = currentModel.startsWith('gpt-') ? currentModel : 'gpt-4o-mini';
+          } else if (p === 'anthropic') {
+            newModel = currentModel.startsWith('claude-') ? currentModel : 'claude-haiku-4-5';
+          } else if (p === 'webllm') {
+            newModel = 'webllm/browser';
+          }
           handleSettingChange('advancedAi', {
             ...settings.advancedAi,
             provider: p,
@@ -131,7 +125,7 @@ export const AiSection: FC = () => {
                   }}
                 >
                   <option value="">{t('settings.ai.fallbackNone')}</option>
-                  {(['gemini', 'openai', 'ollama', 'grok'] as const)
+                  {(['gemini', 'openai', 'ollama', 'grok', 'webllm'] as const)
                     .filter((p) => p !== settings.advancedAi.provider)
                     .map((p) => (
                       <option key={p} value={p}>
@@ -165,7 +159,7 @@ export const AiSection: FC = () => {
                   }}
                 >
                   <option value="">{t('settings.ai.fallbackNone')}</option>
-                  {(['gemini', 'openai', 'ollama', 'grok'] as const)
+                  {(['gemini', 'openai', 'ollama', 'grok', 'webllm'] as const)
                     .filter((p) => p !== settings.advancedAi.provider)
                     .map((p) => (
                       <option key={p} value={p}>
@@ -364,6 +358,8 @@ export const AdvancedAiSection: FC = () => {
                   <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
                   <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
                 </>
+              ) : settings.advancedAi.provider === 'webllm' ? (
+                <option value="webllm/browser">WebLLM (browser bundle)</option>
               ) : (
                 <>
                   <optgroup label="Current Generation">

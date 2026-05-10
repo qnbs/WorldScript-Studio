@@ -108,6 +108,8 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     if (provider === 'ollama') {
       void handleLoadOllamaModels();
       void handleTest();
+    } else if (provider === 'webllm') {
+      void handleTest();
     }
   }, [provider, handleLoadOllamaModels, handleTest]);
 
@@ -115,6 +117,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     { id: 'gemini', label: 'Google Gemini' },
     { id: 'openai', label: 'OpenAI' },
     { id: 'ollama', label: 'Ollama (lokal)' },
+    { id: 'webllm', label: t('settings.ai.providerWebllm') },
     { id: 'anthropic', label: 'Anthropic Claude' },
   ];
 
@@ -136,7 +139,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {providers.map((p) => (
             <button
               type="button"
@@ -362,6 +365,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               </div>
             )}
             <p className="text-xs text-[var(--foreground-muted)]">{t('settings.ai.ollamaHint')}</p>
+          </div>
+        )}
+
+        {provider === 'webllm' && (
+          <div className="p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-sm text-[var(--foreground-secondary)] space-y-2">
+            <p>{t('settings.ai.webllmHint')}</p>
           </div>
         )}
 

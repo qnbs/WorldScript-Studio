@@ -20,22 +20,24 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
       include: [
-        'app/**/*.ts',
-        'components/**/*.tsx',
-        'features/**/*.ts',
-        'hooks/**/*.ts',
-        'services/**/*.ts',
+        'app/**/*.{ts,tsx}',
+        'components/**/*.{ts,tsx}',
+        'features/**/*.{ts,tsx}',
+        'hooks/**/*.{ts,tsx}',
+        'services/**/*.{ts,tsx}',
+        'packages/*/src/**/*.{ts,tsx}',
       ],
       exclude: [
         'node_modules/',
         'dist/',
         'tests/',
+        '**/mocks/**',
         '.storybook/',
         'src-tauri/',
         '**/*.stories.{ts,tsx}',
         '**/*.d.ts',
       ],
-      // QNBS-v3: Untergrenze knapp unter aktuellem Gesamtdeckungsgrad — Hotspots gezielt in docs/BEST-PRACTICES.md.
+      // QNBS-v3: Breiteres include senkt die Kopf-% gegenüber dem alten „Insel“-Glob — Schwellen = aktueller Messtand; Ziel 50–70 % über weitere Tests.
       thresholds: {
         lines: 25,
         functions: 21,

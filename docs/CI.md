@@ -6,6 +6,21 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 ---
 
+## Cloud CI-first vs local development
+
+**Canonical quality gate:** GitHub Actions. Low-end local machines should **not** be expected to run the full heavy stack.
+
+| Tier | Where | Commands / scope |
+|------|--------|------------------|
+| **Quick (local)** | Developer laptop | `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`; optional `pnpm exec vitest run` **without** `--coverage` for a fast smoke |
+| **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Stryker (informational), Storybook static build, bundle budget + analyze |
+
+**Merge readiness:** A green workflow run on the PR/branch matters more than reproducing every E2E or LHCI step locally. Use CI **artifacts** (Playwright HTML report, coverage, Lighthouse output) to debug failures.
+
+**Optional local deep dive:** `CI=true pnpm run test:e2e`, `pnpm exec vitest run --coverage`, `pnpm exec lhci autorun` — only when the machine has enough CPU/RAM and time. Mobile Playwright project locally: set `RUN_MOBILE_E2E=1` (see [`playwright.config.ts`](../playwright.config.ts)).
+
+---
+
 ## Toolchain (CI parity)
 
 | Requirement | Source |
@@ -49,7 +64,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 | `security` | — | `pnpm audit --audit-level=high`; on PRs: `dependency-review-action` |
 | `quality` | `security` | Matrix **Node `lts/*`** and **`node` (current)** → Biome lint, **`pnpm run i18n:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact |
-| `e2e` | `quality` | Playwright **Chromium only** (`playwright install --with-deps chromium`), `CI=true`. Firefox runs only in local Playwright (see `playwright.config.ts`). |
+| `e2e` | `quality` | Playwright **Chromium** + **mobile emulation** (Pixel 5, same browser install), `CI=true`. Firefox and optional mobile locally — see [`playwright.config.ts`](../playwright.config.ts). |
 | `mutation` | `quality` | **`pnpm run mutation`** if `stryker.conf.json` exists — HTML report in-repo locally; **`continue-on-error: true`** so score does not block merges while targets grow |
 | `lighthouse` | `build` | LHCI against downloaded `dist` (hard-fail: `assert.exitCode=0`) |
 | `storybook` | `quality` | Static Storybook → artifact |
@@ -68,7 +83,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 ## Local checks (without Act)
 
-On **low-resource** machines, run **`pnpm run lint`** (Biome treats warnings as errors like CI), **`pnpm run typecheck`**, and **`pnpm run i18n:check`** first — ideally when the machine is idle and (if needed) outside heavy IDE sessions. Prefer **`pnpm exec vitest run`** without `--coverage` for a faster smoke; leave **`CI=true pnpm run test:e2e`**, **Lighthouse**, and **coverage thresholds** primarily to **GitHub Actions**, where Chromium-only E2E and install caches match production parity.
+On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run lint`**, **`pnpm run typecheck`**, **`pnpm run i18n:check`**, and optionally **`pnpm exec vitest run`** without `--coverage`. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, and **coverage threshold enforcement** as **CI-owned** unless you have a powerful workstation.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -129,7 +144,7 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | `vitest.config.ts` | Coverage thresholds, reporters |
 | `scripts/check-bundle-budget.mjs` | Chunk size budget after `pnpm run build` |
 | `renovate.json` | Renovate Bot: patch auto-merge policy |
-| `playwright.config.ts` | E2E projects (Chromium in CI; Chromium + Firefox locally), `snapshotPathTemplate`, reporters |
+| `playwright.config.ts` | E2E projects (CI: Chromium desktop + Pixel 5; local: Chromium + Firefox, optional mobile via `RUN_MOBILE_E2E=1`), `snapshotPathTemplate`, reporters |
 | `tests/e2e/helpers.ts` | SPA-ready waits (avoid `networkidle` with Vite/HMR), EN locale, blank project bootstrap, `#sidebar` scope |
 | `tests/e2e/a11y.spec.ts` | axe Playwright smoke (welcome + settings accessibility hub) |
 | `services/commands/` | Command registry backing the palette (fuzzy search — regression-sensitive if E2E targets palette copy) |

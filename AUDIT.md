@@ -537,7 +537,7 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 | 4   | ~~Add per-view error boundaries~~         | Low    | Medium | ✅ Done       |
 | 5   | ~~Make Redux logger opt-in~~              | Low    | Medium | ✅ Done       |
 | 6   | ~~Fix `any` type casts~~                  | Medium | Medium | ✅ Partial    |
-| 7   | Increase unit test coverage to 60%+       | High   | High   | 🟡 Ongoing    |
+| 7   | Raise unit/integration coverage toward **50–70 %** (Vitest `vitest.config.ts`: breites `coverage.include`, Schwellen = aktueller Gesamt‑%; CI gate) | High | High | 🟡 Ongoing |
 | 8   | Add DevContainer configuration            | Low    | Medium | 🟠 Backlog    |
 | 9   | Fix ManuscriptView resize memory leak     | Low    | Medium | 🟠 Backlog    |
 | 10  | ~~Add performance budgets~~               | Medium | Medium | ✅ Done       |

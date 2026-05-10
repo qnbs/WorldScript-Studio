@@ -33,6 +33,7 @@ describe('storyCraftAi provider helpers', () => {
     expect(isOrchestrationReadyProvider('ollama')).toBe(true);
     expect(isOrchestrationReadyProvider('grok')).toBe(false);
     expect(isOrchestrationReadyProvider('anthropic')).toBe(false);
+    expect(isOrchestrationReadyProvider('webllm')).toBe(false);
   });
 });
 

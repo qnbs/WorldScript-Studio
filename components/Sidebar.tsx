@@ -65,7 +65,7 @@ const BottomTabItem: React.FC<{
   <button
     type="button"
     onClick={onClick}
-    className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-colors duration-200 touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded-lg ${
+    className={`relative flex flex-col items-center justify-center flex-1 min-h-[44px] py-2 transition-colors duration-200 touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded-lg ${
       isActive ? 'text-[var(--nav-text-active)]' : 'text-[var(--foreground-muted)]'
     }`}
     aria-current={isActive ? 'page' : undefined}

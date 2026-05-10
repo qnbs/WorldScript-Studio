@@ -26,6 +26,12 @@ alwaysApply: false
 
 - Nutzerinteraktion mit `@testing-library/user-event`; async mit `findBy*`/`waitFor` wo nötig.
 
+## Schwere Suites (CI-first)
+
+- **Canonical Gate:** GitHub Actions (`docs/CI.md`) — Vitest **mit** Coverage-Schwellen, Playwright E2E (inkl. **axe-core** über `tests/e2e/a11y.spec.ts` und erweiterte Modal-/Panel-Routen), Lighthouse CI, Bundle-Budget. Merge-Bar ist ein **grüner Workflow**, nicht ein voller lokaler Lauf auf Low-End-Hardware.
+- **Lokal:** `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage`. Playwright / LHCI / Coverage-Gates nur bei ausreichender Maschine oder zum Debuggen über **CI-Artefakte** (Reports).
+- **Accessibility:** Automatisierte schwere/critical **axe**-Verstöße müssen in den Playwright-Specs fehlen (Kontrastregel ggf. per Projektpolitik deaktiviert — siehe `docs/ACCESSIBILITY.md`).
+
 <example>
 `geminiService`: `@google/genai` mit `vi.mock` stubben; Antworten fest verdrahtet, Snapshot nur wenn stabil.
 </example>

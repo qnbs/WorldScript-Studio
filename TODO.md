@@ -10,7 +10,13 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ## v1.3.x — Nacharbeiten & Qualität
 
-> Vollständige **`.md`-Inventur** (15 Quellen): [`AUDIT.md`](AUDIT.md) § *Markdown corpus*; Navigation: [`README.md`](README.md#-documentation-hub).
+> Vollständige **`.md`-Inventur** (19 kuratierte Quellen): [`AUDIT.md`](AUDIT.md) § *Markdown corpus*; Navigation: [`README.md`](README.md#-documentation-hub). Schwere Tests **CI-first**: [`docs/CI.md`](docs/CI.md).
+
+### Hoch (🟡)
+
+- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — breites `coverage.include` aktiv; Schwellen folgen dem Gesamt‑% (aktuell ~26 % Zeilen); weiter **Tests staffeln**
+- ✅ **One-Click** verschlüsselter **Library-Export** (ZIP + AES-GCM, META.json + vault.bin) — [`services/libraryBackupService.ts`](services/libraryBackupService.ts), Settings → Data
+- ✅ **WebLLM** als wählbarer Provider (`webllm/browser`, Privacy wie Ollama) — [`services/aiProviderService.ts`](services/aiProviderService.ts), [`packages/ai-core`](packages/ai-core)
 
 ### Niedrig (🟢)
 
