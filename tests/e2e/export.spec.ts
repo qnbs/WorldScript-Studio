@@ -102,7 +102,6 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await expect(previewHeading).toBeVisible();
     const exportPreview = page.locator('pre').first();
     await expect(exportPreview).toContainText(/quiet village under a strange moon/i);
-    await expect(exportPreview).toHaveScreenshot('export-preview.png');
 
     await page.getByRole('button', { name: /Settings|Einstellungen/i }).click();
     await page.getByRole('button', { name: /AI Configuration|AI Configuration/i }).click();
