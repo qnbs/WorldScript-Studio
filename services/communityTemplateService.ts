@@ -7,9 +7,26 @@
  * third-party requests, works offline and with Tauri desktop builds.
  */
 
+import { z } from 'zod';
+
 import type { CommunityTemplate } from '../types';
 
 const INDEX_URL = `${import.meta.env.BASE_URL}community-templates/index.json`;
+
+// QNBS-v3: Zod an der Asset-Grenze — kaputte JSON-Lieferungen fallen auf eingebettete Fallbacks zurück statt still UI zu brüchen.
+const communityTemplateSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  description: z.string(),
+  type: z.enum(['Genre', 'Structure']),
+  author: z.string(),
+  tags: z.array(z.string()).min(1),
+  arcDescription: z.string(),
+  stars: z.number().nonnegative().optional(),
+  sections: z.array(z.object({ title: z.string(), description: z.string().optional() })).min(1),
+});
+
+const communityTemplatesSchema = z.array(communityTemplateSchema).min(1);
 
 // In-memory cache (valid for the duration of the session)
 let cachedTemplates: CommunityTemplate[] | null = null;
@@ -42,7 +59,16 @@ export async function fetchCommunityTemplates(
       };
     }
 
-    const data = (await res.json()) as CommunityTemplate[];
+    const raw: unknown = await res.json();
+    const parsed = communityTemplatesSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        templates: getFallbackTemplates(),
+        error: 'Community templates failed validation',
+        isFallback: true,
+      };
+    }
+    const data = parsed.data as CommunityTemplate[];
     cachedTemplates = data;
     return { templates: data };
   } catch (e) {
@@ -96,10 +122,11 @@ function getFallbackTemplates(): CommunityTemplate[] {
     {
       id: 'community-dark-romantik',
       name: 'Dark Romance',
-      description: 'Gothic love story with suspense and dark secrets.',
+      description:
+        'Gothic love story with suspense and dark secrets. Contains mature themes — use only if it fits your story and audience.',
       type: 'Genre',
       author: 'NightWriter42',
-      tags: ['Romance', 'Gothic', 'Mystery', '#dark'],
+      tags: ['Romance', 'Gothic', 'Mystery', 'Dark'],
       arcDescription:
         'Forbidden love in a world full of secrets — suspense and passion in balance.',
       stars: 31,
@@ -153,6 +180,51 @@ function getFallbackTemplates(): CommunityTemplate[] {
         { title: 'Personal Danger' },
         { title: 'The Crucial Clue' },
         { title: 'Resolution at the Village Festival' },
+      ],
+    },
+    {
+      id: 'community-scifi-first-contact',
+      name: 'First Contact Sci-Fi',
+      description:
+        'Humanity meets intelligent life for the first time — ideas-first science fiction.',
+      type: 'Genre',
+      author: 'StargazerX',
+      tags: ['Sci-Fi', 'First Contact', 'Philosophy'],
+      arcDescription:
+        'What does it mean to be human — when you must explain it to someone utterly unlike you?',
+      stars: 25,
+      sections: [
+        { title: 'The Signal' },
+        { title: 'Global Response' },
+        { title: 'The First Message' },
+        { title: 'Diplomatic Crisis' },
+        { title: 'Misunderstanding and Escalation' },
+        { title: 'The Breakthrough' },
+        { title: 'True Intentions' },
+        { title: 'Decision for Humanity' },
+        { title: 'Aftermath — A Changed World' },
+      ],
+    },
+    {
+      id: 'community-bildungsroman',
+      name: 'Coming-of-Age Arc',
+      description: 'A literary bildungsroman — innocence, failure, love, and mature selfhood.',
+      type: 'Structure',
+      author: 'LitProfessor',
+      tags: ['Literary', 'Coming of Age', 'Growth'],
+      arcDescription: 'From youthful naivety to adult identity — through failure, love, and loss.',
+      stars: 22,
+      sections: [
+        { title: 'Childhood and Innocence' },
+        { title: 'First Confrontation with the World' },
+        { title: 'Mentor and Guide' },
+        { title: 'First Love / First Defeat' },
+        { title: 'Identity Crisis' },
+        { title: 'Rebellion and Consequences' },
+        { title: 'Rock Bottom' },
+        { title: 'Reconciliation with the Past' },
+        { title: 'Coming-of-Age Trial' },
+        { title: 'Setting Out into the Future' },
       ],
     },
   ];

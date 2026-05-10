@@ -12,6 +12,7 @@
   "tour.settings.body": "Configure API keys, AI provider (Gemini cloud or local Ollama), appearance, editor, backups, and exports.",
   "tour.outro.title": "You're set",
   "tour.outro.body": "Your work saves automatically on this device. Open Help anytime to run this tour again.",
+  "tour.outro.helpCta": "Tip: open Help from the sidebar for articles, FAQs, and the AI guide — then use “Try it now” to jump straight into a view.",
   "tour.btn.next": "Next",
   "tour.btn.prev": "Back",
   "tour.btn.done": "Done",

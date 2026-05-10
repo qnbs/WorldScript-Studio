@@ -6,6 +6,13 @@
 
 ---
 
+## Follow-up Audit — 2026-05-10 (Global Best-Practices & content program)
+
+- **App-Inhalte:** Community-Templates auf **englischen Master** vereinheitlicht (`community-templates/index.json` ↔ `public/`); `content-guard` + Zod-Validierung in `fetchCommunityTemplates`; Help-Artikel mit **`tryActionId`** für Palette-/Nav-Sprünge; Demo/Import-Feedback über **Toasts** statt `alert` (`WelcomePortal`, `useSettingsView`).
+- **UX/Diagnostik:** Experimentelles **App-Gesundheit**-Panel (`enableAppHealthPanel`) unter Settings → Info; About zeigt **package.json-Version** statt Platzhalter.
+- **Doku:** [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (Engineering + Content + CI); README Privacy-Bullet präzisiert (lokal vs. Cloud-KI).
+- **Tests:** Vitest-Coverage-Untergrenzen moderat angehoben; Community-Template-Tests inkl. Zod-Fallback-Pfad.
+
 ## Follow-up Audit — 2026-05-10 (Hybrid-AI, i18n runtime bundles, deployment docs)
 
 - **Hybrid-AI / OpenAI-kompatible Cloud:** `advancedAi` Presets (Ollama/LM Studio/vLLM), `openAiCompatibleBaseUrl` + optionale OpenRouter-Header, konfigurierbare **Fallback-Kette** in `aiProviderService` / Thunks; Writer-Orchestrierung unverändert primärer Provider; Tauri **CSP** `connect-src` erweitert.

@@ -224,6 +224,12 @@ class StorageManager {
     const backend = await this.getBackend();
     return backend.deleteAllBinderAssetsForProject(projectId);
   }
+
+  // QNBS-v3: Explizites Backend-Label für Settings-Diagnostik — keine Heuristik über window allein.
+  async getStorageBackendKind(): Promise<'indexeddb' | 'filesystem'> {
+    await this.ready;
+    return this.backend === fileSystemService ? 'filesystem' : 'indexeddb';
+  }
 }
 
 export const storageService = new StorageManager();

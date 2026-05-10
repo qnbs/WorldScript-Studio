@@ -284,6 +284,7 @@
   "tour.navigationOnly.outroBody": "You can replay navigation-only tours anytime from Help.",
   "tour.navigationOnly.startButton": "Navigation tour only",
   "tour.outro.body": "Il lavoro viene salvato automaticamente su questo dispositivo. Apri Aiuto per ripetere il tour quando vuoi.",
+  "tour.outro.helpCta": "Tip: open Help from the sidebar for articles, FAQs, and the AI guide — then use “Try it now” to jump straight into a view.",
   "tour.outro.title": "Pronto a scrivere",
   "tour.palette.body": "Premi Ctrl+K (⌘K su Mac) per cercare comandi, cambiare tema o lingua e saltare a una vista.",
   "tour.palette.title": "Palette comandi",
@@ -312,6 +313,7 @@
   "portal.demo.outline2Desc": "Il sigillo si spezza; una decisione pesante.",
   "portal.demo.outline2Title": "Conflitto",
   "portal.demo.title": "Demo: La torre sigillata",
+  "portal.language.groupLabel": "Welcome screen language",
   "portal.new.ai.description": "Fornisci un’idea semplice e lascia che l’IA costruisca una scaletta dettagliata.",
   "portal.new.ai.title": "Genera con l’IA",
   "portal.new.blank.description": "Per chi ha già chiaro il percorso — primo capitolo vuoto.",
@@ -968,6 +970,7 @@
   "export.worldsLabel": "Worlds",
   "settings.about.description": "Your AI-powered creative partner for writing.",
   "settings.about.title": "About StoryCraft Studio",
+  "settings.about.versionLabel": "Version",
   "settings.accessibility.colorBlind.deuteranopia": "Deuteranopia",
   "settings.accessibility.colorBlind.none": "None",
   "settings.accessibility.colorBlind.protanopia": "Protanopia",
@@ -1165,6 +1168,7 @@
   "settings.editor.previewTitle": "Live Preview",
   "settings.editor.title": "Editor Preferences",
   "settings.featureFlags.description": "Enable new or experimental features for testing and advanced workflows.",
+  "settings.featureFlags.enableAppHealthPanel": "App health snapshot (About)",
   "settings.featureFlags.enableBinderResearch": "Research binder (Manuscript sidebar)",
   "settings.featureFlags.enableCodexAutoTracking": "Codex auto-tracking (manuscript)",
   "settings.featureFlags.enableCompileWizard": "Compile wizard (Export)",
@@ -1179,6 +1183,14 @@
   "settings.font.mono": "Monospace",
   "settings.font.sans": "Sans-Serif",
   "settings.font.serif": "Serif",
+  "settings.health.buildNote": "Enable “App health snapshot” under Experimental flags to see this panel.",
+  "settings.health.description": "Runtime diagnostics only — not a substitute for CI Lighthouse or bundle reports.",
+  "settings.health.locale": "UI language",
+  "settings.health.projectSize": "Serialized project size (approx.)",
+  "settings.health.storageFilesystem": "Storage: desktop app data (filesystem)",
+  "settings.health.storageIndexeddb": "Storage: browser IndexedDB",
+  "settings.health.title": "App health snapshot",
+  "settings.health.wordCount": "Words in open project",
   "settings.integrations.evernoteSync": "Evernote Sync",
   "settings.integrations.googleDocsImport": "Google Docs Import",
   "settings.integrations.languageToolEnable": "Abilita LanguageTool",
@@ -1262,7 +1274,7 @@
   "help.aiStudio.tools.content": "<h3>The Right Tool for the Job</h3><p>Each tool in the studio serves a different purpose:</p><ul><li><b>Continue Writing:</b> Perfect for writer's block. Place your cursor in the text, and the AI will write what comes next.</li><li><b>Improve Text:</b> Highlight a sentence or paragraph, and the AI will rewrite it. Use the Style dropdown to guide the improvement (e.g., make it more 'Cinematic').</li><li><b>Change Tone:</b> Similar to 'Improve Text,' but uses the Tone dropdown to change the mood (e.g., make it more 'Suspenseful').</li><li><b>Generate Dialogue:</b> Select the characters in the scene, describe the scenario, and the AI will write their conversation.</li><li><b>Brainstorm Ideas:</b> Get a list of creative plot points for what could happen next.</li><li><b>Summarize Section:</b> Quickly generates a synopsis of the selected manuscript section, which is useful for checking pacing or writing chapter summaries.</li></ul>",
   "help.aiStudio.tools.title": "Understanding the AI Tools",
   "help.article.selectPrompt": "Select an article on the left to read it, or ask our AI assistant for help.",
-  "help.article.tryItNow": "Try it now",
+  "help.article.tryItNow": "Provalo ora",
   "help.categories": [
     {
       "id": "getting-started",
@@ -1271,11 +1283,13 @@
       "articles": [
         {
           "title": "help.gettingStarted.tour.title",
-          "content": "help.gettingStarted.tour.content"
+          "content": "help.gettingStarted.tour.content",
+          "tryActionId": "nav-dashboard"
         },
         {
           "title": "help.gettingStarted.firstProject.title",
-          "content": "help.gettingStarted.firstProject.content"
+          "content": "help.gettingStarted.firstProject.content",
+          "tryActionId": "nav-templates"
         }
       ]
     },
@@ -1289,8 +1303,16 @@
           "content": "help.writing.manuscript.content",
           "tryActionId": "nav-manuscript"
         },
-        { "title": "help.writing.templates.title", "content": "help.writing.templates.content" },
-        { "title": "help.writing.outline.title", "content": "help.writing.outline.content" }
+        {
+          "title": "help.writing.templates.title",
+          "content": "help.writing.templates.content",
+          "tryActionId": "nav-templates"
+        },
+        {
+          "title": "help.writing.outline.title",
+          "content": "help.writing.outline.content",
+          "tryActionId": "nav-outline"
+        }
       ]
     },
     {
@@ -1300,11 +1322,13 @@
       "articles": [
         {
           "title": "help.worldbuilding.characters.title",
-          "content": "help.worldbuilding.characters.content"
+          "content": "help.worldbuilding.characters.content",
+          "tryActionId": "nav-characters"
         },
         {
           "title": "help.worldbuilding.worlds.title",
-          "content": "help.worldbuilding.worlds.content"
+          "content": "help.worldbuilding.worlds.content",
+          "tryActionId": "nav-world"
         }
       ]
     },
@@ -1313,8 +1337,16 @@
       "title": "help.category.aiStudio",
       "icon": "SPARKLES",
       "articles": [
-        { "title": "help.aiStudio.overview.title", "content": "help.aiStudio.overview.content" },
-        { "title": "help.aiStudio.tools.title", "content": "help.aiStudio.tools.content" }
+        {
+          "title": "help.aiStudio.overview.title",
+          "content": "help.aiStudio.overview.content",
+          "tryActionId": "nav-writer"
+        },
+        {
+          "title": "help.aiStudio.tools.title",
+          "content": "help.aiStudio.tools.content",
+          "tryActionId": "nav-writer"
+        }
       ]
     },
     {
@@ -1322,8 +1354,16 @@
       "title": "help.category.management",
       "icon": "SETTINGS",
       "articles": [
-        { "title": "help.management.export.title", "content": "help.management.export.content" },
-        { "title": "help.management.data.title", "content": "help.management.data.content" }
+        {
+          "title": "help.management.export.title",
+          "content": "help.management.export.content",
+          "tryActionId": "nav-export"
+        },
+        {
+          "title": "help.management.data.title",
+          "content": "help.management.data.content",
+          "tryActionId": "nav-settings"
+        }
       ]
     },
     {
@@ -1331,8 +1371,16 @@
       "title": "help.category.proTips",
       "icon": "LIGHTNING_BOLT",
       "articles": [
-        { "title": "help.proTips.mentions.title", "content": "help.proTips.mentions.content" },
-        { "title": "help.proTips.snapshots.title", "content": "help.proTips.snapshots.content" }
+        {
+          "title": "help.proTips.mentions.title",
+          "content": "help.proTips.mentions.content",
+          "tryActionId": "nav-manuscript"
+        },
+        {
+          "title": "help.proTips.snapshots.title",
+          "content": "help.proTips.snapshots.content",
+          "tryActionId": "nav-settings"
+        }
       ]
     },
     {

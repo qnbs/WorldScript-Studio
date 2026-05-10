@@ -91,11 +91,14 @@ export function startSpotlightTour(t: Translate, tourId: SpotlightTourId = 'defa
     }
   }
 
+  // QNBS-v3: Outro verknüpft Tour mit Help/„Try it“-Pfad — konsistentes Lernen statt toter Endscreens.
   steps.push({
     popover: {
       title: t('tour.outro.title'),
       description:
-        tourId === 'navigation' ? t('tour.navigationOnly.outroBody') : t('tour.outro.body'),
+        tourId === 'navigation'
+          ? `${t('tour.navigationOnly.outroBody')}\n\n${t('tour.outro.helpCta')}`
+          : `${t('tour.outro.body')}\n\n${t('tour.outro.helpCta')}`,
       side: 'over',
       align: 'center',
     },

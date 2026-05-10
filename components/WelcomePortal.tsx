@@ -2,9 +2,10 @@ import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
+import type { Language } from '../contexts/I18nContext';
 import { projectActions } from '../features/project/projectSlice';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
-import type { Language } from '../contexts/I18nContext';
+import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import { storageService } from '../services/storageService';
 import type { View } from '../types';
@@ -25,12 +26,12 @@ const WELCOME_LANGS: { code: Language; label: string }[] = [
 ];
 
 const LanguageSelector = () => {
-  const { language, setLanguage } = useTranslation();
+  const { language, setLanguage, t } = useTranslation();
   return (
     <div
       className="absolute top-4 right-4 flex flex-wrap justify-end gap-1 max-w-[min(100%,14rem)]"
       role="group"
-      aria-label="Language"
+      aria-label={t('portal.language.groupLabel')}
     >
       {WELCOME_LANGS.map(({ code, label }) => (
         <button
@@ -132,10 +133,20 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
     if (file) {
       const resultAction = await dispatch(importProjectThunk(file));
       if (importProjectThunk.fulfilled.match(resultAction)) {
-        alert(t('settings.data.importSuccess'));
+        dispatch(
+          statusActions.addNotification({
+            type: 'success',
+            title: t('settings.data.importSuccess'),
+          }),
+        );
         onExit('manuscript');
       } else {
-        alert(t('settings.data.importError'));
+        dispatch(
+          statusActions.addNotification({
+            type: 'error',
+            title: t('settings.data.importError'),
+          }),
+        );
       }
     }
   };
@@ -177,10 +188,20 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   const handleLoadDemo = async () => {
     const resultAction = await dispatch(importProjectThunk(buildDemoProjectFile()));
     if (importProjectThunk.fulfilled.match(resultAction)) {
-      alert(t('settings.data.importSuccess'));
+      dispatch(
+        statusActions.addNotification({
+          type: 'success',
+          title: t('settings.data.importSuccess'),
+        }),
+      );
       onExit('manuscript');
     } else {
-      alert(t('settings.data.importError'));
+      dispatch(
+        statusActions.addNotification({
+          type: 'error',
+          title: t('settings.data.importError'),
+        }),
+      );
     }
   };
 

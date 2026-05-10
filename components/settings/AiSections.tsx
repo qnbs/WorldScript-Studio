@@ -596,6 +596,11 @@ export const AdvancedAiSection: FC = () => {
                 checked={featureFlags.enableCrossProjectSearch}
                 onChange={(v) => handleSettingChange('enableCrossProjectSearch', v)}
               />
+              <ToggleSwitch
+                label={t('settings.featureFlags.enableAppHealthPanel')}
+                checked={featureFlags.enableAppHealthPanel}
+                onChange={(v) => handleSettingChange('enableAppHealthPanel', v)}
+              />
             </div>
             <p className="text-sm text-[var(--foreground-muted)] mt-3">
               {t('settings.featureFlags.description')}

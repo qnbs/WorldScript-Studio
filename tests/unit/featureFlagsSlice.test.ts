@@ -15,6 +15,7 @@ describe('featureFlagsSlice', () => {
     enableCompileWizard: false,
     enableProjectHealthScore: false,
     enableCrossProjectSearch: false,
+    enableAppHealthPanel: false,
   };
 
   it('should match default feature flag state on init', () => {
@@ -44,6 +45,7 @@ describe('featureFlagsSlice', () => {
       enableCompileWizard: false,
       enableProjectHealthScore: false,
       enableCrossProjectSearch: false,
+      enableAppHealthPanel: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

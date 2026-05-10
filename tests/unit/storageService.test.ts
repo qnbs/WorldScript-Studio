@@ -161,4 +161,8 @@ describe('storageService (IndexedDB backend in browser)', () => {
     await storageService.deleteImage('img-1');
     expect(mockDb.deleteImage).toHaveBeenCalledWith('img-1');
   });
+
+  it('reports indexeddb storage backend in web context', async () => {
+    await expect(storageService.getStorageBackendKind()).resolves.toBe('indexeddb');
+  });
 });

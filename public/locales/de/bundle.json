@@ -284,6 +284,7 @@
   "tour.navigationOnly.outroBody": "You can replay navigation-only tours anytime from Help.",
   "tour.navigationOnly.startButton": "Navigation tour only",
   "tour.outro.body": "Ihre Arbeit wird automatisch auf diesem Gerät gespeichert. Unter Hilfe können Sie diese Tour jederzeit erneut starten.",
+  "tour.outro.helpCta": "Tipp: Hilfe über die Seitenleiste öffnen — Artikel, FAQ und KI-Guide; mit „Jetzt ausprobieren“ springen Sie direkt in die passende Ansicht.",
   "tour.outro.title": "Los geht's",
   "tour.palette.body": "Drücken Sie Strg+K (⌘K auf dem Mac), um Befehle zu suchen, Theme oder Sprache zu wechseln und Ansichten zu öffnen.",
   "tour.palette.title": "Befehlspalette",
@@ -312,6 +313,7 @@
   "portal.demo.outline2Desc": "Das Siegel bricht; eine Entscheidung mit Folgen.",
   "portal.demo.outline2Title": "Konflikt",
   "portal.demo.title": "Demo: Der verschlossene Turm",
+  "portal.language.groupLabel": "Sprache auf dem Willkommensbildschirm",
   "portal.new.ai.description": "Geben Sie eine einfache Idee an und lassen Sie unsere KI eine detaillierte Handlungsgliederung für Sie erstellen.",
   "portal.new.ai.title": "Mit KI generieren",
   "portal.new.blank.description": "Für diejenigen, die wissen, wohin sie wollen. Beginnen Sie mit einem leeren ersten Kapitel.",
@@ -968,6 +970,7 @@
   "export.worldsLabel": "Welten",
   "settings.about.description": "Ihr KI-gestützter kreativer Partner für das Schreiben.",
   "settings.about.title": "Über StoryCraft Studio",
+  "settings.about.versionLabel": "Version",
   "settings.accessibility.colorBlind.deuteranopia": "Deuteranopie",
   "settings.accessibility.colorBlind.none": "Kein",
   "settings.accessibility.colorBlind.protanopia": "Protanopie",
@@ -1165,6 +1168,7 @@
   "settings.editor.previewTitle": "Live-Vorschau",
   "settings.editor.title": "Editor-Einstellungen",
   "settings.featureFlags.description": "Aktivieren Sie neue oder experimentelle Funktionen für Tests und fortgeschrittene Arbeitsabläufe.",
+  "settings.featureFlags.enableAppHealthPanel": "App-Gesundheit (Über „Info“)",
   "settings.featureFlags.enableBinderResearch": "Research binder (Manuscript sidebar)",
   "settings.featureFlags.enableCodexAutoTracking": "Codex Auto-Tracking (Manuskript)",
   "settings.featureFlags.enableCompileWizard": "Compile wizard (Export)",
@@ -1179,6 +1183,14 @@
   "settings.font.mono": "Monospace",
   "settings.font.sans": "Sans-Serif",
   "settings.font.serif": "Serif",
+  "settings.health.buildNote": "Aktivieren Sie „App-Gesundheit“ unter Experimentellen Feature-Flags, um dieses Panel zu sehen.",
+  "settings.health.description": "Nur Laufzeit-Diagnose — kein Ersatz für Lighthouse- oder Bundle-Reports aus der CI.",
+  "settings.health.locale": "UI-Sprache",
+  "settings.health.projectSize": "Serialisierte Projektgröße (ca.)",
+  "settings.health.storageFilesystem": "Speicher: Desktop-App-Daten (Dateisystem)",
+  "settings.health.storageIndexeddb": "Speicher: Browser-IndexedDB",
+  "settings.health.title": "App-Gesundheit (Überblick)",
+  "settings.health.wordCount": "Wörter im geöffneten Projekt",
   "settings.integrations.evernoteSync": "Evernote-Synchronisation",
   "settings.integrations.googleDocsImport": "Google Docs-Import",
   "settings.integrations.languageToolEnable": "LanguageTool aktivieren",
@@ -1262,7 +1274,7 @@
   "help.aiStudio.tools.content": "<h3>Das richtige Werkzeug für die Aufgabe</h3><p>Jedes Werkzeug im Studio dient einem anderen Zweck:</p><ul><li><b>Weiterschreiben:</b> Perfekt bei Schreibblockaden. Platzieren Sie Ihren Cursor im Text, und die KI schreibt, was als Nächstes kommt.</li><li><b>Text verbessern:</b> Markieren Sie einen Satz oder Absatz, und die KI schreibt ihn neu. Verwenden Sie das Stil-Dropdown, um die Verbesserung zu steuern (z. B. 'filmischer' machen).</li><li><b>Ton ändern:</b> Ähnlich wie 'Text verbessern', verwendet aber das Ton-Dropdown, um die Stimmung zu ändern (z. B. 'spannender' machen).</li><li><b>Dialog generieren:</b> Wählen Sie die Charaktere in der Szene aus, beschreiben Sie das Szenario, und die KI schreibt deren Gespräch.</li><li><b>Ideen brainstormen:</b> Erhalten Sie eine Liste kreativer Handlungspunkte für die Fortsetzung.</li><li><b>Abschnitt zusammenfassen:</b> Generiert schnell eine Synopse des ausgewählten Manuskriptabschnitts, nützlich zur Überprüfung des Tempos oder zum Schreiben von Kapitelzusammenfassungen.</li></ul>",
   "help.aiStudio.tools.title": "Die KI-Werkzeuge verstehen",
   "help.article.selectPrompt": "Wählen Sie links einen Artikel aus, um ihn zu lesen, oder fragen Sie unseren KI-Assistenten um Hilfe.",
-  "help.article.tryItNow": "Try it now",
+  "help.article.tryItNow": "Jetzt ausprobieren",
   "help.categories": [
     {
       "id": "getting-started",
@@ -1271,11 +1283,13 @@
       "articles": [
         {
           "title": "help.gettingStarted.tour.title",
-          "content": "help.gettingStarted.tour.content"
+          "content": "help.gettingStarted.tour.content",
+          "tryActionId": "nav-dashboard"
         },
         {
           "title": "help.gettingStarted.firstProject.title",
-          "content": "help.gettingStarted.firstProject.content"
+          "content": "help.gettingStarted.firstProject.content",
+          "tryActionId": "nav-templates"
         }
       ]
     },
@@ -1289,8 +1303,16 @@
           "content": "help.writing.manuscript.content",
           "tryActionId": "nav-manuscript"
         },
-        { "title": "help.writing.templates.title", "content": "help.writing.templates.content" },
-        { "title": "help.writing.outline.title", "content": "help.writing.outline.content" }
+        {
+          "title": "help.writing.templates.title",
+          "content": "help.writing.templates.content",
+          "tryActionId": "nav-templates"
+        },
+        {
+          "title": "help.writing.outline.title",
+          "content": "help.writing.outline.content",
+          "tryActionId": "nav-outline"
+        }
       ]
     },
     {
@@ -1300,11 +1322,13 @@
       "articles": [
         {
           "title": "help.worldbuilding.characters.title",
-          "content": "help.worldbuilding.characters.content"
+          "content": "help.worldbuilding.characters.content",
+          "tryActionId": "nav-characters"
         },
         {
           "title": "help.worldbuilding.worlds.title",
-          "content": "help.worldbuilding.worlds.content"
+          "content": "help.worldbuilding.worlds.content",
+          "tryActionId": "nav-world"
         }
       ]
     },
@@ -1313,8 +1337,16 @@
       "title": "help.category.aiStudio",
       "icon": "SPARKLES",
       "articles": [
-        { "title": "help.aiStudio.overview.title", "content": "help.aiStudio.overview.content" },
-        { "title": "help.aiStudio.tools.title", "content": "help.aiStudio.tools.content" }
+        {
+          "title": "help.aiStudio.overview.title",
+          "content": "help.aiStudio.overview.content",
+          "tryActionId": "nav-writer"
+        },
+        {
+          "title": "help.aiStudio.tools.title",
+          "content": "help.aiStudio.tools.content",
+          "tryActionId": "nav-writer"
+        }
       ]
     },
     {
@@ -1322,8 +1354,16 @@
       "title": "help.category.management",
       "icon": "SETTINGS",
       "articles": [
-        { "title": "help.management.export.title", "content": "help.management.export.content" },
-        { "title": "help.management.data.title", "content": "help.management.data.content" }
+        {
+          "title": "help.management.export.title",
+          "content": "help.management.export.content",
+          "tryActionId": "nav-export"
+        },
+        {
+          "title": "help.management.data.title",
+          "content": "help.management.data.content",
+          "tryActionId": "nav-settings"
+        }
       ]
     },
     {
@@ -1331,8 +1371,16 @@
       "title": "help.category.proTips",
       "icon": "LIGHTNING_BOLT",
       "articles": [
-        { "title": "help.proTips.mentions.title", "content": "help.proTips.mentions.content" },
-        { "title": "help.proTips.snapshots.title", "content": "help.proTips.snapshots.content" }
+        {
+          "title": "help.proTips.mentions.title",
+          "content": "help.proTips.mentions.content",
+          "tryActionId": "nav-manuscript"
+        },
+        {
+          "title": "help.proTips.snapshots.title",
+          "content": "help.proTips.snapshots.content",
+          "tryActionId": "nav-settings"
+        }
       ]
     },
     {

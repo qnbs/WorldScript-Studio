@@ -14,6 +14,6 @@ export const SETTINGS_CATEGORY_SEARCH_HINTS: Record<string, string[]> = {
   integrations: ['language tool', 'sync', 'notion'],
   backup: ['snapshot', 'frequency', 'encrypt'],
   data: ['export', 'import', 'reset', 'json'],
-  about: ['version', 'license', 'credits'],
+  about: ['version', 'license', 'credits', 'health', 'diagnostics', 'locale'],
   shortcuts: ['keyboard', 'hotkey', 'keybinding', 'ctrl', 'meta'],
 };

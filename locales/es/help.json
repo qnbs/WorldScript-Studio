@@ -11,7 +11,7 @@
   "help.aiStudio.tools.content": "<h3>The Right Tool for the Job</h3><p>Each tool in the studio serves a different purpose:</p><ul><li><b>Continue Writing:</b> Perfect for writer's block. Place your cursor in the text, and the AI will write what comes next.</li><li><b>Improve Text:</b> Highlight a sentence or paragraph, and the AI will rewrite it. Use the Style dropdown to guide the improvement (e.g., make it more 'Cinematic').</li><li><b>Change Tone:</b> Similar to 'Improve Text,' but uses the Tone dropdown to change the mood (e.g., make it more 'Suspenseful').</li><li><b>Generate Dialogue:</b> Select the characters in the scene, describe the scenario, and the AI will write their conversation.</li><li><b>Brainstorm Ideas:</b> Get a list of creative plot points for what could happen next.</li><li><b>Summarize Section:</b> Quickly generates a synopsis of the selected manuscript section, which is useful for checking pacing or writing chapter summaries.</li></ul>",
   "help.aiStudio.tools.title": "Understanding the AI Tools",
   "help.article.selectPrompt": "Select an article on the left to read it, or ask our AI assistant for help.",
-  "help.article.tryItNow": "Try it now",
+  "help.article.tryItNow": "Probar ahora",
   "help.categories": [
     {
       "id": "getting-started",
@@ -20,11 +20,13 @@
       "articles": [
         {
           "title": "help.gettingStarted.tour.title",
-          "content": "help.gettingStarted.tour.content"
+          "content": "help.gettingStarted.tour.content",
+          "tryActionId": "nav-dashboard"
         },
         {
           "title": "help.gettingStarted.firstProject.title",
-          "content": "help.gettingStarted.firstProject.content"
+          "content": "help.gettingStarted.firstProject.content",
+          "tryActionId": "nav-templates"
         }
       ]
     },
@@ -40,11 +42,13 @@
         },
         {
           "title": "help.writing.templates.title",
-          "content": "help.writing.templates.content"
+          "content": "help.writing.templates.content",
+          "tryActionId": "nav-templates"
         },
         {
           "title": "help.writing.outline.title",
-          "content": "help.writing.outline.content"
+          "content": "help.writing.outline.content",
+          "tryActionId": "nav-outline"
         }
       ]
     },
@@ -55,11 +59,13 @@
       "articles": [
         {
           "title": "help.worldbuilding.characters.title",
-          "content": "help.worldbuilding.characters.content"
+          "content": "help.worldbuilding.characters.content",
+          "tryActionId": "nav-characters"
         },
         {
           "title": "help.worldbuilding.worlds.title",
-          "content": "help.worldbuilding.worlds.content"
+          "content": "help.worldbuilding.worlds.content",
+          "tryActionId": "nav-world"
         }
       ]
     },
@@ -70,11 +76,13 @@
       "articles": [
         {
           "title": "help.aiStudio.overview.title",
-          "content": "help.aiStudio.overview.content"
+          "content": "help.aiStudio.overview.content",
+          "tryActionId": "nav-writer"
         },
         {
           "title": "help.aiStudio.tools.title",
-          "content": "help.aiStudio.tools.content"
+          "content": "help.aiStudio.tools.content",
+          "tryActionId": "nav-writer"
         }
       ]
     },
@@ -85,11 +93,13 @@
       "articles": [
         {
           "title": "help.management.export.title",
-          "content": "help.management.export.content"
+          "content": "help.management.export.content",
+          "tryActionId": "nav-export"
         },
         {
           "title": "help.management.data.title",
-          "content": "help.management.data.content"
+          "content": "help.management.data.content",
+          "tryActionId": "nav-settings"
         }
       ]
     },
@@ -100,11 +110,13 @@
       "articles": [
         {
           "title": "help.proTips.mentions.title",
-          "content": "help.proTips.mentions.content"
+          "content": "help.proTips.mentions.content",
+          "tryActionId": "nav-manuscript"
         },
         {
           "title": "help.proTips.snapshots.title",
-          "content": "help.proTips.snapshots.content"
+          "content": "help.proTips.snapshots.content",
+          "tryActionId": "nav-settings"
         }
       ]
     },

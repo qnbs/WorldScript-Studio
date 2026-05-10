@@ -285,6 +285,7 @@
   "tour.settings.body": "Configure API keys, AI provider (Gemini cloud or local Ollama), appearance, editor, backups, and exports.",
   "tour.outro.title": "You're set",
   "tour.outro.body": "Your work saves automatically on this device. Open Help anytime to run this tour again.",
+  "tour.outro.helpCta": "Tip: open Help from the sidebar for articles, FAQs, and the AI guide — then use “Try it now” to jump straight into a view.",
   "tour.btn.next": "Next",
   "tour.btn.prev": "Back",
   "tour.btn.done": "Done",
@@ -303,6 +304,7 @@
   "sidebar.export": "Export",
   "sidebar.settings": "Settings",
   "sidebar.help": "Help",
+  "portal.language.groupLabel": "Welcome screen language",
   "portal.welcome.title": "Welcome to StoryCraft Studio",
   "portal.welcome.subtitle": "Your AI-powered creative partner for writing.",
   "portal.welcome.newProject": "Start a New Project",
@@ -1070,6 +1072,15 @@
   "settings.deleteModal.confirm": "Yes, Delete Snapshot",
   "settings.about.title": "About StoryCraft Studio",
   "settings.about.description": "Your AI-powered creative partner for writing.",
+  "settings.about.versionLabel": "Version",
+  "settings.health.title": "App health snapshot",
+  "settings.health.description": "Runtime diagnostics only — not a substitute for CI Lighthouse or bundle reports.",
+  "settings.health.locale": "UI language",
+  "settings.health.storageIndexeddb": "Storage: browser IndexedDB",
+  "settings.health.storageFilesystem": "Storage: desktop app data (filesystem)",
+  "settings.health.wordCount": "Words in open project",
+  "settings.health.projectSize": "Serialized project size (approx.)",
+  "settings.health.buildNote": "Enable “App health snapshot” under Experimental flags to see this panel.",
   "settings.categories.advancedEditor": "Advanced Editor",
   "settings.categories.advancedAi": "Advanced AI",
   "settings.categories.accessibility": "Accessibility",
@@ -1124,6 +1135,7 @@
   "settings.featureFlags.enableCompileWizard": "Compile wizard (Export)",
   "settings.featureFlags.enableProjectHealthScore": "Project health score (Dashboard)",
   "settings.featureFlags.enableCrossProjectSearch": "Cross-project search (experimental)",
+  "settings.featureFlags.enableAppHealthPanel": "App health snapshot (About)",
   "settings.shortcuts.title": "Keyboard shortcuts",
   "settings.shortcuts.description": "Customize shortcuts for frequent actions. Conflicting chords are highlighted in amber.",
   "settings.shortcuts.resetDefaults": "Reset to defaults",
@@ -1273,11 +1285,13 @@
       "articles": [
         {
           "title": "help.gettingStarted.tour.title",
-          "content": "help.gettingStarted.tour.content"
+          "content": "help.gettingStarted.tour.content",
+          "tryActionId": "nav-dashboard"
         },
         {
           "title": "help.gettingStarted.firstProject.title",
-          "content": "help.gettingStarted.firstProject.content"
+          "content": "help.gettingStarted.firstProject.content",
+          "tryActionId": "nav-templates"
         }
       ]
     },
@@ -1291,8 +1305,16 @@
           "content": "help.writing.manuscript.content",
           "tryActionId": "nav-manuscript"
         },
-        { "title": "help.writing.templates.title", "content": "help.writing.templates.content" },
-        { "title": "help.writing.outline.title", "content": "help.writing.outline.content" }
+        {
+          "title": "help.writing.templates.title",
+          "content": "help.writing.templates.content",
+          "tryActionId": "nav-templates"
+        },
+        {
+          "title": "help.writing.outline.title",
+          "content": "help.writing.outline.content",
+          "tryActionId": "nav-outline"
+        }
       ]
     },
     {
@@ -1302,11 +1324,13 @@
       "articles": [
         {
           "title": "help.worldbuilding.characters.title",
-          "content": "help.worldbuilding.characters.content"
+          "content": "help.worldbuilding.characters.content",
+          "tryActionId": "nav-characters"
         },
         {
           "title": "help.worldbuilding.worlds.title",
-          "content": "help.worldbuilding.worlds.content"
+          "content": "help.worldbuilding.worlds.content",
+          "tryActionId": "nav-world"
         }
       ]
     },
@@ -1315,8 +1339,16 @@
       "title": "help.category.aiStudio",
       "icon": "SPARKLES",
       "articles": [
-        { "title": "help.aiStudio.overview.title", "content": "help.aiStudio.overview.content" },
-        { "title": "help.aiStudio.tools.title", "content": "help.aiStudio.tools.content" }
+        {
+          "title": "help.aiStudio.overview.title",
+          "content": "help.aiStudio.overview.content",
+          "tryActionId": "nav-writer"
+        },
+        {
+          "title": "help.aiStudio.tools.title",
+          "content": "help.aiStudio.tools.content",
+          "tryActionId": "nav-writer"
+        }
       ]
     },
     {
@@ -1324,8 +1356,16 @@
       "title": "help.category.management",
       "icon": "SETTINGS",
       "articles": [
-        { "title": "help.management.export.title", "content": "help.management.export.content" },
-        { "title": "help.management.data.title", "content": "help.management.data.content" }
+        {
+          "title": "help.management.export.title",
+          "content": "help.management.export.content",
+          "tryActionId": "nav-export"
+        },
+        {
+          "title": "help.management.data.title",
+          "content": "help.management.data.content",
+          "tryActionId": "nav-settings"
+        }
       ]
     },
     {
@@ -1333,8 +1373,16 @@
       "title": "help.category.proTips",
       "icon": "LIGHTNING_BOLT",
       "articles": [
-        { "title": "help.proTips.mentions.title", "content": "help.proTips.mentions.content" },
-        { "title": "help.proTips.snapshots.title", "content": "help.proTips.snapshots.content" }
+        {
+          "title": "help.proTips.mentions.title",
+          "content": "help.proTips.mentions.content",
+          "tryActionId": "nav-manuscript"
+        },
+        {
+          "title": "help.proTips.snapshots.title",
+          "content": "help.proTips.snapshots.content",
+          "tryActionId": "nav-settings"
+        }
       ]
     },
     {

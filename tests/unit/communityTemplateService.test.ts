@@ -11,7 +11,7 @@ const mockTemplates = [
     description: 'desc',
     type: 'Structure',
     author: 'Tester',
-    tags: [],
+    tags: ['fixture'],
     arcDescription: 'arc',
     stars: 5,
     sections: [{ title: 'Act 1' }],
@@ -70,6 +70,18 @@ describe('fetchCommunityTemplates', () => {
     expect(result.templates.length).toBeGreaterThan(0);
     expect(result.isFallback).toBe(true);
     expect(result.error).toContain('offline');
+  });
+
+  it('returns fallback templates when JSON fails Zod validation', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([{ id: '', name: 'bad' }]), { status: 200 }),
+    );
+
+    const result = await fetchCommunityTemplates();
+
+    expect(result.templates.length).toBeGreaterThan(0);
+    expect(result.error).toContain('validation');
+    expect(result.isFallback).toBe(true);
   });
 
   it('returns empty templates on AbortError', async () => {

@@ -16,6 +16,8 @@ export interface FeatureFlagsState {
   enableProjectHealthScore: boolean;
   /** Experimental: Search across projects (default: false). */
   enableCrossProjectSearch: boolean;
+  /** Experimental: About-page runtime diagnostics (default: false). */
+  enableAppHealthPanel: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -30,6 +32,7 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableCompileWizard: false,
   enableProjectHealthScore: false,
   enableCrossProjectSearch: false,
+  enableAppHealthPanel: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -98,6 +101,9 @@ const featureFlagsSlice = createSlice({
     setEnableCrossProjectSearch(state, action: PayloadAction<boolean>) {
       state.enableCrossProjectSearch = action.payload;
     },
+    setEnableAppHealthPanel(state, action: PayloadAction<boolean>) {
+      state.enableAppHealthPanel = action.payload;
+    },
   },
 });
 
@@ -122,6 +128,8 @@ export const selectEnableProjectHealthScore = (state: { featureFlags: FeatureFla
   state.featureFlags.enableProjectHealthScore;
 export const selectEnableCrossProjectSearch = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableCrossProjectSearch;
+export const selectEnableAppHealthPanel = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableAppHealthPanel;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

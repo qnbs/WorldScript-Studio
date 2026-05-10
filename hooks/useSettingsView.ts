@@ -10,6 +10,7 @@ import {
   restoreSnapshotThunk,
 } from '../features/project/thunks/projectManagementThunks';
 import { settingsActions } from '../features/settings/settingsSlice';
+import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import { logger } from '../services/logger';
 import { storageService } from '../services/storageService';
@@ -186,6 +187,9 @@ export const useSettingsView = () => {
         case 'enableCrossProjectSearch':
           dispatch(featureFlagsActions.setEnableCrossProjectSearch(Boolean(value)));
           break;
+        case 'enableAppHealthPanel':
+          dispatch(featureFlagsActions.setEnableAppHealthPanel(Boolean(value)));
+          break;
         default:
           logger.warn(`Unknown setting key: ${key}`);
           break;
@@ -229,9 +233,19 @@ export const useSettingsView = () => {
       if (file) {
         const resultAction = await dispatch(importProjectThunk(file));
         if (importProjectThunk.fulfilled.match(resultAction)) {
-          alert(t('settings.data.importSuccess'));
+          dispatch(
+            statusActions.addNotification({
+              type: 'success',
+              title: t('settings.data.importSuccess'),
+            }),
+          );
         } else {
-          alert(t('settings.data.importError'));
+          dispatch(
+            statusActions.addNotification({
+              type: 'error',
+              title: t('settings.data.importError'),
+            }),
+          );
         }
       }
       if (event.target) event.target.value = '';

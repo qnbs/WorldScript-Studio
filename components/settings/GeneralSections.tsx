@@ -1,7 +1,10 @@
 import type { FC } from 'react';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ICONS } from '../../constants';
+import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import packageJson from '../../package.json';
+import { storageService } from '../../services/storageService';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Select } from '../ui/Select';
@@ -228,31 +231,102 @@ export const AppearanceSection: FC = () => {
   );
 };
 
-export const AboutSection: FC = React.memo(() => {
-  const { t } = useSettingsViewContext();
+// QNBS-v3: Laufzeit-Snapshot unter Feature-Flag — ehrliche UX ohne Lighthouse-Versprechen.
+const AppHealthPanel: FC = () => {
+  const { t, language, projectSize, currentWordCount } = useSettingsViewContext();
+  const [backend, setBackend] = useState<'indexeddb' | 'filesystem' | 'pending'>('pending');
+
+  useEffect(() => {
+    let cancelled = false;
+    void storageService.getStorageBackendKind().then((kind) => {
+      if (!cancelled) setBackend(kind);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const storageLine =
+    backend === 'pending'
+      ? '…'
+      : backend === 'filesystem'
+        ? t('settings.health.storageFilesystem')
+        : t('settings.health.storageIndexeddb');
+
   return (
-    <Card>
+    <Card className="mt-6">
       <CardHeader>
         <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t('settings.about.title')}
+          {t('settings.health.title')}
         </h2>
       </CardHeader>
-      <CardContent className="text-center text-[var(--foreground-muted)] space-y-2">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-          className="w-16 h-16 text-indigo-400 mx-auto"
-        >
-          {ICONS.WRITER}
-        </svg>
-        <h3 className="text-2xl font-bold text-[var(--foreground-primary)]">StoryCraft Studio</h3>
-        <p>Version 2.0.0</p>
-        <p>{t('settings.about.description')}</p>
+      <CardContent className="space-y-4 text-sm text-[var(--foreground-secondary)]">
+        <p>{t('settings.health.description')}</p>
+        <ul className="list-disc space-y-2 pl-5">
+          <li>
+            <span className="font-medium text-[var(--foreground-primary)]">
+              {t('settings.health.locale')}:
+            </span>{' '}
+            <span className="uppercase">{language}</span>
+          </li>
+          <li>{storageLine}</li>
+          <li>
+            <span className="font-medium text-[var(--foreground-primary)]">
+              {t('settings.health.wordCount')}:
+            </span>{' '}
+            {currentWordCount}
+          </li>
+          <li>
+            <span className="font-medium text-[var(--foreground-primary)]">
+              {t('settings.health.projectSize')}:
+            </span>{' '}
+            {projectSize}
+          </li>
+        </ul>
       </CardContent>
     </Card>
+  );
+};
+
+export const AboutSection: FC = React.memo(() => {
+  const { t } = useSettingsViewContext();
+  const { enableAppHealthPanel } = useFeatureFlags();
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+            {t('settings.about.title')}
+          </h2>
+        </CardHeader>
+        <CardContent className="text-center text-[var(--foreground-muted)] space-y-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            className="w-16 h-16 text-indigo-400 mx-auto"
+            aria-hidden="true"
+          >
+            {ICONS.WRITER}
+          </svg>
+          <h3 className="text-2xl font-bold text-[var(--foreground-primary)]">StoryCraft Studio</h3>
+          <p>
+            {t('settings.about.versionLabel')} {packageJson.version}
+          </p>
+          <p>{t('settings.about.description')}</p>
+        </CardContent>
+      </Card>
+      {enableAppHealthPanel ? (
+        <AppHealthPanel />
+      ) : (
+        <p className="text-xs text-center text-[var(--foreground-muted)] px-2">
+          {t('settings.health.buildNote')}
+        </p>
+      )}
+    </div>
   );
 });
 AboutSection.displayName = 'AboutSection';

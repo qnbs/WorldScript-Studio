@@ -35,11 +35,12 @@ export default defineConfig({
         '**/*.stories.{ts,tsx}',
         '**/*.d.ts',
       ],
+      // QNBS-v3: Untergrenze knapp unter aktuellem Gesamtdeckungsgrad — Hotspots gezielt in docs/BEST-PRACTICES.md.
       thresholds: {
-        lines: 15,
-        functions: 15,
-        branches: 10,
-        statements: 15,
+        lines: 25,
+        functions: 21,
+        branches: 17,
+        statements: 24,
         perFile: false,
       },
     },

@@ -61,7 +61,7 @@ In a world of generic text editors and bloated writing software, StoryCraft Stud
 
 - **✍️ From Macro to Micro:** Most tools focus only on writing. We cover the _entire_ creative lifecycle — from high-level plot structure and world-building down to sentence-by-sentence prose refinement.
 - **🧠 Intelligent Partnership:** The AI is not a ghostwriter — it's a Socratic partner, a tireless brainstormer, and a creative muse. It's designed to break blocks and expand your own potential, not replace it.
-- **🔒 Ultimate Privacy & Ownership:** Your story is your most valuable asset. A 100% local, offline-first architecture with IndexedDB means your data never leaves your machine. No clouds, no accounts, no compromises.
+- **🔒 Ultimate Privacy & Ownership:** Your manuscript and project data stay on this device by default (IndexedDB in the browser, or local files in the desktop app). Cloud AI features send only the prompts and context you trigger to the provider you configure (for example Google Gemini); use local/Ollama mode if you want AI without sending text to a cloud API. There is no StoryCraft account — you stay in control of exports and backups.
 - **🔬 Built-in Quality Tools:** Go beyond writing with the AI Critic, Plot-Hole Detector, and RAG Consistency Checker — tools that help you catch narrative weaknesses before your readers do.
 
 ---
@@ -405,6 +405,7 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | -------- | ----------- |
 | [`README.md`](README.md) | Product overview, features, getting started (this file) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, Biome/Vitest/Playwright, architecture notes |
+| [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Pages + Vercel — static SPA, `base`, keys/privacy |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow (manual/tag builds, artifacts) |
