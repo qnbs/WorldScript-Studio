@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm run dev           # Vite dev server on http://localhost:3000
 pnpm run build         # Production build to dist/
-pnpm run lint          # Biome lint check
+pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # TypeScript type check (tsc --noEmit)
 pnpm run test          # Vitest watch mode

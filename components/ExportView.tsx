@@ -1,10 +1,11 @@
 import type { FC } from 'react';
 import React from 'react';
-import { useAppSelector } from '../app/hooks';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { ICONS } from '../constants';
 import { ExportViewContext, useExportViewContext } from '../contexts/ExportViewContext';
 import { selectEnableCompileWizard } from '../features/featureFlags/featureFlagsSlice';
+import { projectActions } from '../features/project/projectSlice';
 import { useExportView } from '../hooks/useExportView';
 import { AdvancedImportExport } from './AdvancedImportExport';
 import { CompileWizardModal } from './CompileWizardModal';
@@ -63,6 +64,7 @@ const AccordionSection: FC<{
 AccordionSection.displayName = 'AccordionSection';
 
 const ExportControls: FC = () => {
+  const dispatch = useAppDispatch();
   const {
     t,
     language,
@@ -102,6 +104,7 @@ const ExportControls: FC = () => {
         ...(synopsis ? { synopsis } : {}),
         chapters,
         lang: language,
+        ...(project.compileProfile ? { compileProfile: project.compileProfile } : {}),
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -219,11 +222,12 @@ const ExportControls: FC = () => {
                 id="export-format"
                 value={format}
                 onChange={(e) =>
-                  setFormat(e.target.value as 'md' | 'txt' | 'pdf' | 'docx' | 'epub')
+                  setFormat(e.target.value as 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt')
                 }
               >
                 <option value="md">{t('export.format.md')}</option>
                 <option value="txt">{t('export.format.txt')}</option>
+                <option value="norm-txt">{t('export.format.normTxt')}</option>
                 <option value="pdf">{t('export.format.pdf')}</option>
                 <option value="docx">Microsoft Word (.docx)</option>
                 <option value="epub">eBook (.epub)</option>
@@ -313,6 +317,65 @@ const ExportControls: FC = () => {
                 />
               </div>
             )}
+          </div>
+        </AccordionSection>
+        <AccordionSection title={t('export.compileProfile.title')} idSuffix="compile-profile">
+          <p className="text-xs text-[var(--foreground-muted)] pb-2">
+            {t('export.compileProfile.hint')}
+          </p>
+          <div className="space-y-3 pt-2">
+            <label htmlFor="cp-title-page" className="sr-only">
+              {t('export.compileProfile.titlePage')}
+            </label>
+            <Textarea
+              id="cp-title-page"
+              value={project.compileProfile?.titlePageMarkdown ?? ''}
+              onChange={(e) =>
+                dispatch(projectActions.updateCompileProfile({ titlePageMarkdown: e.target.value }))
+              }
+              placeholder={t('export.compileProfile.titlePage')}
+              className="min-h-[72px] text-sm"
+            />
+            <label htmlFor="cp-dedication" className="sr-only">
+              {t('export.compileProfile.dedication')}
+            </label>
+            <Textarea
+              id="cp-dedication"
+              value={project.compileProfile?.dedicationMarkdown ?? ''}
+              onChange={(e) =>
+                dispatch(
+                  projectActions.updateCompileProfile({ dedicationMarkdown: e.target.value }),
+                )
+              }
+              placeholder={t('export.compileProfile.dedication')}
+              className="min-h-[56px] text-sm"
+            />
+            <label htmlFor="cp-imprint" className="sr-only">
+              {t('export.compileProfile.imprint')}
+            </label>
+            <Textarea
+              id="cp-imprint"
+              value={project.compileProfile?.imprintMarkdown ?? ''}
+              onChange={(e) =>
+                dispatch(projectActions.updateCompileProfile({ imprintMarkdown: e.target.value }))
+              }
+              placeholder={t('export.compileProfile.imprint')}
+              className="min-h-[56px] text-sm"
+            />
+            <label htmlFor="cp-ack" className="sr-only">
+              {t('export.compileProfile.acknowledgements')}
+            </label>
+            <Textarea
+              id="cp-ack"
+              value={project.compileProfile?.acknowledgementsMarkdown ?? ''}
+              onChange={(e) =>
+                dispatch(
+                  projectActions.updateCompileProfile({ acknowledgementsMarkdown: e.target.value }),
+                )
+              }
+              placeholder={t('export.compileProfile.acknowledgements')}
+              className="min-h-[56px] text-sm"
+            />
           </div>
         </AccordionSection>
         <div className="p-4 space-y-3">

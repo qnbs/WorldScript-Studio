@@ -70,7 +70,7 @@ In a world of generic text editors and bloated writing software, StoryCraft Stud
 
 ### 📊 Dynamic Project Dashboard
 
-Your mission control. Track word counts against custom goals, visualize project statistics, manage your title and logline with AI assistance, and access all views from a single hub.
+Your mission control. Track word counts against custom goals, visualize project statistics, manage your title and logline with AI assistance, and access all views from a single hub. Includes **readability sampling** (Flesch-style heuristic) and **scene-timeline rule hints** without sending manuscript text to the cloud.
 
 ### ✍️ Three-Panel Manuscript Editor
 
@@ -327,6 +327,8 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 
 Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, sidebar-scoped clicks) live in **`tests/e2e/helpers.ts`** — **do not** rely on `networkidle` with the Vite dev server (HMR/WebSocket). Details: **`docs/CI.md`**.
+
+**Low-resource / laptop workflow:** Run **`pnpm run typecheck`**, **`pnpm run lint`** (Biome with `--error-on-warnings`), and **`pnpm run i18n:check`** before pushing. **`pnpm run test:run`** exercises Vitest only — still meaningful but lighter than Playwright. Full **E2E** (`CI=true pnpm run test:e2e`) is intentionally heavy; rely on the **`e2e` job in CI** unless you are debugging a specific spec locally.
 
 Simulate parts of the pipeline with [Act](https://github.com/nektos/act) (job ids must match `ci.yml`):
 

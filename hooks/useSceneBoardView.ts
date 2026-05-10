@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../app/hooks';
 import type { RootState } from '../app/store';
-import { selectAllCharacters } from '../features/project/projectSelectors';
+import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import type { StorySection } from '../types';
@@ -13,6 +13,21 @@ export const useSceneBoardView = () => {
   const characters = selectAllCharacters({
     project: { present: { data: project } },
   } as unknown as RootState);
+
+  const worlds = selectAllWorlds({
+    project: { present: { data: project } },
+  } as unknown as RootState);
+
+  const locationOptions = useMemo(
+    () =>
+      worlds.flatMap((w) =>
+        (w.locations ?? []).map((loc) => ({
+          id: loc.id,
+          label: `${w.name}: ${loc.name}`,
+        })),
+      ),
+    [worlds],
+  );
 
   const sections = useMemo(() => {
     return project.manuscript.map((section) => ({
@@ -63,6 +78,7 @@ export const useSceneBoardView = () => {
     project,
     sections,
     characters,
+    locationOptions,
     handleUpdateSection,
     handleDeleteSection,
     handleMoveSection,

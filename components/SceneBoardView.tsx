@@ -15,6 +15,7 @@ import { ICONS } from '../constants';
 import { SceneBoardViewContext, useSceneBoardViewContext } from '../contexts/SceneBoardViewContext';
 import { useSceneBoardView } from '../hooks/useSceneBoardView';
 import type { Character, StorySection } from '../types';
+import { SceneTimelinePanel } from './SceneTimelinePanel';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
@@ -35,10 +36,11 @@ const STATUS_COLORS: Record<string, string> = {
 const SortableSceneCard: FC<{
   section: StorySection;
   characters: Character[];
+  locationOptions: { id: string; label: string }[];
   t: (key: string, replacements?: Record<string, string>) => string;
   onUpdate: (id: string, updates: Partial<StorySection>) => void;
   onDelete: (id: string) => void;
-}> = React.memo(({ section, characters, t, onUpdate, onDelete }) => {
+}> = React.memo(({ section, characters, locationOptions, t, onUpdate, onDelete }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.id,
   });
@@ -49,6 +51,10 @@ const SortableSceneCard: FC<{
     color: section.color || '#3b82f6',
     status: section.status || 'draft',
     act: section.act || 1,
+    sceneStart: section.sceneStart ?? '',
+    sceneDuration: section.sceneDuration ?? '',
+    sceneLocationId: section.sceneLocationId ?? '',
+    povCharacterId: section.povCharacterId ?? '',
   });
 
   const style: React.CSSProperties = {
@@ -58,7 +64,22 @@ const SortableSceneCard: FC<{
   };
 
   const handleSave = () => {
-    onUpdate(section.id, editData);
+    const changes: Partial<StorySection> = {
+      title: editData.title,
+      summary: editData.summary,
+      color: editData.color,
+      status: editData.status,
+      act: editData.act,
+    };
+    const ss = editData.sceneStart.trim();
+    const sd = editData.sceneDuration.trim();
+    const sl = editData.sceneLocationId.trim();
+    const pv = editData.povCharacterId.trim();
+    if (ss) changes.sceneStart = ss;
+    if (sd) changes.sceneDuration = sd;
+    if (sl) changes.sceneLocationId = sl;
+    if (pv) changes.povCharacterId = pv;
+    onUpdate(section.id, changes);
     setIsEditing(false);
   };
 
@@ -134,6 +155,51 @@ const SortableSceneCard: FC<{
               className="w-7 h-7 rounded border cursor-pointer"
             />
           </div>
+          <div className="grid grid-cols-1 gap-2 border-t border-[var(--border-primary)] pt-2 mt-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--foreground-muted)]">
+              {t('sceneboard.timeline.metaHeading')}
+            </p>
+            <Input
+              value={editData.sceneStart}
+              onChange={(e) => setEditData((p) => ({ ...p, sceneStart: e.target.value }))}
+              placeholder={t('sceneboard.timeline.sceneStartPlaceholder')}
+              className="text-xs"
+              aria-label={t('sceneboard.timeline.sceneStartPlaceholder')}
+            />
+            <Input
+              value={editData.sceneDuration}
+              onChange={(e) => setEditData((p) => ({ ...p, sceneDuration: e.target.value }))}
+              placeholder={t('sceneboard.timeline.sceneDurationPlaceholder')}
+              className="text-xs"
+              aria-label={t('sceneboard.timeline.sceneDurationPlaceholder')}
+            />
+            <Select
+              value={editData.sceneLocationId || ''}
+              onChange={(e) => setEditData((p) => ({ ...p, sceneLocationId: e.target.value }))}
+              className="text-xs"
+              aria-label={t('sceneboard.timeline.locationLabel')}
+            >
+              <option value="">{t('sceneboard.timeline.locationNone')}</option>
+              {locationOptions.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={editData.povCharacterId || ''}
+              onChange={(e) => setEditData((p) => ({ ...p, povCharacterId: e.target.value }))}
+              className="text-xs"
+              aria-label={t('sceneboard.timeline.povLabel')}
+            >
+              <option value="">{t('sceneboard.timeline.povNone')}</option>
+              {characters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </div>
           <div className="flex justify-between">
             <Button size="sm" variant="danger" onClick={() => onDelete(section.id)}>
               {t('common.delete')}
@@ -165,6 +231,17 @@ const SortableSceneCard: FC<{
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
+                setEditData({
+                  title: section.title,
+                  summary: section.summary || '',
+                  color: section.color || '#3b82f6',
+                  status: section.status || 'draft',
+                  act: section.act || 1,
+                  sceneStart: section.sceneStart ?? '',
+                  sceneDuration: section.sceneDuration ?? '',
+                  sceneLocationId: section.sceneLocationId ?? '',
+                  povCharacterId: section.povCharacterId ?? '',
+                });
                 setIsEditing(true);
               }}
               className="text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] p-0.5 rounded"
@@ -230,11 +307,12 @@ const ActSwimlane: FC<{
   act: 1 | 2 | 3;
   sections: StorySection[];
   characters: Character[];
+  locationOptions: { id: string; label: string }[];
   t: (key: string, replacements?: Record<string, string>) => string;
   onUpdate: (id: string, updates: Partial<StorySection>) => void;
   onDelete: (id: string) => void;
   onAddSection: (act: 1 | 2 | 3) => void;
-}> = ({ act, sections, characters, t, onUpdate, onDelete, onAddSection }) => {
+}> = ({ act, sections, characters, locationOptions, t, onUpdate, onDelete, onAddSection }) => {
   const ACT_LABELS: Record<number, string> = {
     1: t('sceneboard.act1.label'),
     2: t('sceneboard.act2.label'),
@@ -282,6 +360,7 @@ const ActSwimlane: FC<{
               key={section.id}
               section={section}
               characters={characters}
+              locationOptions={locationOptions}
               t={t}
               onUpdate={onUpdate}
               onDelete={onDelete}
@@ -306,11 +385,13 @@ const SceneBoardUI: FC = () => {
     project,
     sections,
     characters,
+    locationOptions,
     handleUpdateSection,
     handleDeleteSection,
     handleAddSection,
   } = useSceneBoardViewContext();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [sceneUiMode, setSceneUiMode] = useState<'board' | 'timeline'>('board');
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -386,7 +467,7 @@ const SceneBoardUI: FC = () => {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="mb-4 flex items-center justify-between flex-shrink-0">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
             {t('sceneboard.title')}
@@ -395,59 +476,90 @@ const SceneBoardUI: FC = () => {
             {sections.length} {t('sceneboard.scenes')} · {totalWords} {t('sceneboard.words')}
           </p>
         </div>
-        <Button onClick={() => handleAddForAct(1)} size="sm">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-4 h-4 mr-1"
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="tablist"
+            aria-label={t('sceneboard.timeline.modeTabs')}
           >
-            {ICONS.ADD}
-          </svg>
-          {t('sceneboard.addScene')}
-        </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={sceneUiMode === 'board' ? 'primary' : 'secondary'}
+              aria-pressed={sceneUiMode === 'board'}
+              onClick={() => setSceneUiMode('board')}
+            >
+              {t('sceneboard.timeline.modeBoard')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={sceneUiMode === 'timeline' ? 'primary' : 'secondary'}
+              aria-pressed={sceneUiMode === 'timeline'}
+              onClick={() => setSceneUiMode('timeline')}
+            >
+              {t('sceneboard.timeline.modeTimeline')}
+            </Button>
+          </div>
+          <Button onClick={() => handleAddForAct(1)} size="sm">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-4 h-4 mr-1"
+            >
+              {ICONS.ADD}
+            </svg>
+            {t('sceneboard.addScene')}
+          </Button>
+        </div>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-      >
-        {/* Kanban-Board mit 3 Swimlanes */}
-        <div className="flex gap-4 overflow-x-auto pb-4 flex-grow">
-          {([1, 2, 3] as const).map((act) => (
-            <ActSwimlane
-              key={act}
-              act={act}
-              sections={sectionsByAct[act]}
-              characters={characters}
-              t={t}
-              onUpdate={handleUpdateSection}
-              onDelete={setDeleteTargetId}
-              onAddSection={handleAddForAct}
-            />
-          ))}
-        </div>
+      {sceneUiMode === 'timeline' ? (
+        <SceneTimelinePanel sections={sections} t={t} />
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          {/* Kanban-Board mit 3 Swimlanes */}
+          <div className="flex gap-4 overflow-x-auto pb-4 flex-grow">
+            {([1, 2, 3] as const).map((act) => (
+              <ActSwimlane
+                key={act}
+                act={act}
+                sections={sectionsByAct[act]}
+                characters={characters}
+                locationOptions={locationOptions}
+                t={t}
+                onUpdate={handleUpdateSection}
+                onDelete={setDeleteTargetId}
+                onAddSection={handleAddForAct}
+              />
+            ))}
+          </div>
 
-        <DragOverlay>
-          {activeSection ? (
-            <div className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-lg p-3 shadow-2xl opacity-90 w-72">
-              <h4 className="text-sm font-semibold text-[var(--foreground-primary)]">
-                {activeSection.title}
-              </h4>
-              {activeSection.summary && (
-                <p className="text-xs text-[var(--foreground-muted)] mt-1 line-clamp-2">
-                  {activeSection.summary}
-                </p>
-              )}
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay>
+            {activeSection ? (
+              <div className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-lg p-3 shadow-2xl opacity-90 w-72">
+                <h4 className="text-sm font-semibold text-[var(--foreground-primary)]">
+                  {activeSection.title}
+                </h4>
+                {activeSection.summary && (
+                  <p className="text-xs text-[var(--foreground-muted)] mt-1 line-clamp-2">
+                    {activeSection.summary}
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      )}
 
       {/* Delete Confirmation Modal */}
       <Modal

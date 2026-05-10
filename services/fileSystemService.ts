@@ -4,6 +4,8 @@ import LZString from 'lz-string';
 let tauriApis: {
   readTextFile: (path: string) => Promise<string>;
   writeTextFile: (path: string, content: string) => Promise<void>;
+  readFile: (path: string) => Promise<Uint8Array<ArrayBuffer>>;
+  writeFile: (path: string, data: Uint8Array) => Promise<void>;
   mkdir: (path: string, opts?: { recursive?: boolean }) => Promise<void>;
   exists: (path: string) => Promise<boolean>;
   readDir: (path: string) => Promise<{ name?: string; isDirectory?: boolean }[]>;
@@ -28,6 +30,8 @@ async function loadTauriApis() {
       invoke: coreModule.invoke as NonNullable<typeof tauriApis>['invoke'],
       readTextFile: fsModule.readTextFile,
       writeTextFile: fsModule.writeTextFile,
+      readFile: fsModule.readFile,
+      writeFile: fsModule.writeFile,
       mkdir: fsModule.mkdir,
       exists: fsModule.exists,
       readDir: fsModule.readDir as NonNullable<typeof tauriApis>['readDir'],
@@ -161,6 +165,8 @@ import { DEFAULT_WEBRTC_SIGNALING_URLS } from './collaborationService';
 import { logger } from './logger';
 import { parseImportedProjectJson } from './projectImportSchema';
 import {
+  type BinderAssetMeta,
+  type BinderAssetPayload,
   normalizeSaveProjectInputToStoryProject,
   type SaveProjectInput,
   type StorageBackend,
@@ -333,6 +339,91 @@ class FileSystemService implements StorageBackend {
     }
   }
 
+  // QNBS-v3: Research-Blobs pro Projekt unter projects/<id>/binder — rekursives deleteProject räumt mit auf.
+  private async binderAssetPaths(projectId: string, assetId: string) {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const safeId = sanitizePathSegment(projectId, 'project');
+    const safeAsset = sanitizePathSegment(assetId, 'asset');
+    const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
+    const binFile = await apis.join(dir, `${safeAsset}.bin`);
+    const metaFile = await apis.join(dir, `${safeAsset}.meta.json`);
+    return { apis, dir, binFile, metaFile };
+  }
+
+  async saveBinderAsset(
+    projectId: string,
+    assetId: string,
+    data: ArrayBuffer,
+    meta: BinderAssetMeta,
+  ): Promise<void> {
+    const apis = await this.getApis();
+    const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+    if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
+    const metaOut: BinderAssetMeta = {
+      ...meta,
+      byteSize: data.byteLength,
+    };
+    await retryFs(() => apis.writeFile(binFile, new Uint8Array(data)));
+    await retryFs(() => apis.writeTextFile(metaFile, JSON.stringify(metaOut)));
+  }
+
+  async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
+    try {
+      const apis = await this.getApis();
+      const { binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+      if (!(await apis.exists(binFile)) || !(await apis.exists(metaFile))) return null;
+      const [bytes, metaRaw] = await Promise.all([
+        retryFs(() => apis.readFile(binFile)),
+        retryFs(() => apis.readTextFile(metaFile)),
+      ]);
+      const meta = JSON.parse(metaRaw) as BinderAssetMeta;
+      const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      return { data: copy, meta };
+    } catch (error) {
+      logger.warn('getBinderAsset failed:', error);
+      return null;
+    }
+  }
+
+  async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
+    try {
+      const apis = await this.getApis();
+      const { binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+      if (await apis.exists(binFile)) await retryFs(() => apis.remove(binFile));
+      if (await apis.exists(metaFile)) await retryFs(() => apis.remove(metaFile));
+    } catch (error) {
+      logger.warn('deleteBinderAsset failed:', error);
+    }
+  }
+
+  async listBinderAssetIds(projectId: string): Promise<string[]> {
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const safeId = sanitizePathSegment(projectId, 'project');
+      const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
+      if (!(await apis.exists(dir))) return [];
+      const entries = await retryFs(() => apis.readDir(dir));
+      const ids = new Set<string>();
+      for (const e of entries) {
+        const name = e.name ?? '';
+        if (name.endsWith('.meta.json')) {
+          ids.add(name.replace(/\.meta\.json$/, ''));
+        }
+      }
+      return [...ids];
+    } catch (error) {
+      logger.warn('listBinderAssetIds failed:', error);
+      return [];
+    }
+  }
+
+  async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
+    const ids = await this.listBinderAssetIds(projectId);
+    await Promise.all(ids.map((id) => this.deleteBinderAsset(projectId, id)));
+  }
+
   async hasSavedData(): Promise<boolean> {
     try {
       const apis = await this.getApis();
@@ -389,6 +480,16 @@ class FileSystemService implements StorageBackend {
       ) {
         parsed.collaboration.webrtcSignalingUrls = [...DEFAULT_WEBRTC_SIGNALING_URLS];
       }
+      const integrationsDefaults = {
+        syncProvider: 'none' as const,
+        evernoteSync: false,
+        notionSync: false,
+        scrivenerExport: false,
+        googleDocsImport: false,
+        languageToolEnabled: false,
+        languageToolBaseUrl: 'http://localhost:8010',
+      };
+      parsed.integrations = { ...integrationsDefaults, ...(parsed.integrations ?? {}) };
       return parsed;
     } catch (error) {
       logger.error('Failed to load settings:', error);

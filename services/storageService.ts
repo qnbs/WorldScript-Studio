@@ -1,12 +1,21 @@
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
-import type { SaveProjectInput, StorageBackend } from './storageBackend';
+import type {
+  BinderAssetMeta,
+  BinderAssetPayload,
+  SaveProjectInput,
+  StorageBackend,
+} from './storageBackend';
 
 export type {
+  BinderAssetMeta,
+  BinderAssetPayload,
   SaveProjectEnvelope,
   SaveProjectInput,
   StorageBackend,
 } from './storageBackend';
 export {
+  makeBinderAssetIdsPrefix,
+  makeBinderAssetStorageKey,
   normalizeSaveProjectInputToStoryProject,
   saveEnvelopeFromProjectData,
 } from './storageBackend';
@@ -184,6 +193,36 @@ class StorageManager {
   async deleteRagVectors(projectId: string): Promise<void> {
     const backend = await this.getBackend();
     return backend.deleteRagVectors(projectId);
+  }
+
+  async saveBinderAsset(
+    projectId: string,
+    assetId: string,
+    data: ArrayBuffer,
+    meta: BinderAssetMeta,
+  ): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.saveBinderAsset(projectId, assetId, data, meta);
+  }
+
+  async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
+    const backend = await this.getBackend();
+    return backend.getBinderAsset(projectId, assetId);
+  }
+
+  async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.deleteBinderAsset(projectId, assetId);
+  }
+
+  async listBinderAssetIds(projectId: string): Promise<string[]> {
+    const backend = await this.getBackend();
+    return backend.listBinderAssetIds(projectId);
+  }
+
+  async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.deleteAllBinderAssetsForProject(projectId);
   }
 }
 

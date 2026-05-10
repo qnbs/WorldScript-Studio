@@ -1,6 +1,30 @@
 import type { ProjectData } from '../features/project/projectSlice';
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../types';
 
+/** Metadata for binder binary assets (PDF, images, audio) stored outside Redux. */
+export interface BinderAssetMeta {
+  mimeType: string;
+  originalFileName: string;
+  byteSize: number;
+}
+
+export interface BinderAssetPayload {
+  data: ArrayBuffer;
+  meta: BinderAssetMeta;
+}
+
+/** IndexedDB / filesystem key for binder blobs — stable delimiter avoids UUID clashes. */
+export function makeBinderAssetStorageKey(projectId: string, assetId: string): string {
+  const safeProject = projectId.replace(/[\s:]/g, '_').slice(0, 200);
+  return `${safeProject}::${assetId}`;
+}
+
+/** Prefix for listing/deleting all binder assets of a project (`projectId::`). */
+export function makeBinderAssetIdsPrefix(projectId: string): string {
+  const safeProject = projectId.replace(/[\s:]/g, '_').slice(0, 200);
+  return `${safeProject}::`;
+}
+
 /**
  * Redux-undo / auto-save shape (not a flat `StoryProject` export).
  * Kept separate from `StoryProject` so call-sites can type auto-save without casts.
@@ -72,4 +96,16 @@ export interface StorageBackend {
   saveRagVectors(projectId: string, vectors: unknown[]): Promise<void>;
   getRagVectors(projectId: string): Promise<unknown[]>;
   deleteRagVectors(projectId: string): Promise<void>;
+
+  /** Large binder files (research PDFs, images); Redux keeps only asset IDs. */
+  saveBinderAsset(
+    projectId: string,
+    assetId: string,
+    data: ArrayBuffer,
+    meta: BinderAssetMeta,
+  ): Promise<void>;
+  getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null>;
+  deleteBinderAsset(projectId: string, assetId: string): Promise<void>;
+  listBinderAssetIds(projectId: string): Promise<string[]>;
+  deleteAllBinderAssetsForProject(projectId: string): Promise<void>;
 }

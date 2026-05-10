@@ -1,6 +1,7 @@
 // Client-side EPUB 3.0 Generator (kein Server nötig)
 // Verwendet JSZip für vollständige EPUB-3.0-Erzeugung direkt im Browser
 
+import type { CompileProfile } from '../types';
 import { logger } from './logger';
 
 export interface EpubExportOptions {
@@ -10,6 +11,8 @@ export interface EpubExportOptions {
   chapters: Array<{ title: string; content: string }>;
   coverImage?: string; // base64 data URL
   lang?: string;
+  /** Title page, imprint, dedication — inserted after nav title entry. */
+  compileProfile?: CompileProfile;
 }
 
 const esc = (s: string) =>
@@ -25,7 +28,7 @@ const toParagraphs = (text: string) =>
     .join('');
 
 export async function exportEpub(options: EpubExportOptions): Promise<void> {
-  const { title, author, synopsis, chapters, lang = 'de', coverImage } = options;
+  const { title, author, synopsis, chapters, lang = 'de', coverImage, compileProfile } = options;
   const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
   const uid = `urn:uuid:sc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -90,18 +93,58 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
     }
   }
 
-  // Title page
+  // Title page — optional Markdown body from compile profile (Scrivener-style front matter).
+  const titleInner = compileProfile?.titlePageMarkdown?.trim()
+    ? `<div class="titlepage">${toParagraphs(compileProfile.titlePageMarkdown)}</div>`
+    : `<div class="titlepage"><h1>${esc(title)}</h1>
+${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div>`;
   oebps.file(
     'titlepage.xhtml',
     `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>${esc(title)}</title><link rel="stylesheet" href="style.css"/></head>
-<body><div class="titlepage"><h1>${esc(title)}</h1>
-${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div></body></html>`,
+<body>${titleInner}</body></html>`,
   );
   manifest.push(`<item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>`);
   spine.push(`<itemref idref="titlepage"/>`);
   tocEntries.push(`<li><a href="titlepage.xhtml">${esc(title)}</a></li>`);
+
+  let extraIdx = 0;
+  const pushCompilePage = (navLabel: string, markdown: string) => {
+    const id = `compile-${extraIdx++}`;
+    const file = `${id}.xhtml`;
+    oebps.file(
+      file,
+      `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
+<title>${esc(navLabel)}</title><link rel="stylesheet" href="style.css"/></head>
+<body><h2>${esc(navLabel)}</h2>${toParagraphs(markdown)}</body></html>`,
+    );
+    manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
+    spine.push(`<itemref idref="${id}"/>`);
+    tocEntries.push(`<li><a href="${file}">${esc(navLabel)}</a></li>`);
+  };
+
+  if (compileProfile?.dedicationMarkdown?.trim()) {
+    pushCompilePage('Dedication', compileProfile.dedicationMarkdown);
+  }
+  if (compileProfile?.imprintMarkdown?.trim()) {
+    pushCompilePage('Imprint', compileProfile.imprintMarkdown);
+  }
+  for (const block of compileProfile?.frontMatter ?? []) {
+    const id = `compile-${extraIdx++}`;
+    const file = `${id}.xhtml`;
+    oebps.file(
+      file,
+      `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
+<title>${esc(block.title)}</title><link rel="stylesheet" href="style.css"/></head>
+<body><h2>${esc(block.title)}</h2>${toParagraphs(block.bodyMarkdown)}</body></html>`,
+    );
+    manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
+    spine.push(`<itemref idref="${id}"/>`);
+    tocEntries.push(`<li><a href="${file}">${esc(block.title)}</a></li>`);
+  }
 
   // Synopsis
   if (synopsis?.trim()) {
@@ -133,6 +176,24 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Emp
     spine.push(`<itemref idref="${id}"/>`);
     tocEntries.push(`<li><a href="${file}">${esc(ch.title)}</a></li>`);
   });
+
+  if (compileProfile?.acknowledgementsMarkdown?.trim()) {
+    pushCompilePage('Acknowledgements', compileProfile.acknowledgementsMarkdown);
+  }
+  for (const block of compileProfile?.backMatter ?? []) {
+    const id = `compile-${extraIdx++}`;
+    const file = `${id}.xhtml`;
+    oebps.file(
+      file,
+      `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
+<title>${esc(block.title)}</title><link rel="stylesheet" href="style.css"/></head>
+<body><h2>${esc(block.title)}</h2>${toParagraphs(block.bodyMarkdown)}</body></html>`,
+    );
+    manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
+    spine.push(`<itemref idref="${id}"/>`);
+    tocEntries.push(`<li><a href="${file}">${esc(block.title)}</a></li>`);
+  }
 
   // Navigation (EPUB 3)
   oebps.file(

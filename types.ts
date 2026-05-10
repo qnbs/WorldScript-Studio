@@ -98,7 +98,15 @@ export interface BinderNode {
   title: string;
   linkedSectionId?: string;
   content?: string;
+  /** Legacy/small images may use character-style image store; binder blobs prefer `binderAssetId`. */
   imageAssetId?: string;
+  /** Unified blob key for PDF/image/audio in StorageBackend binder asset API. */
+  binderAssetId?: string;
+  /** External reference (no blob). */
+  linkUrl?: string;
+  mimeType?: string;
+  byteSize?: number;
+  originalFileName?: string;
   sortIndex: number;
 }
 
@@ -116,17 +124,45 @@ export interface StorySection {
   wordCount?: number;
   status?: 'draft' | 'outline' | 'first-draft' | 'revised' | 'final';
   act?: 1 | 2 | 3; // Akt-Zugehörigkeit für Swimlanes
+  /** In-universe scene start (ISO-like or story-calendar string). */
+  sceneStart?: string;
+  /** Human-readable duration (e.g. PT2H, "3 days"). */
+  sceneDuration?: string;
+  /** Links to WorldLocation.id when places are modeled. */
+  sceneLocationId?: string;
+  /** Primary POV character for analytics. */
+  povCharacterId?: string;
+}
+
+/** Compile front/back matter (Scrivener-style), stored with project. */
+export interface CompileMatterBlock {
+  id: string;
+  title: string;
+  bodyMarkdown: string;
+}
+
+export interface CompileProfile {
+  titlePageMarkdown?: string;
+  dedicationMarkdown?: string;
+  imprintMarkdown?: string;
+  acknowledgementsMarkdown?: string;
+  /** Ordered sections inserted before/after manuscript at export. */
+  frontMatter?: CompileMatterBlock[];
+  backMatter?: CompileMatterBlock[];
 }
 
 export interface StoryProject {
   title: string;
   logline: string;
+  author?: string;
   characters: Character[] | EntityState<Character, string>;
   worlds: World[] | EntityState<World, string>;
   outline?: OutlineSection[];
   manuscript: StorySection[];
   /** Optional research binder (feature-flagged UI). */
   binderNodes?: BinderNode[];
+  /** Export / compile metadata (title page, imprint, Normseiten tuning). */
+  compileProfile?: CompileProfile;
   projectGoals?: {
     totalWordCount: number;
     targetDate: string | null;
@@ -311,6 +347,9 @@ export interface IntegrationSettings {
   notionSync: boolean;
   scrivenerExport: boolean;
   googleDocsImport: boolean;
+  /** Opt-in: nur eigener LanguageTool-Server (typ. localhost) — kein stiller Cloud-Upload. */
+  languageToolEnabled: boolean;
+  languageToolBaseUrl: string;
 }
 
 export interface AdvancedEditorSettings {

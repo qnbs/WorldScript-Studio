@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectProjectData } from '../features/project/projectSelectors';
@@ -14,12 +14,95 @@ import {
   versionControlActions,
 } from '../features/versionControl/versionControlSlice';
 import { useTranslation } from '../hooks/useTranslation';
+import {
+  diffTokensToOps,
+  MAX_CHARS_WORD_DIFF_LINE,
+  tokenizeWordsAndSpaces,
+} from '../services/wordDiff';
 import type { StorySection, VersionBranch, VersionSnapshot } from '../types';
+
+/** Schwache Hardware: zu viele DOM-Zeilen im Diff-Modal vermeiden. */
+const MAX_DIFF_VIEW_LINES = 450;
+
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 
 // ─── Helper Components ────────────────────────────────────────────────────────
+
+// QNBS-v3: Zeilen-Diff ohne externes Paket — ausreichend für Autoren-Snapshot-Review.
+function buildLineDiff(
+  oldText: string,
+  newText: string,
+): { left: string; right: string; changed: boolean }[] {
+  const a = oldText.split('\n');
+  const b = newText.split('\n');
+  const n = Math.max(a.length, b.length);
+  return Array.from({ length: n }, (_, i) => {
+    const left = a[i] ?? '';
+    const right = b[i] ?? '';
+    return { left, right, changed: left !== right };
+  });
+}
+
+// QNBS-v3: Wortgranularität bei geänderten Zeilen — ergänzt das Zeilen-Diff aus buildLineDiff.
+function renderCompareLineWordCells(
+  left: string,
+  right: string,
+  changed: boolean,
+): { leftCell: ReactNode; rightCell: ReactNode } {
+  if (!changed) {
+    return {
+      leftCell: left.length > 0 ? left : '\u00a0',
+      rightCell: right.length > 0 ? right : '\u00a0',
+    };
+  }
+  // QNBS-v3: Auf Low-End-Geräten keine O(n·m)-LCS auf Roman-Zeilen — Zeilen-Diff reicht.
+  if (left.length > MAX_CHARS_WORD_DIFF_LINE || right.length > MAX_CHARS_WORD_DIFF_LINE) {
+    return {
+      leftCell: left.length > 0 ? left : '\u00a0',
+      rightCell: right.length > 0 ? right : '\u00a0',
+    };
+  }
+  const ops = diffTokensToOps(tokenizeWordsAndSpaces(left), tokenizeWordsAndSpaces(right));
+  const leftParts: ReactNode[] = [];
+  const rightParts: ReactNode[] = [];
+  let tokSeq = 0;
+  for (const op of ops) {
+    tokSeq += 1;
+    if (op.type === 'equal') {
+      leftParts.push(<span key={`eq-l-${tokSeq}`}>{op.token}</span>);
+      rightParts.push(<span key={`eq-r-${tokSeq}`}>{op.token}</span>);
+    } else if (op.type === 'delete') {
+      leftParts.push(
+        <span key={`del-l-${tokSeq}`} className="bg-red-500/40 rounded px-0.5">
+          {op.token}
+        </span>,
+      );
+      rightParts.push(
+        <span key={`del-r-${tokSeq}`} className="select-none text-transparent" aria-hidden="true">
+          {'\u00a0'}
+        </span>,
+      );
+    } else {
+      leftParts.push(
+        <span
+          key={`ins-l-${tokSeq}`}
+          className="text-[var(--foreground-muted)] select-none"
+          aria-hidden="true"
+        >
+          ·
+        </span>,
+      );
+      rightParts.push(
+        <span key={`ins-r-${tokSeq}`} className="bg-green-500/40 rounded px-0.5">
+          {op.token}
+        </span>,
+      );
+    }
+  }
+  return { leftCell: <>{leftParts}</>, rightCell: <>{rightParts}</> };
+}
 
 const BranchBadge: FC<{ branch: VersionBranch; isActive?: boolean }> = ({ branch, isActive }) => (
   <span
@@ -43,8 +126,9 @@ const SnapshotCard: FC<{
   branch: VersionBranch | undefined;
   onRestore: (snapshot: VersionSnapshot) => void;
   onDelete: (id: string) => void;
+  onCompare?: (snapshot: VersionSnapshot) => void;
   isHead: boolean;
-}> = ({ snapshot, branch, onRestore, onDelete, isHead }) => {
+}> = ({ snapshot, branch, onRestore, onDelete, onCompare, isHead }) => {
   const { t } = useTranslation();
   return (
     <div
@@ -79,7 +163,17 @@ const SnapshotCard: FC<{
             </span>
           </div>
         </div>
-        <div className="flex gap-1 flex-shrink-0">
+        <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+          {onCompare ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onCompare(snapshot)}
+              aria-label={t('vc.compare')}
+            >
+              {t('vc.compare')}
+            </Button>
+          ) : null}
           <Button
             variant="secondary"
             size="sm"
@@ -122,6 +216,7 @@ export const VersionControlPanel: FC = () => {
     'none' | 'createSnapshot' | 'createBranch' | 'restore' | 'switchBranch'
   >('none');
   const [pendingRestore, setPendingRestore] = useState<VersionSnapshot | null>(null);
+  const [compareTarget, setCompareTarget] = useState<VersionSnapshot | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -138,6 +233,48 @@ export const VersionControlPanel: FC = () => {
     () => (Array.isArray(project?.manuscript) ? (project.manuscript as StorySection[]) : []),
     [project?.manuscript],
   );
+
+  const compareBodies = useMemo(() => {
+    if (!compareTarget) return { oldText: '', newText: '' };
+    const sections = decompressManuscript(compareTarget.manuscriptSnapshot);
+    if (compareTarget.sectionId) {
+      const oldText = sections[0]?.content ?? '';
+      const cur = manuscript.find((s) => s.id === compareTarget.sectionId);
+      return { oldText, newText: cur?.content ?? '' };
+    }
+    const oldText = sections.map((s) => `## ${s.title}\n${s.content ?? ''}`).join('\n\n');
+    const newText = manuscript.map((s) => `## ${s.title}\n${s.content ?? ''}`).join('\n\n');
+    return { oldText, newText };
+  }, [compareTarget, manuscript]);
+
+  const diffLinesFull = useMemo(
+    () => buildLineDiff(compareBodies.oldText, compareBodies.newText),
+    [compareBodies.oldText, compareBodies.newText],
+  );
+
+  const diffViewTruncated = diffLinesFull.length > MAX_DIFF_VIEW_LINES;
+
+  const diffLines = useMemo(
+    () => (diffViewTruncated ? diffLinesFull.slice(0, MAX_DIFF_VIEW_LINES) : diffLinesFull),
+    [diffLinesFull, diffViewTruncated],
+  );
+
+  const compareRenderedLines = useMemo(() => {
+    const sid = compareTarget?.id ?? 'diff';
+    let seq = 0;
+    return diffLines.map((row) => {
+      seq += 1;
+      return {
+        ...row,
+        ...renderCompareLineWordCells(row.left, row.right, row.changed),
+        rowDomKey: `${sid}-ln-${seq}`,
+      };
+    });
+  }, [diffLines, compareTarget?.id]);
+
+  const handleCompareSnapshot = useCallback((snapshot: VersionSnapshot) => {
+    setCompareTarget(snapshot);
+  }, []);
 
   const handleCreateSnapshot = useCallback(() => {
     if (!snapshotLabel.trim()) return;
@@ -329,6 +466,7 @@ export const VersionControlPanel: FC = () => {
                       branch={branch}
                       onRestore={handleRestore}
                       onDelete={handleDeleteSnapshot}
+                      onCompare={handleCompareSnapshot}
                       isHead={isHead}
                     />
                   );
@@ -521,6 +659,56 @@ export const VersionControlPanel: FC = () => {
               )}
             </button>
           ))}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={compareTarget !== null}
+        onClose={() => setCompareTarget(null)}
+        title={t('vc.compareTitle')}
+      >
+        <p className="text-xs text-[var(--foreground-muted)] mb-2">
+          {t('vc.compareHint')} {t('vc.compareWordHint')}
+        </p>
+        {diffViewTruncated ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-2" role="status">
+            {t('vc.compareTruncated', {
+              shown: String(MAX_DIFF_VIEW_LINES),
+              total: String(diffLinesFull.length),
+            })}
+          </p>
+        ) : null}
+        <div className="grid grid-cols-2 gap-2 max-h-[min(70vh,520px)] overflow-auto rounded border border-[var(--border-primary)] p-2 contain-content">
+          <div>
+            <div className="font-semibold text-xs mb-1 text-[var(--foreground-secondary)]">
+              {t('vc.compareSnapshotColumn')}
+            </div>
+            <div className="font-mono text-xs whitespace-pre-wrap break-words space-y-px">
+              {compareRenderedLines.map((row) => (
+                <div
+                  key={`${row.rowDomKey}-L`}
+                  className={row.changed ? 'bg-red-500/15 px-0.5 rounded-sm' : undefined}
+                >
+                  {row.leftCell}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="font-semibold text-xs mb-1 text-[var(--foreground-secondary)]">
+              {t('vc.compareCurrentColumn')}
+            </div>
+            <div className="font-mono text-xs whitespace-pre-wrap break-words space-y-px">
+              {compareRenderedLines.map((row) => (
+                <div
+                  key={`${row.rowDomKey}-R`}
+                  className={row.changed ? 'bg-green-500/15 px-0.5 rounded-sm' : undefined}
+                >
+                  {row.rightCell}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </Modal>
     </>

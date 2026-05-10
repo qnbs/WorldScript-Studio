@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ICONS } from '../constants';
 import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
 import { useDashboard } from '../hooks/useDashboard';
@@ -55,6 +55,73 @@ const StatCard: FC<{
   ),
 );
 StatCard.displayName = 'StatCard';
+
+const AuthorInsightsCard: FC = () => {
+  const { t, readability, sceneTimelineHints } = useDashboardContext();
+  const warnCount = useMemo(
+    () => sceneTimelineHints.filter((h) => h.severity === 'warn').length,
+    [sceneTimelineHints],
+  );
+  return (
+    <Card
+      className="animate-in p-6 border-[var(--border-primary)]"
+      style={{ '--index': 5 } as React.CSSProperties}
+    >
+      <CardHeader className="border-b border-[var(--border-primary)] pb-4 px-0 pt-0">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--foreground-muted)]">
+          {t('dashboard.authorInsights.title')}
+        </h2>
+      </CardHeader>
+      <CardContent className="grid gap-6 md:grid-cols-2 px-0 pb-0 pt-4">
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--foreground-primary)] mb-2">
+            {t('dashboard.authorInsights.readability')}
+          </h3>
+          {readability.score === null ? (
+            <p className="text-sm text-[var(--foreground-muted)]">
+              {t('dashboard.authorInsights.readabilityNeedMore')}
+            </p>
+          ) : (
+            <p className="text-4xl font-black tabular-nums text-[var(--foreground-primary)]">
+              {readability.score}
+            </p>
+          )}
+          <p className="text-xs text-[var(--foreground-muted)] mt-2">
+            {t('dashboard.authorInsights.readabilityFootnote')}
+          </p>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--foreground-primary)] mb-2">
+            {t('dashboard.authorInsights.timeline')}
+          </h3>
+          {sceneTimelineHints.length === 0 ? (
+            <p className="text-sm text-[var(--foreground-muted)]">
+              {t('dashboard.authorInsights.timelineClear')}
+            </p>
+          ) : (
+            <ul className="space-y-2 text-xs text-[var(--foreground-secondary)] max-h-40 overflow-y-auto pr-1">
+              {sceneTimelineHints.slice(0, 8).map((h) => (
+                <li
+                  key={h.id}
+                  className={
+                    h.severity === 'warn' ? 'text-amber-600 dark:text-amber-400' : undefined
+                  }
+                >
+                  {t(h.messageKey, h.params)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {warnCount > 0 ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+              {t('dashboard.authorInsights.timelineWarnBadge', { count: String(warnCount) })}
+            </p>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const QuickAccessCard: FC<{
   title: string;
@@ -564,6 +631,7 @@ const DashboardUI: FC = () => {
         <GoalTracker />
       </div>
       <StatsGrid />
+      <AuthorInsightsCard />
       <QuickActions />
       <DashboardModals />
     </div>

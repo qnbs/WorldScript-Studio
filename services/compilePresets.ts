@@ -3,7 +3,7 @@
  * QNBS-v3: MVP für Scrivener-ähnliche „Presets“ ohne neue Backend-Schicht.
  */
 
-export type CompileExportFormat = 'md' | 'txt' | 'pdf' | 'docx' | 'epub';
+export type CompileExportFormat = 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt';
 
 export interface CompilePresetDefinition {
   id: string;
@@ -59,6 +59,17 @@ export const COMPILE_PRESETS: CompilePresetDefinition[] = [
     format: 'epub',
     contentToExport: {
       title: true,
+      characters: false,
+      worlds: false,
+      manuscript: true,
+    },
+  },
+  {
+    id: 'norm-manuscript-txt',
+    nameKey: 'export.compileWizard.presets.normTxt',
+    format: 'norm-txt',
+    contentToExport: {
+      title: false,
       characters: false,
       worlds: false,
       manuscript: true,

@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Gold-Standard author pipeline (offline-first):** Binder blob storage + import/GC; manuscript research split; compile profile / norm-page TXT / EPUB matter; optional **Tauri Pandoc** EPUB (`pandoc_markdown_to_epub`) with JS fallback; VC snapshot **word-level diff** (bounded rows); scene **timeline** UI + rule engine (capped hints); dashboard **readability** sampling + timeline summaries (bounded text samples); optional **LanguageTool** (user URL + privacy gate); **local RAG** index rebuild → `saveRagVectors`; WebGPU tab **leader election** for WebLLM; settings **local RAG rebuild** control.
+
+### Changed
+
+- **Performance:** Manuscript metrics sampling (`services/manuscriptMetricsSampling.ts`), diff/word-diff caps, scene timeline DOM caps, RAG rebuild yields between sections — tuned for low-end hardware.
+
 ### Documentation
 
+- **README / AUDIT:** CI vs local validation (typecheck, lint, i18n; defer heavy E2E to cloud CI); Gold-Standard audit section dated **2026-05-10**.
 - **Complete curated markdown pass (15 `.md` sources):** explicit inventory and cross-links in **[`AUDIT.md`](AUDIT.md)**; **README** Documentation Hub now includes **`.github/ACTIONS-OPTIMIZATIONS.md`** and every maintainer-facing guide; **`docs/CI.md`** related-files table links the historical Actions doc; **`.github/copilot-instructions.md`** storage wording aligned with **dual IndexedDB** + `storageService` (browser vs Tauri). References throughout: Playwright **[`tests/e2e/helpers.ts`](tests/e2e/helpers.ts)** (no `networkidle` under Vite), Version Control overlay / **Escape**, memoized **`selectCurrentBranchSnapshots`**. Generated paths (`tests/e2e/html-report/`, `.stryker-tmp/`) remain non-doc.
 
 Nothing queued for the next tagged release beyond doc maintenance; see **[1.3.0]** for the latest shipped release.

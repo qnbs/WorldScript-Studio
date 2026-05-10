@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
+import { useTransientUiStore } from '../app/transientUiStore';
 import { ICONS } from '../constants';
 import { ManuscriptViewContext, useManuscriptViewContext } from '../contexts/ManuscriptViewContext';
 import { selectEnableBinderResearch } from '../features/featureFlags/featureFlagsSlice';
@@ -14,6 +15,7 @@ import {
 import { useManuscriptView } from '../hooks/useManuscriptView';
 import { useTranslation } from '../hooks/useTranslation';
 import { BinderPanel } from './BinderPanel';
+import { ManuscriptResearchSplit } from './ManuscriptResearchSplit';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { DebouncedInput } from './ui/DebouncedInput';
@@ -1126,6 +1128,11 @@ InspectorPanel.displayName = 'InspectorPanel';
 const ManuscriptViewUI: FC = () => {
   const { project, activeSection, t } = useManuscriptViewContext();
   const enableBinder = useAppSelector(selectEnableBinderResearch);
+  const manuscriptResearchSplitOpen = useTransientUiStore((s) => s.manuscriptResearchSplitOpen);
+  const manuscriptPinnedBinderNodeId = useTransientUiStore((s) => s.manuscriptPinnedBinderNodeId);
+  const setManuscriptResearchSplitOpen = useTransientUiStore(
+    (s) => s.setManuscriptResearchSplitOpen,
+  );
   const [leftNavTab, setLeftNavTab] = useState<'chapters' | 'binder'>('chapters');
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isInspectorDrawerOpen, setIsInspectorDrawerOpen] = useState(false);
@@ -1139,6 +1146,15 @@ const ManuscriptViewUI: FC = () => {
     setRightPanelWidth,
   } = useResizablePanels(20, 20);
 
+  useEffect(() => {
+    if (!manuscriptResearchSplitOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setManuscriptResearchSplitOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [manuscriptResearchSplitOpen, setManuscriptResearchSplitOpen]);
+
   if (!project) {
     return (
       <div className="flex h-[80vh] w-full items-center justify-center">
@@ -1146,6 +1162,9 @@ const ManuscriptViewUI: FC = () => {
       </div>
     );
   }
+
+  const projectStorageId = project.id && project.id.length > 0 ? project.id : 'browser-project';
+  const pinnedBinderNode = project.binderNodes?.find((n) => n.id === manuscriptPinnedBinderNodeId);
 
   return (
     <div className="h-full flex flex-col">
@@ -1324,11 +1343,22 @@ const ManuscriptViewUI: FC = () => {
           />
         )}
 
-        {/* Editor */}
+        {/* Editor + optional research split */}
         <Card
-          className={`h-full flex-grow p-0 rounded-none border-0 shadow-none z-0 bg-[var(--background-primary)] transition-all duration-500`}
+          className={`h-full flex-grow p-0 rounded-none border-0 shadow-none z-0 bg-[var(--background-primary)] transition-all duration-500 flex flex-col min-w-0`}
         >
-          <ManuscriptEditor isFocusMode={isFocusMode} />
+          <div className="flex h-full min-h-0 w-full flex-1">
+            <div className="flex-1 min-h-0 min-w-0 flex flex-col">
+              <ManuscriptEditor isFocusMode={isFocusMode} />
+            </div>
+            {manuscriptResearchSplitOpen && enableBinder ? (
+              <ManuscriptResearchSplit
+                projectId={projectStorageId}
+                node={pinnedBinderNode}
+                onClose={() => setManuscriptResearchSplitOpen(false)}
+              />
+            ) : null}
+          </div>
         </Card>
 
         {!isFocusMode && (

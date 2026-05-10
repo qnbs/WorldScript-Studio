@@ -1,3 +1,5 @@
+import { electSingleHeavyInferenceTab } from './tabLeaderElection';
+
 export type WorkerPriority = 'critical' | 'high' | 'normal' | 'low';
 
 export type LocalAiLayer = 'webllm' | 'transformers' | 'heuristic';
@@ -85,6 +87,8 @@ export class WorkerBus {
   }
 }
 
+export { electSingleHeavyInferenceTab };
+
 export function detectWebGpuSupport(): boolean {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
 }
@@ -114,6 +118,9 @@ export async function runLocalTextGeneration(prompt: string): Promise<LocalAiRes
     return { layer: 'heuristic', text: 'Heuristic fallback response' };
   }
 
+  const hasWebGpu = detectWebGpuSupport();
+  const gpuTabLeader = hasWebGpu ? await electSingleHeavyInferenceTab() : true;
+
   try {
     const mod = await import('@mlc-ai/web-llm');
     type EngineModule = typeof mod & {
@@ -132,7 +139,8 @@ export async function runLocalTextGeneration(prompt: string): Promise<LocalAiRes
     };
     const m = mod as EngineModule;
     const CreateMLCEngine = m.CreateMLCEngine;
-    if (typeof CreateMLCEngine === 'function' && detectWebGpuSupport()) {
+    // QNBS-v3: Nur ein Tab lädt WebLLM — vermeidet GPU/RAM-Kollision bei mehreren StoryCraft-Tabs.
+    if (typeof CreateMLCEngine === 'function' && hasWebGpu && gpuTabLeader) {
       const engine = await CreateMLCEngine('Llama-3.2-1B-Instruct-q4f16_1-MLC', {
         initProgressCallback: () => {},
       });
@@ -148,7 +156,16 @@ export async function runLocalTextGeneration(prompt: string): Promise<LocalAiRes
     /* optional @mlc-ai/web-llm not installed, WebGPU, or model fetch blocked */
   }
 
-  if (detectWebGpuSupport()) {
+  if (hasWebGpu) {
+    if (!gpuTabLeader) {
+      return {
+        layer: 'webllm',
+        text:
+          'WebLLM: Another StoryCraft tab holds the local inference lock. Close extra tabs or use Ollama. Preview: ' +
+          sanitizedPrompt.slice(0, 160) +
+          (sanitizedPrompt.length > 160 ? '…' : ''),
+      };
+    }
     return {
       layer: 'webllm',
       text:

@@ -190,6 +190,9 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 <p>{t('settings.ai.ollamaBrowserNote')}</p>
               </div>
             )}
+            {isDesktop && (
+              <p className="text-xs text-emerald-400/90">{t('settings.ai.ollamaTauriBypass')}</p>
+            )}
             <label
               htmlFor="ollama-server-url"
               className="text-sm font-medium text-[var(--foreground-secondary)] block"
