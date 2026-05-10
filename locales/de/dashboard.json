@@ -51,5 +51,12 @@
   "dashboard.stats.worlds": "Welten",
   "initialProject.chapter1": "Kapitel 1",
   "initialProject.logline": "Eine Reise von tausend Meilen beginnt mit einem einzigen Schritt...",
-  "initialProject.title": "Meine unbenannte Geschichte"
+  "initialProject.title": "Meine unbenannte Geschichte",
+  "dashboard.authorInsights.title": "Einblicke Autoren-Pipeline",
+  "dashboard.authorInsights.readability": "Lesbarkeit (Flesch-ähnlich, EN-Heuristik)",
+  "dashboard.authorInsights.readabilityNeedMore": "Noch etwas schreiben — stabiler Wert ab ca. 40+ Wörtern.",
+  "dashboard.authorInsights.readabilityFootnote": "Höhere Werte wirken oft leichter lesbar; Genre bewusst steuern.",
+  "dashboard.authorInsights.timeline": "Szenen-Zeitleiste",
+  "dashboard.authorInsights.timelineClear": "Keine Warnungen aus Szenen-Metadaten.",
+  "dashboard.authorInsights.timelineWarnBadge": "{{count}} Warnungen — Daten auf dem Szenenboard prüfen."
 }

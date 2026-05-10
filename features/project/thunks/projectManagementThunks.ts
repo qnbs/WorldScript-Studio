@@ -77,6 +77,7 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     writingGoals: projectDataJson.writingGoals,
     sceneBoardLayout: projectDataJson.sceneBoardLayout,
     binderNodes: projectDataJson.binderNodes ?? [],
+    compileProfile: projectDataJson.compileProfile,
     persistedVersionControl: projectDataJson.persistedVersionControl,
   };
 

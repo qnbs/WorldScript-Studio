@@ -14,6 +14,11 @@ export const binderNodeSchema = z.object({
   linkedSectionId: z.string().optional(),
   content: z.string().optional(),
   imageAssetId: z.string().optional(),
+  binderAssetId: z.string().optional(),
+  linkUrl: z.string().optional(),
+  mimeType: z.string().optional(),
+  byteSize: z.number().optional(),
+  originalFileName: z.string().optional(),
   sortIndex: z.number().default(0),
 });
 
@@ -102,6 +107,25 @@ const storySectionSchema = z.object({
   wordCount: z.number().optional(),
   status: z.enum(['draft', 'outline', 'first-draft', 'revised', 'final']).optional(),
   act: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+  sceneStart: z.string().optional(),
+  sceneDuration: z.string().optional(),
+  sceneLocationId: z.string().optional(),
+  povCharacterId: z.string().optional(),
+});
+
+const compileMatterBlockSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  bodyMarkdown: z.string(),
+});
+
+const compileProfileSchema = z.object({
+  titlePageMarkdown: z.string().optional(),
+  dedicationMarkdown: z.string().optional(),
+  imprintMarkdown: z.string().optional(),
+  acknowledgementsMarkdown: z.string().optional(),
+  frontMatter: z.array(compileMatterBlockSchema).optional(),
+  backMatter: z.array(compileMatterBlockSchema).optional(),
 });
 
 const outlineSectionSchema = z.object({
@@ -197,6 +221,7 @@ export const importedProjectJsonSchema = z.object({
   writingGoals: z.array(writingGoalSchema).optional(),
   sceneBoardLayout: z.record(z.string(), z.object({ x: z.number(), y: z.number() })).optional(),
   binderNodes: z.array(binderNodeSchema).optional(),
+  compileProfile: compileProfileSchema.optional(),
   persistedVersionControl: versionControlPersistSchema.optional(),
 });
 

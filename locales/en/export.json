@@ -42,6 +42,13 @@
   "export.format.double": "Double",
   "export.format.single": "Single",
   "export.format.titlePage": "Include Title Page",
+  "export.format.normTxt": "Norm pages (.txt, DE 60×30)",
+  "export.compileProfile.title": "Front & back matter (Markdown)",
+  "export.compileProfile.titlePage": "Title page",
+  "export.compileProfile.dedication": "Dedication",
+  "export.compileProfile.imprint": "Imprint / colophon",
+  "export.compileProfile.acknowledgements": "Acknowledgements",
+  "export.compileProfile.hint": "Used in Markdown export and EPUB 3 compile; manuscript text is unchanged.",
   "export.toggleSection": "Toggle visibility for {{title}}",
   "export.importProject": "Import Project",
   "export.exportProject": "Export Project",
@@ -81,5 +88,6 @@
   "export.compileWizard.flagOff": "Excluded",
   "export.compileWizard.presets.novelPdf": "Novel manuscript (PDF)",
   "export.compileWizard.presets.fullMd": "Full project archive (Markdown)",
-  "export.compileWizard.presets.ebookEpub": "eBook chapters (EPUB)"
+  "export.compileWizard.presets.ebookEpub": "eBook chapters (EPUB)",
+  "export.compileWizard.presets.normTxt": "Norm manuscript (.txt)"
 }

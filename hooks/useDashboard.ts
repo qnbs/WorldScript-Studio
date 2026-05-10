@@ -8,6 +8,9 @@ import {
 } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import { generateLoglineSuggestionsThunk } from '../features/project/thunks/writingThunks';
+import { sampleManuscriptPlainText } from '../services/manuscriptMetricsSampling';
+import { computeReadabilitySnapshot } from '../services/readabilityFlesch';
+import { evaluateSceneTimeline } from '../services/sceneTimelineRules';
 import type { View } from '../types';
 import { useTranslation } from './useTranslation';
 
@@ -47,6 +50,21 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
         ? (wordCount / project.projectGoals.totalWordCount) * 100
         : 0,
     [wordCount, project.projectGoals?.totalWordCount],
+  );
+
+  const readabilitySample = useMemo(
+    () => sampleManuscriptPlainText(project.manuscript),
+    [project.manuscript],
+  );
+
+  const readability = useMemo(
+    () => computeReadabilitySnapshot(readabilitySample),
+    [readabilitySample],
+  );
+
+  const sceneTimelineHints = useMemo(
+    () => evaluateSceneTimeline(project.manuscript),
+    [project.manuscript],
   );
 
   const daysLeft = useMemo(() => {
@@ -125,6 +143,8 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
     worlds,
     wordCount,
     wordCountProgress,
+    readability,
+    sceneTimelineHints,
     daysLeft,
     onNavigate,
     // Goals

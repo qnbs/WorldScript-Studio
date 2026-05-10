@@ -51,5 +51,12 @@
   "dashboard.stats.worlds": "Worlds",
   "initialProject.chapter1": "Chapter 1",
   "initialProject.logline": "A journey of a thousand miles begins with a single step...",
-  "initialProject.title": "My Untitled Story"
+  "initialProject.title": "My Untitled Story",
+  "dashboard.authorInsights.title": "Infos pipeline auteur",
+  "dashboard.authorInsights.readability": "Lisibilité (style Flesch, heuristique EN)",
+  "dashboard.authorInsights.readabilityNeedMore": "Écrivez encore un peu — score stable vers 40+ mots.",
+  "dashboard.authorInsights.readabilityFootnote": "Des scores plus élevés lisent souvent plus facilement ; adaptez selon le genre.",
+  "dashboard.authorInsights.timeline": "Contrôles chronologie des scènes",
+  "dashboard.authorInsights.timelineClear": "Aucun avertissement à partir des métadonnées.",
+  "dashboard.authorInsights.timelineWarnBadge": "{{count}} avertissements — vérifiez dates/durées sur le tableau des scènes."
 }

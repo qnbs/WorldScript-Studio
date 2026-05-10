@@ -5,7 +5,7 @@ import { generateSynopsisThunk } from '../features/project/thunks/writingThunks'
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from './useTranslation';
 
-type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub';
+type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt';
 interface ContentToExport {
   title: boolean;
   characters: boolean;
@@ -58,8 +58,32 @@ export const useExportView = () => {
     setIsGeneratingSynopsis(false);
   }, [dispatch, language]);
 
+  const compilePrefix = useMemo(() => {
+    const cp = project.compileProfile;
+    if (!cp) return '';
+    const chunks: string[] = [];
+    if (cp.titlePageMarkdown?.trim()) chunks.push(cp.titlePageMarkdown.trim());
+    if (cp.dedicationMarkdown?.trim()) chunks.push(cp.dedicationMarkdown.trim());
+    if (cp.imprintMarkdown?.trim()) chunks.push(cp.imprintMarkdown.trim());
+    for (const b of cp.frontMatter ?? []) {
+      chunks.push(`## ${b.title}\n\n${b.bodyMarkdown}`);
+    }
+    return chunks.length ? `${chunks.join('\n\n')}\n\n` : '';
+  }, [project.compileProfile]);
+
+  const compileSuffix = useMemo(() => {
+    const cp = project.compileProfile;
+    if (!cp) return '';
+    const chunks: string[] = [];
+    if (cp.acknowledgementsMarkdown?.trim()) chunks.push(cp.acknowledgementsMarkdown.trim());
+    for (const b of cp.backMatter ?? []) {
+      chunks.push(`## ${b.title}\n\n${b.bodyMarkdown}`);
+    }
+    return chunks.length ? `\n\n${chunks.join('\n\n')}` : '';
+  }, [project.compileProfile]);
+
   const formattedOutput = useMemo(() => {
-    let output = '';
+    let output = compilePrefix;
     if (contentToExport.title) {
       output += `# ${project.title}\n\n**${t('export.loglineLabel')}:** ${project.logline}\n\n`;
     }
@@ -84,8 +108,19 @@ export const useExportView = () => {
         output += `### ${section.title}\n\n${section.content || `*(${t('export.emptySection')})*`}\n\n`;
       });
     }
-    return output.trim();
-  }, [project, characters, worlds, contentToExport, aiEnhancements, synopsis, t]);
+    const trimmed = output.trim();
+    return `${trimmed}${compileSuffix}`.trim();
+  }, [
+    project,
+    characters,
+    worlds,
+    contentToExport,
+    aiEnhancements,
+    synopsis,
+    t,
+    compilePrefix,
+    compileSuffix,
+  ]);
 
   const downloadPdf = useCallback(async () => {
     setIsExportLoading(true);
@@ -237,107 +272,35 @@ export const useExportView = () => {
   const downloadEpub = useCallback(async () => {
     setIsExportLoading(true);
     try {
-      const JSZip = (await import('jszip')).default;
-      const zip = new JSZip();
-      const folder = zip.folder('OEBPS');
-
-      // Mimetype
-      zip.file('mimetype', 'application/epub+zip');
-
-      // Container XML
-      zip.folder('META-INF')?.file(
-        'container.xml',
-        `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-   <rootfiles>
-      <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-   </rootfiles>
-</container>`,
-      );
-
-      // Content
-      let contentOpf = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="2.0">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
-    <dc:title>${project.title}</dc:title>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-    <item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>
-`;
-      let spineRef = `<itemref idref="titlepage"/>`;
-      let tocNcx = `<?xml version="1.0" encoding="UTF-8"?>
-<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
-<head><meta name="dtb:uid" content="urn:uuid:12345"/></head>
-<docTitle><text>${project.title}</text></docTitle>
-<navMap>
-<navPoint id="navPoint-1" playOrder="1"><navLabel><text>Title Page</text></navLabel><content src="titlepage.xhtml"/></navPoint>
-`;
-
-      // Title Page
-      folder?.file(
-        'titlepage.xhtml',
-        `<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>${project.title}</title></head>
-<body><h1>${project.title}</h1><p><i>${project.logline}</i></p></body></html>`,
-      );
-
-      let chapterCount = 2;
-
-      if (synopsis) {
-        contentOpf += `<item id="synopsis" href="synopsis.xhtml" media-type="application/xhtml+xml"/>\n`;
-        spineRef += `<itemref idref="synopsis"/>\n`;
-        tocNcx += `<navPoint id="navPoint-${chapterCount}" playOrder="${chapterCount}"><navLabel><text>AI Synopsis</text></navLabel><content src="synopsis.xhtml"/></navPoint>\n`;
-        chapterCount++;
-
-        const synopsisHtml = `<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>AI Synopsis</title></head>
-<body><h2>AI Synopsis</h2>${synopsis
-          .split('\n')
-          .map((p) => (p.trim() ? `<p>${p}</p>` : ''))
-          .join('')}</body></html>`;
-        folder?.file('synopsis.xhtml', synopsisHtml);
+      const { buildPandocMarkdownFromProject } = await import('../services/pandocExportMarkdown');
+      const { tryPandocMarkdownToEpub } = await import('../services/pandocTauri');
+      const pandocMd = buildPandocMarkdownFromProject(project);
+      const pandocBytes = await tryPandocMarkdownToEpub(pandocMd);
+      if (pandocBytes && pandocBytes.byteLength > 0) {
+        const blob = new Blob([new Uint8Array(pandocBytes)], { type: 'application/epub+zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${project.title.replace(/[/\\?%*:|"<>]/g, '-')}.epub`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
       }
-
-      if (contentToExport.manuscript) {
-        project.manuscript.forEach((section, idx) => {
-          const id = `chap${idx}`;
-          const filename = `${id}.xhtml`;
-          contentOpf += `<item id="${id}" href="${filename}" media-type="application/xhtml+xml"/>\n`;
-          spineRef += `<itemref idref="${id}"/>\n`;
-          tocNcx += `<navPoint id="navPoint-${chapterCount}" playOrder="${chapterCount}"><navLabel><text>${section.title}</text></navLabel><content src="${filename}"/></navPoint>\n`;
-          chapterCount++;
-
-          const htmlContent = `<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>${section.title}</title></head>
-<body><h2>${section.title}</h2>${section.content
-            .split('\n')
-            .map((p) => (p.trim() ? `<p>${p}</p>` : ''))
-            .join('')}</body></html>`;
-          folder?.file(filename, htmlContent);
-        });
-      }
-
-      contentOpf += `</manifest>\n<spine toc="ncx">\n${spineRef}\n</spine>\n</package>`;
-      tocNcx += `</navMap>\n</ncx>`;
-
-      folder?.file('content.opf', contentOpf);
-      folder?.file('toc.ncx', tocNcx);
-
-      const blob = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${project.title}.epub`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const { exportEpub } = await import('../services/epubApiService');
+      const chapters = contentToExport.manuscript
+        ? project.manuscript.map((section) => ({
+            title: section.title,
+            content: section.content || '',
+          }))
+        : [];
+      await exportEpub({
+        title: project.title,
+        author: project.author ?? '',
+        lang: language,
+        chapters,
+        ...(aiEnhancements.synopsis && synopsis.trim() ? { synopsis } : {}),
+        ...(project.compileProfile ? { compileProfile: project.compileProfile } : {}),
+      });
     } catch (error) {
       dispatch(
         statusActions.addNotification({
@@ -349,7 +312,15 @@ export const useExportView = () => {
     } finally {
       setIsExportLoading(false);
     }
-  }, [project, contentToExport, synopsis, dispatch, t]);
+  }, [
+    project,
+    contentToExport.manuscript,
+    synopsis,
+    aiEnhancements.synopsis,
+    language,
+    dispatch,
+    t,
+  ]);
 
   const handleDownload = useCallback(async () => {
     try {
@@ -359,6 +330,21 @@ export const useExportView = () => {
         await downloadDocx();
       } else if (format === 'epub') {
         await downloadEpub();
+      } else if (format === 'norm-txt') {
+        const { buildNormManuscriptExport } = await import('../services/normPageExport');
+        const textOutput = buildNormManuscriptExport(
+          project.manuscript.map((s) => ({
+            title: s.title,
+            content: s.content ?? '',
+          })),
+        );
+        const blob = new Blob([textOutput], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${project.title}-norm.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
       } else {
         const extension = format === 'md' ? 'md' : 'txt';
         let textOutput = formattedOutput;
@@ -386,6 +372,7 @@ export const useExportView = () => {
     format,
     formattedOutput,
     project.title,
+    project.manuscript,
     downloadPdf,
     downloadDocx,
     downloadEpub,
@@ -395,7 +382,15 @@ export const useExportView = () => {
 
   const handleCopyToClipboard = useCallback(async () => {
     let textOutput = formattedOutput;
-    if (format === 'txt') {
+    if (format === 'norm-txt') {
+      const { buildNormManuscriptExport } = await import('../services/normPageExport');
+      textOutput = buildNormManuscriptExport(
+        project.manuscript.map((s) => ({
+          title: s.title,
+          content: s.content ?? '',
+        })),
+      );
+    } else if (format === 'txt') {
       textOutput = textOutput.replace(/#+\s/g, '').replace(/\*\*(.*?)\*\*/g, '$1');
     }
     try {
@@ -412,7 +407,7 @@ export const useExportView = () => {
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [formattedOutput, format, dispatch, t]);
+  }, [formattedOutput, format, project.manuscript, dispatch, t]);
 
   return {
     t,

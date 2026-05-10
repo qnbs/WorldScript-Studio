@@ -1,11 +1,17 @@
 import type { FC } from 'react';
 import { useState } from 'react';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { selectProjectData } from '../../features/project/projectSelectors';
+import { statusActions } from '../../features/status/statusSlice';
+import { rebuildLocalRagIndex } from '../../services/localRagIndex';
 import type { AIProvider } from '../../types';
 import { ApiKeySection } from '../ApiKeySection';
+import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
+import { Spinner } from '../ui/Spinner';
 import { AiProviderCard } from './AiProviderCard';
 import { ToggleSwitch } from './SettingsShared';
 
@@ -131,6 +137,9 @@ export const AiSection: FC = () => {
 
 export const AdvancedAiSection: FC = () => {
   const { t, settings, featureFlags, handleSettingChange } = useSettingsViewContext();
+  const dispatch = useAppDispatch();
+  const project = useAppSelector(selectProjectData);
+  const [ragBusy, setRagBusy] = useState(false);
 
   const currentModel = settings.advancedAi.model;
   const showCustomInput =
@@ -147,6 +156,31 @@ export const AdvancedAiSection: FC = () => {
         ...settings.advancedAi,
         model: `ollama/${trimmed}`,
       });
+    }
+  };
+
+  const handleBuildLocalRag = async () => {
+    const pid = project.id ?? 'browser-project';
+    setRagBusy(true);
+    try {
+      const chunks = await rebuildLocalRagIndex(pid, project.manuscript);
+      dispatch(
+        statusActions.addNotification({
+          type: 'success',
+          title: t('settings.advancedAi.localRagDone'),
+          description: t('settings.advancedAi.localRagDoneDetail', { count: String(chunks) }),
+        }),
+      );
+    } catch (e: unknown) {
+      dispatch(
+        statusActions.addNotification({
+          type: 'error',
+          title: t('error.apiErrorTitle'),
+          description: typeof e === 'string' ? e : e instanceof Error ? e.message : String(e),
+        }),
+      );
+    } finally {
+      setRagBusy(false);
     }
   };
 
@@ -393,6 +427,24 @@ export const AdvancedAiSection: FC = () => {
                 <span>120</span>
               </div>
             </div>
+          </div>
+
+          <div className="border-t border-[var(--border-primary)] pt-4 space-y-3">
+            <h3 className="text-lg font-semibold text-[var(--foreground-primary)]">
+              {t('settings.advancedAi.localRagTitle')}
+            </h3>
+            <p className="text-sm text-[var(--foreground-muted)]">
+              {t('settings.advancedAi.localRagDescription')}
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={ragBusy}
+              onClick={() => void handleBuildLocalRag()}
+              aria-busy={ragBusy}
+            >
+              {ragBusy ? <Spinner className="w-4 h-4" /> : t('settings.advancedAi.localRagBuild')}
+            </Button>
           </div>
 
           {/* Feature Flags */}

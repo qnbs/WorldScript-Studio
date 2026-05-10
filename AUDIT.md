@@ -6,6 +6,29 @@
 
 ---
 
+## Follow-up Audit — 2026-05-10 (Gold-Standard pipeline + strict lint/typecheck)
+
+### Product / architecture
+
+- **Binder blobs & research:** `StorageBackend` binder asset API; Binder panel import/preview; split-screen research (`ManuscriptResearchSplit`, transient UI store).
+- **Compiler stage 1:** Norm-page export, `CompileProfile` matter fields, EPUB improvements; optional **Tauri Pandoc** command (`pandoc_markdown_to_epub`) with JS EPUB fallback.
+- **Version control UX:** Side-by-side snapshot compare with **word-level** highlights on changed lines (bounded line count for weak hardware).
+- **Scene timeline:** Optional `StorySection` time fields; Scene Board **timeline tab** with rule engine caps; dashboard mirrors capped hints.
+- **Offline style / privacy:** Dashboard readability sample (bounded character budget); optional **LanguageTool** against a **user-configured URL** with **local-only privacy gating** (`integrations.languageTool*`).
+- **Local AI hardening:** Ollama/Tauri messaging; **BroadcastChannel** tab leader for WebLLM (`electSingleHeavyInferenceTab`); **local RAG index** rebuild → existing `saveRagVectors` storage with chunked yields.
+
+### Tooling / DX
+
+- **Biome:** `lint` uses **`--error-on-warnings`** — warnings fail CI locally and in GitHub Actions.
+- **TypeScript:** `exactOptionalPropertyTypes` fixes in `wordDiff` / `localRagIndex` where applicable.
+- **i18n:** New keys (e.g. `vc.compareTruncated`, timeline/dashboard strings) mirrored across **de, en, fr, es, it**.
+
+### Documentation
+
+- **[`README.md`](README.md):** CI/local validation subsection extended for low-resource workflows and E2E deferral to cloud CI.
+
+---
+
 ## Follow-up Audit — 2026-05-06 (documentation inventory)
 
 ### Markdown corpus (maintainer-curated)

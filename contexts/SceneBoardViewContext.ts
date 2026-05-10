@@ -3,10 +3,12 @@ import type { ProjectData } from '../features/project/projectSlice';
 import type { Character, StorySection } from '../types';
 
 interface SceneBoardViewContextType {
-  t: (key: string) => string;
+  t: (key: string, replacements?: Record<string, string>) => string;
   project: ProjectData;
   sections: (StorySection & { position: { x: number; y: number }; wordCount: number })[];
   characters: Character[];
+  /** Welt-Ort-IDs für Szenen-Metadaten (sceneLocationId). */
+  locationOptions: { id: string; label: string }[];
   handleUpdateSection: (id: string, updates: Partial<StorySection>) => void;
   handleDeleteSection: (id: string) => void;
   handleMoveSection: (id: string, position: { x: number; y: number }) => void;

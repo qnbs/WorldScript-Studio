@@ -5,6 +5,7 @@ import type {
   BinderNode,
   Character,
   CharacterRelationship,
+  CompileProfile,
   OutlineSection,
   PersistedVersionControlState,
   StorySection,
@@ -23,6 +24,10 @@ import { generateWorldImageThunk, uploadWorldImageThunk } from './thunks/worldTh
 // --- Re-exports for consumers ---
 export { charactersAdapter, worldsAdapter } from './adapters';
 export { createDeduplicatedThunk } from './aiThunkUtils';
+export {
+  importBinderFileThunk,
+  removeBinderSubtreeWithAssetsThunk,
+} from './thunks/binderThunks';
 export {
   generateCharacterPortraitThunk,
   generateCharacterProfileThunk,
@@ -72,6 +77,7 @@ export interface ProjectData {
   writingGoals?: WritingGoal[];
   sceneBoardLayout?: { [sectionId: string]: { x: number; y: number } };
   binderNodes?: BinderNode[];
+  compileProfile?: CompileProfile;
   /** Saved with project so version branches/snapshots survive reload (Embedded VC). */
   persistedVersionControl?: PersistedVersionControlState;
 }
@@ -307,6 +313,9 @@ const projectSlice = createSlice({
       };
       collect(rootId);
       state.data.binderNodes = nodes.filter((n) => !toRemove.has(n.id));
+    },
+    updateCompileProfile: (state, action: PayloadAction<Partial<CompileProfile>>) => {
+      state.data.compileProfile = { ...state.data.compileProfile, ...action.payload };
     },
   },
   extraReducers: (builder) => {

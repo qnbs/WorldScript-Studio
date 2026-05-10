@@ -104,6 +104,8 @@ const defaultSettings: Settings = {
     notionSync: false,
     scrivenerExport: false,
     googleDocsImport: false,
+    languageToolEnabled: false,
+    languageToolBaseUrl: 'http://localhost:8010',
   },
   advancedEditor: {
     autoComplete: true,

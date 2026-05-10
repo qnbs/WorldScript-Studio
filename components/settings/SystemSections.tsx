@@ -1,9 +1,13 @@
 import type { FC } from 'react';
+import { useState } from 'react';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../../services/collaborationService';
+import { assertLanguageToolAllowed, languageToolPing } from '../../services/languageToolClient';
+import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
+import { Spinner } from '../ui/Spinner';
 import { Textarea } from '../ui/Textarea';
 import { ToggleSwitch } from './SettingsShared';
 
@@ -412,6 +416,33 @@ export const CollaborationSection: FC = () => {
 
 export const IntegrationsSection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
+  const [ltBusy, setLtBusy] = useState(false);
+  const [ltMsg, setLtMsg] = useState('');
+
+  const runLanguageToolPing = async () => {
+    setLtBusy(true);
+    setLtMsg('');
+    try {
+      assertLanguageToolAllowed(settings, settings.integrations.languageToolBaseUrl);
+      const ok = await languageToolPing(settings.integrations.languageToolBaseUrl);
+      setLtMsg(
+        ok
+          ? t('settings.integrations.languageToolTestOk')
+          : t('settings.integrations.languageToolTestFail'),
+      );
+    } catch (e: unknown) {
+      setLtMsg(
+        typeof e === 'string'
+          ? e
+          : e instanceof Error
+            ? e.message
+            : t('settings.integrations.languageToolTestFail'),
+      );
+    } finally {
+      setLtBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -482,6 +513,67 @@ export const IntegrationsSection: FC = () => {
                 })
               }
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+            {t('settings.integrations.languageToolTitle')}
+          </h2>
+          <p className="text-sm text-[var(--foreground-muted)] mt-1">
+            {t('settings.integrations.languageToolPrivacy')}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ToggleSwitch
+            label={t('settings.integrations.languageToolEnable')}
+            checked={settings.integrations.languageToolEnabled}
+            onChange={(v) =>
+              handleSettingChange('integrations', {
+                ...settings.integrations,
+                languageToolEnabled: v,
+              })
+            }
+          />
+          <div>
+            <label
+              htmlFor="settings-languagetool-url"
+              className="text-sm font-medium text-[var(--foreground-secondary)] mb-1 block"
+            >
+              {t('settings.integrations.languageToolUrl')}
+            </label>
+            <Input
+              id="settings-languagetool-url"
+              type="url"
+              value={settings.integrations.languageToolBaseUrl}
+              onChange={(e) =>
+                handleSettingChange('integrations', {
+                  ...settings.integrations,
+                  languageToolBaseUrl: e.target.value,
+                })
+              }
+              className="font-mono text-sm"
+              disabled={!settings.integrations.languageToolEnabled}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!settings.integrations.languageToolEnabled || ltBusy}
+              onClick={() => void runLanguageToolPing()}
+            >
+              {ltBusy ? (
+                <Spinner className="w-4 h-4" />
+              ) : (
+                t('settings.integrations.languageToolTest')
+              )}
+            </Button>
+            {ltMsg ? (
+              <span className="text-xs text-[var(--foreground-secondary)] max-w-md">{ltMsg}</span>
+            ) : null}
           </div>
         </CardContent>
       </Card>

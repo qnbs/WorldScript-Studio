@@ -1,5 +1,6 @@
 import {
   APP_DATA_STORE,
+  BINDER_ASSETS_STORE,
   CODEX_STORE,
   DATA_DB_NAME,
   IMAGES_STORE,
@@ -121,7 +122,7 @@ async function setMigrationMarker(stateDb: IDBDatabase): Promise<void> {
 }
 
 const STATE_STORES = [APP_DATA_STORE, SNAPSHOTS_STORE] as const;
-const DATA_STORES = [IMAGES_STORE, RAG_VECTORS_STORE, CODEX_STORE] as const;
+const DATA_STORES = [IMAGES_STORE, RAG_VECTORS_STORE, CODEX_STORE, BINDER_ASSETS_STORE] as const;
 
 export type MigrateLegacyOptions = {
   /** Defaults to `globalThis.indexedDB` — inject fake-indexeddb in unit tests when the runtime locks `indexedDB`. */

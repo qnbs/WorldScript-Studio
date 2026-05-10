@@ -68,6 +68,8 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 ## Local checks (without Act)
 
+On **low-resource** machines, run **`pnpm run lint`** (Biome treats warnings as errors like CI), **`pnpm run typecheck`**, and **`pnpm run i18n:check`** first — ideally when the machine is idle and (if needed) outside heavy IDE sessions. Prefer **`pnpm exec vitest run`** without `--coverage` for a faster smoke; leave **`CI=true pnpm run test:e2e`**, **Lighthouse**, and **coverage thresholds** primarily to **GitHub Actions**, where Chromium-only E2E and install caches match production parity.
+
 ```bash
 pnpm install --frozen-lockfile
 pnpm run lint

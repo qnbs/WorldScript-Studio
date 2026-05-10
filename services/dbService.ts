@@ -4,6 +4,7 @@ import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../typ
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from './collaborationService';
 import {
   APP_DATA_STORE,
+  BINDER_ASSETS_STORE,
   CODEX_STORE,
   DATA_DB_NAME,
   DB_VERSION,
@@ -14,7 +15,13 @@ import {
 } from './dbConstants';
 import { migrateLegacyStorycraftDbIfNeeded } from './dbMigration';
 import { logger } from './logger';
-import type { SaveProjectInput, StorageBackend } from './storageBackend';
+import type {
+  BinderAssetMeta,
+  BinderAssetPayload,
+  SaveProjectInput,
+  StorageBackend,
+} from './storageBackend';
+import { makeBinderAssetIdsPrefix, makeBinderAssetStorageKey } from './storageBackend';
 
 // LZ-String threshold: compress payloads >10 KB
 const COMPRESS_THRESHOLD_BYTES = 10_240;
@@ -117,7 +124,10 @@ class IndexedDBService implements StorageBackend {
 
   private isDataStore(storeName: string): boolean {
     return (
-      storeName === IMAGES_STORE || storeName === RAG_VECTORS_STORE || storeName === CODEX_STORE
+      storeName === IMAGES_STORE ||
+      storeName === RAG_VECTORS_STORE ||
+      storeName === CODEX_STORE ||
+      storeName === BINDER_ASSETS_STORE
     );
   }
 
@@ -424,6 +434,9 @@ class IndexedDBService implements StorageBackend {
         if (event.oldVersion < 6 && !db.objectStoreNames.contains(CODEX_STORE)) {
           db.createObjectStore(CODEX_STORE, { keyPath: 'projectId' });
         }
+        if (event.oldVersion < 7 && !db.objectStoreNames.contains(BINDER_ASSETS_STORE)) {
+          db.createObjectStore(BINDER_ASSETS_STORE);
+        }
       };
       request.onsuccess = () => {
         const db = request.result;
@@ -659,6 +672,19 @@ class IndexedDBService implements StorageBackend {
       ) {
         validSettings.collaboration.webrtcSignalingUrls = [...DEFAULT_WEBRTC_SIGNALING_URLS];
       }
+      const integrationsDefaults = {
+        syncProvider: 'none' as const,
+        evernoteSync: false,
+        notionSync: false,
+        scrivenerExport: false,
+        googleDocsImport: false,
+        languageToolEnabled: false,
+        languageToolBaseUrl: 'http://localhost:8010',
+      };
+      validSettings.integrations = {
+        ...integrationsDefaults,
+        ...(incoming['integrations'] as Partial<Settings['integrations']> | undefined),
+      };
     }
 
     const result: PersistedState = {};
@@ -739,6 +765,84 @@ class IndexedDBService implements StorageBackend {
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+  }
+
+  // QNBS-v3: Binder-Blobs in eigener IDB-Store — Redux bleibt schlank, Research-PDFs offline-first.
+  async saveBinderAsset(
+    projectId: string,
+    assetId: string,
+    data: ArrayBuffer,
+    meta: BinderAssetMeta,
+  ): Promise<void> {
+    return retryDb(async () => {
+      const key = makeBinderAssetStorageKey(projectId, assetId);
+      const blob = new Blob([data], { type: meta.mimeType || 'application/octet-stream' });
+      const record = { meta: { ...meta, byteSize: data.byteLength }, blob };
+      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
+      return new Promise<void>((resolve, reject) => {
+        const req = store.put(record, key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(getUserFriendlyDbError(req.error));
+      });
+    });
+  }
+
+  async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
+    return retryDb(async () => {
+      const key = makeBinderAssetStorageKey(projectId, assetId);
+      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');
+      const raw = await new Promise<{ meta: BinderAssetMeta; blob: Blob } | undefined>(
+        (resolve, reject) => {
+          const req = store.get(key);
+          req.onsuccess = () => resolve(req.result as { meta: BinderAssetMeta; blob: Blob });
+          req.onerror = () => reject(getUserFriendlyDbError(req.error));
+        },
+      );
+      if (!raw?.blob) return null;
+      const data = await raw.blob.arrayBuffer();
+      return { data, meta: raw.meta };
+    });
+  }
+
+  async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
+    return retryDb(async () => {
+      const key = makeBinderAssetStorageKey(projectId, assetId);
+      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
+      return new Promise<void>((resolve, reject) => {
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(getUserFriendlyDbError(req.error));
+      });
+    });
+  }
+
+  async listBinderAssetIds(projectId: string): Promise<string[]> {
+    return retryDb(async () => {
+      const prefix = makeBinderAssetIdsPrefix(projectId);
+      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');
+      const ids: string[] = [];
+      return new Promise((resolve, reject) => {
+        const req = store.openCursor();
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (cursor) {
+            const k = String(cursor.key ?? '');
+            if (k.startsWith(prefix)) {
+              ids.push(k.slice(prefix.length));
+            }
+            cursor.continue();
+          } else {
+            resolve(ids);
+          }
+        };
+        req.onerror = () => reject(getUserFriendlyDbError(req.error));
+      });
+    });
+  }
+
+  async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
+    const ids = await this.listBinderAssetIds(projectId);
+    await Promise.all(ids.map((id) => this.deleteBinderAsset(projectId, id)));
   }
 
   // --- Snapshot Methods ---
@@ -836,7 +940,8 @@ class IndexedDBService implements StorageBackend {
     return [raw.id ?? 'browser-project'];
   }
 
-  async deleteProject(_projectId: string): Promise<void> {
+  async deleteProject(projectId: string): Promise<void> {
+    await this.deleteAllBinderAssetsForProject(projectId);
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const req = store.delete('project');

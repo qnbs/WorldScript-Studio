@@ -57,6 +57,9 @@ importers:
       '@tauri-apps/plugin-fs':
         specifier: ^2.5.0
         version: 2.5.0
+      diff-match-patch:
+        specifier: ^1.0.5
+        version: 1.0.5
       docx:
         specifier: ^9.6.1
         version: 9.6.1
