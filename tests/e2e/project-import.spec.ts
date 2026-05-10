@@ -20,6 +20,29 @@ const MINIMAL_PROJECT = JSON.stringify({
   worlds: [],
 });
 
+/** Advanced import opens a modal first; the native file picker is triggered by the dialog's Import action. */
+async function importJsonViaModal(
+  page: import('@playwright/test').Page,
+  file: { name: string; buffer: Buffer },
+): Promise<void> {
+  await sidebar(page)
+    .getByRole('button', { name: /^Export$/i })
+    .click();
+  await page.getByRole('button', { name: /Import Project/i }).click();
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15000 });
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^Import$/i })
+    .click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles({
+    name: file.name,
+    mimeType: 'application/json',
+    buffer: file.buffer,
+  });
+}
+
 test.describe('Project Import (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
@@ -31,22 +54,8 @@ test.describe('Project Import (CI-only)', () => {
 
   test('imports a JSON project and reflects title + manuscript', async ({ page }) => {
     // Navigate to Export/Import view
-    await sidebar(page)
-      .getByRole('button', { name: /^Export$/i })
-      .click();
-    await page
-      .getByRole('button', { name: /Import Project/i })
-      .waitFor({ state: 'visible', timeout: 15000 });
-
-    // The Import Project button triggers a file chooser
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: /Import Project/i }).click();
-    const fileChooser = await fileChooserPromise;
-
-    // Upload the minimal JSON fixture as a buffer
-    await fileChooser.setFiles({
+    await importJsonViaModal(page, {
       name: 'test-project.json',
-      mimeType: 'application/json',
       buffer: Buffer.from(MINIMAL_PROJECT, 'utf-8'),
     });
 
@@ -66,15 +75,8 @@ test.describe('Project Import (CI-only)', () => {
 
   test('import survives a page reload (IndexedDB persistence)', async ({ page }) => {
     // Import first
-    await sidebar(page)
-      .getByRole('button', { name: /^Export$/i })
-      .click();
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: /Import Project/i }).click();
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles({
+    await importJsonViaModal(page, {
       name: 'persist-test.json',
-      mimeType: 'application/json',
       buffer: Buffer.from(MINIMAL_PROJECT, 'utf-8'),
     });
     await expect(page.getByText(/imported successfully|Imported Test Novel/i)).toBeVisible({
@@ -88,20 +90,15 @@ test.describe('Project Import (CI-only)', () => {
   });
 
   test('rejects a malformed JSON file gracefully', async ({ page }) => {
-    await sidebar(page)
-      .getByRole('button', { name: /^Export$/i })
-      .click();
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: /Import Project/i }).click();
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles({
+    await importJsonViaModal(page, {
       name: 'broken.json',
-      mimeType: 'application/json',
       buffer: Buffer.from('{ this is: not valid JSON }', 'utf-8'),
     });
 
-    // App must show an error, not crash
-    await expect(page.getByText(/error|failed|ungültig/i)).toBeVisible({ timeout: 8000 });
+    // App must show an error, not crash (toast uses export.importFailed in EN)
+    await expect(page.getByText(/Import failed|error|failed|ungültig/i)).toBeVisible({
+      timeout: 8000,
+    });
     await expect(page.locator('body')).toBeVisible();
   });
 });

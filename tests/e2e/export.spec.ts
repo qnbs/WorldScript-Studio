@@ -12,7 +12,7 @@ const mockGemini = async (route: Route) => {
 
   const postData = request.postData() || '';
   const isJsonSchema = /responseMimeType|responseSchema/i.test(postData);
-  const content = isJsonSchema
+  const textPart = isJsonSchema
     ? JSON.stringify([
         {
           id: 'outline-1',
@@ -27,10 +27,18 @@ const mockGemini = async (route: Route) => {
       ])
     : 'OK';
 
+  // QNBS-v3: @google/genai SDK reads aggregated text from candidates[].content.parts[].text — flat `content` breaks outline JSON parsing in CI.
   await route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ candidates: [{ content }] }),
+    body: JSON.stringify({
+      candidates: [
+        {
+          content: { role: 'model', parts: [{ text: textPart }] },
+          finishReason: 'STOP',
+        },
+      ],
+    }),
   });
 };
 

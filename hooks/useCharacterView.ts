@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import { selectAllCharacters } from '../features/project/projectSelectors';
@@ -33,8 +34,25 @@ export const useCharacterView = () => {
 
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
 
+  // QNBS-v3: Manual add must open the dossier immediately — dispatch-only left users on an empty grid and broke E2E + discoverability.
   const handleAddNewManually = useCallback(() => {
-    dispatch(projectActions.addCharacter({ name: t('characters.newCharacterName') }));
+    const id = uuidv4();
+    const name = t('characters.newCharacterName');
+    dispatch(projectActions.addCharacter({ id, name }));
+    setSelectedCharacter({
+      id,
+      name,
+      backstory: '',
+      motivation: '',
+      appearance: '',
+      personalityTraits: '',
+      flaws: '',
+      notes: '',
+      hasAvatar: false,
+      characterArc: '',
+      relationships: '',
+    });
+    setIsDossierOpen(true);
   }, [dispatch, t]);
 
   const handleAddNewWithAI = useCallback(() => {

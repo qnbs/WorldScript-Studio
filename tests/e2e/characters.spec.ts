@@ -23,8 +23,8 @@ test.describe('Character CRUD (CI-only)', () => {
     // "Add Manually" is an AddNewCard rendered as <button>
     await page.getByRole('button', { name: /Add Manually/i }).click();
 
-    // Dossier opens immediately with the new character — name input has aria-label="Name"
-    const nameInput = page.getByRole('textbox', { name: /^Name$/i });
+    // Dossier opens immediately with the new character — scope to dialog (Modal role)
+    const nameInput = page.getByRole('dialog').getByRole('textbox', { name: /^Name$/i });
     await expect(nameInput).toBeVisible({ timeout: 8000 });
     await nameInput.clear();
     await nameInput.fill('Elara Voss');
@@ -46,7 +46,7 @@ test.describe('Character CRUD (CI-only)', () => {
       .waitFor({ state: 'visible', timeout: 15000 });
 
     await page.getByRole('button', { name: /Add Manually/i }).click();
-    const nameInput = page.getByRole('textbox', { name: /^Name$/i });
+    const nameInput = page.getByRole('dialog').getByRole('textbox', { name: /^Name$/i });
     await expect(nameInput).toBeVisible({ timeout: 8000 });
     await nameInput.clear();
     await nameInput.fill('Braxton Hale');
@@ -56,7 +56,7 @@ test.describe('Character CRUD (CI-only)', () => {
 
     // Click the character card to reopen the dossier
     await page.getByRole('button', { name: /Braxton Hale/i }).click();
-    const editInput = page.getByRole('textbox', { name: /^Name$/i });
+    const editInput = page.getByRole('dialog').getByRole('textbox', { name: /^Name$/i });
     await expect(editInput).toBeVisible({ timeout: 6000 });
     await editInput.clear();
     await editInput.fill('Braxton Hale Jr.');
@@ -76,7 +76,7 @@ test.describe('Character CRUD (CI-only)', () => {
       .waitFor({ state: 'visible', timeout: 15000 });
 
     await page.getByRole('button', { name: /Add Manually/i }).click();
-    const nameInput = page.getByRole('textbox', { name: /^Name$/i });
+    const nameInput = page.getByRole('dialog').getByRole('textbox', { name: /^Name$/i });
     await expect(nameInput).toBeVisible({ timeout: 8000 });
     await nameInput.clear();
     await nameInput.fill('Doomed Character');
@@ -106,7 +106,7 @@ test.describe('Character CRUD (CI-only)', () => {
 
     for (const name of ['Alpha Char', 'Beta Char']) {
       await page.getByRole('button', { name: /Add Manually/i }).click();
-      const input = page.getByRole('textbox', { name: /^Name$/i });
+      const input = page.getByRole('dialog').getByRole('textbox', { name: /^Name$/i });
       await expect(input).toBeVisible({ timeout: 8000 });
       await input.clear();
       await input.fill(name);
