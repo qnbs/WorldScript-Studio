@@ -4,6 +4,7 @@ import type { Settings } from '../../types';
 
 const baseSettings = (): Settings => ({
   theme: 'dark',
+  appearancePreset: 'default',
   editorFont: 'serif',
   fontSize: 16,
   lineSpacing: 1.6,

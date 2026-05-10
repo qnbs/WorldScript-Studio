@@ -635,6 +635,7 @@ class IndexedDBService implements StorageBackend {
       const incoming = settings as Record<string, unknown>;
       validSettings = {
         theme: 'dark',
+        appearancePreset: 'default',
         editorFont: 'serif',
         fontSize: 16,
         lineSpacing: 1.6,

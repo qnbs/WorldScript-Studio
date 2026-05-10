@@ -24,7 +24,13 @@ const StatCard: FC<{
   animationIndex: number;
   colorClass?: string;
 }> = React.memo(
-  ({ title, value, icon, animationIndex, colorClass = 'text-indigo-500 bg-indigo-500/10' }) => (
+  ({
+    title,
+    value,
+    icon,
+    animationIndex,
+    colorClass = 'text-[var(--sc-accent)] bg-[var(--sc-accent-subtle)]',
+  }) => (
     <Card
       className="animate-in flex items-center p-5 h-auto hover:border-[var(--border-highlight)] transition-colors group"
       style={{ '--index': animationIndex } as React.CSSProperties}

@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LinkObject, NodeObject } from 'react-force-graph-2d';
 import ForceGraph2D from 'react-force-graph-2d';
+import { useAppSelector } from '../app/hooks';
 import {
   CharacterGraphViewContext,
   useCharacterGraphViewContext,
@@ -30,8 +31,30 @@ type GraphLink = LinkObject & { type: string; strength: number };
 // ForceGraph2D-basierte Darstellung mit Physics-Layout
 const CharacterForceGraph: FC = () => {
   const { t, characters, relationships } = useCharacterGraphViewContext();
+  const theme = useAppSelector((s) => s.settings.theme);
+  const appearancePreset = useAppSelector((s) => s.settings.appearancePreset);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+  const [paintColors, setPaintColors] = useState({
+    fill: '#6366f1',
+    stroke: '#a5b4fc',
+    label: '#e2e8f0',
+  });
+
+  // QNBS-v3: Canvas nodes follow DS accent — refresh after body theme/preset classes update.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: theme/preset are intentional triggers; effect reads computed CSS after App updates body.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const id = requestAnimationFrame(() => {
+      const body = document.body;
+      setPaintColors({
+        fill: getComputedStyle(body).getPropertyValue('--sc-accent').trim() || '#6366f1',
+        stroke: getComputedStyle(body).getPropertyValue('--sc-text-secondary').trim() || '#a5b4fc',
+        label: getComputedStyle(body).getPropertyValue('--sc-text-secondary').trim() || '#e2e8f0',
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [theme, appearancePreset]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -72,9 +95,9 @@ const CharacterForceGraph: FC = () => {
 
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#4f46e5';
+      ctx.fillStyle = paintColors.fill;
       ctx.fill();
-      ctx.strokeStyle = '#818cf8';
+      ctx.strokeStyle = paintColors.stroke;
       ctx.lineWidth = 2;
       ctx.stroke();
 
@@ -87,13 +110,13 @@ const CharacterForceGraph: FC = () => {
 
       if (globalScale >= 0.6) {
         const label = n.name.length > 14 ? `${n.name.slice(0, 13)}\u2026` : n.name;
-        ctx.fillStyle = '#e2e8f0';
+        ctx.fillStyle = paintColors.label;
         ctx.font = `${Math.max(6, 10 / globalScale)}px sans-serif`;
         ctx.textBaseline = 'top';
         ctx.fillText(label, x, y + r + 3);
       }
     },
-    [],
+    [paintColors],
   );
 
   if (characters.length === 0) {
@@ -162,8 +185,8 @@ const CharacterGraphUI: FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-grow min-h-0">
         {/* Graph */}
         <div className="lg:col-span-3">
-          <Card className="h-full min-h-[400px]">
-            <CardContent className="p-0 h-full min-h-[400px] rounded-xl overflow-hidden">
+          <Card className="h-full min-h-[400px] shadow-sc-md border-[var(--border-primary)]">
+            <CardContent className="p-0 h-full min-h-[400px] rounded-sc-lg overflow-hidden">
               <CharacterForceGraph />
             </CardContent>
           </Card>

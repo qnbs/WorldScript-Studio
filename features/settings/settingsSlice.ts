@@ -5,6 +5,7 @@ import type {
   AdvancedAiSettings,
   AdvancedEditorSettings,
   AiCreativity,
+  AppearancePreset,
   BackupSettings,
   CollaborationSettings,
   CustomFont,
@@ -31,6 +32,7 @@ const getSystemThemePreference = (): Theme => {
 const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
+  appearancePreset: 'default',
   editorFont: 'serif',
   fontSize: 16,
   lineSpacing: 1.6,
@@ -154,6 +156,9 @@ const settingsSlice = createSlice({
     },
     setTheme(state, action: PayloadAction<Theme>) {
       state.theme = action.payload;
+    },
+    setAppearancePreset(state, action: PayloadAction<AppearancePreset>) {
+      state.appearancePreset = action.payload;
     },
     setEditorFont(state, action: PayloadAction<EditorFont>) {
       state.editorFont = action.payload;

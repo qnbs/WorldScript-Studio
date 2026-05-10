@@ -18,6 +18,7 @@ import type {
   AdvancedAiSettings,
   AdvancedEditorSettings,
   AiCreativity,
+  AppearancePreset,
   BackupSettings,
   CollaborationSettings,
   CustomFont,
@@ -81,6 +82,9 @@ export const useSettingsView = () => {
         // Basic Settings
         case 'theme':
           dispatch(settingsActions.setTheme(value as Theme));
+          break;
+        case 'appearancePreset':
+          dispatch(settingsActions.setAppearancePreset(value as AppearancePreset));
           break;
         case 'editorFont':
           dispatch(settingsActions.setEditorFont(value as EditorFont));

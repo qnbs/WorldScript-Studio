@@ -144,6 +144,39 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     return undefined;
   }, [settings.theme]);
 
+  // QNBS-v3: Appearance presets + a11y hooks → body classes (pairs with index.css tokens).
+  useEffect(() => {
+    const appearanceClasses = ['appearance-sepia', 'appearance-fantasy', 'appearance-romance'];
+    document.body.classList.remove(...appearanceClasses);
+    switch (settings.appearancePreset) {
+      case 'sepia':
+        document.body.classList.add('appearance-sepia');
+        break;
+      case 'fantasy':
+        document.body.classList.add('appearance-fantasy');
+        break;
+      case 'romance':
+        document.body.classList.add('appearance-romance');
+        break;
+      default:
+        break;
+    }
+  }, [settings.appearancePreset]);
+
+  useEffect(() => {
+    document.body.classList.toggle(
+      'accessibility-high-contrast',
+      settings.accessibility.highContrast,
+    );
+  }, [settings.accessibility.highContrast]);
+
+  useEffect(() => {
+    document.body.classList.toggle(
+      'storycraft-reduced-motion',
+      settings.accessibility.reducedMotion,
+    );
+  }, [settings.accessibility.reducedMotion]);
+
   useEffect(() => {
     if (!isPortalActive && project && project.title === '' && project.manuscript.length === 0) {
       dispatch(

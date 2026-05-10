@@ -152,7 +152,7 @@ const Resizer: FC<ResizerProps> = React.memo(({ onMouseDown, onKeyAdjust, label 
       tabIndex={0}
       onMouseDown={onMouseDown}
       onKeyDown={handleKeyDown}
-      className="w-2 h-full cursor-col-resize flex items-center justify-center group -ml-1 z-10 hover:scale-x-110 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+      className="w-2 h-full cursor-col-resize flex items-center justify-center group -ml-1 z-10 hover:scale-x-110 transition-transform duration-sc-fast ease-sc-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)]"
     >
       <div
         className="w-0.5 h-8 bg-[var(--border-primary)] group-hover:bg-indigo-400 group-hover:h-full transition-all duration-300 rounded-full"
@@ -1345,7 +1345,11 @@ const ManuscriptViewUI: FC = () => {
 
         {/* Editor + optional research split */}
         <Card
-          className={`h-full flex-grow p-0 rounded-none border-0 shadow-none z-0 bg-[var(--background-primary)] transition-all duration-500 flex flex-col min-w-0`}
+          className={`h-full flex-grow p-0 rounded-none border-0 shadow-none z-0 bg-[var(--background-primary)] transition-all duration-500 ease-sc-emphasized flex flex-col min-w-0 ${
+            isFocusMode
+              ? 'manuscript-zen-active rounded-sc-lg shadow-sc-lg ring-1 ring-[var(--sc-border-subtle)]'
+              : ''
+          }`}
         >
           <div className="flex h-full min-h-0 w-full flex-1">
             <div className="flex-1 min-h-0 min-w-0 flex flex-col">

@@ -235,6 +235,8 @@ export interface OutlineSection {
 
 // Settings Types
 export type Theme = 'dark' | 'light' | 'auto';
+/** Creative appearance presets — map to `body` classes in App (`.appearance-sepia`, …). */
+export type AppearancePreset = 'default' | 'sepia' | 'fantasy' | 'romance';
 export type EditorFont = 'serif' | 'sans-serif' | 'monospace' | 'custom';
 export type AiCreativity = 'Focused' | 'Balanced' | 'Imaginative';
 export type AiModel =
@@ -404,6 +406,7 @@ export interface ThemeCustomization {
 export interface Settings {
   // Basic Settings
   theme: Theme;
+  appearancePreset: AppearancePreset;
   editorFont: EditorFont;
   fontSize: number;
   lineSpacing: number;
