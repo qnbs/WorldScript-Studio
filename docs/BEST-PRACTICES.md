@@ -34,6 +34,11 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 - Add keys to **all** of `de`, `en`, `fr`, `es`, `it`, then `pnpm run i18n:check`.
 - Key parity is enforced in CI; meaning review for FR/ES/IT is manual/editorial.
 
+## Accessibility
+
+- Maintainer reference: **[`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md)** (live regions, focus traps, Lighthouse / axe / Storybook addon-a11y).
+- Product UX copy for accessibility belongs in locale modules like any other UI string.
+
 ## Testing & coverage
 
 - **Unit/integration:** Vitest; global coverage thresholds in `vitest.config.ts` are a regression floor.

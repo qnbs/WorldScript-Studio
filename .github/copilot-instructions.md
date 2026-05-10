@@ -32,7 +32,7 @@ contexts/         → React context providers (one per major view + I18nContext 
 features/         → Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
 hooks/            → Custom hooks with view business logic (one hook per view)
 services/         → External adapters: geminiService, aiProviderService, dbService (dual IndexedDB + migration), storageService, collaborationService, epubApiService; **commands/** (palette registry), **keyboard/** (shortcut matching), **help/** (doc retrieval for AI), **settingsExchange** (settings JSON)
-locales/          → i18n source files (de, en, es, fr, it) × 14 modules
+locales/          → i18n source files (de, en, es, fr, it) × 15 JSON modules
 public/locales/   → i18n runtime files served at BASE_URL
 tests/            → Unit + E2E tests (Vitest + Playwright)
 types/            → Additional TypeScript type definitions
@@ -75,8 +75,9 @@ types.ts          → Core shared interfaces and types
 - Hooks must follow the `use*View` naming convention for view logic hooks
 - Always clean up event listeners, timeouts, and subscriptions in `useEffect` return
 
-### Accessibility (WCAG 2.1 AA)
+### Accessibility (WCAG 2.2 AA-oriented)
 
+- See [`docs/ACCESSIBILITY.md`](../docs/ACCESSIBILITY.md) for architecture (`LiveRegionProvider`, focus traps, CI gates).
 - All interactive elements need proper `role`, `aria-label`, `aria-expanded`, etc.
 - Modals must trap focus and restore focus on close
 - Icons must have `aria-hidden="true"` when decorative

@@ -8,6 +8,7 @@ import {
   useCharacterGraphViewContext,
 } from '../contexts/CharacterGraphViewContext';
 import { useCharacterGraphView } from '../hooks/useCharacterGraphView';
+import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 
 const RELATIONSHIP_COLORS: Record<string, string> = {
@@ -141,7 +142,13 @@ const CharacterForceGraph: FC = () => {
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full" style={{ minHeight: 400 }}>
+    <div
+      ref={containerRef}
+      className="w-full h-full"
+      style={{ minHeight: 400 }}
+      role="region"
+      aria-label={t('characterGraph.graphAriaLabel')}
+    >
       <ForceGraph2D
         graphData={graphData}
         width={dimensions.width}
@@ -167,27 +174,135 @@ const CharacterForceGraph: FC = () => {
 
 const CharacterGraphUI: FC = () => {
   const { t, characters, relationships, onUpdateRelationship } = useCharacterGraphViewContext();
+  const [viewMode, setViewMode] = useState<'graph' | 'table'>('graph');
 
   return (
     <div className="h-full flex flex-col">
-      <div className="mb-4 flex items-center justify-between flex-shrink-0">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
         <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
           {t('characterGraph.title')}
         </h1>
-        <div className="flex items-center gap-2 text-xs text-[var(--foreground-muted)]">
-          <span>
-            {characters.length} {t('charGraph.characters')} &middot; {relationships.length}{' '}
+        <div className="flex flex-wrap items-center gap-2 justify-between sm:justify-end">
+          <div
+            className="flex rounded-lg border border-[var(--border-primary)] p-0.5 bg-[var(--background-tertiary)]/60"
+            role="tablist"
+            aria-label={t('characterGraph.title')}
+          >
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'graph' ? 'primary' : 'ghost'}
+              className="rounded-md"
+              aria-pressed={viewMode === 'graph'}
+              onClick={() => setViewMode('graph')}
+            >
+              {t('characterGraph.view.graph')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'table' ? 'primary' : 'ghost'}
+              className="rounded-md"
+              aria-pressed={viewMode === 'table'}
+              onClick={() => setViewMode('table')}
+            >
+              {t('characterGraph.view.table')}
+            </Button>
+          </div>
+          <span className="text-xs text-[var(--foreground-muted)]">
+            {characters.length} {t('charGraph.characters')} · {relationships.length}{' '}
             {t('charGraph.relationships')}
           </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-grow min-h-0">
-        {/* Graph */}
+        {/* Graph or accessible table alternative */}
         <div className="lg:col-span-3">
           <Card className="h-full min-h-[400px] shadow-sc-md border-[var(--border-primary)]">
             <CardContent className="p-0 h-full min-h-[400px] rounded-sc-lg overflow-hidden">
-              <CharacterForceGraph />
+              {viewMode === 'graph' ? (
+                <CharacterForceGraph />
+              ) : (
+                <div className="p-4 overflow-auto max-h-[min(70vh,560px)]">
+                  {relationships.length === 0 ? (
+                    <p className="text-sm text-[var(--foreground-muted)]">
+                      {t('characterGraph.table.empty')}
+                    </p>
+                  ) : (
+                    <table className="w-full text-sm border-collapse border border-[var(--border-primary)] rounded-lg overflow-hidden">
+                      <caption className="text-left py-2 px-1 font-semibold text-[var(--foreground-primary)]">
+                        {t('characterGraph.table.caption')}
+                      </caption>
+                      <thead className="bg-[var(--background-tertiary)]">
+                        <tr>
+                          <th
+                            scope="col"
+                            className="text-left p-3 border-b border-[var(--border-primary)]"
+                          >
+                            {t('characterGraph.table.from')}
+                          </th>
+                          <th
+                            scope="col"
+                            className="text-left p-3 border-b border-[var(--border-primary)]"
+                          >
+                            {t('characterGraph.table.to')}
+                          </th>
+                          <th
+                            scope="col"
+                            className="text-left p-3 border-b border-[var(--border-primary)]"
+                          >
+                            {t('characterGraph.table.type')}
+                          </th>
+                          <th
+                            scope="col"
+                            className="text-left p-3 border-b border-[var(--border-primary)]"
+                          >
+                            {t('characterGraph.table.strength')}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {relationships.map((rel) => {
+                          const fromChar = characters.find((c) => c.id === rel.fromCharacterId);
+                          const toChar = characters.find((c) => c.id === rel.toCharacterId);
+                          return (
+                            <tr key={rel.id} className="odd:bg-[var(--background-secondary)]/40">
+                              <td className="p-3 border-b border-[var(--border-primary)]">
+                                {fromChar?.name ?? rel.fromCharacterId}
+                              </td>
+                              <td className="p-3 border-b border-[var(--border-primary)]">
+                                {toChar?.name ?? rel.toCharacterId}
+                              </td>
+                              <td className="p-3 border-b border-[var(--border-primary)] capitalize">
+                                {rel.type}
+                              </td>
+                              <td className="p-3 border-b border-[var(--border-primary)]">
+                                <label className="sr-only" htmlFor={`rel-str-${rel.id}`}>
+                                  {t('characterGraph.table.strength')}
+                                </label>
+                                <input
+                                  id={`rel-str-${rel.id}`}
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={rel.strength || 5}
+                                  onChange={(e) =>
+                                    onUpdateRelationship(rel.id, {
+                                      strength: parseInt(e.target.value, 10),
+                                    })
+                                  }
+                                  className="w-full accent-indigo-500"
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

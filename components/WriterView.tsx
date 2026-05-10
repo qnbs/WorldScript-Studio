@@ -561,7 +561,10 @@ const AiScratchpad: FC = React.memo(() => {
           </h2>
         </CardHeader>
         <CardContent className="flex flex-col flex-grow min-h-0 p-4 sm:p-6 overflow-hidden">
-          <div className="relative flex-grow mb-4 overflow-hidden flex flex-col">
+          <div
+            className="relative flex-grow mb-4 overflow-hidden flex flex-col"
+            aria-busy={isLoading}
+          >
             <Textarea
               ref={textareaRef}
               value={currentResult}

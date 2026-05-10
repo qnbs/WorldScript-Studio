@@ -1,8 +1,11 @@
 import type { FC } from 'react';
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { AppContext } from '../../contexts/AppContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { accessibilityPresetDefaults } from '../../features/settings/accessibilitySchema';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../../services/collaborationService';
 import { assertLanguageToolAllowed, languageToolPing } from '../../services/languageToolClient';
+import type { AccessibilityPresetId, AccessibilitySettings } from '../../types';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -11,8 +14,34 @@ import { Spinner } from '../ui/Spinner';
 import { Textarea } from '../ui/Textarea';
 import { ToggleSwitch } from './SettingsShared';
 
+const PRESET_IDS: Exclude<AccessibilityPresetId, 'custom'>[] = [
+  'motor',
+  'lowVision',
+  'cognitive',
+  'screenReader',
+];
+
 export const AccessibilitySection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
+  const appCtx = useContext(AppContext);
+
+  const patchA11y = (partial: Partial<AccessibilitySettings>) => {
+    handleSettingChange('accessibility', {
+      ...settings.accessibility,
+      ...partial,
+      presetId: 'custom',
+    });
+  };
+
+  const applyPreset = (id: Exclude<AccessibilityPresetId, 'custom'>) => {
+    handleSettingChange('accessibility', accessibilityPresetDefaults(id));
+  };
+
+  const openHelp = () => appCtx?.handleNavigate('help');
+
+  const presetTitleKey = (id: Exclude<AccessibilityPresetId, 'custom'>) =>
+    `settings.accessibility.hub.preset.${id}`;
+
   return (
     <div className="space-y-6">
       <Card>
@@ -20,49 +49,136 @@ export const AccessibilitySection: FC = () => {
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
             {t('settings.accessibility.title')}
           </h2>
+          <p className="text-sm text-[var(--foreground-muted)] mt-2">
+            {t('settings.accessibility.hub.intro')}
+          </p>
+          <p className="text-xs text-[var(--foreground-tertiary)] mt-2">
+            {t('settings.accessibility.activePreset')}:{' '}
+            <span className="font-medium text-[var(--foreground-secondary)]">
+              {t(`settings.accessibility.preset.${settings.accessibility.presetId}`)}
+            </span>
+          </p>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-8">
+          {/* QNBS-v3: Accessibility-Hub — Presets + Vorschau + Hilfe, ohne bestehende Feineinstellungen zu entfernen. */}
+          <section aria-labelledby="a11y-presets-heading">
+            <h3
+              id="a11y-presets-heading"
+              className="text-sm font-semibold text-[var(--foreground-secondary)] mb-3"
+            >
+              {t('settings.accessibility.hub.presetsTitle')}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {PRESET_IDS.map((id) => (
+                <div
+                  key={id}
+                  className="rounded-xl border border-[var(--border-primary)] bg-[var(--background-tertiary)]/40 p-4 flex flex-col gap-2"
+                >
+                  <Button
+                    type="button"
+                    variant={settings.accessibility.presetId === id ? 'primary' : 'secondary'}
+                    size="sm"
+                    className="w-full justify-center"
+                    aria-pressed={settings.accessibility.presetId === id}
+                    aria-label={t(presetTitleKey(id))}
+                    onClick={() => applyPreset(id)}
+                  >
+                    {t(presetTitleKey(id))}
+                  </Button>
+                  <p className="text-xs text-[var(--foreground-muted)] leading-snug">
+                    {t(`${presetTitleKey(id)}Hint`)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section aria-labelledby="a11y-preview-heading">
+            <h3
+              id="a11y-preview-heading"
+              className="text-sm font-semibold text-[var(--foreground-secondary)] mb-3"
+            >
+              {t('settings.accessibility.hub.previewTitle')}
+            </h3>
+            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--background-primary)] p-4 flex flex-wrap items-center gap-3">
+              <Button type="button" variant="primary" size="sm">
+                {t('settings.accessibility.hub.preview.sampleButton')}
+              </Button>
+              <button
+                type="button"
+                className="text-sm text-[var(--background-interactive)] underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded"
+              >
+                {t('settings.accessibility.hub.preview.sampleLink')}
+              </button>
+              <span className="text-xs px-2 py-1 rounded-md bg-[var(--background-tertiary)] border border-[var(--border-primary)]">
+                {t('settings.accessibility.hub.preview.badge')}
+              </span>
+            </div>
+          </section>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!appCtx}
+              onClick={() => openHelp()}
+            >
+              {t('settings.accessibility.hub.helpButton')}
+            </Button>
+            <span className="text-xs text-[var(--foreground-muted)]">
+              {t('settings.accessibility.hub.helpHint')}
+            </span>
+          </div>
+
+          <div>
+            <label
+              htmlFor="settings-live-region-verbosity"
+              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+            >
+              {t('settings.accessibility.liveRegionVerbosity')}
+            </label>
+            <Select
+              id="settings-live-region-verbosity"
+              value={settings.accessibility.liveRegionVerbosity}
+              onChange={(e) =>
+                patchA11y({
+                  liveRegionVerbosity: e.target
+                    .value as AccessibilitySettings['liveRegionVerbosity'],
+                })
+              }
+            >
+              <option value="minimal">{t('settings.accessibility.liveRegion.minimal')}</option>
+              <option value="normal">{t('settings.accessibility.liveRegion.normal')}</option>
+              <option value="verbose">{t('settings.accessibility.liveRegion.verbose')}</option>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ToggleSwitch
               label={t('settings.accessibility.highContrast')}
               checked={settings.accessibility.highContrast}
-              onChange={(v) =>
-                handleSettingChange('accessibility', { ...settings.accessibility, highContrast: v })
-              }
+              onChange={(v) => patchA11y({ highContrast: v })}
             />
             <ToggleSwitch
               label={t('settings.accessibility.reducedMotion')}
               checked={settings.accessibility.reducedMotion}
-              onChange={(v) =>
-                handleSettingChange('accessibility', {
-                  ...settings.accessibility,
-                  reducedMotion: v,
-                })
-              }
+              onChange={(v) => patchA11y({ reducedMotion: v })}
             />
             <ToggleSwitch
               label={t('settings.accessibility.largeText')}
               checked={settings.accessibility.largeText}
-              onChange={(v) =>
-                handleSettingChange('accessibility', { ...settings.accessibility, largeText: v })
-              }
+              onChange={(v) => patchA11y({ largeText: v })}
             />
             <ToggleSwitch
               label={t('settings.accessibility.screenReader')}
               checked={settings.accessibility.screenReader}
-              onChange={(v) =>
-                handleSettingChange('accessibility', { ...settings.accessibility, screenReader: v })
-              }
+              onChange={(v) => patchA11y({ screenReader: v })}
             />
             <ToggleSwitch
               label={t('settings.accessibility.focusIndicators')}
               checked={settings.accessibility.focusIndicators}
-              onChange={(v) =>
-                handleSettingChange('accessibility', {
-                  ...settings.accessibility,
-                  focusIndicators: v,
-                })
-              }
+              onChange={(v) => patchA11y({ focusIndicators: v })}
             />
           </div>
           <div>
@@ -76,9 +192,8 @@ export const AccessibilitySection: FC = () => {
               id="settings-colorblind-mode"
               value={settings.accessibility.colorBlindMode}
               onChange={(e) =>
-                handleSettingChange('accessibility', {
-                  ...settings.accessibility,
-                  colorBlindMode: e.target.value,
+                patchA11y({
+                  colorBlindMode: e.target.value as AccessibilitySettings['colorBlindMode'],
                 })
               }
             >

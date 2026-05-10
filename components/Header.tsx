@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { selectCanRedo, selectCanUndo } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
+import { viewNavigationLabelKey } from '../services/viewNavigationLabels';
 import type { View } from '../types';
 import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
 import { Tooltip } from './ui/Tooltip';
@@ -38,26 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const viewTitleMap: Partial<Record<View, string>> = {
-    dashboard: 'sidebar.dashboard',
-    manuscript: 'sidebar.manuscript',
-    writer: 'sidebar.writer',
-    templates: 'sidebar.templates',
-    outline: 'sidebar.outline',
-    characters: 'sidebar.characters',
-    world: 'sidebar.world',
-    export: 'sidebar.export',
-    settings: 'sidebar.settings',
-    help: 'sidebar.help',
-    sceneboard: 'sidebar.sceneboard',
-    analytics: 'sidebar.analytics',
-    zen: 'sidebar.zen',
-    characterGraph: 'sidebar.characterGraph',
-    consistencyChecker: 'sidebar.consistencyChecker',
-    critic: 'sidebar.critic',
-  };
-
-  const pageTitle = t(viewTitleMap[currentView] ?? 'sidebar.dashboard');
+  const pageTitle = t(viewNavigationLabelKey(currentView));
 
   return (
     <header

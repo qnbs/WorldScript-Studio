@@ -12,6 +12,7 @@ interface SceneBoardViewContextType {
   handleUpdateSection: (id: string, updates: Partial<StorySection>) => void;
   handleDeleteSection: (id: string) => void;
   handleMoveSection: (id: string, position: { x: number; y: number }) => void;
+  handleMoveSectionWithinAct: (id: string, direction: 'up' | 'down') => void;
   handleAddSection: () => void;
 }
 

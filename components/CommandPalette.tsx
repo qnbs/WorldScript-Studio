@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import type { Language } from '../contexts/I18nContext';
 import { selectFeatureFlags } from '../features/featureFlags/featureFlagsSlice';
@@ -7,6 +8,7 @@ import {
   selectAllWorlds,
   selectProjectData,
 } from '../features/project/projectSelectors';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useTranslation } from '../hooks/useTranslation';
 import { getLocalAiSuggestions } from '../services/commands/aiSuggestions';
@@ -65,6 +67,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [pinTick, setPinTick] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const palettePanelRef = useRef<HTMLDivElement>(null);
+  const [paletteLiveStatus, setPaletteLiveStatus] = useState('');
+
+  useFocusTrap(palettePanelRef, { isActive: isOpen });
 
   const isTouchDevice = useMemo(
     () =>
@@ -285,6 +291,24 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
   }, [selectedIndex]);
 
+  // QNBS-v3: aria-live für Spracheingabe (Priorität) und Trefferzahl.
+  useEffect(() => {
+    if (!isOpen) {
+      setPaletteLiveStatus('');
+      return;
+    }
+    if (isListening) {
+      setPaletteLiveStatus(t('palette.voice.listeningLive'));
+      return;
+    }
+    const qn = normalizeSearch(query);
+    if (flatItems.length === 0 && qn) {
+      setPaletteLiveStatus(t('palette.noResults'));
+      return;
+    }
+    setPaletteLiveStatus(t('palette.resultsLive', { count: String(flatItems.length) }));
+  }, [isOpen, isListening, query, flatItems.length, t]);
+
   const qNorm = normalizeSearch(query);
 
   const renderTitle = (title: string) => {
@@ -318,11 +342,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       />
 
       <div
+        ref={palettePanelRef}
         role="dialog"
         aria-modal="true"
         aria-label={t('palette.ariaLabel')}
+        tabIndex={-1}
         className="relative w-full max-w-2xl bg-[var(--background-secondary)]/90 backdrop-blur-xl border border-[var(--border-primary)] shadow-2xl rounded-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 ring-1 ring-[var(--glass-border)] max-h-[85vh]"
       >
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {paletteLiveStatus}
+        </div>
         <div className="flex items-center px-4 py-4 border-b border-[var(--border-primary)]/50">
           <svg
             className="w-5 h-5 text-[var(--foreground-muted)] mr-3 shrink-0"
@@ -347,8 +376,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               flatItems[selectedIndex] ? `palette-opt-${selectedIndex}` : undefined
             }
             aria-controls="command-palette-listbox"
+            aria-autocomplete="list"
             role="combobox"
-            aria-expanded
+            aria-expanded={true}
             className="w-full bg-transparent border-none focus:ring-0 text-lg text-[var(--foreground-primary)] placeholder-[var(--foreground-muted)] h-10"
             placeholder={t('palette.placeholder')}
             value={query}
@@ -365,6 +395,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             }`}
             title={isListening ? t('palette.voice.stop') : t('palette.voice.start')}
             aria-label={isListening ? t('palette.voice.stop') : t('palette.voice.start')}
+            aria-pressed={isListening}
           >
             <svg
               className="w-5 h-5"
@@ -408,28 +439,44 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </div>
           ) : (
             (() => {
-              let lastHeading: string | undefined;
-              return flatItems.map(({ item: cmd, heading, rowKey }, visualIndex) => {
-                const showHeading = heading !== lastHeading;
-                lastHeading = heading;
-                const isActive = visualIndex === selectedIndex;
-                const sug = suggestionEntries.find((s) => s.model.id === cmd.id);
+              let visualIndex = 0;
+              return flatList.map((block) => {
+                const blockKey = `${block.heading ?? '__flat__'}:${block.items.map((c) => c.id).join('|')}`;
+                const headingId = block.heading
+                  ? `palette-sec-${block.items.map((c) => c.id).join('-')}`.replace(
+                      /[^a-zA-Z0-9_-]/g,
+                      '_',
+                    )
+                  : undefined;
+                const headingNode =
+                  block.heading && headingId ? (
+                    <div
+                      key={headingId}
+                      id={headingId}
+                      role="presentation"
+                      className="px-3 py-2 text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider sticky top-0 bg-[var(--background-secondary)]/95 backdrop-blur-sm z-10"
+                    >
+                      {block.heading}
+                    </div>
+                  ) : null;
 
-                return (
-                  <React.Fragment key={rowKey}>
-                    {showHeading && heading ? (
-                      <div className="px-3 py-2 text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider sticky top-0 bg-[var(--background-secondary)]/95 backdrop-blur-sm z-10">
-                        {heading}
-                      </div>
-                    ) : null}
+                const optionButtons = block.items.map((cmd) => {
+                  const vi = visualIndex;
+                  visualIndex += 1;
+                  const isActive = vi === selectedIndex;
+                  const sug = suggestionEntries.find((s) => s.model.id === cmd.id);
+                  const rowKey = `${cmd.id}-${blockKey}-${vi}`;
+
+                  return (
                     <button
+                      key={rowKey}
                       type="button"
                       role="option"
                       aria-selected={isActive}
-                      id={`palette-opt-${visualIndex}`}
-                      data-palette-index={visualIndex}
+                      id={`palette-opt-${vi}`}
+                      data-palette-index={vi}
                       onClick={() => runCommand(cmd)}
-                      onMouseEnter={() => setSelectedIndex(visualIndex)}
+                      onMouseEnter={() => setSelectedIndex(vi)}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         togglePinnedCommand(cmd.id);
@@ -482,7 +529,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                         ) : null}
                       </div>
                     </button>
-                  </React.Fragment>
+                  );
+                });
+
+                const groupProps =
+                  block.heading && headingId
+                    ? { role: 'group' as const, 'aria-labelledby': headingId }
+                    : {};
+
+                return (
+                  <div key={`palette-block-${blockKey}`} {...groupProps}>
+                    {headingNode}
+                    {optionButtons}
+                  </div>
                 );
               });
             })()

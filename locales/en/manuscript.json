@@ -1,6 +1,8 @@
 {
   "manuscript.navigator.title": "Navigator",
   "manuscript.inspector.title": "Inspector",
+  "manuscript.inspector.regionAriaLabel": "Project details and AI assistant tools",
+  "manuscript.inspector.aiWorkingStatus": "Artificial intelligence is working on your request.",
   "manuscript.select": "Select a section from the navigator to begin writing.",
   "manuscript.contentPlaceholder": "Write content for {{title}}...",
   "manuscript.mention.characters": "Characters",

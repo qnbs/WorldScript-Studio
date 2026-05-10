@@ -838,10 +838,22 @@ const InspectorPanel: FC = React.memo(() => {
       ? selectCurrentBranchSnapshots(state).filter((s) => s.sectionId === activeSectionId)
       : [],
   );
+  const inspectorAiBusy = isAiLoading || isProofreading || isSceneVisualizing;
 
   return (
     <>
-      <div className="space-y-4 p-4">
+      {/* QNBS-v3: Inspector-KI-Zustände für SR mit aria-busy + kurzer Live-Status (Abschluss nur bei verbose/normal über announce). */}
+      <div
+        className="space-y-4 p-4"
+        role="region"
+        aria-label={t('manuscript.inspector.regionAriaLabel')}
+        aria-busy={inspectorAiBusy}
+      >
+        {inspectorAiBusy ? (
+          <p className="sr-only" aria-live="polite">
+            {t('manuscript.inspector.aiWorkingStatus')}
+          </p>
+        ) : null}
         <div>
           <label
             htmlFor="projectTitle"

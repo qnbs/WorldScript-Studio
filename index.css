@@ -277,6 +277,27 @@
   opacity: 0.1;
 }
 
+/* Large UI text — paired with Settings › Accessibility */
+html.storycraft-large-text {
+  font-size: 112.5%;
+}
+
+/* Comfortable tap targets — motor preset */
+body.accessibility-comfortable-targets :where(button:not(.sr-only), [role="button"]) {
+  min-height: 44px;
+}
+
+/* Stronger focus rings when enabled */
+body.storycraft-focus-indicators :focus-visible {
+  outline: 3px solid var(--ring-focus);
+  outline-offset: 3px;
+}
+
+/* Screen reader mode — slightly roomier line rhythm */
+body.storycraft-screen-reader {
+  line-height: 1.65;
+}
+
 /* Tailwind v4 theme bridge → utilities bg-sc-* / text-sc-* */
 @theme inline {
   --color-sc-bg: var(--sc-bg);
@@ -558,4 +579,17 @@ select option {
 .driver-popover.storycraft-driver-popover button.driver-popover-prev-btn,
 .driver-popover.storycraft-driver-popover button.driver-popover-close-btn {
   color: var(--foreground-secondary);
+}
+
+/* Approximate color-vision hints — nach base `body`-Regeln (Biome noDescendingSpecificity). */
+:root[data-colorblind="protanopia"] body {
+  filter: sepia(0.12) hue-rotate(-12deg) saturate(1.15);
+}
+
+:root[data-colorblind="deuteranopia"] body {
+  filter: sepia(0.1) hue-rotate(-8deg) saturate(1.12);
+}
+
+:root[data-colorblind="tritanopia"] body {
+  filter: sepia(0.08) hue-rotate(18deg) saturate(1.1);
 }

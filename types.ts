@@ -318,6 +318,10 @@ export interface AdvancedAiSettings {
   hybridFallbackChain: AIProvider[];
 }
 
+export type AccessibilityPresetId = 'custom' | 'motor' | 'lowVision' | 'cognitive' | 'screenReader';
+
+export type LiveRegionVerbosity = 'minimal' | 'normal' | 'verbose';
+
 export interface AccessibilitySettings {
   highContrast: boolean;
   reducedMotion: boolean;
@@ -325,6 +329,12 @@ export interface AccessibilitySettings {
   screenReader: boolean;
   focusIndicators: boolean;
   colorBlindMode: 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
+  /** Last applied accessibility preset (manual tweaks set this to custom). */
+  presetId: AccessibilityPresetId;
+  /** Controls non-critical screen reader announcements (view titles always announce). */
+  liveRegionVerbosity: LiveRegionVerbosity;
+  /** Larger minimum tap targets (motor comfort). */
+  comfortableTargets: boolean;
 }
 
 export interface PrivacySettings {

@@ -20,6 +20,7 @@ import type {
   ThemeCustomization,
   WritingGoal,
 } from '../../types';
+import { normalizeAccessibilitySettings } from './accessibilitySchema';
 import { getDefaultKeyboardShortcuts } from './keyboardShortcutsDefaults';
 
 // Detect system preference for initial theme
@@ -65,14 +66,14 @@ const defaultSettings: Settings = {
     hybridFallbackEnabled: false,
     hybridFallbackChain: [],
   },
-  accessibility: {
+  accessibility: normalizeAccessibilitySettings({
     highContrast: false,
     reducedMotion: false,
     largeText: false,
     screenReader: false,
     focusIndicators: true,
     colorBlindMode: 'none',
-  },
+  }),
   privacy: {
     analyticsEnabled: false,
     crashReporting: false,
@@ -149,6 +150,7 @@ const settingsSlice = createSlice({
   reducers: {
     setSettings(state, action: PayloadAction<Settings>) {
       Object.assign(state, action.payload);
+      state.accessibility = normalizeAccessibilitySettings(state.accessibility);
     },
     setTheme(state, action: PayloadAction<Theme>) {
       state.theme = action.payload;
@@ -211,7 +213,10 @@ const settingsSlice = createSlice({
       state.advancedAi = { ...state.advancedAi, ...action.payload };
     },
     setAccessibility(state, action: PayloadAction<Partial<AccessibilitySettings>>) {
-      state.accessibility = { ...state.accessibility, ...action.payload };
+      state.accessibility = normalizeAccessibilitySettings({
+        ...state.accessibility,
+        ...action.payload,
+      });
     },
     setPrivacy(state, action: PayloadAction<Partial<PrivacySettings>>) {
       state.privacy = { ...state.privacy, ...action.payload };

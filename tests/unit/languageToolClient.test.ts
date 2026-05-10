@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { normalizeAccessibilitySettings } from '../../features/settings/accessibilitySchema';
 import { assertLanguageToolAllowed } from '../../services/languageToolClient';
 import type { Settings } from '../../types';
 
@@ -31,14 +32,14 @@ const baseSettings = (): Settings => ({
     hybridFallbackEnabled: false,
     hybridFallbackChain: [],
   },
-  accessibility: {
+  accessibility: normalizeAccessibilitySettings({
     highContrast: false,
     reducedMotion: false,
     largeText: false,
     screenReader: false,
     focusIndicators: true,
     colorBlindMode: 'none',
-  },
+  }),
   privacy: {
     analyticsEnabled: false,
     crashReporting: false,

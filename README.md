@@ -406,8 +406,10 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | [`README.md`](README.md) | Product overview, features, getting started (this file) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, Biome/Vitest/Playwright, architecture notes |
 | [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
+| [`docs/Design-System.md`](docs/Design-System.md) | Tokens, Tailwind preset, UI primitives under `components/ui` |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Pages + Vercel — static SPA, `base`, keys/privacy |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
+| [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y-Architektur (Live-Regionen, Fokus, Tests, Lighthouse) |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow (manual/tag builds, artifacts) |
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
 | [`ROADMAP.md`](ROADMAP.md) / [`TODO.md`](TODO.md) | Planning and sprint tasks |

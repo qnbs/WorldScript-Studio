@@ -73,13 +73,13 @@ Repo-root **`.cursorrules`** defines the **QNBS Master Prompt v3** (“Creative 
 
 ## Documentation index
 
-All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* duplicates the 15-file inventory.
+All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* duplicates the **19-file** maintainer inventory (see table there). Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**.
 
 ## Key Constraints
 
 - `strict: true` + `exactOptionalPropertyTypes: true` — no `any` types; use `undefined` explicitly for optional props
 - Never log or expose API keys; never `eval()` AI responses
-- All interactive elements require proper `role`, `aria-label`, `aria-expanded` attributes (WCAG 2.1 AA)
+- All interactive elements require proper `role`, `aria-label`, `aria-expanded` attributes (WCAG **2.2** AA-oriented; Biome `a11y` warnings fail CI)
 - Modals must trap focus and restore on close; decorative icons need `aria-hidden="true"`
 - Gemini API calls must use `NetworkOnly` caching (never cache AI responses in the Service Worker)
 - Use `focus-visible:ring-2` for keyboard focus styles

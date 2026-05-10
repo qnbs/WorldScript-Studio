@@ -20,6 +20,8 @@ module.exports = {
     },
     assert: {
       assertions: {
+        // QNBS-v3: Accessibility-Gate (warn bis Smoke stabil; später minScore erhöhen).
+        'categories:accessibility': ['warn', { minScore: 0.88 }],
         'categories:performance': ['warn', { minScore: 0.5 }],
         'first-contentful-paint': ['warn', { maxNumericValue: 6000 }],
         'largest-contentful-paint': ['warn', { maxNumericValue: 8000 }],

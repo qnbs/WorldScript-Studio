@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 import { useAppDispatch, useAppSelector } from './app/hooks';
 import type { RootState } from './app/store';
@@ -17,6 +17,7 @@ import { AppContext } from './contexts/AppContext';
 import { CommandExecutorProvider } from './contexts/CommandExecutorContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { I18nProvider } from './contexts/I18nContext';
+import { LiveRegionProvider, useAnnounce } from './contexts/LiveRegionContext';
 import { selectFeatureFlags } from './features/featureFlags/featureFlagsSlice';
 import {
   selectAllCharacters,
@@ -30,6 +31,8 @@ import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
+import { viewNavigationLabelKey } from './services/viewNavigationLabels';
+import type { View } from './types';
 
 // ── Lazy-geladene Views (Code-Splitting → separate JS-Chunks) ─────────────────
 const Dashboard = lazy(() =>
@@ -121,8 +124,11 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const dispatch = useAppDispatch();
   const store = useStore();
   const { t, language, setLanguage } = useTranslation();
+  const announce = useAnnounce();
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
+
+  const prevViewRef = useRef<View | null>(null);
 
   const isPaletteOpen = useTransientUiStore((s) => s.isCommandPaletteOpen);
   const setCommandPaletteOpen = useTransientUiStore((s) => s.setCommandPaletteOpen);
@@ -191,6 +197,50 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       settings.accessibility.reducedMotion,
     );
   }, [settings.accessibility.reducedMotion]);
+
+  // QNBS-v3: Barrierefreiheits-Toggles → dokumentweite Klassen (Tokens in index.css).
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      'storycraft-large-text',
+      settings.accessibility.largeText,
+    );
+    document.body.classList.toggle('storycraft-screen-reader', settings.accessibility.screenReader);
+    document.body.classList.toggle(
+      'storycraft-focus-indicators',
+      settings.accessibility.focusIndicators,
+    );
+    document.body.classList.toggle(
+      'accessibility-comfortable-targets',
+      settings.accessibility.comfortableTargets,
+    );
+  }, [
+    settings.accessibility.largeText,
+    settings.accessibility.screenReader,
+    settings.accessibility.focusIndicators,
+    settings.accessibility.comfortableTargets,
+  ]);
+
+  useEffect(() => {
+    const mode = settings.accessibility.colorBlindMode;
+    if (mode === 'none') {
+      document.documentElement.removeAttribute('data-colorblind');
+    } else {
+      document.documentElement.setAttribute('data-colorblind', mode);
+    }
+  }, [settings.accessibility.colorBlindMode]);
+
+  // QNBS-v3: Übersetzte View-Ansage statt Rohtext (WCAG 4.1.3 Statusmeldungen).
+  useEffect(() => {
+    if (isInitialLoad || isPortalActive) return;
+    if (prevViewRef.current === currentView) return;
+    prevViewRef.current = currentView;
+    const labelKey = viewNavigationLabelKey(currentView);
+    announce(
+      t('common.viewOpenedAnnouncement', {
+        view: t(labelKey),
+      }),
+    );
+  }, [currentView, announce, t, isInitialLoad, isPortalActive]);
 
   useEffect(() => {
     if (!isPortalActive && project && project.title === '' && project.manuscript.length === 0) {
@@ -342,10 +392,6 @@ const App: FC<AppProps> = ({ isNewUser }) => {
             >
               {t('common.skipToContent')}
             </a>
-            {/* ARIA live region: announces view changes to screen readers */}
-            <div aria-live="polite" aria-atomic="true" className="sr-only">
-              {currentView}
-            </div>
             <div className="flex h-[100dvh] bg-[var(--background-primary)] text-[var(--foreground-primary)] overflow-hidden touch-none md:touch-auto">
               <Sidebar
                 currentView={currentView}
@@ -395,7 +441,9 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
 const AppWrapper: FC<AppProps> = (props) => (
   <I18nProvider>
-    <App {...props} />
+    <LiveRegionProvider>
+      <App {...props} />
+    </LiveRegionProvider>
   </I18nProvider>
 );
 

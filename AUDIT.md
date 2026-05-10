@@ -13,6 +13,17 @@
 - **Doku:** [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (Engineering + Content + CI); README Privacy-Bullet präzisiert (lokal vs. Cloud-KI).
 - **Tests:** Vitest-Coverage-Untergrenzen moderat angehoben; Community-Template-Tests inkl. Zod-Fallback-Pfad.
 
+## Follow-up Audit — 2026-05-10 (Accessibility & WCAG-oriented QA)
+
+- **Live regions:** [`contexts/LiveRegionContext.tsx`](contexts/LiveRegionContext.tsx) zentralisiert `announce()`; View-Wechsel mit übersetztem Titel ([`App.tsx`](App.tsx)); optional reduzierte Ansagen über `settings.accessibility.liveRegionVerbosity`.
+- **Settings-Hub:** Presets (Motor, Sehschwäche, Kognitiv, Screenreader), Vorschau, Hilfe-Link; Zod-Normalisierung persistenter Daten in [`features/settings/accessibilitySchema.ts`](features/settings/accessibilitySchema.ts).
+- **Globale Anzeige:** Body-/HTML-Klassen für große Schrift, Farbfilter (`data-colorblind`), komfortable Ziele, Fokus-Verstärkung ([`App.tsx`](App.tsx), [`index.css`](index.css)).
+- **Command Palette:** [`hooks/useFocusTrap.ts`](hooks/useFocusTrap.ts), APG-Gruppen im Listbox, `aria-live` für Trefferzahl/Spracheingabe ([`components/CommandPalette.tsx`](components/CommandPalette.tsx)).
+- **Modal:** Dialog-Rolle nur auf dem Panel; schließbarer Vollflächen-Backdrop als `button` mit `aria-label` ([`components/ui/Modal.tsx`](components/ui/Modal.tsx)).
+- **Feature-Views:** Character Graph mit Tabellen-Alternative; Scene Board Reihenfolge je Akt auch per Tastatur (`moveManuscriptSectionWithinAct` in [`features/project/projectSlice.ts`](features/project/projectSlice.ts)); Writer KI-Bereich mit `aria-busy` ([`components/WriterView.tsx`](components/WriterView.tsx)); Manuskript-Inspector-Region mit `aria-busy` + kurzem `aria-live`-Status während Logline-/Proofread-/Szenen-KI ([`components/ManuscriptView.tsx`](components/ManuscriptView.tsx)).
+- **CI / Qualität:** Lighthouse assert `categories:accessibility` (warn) in [`.lighthouserc.cjs`](.lighthouserc.cjs); Playwright [`tests/e2e/a11y.spec.ts`](tests/e2e/a11y.spec.ts) mit `@axe-core/playwright`; Storybook `@storybook/addon-a11y` für lokale Komponentenprüfung (`pnpm run storybook`).
+- **Maintainer-Doku:** [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
+
 ## Follow-up Audit — 2026-05-10 (Hybrid-AI, i18n runtime bundles, deployment docs)
 
 - **Hybrid-AI / OpenAI-kompatible Cloud:** `advancedAi` Presets (Ollama/LM Studio/vLLM), `openAiCompatibleBaseUrl` + optionale OpenRouter-Header, konfigurierbare **Fallback-Kette** in `aiProviderService` / Thunks; Writer-Orchestrierung unverändert primärer Provider; Tauri **CSP** `connect-src` erweitert.
@@ -65,7 +76,7 @@
 
 ### Markdown corpus (maintainer-curated)
 
-**Inventory (16 files):** [`README.md`](README.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md), [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md), [`CLAUDE.md`](CLAUDE.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/CI.md`](docs/CI.md), [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), [`docs/graphify.md`](docs/graphify.md), [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md), [`.github/SECURITY.md`](.github/SECURITY.md), [`.github/copilot-instructions.md`](.github/copilot-instructions.md), [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md).
+**Inventory (19 files):** [`README.md`](README.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md), [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md), [`CLAUDE.md`](CLAUDE.md), [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md), [`docs/Design-System.md`](docs/Design-System.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/CI.md`](docs/CI.md), [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md), [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), [`docs/graphify.md`](docs/graphify.md), [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md), [`.github/SECURITY.md`](.github/SECURITY.md), [`.github/copilot-instructions.md`](.github/copilot-instructions.md), [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md).
 
 Aligned with the current toolchain and UX: **README** Documentation Hub lists every entry above plus [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) and [`.cursorrules`](.cursorrules); **CONTRIBUTING** documents Playwright helpers and Version Control backdrop behavior; **docs/CI.md** holds E2E authoring notes; agent files (**CLAUDE**, **copilot-instructions**) reference dual IndexedDB + `tests/e2e/helpers.ts`; **SECURITY** supported-version table matches **1.3.x**; **CHANGELOG** `[Unreleased]` carries doc-maintenance notes; **ACTIONS-OPTIMIZATIONS** remains explicitly historical vs **`docs/CI.md`**.
 

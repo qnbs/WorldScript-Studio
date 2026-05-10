@@ -20,6 +20,9 @@ describe('settingsSlice', () => {
     expect(state.aiCreativity).toBe('Balanced');
     expect(state.keyboardShortcuts.length).toBeGreaterThan(0);
     expect(state.writingGoals.length).toBeGreaterThan(0);
+    expect(state.accessibility.presetId).toBe('custom');
+    expect(state.accessibility.liveRegionVerbosity).toBe('normal');
+    expect(state.accessibility.comfortableTargets).toBe(false);
   });
 
   it('setSettings replaces state values from payload', () => {
@@ -201,6 +204,26 @@ describe('settingsSlice', () => {
     expect(state.accessibility.reducedMotion).toBe(true);
     expect(state.accessibility.colorBlindMode).toBe('deuteranopia');
     expect(state.accessibility.focusIndicators).toBe(true);
+  });
+
+  it('setSettings normalizes accessibility when legacy payload omits new keys', () => {
+    const base = initState();
+    const legacy = {
+      ...base,
+      accessibility: {
+        highContrast: false,
+        reducedMotion: false,
+        largeText: false,
+        screenReader: false,
+        focusIndicators: true,
+        colorBlindMode: 'none' as const,
+      },
+    };
+    const state = settingsReducer(base, settingsActions.setSettings(legacy as typeof base));
+
+    expect(state.accessibility.presetId).toBe('custom');
+    expect(state.accessibility.liveRegionVerbosity).toBe('normal');
+    expect(state.accessibility.comfortableTargets).toBe(false);
   });
 
   it('setPrivacy merges privacy settings', () => {

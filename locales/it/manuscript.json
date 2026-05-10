@@ -28,6 +28,8 @@
   "manuscript.inspector.readTimeValue": "~{{time}} min",
   "manuscript.inspector.statsTitle": "Section Stats",
   "manuscript.inspector.title": "Inspector",
+  "manuscript.inspector.regionAriaLabel": "Dettagli progetto e strumenti IA",
+  "manuscript.inspector.aiWorkingStatus": "L’intelligenza artificiale sta elaborando la richiesta.",
   "manuscript.leftPanel.mobileBinder": "Res",
   "manuscript.leftPanel.mobileChapters": "TOC",
   "manuscript.leftPanel.openDrawer": "Open sidebar",

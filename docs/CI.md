@@ -17,7 +17,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 | Types | **TypeScript** `pnpm run typecheck` |
 | Unit tests | **Vitest** with V8 coverage (`pnpm exec vitest run --coverage`) |
 | E2E | **Playwright** (`pnpm run test:e2e` with `CI=true`) |
-| Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs`) |
+| Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs` — includes **accessibility** category assertion as `warn` with `minScore`) |
 | Bundle guardrails | **`pnpm run bundle:budget`** (max chunk KB) + **`pnpm run analyze`** (rollup visualizer → `dist/bundle-analysis.html`, artifact in CI) |
 
 ---
@@ -111,6 +111,7 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 
 - Specs run **only** when `CI=true` (`pnpm run test:e2e`). CI installs **Chromium**; locally you may also run Firefox projects (`playwright.config.ts`).
 - Shared utilities: **[`tests/e2e/helpers.ts`](../tests/e2e/helpers.ts)** — replace brittle `networkidle` waits with `waitForSpaReady()`, bootstrap projects via `ensureBlankProject()`, and prefer **sidebar-scoped** locators (`#sidebar`) so desktop navigation is unambiguous.
+- **Accessibility:** **[`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts)** runs **axe-core** (via `@axe-core/playwright`) on the welcome route and on **Settings → Accessibility** after `ensureBlankProject`; serious/critical violations must be zero (`color-contrast` rule disabled — track tokens separately).
 - The **Version Control** drawer uses a modal backdrop; close it (**Escape** when no nested modal is open) before clicking other chrome.
 - Visual baselines live under `tests/e2e/*-snapshots/`; `snapshotPathTemplate` omits the OS segment so one PNG can serve Linux CI and Windows/macOS dev machines.
 
@@ -130,6 +131,7 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | `renovate.json` | Renovate Bot: patch auto-merge policy |
 | `playwright.config.ts` | E2E projects (Chromium in CI; Chromium + Firefox locally), `snapshotPathTemplate`, reporters |
 | `tests/e2e/helpers.ts` | SPA-ready waits (avoid `networkidle` with Vite/HMR), EN locale, blank project bootstrap, `#sidebar` scope |
+| `tests/e2e/a11y.spec.ts` | axe Playwright smoke (welcome + settings accessibility hub) |
 | `services/commands/` | Command registry backing the palette (fuzzy search — regression-sensitive if E2E targets palette copy) |
 | `hooks/useGlobalKeyboardShortcuts.ts` | Global shortcut listener — keep in sync with **Settings → Shortcuts** defaults |
 | `stryker.conf.json` | Mutation testing targets + thresholds (`break: null` until score improves) |

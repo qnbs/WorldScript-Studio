@@ -273,19 +273,28 @@ Missing keys (e.g. after adding strings to `locales/en/*.json`): run `node scrip
 
 ## Accessibility
 
-The project follows WCAG 2.1 AA guidelines:
+We target **WCAG 2.2 AA** patterns where practical (Biome `a11y` rules are strict — warnings fail CI).
 
-- All interactive elements have `aria-label` or accessible text
-- Dialog/Modal components use `role="dialog"`, `aria-modal="true"`, `aria-labelledby`
-- AI responses use `aria-live="polite"` regions for screen-reader announcements
-- Scene Board drag-and-drop uses `role="list"` with accessible instructions
-- Keyboard navigation works throughout (Tab, Enter, Escape, Arrow keys)
+**Architecture (don’t bypass):**
 
-When adding new components:
+- **Live announcements:** `LiveRegionProvider` / `useAnnounce()` in [`contexts/LiveRegionContext.tsx`](contexts/LiveRegionContext.tsx) — use for meaningful status changes; respect `settings.accessibility.liveRegionVerbosity`.
+- **Focus management:** Modals and the **Command Palette** use [`hooks/useFocusTrap.ts`](hooks/useFocusTrap.ts); restore focus when closing overlays.
+- **Settings:** Accessibility presets + Zod-normalized persistence — [`features/settings/accessibilitySchema.ts`](features/settings/accessibilitySchema.ts), UI in [`components/settings/SystemSections.tsx`](components/settings/SystemSections.tsx).
 
-- Use semantic HTML elements where possible
-- Provide `aria-label` for icon-only buttons
-- Test with a screen reader (NVDA/VoiceOver) before submitting
+**Patterns:**
+
+- Interactive controls expose accessible names (`aria-label`, visible text, or `aria-labelledby`).
+- Dialog surfaces use `role="dialog"`, `aria-modal`, and labelled titles (see [`components/ui/Modal.tsx`](components/ui/Modal.tsx)).
+- Long-running or AI-heavy regions may use `aria-busy` and short `aria-live="polite"` copy (e.g. Writer, Manuscript inspector).
+- Lists and boards: semantic roles (`list`, `tablist`, grouped command palette options); prefer keyboard alternatives where interaction is mouse-first (e.g. Scene Board reorder controls).
+
+**When adding UI:**
+
+- Prefer semantic HTML; avoid redundant roles on native elements unless fixing SR gaps.
+- Icon-only buttons require `aria-label` (or tooltip + focus pattern that meets WCAG).
+- New copy goes through **all five** locale trees — [`pnpm run i18n:check`](package.json).
+
+**Further reading:** [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md); automated smoke — [`tests/e2e/a11y.spec.ts`](tests/e2e/a11y.spec.ts).
 
 ---
 

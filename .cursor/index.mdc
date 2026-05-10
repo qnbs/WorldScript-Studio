@@ -27,6 +27,8 @@ alwaysApply: true
 
 **Qualität:** `pnpm lint` / `biome`, `pnpm typecheck`, `pnpm test:run`. CI-Build: `bundle:budget` + `analyze` (rollup visualizer). Graphify: `graphify:bootstrap` → `graphify:update`; Git-Hooks optional via `simple-git-hooks` + lint-staged.
 
+**Barrierefreiheit:** `LiveRegionProvider` / `useAnnounce()` ([`contexts/LiveRegionContext.tsx`](../contexts/LiveRegionContext.tsx)); Settings-Hub Presets + Zod ([`features/settings/accessibilitySchema.ts`](../features/settings/accessibilitySchema.ts)); Maintainer-Leitfaden [`docs/ACCESSIBILITY.md`](../docs/ACCESSIBILITY.md); E2E [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts).
+
 **Command Center:** Zentrale Befehlsliste `services/commands/` → Command Palette (Fuzzy, Recent/Pinned); Ausführung über `CommandExecutorContext`; globale Shortcuts `hooks/useGlobalKeyboardShortcuts.ts` + `services/keyboard/`; Palette-Sichtbarkeit `app/transientUiStore.ts`. Hilfe: statische Retrieval-Hilfe für KI (`services/help/helpDocRetrieval.ts`).
 
 **Storage:** Auto-Save nutzt `saveEnvelopeFromProjectData()` aus `services/storageBackend.ts` (typisiertes Redux-Envelope, kein Cast im Listener).

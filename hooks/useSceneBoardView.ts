@@ -73,6 +73,13 @@ export const useSceneBoardView = () => {
     dispatch(projectActions.addManuscriptSection(newSection));
   }, [dispatch, t]);
 
+  const handleMoveSectionWithinAct = useCallback(
+    (id: string, direction: 'up' | 'down') => {
+      dispatch(projectActions.moveManuscriptSectionWithinAct({ id, direction }));
+    },
+    [dispatch],
+  );
+
   return {
     t,
     project,
@@ -82,6 +89,7 @@ export const useSceneBoardView = () => {
     handleUpdateSection,
     handleDeleteSection,
     handleMoveSection,
+    handleMoveSectionWithinAct,
     handleAddSection,
   };
 };
