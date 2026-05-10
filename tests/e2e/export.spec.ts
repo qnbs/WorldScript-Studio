@@ -1,6 +1,6 @@
 import { expect, type Route, test } from '@playwright/test';
 
-import { waitForSpaReady } from './helpers';
+import { selectFirstEnabledWriterSection, waitForSpaReady } from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -61,16 +61,8 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await expect(applyButton).toBeVisible({ timeout: 15000 });
     await applyButton.click();
 
-    await page.getByRole('button', { name: /Writer|Schreiben/i }).click();
-    const sectionSelect = page.getByRole('combobox').first();
-    await expect(sectionSelect).toBeVisible();
-    const firstValue = await sectionSelect
-      .locator('option:not([disabled])')
-      .first()
-      .getAttribute('value');
-    if (firstValue) {
-      await sectionSelect.selectOption(firstValue);
-    }
+    await page.getByRole('button', { name: /AI Writing Studio|Writer|Schreiben/i }).click();
+    await selectFirstEnabledWriterSection(page);
 
     const writerTextbox = page.getByRole('textbox').first();
     await expect(writerTextbox).toBeVisible();

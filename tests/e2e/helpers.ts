@@ -1,4 +1,24 @@
 import type { Page } from '@playwright/test';
+import { expect } from '@playwright/test';
+
+// QNBS-v3: Stable Writer `#writer-section-select` + option handling avoids Playwright strict-mode / native-<option> visibility pitfalls that broke CI E2E.
+
+/** Writer section `<Select>` — stable id to avoid picking tone/tool comboboxes elsewhere on the page. */
+export function writerSectionSelect(page: Page) {
+  return page.locator('#writer-section-select');
+}
+
+/**
+ * Native `<option>` nodes are not Playwright-visible when the list is closed; use counts + selectOption.
+ */
+export async function selectFirstEnabledWriterSection(page: Page): Promise<void> {
+  const sel = writerSectionSelect(page);
+  await expect(sel).toBeVisible();
+  const enabled = sel.locator('option:not([disabled])');
+  await expect.poll(async () => enabled.count()).toBeGreaterThan(0);
+  const value = await enabled.first().getAttribute('value');
+  if (value) await sel.selectOption(value);
+}
 
 /**
  * Vite dev server keeps the HMR/WebSocket busy → `networkidle` often never settles.

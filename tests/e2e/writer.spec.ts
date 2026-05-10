@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-import { ensureBlankProject, selectEnglish, sidebar, waitForSpaReady } from './helpers';
+import {
+  ensureBlankProject,
+  selectEnglish,
+  selectFirstEnabledWriterSection,
+  sidebar,
+  waitForSpaReady,
+} from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -33,14 +39,7 @@ test.describe('AI Writer Flow (CI-only)', () => {
     await writerButton.click();
     await page.waitForURL('**/');
 
-    const sectionSelect = page.getByRole('combobox').first();
-    await expect(sectionSelect).toBeVisible();
-    const sectionOptions = sectionSelect.locator('option:not([disabled])');
-    await expect(sectionOptions.first()).toBeVisible();
-    const firstValue = await sectionOptions.first().getAttribute('value');
-    if (firstValue) {
-      await sectionSelect.selectOption(firstValue);
-    }
+    await selectFirstEnabledWriterSection(page);
 
     const writerTextbox = page.getByRole('textbox').first();
     await expect(writerTextbox).toBeVisible();

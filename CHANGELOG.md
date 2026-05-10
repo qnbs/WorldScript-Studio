@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Performance:** Manuscript metrics sampling (`services/manuscriptMetricsSampling.ts`), diff/word-diff caps, scene timeline DOM caps, RAG rebuild yields between sections — tuned for low-end hardware.
 
+### Fixed
+
+- **Playwright (CI):** E2E helpers use `#writer-section-select` (avoids wrong combobox); native `<option>` assertions replaced with count/selectOption; snapshot panel uses `getByRole('heading')` so `/Snapshots/i` does not match empty-state copy; export flow navigates via **AI Writing Studio** label.
+
 ### Documentation
 
 - **README / AUDIT:** CI vs local validation (typecheck, lint, i18n; defer heavy E2E to cloud CI); Gold-Standard audit section dated **2026-05-10**.

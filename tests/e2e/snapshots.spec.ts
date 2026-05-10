@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-import { ensureBlankProject, selectEnglish, sidebar, waitForSpaReady } from './helpers';
+import {
+  ensureBlankProject,
+  selectEnglish,
+  selectFirstEnabledWriterSection,
+  sidebar,
+  waitForSpaReady,
+} from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -8,13 +14,7 @@ const isCI = process.env['CI'] === 'true';
 async function seedManuscriptContent(page: import('@playwright/test').Page): Promise<void> {
   const writerBtn = sidebar(page).getByRole('button', { name: /AI Writing Studio/i });
   await writerBtn.click();
-  const sectionSelect = page.getByRole('combobox').first();
-  await expect(sectionSelect).toBeVisible({ timeout: 8000 });
-  const firstValue = await sectionSelect
-    .locator('option:not([disabled])')
-    .first()
-    .getAttribute('value');
-  if (firstValue) await sectionSelect.selectOption(firstValue);
+  await selectFirstEnabledWriterSection(page);
   const textarea = page.getByRole('textbox').first();
   await expect(textarea).toBeVisible();
   await textarea.fill('Snapshot seed content — this text will be captured in a snapshot.');
@@ -127,7 +127,9 @@ test.describe('Snapshot Flow (CI-only)', () => {
     // Wait up to 10 s — auto-save fires within ~30 s in production,
     // but the test environment may trigger it sooner via forced save.
     // We just verify the panel renders without error for now.
-    await expect(page.getByText(/Snapshots/i)).toBeVisible({ timeout: 6000 });
+    await expect(page.getByRole('heading', { name: /Snapshots/i })).toBeVisible({
+      timeout: 6000,
+    });
     // Snapshot count label is always present even if 0
     await expect(
       page

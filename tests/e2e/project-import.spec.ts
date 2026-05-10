@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-import { ensureBlankProject, selectEnglish, sidebar, waitForSpaReady } from './helpers';
+import {
+  ensureBlankProject,
+  selectEnglish,
+  sidebar,
+  waitForSpaReady,
+  writerSectionSelect,
+} from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -53,7 +59,7 @@ test.describe('Project Import (CI-only)', () => {
     await sidebar(page)
       .getByRole('button', { name: /AI Writing Studio/i })
       .click();
-    const sectionSelect = page.getByRole('combobox').first();
+    const sectionSelect = writerSectionSelect(page);
     await expect(sectionSelect).toBeVisible({ timeout: 8000 });
     await expect(sectionSelect.locator('option', { hasText: /Chapter One/i })).toBeAttached();
   });
