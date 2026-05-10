@@ -61,7 +61,7 @@ const ContextPanel: FC = React.memo(() => {
     selection.start === selection.end;
   return (
     <div className="h-full flex flex-col">
-      <Card className="h-full flex flex-col border-0 sm:border">
+      <Card className="h-full flex flex-col border-0 sm:border border-[var(--border-primary)] shadow-sc-md rounded-sc-lg">
         <CardHeader className="hidden md:block">
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
             {t('writer.studio.context.title')}

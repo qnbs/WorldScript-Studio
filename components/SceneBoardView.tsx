@@ -90,7 +90,7 @@ const SortableSceneCard: FC<{
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-lg p-3 mb-2 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+      className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-sc-lg p-3 mb-2 shadow-sc-sm cursor-grab active:cursor-grabbing hover:shadow-sc-md transition-[box-shadow] duration-sc-normal ease-sc-standard"
       {...attributes}
       {...listeners}
     >

@@ -5,55 +5,94 @@
 /* ── Tailwind v4: dark mode via .dark-theme selector ─── */
 @custom-variant dark (&:where(.dark-theme, .dark-theme *));
 
-/* ── Theme: CSS Custom Properties ──────────────────────── */
+/* ── Theme: semantic tokens + legacy bridge (QNBS-v3: DS foundation, FOUC-safe defaults on :root) ── */
 :root {
-  /* Base Palette - Deep Space / Midnight - ULTRA PREMIUM DARK */
-  --background-primary: #020617; /* Slate 950 - Deeper black */
-  --background-secondary: #0f172a; /* Slate 900 */
-  --background-tertiary: #1e293b; /* Slate 800 */
+  /* Motion & stacking — theme-agnostic */
+  --sc-duration-fast: 150ms;
+  --sc-duration-normal: 280ms;
+  --sc-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --sc-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --sc-z-docked: 10;
+  --sc-z-sticky: 100;
+  --sc-z-command: 150;
+  --sc-z-modal: 200;
+  --sc-z-toast: 300;
+  --font-ui: "Inter", system-ui, -apple-system, sans-serif;
+  --font-editor: "Merriweather", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --sc-prose-measure: 65ch;
 
-  /* Interactive - Electric Indigo */
-  --background-interactive: #6366f1;
-  --background-interactive-hover: #4f46e5;
-  --background-interactive-subtle: rgba(99, 102, 241, 0.1);
+  /* Dark — semantic */
+  --sc-surface-base: #020617;
+  --sc-surface-raised: #0f172a;
+  --sc-surface-overlay: #1e293b;
+  --sc-surface-inverse: #f8fafc;
+  --sc-text-primary: #f8fafc;
+  --sc-text-secondary: #cbd5e1;
+  --sc-text-muted: #64748b;
+  --sc-text-on-accent: #ffffff;
+  --sc-accent: #6366f1;
+  --sc-accent-hover: #4f46e5;
+  --sc-accent-subtle: rgba(99, 102, 241, 0.12);
+  --sc-accent-glow: 0 0 40px -10px rgba(99, 102, 241, 0.35);
+  --sc-border-subtle: rgba(255, 255, 255, 0.08);
+  --sc-border-strong: rgba(255, 255, 255, 0.15);
+  --sc-border-focus: #6366f1;
+  --sc-ring-focus: rgba(99, 102, 241, 0.55);
+  --sc-danger-bg: rgba(239, 68, 68, 0.12);
+  --sc-danger-fg: #f87171;
+  --sc-danger-border: rgba(239, 68, 68, 0.35);
+  --sc-success-bg: rgba(34, 197, 94, 0.12);
+  --sc-success-fg: #4ade80;
+  --sc-warning-bg: rgba(245, 158, 11, 0.12);
+  --sc-warning-fg: #fbbf24;
+  --sc-info-bg: rgba(59, 130, 246, 0.12);
+  --sc-info-fg: #60a5fa;
+  --sc-prose-bg: var(--sc-surface-base);
+  --sc-prose-fg: var(--sc-text-primary);
+  --sc-shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.45);
+  --sc-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --sc-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  --sc-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.65), 0 4px 6px -4px rgb(0 0 0 / 0.65);
+  --sc-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.65), 0 8px 10px -6px rgb(0 0 0 / 0.65);
+  --sc-backdrop-strong: rgba(0, 0, 0, 0.55);
 
-  /* Foreground */
-  --foreground-primary: #f8fafc; /* Slate 50 */
-  --foreground-secondary: #cbd5e1; /* Slate 300 */
-  --foreground-muted: #64748b; /* Slate 500 */
-  --foreground-interactive: #ffffff;
+  /* @domain/ui shorthand */
+  --sc-bg: var(--sc-surface-base);
+  --sc-fg: var(--sc-text-primary);
+  --sc-muted: var(--sc-text-muted);
 
-  /* Borders - Glassy & Refined */
-  --border-primary: rgba(255, 255, 255, 0.08);
-  --border-highlight: rgba(255, 255, 255, 0.15);
-  --border-interactive: #6366f1;
-
-  /* Rings & Glows */
-  --ring-focus: rgba(99, 102, 241, 0.6);
-  --glow-primary: 0 0 40px -10px rgba(99, 102, 241, 0.3);
-
-  /* Navigation */
+  /* Legacy bridge → semantic */
+  --background-primary: var(--sc-surface-base);
+  --background-secondary: var(--sc-surface-raised);
+  --background-tertiary: var(--sc-surface-overlay);
+  --background-interactive: var(--sc-accent);
+  --background-interactive-hover: var(--sc-accent-hover);
+  --background-interactive-subtle: var(--sc-accent-subtle);
+  --foreground-primary: var(--sc-text-primary);
+  --foreground-secondary: var(--sc-text-secondary);
+  --foreground-muted: var(--sc-text-muted);
+  --foreground-interactive: var(--sc-text-on-accent);
+  --border-primary: var(--sc-border-subtle);
+  --border-highlight: var(--sc-border-strong);
+  --border-interactive: var(--sc-border-focus);
+  --ring-focus: var(--sc-ring-focus);
+  --glow-primary: var(--sc-accent-glow);
   --nav-background-hover: rgba(255, 255, 255, 0.05);
   --nav-background-active: rgba(99, 102, 241, 0.15);
   --nav-text-active: #a5b4fc;
-  --nav-border-active: #6366f1;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.7), 0 4px 6px -4px rgb(0 0 0 / 0.7);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.7), 0 8px 10px -6px rgb(0 0 0 / 0.7);
-
-  /* Gradients */
+  --nav-border-active: var(--sc-accent);
+  --shadow-sm: var(--sc-shadow-sm);
+  --shadow-md: var(--sc-shadow-md);
+  --shadow-lg: var(--sc-shadow-lg);
+  --shadow-xl: var(--sc-shadow-xl);
   --gradient-surface: linear-gradient(
     145deg,
     rgba(255, 255, 255, 0.03) 0%,
     rgba(255, 255, 255, 0) 100%
   );
   --background-gradient-overlay-start: rgba(2, 6, 23, 0);
-
-  /* Glass & Overlay */
-  --overlay-backdrop: rgba(0, 0, 0, 0.5);
+  --overlay-backdrop: var(--sc-backdrop-strong);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-bg-hover: rgba(255, 255, 255, 0.1);
   --glass-border: rgba(255, 255, 255, 0.05);
@@ -62,47 +101,209 @@
 }
 
 .light-theme {
-  /* Paper / Ink - HIGH CONTRAST LIGHT */
-  --background-primary: #ffffff;
-  --background-secondary: #f8fafc; /* Slate 50 */
-  --background-tertiary: #f1f5f9; /* Slate 100 */
+  --sc-surface-base: #ffffff;
+  --sc-surface-raised: #f8fafc;
+  --sc-surface-overlay: #f1f5f9;
+  --sc-surface-inverse: #0f172a;
+  --sc-text-primary: #0f172a;
+  --sc-text-secondary: #475569;
+  --sc-text-muted: #94a3b8;
+  --sc-text-on-accent: #ffffff;
+  --sc-accent: #4f46e5;
+  --sc-accent-hover: #4338ca;
+  --sc-accent-subtle: rgba(79, 70, 229, 0.08);
+  --sc-accent-glow: 0 0 24px -6px rgba(79, 70, 229, 0.18);
+  --sc-border-subtle: #e2e8f0;
+  --sc-border-strong: #cbd5e1;
+  --sc-border-focus: #4f46e5;
+  --sc-ring-focus: rgba(79, 70, 229, 0.38);
+  --sc-danger-bg: rgba(220, 38, 38, 0.08);
+  --sc-danger-fg: #dc2626;
+  --sc-danger-border: rgba(220, 38, 38, 0.25);
+  --sc-success-bg: rgba(22, 163, 74, 0.1);
+  --sc-success-fg: #15803d;
+  --sc-warning-bg: rgba(217, 119, 6, 0.1);
+  --sc-warning-fg: #c2410c;
+  --sc-info-bg: rgba(37, 99, 235, 0.1);
+  --sc-info-fg: #1d4ed8;
+  --sc-prose-bg: #ffffff;
+  --sc-prose-fg: var(--sc-text-primary);
+  --sc-shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --sc-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --sc-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+  --sc-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
+  --sc-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.08);
+  --sc-backdrop-strong: rgba(0, 0, 0, 0.35);
 
-  --background-interactive: #4f46e5;
-  --background-interactive-hover: #4338ca;
-  --background-interactive-subtle: rgba(79, 70, 229, 0.05);
+  --sc-bg: var(--sc-surface-base);
+  --sc-fg: var(--sc-text-primary);
+  --sc-muted: var(--sc-text-muted);
 
-  --foreground-primary: #0f172a; /* Slate 900 */
-  --foreground-secondary: #475569; /* Slate 600 */
-  --foreground-muted: #94a3b8; /* Slate 400 */
-  --foreground-interactive: #ffffff;
-
-  --border-primary: #e2e8f0; /* Slate 200 */
-  --border-highlight: #cbd5e1; /* Slate 300 */
-  --border-interactive: #4f46e5;
-
-  --ring-focus: rgba(79, 70, 229, 0.4);
-  --glow-primary: 0 0 20px -5px rgba(79, 70, 229, 0.15);
-
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.06);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.08);
-
+  --background-primary: var(--sc-surface-base);
+  --background-secondary: var(--sc-surface-raised);
+  --background-tertiary: var(--sc-surface-overlay);
+  --background-interactive: var(--sc-accent);
+  --background-interactive-hover: var(--sc-accent-hover);
+  --background-interactive-subtle: var(--sc-accent-subtle);
+  --foreground-primary: var(--sc-text-primary);
+  --foreground-secondary: var(--sc-text-secondary);
+  --foreground-muted: var(--sc-text-muted);
+  --foreground-interactive: var(--sc-text-on-accent);
+  --border-primary: var(--sc-border-subtle);
+  --border-highlight: var(--sc-border-strong);
+  --border-interactive: var(--sc-border-focus);
+  --ring-focus: var(--sc-ring-focus);
+  --glow-primary: var(--sc-accent-glow);
   --nav-background-hover: rgba(0, 0, 0, 0.03);
   --nav-background-active: rgba(79, 70, 229, 0.08);
   --nav-text-active: #4338ca;
-  --nav-border-active: #4f46e5;
-
+  --nav-border-active: var(--sc-accent);
+  --shadow-sm: var(--sc-shadow-sm);
+  --shadow-md: var(--sc-shadow-md);
+  --shadow-lg: var(--sc-shadow-lg);
+  --shadow-xl: var(--sc-shadow-xl);
   --gradient-surface: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
   --background-gradient-overlay-start: rgba(255, 255, 255, 0);
-
-  /* Glass & Overlay */
-  --overlay-backdrop: rgba(0, 0, 0, 0.2);
+  --overlay-backdrop: rgba(0, 0, 0, 0.22);
   --glass-bg: rgba(0, 0, 0, 0.03);
   --glass-bg-hover: rgba(0, 0, 0, 0.05);
   --glass-border: rgba(0, 0, 0, 0.05);
   --glass-highlight: rgba(0, 0, 0, 0.08);
   --card-gradient-overlay: rgba(0, 0, 0, 0.15);
+}
+
+/* Writer's Sepia — warm paper (stacks with light/dark; overrides surfaces) */
+.appearance-sepia {
+  --sc-surface-base: #f4ecd8;
+  --sc-surface-raised: #efe6cf;
+  --sc-surface-overlay: #e8dcc8;
+  --sc-text-primary: #3d3428;
+  --sc-text-secondary: #5c5346;
+  --sc-text-muted: #8a7f72;
+  --sc-accent: #b45309;
+  --sc-accent-hover: #92400e;
+  --sc-accent-subtle: rgba(180, 83, 9, 0.14);
+  --sc-accent-glow: 0 0 32px -8px rgba(180, 83, 9, 0.28);
+  --sc-border-subtle: rgba(61, 52, 40, 0.12);
+  --sc-border-strong: rgba(61, 52, 40, 0.22);
+  --sc-border-focus: #b45309;
+  --sc-ring-focus: rgba(180, 83, 9, 0.45);
+  --sc-prose-bg: #faf6ee;
+  --sc-prose-fg: #2c2419;
+  --nav-text-active: #b45309;
+  --nav-background-active: rgba(180, 83, 9, 0.12);
+  --sc-bg: var(--sc-surface-base);
+  --sc-fg: var(--sc-text-primary);
+  --sc-muted: var(--sc-text-muted);
+  --background-primary: var(--sc-surface-base);
+  --background-secondary: var(--sc-surface-raised);
+  --background-tertiary: var(--sc-surface-overlay);
+  --background-interactive: var(--sc-accent);
+  --background-interactive-hover: var(--sc-accent-hover);
+  --background-interactive-subtle: var(--sc-accent-subtle);
+  --foreground-primary: var(--sc-text-primary);
+  --foreground-secondary: var(--sc-text-secondary);
+  --foreground-muted: var(--sc-text-muted);
+  --border-primary: var(--sc-border-subtle);
+  --border-highlight: var(--sc-border-strong);
+  --border-interactive: var(--sc-border-focus);
+  --ring-focus: var(--sc-ring-focus);
+  --glow-primary: var(--sc-accent-glow);
+  --nav-border-active: var(--sc-accent);
+}
+
+/* Genre-inspired accents (creative tint; keeps readable surfaces) */
+.appearance-fantasy {
+  --sc-accent: #a855f7;
+  --sc-accent-hover: #9333ea;
+  --sc-accent-subtle: rgba(168, 85, 247, 0.14);
+  --sc-accent-glow: 0 0 48px -12px rgba(168, 85, 247, 0.35);
+  --background-interactive: var(--sc-accent);
+  --background-interactive-hover: var(--sc-accent-hover);
+  --background-interactive-subtle: var(--sc-accent-subtle);
+  --border-interactive: var(--sc-accent);
+  --nav-border-active: var(--sc-accent);
+  --nav-text-active: #d8b4fe;
+  --glow-primary: var(--sc-accent-glow);
+}
+
+.appearance-romance {
+  --sc-accent: #e11d48;
+  --sc-accent-hover: #be123c;
+  --sc-accent-subtle: rgba(225, 29, 72, 0.12);
+  --sc-accent-glow: 0 0 40px -10px rgba(225, 29, 72, 0.28);
+  --background-interactive: var(--sc-accent);
+  --background-interactive-hover: var(--sc-accent-hover);
+  --background-interactive-subtle: var(--sc-accent-subtle);
+  --border-interactive: var(--sc-accent);
+  --nav-border-active: var(--sc-accent);
+  --nav-text-active: #fda4af;
+  --glow-primary: var(--sc-accent-glow);
+}
+
+/* High contrast — user toggle + system preference */
+.accessibility-high-contrast {
+  --sc-border-subtle: color-mix(in srgb, var(--foreground-primary) 28%, transparent);
+  --sc-border-strong: color-mix(in srgb, var(--foreground-primary) 45%, transparent);
+  --ring-focus: color-mix(in srgb, var(--sc-accent) 65%, white);
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --sc-border-subtle: rgba(255, 255, 255, 0.22);
+    --sc-border-strong: rgba(255, 255, 255, 0.38);
+  }
+  .light-theme {
+    --sc-border-subtle: #94a3b8;
+    --sc-border-strong: #64748b;
+  }
+}
+
+/* Reduced motion: Aurora + stagger respect */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob {
+    animation: none;
+    opacity: 0.12;
+  }
+  .animate-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.storycraft-reduced-motion .aurora-blob {
+  animation: none;
+  opacity: 0.1;
+}
+
+/* Tailwind v4 theme bridge → utilities bg-sc-* / text-sc-* */
+@theme inline {
+  --color-sc-bg: var(--sc-bg);
+  --color-sc-fg: var(--sc-fg);
+  --color-sc-muted: var(--sc-muted);
+  --color-sc-accent: var(--sc-accent);
+  --color-sc-surface-base: var(--sc-surface-base);
+  --color-sc-surface-raised: var(--sc-surface-raised);
+  --color-sc-surface-overlay: var(--sc-surface-overlay);
+  --color-sc-text-primary: var(--sc-text-primary);
+  --color-sc-text-secondary: var(--sc-text-secondary);
+  --color-sc-text-muted: var(--sc-text-muted);
+  --shadow-sc-sm: var(--sc-shadow-sm);
+  --shadow-sc-md: var(--sc-shadow-md);
+  --shadow-sc-lg: var(--sc-shadow-lg);
+  --radius-sc-sm: 0.375rem;
+  --radius-sc-md: 0.5rem;
+  --radius-sc-lg: 0.75rem;
+  --spacing-sc-xs: 0.25rem;
+  --spacing-sc-sm: 0.5rem;
+  --spacing-sc-md: 1rem;
+  --spacing-sc-lg: 1.5rem;
+  --spacing-sc-xl: 2rem;
+  --ease-sc-standard: var(--sc-ease-standard);
+  --ease-sc-emphasized: var(--sc-ease-emphasized);
+  --duration-sc-fast: var(--sc-duration-fast);
+  --duration-sc-normal: var(--sc-duration-normal);
 }
 
 /* ── Base ──────────────────────────────────────────────── */
@@ -115,9 +316,9 @@ body {
   background-color: var(--background-primary);
   color: var(--foreground-primary);
   transition:
-    background-color 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-    color 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+    background-color var(--sc-duration-normal) var(--sc-ease-emphasized),
+    color var(--sc-duration-normal) var(--sc-ease-emphasized);
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

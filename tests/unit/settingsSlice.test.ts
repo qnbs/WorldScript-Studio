@@ -16,6 +16,7 @@ describe('settingsSlice', () => {
     const state = initState();
     expect(state).toBeDefined();
     expect(state.theme).toBeTypeOf('string');
+    expect(state.appearancePreset).toBe('default');
     expect(state.aiCreativity).toBe('Balanced');
     expect(state.keyboardShortcuts.length).toBeGreaterThan(0);
     expect(state.writingGoals.length).toBeGreaterThan(0);
@@ -38,6 +39,11 @@ describe('settingsSlice', () => {
   it('setTheme updates theme', () => {
     const state = settingsReducer(initState(), settingsActions.setTheme('auto'));
     expect(state.theme).toBe('auto');
+  });
+
+  it('setAppearancePreset updates appearance preset', () => {
+    const state = settingsReducer(initState(), settingsActions.setAppearancePreset('sepia'));
+    expect(state.appearancePreset).toBe('sepia');
   });
 
   it('setEditorFont updates editor font', () => {

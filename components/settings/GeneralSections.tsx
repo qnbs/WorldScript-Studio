@@ -68,6 +68,49 @@ export const AppearanceSection: FC = () => {
               {t('settings.theme.auto')}
             </Button>
           </div>
+          {/* QNBS-v3: Creative palettes layer on dark/light — semantic tokens in index.css */}
+          <div className="pt-2 border-t border-[var(--border-primary)] space-y-2">
+            <span className="text-sm font-medium text-[var(--foreground-secondary)]">
+              {t('settings.appearance.preset')}
+            </span>
+            <p className="text-xs text-[var(--foreground-muted)]">
+              {t('settings.appearance.presetHint')}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Button
+                variant={settings.appearancePreset === 'default' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => handleSettingChange('appearancePreset', 'default')}
+                className="justify-center"
+              >
+                {t('settings.appearance.presetDefault')}
+              </Button>
+              <Button
+                variant={settings.appearancePreset === 'sepia' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => handleSettingChange('appearancePreset', 'sepia')}
+                className="justify-center"
+              >
+                {t('settings.appearance.presetSepia')}
+              </Button>
+              <Button
+                variant={settings.appearancePreset === 'fantasy' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => handleSettingChange('appearancePreset', 'fantasy')}
+                className="justify-center"
+              >
+                {t('settings.appearance.presetFantasy')}
+              </Button>
+              <Button
+                variant={settings.appearancePreset === 'romance' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => handleSettingChange('appearancePreset', 'romance')}
+                className="justify-center"
+              >
+                {t('settings.appearance.presetRomance')}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
       <Card>
