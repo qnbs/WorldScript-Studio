@@ -127,16 +127,9 @@ test.describe('Snapshot Flow (CI-only)', () => {
     // Wait up to 10 s — auto-save fires within ~30 s in production,
     // but the test environment may trigger it sooner via forced save.
     // We just verify the panel renders without error for now.
-    await expect(page.getByRole('heading', { name: /Snapshots/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /Snapshots \(\d+\)/i })).toBeVisible({
       timeout: 6000,
     });
-    // Snapshot count label is always present even if 0
-    await expect(
-      page
-        .locator('[aria-label*="snapshot" i], [class*="snapshot" i]')
-        .first()
-        .or(page.getByText(/Snapshots \(\d+\)/i).first()),
-    ).toBeVisible({ timeout: 6000 });
   });
 
   test('snapshot panel closes on pressing Escape', async ({ page }) => {

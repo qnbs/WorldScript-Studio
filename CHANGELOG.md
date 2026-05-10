@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Characters:** "Add Manually" opens the dossier immediately again (dispatch + local selection state).
+- **Playwright (CI):** Gemini route mock returns `candidates[].content.parts[].text` for `@google/genai`; import E2E follows **Import Project** → modal → **Import**; VC snapshot assertions avoid `[aria-label*="snapshot"]` matching the "Create new snapshot" button.
 - **Playwright (CI):** E2E helpers use `#writer-section-select` (avoids wrong combobox); native `<option>` assertions replaced with count/selectOption; snapshot panel uses `getByRole('heading')` so `/Snapshots/i` does not match empty-state copy; export flow navigates via **AI Writing Studio** label.
 
 ### Documentation
