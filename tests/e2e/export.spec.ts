@@ -115,7 +115,9 @@ test.describe('End-to-end project flow (CI-only)', () => {
       timeout: 15000,
     });
 
-    await page.getByRole('button', { name: /Dark/i }).click();
+    // QNBS-v3: Theme-Buttons stehen in AppearanceSection — bei aktiver AI-Kategorie sind sie nicht im DOM.
+    await page.getByRole('button', { name: /Appearance|Erscheinungsbild/i }).click();
+    await page.getByRole('button', { name: /Dark|Dunkel/i }).click();
     await expect(page.locator('body')).toHaveClass(/dark-theme/);
   });
 });
