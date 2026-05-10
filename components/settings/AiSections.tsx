@@ -426,6 +426,16 @@ export const AdvancedAiSection: FC = () => {
                 checked={featureFlags.enableStoryBibleAdvanced}
                 onChange={(v) => handleSettingChange('enableStoryBibleAdvanced', v)}
               />
+              <ToggleSwitch
+                label={t('settings.featureFlags.enableBinderResearch')}
+                checked={featureFlags.enableBinderResearch}
+                onChange={(v) => handleSettingChange('enableBinderResearch', v)}
+              />
+              <ToggleSwitch
+                label={t('settings.featureFlags.enableCompileWizard')}
+                checked={featureFlags.enableCompileWizard}
+                onChange={(v) => handleSettingChange('enableCompileWizard', v)}
+              />
             </div>
             <p className="text-sm text-[var(--foreground-muted)] mt-3">
               {t('settings.featureFlags.description')}

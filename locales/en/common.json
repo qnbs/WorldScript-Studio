@@ -136,6 +136,7 @@
   "vc.restoreWarning": "The current state will be lost unless a snapshot exists. Create one beforehand!",
   "vc.switchBranchTitle": "Switch Branch",
   "vc.active": "Active",
+  "vc.scopeSection": "Section",
   "collab.title": "Collaboration",
   "collab.connected": "Connected",
   "collab.close": "Close collaboration panel",

@@ -170,6 +170,12 @@ export const useSettingsView = () => {
         case 'enableStoryBibleAdvanced':
           dispatch(featureFlagsActions.setEnableStoryBibleAdvanced(Boolean(value)));
           break;
+        case 'enableBinderResearch':
+          dispatch(featureFlagsActions.setEnableBinderResearch(Boolean(value)));
+          break;
+        case 'enableCompileWizard':
+          dispatch(featureFlagsActions.setEnableCompileWizard(Boolean(value)));
+          break;
         default:
           logger.warn(`Unknown setting key: ${key}`);
           break;

@@ -1,16 +1,16 @@
 {
-  "sidebar.dashboard": "Dashboard",
-  "sidebar.manuscript": "Manuskript",
-  "sidebar.writer": "KI-Schreibstudio",
-  "sidebar.templates": "Vorlagen",
-  "sidebar.outline": "Gliederungsgenerator",
-  "sidebar.characters": "Charaktere",
-  "sidebar.world": "Weltenbau",
-  "sidebar.sceneboard": "Szenenbrett",
   "sidebar.characterGraph": "Charaktergraph",
+  "sidebar.characters": "Charaktere",
   "sidebar.consistencyChecker": "Konsistenzprüfer",
   "sidebar.critic": "KI-Kritiker",
+  "sidebar.dashboard": "Dashboard",
   "sidebar.export": "Exportieren",
+  "sidebar.help": "Hilfe",
+  "sidebar.manuscript": "Manuskript",
+  "sidebar.outline": "Gliederungsgenerator",
+  "sidebar.sceneboard": "Szenenbrett",
   "sidebar.settings": "Einstellungen",
-  "sidebar.help": "Hilfe"
+  "sidebar.templates": "Vorlagen",
+  "sidebar.world": "Weltenbau",
+  "sidebar.writer": "KI-Schreibstudio"
 }

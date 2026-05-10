@@ -65,5 +65,21 @@
   "export.pasteSection.defaultTitle": "Pasted content",
   "export.format.docx": "Word Document (.docx)",
   "export.error.epubFailed": "EPUB export failed: ",
-  "export.error.exportFailed": "Export failed"
+  "export.error.exportFailed": "Export failed",
+  "export.compileWizard.openButton": "Compile wizard…",
+  "export.compileWizard.title": "Compile wizard",
+  "export.compileWizard.stepPreset": "Choose a preset",
+  "export.compileWizard.stepReview": "Review & export",
+  "export.compileWizard.next": "Next",
+  "export.compileWizard.back": "Back",
+  "export.compileWizard.runExport": "Export now",
+  "export.compileWizard.reviewFormat": "Format",
+  "export.compileWizard.reviewTitle": "Title & logline",
+  "export.compileWizard.reviewManuscript": "Manuscript",
+  "export.compileWizard.reviewCharsWorlds": "Characters / worlds",
+  "export.compileWizard.flagOn": "Included",
+  "export.compileWizard.flagOff": "Excluded",
+  "export.compileWizard.presets.novelPdf": "Novel manuscript (PDF)",
+  "export.compileWizard.presets.fullMd": "Full project archive (Markdown)",
+  "export.compileWizard.presets.ebookEpub": "eBook chapters (EPUB)"
 }

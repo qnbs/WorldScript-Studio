@@ -133,6 +133,44 @@ describe('versionControlSlice', () => {
     expect(opened.isPanelOpen).toBe(true);
   });
 
+  it('creates section-scoped snapshot storing only matching section', () => {
+    const state = reducer(
+      undefined,
+      versionControlActions.createSnapshot({
+        label: 'Section checkpoint',
+        sections,
+        sectionId: 's1',
+      }),
+    );
+
+    expect(state.snapshots[0]?.sectionId).toBe('s1');
+    const restored = decompressManuscript(state.snapshots[0]?.manuscriptSnapshot ?? '');
+    expect(restored).toHaveLength(1);
+    expect(restored[0]?.id).toBe('s1');
+  });
+
+  it('hydrates branches from persisted project payload', () => {
+    const state = reducer(
+      undefined,
+      versionControlActions.hydrateFromPersisted({
+        branches: [
+          {
+            id: MAIN_BRANCH_ID,
+            name: 'main',
+            description: 'restored',
+            color: '#111111',
+            createdAt: '2025-01-01T00:00:00.000Z',
+          },
+        ],
+        snapshots: [],
+        currentBranchId: MAIN_BRANCH_ID,
+      }),
+    );
+
+    expect(state.branches[0]?.description).toBe('restored');
+    expect(state.snapshots).toHaveLength(0);
+  });
+
   it('selectors return branch and panel information', () => {
     const state = {
       versionControl: {

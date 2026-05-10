@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
+import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
 import { useTranslation } from '../hooks/useTranslation';
 import { logger } from '../services/logger';
 import { Button } from './ui/Button';
@@ -39,36 +40,25 @@ export const AdvancedImportExport: React.FC = () => {
       try {
         if (importFormat === 'docx') {
           await handleDocxImport(file);
+        } else if (importFormat === 'json') {
+          const resultAction = await dispatch(importProjectThunk(file));
+          if (!importProjectThunk.fulfilled.match(resultAction)) {
+            throw new Error(resultAction.error?.message ?? 'Import failed');
+          }
         } else {
           const text = await file.text();
-          if (importFormat === 'json') {
-            const parsed = JSON.parse(text) as {
-              title?: string;
-              logline?: string;
-              manuscript?: Array<{
-                id: string;
-                title: string;
-                content: string;
-              }>;
-            };
-            if (parsed.title) dispatch(projectActions.updateTitle(parsed.title));
-            if (parsed.logline) dispatch(projectActions.updateLogline(parsed.logline));
-            if (Array.isArray(parsed.manuscript))
-              dispatch(projectActions.setManuscript(parsed.manuscript));
-          } else {
-            // Markdown: split by '# ' headings
-            const sections = text
-              .split(/\n(?=# )/)
-              .filter(Boolean)
-              .map((chunk, i) => {
-                const firstNewline = chunk.indexOf('\n');
-                const rawTitle = firstNewline > 0 ? chunk.slice(0, firstNewline) : chunk;
-                const title = rawTitle.replace(/^# /, '').trim() || `Abschnitt ${i + 1}`;
-                const content = firstNewline > 0 ? chunk.slice(firstNewline + 1).trim() : '';
-                return { id: `import-${Date.now()}-${i}`, title, content };
-              });
-            if (sections.length > 0) dispatch(projectActions.setManuscript(sections));
-          }
+          // Markdown: split by '# ' headings
+          const sections = text
+            .split(/\n(?=# )/)
+            .filter(Boolean)
+            .map((chunk, i) => {
+              const firstNewline = chunk.indexOf('\n');
+              const rawTitle = firstNewline > 0 ? chunk.slice(0, firstNewline) : chunk;
+              const title = rawTitle.replace(/^# /, '').trim() || `Abschnitt ${i + 1}`;
+              const content = firstNewline > 0 ? chunk.slice(firstNewline + 1).trim() : '';
+              return { id: `import-${Date.now()}-${i}`, title, content };
+            });
+          if (sections.length > 0) dispatch(projectActions.setManuscript(sections));
         }
         toast.success(t('export.importSuccess'), file.name);
         setIsImportModalOpen(false);
