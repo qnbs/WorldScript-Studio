@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Characters:** "Add Manually" opens the dossier immediately again (dispatch + local selection state).
 - **Playwright (CI):** Gemini route mock returns `candidates[].content.parts[].text` for `@google/genai`; import E2E follows **Import Project** → modal → **Import**; VC snapshot assertions avoid `[aria-label*="snapshot"]` matching the "Create new snapshot" button.
 - **Playwright (CI):** `seedGeminiApiKey` before outline generation (otherwise `NO_API_KEY` blocks HTTP mocks); Writer textarea `data-testid="writer-studio-editor"`; export flow returns to Outline after saving key; character rename assertion uses `{ exact: true }` so "Braxton Hale Jr." does not satisfy "Braxton Hale".
+- **Playwright (CI):** `flushWriterDebounce` after Writer fills (750ms DebouncedTextarea → Redux); snapshot restore re-selects manuscript section; import success uses exact toast copy (strict-mode vs markdown preview); delete assertion targets character card button counts.
 - **Playwright (CI):** E2E helpers use `#writer-section-select` (avoids wrong combobox); native `<option>` assertions replaced with count/selectOption; snapshot panel uses `getByRole('heading')` so `/Snapshots/i` does not match empty-state copy; export flow navigates via **AI Writing Studio** label.
 
 ### Documentation

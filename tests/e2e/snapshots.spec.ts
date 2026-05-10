@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import {
   ensureBlankProject,
+  flushWriterDebounce,
   selectEnglish,
   selectFirstEnabledWriterSection,
   sidebar,
@@ -18,6 +19,7 @@ async function seedManuscriptContent(page: import('@playwright/test').Page): Pro
   const textarea = page.getByTestId('writer-studio-editor');
   await expect(textarea).toBeVisible();
   await textarea.fill('Snapshot seed content — this text will be captured in a snapshot.');
+  await flushWriterDebounce(page);
 }
 
 test.describe('Snapshot Flow (CI-only)', () => {
@@ -92,6 +94,7 @@ test.describe('Snapshot Flow (CI-only)', () => {
     const textarea = page.getByTestId('writer-studio-editor');
     await expect(textarea).toBeVisible({ timeout: 6000 });
     await textarea.fill('Completely different content after the snapshot.');
+    await flushWriterDebounce(page);
 
     // Re-open panel and restore
     await page
@@ -111,6 +114,7 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await sidebar(page)
       .getByRole('button', { name: /AI Writing Studio/i })
       .click();
+    await selectFirstEnabledWriterSection(page);
     const restoredTextarea = page.getByTestId('writer-studio-editor');
     await expect(restoredTextarea).toHaveValue(/Snapshot seed content/i, { timeout: 10000 });
   });

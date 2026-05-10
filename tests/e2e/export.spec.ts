@@ -1,6 +1,7 @@
 import { expect, type Route, test } from '@playwright/test';
 
 import {
+  flushWriterDebounce,
   seedGeminiApiKey,
   selectFirstEnabledWriterSection,
   sidebar,
@@ -86,6 +87,7 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await expect(writerTextbox).toBeVisible();
     await writerTextbox.fill('The first chapter opens on a quiet village under a strange moon.');
     await expect(writerTextbox).toHaveValue(/quiet village under a strange moon/i);
+    await flushWriterDebounce(page);
 
     await page.getByRole('button', { name: /Export|Exportieren/i }).click();
     const manuscriptCheckbox = page.getByLabel(/Manuscript|Manuskript/i).first();

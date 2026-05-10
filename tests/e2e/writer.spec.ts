@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import {
   ensureBlankProject,
+  flushWriterDebounce,
   selectEnglish,
   selectFirstEnabledWriterSection,
   sidebar,
@@ -45,6 +46,7 @@ test.describe('AI Writer Flow (CI-only)', () => {
     await expect(writerTextbox).toBeVisible();
     await writerTextbox.fill('This is the first AI-assisted draft paragraph.');
     await expect(writerTextbox).toHaveValue(/first AI-assisted draft paragraph/i);
+    await flushWriterDebounce(page);
   });
 
   test('keyboard navigation and responsive layout work', async ({ page }) => {

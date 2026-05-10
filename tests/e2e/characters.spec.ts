@@ -98,7 +98,7 @@ test.describe('Character CRUD (CI-only)', () => {
     await confirmBtn.click();
 
     // Character must no longer appear in the list
-    await expect(page.getByText('Doomed Character')).not.toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole('button', { name: /^Doomed Character$/ })).toHaveCount(0);
   });
 
   test('adding two characters shows both in the list', async ({ page }) => {

@@ -21,6 +21,11 @@ export async function selectFirstEnabledWriterSection(page: Page): Promise<void>
 }
 
 /** Outline / AI flows call Gemini only when a key exists in encrypted storage — seed before mocked HTTP in CI. */
+/** DebouncedTextarea notifies Redux after ~750ms — flush before leaving Writer or export previews stay stale in CI. */
+export async function flushWriterDebounce(page: Page): Promise<void> {
+  await page.waitForTimeout(850);
+}
+
 export async function seedGeminiApiKey(page: Page): Promise<void> {
   await sidebar(page)
     .getByRole('button', { name: /Settings/i })

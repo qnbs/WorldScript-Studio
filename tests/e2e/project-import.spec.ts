@@ -61,8 +61,9 @@ test.describe('Project Import (CI-only)', () => {
       buffer: Buffer.from(MINIMAL_PROJECT, 'utf-8'),
     });
 
-    // Success toast or heading should reflect the imported title
-    await expect(page.getByText(/imported successfully|Imported Test Novel/i)).toBeVisible({
+    await expect(
+      page.getByText('Project imported successfully', { exact: true }).first(),
+    ).toBeVisible({
       timeout: 15000,
     });
 
@@ -81,7 +82,9 @@ test.describe('Project Import (CI-only)', () => {
       name: 'persist-test.json',
       buffer: Buffer.from(MINIMAL_PROJECT, 'utf-8'),
     });
-    await expect(page.getByText(/imported successfully|Imported Test Novel/i)).toBeVisible({
+    await expect(
+      page.getByText('Project imported successfully', { exact: true }).first(),
+    ).toBeVisible({
       timeout: 15000,
     });
 
@@ -98,7 +101,7 @@ test.describe('Project Import (CI-only)', () => {
     });
 
     // App must show an error, not crash (toast uses export.importFailed in EN)
-    await expect(page.getByText(/Import failed|error|failed|ungültig/i)).toBeVisible({
+    await expect(page.getByText(/Import failed/i).first()).toBeVisible({
       timeout: 8000,
     });
     await expect(page.locator('body')).toBeVisible();
