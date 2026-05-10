@@ -10,6 +10,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
     testTimeout: 30000,
+    // QNBS-v3: Fork-Worker-Timeouts unter Last/jsdom — Threads-Pool stabiler als forks bei wenigen Workern.
+    pool: 'threads',
     maxWorkers: 1,
     include: ['tests/**/*.{test,spec}.{ts,tsx}', 'components/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['tests/e2e/**'],
