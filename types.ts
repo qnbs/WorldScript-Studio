@@ -285,6 +285,9 @@ export interface WritingGoal {
   enabled?: boolean;
 }
 
+/** Lokales OpenAI-kompatibles Backend — Preset setzt nur Default-URL (LM Studio, vLLM, …). */
+export type LocalBackendPreset = 'ollama_default' | 'lm_studio' | 'vllm' | 'custom';
+
 export interface AdvancedAiSettings {
   model: AiModel;
   provider: AIProvider;
@@ -296,6 +299,21 @@ export interface AdvancedAiSettings {
   customPrompts: Record<string, string>;
   rateLimit: number; // requests per minute
   ollamaBaseUrl: string;
+  /** Preset für lokale /v1-Server; bei Wechsel wird typische Basis-URL gesetzt (custom = manuelle URL). */
+  localBackendPreset: LocalBackendPreset;
+  /**
+   * OpenAI-kompatible Cloud- oder Proxy-API (OpenRouter, Groq, …): Root ohne Pfad, z. B. `https://openrouter.ai/api`.
+   * Leer = offizielle OpenAI-API (`api.openai.com`).
+   */
+  openAiCompatibleBaseUrl: string;
+  /** Optional für OpenRouter-Rankings / Attribution (Header HTTP-Referer). */
+  openAiSiteUrl: string;
+  /** Optional für OpenRouter (Header X-Title). */
+  openAiSiteTitle: string;
+  /** Nach Primär-Provider weitere Provider bei Fehler versuchen (Projekt-Thunks / Legacy-Streaming). */
+  hybridFallbackEnabled: boolean;
+  /** Reihenfolge der Fallback-Provider (ohne Duplikate; Primär kommt immer zuerst). */
+  hybridFallbackChain: AIProvider[];
 }
 
 export interface AccessibilitySettings {

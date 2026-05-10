@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import { statusActions } from '../../features/status/statusSlice';
+import { RECOMMENDED_OLLAMA_MODEL_IDS } from '../../services/ai/modelRecommendations';
 import { rebuildLocalRagIndex } from '../../services/localRagIndex';
 import type { AIProvider } from '../../types';
 import { ApiKeySection } from '../ApiKeySection';
@@ -45,8 +46,10 @@ export const AiSection: FC = () => {
   return (
     <div className="space-y-6">
       <AiProviderCard
-        provider={(settings.advancedAi?.provider ?? 'gemini') as AIProvider}
-        ollamaBaseUrl={settings.advancedAi?.ollamaBaseUrl ?? 'http://localhost:11434'}
+        advancedAi={settings.advancedAi}
+        onAdvancedAiPatch={(patch) =>
+          handleSettingChange('advancedAi', { ...settings.advancedAi, ...patch })
+        }
         onProviderChange={(p) => {
           const currentModel = settings.advancedAi?.model ?? 'gemini-2.5-flash';
           const newModel =
@@ -73,12 +76,6 @@ export const AiSection: FC = () => {
             model: newModel,
           });
         }}
-        onOllamaUrlChange={(url) =>
-          handleSettingChange('advancedAi', {
-            ...settings.advancedAi,
-            ollamaBaseUrl: url,
-          })
-        }
         onModelSelect={(model) =>
           handleSettingChange('advancedAi', {
             ...settings.advancedAi,
@@ -86,6 +83,101 @@ export const AiSection: FC = () => {
           })
         }
       />
+      {/* QNBS-v3: Hybrid-Fallback nur für Legacy-/Thunk-Pfad — Writer-Orchestrierung bleibt Primär-Provider (siehe README). */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-[var(--foreground-primary)]">
+            {t('settings.ai.hybridFallbackTitle')}
+          </h2>
+          <p className="text-sm text-[var(--foreground-muted)] mt-1">
+            {t('settings.ai.hybridFallbackHint')}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ToggleSwitch
+            checked={settings.advancedAi.hybridFallbackEnabled}
+            onChange={(enabled) =>
+              handleSettingChange('advancedAi', {
+                ...settings.advancedAi,
+                hybridFallbackEnabled: enabled,
+              })
+            }
+            label={t('settings.ai.hybridFallbackToggle')}
+          />
+          {settings.advancedAi.hybridFallbackEnabled && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label
+                  htmlFor="fb-step-1"
+                  className="text-sm font-medium text-[var(--foreground-secondary)]"
+                >
+                  {t('settings.ai.fallbackStep1')}
+                </label>
+                <select
+                  id="fb-step-1"
+                  className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                  value={settings.advancedAi.hybridFallbackChain[0] ?? ''}
+                  onChange={(e) => {
+                    const primary = settings.advancedAi.provider;
+                    const v = e.target.value as AIProvider | '';
+                    const second = settings.advancedAi.hybridFallbackChain[1];
+                    const next: AIProvider[] = [];
+                    if (v && v !== primary) next.push(v);
+                    if (second && second !== primary && second !== v) next.push(second);
+                    handleSettingChange('advancedAi', {
+                      ...settings.advancedAi,
+                      hybridFallbackChain: next,
+                    });
+                  }}
+                >
+                  <option value="">{t('settings.ai.fallbackNone')}</option>
+                  {(['gemini', 'openai', 'ollama', 'grok'] as const)
+                    .filter((p) => p !== settings.advancedAi.provider)
+                    .map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label
+                  htmlFor="fb-step-2"
+                  className="text-sm font-medium text-[var(--foreground-secondary)]"
+                >
+                  {t('settings.ai.fallbackStep2')}
+                </label>
+                <select
+                  id="fb-step-2"
+                  className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                  value={settings.advancedAi.hybridFallbackChain[1] ?? ''}
+                  onChange={(e) => {
+                    const primary = settings.advancedAi.provider;
+                    const first = settings.advancedAi.hybridFallbackChain[0];
+                    const v = e.target.value as AIProvider | '';
+                    const next: AIProvider[] = [];
+                    if (first && first !== primary) next.push(first);
+                    if (v && v !== primary && v !== first) next.push(v);
+                    handleSettingChange('advancedAi', {
+                      ...settings.advancedAi,
+                      hybridFallbackChain: next,
+                    });
+                  }}
+                >
+                  <option value="">{t('settings.ai.fallbackNone')}</option>
+                  {(['gemini', 'openai', 'ollama', 'grok'] as const)
+                    .filter((p) => p !== settings.advancedAi.provider)
+                    .map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
@@ -204,6 +296,12 @@ export const AdvancedAiSection: FC = () => {
             <p className="text-xs text-[var(--foreground-muted)] mb-2">
               {t('settings.advancedAi.modelDescription')}
             </p>
+            {settings.advancedAi.provider === 'ollama' && (
+              <p className="text-xs text-[var(--foreground-muted)] mb-3">
+                {t('settings.advancedAi.modelRecommendationsIntro')}{' '}
+                {RECOMMENDED_OLLAMA_MODEL_IDS.join(', ')}
+              </p>
+            )}
             <Select
               id="settings-ai-model"
               value={showCustomInput ? 'ollama/custom' : currentModel}

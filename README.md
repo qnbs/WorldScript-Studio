@@ -289,6 +289,10 @@ StoryCraft Studio supports local AI plus BYOK cloud providers:
 3. **Push to `main`** — deployment runs automatically via GitHub Actions
 4. **Access your app** at `https://YOUR-USERNAME.github.io/StoryCraft-Studio/`
 
+### ☁️ Deploying to Vercel (alternative)
+
+Vercel is a **first-class** hosting option alongside Pages: connect the repo, use **`pnpm run build`**, output **`dist`**, SPA routing via **[`vercel.json`](vercel.json)**. Use a **custom domain** on Vercel with Vite **`base: '/'`** for clean asset URLs; keep API keys **only in the app** (IndexedDB), not in Vercel env vars for inference. Full checklist: **[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)**.
+
 ### 💻 Local Development
 
 ```bash
@@ -392,6 +396,7 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | -------- | ----------- |
 | [`README.md`](README.md) | Product overview, features, getting started (this file) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, Biome/Vitest/Playwright, architecture notes |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Pages + Vercel — static SPA, `base`, keys/privacy |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow (manual/tag builds, artifacts) |
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |

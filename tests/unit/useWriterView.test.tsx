@@ -41,6 +41,28 @@ const mockState: {
     projectGoals: { totalWordCount: number; targetDate: string | null };
     writingHistory: unknown[];
   };
+  /** Minimal `settings` für Selektoren; `grok` erzwingt Legacy-`streamGenerationThunk` in den Tests. */
+  settings: {
+    advancedAi: {
+      model: string;
+      provider: 'grok' | 'gemini' | 'openai' | 'ollama' | 'anthropic';
+      temperature: number;
+      maxTokens: number;
+      topP: number;
+      frequencyPenalty: number;
+      presencePenalty: number;
+      customPrompts: Record<string, string>;
+      rateLimit: number;
+      ollamaBaseUrl: string;
+      localBackendPreset: string;
+      openAiCompatibleBaseUrl: string;
+      openAiSiteUrl: string;
+      openAiSiteTitle: string;
+      hybridFallbackEnabled: boolean;
+      hybridFallbackChain: ('gemini' | 'openai' | 'ollama' | 'grok' | 'anthropic')[];
+    };
+    aiCreativity: 'Focused' | 'Balanced' | 'Imaginative';
+  };
   writer: {
     activeTool: string;
     selection: { text: string; start: number; end: number };
@@ -52,6 +74,7 @@ const mockState: {
     isLoading: boolean;
     generationHistory: string[];
     activeHistoryIndex: number;
+    resultStream: string;
     selectedSectionId: string | null;
   };
 } = {
@@ -62,6 +85,27 @@ const mockState: {
     relationships: [],
     projectGoals: { totalWordCount: 1000, targetDate: null },
     writingHistory: [],
+  },
+  settings: {
+    advancedAi: {
+      model: 'grok-2',
+      provider: 'grok',
+      temperature: 0.7,
+      maxTokens: 2048,
+      topP: 0.9,
+      frequencyPenalty: 0,
+      presencePenalty: 0,
+      customPrompts: {},
+      rateLimit: 60,
+      ollamaBaseUrl: 'http://localhost:11434',
+      localBackendPreset: 'ollama_default',
+      openAiCompatibleBaseUrl: '',
+      openAiSiteUrl: '',
+      openAiSiteTitle: 'StoryCraft Studio',
+      hybridFallbackEnabled: false,
+      hybridFallbackChain: [],
+    },
+    aiCreativity: 'Balanced',
   },
   writer: {
     activeTool: 'continue',
@@ -74,6 +118,7 @@ const mockState: {
     isLoading: false,
     generationHistory: ['Generated text'],
     activeHistoryIndex: 0,
+    resultStream: '',
     selectedSectionId: null,
   },
 };
@@ -85,6 +130,16 @@ vi.mock('../../app/hooks', () => ({
 }));
 vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (key: string) => key, language: 'en' }),
+}));
+vi.mock('../../hooks/useStoryCraftAI', () => ({
+  useStoryCraftAI: () => ({
+    runCompletion: vi.fn(() => Promise.resolve()),
+    stop: vi.fn(),
+    completion: '',
+    isLoading: false,
+    error: undefined,
+    setCompletion: vi.fn(),
+  }),
 }));
 vi.mock('../../services/logger', () => ({
   logger: {

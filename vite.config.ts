@@ -77,7 +77,10 @@ export default defineConfig({
       polyfill: false,
       resolveDependencies: (_filename: string, deps: string[]) =>
         deps.filter(
-          (d) => !/ai-vendor|export-vendor|data-vendor|collaboration-vendor|canvas-vendor/.test(d),
+          (d) =>
+            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|canvas-vendor/.test(
+              d,
+            ),
         ),
     },
     rollupOptions: {
@@ -109,6 +112,14 @@ export default defineConfig({
           }
           if (id.includes('@google/genai')) {
             return 'ai-vendor';
+          }
+          // QNBS-v3: Vercel AI SDK + Provider-Packages gebündelt, analog zu @google/genai.
+          if (
+            id.includes('node_modules/ai/') ||
+            id.includes('/node_modules/ai/') ||
+            id.includes('@ai-sdk/')
+          ) {
+            return 'ai-sdk-vendor';
           }
           if (id.includes('y-webrtc') || id.includes('yjs')) {
             return 'collaboration-vendor';
