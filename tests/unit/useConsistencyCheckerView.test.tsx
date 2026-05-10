@@ -18,6 +18,12 @@ type MockState = {
       temperature: number;
       maxTokens: number;
       ollamaBaseUrl: string;
+      localBackendPreset: string;
+      openAiCompatibleBaseUrl: string;
+      openAiSiteUrl: string;
+      openAiSiteTitle: string;
+      hybridFallbackEnabled: boolean;
+      hybridFallbackChain: string[];
     };
   };
   projectData: MockProjectData | undefined;
@@ -44,6 +50,12 @@ const mockState: MockState = {
       temperature: 0.7,
       maxTokens: 4096,
       ollamaBaseUrl: 'http://localhost:11434',
+      localBackendPreset: 'ollama_default',
+      openAiCompatibleBaseUrl: '',
+      openAiSiteUrl: '',
+      openAiSiteTitle: 'StoryCraft Studio',
+      hybridFallbackEnabled: false,
+      hybridFallbackChain: [],
     },
   },
   projectData: {

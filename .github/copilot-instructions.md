@@ -101,10 +101,10 @@ types.ts          → Core shared interfaces and types
 ### i18n
 
 - All user-facing strings must use `t('key.path')` from `useTranslation()`
-- Translation files are in `locales/{lang}/{module}.json` (and mirrored under `public/locales/` for runtime)
-- 14 modules per language; **the in-app selector exposes five locales:** **de**, **en**, **fr**, **es**, **it** — keep key parity with English (`pnpm run i18n:check` in CI)
+- Source files: `locales/{lang}/{module}.json` (15 modules). Runtime: **one** merged **`public/locales/{lang}/bundle.json`** per language — regenerate with **`pnpm run i18n:bundle`** or **`pnpm run i18n:check`** (parity check **and** bundle build); **`predev`** / **`prebuild`** also rebuild bundles so the UI never shows raw keys after editing locale JSON.
+- **the in-app selector exposes five locales:** **de**, **en**, **fr**, **es**, **it** — keep key parity with English (`pnpm run i18n:check` in CI)
 - English is the fallback language
-- New keys: add to **`locales/en/`** first, then **de**, **fr**, **es**, **it** (or run `node scripts/check-i18n-keys.mjs --fix` and translate)
+- New keys: add to **`locales/en/`** first, then **de**, **fr**, **es**, **it** (or run `node scripts/check-i18n-keys.mjs --fix` and translate), then commit updated **`bundle.json`** files
 
 ### Git & CI
 

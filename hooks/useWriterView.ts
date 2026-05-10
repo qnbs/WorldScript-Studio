@@ -8,7 +8,9 @@ import {
 import { projectActions } from '../features/project/projectSlice';
 import { streamGenerationThunk } from '../features/project/thunks/writingThunks';
 import { writerActions } from '../features/writer/writerSlice';
+import { isOrchestrationReadyProvider } from '../services/ai/orchestrationProviders';
 import { logger } from '../services/logger';
+import { useStoryCraftAI } from './useStoryCraftAI';
 import { useTranslation } from './useTranslation';
 
 export const useWriterView = () => {
@@ -17,6 +19,7 @@ export const useWriterView = () => {
   const project = useAppSelector(selectProjectData);
   const characters = useAppSelector(selectAllCharacters);
   const manuscript = useAppSelector(selectManuscript);
+  const aiProvider = useAppSelector((state) => state.settings.advancedAi.provider);
   const writerState = useAppSelectorShallow((state) => state.writer);
 
   const {
@@ -34,6 +37,18 @@ export const useWriterView = () => {
 
   // Ref to hold the abort controller for the current generation request
   const abortControllerRef = useRef<AbortController | null>(null);
+  const fullStreamRef = useRef('');
+
+  const { runCompletion, stop: stopOrchestrationStreaming } = useStoryCraftAI({
+    onIncremental: useCallback(
+      (fullText: string, delta: string) => {
+        fullStreamRef.current = fullText;
+        dispatch(writerActions.updateCurrentHistoryItem(fullText));
+        dispatch(writerActions.appendResultStream(delta));
+      },
+      [dispatch],
+    ),
+  });
 
   const selectedSectionId = useMemo(() => {
     // If there's a valid selection in state, use it. Otherwise, default to the first section.
@@ -53,12 +68,13 @@ export const useWriterView = () => {
   // Cleanup function to abort any pending requests when unmounting or changing view
   useEffect(() => {
     return () => {
+      stopOrchestrationStreaming();
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
       dispatch(writerActions.stopLoading());
     };
-  }, [dispatch]);
+  }, [dispatch, stopOrchestrationStreaming]);
 
   const handleContentChange = useCallback(
     (index: number, content: string) => {
@@ -186,6 +202,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
   const handleGenerate = useCallback(() => {
     // If already loading, checking explicitly to act as a "Stop" toggle
     if (isLoading) {
+      stopOrchestrationStreaming();
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -195,24 +212,52 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
     if (isGenerateDisabled()) return;
 
-    // Create new controller
-    abortControllerRef.current = new AbortController();
-
     const prompt = getPromptForTool();
     if (!prompt) return;
 
+    abortControllerRef.current = new AbortController();
+
+    const fullPrompt = `${prompt}\n\nRespond in ${language === 'de' ? 'German' : 'English'}.`;
+
     dispatch(writerActions.startLoading());
     dispatch(writerActions.clearResultStream()); // Live-Preview reset
-    let fullStream = '';
+    fullStreamRef.current = '';
 
+    dispatch(writerActions.addHistory('')); // Add empty item to start
+
+    const handleFailure = (err: unknown) => {
+      const isAbort =
+        err instanceof Error &&
+        (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'));
+      if (!isAbort) {
+        logger.error('Generation failed', err);
+        dispatch(
+          writerActions.updateCurrentHistoryItem(
+            'Error generating content. Please try again later or check your API key.',
+          ),
+        );
+      } else {
+        dispatch(writerActions.updateCurrentHistoryItem(`${fullStreamRef.current} [Cancelled]`));
+      }
+    };
+
+    if (isOrchestrationReadyProvider(aiProvider)) {
+      void runCompletion(fullPrompt)
+        .catch(handleFailure)
+        .finally(() => {
+          dispatch(writerActions.stopLoading());
+          abortControllerRef.current = null;
+        });
+      return;
+    }
+
+    let fullStream = '';
     const onChunk = (chunk: string) => {
       fullStream += chunk;
-      // Dual-update: history für Accept-Button, resultStream für Live-Preview
+      fullStreamRef.current = fullStream;
       dispatch(writerActions.updateCurrentHistoryItem(fullStream));
       dispatch(writerActions.appendResultStream(chunk));
     };
-
-    dispatch(writerActions.addHistory('')); // Add empty item to start
 
     dispatch(
       streamGenerationThunk({
@@ -222,23 +267,21 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       }),
     )
       .unwrap()
-      .catch((err) => {
-        if (err.name !== 'AbortError') {
-          logger.error('Generation failed', err);
-          dispatch(
-            writerActions.updateCurrentHistoryItem(
-              'Error generating content. Please try again later or check your API key.',
-            ),
-          );
-        } else {
-          dispatch(writerActions.updateCurrentHistoryItem(`${fullStream} [Cancelled]`));
-        }
-      })
+      .catch(handleFailure)
       .finally(() => {
         dispatch(writerActions.stopLoading());
         abortControllerRef.current = null;
       });
-  }, [dispatch, isLoading, isGenerateDisabled, getPromptForTool, language]);
+  }, [
+    dispatch,
+    isLoading,
+    isGenerateDisabled,
+    getPromptForTool,
+    language,
+    aiProvider,
+    runCompletion,
+    stopOrchestrationStreaming,
+  ]);
 
   const handleNavigateHistory = useCallback(
     (direction: 'prev' | 'next') => {

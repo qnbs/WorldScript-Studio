@@ -6,6 +6,13 @@
 
 ---
 
+## Follow-up Audit — 2026-05-10 (Hybrid-AI, i18n runtime bundles, deployment docs)
+
+- **Hybrid-AI / OpenAI-kompatible Cloud:** `advancedAi` Presets (Ollama/LM Studio/vLLM), `openAiCompatibleBaseUrl` + optionale OpenRouter-Header, konfigurierbare **Fallback-Kette** in `aiProviderService` / Thunks; Writer-Orchestrierung unverändert primärer Provider; Tauri **CSP** `connect-src` erweitert.
+- **i18n:** `locales/*/*.json` ist die Quelle; **`public/locales/<lang>/bundle.json`** muss per **`node scripts/build-i18n.mjs`** (u. a. `predev` / nach `i18n:check`) mit Source synchron bleiben — sonst erscheinen **rohe Key-Strings** in der UI.
+- **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (GitHub Pages + Vercel, gleichwertig), Root [`vercel.json`](vercel.json) für SPA-Rewrites + Build/Output.
+- **Doku-Hub / README:** Vercel-Abschnitt + Link; [`services/ai/index.ts`](services/ai/index.ts) Architekturkommentar Hybrid.
+
 ## Follow-up Audit — 2026-05-10 (Gold-Standard pipeline + strict lint/typecheck)
 
 ### Product / architecture
@@ -33,7 +40,7 @@
 
 ### Markdown corpus (maintainer-curated)
 
-**Inventory (15 files):** [`README.md`](README.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md), [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md), [`CLAUDE.md`](CLAUDE.md), [`docs/CI.md`](docs/CI.md), [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), [`docs/graphify.md`](docs/graphify.md), [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md), [`.github/SECURITY.md`](.github/SECURITY.md), [`.github/copilot-instructions.md`](.github/copilot-instructions.md), [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md).
+**Inventory (16 files):** [`README.md`](README.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md), [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md), [`CLAUDE.md`](CLAUDE.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/CI.md`](docs/CI.md), [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), [`docs/graphify.md`](docs/graphify.md), [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md), [`.github/SECURITY.md`](.github/SECURITY.md), [`.github/copilot-instructions.md`](.github/copilot-instructions.md), [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md).
 
 Aligned with the current toolchain and UX: **README** Documentation Hub lists every entry above plus [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) and [`.cursorrules`](.cursorrules); **CONTRIBUTING** documents Playwright helpers and Version Control backdrop behavior; **docs/CI.md** holds E2E authoring notes; agent files (**CLAUDE**, **copilot-instructions**) reference dual IndexedDB + `tests/e2e/helpers.ts`; **SECURITY** supported-version table matches **1.3.x**; **CHANGELOG** `[Unreleased]` carries doc-maintenance notes; **ACTIONS-OPTIMIZATIONS** remains explicitly historical vs **`docs/CI.md`**.
 

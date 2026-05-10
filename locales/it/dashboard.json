@@ -1,4 +1,11 @@
 {
+  "dashboard.authorInsights.readability": "Leggibilità (stile Flesch, euristica EN)",
+  "dashboard.authorInsights.readabilityFootnote": "Punteggi più alti sono spesso più facili da leggere; calibra sul genere.",
+  "dashboard.authorInsights.readabilityNeedMore": "Scrivi ancora — servono ~40+ parole per un punteggio stabile.",
+  "dashboard.authorInsights.timeline": "Controlli cronologia scene",
+  "dashboard.authorInsights.timelineClear": "Nessun avviso dai metadati.",
+  "dashboard.authorInsights.timelineWarnBadge": "{{count}} avvisi — controlla date/durate sul board.",
+  "dashboard.authorInsights.title": "Insight pipeline autore",
   "dashboard.continueWriting.button": "Jump Back In",
   "dashboard.continueWriting.empty": "Start your story in the Manuscript view.",
   "dashboard.continueWriting.title": "Continue Writing",
@@ -51,12 +58,5 @@
   "dashboard.stats.worlds": "Worlds",
   "initialProject.chapter1": "Chapter 1",
   "initialProject.logline": "A journey of a thousand miles begins with a single step...",
-  "initialProject.title": "My Untitled Story",
-  "dashboard.authorInsights.title": "Insight pipeline autore",
-  "dashboard.authorInsights.readability": "Leggibilità (stile Flesch, euristica EN)",
-  "dashboard.authorInsights.readabilityNeedMore": "Scrivi ancora — servono ~40+ parole per un punteggio stabile.",
-  "dashboard.authorInsights.readabilityFootnote": "Punteggi più alti sono spesso più facili da leggere; calibra sul genere.",
-  "dashboard.authorInsights.timeline": "Controlli cronologia scene",
-  "dashboard.authorInsights.timelineClear": "Nessun avviso dai metadati.",
-  "dashboard.authorInsights.timelineWarnBadge": "{{count}} avvisi — controlla date/durate sul board."
+  "initialProject.title": "My Untitled Story"
 }

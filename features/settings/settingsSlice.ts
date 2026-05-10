@@ -60,6 +60,12 @@ const defaultSettings: Settings = {
     customPrompts: {},
     rateLimit: 60,
     ollamaBaseUrl: 'http://localhost:11434',
+    localBackendPreset: 'ollama_default',
+    openAiCompatibleBaseUrl: '',
+    openAiSiteUrl: '',
+    openAiSiteTitle: 'StoryCraft Studio',
+    hybridFallbackEnabled: false,
+    hybridFallbackChain: [],
   },
   accessibility: {
     highContrast: false,

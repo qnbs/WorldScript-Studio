@@ -2,7 +2,7 @@
 /**
  * Build-time i18n bundler
  *
- * Merges all 14 per-module JSON files for each language into a single
+ * Merges all 15 per-module JSON files for each language into a single
  * `bundle.json` written to `public/locales/<lang>/bundle.json`.
  *
  * This reduces the boot-time fetch count from 70 (5 langs × 14 modules)

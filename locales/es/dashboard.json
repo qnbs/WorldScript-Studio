@@ -1,4 +1,11 @@
 {
+  "dashboard.authorInsights.readability": "Legibilidad (estilo Flesch, heurística EN)",
+  "dashboard.authorInsights.readabilityFootnote": "Puntuaciones más altas suelen leerse más fácil; afina según el género.",
+  "dashboard.authorInsights.readabilityNeedMore": "Escribe un poco más — se necesitan ~40+ palabras para un valor estable.",
+  "dashboard.authorInsights.timeline": "Comprobaciones de línea temporal",
+  "dashboard.authorInsights.timelineClear": "Sin avisos desde los metadatos de escena.",
+  "dashboard.authorInsights.timelineWarnBadge": "{{count}} avisos — revisa fechas/duraciones en el tablero.",
+  "dashboard.authorInsights.title": "Información de pipeline del autor",
   "dashboard.continueWriting.button": "Jump Back In",
   "dashboard.continueWriting.empty": "Start your story in the Manuscript view.",
   "dashboard.continueWriting.title": "Continue Writing",
@@ -51,12 +58,5 @@
   "dashboard.stats.worlds": "Worlds",
   "initialProject.chapter1": "Chapter 1",
   "initialProject.logline": "A journey of a thousand miles begins with a single step...",
-  "initialProject.title": "My Untitled Story",
-  "dashboard.authorInsights.title": "Información de pipeline del autor",
-  "dashboard.authorInsights.readability": "Legibilidad (estilo Flesch, heurística EN)",
-  "dashboard.authorInsights.readabilityNeedMore": "Escribe un poco más — se necesitan ~40+ palabras para un valor estable.",
-  "dashboard.authorInsights.readabilityFootnote": "Puntuaciones más altas suelen leerse más fácil; afina según el género.",
-  "dashboard.authorInsights.timeline": "Comprobaciones de línea temporal",
-  "dashboard.authorInsights.timelineClear": "Sin avisos desde los metadatos de escena.",
-  "dashboard.authorInsights.timelineWarnBadge": "{{count}} avisos — revisa fechas/duraciones en el tablero."
+  "initialProject.title": "My Untitled Story"
 }

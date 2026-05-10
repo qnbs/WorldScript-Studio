@@ -685,6 +685,30 @@ class IndexedDBService implements StorageBackend {
         ...integrationsDefaults,
         ...(incoming['integrations'] as Partial<Settings['integrations']> | undefined),
       };
+
+      // QNBS-v3: Hybrid-AI-Felder nachziehen — ältere IndexedDB-Stände ohne neue Keys bleiben kompatibel.
+      const advancedAiDefaults: Settings['advancedAi'] = {
+        model: 'gemini-2.5-flash',
+        provider: 'gemini',
+        temperature: 0.7,
+        maxTokens: 4096,
+        topP: 0.9,
+        frequencyPenalty: 0.0,
+        presencePenalty: 0.0,
+        customPrompts: {},
+        rateLimit: 60,
+        ollamaBaseUrl: 'http://localhost:11434',
+        localBackendPreset: 'ollama_default',
+        openAiCompatibleBaseUrl: '',
+        openAiSiteUrl: '',
+        openAiSiteTitle: 'StoryCraft Studio',
+        hybridFallbackEnabled: false,
+        hybridFallbackChain: [],
+      };
+      validSettings.advancedAi = {
+        ...advancedAiDefaults,
+        ...(incoming['advancedAi'] as Partial<Settings['advancedAi']> | undefined),
+      };
     }
 
     const result: PersistedState = {};
