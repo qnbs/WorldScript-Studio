@@ -30,9 +30,9 @@
 
   "shortcuts": [
     {
-      "name": "New Story",
-      "short_name": "New Story",
-      "description": "Start a fresh project from a template",
+      "name": "Templates",
+      "short_name": "Templates",
+      "description": "Browse narrative templates and start a structured project",
       "url": "/StoryCraft-Studio/?view=templates&source=shortcut",
       "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },

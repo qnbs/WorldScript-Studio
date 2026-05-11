@@ -4,6 +4,18 @@
 
 StoryCraft Studio soll die führende Open-Source-Plattform für KI-gestütztes kreatives Schreiben werden — offline-first, datenschutzfreundlich und erweiterbar.
 
+### UX / PWA baseline audit (2026-05-11)
+
+Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku):
+
+- **Kernpfade:** Willkommen → Blank/Demo → Manuskript / Writer → Export → Settings — Orientierung über Sidebar, Command Palette und konsistente Glossar-Begriffe ([`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md)).
+- **Responsive:** Mobile-Shell-E2E [`tests/e2e/mobile-shell.spec.ts`](tests/e2e/mobile-shell.spec.ts); kleine Viewports manuell für Bottom-Sheet und Writer-Split.
+- **Design-Tokens:** Hotspots schrittweise auf `--sc-*` / `--ring-focus` ([`docs/Design-System.md`](docs/Design-System.md)); Legacy-Bridge in [`index.css`](index.css) bis Migration fertig.
+- **Deep Links:** `?view=` wird beim Start gegen gültige Views validiert ([`hooks/useApp.ts`](hooks/useApp.ts)); PWA-Shortcuts im Manifest zeigen auf dieselben Keys ([`public/manifest.json`](public/manifest.json)).
+- **Share Target:** GET-Parameter `share_title` / `share_text` / `share_url` → Toast + `sessionStorage` + URL-Bereinigung ([`App.tsx`](App.tsx)).
+- **Service Worker:** `APP_VERSION` folgt `package.json` via [`scripts/sync-sw-version.mjs`](scripts/sync-sw-version.mjs) (`predev`/`prebuild`); **Network-only** für KI- und Local-Inference-Hosts ([`public/sw.js`](public/sw.js)); Precache nur über `install` + injiziertes `__WB_MANIFEST` (kein zweites `precacheAndRoute`-Paralleltrack).
+- **HTML `lang`:** folgt der gewählten UI-Sprache ([`App.tsx`](App.tsx)).
+
 > Current sprint tasks → [`TODO.md`](TODO.md)
 > Completed items archive → [`docs/history/`](docs/history/)
 

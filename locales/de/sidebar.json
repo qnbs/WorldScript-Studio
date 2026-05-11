@@ -1,4 +1,9 @@
 {
+  "sidebar.mainAria": "Hauptnavigation",
+  "sidebar.primaryNavAria": "Werkzeuge",
+  "sidebar.secondaryNavAria": "Einstellungen und Hilfe",
+  "sidebar.mobileNavigation": "Hauptansichten",
+  "sidebar.overflowMenuAria": "Weitere Ansichten",
   "sidebar.characterGraph": "Charaktergraph",
   "sidebar.characters": "Charaktere",
   "sidebar.consistencyChecker": "Konsistenzprüfer",

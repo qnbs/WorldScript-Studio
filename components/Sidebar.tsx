@@ -171,7 +171,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         data-tour="nav-mobile"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--background-secondary)]/95 backdrop-blur-xl border-t border-[var(--border-primary)] flex items-center safe-bottom"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-        aria-label="Mobile navigation"
+        aria-label={t('sidebar.mobileNavigation')}
       >
         {mobileTabBarItems.map((item) => (
           <BottomTabItem
@@ -201,7 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* ── Mobile bottom sheet ── */}
       <aside
         id="sidebar-mobile"
-        aria-label="Navigation"
+        aria-label={t('sidebar.overflowMenuAria')}
         aria-hidden={!isSidebarOpen ? true : undefined}
         className={`
           md:hidden fixed left-0 right-0 bottom-0 z-50
@@ -241,7 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <aside
         id="sidebar"
         data-tour="sidebar-desktop"
-        aria-label="Hauptnavigation"
+        aria-label={t('sidebar.mainAria')}
         className={`
         hidden md:flex
         bg-transparent
@@ -252,7 +252,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       `}
       >
         <div className="flex-grow flex flex-col overflow-y-auto no-scrollbar space-y-6">
-          <nav className="flex flex-col space-y-1.5" aria-label="Main navigation">
+          <nav className="flex flex-col space-y-1.5" aria-label={t('sidebar.primaryNavAria')}>
             {desktopNavItems.map((item) => (
               <NavItem
                 key={item.id}
@@ -266,7 +266,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <nav
           className="flex flex-col space-y-1.5 mt-4 border-t border-[var(--border-primary)] pt-4"
-          aria-label="Secondary navigation"
+          aria-label={t('sidebar.secondaryNavAria')}
         >
           {desktopBottomItems.map((item) => (
             <NavItem

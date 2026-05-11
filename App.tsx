@@ -25,6 +25,7 @@ import {
   selectProjectData,
 } from './features/project/projectSelectors';
 import { projectActions } from './features/project/projectSlice';
+import { statusActions } from './features/status/statusSlice';
 import { useApp } from './hooks/useApp';
 import { useGlobalKeyboardShortcuts } from './hooks/useGlobalKeyboardShortcuts';
 import { useTranslation } from './hooks/useTranslation';
@@ -129,6 +130,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const worlds = useAppSelector(selectAllWorlds);
 
   const prevViewRef = useRef<View | null>(null);
+  const shareTargetHandledRef = useRef(false);
 
   const isPaletteOpen = useTransientUiStore((s) => s.isCommandPaletteOpen);
   const setCommandPaletteOpen = useTransientUiStore((s) => s.setCommandPaletteOpen);
@@ -228,6 +230,48 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       document.documentElement.setAttribute('data-colorblind', mode);
     }
   }, [settings.accessibility.colorBlindMode]);
+
+  // QNBS-v3: HTML lang follows locale — aligns SR pronunciation & prepares RTL metadata later.
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
+  // QNBS-v3: PWA share_target GET params → toast + stash for Writer paste flows; strip query to avoid leaking shared text in URL bar.
+  useEffect(() => {
+    if (shareTargetHandledRef.current || isPortalActive) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const shareTitle = params.get('share_title');
+      const shareText = params.get('share_text');
+      const shareUrl = params.get('share_url');
+      if (!shareTitle && !shareText && !shareUrl) return;
+      shareTargetHandledRef.current = true;
+      const combined = [shareTitle, shareText, shareUrl].filter(Boolean).join('\n');
+      const preview = combined.length > 280 ? `${combined.slice(0, 277).trimEnd()}…` : combined;
+      try {
+        sessionStorage.setItem('storycraft-share-target-payload', combined);
+      } catch {
+        /* quota / privacy mode */
+      }
+      dispatch(
+        statusActions.addNotification({
+          type: 'info',
+          title: t('pwa.shareReceivedTitle'),
+          description: preview
+            ? `${t('pwa.shareReceivedHint')}\n${preview}`
+            : t('pwa.shareReceivedHint'),
+        }),
+      );
+      params.delete('share_title');
+      params.delete('share_text');
+      params.delete('share_url');
+      const q = params.toString();
+      const next = `${window.location.pathname}${q ? `?${q}` : ''}${window.location.hash}`;
+      window.history.replaceState(null, '', next);
+    } catch {
+      /* ignore */
+    }
+  }, [dispatch, isPortalActive, t]);
 
   // QNBS-v3: Übersetzte View-Ansage statt Rohtext (WCAG 4.1.3 Statusmeldungen).
   useEffect(() => {

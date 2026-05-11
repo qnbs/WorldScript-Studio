@@ -804,7 +804,7 @@ const WriterViewUI: FC = () => {
             onClick={() => setActiveMobileTab(tab)}
             className={`flex-1 min-h-[44px] py-2 text-sm font-semibold rounded-lg transition-all duration-200 z-10 touch-manipulation ${
               activeMobileTab === tab
-                ? 'bg-[var(--background-secondary)] text-[var(--foreground-primary)] shadow-md transform scale-[1.02] ring-1 ring-[var(--glass-border)]'
+                ? 'bg-[var(--background-secondary)] text-[var(--foreground-primary)] shadow-md transform scale-[1.02] ring-2 ring-[var(--ring-focus)] ring-offset-2 ring-offset-[var(--background-primary)]'
                 : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'
             }`}
           >

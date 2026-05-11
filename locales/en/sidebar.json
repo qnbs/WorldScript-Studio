@@ -1,4 +1,9 @@
 {
+  "sidebar.mainAria": "Main sidebar",
+  "sidebar.primaryNavAria": "Primary navigation",
+  "sidebar.secondaryNavAria": "Settings and help",
+  "sidebar.mobileNavigation": "Primary views",
+  "sidebar.overflowMenuAria": "More views",
   "sidebar.dashboard": "Dashboard",
   "sidebar.manuscript": "Manuscript",
   "sidebar.writer": "AI Writing Studio",

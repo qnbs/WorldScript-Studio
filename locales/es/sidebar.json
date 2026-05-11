@@ -1,4 +1,9 @@
 {
+  "sidebar.mainAria": "Barra lateral principal",
+  "sidebar.primaryNavAria": "Navegación principal",
+  "sidebar.secondaryNavAria": "Ajustes y ayuda",
+  "sidebar.mobileNavigation": "Vistas principales",
+  "sidebar.overflowMenuAria": "Más vistas",
   "sidebar.characterGraph": "Grafo de personajes",
   "sidebar.characters": "Personajes",
   "sidebar.consistencyChecker": "Comprobador de coherencia",

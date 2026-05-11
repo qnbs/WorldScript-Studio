@@ -10,10 +10,10 @@
   },
   "scripts": {
     "prepare": "simple-git-hooks",
-    "predev": "node scripts/build-i18n.mjs",
+    "predev": "node scripts/sync-sw-version.mjs && node scripts/build-i18n.mjs",
     "dev": "vite",
     "dev:turbo": "turbo run dev --parallel",
-    "prebuild": "node scripts/build-i18n.mjs",
+    "prebuild": "node scripts/sync-sw-version.mjs && node scripts/build-i18n.mjs",
     "i18n:bundle": "node scripts/build-i18n.mjs",
     "i18n:check": "node scripts/check-i18n-keys.mjs && node scripts/build-i18n.mjs && node scripts/content-guard.mjs",
     "content:guard": "node scripts/content-guard.mjs",

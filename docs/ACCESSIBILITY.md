@@ -15,7 +15,7 @@ Kurzleitfaden für Maintainer: wo Barrierefreiheit in der App verankert ist und 
 
 ## Automatisierte Checks
 
-- **Playwright:** [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts) — axe-core, schwere Verstöße (critical/serious) müssen fehlen; Farbkontrast-Regel ist bewusst deaktiviert (Designtokens werden separat beobachtet).
+- **Playwright:** [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts) — axe-core, schwere Verstöße (critical/serious) müssen fehlen; Farbkontrast-Regel ist bewusst deaktiviert (Designtokens werden separat beobachtet — bei Bedarf gezielt in Storybook **addon-a11y** oder ein lokaler axe-Lauf mit aktivierter `color-contrast`-Regel auf Einzelscreens).
 - **Lighthouse CI:** [`.lighthouserc.cjs`](../.lighthouserc.cjs) — Accessibility-Kategorie als warn mit Mindest-Score (mobile Preview-URL).
 - **Storybook:** Dev-Dependency `@storybook/addon-a11y` — nach `pnpm run storybook` die A11y-Registerkarte nutzen.
 

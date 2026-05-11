@@ -13,6 +13,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 // ────────────────────────────────────────────────────────────
 // OfflineIndicator
 // ────────────────────────────────────────────────────────────
+// QNBS-v3: Badge-Titel + Banner-ARIA über i18n — SR/Locale-Parität zur restlichen App.
 export const OfflineIndicator: FC = () => {
   const { isOffline } = usePWA();
   const { t } = useTranslation();
@@ -40,7 +41,7 @@ export const OfflineIndicator: FC = () => {
           <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-ping" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
         </span>
-        <span className="font-semibold">Offline</span>
+        <span className="font-semibold">{t('pwa.offlineBadgeTitle')}</span>
       </div>
       <p className="text-amber-300/80 leading-tight">
         {t('pwa.offlineAiUnavailable')}
@@ -63,7 +64,7 @@ export const PWAInstallBanner: FC = () => {
   return (
     <div
       role="banner"
-      aria-label="Install StoryCraft Studio"
+      aria-label={t('pwa.installBannerAriaLabel')}
       className="
         fixed bottom-4 left-1/2 -translate-x-1/2 z-[9998]
         w-[calc(100%-2rem)] max-w-md

@@ -1,4 +1,9 @@
 {
+  "sidebar.mainAria": "Barre latérale principale",
+  "sidebar.primaryNavAria": "Navigation principale",
+  "sidebar.secondaryNavAria": "Paramètres et aide",
+  "sidebar.mobileNavigation": "Vues principales",
+  "sidebar.overflowMenuAria": "Autres vues",
   "sidebar.characterGraph": "Graphe des personnages",
   "sidebar.characters": "Personnages",
   "sidebar.consistencyChecker": "Vérificateur de cohérence",

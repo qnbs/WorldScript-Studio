@@ -5,7 +5,7 @@
 //           offline fallback, push notifications, share target
 // ============================================================
 
-const APP_VERSION   = '3.0.0';
+const APP_VERSION   = '1.3.0';
 const CACHE_STATIC  = `storycraft-static-v${APP_VERSION}`;
 const CACHE_DYNAMIC = `storycraft-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `storycraft-images-v${APP_VERSION}`;
@@ -125,6 +125,24 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/** URLs that must never pass through SW caching strategies */
+function isNetworkOnlyUrl(url) {
+  if (url.protocol === 'chrome-extension:') return true;
+  const h = url.hostname;
+  if (
+    h.includes('generativelanguage.googleapis.com') ||
+    h.includes('generativeai.googleapis.com')
+  ) {
+    return true;
+  }
+  if (h === 'api.openai.com' || h.endsWith('.openai.com')) return true;
+  if (h === 'api.anthropic.com' || h.endsWith('.anthropic.com')) return true;
+  if (h === 'openrouter.ai' || h.endsWith('.openrouter.ai')) return true;
+  if (h.includes('api.deepseek.com')) return true;
+  if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]') return true;
+  return false;
+}
+
 // ════════════════════════════════════════════════════════════
 // FETCH — Multi-strategy routing
 // ════════════════════════════════════════════════════════════
@@ -135,11 +153,9 @@ self.addEventListener('fetch', (event) => {
   // Non-GET: passthrough
   if (request.method !== 'GET') return;
 
-  // 1. External AI / analytics — Network Only, no cache
-  if (
-    url.hostname.includes('generativelanguage.googleapis.com') ||
-    url.protocol === 'chrome-extension:'
-  ) {
+  // 1. External AI, extensions & local inference — Network Only (never cache GET metadata calls)
+  // QNBS-v3: Broad hostname allowlist keeps hybrid/OpenAI-compatible flows off stale-while-revalidate path.
+  if (isNetworkOnlyUrl(url)) {
     return;
   }
 

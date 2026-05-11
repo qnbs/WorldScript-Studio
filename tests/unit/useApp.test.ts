@@ -12,6 +12,18 @@ describe('useApp', () => {
     expect(result.current.currentView).toBe('dashboard');
   });
 
+  it('prefers a valid view from the URL query over localStorage', () => {
+    const original = `${window.location.pathname}${window.location.search}`;
+    window.history.replaceState(null, '', `${window.location.pathname}?view=settings`);
+    localStorage.setItem('storycraft-last-view', 'writer');
+    try {
+      const { result } = renderHook(() => useApp({ isNewUser: false }));
+      expect(result.current.currentView).toBe('settings');
+    } finally {
+      window.history.replaceState(null, '', original);
+    }
+  });
+
   it('restores the last view from localStorage', () => {
     localStorage.setItem('storycraft-last-view', 'writer');
     const { result } = renderHook(() => useApp({ isNewUser: false }));
