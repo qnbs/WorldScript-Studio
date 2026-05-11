@@ -57,7 +57,8 @@ for (const lang of langs) {
   mkdirSync(outDir, { recursive: true });
 
   const outPath = join(outDir, 'bundle.json');
-  writeFileSync(outPath, JSON.stringify(bundle), 'utf8');
+  // QNBS-v3: Pretty-Print — reviewbare Diffs, kein 1-Zeilen-Minify; Verhalten wie historische Bundles im Repo.
+  writeFileSync(outPath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8');
 
   const keys = Object.keys(bundle).length;
   totalKeys += keys;
