@@ -30,6 +30,10 @@ jobs:
     name: 🔒 Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # QNBS-v3: dependency-review-action braucht PR-Metadaten lesbar — sonst schlägt der Job bei externen PRs/Scopes unnötig fehl.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v5
 
@@ -61,7 +65,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [lts/*, node]
+        # QNBS-v3: YAML-sicher quotiert — gleicher String wie in expressions für Codecov/Artifacts.
+        node-version: ['lts/*', 'node']
     steps:
       - uses: actions/checkout@v5
 
@@ -88,13 +93,16 @@ jobs:
         run: pnpm exec vitest run --coverage
 
       - name: Upload coverage report
+        # QNBS-v3: Matrix-Wert bleibt Literal 'lts/*' — ein Upload pro Workflow reicht (Codecov optional).
         if: always() && matrix.node-version == 'lts/*'
         uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: coverage/
+          if-no-files-found: warn
           retention-days: 7
 
+      # QNBS-v3: fail_ci_if_error: false — Forks ohne CODECOV_TOKEN; Coverage bleibt trotzdem im Artifact.
       - name: Publish coverage to Codecov
         if: always() && matrix.node-version == 'lts/*'
         uses: codecov/codecov-action@v5
@@ -241,6 +249,7 @@ jobs:
         with:
           name: playwright-report
           path: tests/e2e/html-report/
+          if-no-files-found: warn
           retention-days: 7
 
   # ----------------------------------------------------------
@@ -282,6 +291,7 @@ jobs:
         with:
           name: lighthouse-report
           path: .lighthouseci/
+          if-no-files-found: warn
           retention-days: 14
 
   # ----------------------------------------------------------

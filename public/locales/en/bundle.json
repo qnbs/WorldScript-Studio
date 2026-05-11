@@ -1453,9 +1453,18 @@
       "title": "help.category.faq",
       "icon": "HELP",
       "articles": [
-        { "title": "help.faq.saving.title", "content": "help.faq.saving.content" },
-        { "title": "help.faq.api.title", "content": "help.faq.api.content" },
-        { "title": "help.faq.privacy.title", "content": "help.faq.privacy.content" }
+        {
+          "title": "help.faq.saving.title",
+          "content": "help.faq.saving.content"
+        },
+        {
+          "title": "help.faq.api.title",
+          "content": "help.faq.api.content"
+        },
+        {
+          "title": "help.faq.privacy.title",
+          "content": "help.faq.privacy.content"
+        }
       ]
     }
   ],

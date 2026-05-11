@@ -77,7 +77,10 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 ## Permissions
 
 - Global default: `contents: read`
+- `security` job (PR dependency review): zusätzlich `pull-requests: read`, damit `dependency-review-action` Metadaten zu geänderten Manifesten lesen kann.
 - `deploy` job: `pages: write`, `id-token: write` (OIDC for Pages)
+
+**Upload-Artefakte:** Coverage-, Playwright- und Lighthouse-Reports nutzen `if-no-files-found: warn`, sodass fehlende Ordner nach Abbrüchen den Workflow nicht zusätzlich rot färben — Logs der failing Steps bleiben die Quelle der Wahrheit.
 
 ---
 

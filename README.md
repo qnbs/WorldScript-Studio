@@ -343,6 +343,8 @@ Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, sidebar-scop
 
 **Low-resource / laptop workflow:** Run **`pnpm run typecheck`**, **`pnpm run lint`** (Biome with `--error-on-warnings`), and **`pnpm run i18n:check`** before pushing. **`pnpm run test:run`** exercises Vitest only — still meaningful but lighter than Playwright. Full **E2E** (`CI=true pnpm run test:e2e`) is intentionally heavy; rely on the **`e2e` job in CI** unless you are debugging a specific spec locally.
 
+**Vollparität mit dem Quality-Job (Zeit & RAM):** `pnpm install --frozen-lockfile && pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage` — entspricht der CI-Matrix ohne zweites Node-Setup.
+
 Simulate parts of the pipeline with [Act](https://github.com/nektos/act) (job ids must match `ci.yml`):
 
 ```bash

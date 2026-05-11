@@ -20,6 +20,8 @@ pnpm run storybook     # Storybook on port 6006
 pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 ```
 
+**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md).
+
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
 Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
