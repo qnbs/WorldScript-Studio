@@ -64,7 +64,7 @@
     "@google/genai": "^2.0.0",
     "@reduxjs/toolkit": "^2.2.6",
     "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.0",
     "@tauri-apps/plugin-http": "^2.5.9",
     "ai": "^6.0.177",
