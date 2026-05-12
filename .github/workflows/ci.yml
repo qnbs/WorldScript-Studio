@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   # ----------------------------------------------------------
-  # 0. SECURITY: pnpm audit + dependency review
+  # 0. SECURITY: pnpm audit + gitleaks + dependency review
   # ----------------------------------------------------------
   security:
     name: 🔒 Security Audit
@@ -35,20 +35,16 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: pnpm audit (high + critical)
         run: pnpm audit --audit-level=high
+
+      # QNBS-v3: gitleaks scans git history for secrets; GITHUB_TOKEN is enough for PR annotations.
+      - name: Scan for leaked secrets (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Dependency review (PRs only)
         if: github.event_name == 'pull_request'
@@ -68,17 +64,9 @@ jobs:
         # QNBS-v3: YAML-sicher quotiert — gleicher String wie in expressions für Codecov/Artifacts.
         node-version: ['lts/*', 'node']
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v5
+      - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Lint (Biome)
         run: pnpm run lint
@@ -113,7 +101,7 @@ jobs:
           fail_ci_if_error: false
 
   # ----------------------------------------------------------
-  # 2. BUILD: Production build + Pages artifact upload
+  # 2. MUTATION: Stryker (informational, does not gate deploy)
   # ----------------------------------------------------------
   mutation:
     name: 🧬 Mutation Tests (Stryker)
@@ -122,14 +110,8 @@ jobs:
     needs: [quality]
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
+
       - name: Run Stryker if configured
         run: |
           if [ -f "stryker.config.json" ] || [ -f "stryker.conf.json" ]; then
@@ -138,23 +120,21 @@ jobs:
             echo "No Stryker config found, skipping mutation testing."
           fi
 
+  # ----------------------------------------------------------
+  # 3. BUILD: Production build + Pages artifact upload
+  # ----------------------------------------------------------
   build:
     name: 🏗️ Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [quality]
+    # QNBS-v3: attestations + id-token needed for SLSA build provenance on main.
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Build application
         run: pnpm run build
@@ -183,6 +163,14 @@ jobs:
           path: ./dist
           retention-days: 7
 
+      # QNBS-v3: SLSA provenance attestation — ties the dist artifact to this exact
+      # workflow run and commit SHA; verifiable with `gh attestation verify`.
+      - name: Attest build provenance
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ./dist
+
       - name: Setup Pages
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
@@ -194,7 +182,7 @@ jobs:
           path: ./dist
 
   # ----------------------------------------------------------
-  # 3. DEPLOY: GitHub Pages (only on main push)
+  # 4. DEPLOY: GitHub Pages (only on main push)
   # ----------------------------------------------------------
   deploy:
     name: 🚀 Deploy to GitHub Pages
@@ -215,7 +203,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   # ----------------------------------------------------------
-  # 3b. E2E: Playwright (after quality gate, parallel with build)
+  # 5. E2E: Playwright (after quality gate, parallel with build)
   # ----------------------------------------------------------
   e2e:
     name: 🎭 E2E Tests (Playwright)
@@ -223,17 +211,7 @@ jobs:
     timeout-minutes: 20
     needs: [quality]
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -253,7 +231,7 @@ jobs:
           retention-days: 7
 
   # ----------------------------------------------------------
-  # 4. LIGHTHOUSE: Performance budgets (after build)
+  # 6. LIGHTHOUSE: Performance budgets (after build)
   # ----------------------------------------------------------
   lighthouse:
     name: 🔦 Lighthouse CI
@@ -262,17 +240,7 @@ jobs:
     needs: [build]
     continue-on-error: false
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Download build artifact
         uses: actions/download-artifact@v6
@@ -280,8 +248,10 @@ jobs:
           name: dist
           path: ./dist
 
+      # QNBS-v3: no --assert.exitCode flag — let .lighthouserc.cjs assertions drive the
+      # exit code; error-level assertions (CLS, accessibility) will correctly fail this job.
       - name: Run Lighthouse CI
-        run: pnpm exec lhci autorun --assert.exitCode=0
+        run: pnpm exec lhci autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
@@ -295,7 +265,7 @@ jobs:
           retention-days: 14
 
   # ----------------------------------------------------------
-  # 5. STORYBOOK: Build + artifact (parallel with build)
+  # 7. STORYBOOK: Build + artifact (parallel with build)
   # ----------------------------------------------------------
   storybook:
     name: 📖 Storybook
@@ -303,17 +273,7 @@ jobs:
     timeout-minutes: 15
     needs: [quality]
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Build Storybook
         run: pnpm exec storybook build --output-dir storybook-static

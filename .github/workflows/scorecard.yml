@@ -1,0 +1,50 @@
+name: OpenSSF Scorecard
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: '30 4 * * 1'   # every Monday 04:30 UTC
+  push:
+    branches: [main]
+
+# Minimal read-all default; individual job overrides what it needs.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Needed to upload SARIF to Code scanning
+      security-events: write
+      # Needed for scorecard to sign its attestation with Sigstore OIDC
+      id-token: write
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # publish_results uploads results to the public Scorecard API and
+          # makes the badge available on https://api.securityscorecards.dev
+          publish_results: true
+
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
