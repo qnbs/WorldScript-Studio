@@ -39,13 +39,13 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 ## Composite setup action
 
-`.github/actions/setup/action.yml` centralises Node.js + pnpm bootstrap into one reusable step used by every job:
+`.github/actions/setup/action.yml` centralises pnpm + Node.js bootstrap into one reusable step used by every job:
 
 ```
-checkout → pnpm/action-setup → actions/setup-node (cache: pnpm) → pnpm install --frozen-lockfile
+pnpm/action-setup → actions/setup-node (cache: pnpm) → pnpm install --frozen-lockfile
 ```
 
-All jobs call `uses: ./.github/actions/setup`. The `quality` job additionally passes `node-version: ${{ matrix.node-version }}` to cover the LTS matrix. GitHub Actions pre-fetches composite action definitions before any step runs, so the checkout inside the composite works correctly even on fresh runners.
+Each job that uses the composite must call `actions/checkout@v5` first (local composite actions are resolved from the workspace, so the repo must be checked out before `uses: ./.github/actions/setup` can be used). The `quality` job additionally passes `node-version: ${{ matrix.node-version }}` to cover the LTS matrix.
 
 ---
 

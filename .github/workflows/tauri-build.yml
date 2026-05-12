@@ -30,7 +30,8 @@ jobs:
           - os: macos-latest
 
     steps:
-      # QNBS-v3: composite action handles checkout + pnpm/node setup + frozen install.
+      - uses: actions/checkout@v5
+      # QNBS-v3: composite action handles pnpm/node setup + frozen install.
       - uses: ./.github/actions/setup
 
       - uses: dtolnay/rust-toolchain@stable

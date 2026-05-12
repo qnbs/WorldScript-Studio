@@ -16,8 +16,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v5
-
     - uses: pnpm/action-setup@v5
 
     # QNBS-v3: When node-version is set (matrix), use it; otherwise read .nvmrc so
