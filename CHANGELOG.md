@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.4.0] - 2026-05-12
+
 ### Added
 
 - **Command Center:** Central **`services/commands/`** registry consumed by **`components/CommandPalette.tsx`** — fuzzy search with highlights, sections, **recent/pinned** commands (persisted), optional on-device **AI-suggested** rows, voice query unchanged; **`CommandExecutorProvider`** (`contexts/CommandExecutorContext.tsx`) + **`runCommandById`** for Help „Try it“ and toast **`commandId`** actions.
@@ -47,8 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **README / AUDIT / CLAUDE / copilot-instructions:** Hybrid-AI architecture; **i18n runtime bundles** (`public/locales/*/bundle.json`) must stay in sync via **`pnpm run i18n:bundle`** / **`i18n:check`** / **`predev`** — fixes missing-translation **key placeholders** in the UI after editing `locales/**/*.json`.
 - **README / AUDIT:** CI vs local validation (typecheck, lint, i18n; defer heavy E2E to cloud CI); Gold-Standard audit section dated **2026-05-10**.
 - **Complete curated markdown pass (16 `.md` sources incl. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)):** explicit inventory and cross-links in **[`AUDIT.md`](AUDIT.md)**; **README** Documentation Hub includes deployment guide and **`.github/ACTIONS-OPTIMIZATIONS.md`**; **`docs/CI.md`** related-files table links the historical Actions doc; **`.github/copilot-instructions.md`** i18n bundle wording updated. References throughout: Playwright **[`tests/e2e/helpers.ts`](tests/e2e/helpers.ts)** (no `networkidle` under Vite), Version Control overlay / **Escape**, memoized **`selectCurrentBranchSnapshots`**. Generated paths (`tests/e2e/html-report/`, `.stryker-tmp/`) remain non-doc.
-
-Nothing queued for the next tagged release beyond doc maintenance; see **[1.3.0]** for the latest shipped release.
 
 ---
 
