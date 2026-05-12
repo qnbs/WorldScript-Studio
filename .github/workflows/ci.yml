@@ -35,7 +35,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: pnpm audit (high + critical)
@@ -65,7 +65,7 @@ jobs:
         # QNBS-v3: YAML-sicher quotiert — gleicher String wie in expressions für Codecov/Artifacts.
         node-version: ['lts/*', 'node']
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
@@ -112,7 +112,7 @@ jobs:
     needs: [quality]
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: Run Stryker if configured
@@ -137,7 +137,7 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: Build application
@@ -215,7 +215,7 @@ jobs:
     timeout-minutes: 20
     needs: [quality]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: Install Playwright browsers
@@ -245,7 +245,7 @@ jobs:
     needs: [build]
     continue-on-error: false
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: Download build artifact
@@ -279,7 +279,7 @@ jobs:
     timeout-minutes: 15
     needs: [quality]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: Build Storybook

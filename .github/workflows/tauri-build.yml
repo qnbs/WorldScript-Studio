@@ -30,7 +30,7 @@ jobs:
           - os: macos-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       # QNBS-v3: composite action handles pnpm/node setup + frozen install.
       - uses: ./.github/actions/setup
 
