@@ -166,16 +166,29 @@ Vereinfachte automatische Konsistenzprüfung:
 
 ---
 
-## Post-v1.3.0 / v1.4 — UX, Touch & weitere Qualität
+## v1.4 — Command Center, Gold-Standard Pipeline & Security Hardening
 
-**Status:** 📋 Geplant (Web-Release **v1.3.0** vom 2026-05-08 ist geshippt — siehe [`CHANGELOG.md`](CHANGELOG.md); Branch `main` kann Neufeatures vor dem nächsten Tag enthalten.)
+**Status:** ✅ Released as **v1.4.0** (2026-05-12) — siehe [`CHANGELOG.md`](CHANGELOG.md)
 
-- Fortschritte am **Autoren-Gold-Standard** (u. a. Binder, VC-Diff, Timeline, Pandoc) siehe [`CHANGELOG.md`](CHANGELOG.md) *Unreleased* / Integrations-Branches — Release-Schnitt bei nächstem Tag
+- **Command Center:** `services/commands/` registry + `CommandPalette.tsx` (fuzzy search, recent/pinned, AI suggestions); `CommandExecutorProvider`; global shortcuts (`services/keyboard/`, `useGlobalKeyboardShortcuts.ts`); Settings → Shortcuts
+- **Settings hub:** search over control hints; settings JSON import/export
+- **Gold-Standard author pipeline:** Binder, research split, compile profile, Pandoc EPUB, VC word-level diff, scene timeline, readability sampling, LanguageTool, local RAG rebuild, WebGPU leader election
+- **Hybrid-AI:** local backend presets (Ollama/LM Studio/vLLM), OpenAI-compatible base URL, configurable fallback chain, desktop port scan
+- **Security:** all GitHub Actions pinned to SHA, CodeQL SAST, OpenSSF Scorecard, gitleaks, SLSA attestation, Dependabot, branch protection
+- **Quality:** pnpm strict config, Lighthouse accessibility error gate (WCAG 2.2)
+
+---
+
+## Post-v1.4.0 / v1.5 — UX, Touch & weitere Qualität
+
+**Status:** 📋 Geplant
+
 - Mobile-First Touch-Optimierungen (Swipe-Navigation, Touch-DnD); **responsive E2E primär in CI** ([`docs/CI.md`](docs/CI.md))
 - AI-Creativity-Presets pro Projekt (nicht global)
 - Erweiterte Keyboard Navigation
 - High-Contrast-Mode Verbesserungen (teilweise durch Accessibility-Hub ergänzt — iterativ)
 - Visual Regression Tests (Playwright Screenshots + Storybook chromatic)
+- Tauri v2 Auto-Update + Code-Signing (aus v1.2.1 verschoben)
 
 ---
 

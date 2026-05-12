@@ -90,11 +90,14 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 | Tool | Trigger | Output |
 |------|---------|--------|
-| **gitleaks** (`gitleaks/gitleaks-action@v2`) | Every CI run (security job) | Fails on leaked secrets/tokens in source or git history |
-| **SLSA build provenance** (`actions/attest-build-provenance@v2`) | `main` push only (build job) | `.intoto.jsonl` attestation attached to the run |
-| **OpenSSF Scorecard** (`ossf/scorecard-action@v2.4.0`) | Weekly cron + `main` push | SARIF → GitHub Code Scanning; separate `scorecard.yml` workflow |
-| **Dependabot** | Weekly (Monday) | PRs for npm deps (dev-tooling grouped) + GitHub Actions versions (max 5 open PRs) |
+| **gitleaks** (`gitleaks/gitleaks-action`) | Every CI run (security job) | Fails on leaked secrets/tokens in source or git history |
+| **SLSA build provenance** (`actions/attest-build-provenance`) | `main` push only (build job) | `.intoto.jsonl` attestation attached to the run |
+| **OpenSSF Scorecard** (`ossf/scorecard-action`) | Weekly cron + `main` push | SARIF → GitHub Code Scanning; separate `scorecard.yml` workflow |
+| **CodeQL** (`github/codeql-action`) | Every push/PR + weekly | JS/TS SAST → GitHub Code Scanning; `codeql.yml` workflow |
+| **SHA-pinned actions** | Every job | All `uses:` references pinned to commit SHA (`# vN` comment) — immune to tag-mutable supply-chain attacks; Dependabot updates SHAs automatically |
+| **Dependabot** | Weekly (Monday) | PRs for npm deps (dev-tooling grouped) + GitHub Actions SHA bumps (max 5 open PRs) |
 | **`dependency-review-action`** | PRs only (security job) | Blocks PRs that introduce new high/critical vulnerabilities |
+| **Branch protection** | Always | `main` requires 1 approved review, required status checks (security, quality ×2, build), no force-push |
 
 ---
 
