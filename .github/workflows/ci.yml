@@ -35,7 +35,10 @@ jobs:
       contents: read
       pull-requests: read
     steps:
+      # QNBS-v3: fetch-depth:0 gives gitleaks access to parent commits (sha^) needed for PR diff scans; shallow clone causes "ambiguous argument" errors.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup
 
       - name: pnpm audit (high + critical)
