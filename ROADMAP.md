@@ -159,7 +159,8 @@ Vereinfachte automatische Konsistenzprüfung:
 
 - ✅ StorageBackend-Interface — `storageBackend.ts`, strikte `StoryProject`-Typen am Proxy
 - ✅ Geführte Tour (Spotlight mit `driver.js`, Dashboard + Hilfe als Einstieg)
-- ⬜ Tauri v2 Release-Pipeline: Auto-Update (`tauri-plugin-updater`) + Code-Signing — **GitHub Release mit Installern bei `v*`-Tags:** [`docs/TAURI-CI.md`](docs/TAURI-CI.md) / [`tauri-build.yml`](.github/workflows/tauri-build.yml)
+- ✅ Tauri Release-Pipeline: GitHub Release mit Installern bei `v*`-Tags — [`docs/TAURI-CI.md`](docs/TAURI-CI.md) / [`tauri-build.yml`](.github/workflows/tauri-build.yml)
+- ⬜ Tauri v2 Auto-Update (`tauri-plugin-updater`) + Code-Signing — deferred to dedicated PR
 - ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — qualitative Übersetzungen iterativ
 - ✅ Bundle-Size-Budgets + rollup-Analyse als CI (`pnpm run bundle:budget`, `analyze` Artifact — siehe [`docs/CI.md`](docs/CI.md)); optionales LHCI-Performance-Budget weiterhin roadmap-offen
 
