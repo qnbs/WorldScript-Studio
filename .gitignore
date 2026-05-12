@@ -39,5 +39,8 @@ playwright-report/
 tests/e2e/html-report/
 tests/e2e/results/
 
+# Storybook static build output
+storybook-static/
+
 # Graphify knowledge graph output
 graphify-out/
