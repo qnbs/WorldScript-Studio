@@ -93,7 +93,7 @@ jobs:
       # QNBS-v3: fail_ci_if_error: false — Forks ohne CODECOV_TOKEN; Coverage bleibt trotzdem im Artifact.
       - name: Publish coverage to Codecov
         if: always() && matrix.node-version == 'lts/*'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info
