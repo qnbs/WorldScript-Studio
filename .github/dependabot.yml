@@ -8,6 +8,13 @@ updates:
       day: monday
     open-pull-requests-limit: 10
     groups:
+      # QNBS-v3: react and react-dom must stay in lockstep; split bumps cause version-mismatch errors at test time.
+      react:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
       # Group dev-tooling updates together to reduce PR noise
       dev-tooling:
         patterns:
