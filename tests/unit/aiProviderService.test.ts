@@ -122,12 +122,17 @@ describe('generateText', () => {
     expect(text).toBe('ok');
   });
 
-  it('throws for anthropic provider', async () => {
+  it('falls back to local AI when anthropic is unavailable', async () => {
+    const spy = vi.spyOn(localAiFacade, 'generateLocalText').mockResolvedValueOnce({
+      layer: 'heuristic',
+      text: 'local-fallback-text',
+    });
     const text = await generateText('prompt', 'Balanced', {
       ...defaultOpts,
       provider: 'anthropic',
     });
-    expect(text).toContain('placeholder response');
+    expect(text).toBe('local-fallback-text');
+    spy.mockRestore();
   });
 
   it('delegates to local facade for webllm provider', async () => {
