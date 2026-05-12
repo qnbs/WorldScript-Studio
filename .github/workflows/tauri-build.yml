@@ -30,13 +30,13 @@ jobs:
           - os: macos-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       # QNBS-v3: composite action handles pnpm/node setup + frozen install.
       - uses: ./.github/actions/setup
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: src-tauri
 
@@ -53,7 +53,7 @@ jobs:
         run: pnpm exec tauri build
 
       - name: Upload bundle directory
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: tauri-bundle-${{ matrix.os }}
           path: src-tauri/target/release/bundle/
@@ -73,7 +73,7 @@ jobs:
       contents: write
     steps:
       - name: Download all bundle artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: tauri-bundle-*
           path: downloaded
@@ -98,7 +98,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.collect.outputs.has_assets == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: release-assets/*
           generate_release_notes: true
