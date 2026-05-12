@@ -1,0 +1,33 @@
+name: Setup Node + pnpm
+description: >
+  Checkout, configure pnpm, setup Node (from .nvmrc or explicit version), install
+  frozen dependencies. Centralises the repeated 4-step block used by every CI job.
+
+inputs:
+  node-version-file:
+    description: Path to version file (.nvmrc) — used when node-version is empty
+    default: '.nvmrc'
+  node-version:
+    description: >
+      Explicit Node version string (e.g. 'lts/*', 'node', '22'). When non-empty,
+      takes precedence over node-version-file. Leave blank for most jobs.
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v5
+
+    - uses: pnpm/action-setup@v5
+
+    # QNBS-v3: When node-version is set (matrix), use it; otherwise read .nvmrc so
+    # non-matrix jobs stay pinned to the project's declared Node version.
+    - uses: actions/setup-node@v5
+      with:
+        node-version: ${{ inputs.node-version }}
+        node-version-file: ${{ inputs.node-version == '' && inputs.node-version-file || '' }}
+        cache: pnpm
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      shell: bash

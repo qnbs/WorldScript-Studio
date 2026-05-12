@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # npm / pnpm workspaces
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      # Group dev-tooling updates together to reduce PR noise
+      dev-tooling:
+        patterns:
+          - 'vitest*'
+          - '@vitest/*'
+          - 'playwright*'
+          - '@playwright/*'
+          - 'storybook*'
+          - '@storybook/*'
+          - 'biome*'
+          - 'stryker*'
+          - '@stryker-mutator/*'
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
