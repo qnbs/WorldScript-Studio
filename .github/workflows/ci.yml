@@ -48,7 +48,7 @@ jobs:
 
       - name: Dependency review (PRs only)
         if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
 
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)
