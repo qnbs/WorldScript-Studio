@@ -50,7 +50,7 @@
     "dev:tauri": "tauri dev"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.71",
+    "@ai-sdk/google": "^3.0.72",
     "@ai-sdk/openai": "^3.0.63",
     "@ai-sdk/react": "^3.0.179",
     "@dnd-kit/core": "^6.3.1",
