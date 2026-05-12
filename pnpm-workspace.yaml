@@ -1,6 +1,14 @@
-allowBuilds:
-  core-js: true
-  esbuild: true
-  protobufjs: true
+# pnpm v10 workspace configuration
+# Build-script allow-list: ONLY these packages may run postinstall/preinstall scripts.
+# All others are silently denied (pnpm v10 default since v9.15+ approve-builds model).
+# v11 upgrade path: rename to strictDepBuilds: true with an explicit allowlist, and add
+#   minimumReleaseAge, blockExoticSubdeps, trustPolicy here.
+onlyBuiltDependencies:
+  - core-js        # generates polyfills at install time
+  - esbuild        # downloads platform binary via postinstall
+  - protobufjs     # builds native addon fallback
+  - '@google/genai' # SDK postinstall (direct dep)
+  - sharp          # downloads platform binary (transitive via @xenova/transformers)
+
 packages:
   - "packages/*"

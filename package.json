@@ -141,7 +141,11 @@
       }
     },
     "onlyBuiltDependencies": [
-      "simple-git-hooks"
+      "@google/genai",
+      "core-js",
+      "esbuild",
+      "protobufjs",
+      "sharp"
     ]
   },
   "simple-git-hooks": {
