@@ -5,7 +5,7 @@
 //           offline fallback, push notifications, share target
 // ============================================================
 
-const APP_VERSION   = '1.3.0';
+const APP_VERSION   = '1.4.0';
 const CACHE_STATIC  = `storycraft-static-v${APP_VERSION}`;
 const CACHE_DYNAMIC = `storycraft-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `storycraft-images-v${APP_VERSION}`;
