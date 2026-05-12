@@ -32,8 +32,20 @@ For historical optimization notes (targets may predate the live workflow), see [
 | Types | **TypeScript** `pnpm run typecheck` |
 | Unit tests | **Vitest** with V8 coverage (`pnpm exec vitest run --coverage`) |
 | E2E | **Playwright** (`pnpm run test:e2e` with `CI=true`) |
-| Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs` — includes **accessibility** category assertion as `warn` with `minScore`) |
+| Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs`) — **accessibility** category asserted at **`error`** level `minScore: 0.88` (blocks CI); performance `warn`; CLS `error` ≤ 0.1 |
 | Bundle guardrails | **`pnpm run bundle:budget`** (max chunk KB) + **`pnpm run analyze`** (rollup visualizer → `dist/bundle-analysis.html`, artifact in CI) |
+
+---
+
+## Composite setup action
+
+`.github/actions/setup/action.yml` centralises Node.js + pnpm bootstrap into one reusable step used by every job:
+
+```
+checkout → pnpm/action-setup → actions/setup-node (cache: pnpm) → pnpm install --frozen-lockfile
+```
+
+All jobs call `uses: ./.github/actions/setup`. The `quality` job additionally passes `node-version: ${{ matrix.node-version }}` to cover the LTS matrix. GitHub Actions pre-fetches composite action definitions before any step runs, so the checkout inside the composite works correctly even on fresh runners.
 
 ---
 
@@ -61,9 +73,9 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 | Job | Needs | Purpose |
 |-----|--------|---------|
-| `security` | — | `pnpm audit --audit-level=high`; on PRs: `dependency-review-action` |
+| `security` | — | `pnpm audit --audit-level=high`; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `quality` | `security` | Matrix **Node `lts/*`** and **`node` (current)** → Biome lint, **`pnpm run i18n:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
-| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact |
+| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation** (`actions/attest-build-provenance@v2`) |
 | `e2e` | `quality` | Playwright **Chromium** + **mobile emulation** (Pixel 5, same browser install), `CI=true`. Firefox and optional mobile locally — see [`playwright.config.ts`](../playwright.config.ts). |
 | `mutation` | `quality` | **`pnpm run mutation`** if `stryker.conf.json` exists — HTML report in-repo locally; **`continue-on-error: true`** so score does not block merges while targets grow |
 | `lighthouse` | `build` | LHCI against downloaded `dist` (hard-fail: `assert.exitCode=0`) |
@@ -74,10 +86,23 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 ---
 
+## Supply-chain security
+
+| Tool | Trigger | Output |
+|------|---------|--------|
+| **gitleaks** (`gitleaks/gitleaks-action@v2`) | Every CI run (security job) | Fails on leaked secrets/tokens in source or git history |
+| **SLSA build provenance** (`actions/attest-build-provenance@v2`) | `main` push only (build job) | `.intoto.jsonl` attestation attached to the run |
+| **OpenSSF Scorecard** (`ossf/scorecard-action@v2.4.0`) | Weekly cron + `main` push | SARIF → GitHub Code Scanning; separate `scorecard.yml` workflow |
+| **Dependabot** | Weekly (Monday) | PRs for npm deps (dev-tooling grouped) + GitHub Actions versions (max 5 open PRs) |
+| **`dependency-review-action`** | PRs only (security job) | Blocks PRs that introduce new high/critical vulnerabilities |
+
+---
+
 ## Permissions
 
 - Global default: `contents: read`
-- `security` job (PR dependency review): zusätzlich `pull-requests: read`, damit `dependency-review-action` Metadaten zu geänderten Manifesten lesen kann.
+- `security` job (PR dependency review): additional `pull-requests: read` so `dependency-review-action` can read changed manifests.
+- `build` job (main, non-PR): `attestations: write` + `id-token: write` for SLSA provenance signing.
 - `deploy` job: `pages: write`, `id-token: write` (OIDC for Pages)
 
 **Upload-Artefakte:** Coverage-, Playwright- und Lighthouse-Reports nutzen `if-no-files-found: warn`, sodass fehlende Ordner nach Abbrüchen den Workflow nicht zusätzlich rot färben — Logs der failing Steps bleiben die Quelle der Wahrheit.
@@ -98,7 +123,7 @@ pnpm run build
 pnpm run bundle:budget
 pnpm run analyze   # optional locally; CI uploads HTML report
 CI=true pnpm run test:e2e
-pnpm exec lhci autorun --assert.exitCode=0   # after build + serve/preview as configured in .lighthouserc.cjs
+pnpm exec lhci autorun   # after build + serve/preview as configured in .lighthouserc.cjs
 ```
 
 ---
@@ -147,6 +172,9 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | `vitest.config.ts` | Coverage thresholds, reporters |
 | `scripts/check-bundle-budget.mjs` | Chunk size budget after `pnpm run build` |
 | `renovate.json` | Renovate Bot: patch auto-merge policy |
+| `.github/actions/setup/action.yml` | Composite action: Node + pnpm setup reused by all jobs |
+| `.github/dependabot.yml` | Dependabot: npm + GitHub Actions weekly updates, dev-tooling grouped |
+| `.github/workflows/scorecard.yml` | OpenSSF Scorecard weekly run → Code Scanning SARIF |
 | `playwright.config.ts` | E2E projects (CI: Chromium desktop + Pixel 5; local: Chromium + Firefox, optional mobile via `RUN_MOBILE_E2E=1`), `snapshotPathTemplate`, reporters |
 | `tests/e2e/helpers.ts` | SPA-ready waits (avoid `networkidle` with Vite/HMR), EN locale, blank project bootstrap, `#sidebar` scope |
 | `tests/e2e/a11y.spec.ts` | axe Playwright smoke (welcome + settings accessibility hub) |

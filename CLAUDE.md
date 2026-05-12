@@ -7,18 +7,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm run dev           # Vite dev server on http://localhost:3000
 pnpm run build         # Production build to dist/
+pnpm run preview       # Preview production build locally
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # TypeScript type check (tsc --noEmit)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
 pnpm run test:coverage # Vitest with V8 coverage (see thresholds in vitest.config.ts)
-pnpm run i18n:check    # Locale key parity (runs in CI quality job)
+pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
 pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
-pnpm run test:e2e      # Playwright E2E tests (requires CI=true); specs use tests/e2e/helpers.ts — never rely on networkidle with Vite
+pnpm run test:e2e      # Playwright E2E tests (CI=true required; E2E are CI-only)
+pnpm run analyze       # Bundle analysis (ANALYZE=true vite build)
+pnpm run bundle:budget # Check vendor chunk sizes (max 7000 KB)
 pnpm run storybook     # Storybook on port 6006
 pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 ```
+
+**Run a single test file:** `pnpm exec vitest run tests/unit/serviceName.test.ts`
+**Run tests matching a name pattern:** `pnpm exec vitest run -t "pattern"`
 
 **Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md).
 
@@ -29,6 +35,8 @@ Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 ## Architecture
 
 StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
+
+**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Two internal workspace packages (`@domain/ai-core`, `@domain/ui`) are consumed as `workspace:*` deps.
 
 **Live:** `https://qnbs.github.io/StoryCraft-Studio/`
 
@@ -51,7 +59,11 @@ Every major view follows this three-file structure:
 
 ### Storage
 
-`dbService.ts` wraps **dual** IndexedDB databases (`storycraft-state-db`, `storycraft-data-db`) with LZ-String compression (payloads > 10 KB) and AES-256-GCM encryption (API keys). `storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Never use `localStorage` for sensitive data.
+`dbService.ts` wraps **dual** IndexedDB databases (`storycraft-state-db` for Redux state, `storycraft-data-db` for assets/blobs) with LZ-String compression (payloads > 10 KB), AES-256-GCM encryption (API keys), and legacy migration via `services/dbMigration.ts`. `storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Data access must go through `dbService` or thunks — never raw IndexedDB calls. Never use `localStorage` for sensitive data.
+
+### Collaboration
+
+Real-time P2P editing via Yjs + y-webrtc (`services/collaborationService.ts`). Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
 
 ### Code Splitting
 
@@ -69,9 +81,18 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 Custom React Context in `I18nContext.tsx` — not i18next. Locale files exist for de, en, es, fr, it (15 modules merged into one **`public/locales/<lang>/bundle.json`** per language — rebuilt by **`pnpm run i18n:bundle`** or automatically via **`pnpm run i18n:check`** / **`prebuild`** / **`predev`**); the **in-app selector** exposes **de**, **en**, **fr**, **es**, and **it** (Settings, Welcome Portal, Command Palette). All user-facing strings must use `t('key.path')` from `useTranslation()` — no hardcoded text. New keys: add to **all five** locale trees (`node scripts/check-i18n-keys.mjs --fix` for parity), then ensure **`pnpm run i18n:bundle`** runs (included in **`pnpm run i18n:check`**, **`prebuild`**, and **`predev`**). English is the fallback.
 
-### Cursor (QNBS)
+### Code comment convention (QNBS-v3)
 
-Repo-root **`.cursorrules`** defines the **QNBS Master Prompt v3** (“Creative AI Architect”): analyse this repo in its own narrative-writing domain, respect Biome/Redux/Vite patterns, prefer substantive `// QNBS-v3:` notes on non-trivial edits, and give short before/after context when proposing changes. Use alongside this file for IDE agents.
+On any non-trivial code change add a single-line comment explaining **why**, not what:
+
+| Context | Syntax |
+|---------|--------|
+| TS / JS | `// QNBS-v3: <reason / impact>` |
+| TSX / JSX | `// QNBS-v3: …` above the changed line; `{/* QNBS-v3: … */}` only when needed inside JSX |
+| CSS | `/* QNBS-v3: … */` |
+| Pure config (JSON, YAML) | No inline comment — explain in the commit message |
+
+Skip the annotation for pure formatting, lockfile updates, or generated artefacts. Cursor IDE agents follow the extended rules in `.cursorrules` and `.cursor/rules/*.mdc`.
 
 ## Documentation index
 
@@ -85,6 +106,9 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 - Modals must trap focus and restore on close; decorative icons need `aria-hidden="true"`
 - Gemini API calls must use `NetworkOnly` caching (never cache AI responses in the Service Worker)
 - Use `focus-visible:ring-2` for keyboard focus styles
+- `dangerouslySetInnerHTML` only with DOMPurify-sanitized content — never raw
+- No direct `@tauri-apps/api` imports in `components/ui/` atoms; abstract through services or hooks so the web build stays unaffected
+- File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors
 
 ## Known Technical Debt
 
