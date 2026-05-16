@@ -9,8 +9,9 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
   const text = await file.text();
   const projectDataJson = parseImportedProjectJson(text);
 
-  const charactersState = charactersAdapter.getInitialState();
-  const worldsState = worldsAdapter.getInitialState();
+  // QNBS-v3: setAll returns a new Immer-produced state — capture the return value, do not rely on in-place mutation
+  let charactersState = charactersAdapter.getInitialState();
+  let worldsState = worldsAdapter.getInitialState();
   const charactersToSet: Character[] = [];
   const worldsToSet: World[] = [];
 
@@ -33,7 +34,7 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     }
     charactersToSet.push(newChar);
   }
-  charactersAdapter.setAll(charactersState, charactersToSet);
+  charactersState = charactersAdapter.setAll(charactersState, charactersToSet);
 
   let worldArray: (World & { ambianceImageBase64?: string })[] = [];
   if (Array.isArray(projectDataJson.worlds)) {
@@ -54,7 +55,7 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     }
     worldsToSet.push(newWorld);
   }
-  worldsAdapter.setAll(worldsState, worldsToSet);
+  worldsState = worldsAdapter.setAll(worldsState, worldsToSet);
 
   const manuscript = projectDataJson.manuscript ?? [];
 

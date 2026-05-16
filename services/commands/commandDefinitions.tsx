@@ -285,15 +285,9 @@ export function getStaticCommandDefinitions(): CommandDefinition[] {
       keywords: ['search', 'projects', 'all'],
       icon: iconBtn(ICONS.DASHBOARD),
       when: (deps) => deps.featureFlags.enableCrossProjectSearch,
-      run: (deps) => {
-        deps.navigate('dashboard');
-        deps.dispatch(
-          statusActions.addNotification({
-            type: 'info',
-            title: deps.t('palette.labs.crossProjectToastTitle'),
-            description: deps.t('palette.labs.crossProjectToastBody'),
-          }),
-        );
+      // QNBS-v3: opens cross-project search panel via Zustand transient state, not Redux (avoids re-renders)
+      run: () => {
+        useTransientUiStore.getState().setCrossProjectSearchOpen(true);
       },
     },
   ];

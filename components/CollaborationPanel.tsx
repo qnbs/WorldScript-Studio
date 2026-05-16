@@ -89,9 +89,7 @@ const sanitizeRoomInput = (value: string): string =>
 
 export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClose, projectId }) => {
   const { t } = useTranslation();
-  const webrtcSignalingUrls = useAppSelector(
-    (s) => s.settings.collaboration.webrtcSignalingUrls,
-  );
+  const webrtcSignalingUrls = useAppSelector((s) => s.settings.collaboration.webrtcSignalingUrls);
   const panelRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [localUser, setLocalUser] = useState<CollaborationUser>(getLocalUser);
@@ -373,6 +371,26 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           {connectionError && (
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400">
               {connectionError}
+            </div>
+          )}
+
+          {/* Security warning — only visible before connecting (QNBS-v3: public relay discloses room metadata; must be shown pre-connection so users can make an informed choice) */}
+          {!isConnected && (
+            <div
+              role="alert"
+              aria-live="polite"
+              className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-700 dark:text-amber-300 space-y-1"
+            >
+              <p className="font-semibold">{t('collab.securityWarning')}</p>
+              <p>{t('collab.securityWarningDetail')}</p>
+              <a
+                href="https://github.com/yjs/y-webrtc#signaling"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
+              >
+                {t('collab.selfHostLinkLabel')}
+              </a>
             </div>
           )}
 

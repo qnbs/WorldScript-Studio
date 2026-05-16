@@ -37,12 +37,12 @@ export default defineConfig({
         '**/*.stories.{ts,tsx}',
         '**/*.d.ts',
       ],
-      // QNBS-v3: Breiteres include senkt die Kopf-% gegenüber dem alten „Insel“-Glob — Schwellen = aktueller Messtand; Ziel 50–70 % über weitere Tests.
+      // QNBS-v3: Phase-1-Schwellen nach 20+ neuen Testdateien erhöht; Ziel Phase-2: 50 %.
       thresholds: {
-        lines: 25,
-        functions: 21,
-        branches: 17,
-        statements: 24,
+        lines: 35,
+        functions: 30,
+        branches: 22,
+        statements: 33,
         perFile: false,
       },
     },

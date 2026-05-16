@@ -39,6 +39,9 @@
   "collab.user": "Nutzer: {{name}}",
   "collab.waitingForUsers": "Warte auf weitere Teilnehmer …",
   "collab.you": "Du",
+  "collab.securityWarning": "Öffentlicher Signalserver",
+  "collab.securityWarningDetail": "Verbindungen nutzen standardmäßig einen öffentlichen Relay-Server. Rauminhalte sind P2P-verschlüsselt, aber Verbindungsmetadaten (Raum-IDs) laufen durch den Relay. Für sensible Projekte empfiehlt sich Self-Hosting.",
+  "collab.selfHostLinkLabel": "Mehr über Self-Hosting",
   "common.appLoading": "Anwendung wird geladen",
   "common.cancel": "Abbrechen",
   "common.close": "Schließen",
@@ -278,5 +281,12 @@
   "vc.switchBranch": "Branch wechseln",
   "vc.switchBranchTitle": "Branch wechseln",
   "vc.title": "Versionsverlauf",
-  "vc.words": "Wörter"
+  "vc.words": "Wörter",
+  "crossSearch.title": "Projektsuche",
+  "crossSearch.placeholder": "Titel, Logline, Manuskript, Figuren suchen…",
+  "crossSearch.noResults": "Keine Treffer gefunden.",
+  "crossSearch.matchType.title": "Titel",
+  "crossSearch.matchType.logline": "Logline",
+  "crossSearch.matchType.manuscript": "Manuskript",
+  "crossSearch.matchType.character": "Figur"
 }
