@@ -31,7 +31,8 @@ export async function exportEpub(options: EpubExportOptions): Promise<void> {
   const { title, author, synopsis, chapters, lang = 'de', coverImage, compileProfile } = options;
   const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
-  const uid = `urn:uuid:sc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  // QNBS-v3: crypto.randomUUID() instead of Math.random() for unpredictable identifiers (CodeQL js/insecure-randomness)
+  const uid = `urn:uuid:${crypto.randomUUID()}`;
   const dateStr = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 
   // mimetype must be first and uncompressed
