@@ -129,16 +129,19 @@ self.addEventListener('activate', (event) => {
 function isNetworkOnlyUrl(url) {
   if (url.protocol === 'chrome-extension:') return true;
   const h = url.hostname;
+  // QNBS-v3: use exact host/endsWith instead of includes() to prevent subdomain bypass (CodeQL js/incomplete-url-substring-sanitization)
   if (
-    h.includes('generativelanguage.googleapis.com') ||
-    h.includes('generativeai.googleapis.com')
+    h === 'generativelanguage.googleapis.com' ||
+    h.endsWith('.generativelanguage.googleapis.com') ||
+    h === 'generativeai.googleapis.com' ||
+    h.endsWith('.generativeai.googleapis.com')
   ) {
     return true;
   }
   if (h === 'api.openai.com' || h.endsWith('.openai.com')) return true;
   if (h === 'api.anthropic.com' || h.endsWith('.anthropic.com')) return true;
   if (h === 'openrouter.ai' || h.endsWith('.openrouter.ai')) return true;
-  if (h.includes('api.deepseek.com')) return true;
+  if (h === 'api.deepseek.com' || h.endsWith('.deepseek.com')) return true;
   if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]') return true;
   return false;
 }

@@ -171,14 +171,9 @@ export async function storyCraftCompletionFetch(
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    const message =
-      err instanceof Error
-        ? err.message
-        : typeof err === 'string'
-          ? err
-          : 'StoryCraft AI request failed.';
+    // QNBS-v3: never expose err.message in response body — may contain internal paths or tokens (CodeQL js/stack-trace-exposure)
     logger.error('storyCraftCompletionFetch failed', err);
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'StoryCraft AI request failed.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
