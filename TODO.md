@@ -8,19 +8,25 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
-## v1.3.x — Nacharbeiten & Qualität
+## v1.4.x — Qualitätssteigerung (Master Perfection Plan)
 
 > Vollständige **`.md`-Inventur** (19 kuratierte Quellen): [`AUDIT.md`](AUDIT.md) § *Markdown corpus*; Navigation: [`README.md`](README.md#-documentation-hub). Schwere Tests **CI-first**: [`docs/CI.md`](docs/CI.md).
 
 ### Hoch (🟡)
 
-- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — breites `coverage.include` aktiv; Schwellen folgen dem Gesamt‑% (aktuell ~26 % Zeilen); weiter **Tests staffeln**
+- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — Phase 1 erreicht (Schwellen 35/30/22/33 gesetzt); gemessene Coverage **~36 % Zeilen / ~30 % Funktionen / ~25 % Branches** (Stand 2026-05-16); Phase 2 (Ziel 50 % Lines) erfordert weitere Branch-Coverage-Arbeit — insbes. große Komponenten, aiProviderService-Streaming, collaborationService
+- ✅ **WebLLM Modell-Selektor** — `WEBLLM_SUPPORTED_MODELS` (4 MLC-Checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress`-Parameter, Settings-UI mit Dropdown + Fortschrittsanzeige (WCAG 2.2 `role="progressbar"`, `useRef`-Mounted-Guard) — [`packages/ai-core`](packages/ai-core), [`services/localAiFacade.ts`](services/localAiFacade.ts), [`components/settings/AiSections.tsx`](components/settings/AiSections.tsx)
+- ✅ **Cross-Project-Search Service** — `services/crossProjectSearchService.ts`, `searchAcrossProjects()` via fuzzyScore, transientUiStore-Integration (`isCrossProjectSearchOpen`), commandDefinitions-Command — v1: Einzelprojekt (multi-project erfordert DB_VERSION-Bump)
+- ✅ **Collaboration Security Warning** — Sicherheitshinweis-Banner in CollaborationPanel (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) vor Verbindungsaufbau sichtbar; verschwindet nach Connect
+- ✅ **Phase 1+2 Unit Tests** — 17 neue Test-Dateien, 733 Tests gesamt; Vitest-Schwellen auf 35/30/22/33 erhöht (zuvor 25/21/17/24)
+- ✅ **Stryker Erweiterung (Phase 4)** — `fuzzyScore.ts`, `palettePreferences.ts`, `commandBuilder.ts` als zusätzliche Mutations-Ziele
+- ✅ **E2E-Tests (Phase 4)** — `commands.spec.ts` (Palette Ctrl+K, „dashboard"-Suche, fuzzy „wrt", Enter-Navigate), `collaboration.spec.ts` (Security-Warning-Banner sichtbar vor Verbindung)
 - ✅ **One-Click** verschlüsselter **Library-Export** (ZIP + AES-GCM, META.json + vault.bin) — [`services/libraryBackupService.ts`](services/libraryBackupService.ts), Settings → Data
 - ✅ **WebLLM** als wählbarer Provider (`webllm/browser`, Privacy wie Ollama) — [`services/aiProviderService.ts`](services/aiProviderService.ts), [`packages/ai-core`](packages/ai-core)
 
 ### Niedrig (🟢)
 
-- ✅ Vollständige Markdown-Doku-Synchronisation (README Hub, CONTRIBUTING, docs/CI, AUDIT, Copilot, CLAUDE, SECURITY, TAURI/graphify, CHANGELOG/ROADMAP/TODO) — 2026-05-06
+- ✅ Vollständige Markdown-Doku-Synchronisation (README Hub, CONTRIBUTING, docs/CI, AUDIT, Copilot, CLAUDE, SECURITY, TAURI/graphify, CHANGELOG/ROADMAP/TODO) — 2026-05-16
 
 ---
 

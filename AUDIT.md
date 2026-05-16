@@ -1,8 +1,29 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up:** 2026-05-02  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Version audited:** 1.1.0 → 1.1.1 (package.json); tooling docs synced with **Node 22**, **Vite 8**, **Biome**, current `ci.yml`
+**Current version:** **1.4.0** (released 2026-05-12); active development on unreleased enhancements  
+**Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-16 (Quality lift: WebLLM selector, cross-project search, test coverage)
+
+### Product / Architecture
+
+- **WebLLM model selector:** `packages/ai-core` exports `WEBLLM_SUPPORTED_MODELS` (4 MLC-packaged checkpoints), `WebLlmModelId`, `WebLlmProgressReport`; `runLocalTextGeneration` now accepts optional `modelId` and `onProgress` params. `services/localAiFacade.ts` forwards both. `types.ts` expands `AiModel` union with 4 specific MLC model IDs. Settings → AI (Advanced) shows a dynamic model dropdown + pre-download button + WCAG 2.2 `role="progressbar"` progress bar + `useRef` mounted guard (prevents `setState`-on-unmount during async download). All 5 locales gain `settings.ai.webllm.{model,downloadProgress,downloading}`.
+- **Cross-project search (v1 scope):** `services/crossProjectSearchService.ts` — `searchAcrossProjects(query, projectData)` fuzzy-searches title/logline/manuscript/characters using `normalizeSearch()` from `fuzzyScore.ts`; results carry `projectId`, `projectTitle`, `matchType`, `excerpt` (≤ 120 chars, trailing `…`), `score`. Searches Redux state only (v1); multi-project requires `DB_VERSION` bump and IDB migration, deferred. `app/transientUiStore.ts` gains `isCrossProjectSearchOpen` + `setCrossProjectSearchOpen`. `labs-cross-project-search` command now opens the panel instead of a stub toast. All 5 locales gain 7 `crossSearch.*` keys.
+- **Collaboration security warning:** `CollaborationPanel.tsx` pre-connection banner (`role="alert"`, `aria-live="polite"`, keyboard-accessible self-hosting link, WCAG 2.2 AA). Hidden after connect. All 5 locales gain `collab.securityWarning`, `collab.securityWarningDetail`, `collab.selfHostLinkLabel`.
+
+### Quality / Testing
+
+- **Unit-test coverage (Phase 1 met):** 17 new test files, 733 tests total. Vitest thresholds bumped from 25/21/17/24 to **35/30/22/33** (lines/functions/branches/statements). Measured: 36.47 % lines · 35.53 % statements · 24.96 % branches · 30.22 % functions — all Phase 1 targets exceeded. New coverage: commands system (fuzzyScore, palettePreferences, commandSystem), writing/character/binder/management thunks, hooks (useDashboard, useManuscriptView, useGlobalKeyboardShortcuts, useCharacterView, useOutlineGenerator), aiProviderService fallback chain, dbService snapshots + binder assets, crossProjectSearchService.
+- **Stryker targets expanded:** `stryker.conf.json` now mutates `fuzzyScore.ts`, `palettePreferences.ts`, and `commandBuilder.ts` alongside the existing `codexService.ts` and `dbMigration.ts`.
+- **E2E additions:** `tests/e2e/commands.spec.ts` (palette Ctrl+K, text search, fuzzy match, Enter-navigate) and `tests/e2e/collaboration.spec.ts` (security warning banner visible pre-connection) — CI-only specs.
+
+### Documentation
+
+- **Markdown corpus (19 files — unchanged count):** `README.md` Redux Toolkit badge corrected from `6.x` to `2.x`; `CHANGELOG.md [Unreleased]` filled with all Phase 3A/3B/3C/4 entries; `TODO.md` updated to reflect Phase 1+2 completion and ~36 % coverage baseline; `ROADMAP.md` gains a v1.4.x Quality-lift section (Phases 3A/3B/3C/4 all marked complete); `docs/CI.md` corrects `checkout@v5` → `checkout@v6` reference and adds `commands.spec.ts` / `collaboration.spec.ts` E2E entries; `.github/SECURITY.md` supported-version table updated (1.4.x current, 1.3.x best-effort); `AUDIT.md` header toolchain line updated.
 
 ---
 

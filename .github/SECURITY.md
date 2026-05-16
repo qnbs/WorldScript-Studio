@@ -7,9 +7,9 @@ The project currently supports security fixes for the following versions:
 | Version | Supported |
 | --- | --- |
 | `main` (latest commit) | Yes |
-| `1.3.x` | Yes |
-| `1.2.x` | Best effort (upgrade recommended) |
-| `< 1.2.0` | No |
+| `1.4.x` | Yes (current release) |
+| `1.3.x` | Best effort (upgrade recommended) |
+| `< 1.3.0` | No |
 
 Maintainer-facing documentation (CI, contributing, architecture) is indexed in [`README.md`](README.md#-documentation-hub) and enumerated in [`AUDIT.md`](AUDIT.md).
 

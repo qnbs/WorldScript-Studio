@@ -45,7 +45,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 pnpm/action-setup → actions/setup-node (cache: pnpm) → pnpm install --frozen-lockfile
 ```
 
-Each job that uses the composite must call `actions/checkout@v5` first (local composite actions are resolved from the workspace, so the repo must be checked out before `uses: ./.github/actions/setup` can be used). The `quality` job additionally passes `node-version: ${{ matrix.node-version }}` to cover the LTS matrix.
+Each job that uses the composite must call `actions/checkout@v6` first (local composite actions are resolved from the workspace, so the repo must be checked out before `uses: ./.github/actions/setup` can be used). The `quality` job additionally passes `node-version: ${{ matrix.node-version }}` to cover the LTS matrix.
 
 ---
 
@@ -158,6 +158,8 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 - Specs run **only** when `CI=true` (`pnpm run test:e2e`). CI installs **Chromium**; locally you may also run Firefox projects (`playwright.config.ts`).
 - Shared utilities: **[`tests/e2e/helpers.ts`](../tests/e2e/helpers.ts)** — replace brittle `networkidle` waits with `waitForSpaReady()`, bootstrap projects via `ensureBlankProject()`, and prefer **sidebar-scoped** locators (`#sidebar`) so desktop navigation is unambiguous.
 - **Accessibility:** **[`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts)** runs **axe-core** (via `@axe-core/playwright`) on the welcome route and on **Settings → Accessibility** after `ensureBlankProject`; serious/critical violations must be zero (`color-contrast` rule disabled — track tokens separately).
+- **Command palette:** **[`tests/e2e/commands.spec.ts`](../tests/e2e/commands.spec.ts)** — palette open/close (Ctrl+K / Escape), "dashboard" search, fuzzy "wrt" search, Enter-navigate. Depends on `ensureBlankProject()`.
+- **Collaboration:** **[`tests/e2e/collaboration.spec.ts`](../tests/e2e/collaboration.spec.ts)** — security warning `[role="alert"]` visible before connection; uses `ensureBlankProject()`.
 - The **Version Control** drawer uses a modal backdrop; close it (**Escape** when no nested modal is open) before clicking other chrome.
 - Visual baselines live under `tests/e2e/*-snapshots/`; `snapshotPathTemplate` omits the OS segment so one PNG can serve Linux CI and Windows/macOS dev machines.
 
@@ -181,6 +183,8 @@ act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 | `playwright.config.ts` | E2E projects (CI: Chromium desktop + Pixel 5; local: Chromium + Firefox, optional mobile via `RUN_MOBILE_E2E=1`), `snapshotPathTemplate`, reporters |
 | `tests/e2e/helpers.ts` | SPA-ready waits (avoid `networkidle` with Vite/HMR), EN locale, blank project bootstrap, `#sidebar` scope |
 | `tests/e2e/a11y.spec.ts` | axe Playwright smoke (welcome + settings accessibility hub) |
+| `tests/e2e/commands.spec.ts` | Command palette: open/close, search, fuzzy match, Enter-navigate |
+| `tests/e2e/collaboration.spec.ts` | Collaboration panel security warning banner pre-connect |
 | `services/commands/` | Command registry backing the palette (fuzzy search — regression-sensitive if E2E targets palette copy) |
 | `hooks/useGlobalKeyboardShortcuts.ts` | Global shortcut listener — keep in sync with **Settings → Shortcuts** defaults |
 | `stryker.conf.json` | Mutation testing targets + thresholds (`break: null` until score improves) |

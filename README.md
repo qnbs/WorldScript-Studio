@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
-  <img src="https://img.shields.io/badge/Redux_Toolkit-6.x-764ABC?logo=redux" alt="Redux Toolkit">
+  <img src="https://img.shields.io/badge/Redux_Toolkit-2.x-764ABC?logo=redux" alt="Redux Toolkit">
   <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
   <img src="https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript 6">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_Ollama-4285F4?logo=google" alt="Gemini + Ollama">

@@ -179,10 +179,47 @@ Vereinfachte automatische Konsistenzprüfung:
 
 ---
 
+## v1.4.x — Qualitätssteigerung (Master Perfection Plan)
+
+**Status:** ✅ Abgeschlossen (2026-05-16) — Teil-Release von v1.4.0-Zyklus; Details in [`CHANGELOG.md`](CHANGELOG.md) und [`TODO.md`](TODO.md).
+
+### Unit-Test-Coverage: Phase 1–2
+
+- **17 neue Test-Dateien**, insgesamt 733 Tests; Vitest-Schwellen erhöht auf **35/30/22/33** (Lines/Functions/Branches/Statements)
+- Gemessene Coverage: ~36 % Lines · ~30 % Functions · ~25 % Branches (Phase 2: Ziel 50 % noch offen — große Komponenten, aiProviderService-Streaming, collaborationService)
+
+### Phase 3A — Cross-Project-Search Service ✅
+
+- `services/crossProjectSearchService.ts`: `searchAcrossProjects()` via `fuzzyScore`, 5 Locales (8 Keys), `transientUiStore`-Integration (`isCrossProjectSearchOpen`), Command-Palette-Command
+- v1-Scope: Einzelprojekt (Multi-Projekt erfordert DB_VERSION-Bump)
+
+### Phase 3B — WebLLM Modell-Selektor ✅
+
+- `WEBLLM_SUPPORTED_MODELS` (4 MLC-Checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress`-Parameter, Settings-UI mit Dropdown + WCAG-Fortschrittsanzeige (`role="progressbar"`, `useRef`-Mounted-Guard)
+- Lokalisiert in allen 5 Sprachen (3 neue Keys je Locale in `settings.json`)
+
+### Phase 3C — Collaboration Security Warning ✅
+
+- `CollaborationPanel.tsx`: Security-Warning-Banner (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) vor Verbindungsaufbau sichtbar
+
+### Phase 4 — Stryker-Erweiterung + E2E-Tests ✅
+
+- `stryker.conf.json`: 3 weitere Mutations-Ziele (`fuzzyScore.ts`, `palettePreferences.ts`, `commandBuilder.ts`)
+- `tests/e2e/commands.spec.ts` (Palette Ctrl+K, „dashboard"-Suche, fuzzy „wrt", Enter-Navigate)
+- `tests/e2e/collaboration.spec.ts` (Security-Warning-Banner vor Verbindung)
+
+### One-Click Library-Export ✅
+
+- `services/libraryBackupService.ts`: verschlüsselter ZIP-Export (AES-GCM, META.json + vault.bin) → Settings → Data
+
+---
+
 ## Post-v1.4.0 / v1.5 — UX, Touch & weitere Qualität
 
 **Status:** 📋 Geplant
 
+- **Unit-Test-Coverage Phase 2** (Ziel 50 % Lines / 45 % Functions / 32 % Branches): große Komponenten, aiProviderService-Streaming, collaborationService
+- **Cross-Project-Search Panel** (UI-Komponente für `crossProjectSearchService`; v2 multi-project erfordert DB_VERSION-Bump)
 - Mobile-First Touch-Optimierungen (Swipe-Navigation, Touch-DnD); **responsive E2E primär in CI** ([`docs/CI.md`](docs/CI.md))
 - AI-Creativity-Presets pro Projekt (nicht global)
 - Erweiterte Keyboard Navigation

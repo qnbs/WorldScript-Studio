@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **WebLLM model selector (Phase 3B):** `packages/ai-core` now exports `WEBLLM_SUPPORTED_MODELS` (4 curated MLC-packaged checkpoints: Llama 3.2 1B, Llama 3.2 3B, Phi-3.5 Mini, Gemma 2 2B), `WebLlmModelId`, and `WebLlmProgressReport` types. `runLocalTextGeneration` accepts an optional `modelId` and `onProgress` callback for per-model download-progress tracking. `services/localAiFacade.ts` forwards both parameters. `types.ts` expands the `AiModel` union with the four specific MLC model IDs. Settings → AI (Advanced) now shows a dynamic model dropdown populated from `WEBLLM_SUPPORTED_MODELS`, a pre-download button, a WCAG 2.2 `role="progressbar"` progress bar, and a `useRef` mounted guard that prevents `setState`-on-unmount. All 5 locale `settings.json` files gain the 3 new i18n keys (`settings.ai.webllm.model`, `settings.ai.webllm.downloadProgress`, `settings.ai.webllm.downloading`).
+
+- **Cross-project search service (Phase 3A):** New `services/crossProjectSearchService.ts` — `searchAcrossProjects(query, projectData)` fuzzy-searches project title, logline, manuscript sections, and character names/fields using `normalizeSearch()` from `fuzzyScore.ts`; returns `CrossProjectSearchResult[]` sorted by score. Results include `projectId`, `projectTitle`, `matchType`, `excerpt` (truncated to 120 chars with `…`), and `score`. v1 scope is single-project (multi-project search requires a DB_VERSION bump + IDB migration — deferred to v2). `app/transientUiStore.ts` gains `isCrossProjectSearchOpen` + `setCrossProjectSearchOpen`. The `labs-cross-project-search` command in `services/commands/commandDefinitions.tsx` now opens the search panel instead of a stub toast. All 5 locale `common.json` files gain 7 `crossSearch.*` keys.
+
+- **Collaboration security warning (Phase 3C):** `CollaborationPanel.tsx` displays a pre-connection security-warning banner (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) that is only visible before connecting. The banner explains that the public y-webrtc signaling relay can observe connection metadata, includes a keyboard-accessible self-hosting link, and disappears once connected. All 5 locale `common.json` files gain `collab.securityWarning`, `collab.securityWarningDetail`, and `collab.selfHostLinkLabel`.
+
+- **E2E tests for new features:** `tests/e2e/commands.spec.ts` — palette open/close (Ctrl+K / Escape), "dashboard" text search surfaces nav command, Enter-to-navigate, fuzzy "wrt" match. `tests/e2e/collaboration.spec.ts` — security warning `[role=alert]` is visible pre-connection and non-empty. Both specs are CI-only (`test.skip(!isCI)`).
+
+### Changed
+
+- **Unit-test coverage — Phase 1 thresholds met:** 17 new test files added (733 tests total); Vitest coverage thresholds bumped to `{ lines: 35, functions: 30, branches: 22, statements: 33 }` (previously 25/21/17/24). Measured coverage: **36.47 % lines · 35.53 % statements · 24.96 % branches · 30.22 % functions** — all Phase 1 targets exceeded. New files cover: `commands/` (fuzzyScore, palettePreferences, commandSystem), project thunks (writing, character, binder, management), hooks (useDashboard, useManuscriptView, useGlobalKeyboardShortcuts, useCharacterView, useOutlineGenerator), `aiProviderService` fallback chain, `dbService` snapshots, `dbService` binder assets, and `crossProjectSearchService`.
+
+- **Stryker mutation targets expanded (Phase 4):** `stryker.conf.json` `mutate` array now includes `services/commands/fuzzyScore.ts`, `services/commands/palettePreferences.ts`, and `services/commands/commandBuilder.ts` in addition to the existing `codexService.ts` and `dbMigration.ts`.
+
 ---
 
 ## [1.4.0] - 2026-05-12
