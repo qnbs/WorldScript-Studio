@@ -332,5 +332,8 @@
   "settings.ai.fallbackStep1": "First fallback",
   "settings.ai.fallbackStep2": "Second fallback",
   "settings.ai.fallbackNone": "None",
-  "settings.advancedAi.modelRecommendationsIntro": "Popular local checkpoints (verify names in your runtime):"
+  "settings.advancedAi.modelRecommendationsIntro": "Popular local checkpoints (verify names in your runtime):",
+  "settings.ai.webllm.model": "WebLLM model",
+  "settings.ai.webllm.downloadProgress": "Download progress",
+  "settings.ai.webllm.downloading": "Downloading model…"
 }

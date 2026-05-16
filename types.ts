@@ -260,7 +260,12 @@ export type AiModel =
   | 'gpt-4o-mini'
   // Ollama – any local model (e.g. "ollama/gemma3" or "ollama/qwen3:8b")
   | `ollama/${string}`
-  /** Browser-only WebGPU path via @mlc-ai/web-llm (see packages/ai-core). */
+  // WebLLM – specific MLC-packaged checkpoints (see WEBLLM_SUPPORTED_MODELS in @domain/ai-core)
+  | 'Llama-3.2-1B-Instruct-q4f16_1-MLC'
+  | 'Llama-3.2-3B-Instruct-q4f16_1-MLC'
+  | 'Phi-3.5-mini-instruct-q4f16_1-MLC'
+  | 'gemma-2-2b-it-q4f16_1-MLC'
+  /** Browser-only WebGPU path via @mlc-ai/web-llm (generic fallback for stored values). */
   | 'webllm/browser';
 export type AIProvider =
   | 'gemini'

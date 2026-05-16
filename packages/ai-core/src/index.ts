@@ -89,6 +89,21 @@ export class WorkerBus {
 
 export { electSingleHeavyInferenceTab };
 
+// QNBS-v3: curated list of MLC-packaged checkpoints small enough for browser RAM; expand as new quants ship
+export const WEBLLM_SUPPORTED_MODELS = [
+  { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Llama 3.2 1B (fast, ~0.7 GB)' },
+  { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', label: 'Llama 3.2 3B (~1.8 GB)' },
+  { id: 'Phi-3.5-mini-instruct-q4f16_1-MLC', label: 'Phi-3.5 Mini (~2.2 GB)' },
+  { id: 'gemma-2-2b-it-q4f16_1-MLC', label: 'Gemma 2 2B (~1.4 GB)' },
+] as const;
+
+export type WebLlmModelId = (typeof WEBLLM_SUPPORTED_MODELS)[number]['id'];
+
+export interface WebLlmProgressReport {
+  progress: number; // 0–1
+  text: string;
+}
+
 export function detectWebGpuSupport(): boolean {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
 }
@@ -112,7 +127,11 @@ export function sanitizeForPrompt(input: string): string {
   return out;
 }
 
-export async function runLocalTextGeneration(prompt: string): Promise<LocalAiResponse> {
+export async function runLocalTextGeneration(
+  prompt: string,
+  modelId?: string,
+  onProgress?: (report: WebLlmProgressReport) => void,
+): Promise<LocalAiResponse> {
   const sanitizedPrompt = sanitizeForPrompt(prompt);
   if (!sanitizedPrompt.trim()) {
     return { layer: 'heuristic', text: 'Heuristic fallback response' };
@@ -120,6 +139,8 @@ export async function runLocalTextGeneration(prompt: string): Promise<LocalAiRes
 
   const hasWebGpu = detectWebGpuSupport();
   const gpuTabLeader = hasWebGpu ? await electSingleHeavyInferenceTab() : true;
+  // QNBS-v3: fall back to first supported model when caller omits modelId (keeps backward compat)
+  const resolvedModelId = modelId ?? WEBLLM_SUPPORTED_MODELS[0].id;
 
   try {
     const mod = await import('@mlc-ai/web-llm');
@@ -141,8 +162,13 @@ export async function runLocalTextGeneration(prompt: string): Promise<LocalAiRes
     const CreateMLCEngine = m.CreateMLCEngine;
     // QNBS-v3: Nur ein Tab lädt WebLLM — vermeidet GPU/RAM-Kollision bei mehreren StoryCraft-Tabs.
     if (typeof CreateMLCEngine === 'function' && hasWebGpu && gpuTabLeader) {
-      const engine = await CreateMLCEngine('Llama-3.2-1B-Instruct-q4f16_1-MLC', {
-        initProgressCallback: () => {},
+      const engine = await CreateMLCEngine(resolvedModelId, {
+        initProgressCallback: (p: unknown) => {
+          if (onProgress && typeof p === 'object' && p !== null) {
+            const r = p as { progress?: number; text?: string };
+            onProgress({ progress: r.progress ?? 0, text: r.text ?? '' });
+          }
+        },
       });
       const reply = await engine.chat.completions.create({
         messages: [{ role: 'user', content: sanitizedPrompt }],

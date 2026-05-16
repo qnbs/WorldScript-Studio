@@ -1,10 +1,12 @@
+import { WEBLLM_SUPPORTED_MODELS } from '@domain/ai-core';
 import type { FC } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import { statusActions } from '../../features/status/statusSlice';
 import { RECOMMENDED_OLLAMA_MODEL_IDS } from '../../services/ai/modelRecommendations';
+import { generateLocalText } from '../../services/localAiFacade';
 import { rebuildLocalRagIndex } from '../../services/localRagIndex';
 import type { AIProvider } from '../../types';
 import { ApiKeySection } from '../ApiKeySection';
@@ -62,7 +64,8 @@ export const AiSection: FC = () => {
           } else if (p === 'anthropic') {
             newModel = currentModel.startsWith('claude-') ? currentModel : 'claude-haiku-4-5';
           } else if (p === 'webllm') {
-            newModel = 'webllm/browser';
+            // QNBS-v3: default to first curated MLC model; 'webllm/browser' kept as legacy fallback
+            newModel = WEBLLM_SUPPORTED_MODELS[0].id;
           }
           handleSettingChange('advancedAi', {
             ...settings.advancedAi,
@@ -226,6 +229,15 @@ export const AdvancedAiSection: FC = () => {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectProjectData);
   const [ragBusy, setRagBusy] = useState(false);
+  // QNBS-v3: null = idle, 0–1 = downloading; useRef guard prevents setState-on-unmount in callback
+  const [webllmProgress, setWebllmProgress] = useState<number | null>(null);
+  const webllmMounted = useRef(true);
+  useEffect(() => {
+    webllmMounted.current = true;
+    return () => {
+      webllmMounted.current = false;
+    };
+  }, []);
 
   const currentModel = settings.advancedAi.model;
   const showCustomInput =
@@ -234,6 +246,21 @@ export const AdvancedAiSection: FC = () => {
   const [customModelInput, setCustomModelInput] = useState(
     showCustomInput ? currentModel.replace(/^ollama\//, '') : '',
   );
+
+  const handleWebllmDownload = async () => {
+    setWebllmProgress(0);
+    try {
+      await generateLocalText(
+        'ping',
+        currentModel === 'webllm/browser' ? WEBLLM_SUPPORTED_MODELS[0].id : currentModel,
+        (report) => {
+          if (webllmMounted.current) setWebllmProgress(report.progress);
+        },
+      );
+    } finally {
+      if (webllmMounted.current) setWebllmProgress(null);
+    }
+  };
 
   const applyCustomModel = () => {
     const trimmed = customModelInput.trim();
@@ -359,7 +386,11 @@ export const AdvancedAiSection: FC = () => {
                   <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
                 </>
               ) : settings.advancedAi.provider === 'webllm' ? (
-                <option value="webllm/browser">WebLLM (browser bundle)</option>
+                WEBLLM_SUPPORTED_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))
               ) : (
                 <>
                   <optgroup label="Current Generation">
@@ -396,6 +427,38 @@ export const AdvancedAiSection: FC = () => {
                 >
                   {t('settings.ai.save')}
                 </button>
+              </div>
+            )}
+
+            {/* WebLLM model download + progress */}
+            {settings.advancedAi.provider === 'webllm' && (
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => void handleWebllmDownload()}
+                  disabled={webllmProgress !== null}
+                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--background-interactive)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                  aria-label={t('settings.ai.webllm.downloading')}
+                >
+                  {webllmProgress !== null
+                    ? t('settings.ai.webllm.downloading')
+                    : t('settings.ai.webllm.model')}
+                </button>
+                {webllmProgress !== null && (
+                  <div
+                    role="progressbar"
+                    aria-label={t('settings.ai.webllm.downloadProgress')}
+                    aria-valuenow={Math.round(webllmProgress * 100)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    className="w-full h-2 rounded-full bg-[var(--background-secondary)] overflow-hidden"
+                  >
+                    <div
+                      className="h-full bg-[var(--background-interactive)] transition-all duration-300"
+                      style={{ width: `${Math.round(webllmProgress * 100)}%` }}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

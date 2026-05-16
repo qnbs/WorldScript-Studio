@@ -1,8 +1,17 @@
-import { type LocalAiResponse, runLocalTextGeneration, WorkerBus } from '@domain/ai-core';
+import {
+  type LocalAiResponse,
+  runLocalTextGeneration,
+  type WebLlmProgressReport,
+  WorkerBus,
+} from '@domain/ai-core';
 
 const localWorkerBus = new WorkerBus();
 
-export async function generateLocalText(prompt: string): Promise<LocalAiResponse> {
+export async function generateLocalText(
+  prompt: string,
+  modelId?: string,
+  onProgress?: (report: WebLlmProgressReport) => void,
+): Promise<LocalAiResponse> {
   const taskId =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
@@ -11,7 +20,7 @@ export async function generateLocalText(prompt: string): Promise<LocalAiResponse
   localWorkerBus.enqueue({
     id: taskId,
     type: 'local.text.generate',
-    payload: { prompt },
+    payload: { prompt, modelId },
     priority: 'normal',
     createdAt: Date.now(),
   });
@@ -23,7 +32,7 @@ export async function generateLocalText(prompt: string): Promise<LocalAiResponse
 
   const startedAt = performance.now();
   try {
-    const result = await runLocalTextGeneration(prompt);
+    const result = await runLocalTextGeneration(prompt, modelId, onProgress);
     localWorkerBus.recordResult(performance.now() - startedAt, true);
     return result;
   } catch {

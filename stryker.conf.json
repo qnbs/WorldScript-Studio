@@ -7,7 +7,13 @@
   },
   "coverageAnalysis": "perTest",
   "plugins": ["@stryker-mutator/vitest-runner"],
-  "mutate": ["services/codexService.ts", "services/dbMigration.ts"],
+  "mutate": [
+    "services/codexService.ts",
+    "services/dbMigration.ts",
+    "services/commands/fuzzyScore.ts",
+    "services/commands/palettePreferences.ts",
+    "services/commands/commandBuilder.ts"
+  ],
   "thresholds": {
     "high": 70,
     "low": 40,
