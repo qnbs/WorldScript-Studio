@@ -1,0 +1,25 @@
+[package]
+name = "storycraft-fuzz"
+version = "0.0.1"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+# Fuzz targets are compiled as separate binaries so we need the main crate as a dependency
+[dependencies.app_lib]
+path = ".."
+
+[[bin]]
+name = "fuzz_file_name_sanitization"
+path = "fuzz_targets/fuzz_file_name_sanitization.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1
