@@ -29,15 +29,12 @@ import { getEffectiveTheme } from '../../../services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from '../../../services/commands/wordCountApprox';
 
 const defaultFeatureFlags: FeatureFlagsState = {
-  enableOllama: false,
-  enablePerformanceBudgets: false,
-  enableVisualRegression: false,
   enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: false,
+  enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
 };
 

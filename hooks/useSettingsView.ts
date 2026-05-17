@@ -160,15 +160,6 @@ export const useSettingsView = () => {
             settingsActions.setThemeCustomization(value as unknown as Partial<ThemeCustomization>),
           );
           break;
-        case 'enableOllama':
-          dispatch(featureFlagsActions.setEnableOllama(Boolean(value)));
-          break;
-        case 'enablePerformanceBudgets':
-          dispatch(featureFlagsActions.setEnablePerformanceBudgets(Boolean(value)));
-          break;
-        case 'enableVisualRegression':
-          dispatch(featureFlagsActions.setEnableVisualRegression(Boolean(value)));
-          break;
         case 'enableCodexAutoTracking':
           dispatch(featureFlagsActions.setEnableCodexAutoTracking(Boolean(value)));
           break;

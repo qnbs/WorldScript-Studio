@@ -1,9 +1,6 @@
 import { createSlice, type Middleware, type PayloadAction } from '@reduxjs/toolkit';
 
 export interface FeatureFlagsState {
-  enableOllama: boolean;
-  enablePerformanceBudgets: boolean;
-  enableVisualRegression: boolean;
   /** When false, manuscript Codex extraction listener is skipped (default: true). */
   enableCodexAutoTracking: boolean;
   /** Story Bible Light: graph edges + consistency hints in Codex (default: false). */
@@ -23,15 +20,13 @@ export interface FeatureFlagsState {
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
 
 const defaultFeatureFlagsState: FeatureFlagsState = {
-  enableOllama: false,
-  enablePerformanceBudgets: false,
-  enableVisualRegression: false,
   enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: false,
+  // QNBS-v3: v1 panel ready; promote from experimental to default-on
+  enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
 };
 
@@ -74,15 +69,6 @@ const featureFlagsSlice = createSlice({
     setFeatureFlags(_state, action: PayloadAction<FeatureFlagsState>) {
       return action.payload;
     },
-    setEnableOllama(state, action: PayloadAction<boolean>) {
-      state.enableOllama = action.payload;
-    },
-    setEnablePerformanceBudgets(state, action: PayloadAction<boolean>) {
-      state.enablePerformanceBudgets = action.payload;
-    },
-    setEnableVisualRegression(state, action: PayloadAction<boolean>) {
-      state.enableVisualRegression = action.payload;
-    },
     setEnableCodexAutoTracking(state, action: PayloadAction<boolean>) {
       state.enableCodexAutoTracking = action.payload;
     },
@@ -110,12 +96,6 @@ const featureFlagsSlice = createSlice({
 export const featureFlagsActions = featureFlagsSlice.actions;
 export const selectFeatureFlags = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags;
-export const selectEnableOllama = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enableOllama;
-export const selectEnablePerformanceBudgets = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enablePerformanceBudgets;
-export const selectEnableVisualRegression = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enableVisualRegression;
 export const selectEnableCodexAutoTracking = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableCodexAutoTracking;
 export const selectEnableStoryBibleAdvanced = (state: { featureFlags: FeatureFlagsState }) =>

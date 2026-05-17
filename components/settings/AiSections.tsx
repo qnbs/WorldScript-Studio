@@ -611,21 +611,6 @@ export const AdvancedAiSection: FC = () => {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ToggleSwitch
-                label={t('settings.featureFlags.enableOllama')}
-                checked={featureFlags.enableOllama}
-                onChange={(v) => handleSettingChange('enableOllama', v)}
-              />
-              <ToggleSwitch
-                label={t('settings.featureFlags.enablePerformanceBudgets')}
-                checked={featureFlags.enablePerformanceBudgets}
-                onChange={(v) => handleSettingChange('enablePerformanceBudgets', v)}
-              />
-              <ToggleSwitch
-                label={t('settings.featureFlags.enableVisualRegression')}
-                checked={featureFlags.enableVisualRegression}
-                onChange={(v) => handleSettingChange('enableVisualRegression', v)}
-              />
-              <ToggleSwitch
                 label={t('settings.featureFlags.enableCodexAutoTracking')}
                 checked={featureFlags.enableCodexAutoTracking}
                 onChange={(v) => handleSettingChange('enableCodexAutoTracking', v)}

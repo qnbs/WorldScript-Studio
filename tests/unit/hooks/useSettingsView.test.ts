@@ -40,15 +40,12 @@ let mockProject = {
 };
 
 const mockFeatureFlags = {
-  enableOllama: false,
-  enablePerformanceBudgets: false,
-  enableVisualRegression: false,
   enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: false,
+  enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
 };
 
@@ -123,15 +120,6 @@ vi.mock('../../../features/settings/settingsSlice', () => ({
 
 vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
   featureFlagsActions: {
-    setEnableOllama: (v: unknown) => ({ type: 'featureFlags/setEnableOllama', payload: v }),
-    setEnablePerformanceBudgets: (v: unknown) => ({
-      type: 'featureFlags/setEnablePerformanceBudgets',
-      payload: v,
-    }),
-    setEnableVisualRegression: (v: unknown) => ({
-      type: 'featureFlags/setEnableVisualRegression',
-      payload: v,
-    }),
     setEnableCodexAutoTracking: (v: unknown) => ({
       type: 'featureFlags/setEnableCodexAutoTracking',
       payload: v,
@@ -272,14 +260,6 @@ describe('handleSettingChange', () => {
     act(() => result.current.handleSettingChange('advancedAi', { maxTokens: 2048 }));
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'settings/setAdvancedAi' }),
-    );
-  });
-
-  it('dispatches setEnableOllama feature flag', () => {
-    const { result } = renderHook(() => useSettingsView());
-    act(() => result.current.handleSettingChange('enableOllama', true));
-    expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'featureFlags/setEnableOllama', payload: true }),
     );
   });
 

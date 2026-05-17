@@ -69,15 +69,12 @@ const baseDeps: CommandRuntimeDeps = {
   currentView: 'dashboard',
   wordCountApprox: 0,
   featureFlags: {
-    enableOllama: false,
-    enablePerformanceBudgets: false,
-    enableVisualRegression: false,
     enableCodexAutoTracking: true,
     enableStoryBibleAdvanced: false,
     enableBinderResearch: false,
     enableCompileWizard: false,
     enableProjectHealthScore: false,
-    enableCrossProjectSearch: false,
+    enableCrossProjectSearch: true,
     enableAppHealthPanel: false,
   },
 };
