@@ -128,8 +128,8 @@ jobs:
     # QNBS-v3: ignoreStatic:true drops runtime from ~90 min to ~10 min; 20 min is ample headroom on shared runners
     timeout-minutes: 20
     needs: [quality]
-    # QNBS-v3: informational only — break:null in stryker.conf.json; baseline TBD before enforcing a hard gate
-    continue-on-error: true
+    # QNBS-v3: gate enforced — break:30 in stryker.conf.json blocks CI if score drops below 30%
+    continue-on-error: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup
