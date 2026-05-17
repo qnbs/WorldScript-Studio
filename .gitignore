@@ -44,3 +44,7 @@ storybook-static/
 
 # Graphify knowledge graph output
 graphify-out/
+
+# Claude Code local config and Lighthouse CI results
+.claude/
+.lighthouseci/
