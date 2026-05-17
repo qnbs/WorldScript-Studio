@@ -536,7 +536,9 @@ export const VersionControlPanel: FC = () => {
           <p className="text-sm text-[var(--foreground-secondary)]">
             {t('vc.createSnapshotDescription')}
           </p>
+          {/* QNBS-v3: data-testid lets Playwright target this input without relying on translatable placeholder text */}
           <Input
+            data-testid="snapshot-label-input"
             placeholder={t('vc.snapshotPlaceholder')}
             value={snapshotLabel}
             onChange={(e) => setSnapshotLabel(e.target.value)}

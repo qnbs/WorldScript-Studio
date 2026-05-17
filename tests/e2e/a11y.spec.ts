@@ -3,7 +3,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { ensureBlankProject, selectEnglish, sidebar } from './helpers';
+import { clickNavItem, ensureBlankProject, selectEnglish } from './helpers';
 
 async function assertNoSeriousViolations(page: import('@playwright/test').Page, label: string) {
   const results = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze();
@@ -23,9 +23,8 @@ test.describe('Accessibility (axe)', () => {
   test('settings accessibility hub has no serious axe violations', async ({ page }) => {
     await page.goto('/');
     await ensureBlankProject(page);
-    await sidebar(page)
-      .getByRole('button', { name: /Settings/i })
-      .click();
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /Settings/i);
     await page.getByRole('button', { name: /Accessibility|Barrierefreiheit/i }).click();
     await expect(
       page.getByRole('heading', {
@@ -51,10 +50,10 @@ test.describe('Accessibility (axe)', () => {
     await page.goto('/');
     await selectEnglish(page);
     await ensureBlankProject(page);
-    await sidebar(page)
-      .getByRole('button', { name: /AI Writing Studio|Writer/i })
-      .click();
-    await page.getByRole('button', { name: /Versions/i }).click();
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /AI Writing Studio|Writer/i);
+    // QNBS-v3: getByTestId — VC button is hidden md:flex on mobile; testid stable on both viewports
+    await page.getByTestId('writer-version-control-btn').first().click();
     await expect(page.locator('#version-control-heading')).toBeVisible({ timeout: 15000 });
     await assertNoSeriousViolations(page, 'writer-version-control');
     await page.keyboard.press('Escape');

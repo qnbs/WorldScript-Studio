@@ -60,6 +60,7 @@ const WriterViewUI: FC = () => {
         {/* QNBS-v3: Aria + Mindest-Touch-Ziel für VC-Toggle — axe/E2E und mobile Writer-Stabilität. */}
         <button
           type="button"
+          data-testid="writer-version-control-btn"
           onClick={() => dispatch(versionControlActions.togglePanel())}
           title="Version Control (Branches &amp; Snapshots)"
           aria-label={t('writer.versionControl.label')}
@@ -70,12 +71,34 @@ const WriterViewUI: FC = () => {
         </button>
       </div>
 
-      {/* Mobile Segmented Control - Top Navigation */}
-      <div className="md:hidden p-1 mx-0 mb-4 bg-[var(--background-tertiary)] rounded-xl flex items-center relative border border-[var(--border-primary)]/50 shadow-inner select-none">
+      {/* QNBS-v3: mobile VC button — desktop VC toggle is hidden md:flex, unreachable on Pixel 5 */}
+      <div className="md:hidden flex items-center justify-end mb-1 px-1">
+        <button
+          type="button"
+          data-testid="writer-version-control-btn"
+          onClick={() => dispatch(versionControlActions.togglePanel())}
+          aria-label={t('writer.versionControl.label')}
+          aria-expanded={isVCPanelOpen}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
+        >
+          ⎎ {t('writer.versionControl.label')}
+        </button>
+      </div>
+
+      {/* QNBS-v3: ARIA tablist — mobile segmented control needs role/aria-selected for axe compliance + Playwright testid selectors */}
+      <div
+        role="tablist"
+        aria-label={t('writer.studio.title')}
+        className="md:hidden p-1 mx-0 mb-4 bg-[var(--background-tertiary)] rounded-xl flex items-center relative border border-[var(--border-primary)]/50 shadow-inner select-none"
+      >
         {(['context', 'tools', 'result'] as const).map((tab) => (
           <button
             type="button"
+            role="tab"
             key={tab}
+            aria-selected={activeMobileTab === tab}
+            aria-controls={`writer-panel-${tab}`}
+            data-testid={`writer-tab-${tab}`}
             onClick={() => setActiveMobileTab(tab)}
             className={`flex-1 min-h-[44px] py-2 text-sm font-semibold rounded-lg transition-all duration-200 z-10 touch-manipulation ${
               activeMobileTab === tab
@@ -92,9 +115,36 @@ const WriterViewUI: FC = () => {
 
       {/* Mobile Views (Conditional Render) */}
       <div className="md:hidden flex-grow min-h-0 overflow-hidden">
-        {activeMobileTab === 'context' && <ContextPanel />}
-        {activeMobileTab === 'tools' && <ToolsPanel />}
-        {activeMobileTab === 'result' && <AiScratchpad />}
+        {activeMobileTab === 'context' && (
+          <div
+            id="writer-panel-context"
+            role="tabpanel"
+            aria-labelledby="writer-tab-context"
+            className="h-full"
+          >
+            <ContextPanel />
+          </div>
+        )}
+        {activeMobileTab === 'tools' && (
+          <div
+            id="writer-panel-tools"
+            role="tabpanel"
+            aria-labelledby="writer-tab-tools"
+            className="h-full"
+          >
+            <ToolsPanel />
+          </div>
+        )}
+        {activeMobileTab === 'result' && (
+          <div
+            id="writer-panel-result"
+            role="tabpanel"
+            aria-labelledby="writer-tab-result"
+            className="h-full"
+          >
+            <AiScratchpad />
+          </div>
+        )}
       </div>
 
       {/* Desktop Grid Layout (Always Visible on MD+) */}

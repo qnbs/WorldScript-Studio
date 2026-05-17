@@ -1,6 +1,29 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
+// QNBS-v3: clickNavItem — sidebar(page) targets #sidebar which is hidden md:flex; fails on Mobile Chrome (Pixel 5)
+/**
+ * Mobile-aware navigation: tries desktop sidebar → mobile tab bar → mobile "More" sheet.
+ */
+export async function clickNavItem(page: Page, name: RegExp): Promise<void> {
+  // 1. Desktop sidebar (md+ viewports) — #sidebar is hidden md:flex, visible only on desktop
+  const desktopBtn = page.locator('#sidebar').getByRole('button', { name });
+  if (await desktopBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await desktopBtn.click();
+    return;
+  }
+  // 2. Mobile bottom tab bar (writer / dashboard / manuscript / characters are here)
+  const mobileTabBtn = page.locator('[data-tour="nav-mobile"]').getByRole('button', { name });
+  if (await mobileTabBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await mobileTabBtn.click();
+    return;
+  }
+  // 3. Mobile "More" sheet (Settings, Outline, Export… not in the 5-item tab bar)
+  await page.locator('[data-tour="nav-mobile"]').getByRole('button', { name: /More/i }).click();
+  await page.locator('#sidebar-mobile').waitFor({ state: 'visible' });
+  await page.locator('#sidebar-mobile').getByRole('button', { name }).click();
+}
+
 // QNBS-v3: Stable Writer `#writer-section-select` + option handling avoids Playwright strict-mode / native-<option> visibility pitfalls that broke CI E2E.
 
 /** Writer section `<Select>` — stable id to avoid picking tone/tool comboboxes elsewhere on the page. */
@@ -12,6 +35,13 @@ export function writerSectionSelect(page: Page) {
  * Native `<option>` nodes are not Playwright-visible when the list is closed; use counts + selectOption.
  */
 export async function selectFirstEnabledWriterSection(page: Page): Promise<void> {
+  // QNBS-v3: ContextPanel is only rendered when the context tab is active on mobile (default tab = tools)
+  const contextTab = page.getByTestId('writer-tab-context');
+  if (await contextTab.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if ((await contextTab.getAttribute('aria-selected')) !== 'true') {
+      await contextTab.click();
+    }
+  }
   const sel = writerSectionSelect(page);
   await expect(sel).toBeVisible();
   const enabled = sel.locator('option:not([disabled])');

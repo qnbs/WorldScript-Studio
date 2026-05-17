@@ -461,8 +461,10 @@ const ExportPreview: FC = () => {
         </h2>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col min-h-0">
+        {/* QNBS-v3: data-testid disambiguates this preview <pre> from ConsistencyChecker/CriticView <pre> elements */}
         {formattedOutput ? (
           <pre
+            data-testid="export-preview"
             className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--border-primary)] p-6 rounded-xl text-[var(--foreground-secondary)] h-full overflow-y-auto whitespace-pre-wrap shadow-inner"
             style={editorStyles}
           >

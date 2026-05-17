@@ -1,10 +1,10 @@
 import { expect, type Route, test } from '@playwright/test';
 
 import {
+  clickNavItem,
   flushWriterDebounce,
   seedGeminiApiKey,
   selectFirstEnabledWriterSection,
-  sidebar,
   waitForSpaReady,
 } from './helpers';
 
@@ -66,9 +66,8 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await page.getByRole('button', { name: /Generate with AI/i }).click();
 
     await seedGeminiApiKey(page);
-    await sidebar(page)
-      .getByRole('button', { name: /Outline Generator/i })
-      .click();
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /Outline Generator/i);
 
     await page.getByLabel(/Genre/i).fill('Fantasy');
     await page.getByLabel(/Prompt|Idea/i).fill('A reluctant hero discovers an ancient secret.');
@@ -80,7 +79,7 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await expect(applyButton).toBeVisible({ timeout: 15000 });
     await applyButton.click();
 
-    await page.getByRole('button', { name: /AI Writing Studio|Writer|Schreiben/i }).click();
+    await clickNavItem(page, /AI Writing Studio|Writer|Schreiben/i);
     await selectFirstEnabledWriterSection(page);
 
     const writerTextbox = page.getByTestId('writer-studio-editor');
@@ -89,7 +88,7 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await expect(writerTextbox).toHaveValue(/quiet village under a strange moon/i);
     await flushWriterDebounce(page);
 
-    await page.getByRole('button', { name: /Export|Exportieren/i }).click();
+    await clickNavItem(page, /Export|Exportieren/i);
     const manuscriptCheckbox = page.getByLabel(/Manuscript|Manuskript/i).first();
     if (await manuscriptCheckbox.isVisible()) {
       const isChecked = await manuscriptCheckbox.isChecked();
@@ -100,10 +99,11 @@ test.describe('End-to-end project flow (CI-only)', () => {
 
     const previewHeading = page.getByRole('heading', { name: /Live Preview/i }).first();
     await expect(previewHeading).toBeVisible();
-    const exportPreview = page.locator('pre').first();
+    // QNBS-v3: getByTestId — multiple <pre> elements on page; positional first() is fragile
+    const exportPreview = page.getByTestId('export-preview');
     await expect(exportPreview).toContainText(/quiet village under a strange moon/i);
 
-    await page.getByRole('button', { name: /Settings|Einstellungen/i }).click();
+    await clickNavItem(page, /Settings|Einstellungen/i);
     await page.getByRole('button', { name: /AI Configuration|KI-Konfiguration/i }).click();
     // QNBS-v3: Nach seedGeminiApiKey zeigt ApiKeySection nur „configured“ — Input fehlt; nur füllen wenn noch kein Key.
     const geminiInput = page.locator('#gemini-api-key');

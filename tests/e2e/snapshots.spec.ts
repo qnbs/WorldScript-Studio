@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  clickNavItem,
   ensureBlankProject,
   flushWriterDebounce,
   selectEnglish,
   selectFirstEnabledWriterSection,
-  sidebar,
   waitForSpaReady,
 } from './helpers';
 
@@ -13,8 +13,8 @@ const isCI = process.env['CI'] === 'true';
 
 /** Navigate to Writer view and add some content so snapshots have something to capture. */
 async function seedManuscriptContent(page: import('@playwright/test').Page): Promise<void> {
-  const writerBtn = sidebar(page).getByRole('button', { name: /AI Writing Studio/i });
-  await writerBtn.click();
+  // QNBS-v3: clickNavItem — sidebar scoping fails on Mobile Chrome (Pixel 5)
+  await clickNavItem(page, /AI Writing Studio/i);
   await selectFirstEnabledWriterSection(page);
   const textarea = page.getByTestId('writer-studio-editor');
   await expect(textarea).toBeVisible();
@@ -35,7 +35,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await seedManuscriptContent(page);
 
     // Open version control panel from Writer toolbar
-    const vcBtn = page.getByRole('button', { name: /Versions/i }).first();
+    // QNBS-v3: getByTestId — VC button is hidden md:flex on mobile; testid works on both viewports
+    const vcBtn = page.getByTestId('writer-version-control-btn').first();
     await expect(vcBtn).toBeVisible({ timeout: 8000 });
     await vcBtn.click();
 
@@ -50,7 +51,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await newSnapshotBtn.click();
 
     // Fill label in modal
-    const labelInput = page.getByPlaceholder(/Before the big twist|snapshot/i).first();
+    // QNBS-v3: getByTestId — placeholder text is UX copy, not a stable test anchor
+    const labelInput = page.getByTestId('snapshot-label-input').first();
     await expect(labelInput).toBeVisible({ timeout: 6000 });
     await labelInput.fill('E2E Test Snapshot');
 
@@ -68,14 +70,16 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await seedManuscriptContent(page);
 
     // Create a snapshot to restore later
-    const vcBtn = page.getByRole('button', { name: /Versions/i }).first();
+    // QNBS-v3: getByTestId — VC button is hidden md:flex on mobile; testid works on both viewports
+    const vcBtn = page.getByTestId('writer-version-control-btn').first();
     await vcBtn.click();
     await expect(page.getByText(/Version History/i)).toBeVisible({ timeout: 8000 });
     await page
       .getByRole('button', { name: /\+ Snapshot|Create new snapshot/i })
       .first()
       .click();
-    const labelInput = page.getByPlaceholder(/Before the big twist|snapshot/i).first();
+    // QNBS-v3: getByTestId — placeholder text is UX copy, not a stable test anchor
+    const labelInput = page.getByTestId('snapshot-label-input').first();
     await expect(labelInput).toBeVisible();
     await labelInput.fill('Restore Target');
     await page
@@ -87,20 +91,14 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await page.keyboard.press('Escape');
 
     // Now change the manuscript
-    const writerBtn = sidebar(page)
-      .getByRole('button', { name: /AI Writing Studio/i })
-      .first();
-    await writerBtn.click();
+    await clickNavItem(page, /AI Writing Studio/i);
     const textarea = page.getByTestId('writer-studio-editor');
     await expect(textarea).toBeVisible({ timeout: 6000 });
     await textarea.fill('Completely different content after the snapshot.');
     await flushWriterDebounce(page);
 
     // Re-open panel and restore
-    await page
-      .getByRole('button', { name: /Versions/i })
-      .first()
-      .click();
+    await page.getByTestId('writer-version-control-btn').first().click();
     await expect(page.getByText('Restore Target')).toBeVisible({ timeout: 8000 });
     await page.getByRole('button', { name: /Restore snapshot "Restore Target"/i }).click();
 
@@ -111,9 +109,7 @@ test.describe('Snapshot Flow (CI-only)', () => {
     }
 
     // Manuscript should reflect seed content again
-    await sidebar(page)
-      .getByRole('button', { name: /AI Writing Studio/i })
-      .click();
+    await clickNavItem(page, /AI Writing Studio/i);
     await selectFirstEnabledWriterSection(page);
     const restoredTextarea = page.getByTestId('writer-studio-editor');
     await expect(restoredTextarea).toHaveValue(/Snapshot seed content/i, { timeout: 10000 });
@@ -123,7 +119,7 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await seedManuscriptContent(page);
 
     // Open version control panel
-    const vcBtn = page.getByRole('button', { name: /Versions/i }).first();
+    const vcBtn = page.getByTestId('writer-version-control-btn').first();
     await vcBtn.click();
     await expect(page.getByText(/Version History/i)).toBeVisible({ timeout: 8000 });
 
@@ -137,10 +133,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
   });
 
   test('snapshot panel closes on pressing Escape', async ({ page }) => {
-    await sidebar(page)
-      .getByRole('button', { name: /AI Writing Studio/i })
-      .click();
-    const vcBtn = page.getByRole('button', { name: /Versions/i }).first();
+    await clickNavItem(page, /AI Writing Studio/i);
+    const vcBtn = page.getByTestId('writer-version-control-btn').first();
     await expect(vcBtn).toBeVisible({ timeout: 8000 });
     await vcBtn.click();
     await expect(page.getByText(/Version History/i)).toBeVisible({ timeout: 8000 });

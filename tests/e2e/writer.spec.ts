@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  clickNavItem,
   ensureBlankProject,
   flushWriterDebounce,
   selectEnglish,
   selectFirstEnabledWriterSection,
-  sidebar,
   waitForSpaReady,
 } from './helpers';
 
@@ -36,8 +36,8 @@ test.describe('AI Writer Flow (CI-only)', () => {
   test('Writer view can be reached and edited', async ({ page }) => {
     await selectEnglish(page);
     await ensureBlankProject(page);
-    const writerButton = sidebar(page).getByRole('button', { name: /AI Writing Studio|Writer/i });
-    await writerButton.click();
+    // QNBS-v3: clickNavItem — sidebar(page) fails on Mobile Chrome; use mobile-aware helper
+    await clickNavItem(page, /AI Writing Studio|Writer/i);
     await page.waitForURL('**/');
 
     await selectFirstEnabledWriterSection(page);
