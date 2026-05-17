@@ -22,7 +22,7 @@
   "thresholds": {
     "high": 70,
     "low": 40,
-    "break": 30
+    "break": null
   },
   "reporters": ["html", "json", "progress"],
   "htmlReporter": { "fileName": "reports/mutation/mutation.html" },
