@@ -28,6 +28,12 @@ pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 
 **Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md).
 
+**CI pipeline order:** `security` → `quality` (Biome + tsc + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
+
+**Local vs CI:** On low-end hardware run only `lint`, `typecheck`, `i18n:check` locally; delegate Playwright, LHCI, and coverage-gate runs to CI (or debug via CI artifacts). The merge bar is a green workflow, not a full local run.
+
+**E2E notes:** Do NOT use `networkidle` waits against the Vite dev server (HMR keeps WebSocket connections open). Scope sidebar navigation via `#sidebar` when both mobile and desktop nav exist. Shared bootstrap helpers live in `tests/e2e/helpers.ts`.
+
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
 Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
@@ -36,9 +42,25 @@ Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 
 StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
 
-**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Two internal workspace packages (`@domain/ai-core`, `@domain/ui`) are consumed as `workspace:*` deps.
+**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Two internal workspace packages (`@domain/ai-core`, `@domain/ui` in `packages/`) are consumed as `workspace:*` deps.
 
 **Live:** `https://qnbs.github.io/StoryCraft-Studio/`
+
+### Directory map
+
+```
+app/              → Redux store, typed hooks, listener middleware, transientUiStore (Zustand)
+components/       → View components; components/ui/ = design-system atoms (Button, Modal, Toast…)
+contexts/         → React context providers — one per major view + I18nContext + CommandExecutorContext
+features/         → Redux slices: project, settings, status, writer, versionControl, featureFlags
+hooks/            → View business logic (use*View.ts naming); useGlobalKeyboardShortcuts here too
+services/         → External adapters: geminiService, aiProviderService, dbService, storageService,
+                     collaborationService; sub-dirs: commands/, keyboard/, help/, settingsExchange/
+packages/         → Internal workspace packages: ai-core, ui
+locales/          → i18n source JSON (de/en/es/fr/it × 15 modules); runtime bundles → public/locales/
+tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
+types.ts          → Core shared interfaces and types (root level)
+```
 
 ### State Management
 
@@ -52,6 +74,8 @@ Every major view follows this three-file structure:
 - `components/Xyz.tsx` — pure rendering only
 - `hooks/useXyzView.ts` — business logic, Redux selectors, thunk dispatches
 - `contexts/XyzContext.ts` — React context that passes the hook return to child components
+
+React conventions: `React.memo()` for expensive renders; `React.forwardRef()` for `components/ui/` primitives; always clean up event listeners, timeouts, and subscriptions in `useEffect` return.
 
 ### AI Services
 
@@ -109,6 +133,7 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 - `dangerouslySetInnerHTML` only with DOMPurify-sanitized content — never raw
 - No direct `@tauri-apps/api` imports in `components/ui/` atoms; abstract through services or hooks so the web build stays unaffected
 - File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors
+- Never comment out or skip failing tests to green CI — fix the root cause. `it.skip` requires a file-level comment with a reason and a ticket/TODO reference
 
 ## Known Technical Debt
 
