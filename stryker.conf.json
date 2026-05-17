@@ -21,9 +21,9 @@
   "thresholds": {
     "high": 70,
     "low": 40,
-    "break": null
+    "break": 30
   },
-  "timeoutMS": 180000,
+  "timeoutMS": 120000,
   "concurrency": 2,
   "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/*.test.ts", "**/*.spec.ts"]
 }

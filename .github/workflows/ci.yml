@@ -18,9 +18,13 @@ on:
 permissions:
   contents: read
 
+# QNBS-v3: cancel-in-progress only on PRs — cancelling a main-branch deploy mid-flight causes rollback confusion
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  group: >-
+    ci-${{ github.workflow }}-${{
+      github.event_name == 'pull_request' && github.head_ref || github.ref_name
+    }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ----------------------------------------------------------
@@ -43,6 +47,14 @@ jobs:
 
       - name: pnpm audit (high + critical)
         run: pnpm audit --audit-level=high
+
+      # QNBS-v3: osv-scanner.toml existed but was never wired into CI — wire it here so advisories are caught on every push
+      - name: OSV vulnerability scan
+        uses: google/osv-scanner-action@6a0fd44c9bab7e2a5e7a11602f89e3ac45ee9bdd # v2.0.2
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --lockfile=pnpm-lock.yaml
 
       # QNBS-v3: gitleaks scans git history for secrets; GITHUB_TOKEN is enough for PR annotations.
       - name: Scan for leaked secrets (gitleaks)
@@ -111,9 +123,11 @@ jobs:
   mutation:
     name: 🧬 Mutation Tests (Stryker)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # QNBS-v3: 30 min — 9 files × timeoutMS:120s × concurrency:2; raised from 20 to avoid premature job kill
+    timeout-minutes: 30
     needs: [quality]
-    continue-on-error: true
+    # QNBS-v3: break:30 in stryker.conf.json now enforces a real gate; continue-on-error removed so CI fails if score drops below 30%
+    continue-on-error: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup
@@ -168,7 +182,8 @@ jobs:
         with:
           name: dist
           path: ./dist
-          retention-days: 7
+          # QNBS-v3: 3 days — dist is only needed by lighthouse + deploy jobs in the same run
+          retention-days: 3
 
       # QNBS-v3: SLSA provenance attestation — ties the dist artifact to this exact
       # workflow run and commit SHA; verifiable with `gh attestation verify`.
@@ -237,12 +252,22 @@ jobs:
         env:
           CI: 'true'
 
-      - name: Upload Playwright report
+      - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
           path: tests/e2e/html-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+      # QNBS-v3: JUnit output from playwright.config.ts reporter — enables per-test annotation in GitHub PR checks
+      - name: Upload E2E JUnit results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-junit
+          path: tests/e2e/results/junit.xml
           if-no-files-found: warn
           retention-days: 7
 
@@ -279,7 +304,8 @@ jobs:
           name: lighthouse-report
           path: .lighthouseci/
           if-no-files-found: warn
-          retention-days: 14
+          # QNBS-v3: align with other report artifacts (7 days); 14 was inconsistent
+          retention-days: 7
 
   # ----------------------------------------------------------
   # 7. STORYBOOK: Build + artifact (parallel with build)
@@ -301,4 +327,5 @@ jobs:
         with:
           name: storybook
           path: storybook-static/
-          retention-days: 14
+          # QNBS-v3: align with other report artifacts (7 days); 14 was inconsistent
+          retention-days: 7

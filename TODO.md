@@ -14,7 +14,9 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ### Hoch (🟡)
 
-- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — Phase 1 erreicht (Schwellen 35/30/22/33 gesetzt); gemessene Coverage **~36 % Zeilen / ~30 % Funktionen / ~25 % Branches** (Stand 2026-05-16); Phase 2 (Ziel 50 % Lines) erfordert weitere Branch-Coverage-Arbeit — insbes. große Komponenten, aiProviderService-Streaming, collaborationService
+- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — Phase 4.5 erreicht (Schwellen 55/53/37/50 gesetzt); gemessene Coverage **63.32 % Zeilen · 61.5 % Statements · 47.1 % Branches · 53.2 % Funktionen** (Stand 2026-05-17, 1561 Tests); nächster Schritt: Branches Richtung 55 % (große Komponenten, aiProviderService-Streaming, collaborationService)
+- ✅ **E2E mobile Selectors (2026-05-17)** — `clickNavItem()` Helper + ARIA-Tabs in WriterViewUI + `data-testid`-Anker in VersionControlPanel/ExportView; alle 4 Spec-Dateien auf 2026 Golden Hierarchy umgestellt (CI-Gate wieder grün)
+- ✅ **CI-Hardening (2026-05-17)** — Stryker `break: 30` erzwungen, Lighthouse Performance→error, OSV-Scanner in Security-Job, Concurrency-Fix (cancel-in-progress nur PRs), Artifact-Retention vereinheitlicht, JUnit-E2E-Upload
 - ✅ **WebLLM Modell-Selektor** — `WEBLLM_SUPPORTED_MODELS` (4 MLC-Checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress`-Parameter, Settings-UI mit Dropdown + Fortschrittsanzeige (WCAG 2.2 `role="progressbar"`, `useRef`-Mounted-Guard) — [`packages/ai-core`](packages/ai-core), [`services/localAiFacade.ts`](services/localAiFacade.ts), [`components/settings/AiSections.tsx`](components/settings/AiSections.tsx)
 - ✅ **Cross-Project-Search Service** — `services/crossProjectSearchService.ts`, `searchAcrossProjects()` via fuzzyScore, transientUiStore-Integration (`isCrossProjectSearchOpen`), commandDefinitions-Command — v1: Einzelprojekt (multi-project erfordert DB_VERSION-Bump)
 - ✅ **Collaboration Security Warning** — Sicherheitshinweis-Banner in CollaborationPanel (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) vor Verbindungsaufbau sichtbar; verschwindet nach Connect

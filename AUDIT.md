@@ -1,9 +1,31 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16 → 2026-05-17  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **1.4.0** (released 2026-05-12); active development on unreleased enhancements  
+**Current version:** **1.4.1** (unreleased); active development on unreleased enhancements  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-17 (E2E mobile selectors + CI hardening)
+
+### E2E / Testing
+
+- **Mobile-aware E2E selectors (Phase 1 — CI gate-breaker):** WriterView was split into sub-components (`WriterViewUI`, `ContextPanel`, `ToolsPanel`, `AiScratchpad`). The mobile Chrome (Pixel 5, 393×851) CI project exposed three hard selector breaks: (a) `#sidebar` is `hidden md:flex` — invisible on mobile; (b) `ContextPanel` only rendered when `activeMobileTab === 'context'` (default: `tools`); (c) VC button inside `hidden md:flex`. Fixes: `clickNavItem()` helper in `tests/e2e/helpers.ts` (tries desktop sidebar → mobile tab bar → "More" sheet); ARIA tablist/tab/tabpanel pattern added to mobile segmented control in `WriterViewUI.tsx`; `data-testid="writer-version-control-btn"` on both desktop and new `md:hidden` mobile VC button; `data-testid="snapshot-label-input"` in `VersionControlPanel.tsx`; `data-testid="export-preview"` in `ExportView.tsx`. All four spec files updated (`writer`, `snapshots`, `a11y`, `export`) to use 2026 Golden Hierarchy selectors (getByRole > getByTestId; never CSS classes or XPath).
+- **Unit-test coverage (measured 2026-05-17):** **63.32 % Lines · 61.5 % Statements · 47.1 % Branches · 53.2 % Functions** — all Vitest thresholds met (55/53/37/50). Exit code 0.
+
+### CI / CD Hardening
+
+- **Stryker gate enforced:** `thresholds.break` raised from `null` → `30`; `timeoutMS` lowered from 180 000 → 120 000 ms (fail faster per mutant). CI mutation job: `continue-on-error: true` → `false`, `timeout-minutes: 20` → `30`. Stryker now gates CI when mutation score drops below 30 %.
+- **Lighthouse performance promoted to error:** `categories:performance` raised from `warn:0.5` → `error:0.4`; `categories:seo` added as `warn:0.8`; FCP tightened 6 000 → 5 000 ms; LCP tightened 8 000 → 7 000 ms. Accessibility gate (`error:0.95`) unchanged.
+- **OSV scanner wired into CI:** `osv-scanner.toml` existed but was never executed in the security job. Added `google/osv-scanner-action@v2` step after `pnpm audit` — advisories now caught on every push.
+- **Concurrency fix:** `cancel-in-progress: true` → `${{ github.event_name == 'pull_request' }}` — prevents cancelling a running deploy on main-branch pushes.
+- **Artifact retention aligned:** `dist` reduced to 3 days (only needed by lighthouse + deploy in same run); `lighthouse-report` and `storybook` reduced from 14 → 7 days (consistent with other report artifacts).
+- **JUnit E2E upload:** Playwright JUnit reporter output (`tests/e2e/results/junit.xml`) now uploaded as `e2e-junit` artifact — enables per-test annotations in GitHub PR checks.
+
+### Documentation
+
+- **Markdown corpus:** `AUDIT.md` header chain + version updated; `TODO.md` coverage line updated to measured numbers (63 %/47 %/53 %); E2E mobile-fix and CI-hardening items marked complete.
 
 ---
 

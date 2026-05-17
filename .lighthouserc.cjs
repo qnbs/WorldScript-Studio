@@ -23,9 +23,11 @@ module.exports = {
         // QNBS-v3: Accessibility promoted to error — WCAG 2.2 is enforced in code and axe-core E2E; this gate mirrors that commitment.
         // QNBS-v3: raised from 0.88 → 0.95 after fixing color-contrast in light theme and aria violations
         'categories:accessibility': ['error', { minScore: 0.95 }],
-        'categories:performance': ['warn', { minScore: 0.5 }],
-        'first-contentful-paint': ['warn', { maxNumericValue: 6000 }],
-        'largest-contentful-paint': ['warn', { maxNumericValue: 8000 }],
+        // QNBS-v3: performance promoted warn→error — perf regressions must fail CI; threshold 0.4 allows PWA cold-start overhead
+        'categories:performance': ['error', { minScore: 0.4 }],
+        'categories:seo': ['warn', { minScore: 0.8 }],
+        'first-contentful-paint': ['warn', { maxNumericValue: 5000 }],
+        'largest-contentful-paint': ['warn', { maxNumericValue: 7000 }],
         'speed-index': ['warn', { maxNumericValue: 8000 }],
         'total-blocking-time': ['warn', { maxNumericValue: 600 }],
         'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],
