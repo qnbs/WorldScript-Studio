@@ -5,7 +5,7 @@
   "vitest": {
     "configFile": "vitest.config.ts"
   },
-  "coverageAnalysis": "perTest",
+  "coverageAnalysis": "all",
   "plugins": ["@stryker-mutator/vitest-runner"],
   "mutate": [
     "services/codexService.ts",
