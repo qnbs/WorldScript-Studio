@@ -37,12 +37,12 @@ export default defineConfig({
         '**/*.stories.{ts,tsx}',
         '**/*.d.ts',
       ],
-      // QNBS-v3: Phase-1-Schwellen nach 20+ neuen Testdateien erhöht; Ziel Phase-2: 50 %.
+      // QNBS-v3: Phase-4-Schwellen — 146 Testdateien, 1561 Tests; aktuell 63 % Lines / 47 % Branches.
       thresholds: {
-        lines: 35,
-        functions: 30,
-        branches: 22,
-        statements: 33,
+        lines: 55,
+        functions: 50,
+        branches: 37,
+        statements: 53,
         perFile: false,
       },
     },

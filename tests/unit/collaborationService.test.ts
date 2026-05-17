@@ -70,7 +70,9 @@ describe('collaborationService', () => {
     it('returns defaults when empty or invalid', () => {
       expect(resolveWebRtcSignalingUrls(undefined)).toEqual([...DEFAULT_WEBRTC_SIGNALING_URLS]);
       expect(resolveWebRtcSignalingUrls([])).toEqual([...DEFAULT_WEBRTC_SIGNALING_URLS]);
-      expect(resolveWebRtcSignalingUrls(['http://bad'])).toEqual([...DEFAULT_WEBRTC_SIGNALING_URLS]);
+      expect(resolveWebRtcSignalingUrls(['http://bad'])).toEqual([
+        ...DEFAULT_WEBRTC_SIGNALING_URLS,
+      ]);
     });
 
     it('keeps valid ws URLs', () => {

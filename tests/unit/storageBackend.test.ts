@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { charactersAdapter, worldsAdapter } from '../../features/project/adapters';
 import type { ProjectData } from '../../features/project/projectSlice';
 import {
   normalizeSaveProjectInputToStoryProject,
   saveEnvelopeFromProjectData,
 } from '../../services/storageBackend';
-import { charactersAdapter, worldsAdapter } from '../../features/project/adapters';
 import type { StoryProject } from '../../types';
 
 const minimalProjectData = (): ProjectData => ({

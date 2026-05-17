@@ -29,6 +29,10 @@ export default defineConfig({
   /** Omit `{platform}` so one baseline PNG works on Linux (CI) and Windows/macOS dev machines. */
   snapshotPathTemplate: '{testDir}/{testFilePath}-snapshots/{arg}-{projectName}{ext}',
 
+  // QNBS-v3: explicit per-test timeout so a hung test fails fast instead of
+  // burning the remaining GitHub Actions budget (job was exceeding 30 min).
+  timeout: 60_000,
+
   expect: {
     timeout: 30_000,
   },
@@ -37,6 +41,10 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:3000/StoryCraft-Studio',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // QNBS-v3: action + navigation timeouts bound to detect UI hangs / stalled
+    // Vite HMR/WebSocket loads that would otherwise silently eat all retries.
+    actionTimeout: 20_000,
+    navigationTimeout: 40_000,
   },
 
   projects: e2eProjects,

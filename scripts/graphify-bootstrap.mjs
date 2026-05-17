@@ -17,9 +17,7 @@ function pip(cmd, args) {
   });
 }
 
-for (const py of process.platform === 'win32'
-  ? ['python', 'python3']
-  : ['python3', 'python']) {
+for (const py of process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']) {
   const r = pip(py, pipInstall);
   if (r.status === 0) process.exit(0);
 }

@@ -29,9 +29,7 @@ if (!tryPythonFirst) {
   }
 
   const notFound =
-    primary.error?.code === 'ENOENT' ||
-    primary.status === 9009 ||
-    primary.status === 127;
+    primary.error?.code === 'ENOENT' || primary.status === 9009 || primary.status === 127;
 
   if (!notFound && primary.status != null) {
     process.exit(primary.status);
@@ -61,9 +59,7 @@ if (tryPythonFirst) {
   }
 
   const notFound =
-    primary.error?.code === 'ENOENT' ||
-    primary.status === 9009 ||
-    primary.status === 127;
+    primary.error?.code === 'ENOENT' || primary.status === 9009 || primary.status === 127;
 
   if (!notFound && primary.status != null) {
     process.exit(primary.status);

@@ -12,7 +12,11 @@
     "services/dbMigration.ts",
     "services/commands/fuzzyScore.ts",
     "services/commands/palettePreferences.ts",
-    "services/commands/commandBuilder.ts"
+    "services/commands/commandBuilder.ts",
+    "services/ai/hybridFallback.ts",
+    "services/ai/providerFactory.ts",
+    "services/help/helpDocRetrieval.ts",
+    "app/listenerMiddleware.ts"
   ],
   "thresholds": {
     "high": 70,

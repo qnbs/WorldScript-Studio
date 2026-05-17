@@ -131,13 +131,15 @@ if (fix) {
 }
 
 if (report.length) {
-    console.error(`[i18n] Locale key mismatch vs reference "${REF}":\n`);
+  console.error(`[i18n] Locale key mismatch vs reference "${REF}":\n`);
   for (const r of report) {
     console.error(`  ${r.lang} (${r.type}, ${r.keys.length}):`);
     for (const k of r.keys.slice(0, 40)) console.error(`    - ${k}`);
     if (r.keys.length > 40) console.error(`    ... and ${r.keys.length - 40} more`);
   }
-  console.error('\nFix: add keys or run `node scripts/check-i18n-keys.mjs --fix` (copies EN strings).');
+  console.error(
+    '\nFix: add keys or run `node scripts/check-i18n-keys.mjs --fix` (copies EN strings).',
+  );
   process.exit(1);
 }
 

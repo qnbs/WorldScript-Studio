@@ -215,8 +215,8 @@ jobs:
   e2e:
     name: 🎭 E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    # QNBS-v3: 44 tests × 1 worker was hitting 20 min; bump to 30 to give headroom as the suite grows.
-    timeout-minutes: 30
+    # QNBS-v3: 29 tests × 2 browser-projects × retries:2 sequential → can exceed 30 min; raised to 50.
+    timeout-minutes: 50
     needs: [quality]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
