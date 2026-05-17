@@ -124,7 +124,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await seedManuscriptContent(page);
 
     // Open version control panel
-    const vcBtn = page.getByTestId('writer-version-control-btn').first();
+    // QNBS-v3: getByRole — ARIA excludes display:none; works for both mobile + desktop VC buttons
+    const vcBtn = page.getByRole('button', { name: /Versions/i });
     await vcBtn.click();
     await expect(page.getByText(/Version History/i)).toBeVisible({ timeout: 8000 });
 
@@ -139,7 +140,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
 
   test('snapshot panel closes on pressing Escape', async ({ page }) => {
     await clickNavItem(page, /AI Writing Studio/i);
-    const vcBtn = page.getByTestId('writer-version-control-btn').first();
+    // QNBS-v3: getByRole — ARIA excludes display:none; works for both mobile + desktop VC buttons
+    const vcBtn = page.getByRole('button', { name: /Versions/i });
     await expect(vcBtn).toBeVisible({ timeout: 8000 });
     await vcBtn.click();
     await expect(page.getByText(/Version History/i)).toBeVisible({ timeout: 8000 });
