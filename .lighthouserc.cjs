@@ -21,7 +21,8 @@ module.exports = {
     assert: {
       assertions: {
         // QNBS-v3: Accessibility promoted to error — WCAG 2.2 is enforced in code and axe-core E2E; this gate mirrors that commitment.
-        'categories:accessibility': ['error', { minScore: 0.88 }],
+        // QNBS-v3: raised from 0.88 → 0.95 after fixing color-contrast in light theme and aria violations
+        'categories:accessibility': ['error', { minScore: 0.95 }],
         'categories:performance': ['warn', { minScore: 0.5 }],
         'first-contentful-paint': ['warn', { maxNumericValue: 6000 }],
         'largest-contentful-paint': ['warn', { maxNumericValue: 8000 }],
