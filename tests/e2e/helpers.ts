@@ -38,10 +38,13 @@ export function writerSectionSelect(page: Page) {
  * Native `<option>` nodes are not Playwright-visible when the list is closed; use counts + selectOption.
  */
 export async function selectFirstEnabledWriterSection(page: Page): Promise<void> {
-  // QNBS-v3: ContextPanel is only rendered when the context tab is active on mobile (default tab = tools)
+  // QNBS-v3: Writer view is lazy-loaded; wait for writer-tab-context to attach before checking
+  // viewport visibility — 2s was too short for CI Mobile Chrome with a cold bundle load.
   const contextTab = page.getByTestId('writer-tab-context');
+  await contextTab.waitFor({ state: 'attached', timeout: 20000 }).catch(() => {});
   let sel: import('@playwright/test').Locator;
-  if (await contextTab.isVisible({ timeout: 2000 }).catch(() => false)) {
+  // md:hidden means visible on <768px (mobile) and hidden on ≥768px (desktop)
+  if (await contextTab.isVisible({ timeout: 500 }).catch(() => false)) {
     if ((await contextTab.getAttribute('aria-selected')) !== 'true') {
       await contextTab.click();
     }

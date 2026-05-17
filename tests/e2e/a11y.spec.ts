@@ -40,7 +40,14 @@ test.describe('Accessibility (axe)', () => {
     await page.goto('/');
     await selectEnglish(page);
     await ensureBlankProject(page);
-    await page.locator('[data-tour="command-palette-trigger"]').click();
+    // QNBS-v3: command-palette-trigger is hidden sm:block (invisible on Mobile Chrome <640px);
+    // fall back to Ctrl+K keyboard shortcut which works on all viewports
+    const trigger = page.locator('[data-tour="command-palette-trigger"]');
+    if (await trigger.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await trigger.click();
+    } else {
+      await page.keyboard.press('Control+k');
+    }
     await expect(page.locator('#command-palette-listbox')).toBeVisible({ timeout: 15000 });
     await assertNoSeriousViolations(page, 'command-palette');
     await page.keyboard.press('Escape');

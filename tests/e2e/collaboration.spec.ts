@@ -3,6 +3,16 @@ import { clickNavItem, ensureBlankProject, selectEnglish, waitForSpaReady } from
 
 const isCI = process.env['CI'] === 'true';
 
+/** Navigate to Settings → Collaboration section (Collaboration is a settings category, not a sidebar item). */
+async function navigateToCollaborationSettings(
+  page: import('@playwright/test').Page,
+): Promise<void> {
+  // QNBS-v3: Collaboration is inside Settings, not a top-level sidebar nav item —
+  // clickNavItem(/Collaboration/) would fall through to mobile "More" sheet and find nothing.
+  await clickNavItem(page, /Settings/i);
+  await page.getByRole('button', { name: /^Collaboration$/i }).click();
+}
+
 test.describe('Collaboration Panel (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
@@ -13,8 +23,7 @@ test.describe('Collaboration Panel (CI-only)', () => {
   });
 
   test('security warning banner is visible before connecting', async ({ page }) => {
-    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
-    await clickNavItem(page, /Collaboration|Collab/i);
+    await navigateToCollaborationSettings(page);
 
     // Security warning must be present (role=alert, aria-live=polite)
     const securityAlert = page.locator('[role="alert"]');
@@ -24,8 +33,7 @@ test.describe('Collaboration Panel (CI-only)', () => {
 
   test('security warning disappears after connecting', async ({ page }) => {
     // QNBS-v3: only checks visibility of warning before connection state; actual connect tested in integration
-    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
-    await clickNavItem(page, /Collaboration|Collab/i);
+    await navigateToCollaborationSettings(page);
 
     // Alert is visible pre-connection
     const securityAlert = page.locator('[role="alert"]');

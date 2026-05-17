@@ -255,11 +255,22 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   );
 
   useEffect(() => {
-    if (isTouchDevice) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
-
+      // QNBS-v3: Escape + Enter must work on all devices (ARIA modal requirement + command execution);
+      // Arrow navigation skipped on touch devices to avoid conflicts with native mobile browser behaviour.
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const row = flatItems[selectedIndex]?.item;
+        if (row) runCommand(row);
+        return;
+      }
+      if (isTouchDevice) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedIndex((prev) => (prev + 1) % Math.max(flatItems.length, 1));
@@ -268,13 +279,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         setSelectedIndex(
           (prev) => (prev - 1 + Math.max(flatItems.length, 1)) % Math.max(flatItems.length, 1),
         );
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        const row = flatItems[selectedIndex]?.item;
-        if (row) runCommand(row);
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
       }
     };
 
