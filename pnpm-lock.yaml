@@ -53,8 +53,8 @@ importers:
         specifier: ^5.2.11
         version: 5.2.11
       '@google/genai':
-        specifier: ^2.0.0
-        version: 2.0.0
+        specifier: ^2.3.0
+        version: 2.3.0
       '@reduxjs/toolkit':
         specifier: ^2.2.6
         version: 2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.6)(redux@5.0.1))(react@19.2.6)
@@ -1183,8 +1183,8 @@ packages:
   '@formatjs/intl-localematcher@0.6.2':
     resolution: {integrity: sha512-XOMO2Hupl0wdd172Y06h6kLpBz6Dv+J4okPLl4LPtzbr8f66WbIoy4ev98EBuZ6ZK4h5ydTN6XneT4QVpD7cdA==}
 
-  '@google/genai@2.0.0':
-    resolution: {integrity: sha512-6XpO+YbGutXkm5QgR7NZktISxSz0dw3pSs9NtCUQwvhJc1eyA3KhdKhE/0Uaxp3a6eul3LC0SKau1bXymjOKUg==}
+  '@google/genai@2.3.0':
+    resolution: {integrity: sha512-rXDhXUBj31gZafcwQFbXvt8jMrMxZoK7ECjQpk88UfA/OkZls3PtZDprT9lM3jjqRtwRjQoNLoPoNq6MlV8qLw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -4534,10 +4534,6 @@ packages:
   prop-types@15.8.1:
     resolution: {integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==}
 
-  protobufjs@8.0.3:
-    resolution: {integrity: sha512-LBYnMWkKLB8fE/ljROPDbCl7mgLSlI+oBe1fAAr5MTqFg4TIi0tYrVVurJvQggOjnUYMQtEZBjrej59ojMNTHQ==}
-    engines: {node: '>=12.0.0'}
-
   protobufjs@8.3.0:
     resolution: {integrity: sha512-JpJpFaR7yKNb6WqKvJJ1MLbiuIQWQnbUUb06nDtf2/i8YWYYLEfP6xf9BwSJoJQg1wAy61EQB8dssQg64oX4aA==}
     engines: {node: '>=12.0.0'}
@@ -6835,12 +6831,12 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@google/genai@2.0.0':
+  '@google/genai@2.3.0':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
-      protobufjs: 8.0.3
-      ws: 8.20.0
+      protobufjs: 8.3.0
+      ws: 8.20.1
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -10265,15 +10261,9 @@ snapshots:
       object-assign: 4.1.1
       react-is: 16.13.1
 
-  protobufjs@8.0.3:
-    dependencies:
-      '@types/node': 25.8.0
-      long: 5.3.2
-
   protobufjs@8.3.0:
     dependencies:
       long: 5.3.2
-    optional: true
 
   proxy-addr@2.0.7:
     dependencies:
@@ -11621,7 +11611,8 @@ snapshots:
 
   ws@7.5.10: {}
 
-  ws@8.20.0: {}
+  ws@8.20.0:
+    optional: true
 
   ws@8.20.1: {}
 
