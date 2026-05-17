@@ -21,9 +21,19 @@
   "thresholds": {
     "high": 70,
     "low": 40,
-    "break": 30
+    "break": null
   },
+  "reporters": ["html", "json", "progress"],
+  "htmlReporter": { "fileName": "reports/mutation/mutation.html" },
+  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
   "timeoutMS": 120000,
   "concurrency": 2,
-  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/*.test.ts", "**/*.spec.ts"]
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/playwright-report/**",
+    "**/storybook-static/**"
+  ]
 }

@@ -1,0 +1,50 @@
+# ============================================================
+# StoryCraft Studio – Standalone Mutation Testing
+# Runs weekly (Monday 03:00 UTC) and on manual dispatch.
+# Does NOT gate the main CI pipeline — informational only until
+# a stable baseline score is established via this workflow.
+# ============================================================
+
+name: 🧬 Mutation Tests (Stryker)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # QNBS-v3: weekly Monday 03:00 UTC — off-hours to avoid runner contention
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  stryker:
+    name: 🧬 Stryker Mutation Report
+    runs-on: ubuntu-latest
+    # QNBS-v3: 9 files × timeoutMS:120s × concurrency:2; 45 min to be safe on shared runners
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: ./.github/actions/setup
+
+      - name: Run Stryker mutation tests
+        run: pnpm run mutation
+        # QNBS-v3: break:null in stryker.conf.json — this job is informational; score establishes the baseline
+
+      - name: Upload Stryker HTML report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: stryker-report
+          path: reports/mutation/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload Stryker JSON report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: stryker-report-json
+          path: reports/mutation/mutation.json
+          if-no-files-found: warn
+          retention-days: 30

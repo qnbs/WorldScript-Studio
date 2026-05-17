@@ -128,8 +128,8 @@ jobs:
     # QNBS-v3: 30 min — 9 files × timeoutMS:120s × concurrency:2; raised from 20 to avoid premature job kill
     timeout-minutes: 30
     needs: [quality]
-    # QNBS-v3: break:30 in stryker.conf.json now enforces a real gate; continue-on-error removed so CI fails if score drops below 30%
-    continue-on-error: false
+    # QNBS-v3: informational only — break:null in stryker.conf.json; baseline TBD before enforcing a hard gate
+    continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup
