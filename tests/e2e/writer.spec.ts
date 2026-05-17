@@ -38,11 +38,14 @@ test.describe('AI Writer Flow (CI-only)', () => {
     await ensureBlankProject(page);
     // QNBS-v3: clickNavItem — sidebar(page) fails on Mobile Chrome; use mobile-aware helper
     await clickNavItem(page, /AI Writing Studio|Writer/i);
-    await page.waitForURL('**/');
+    // QNBS-v3: waitForURL('**/') is a no-op in this SPA (URL never changes) and can cause timing
+    // issues on Mobile Chrome; removed in favour of selectFirstEnabledWriterSection's own wait.
 
     await selectFirstEnabledWriterSection(page);
 
-    const writerTextbox = page.getByTestId('writer-studio-editor');
+    // QNBS-v3: WriterViewUI renders ContextPanel in both mobile tab-panel and desktop grid;
+    // use .first() so strict mode is not violated (mobile panel is first in DOM when active).
+    const writerTextbox = page.getByTestId('writer-studio-editor').first();
     await expect(writerTextbox).toBeVisible();
     await writerTextbox.fill('This is the first AI-assisted draft paragraph.');
     await expect(writerTextbox).toHaveValue(/first AI-assisted draft paragraph/i);

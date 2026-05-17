@@ -82,7 +82,8 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await clickNavItem(page, /AI Writing Studio|Writer|Schreiben/i);
     await selectFirstEnabledWriterSection(page);
 
-    const writerTextbox = page.getByTestId('writer-studio-editor');
+    // QNBS-v3: .first() — ContextPanel renders in both mobile and desktop panels; mobile is first in DOM
+    const writerTextbox = page.getByTestId('writer-studio-editor').first();
     await expect(writerTextbox).toBeVisible();
     await writerTextbox.fill('The first chapter opens on a quiet village under a strange moon.');
     await expect(writerTextbox).toHaveValue(/quiet village under a strange moon/i);

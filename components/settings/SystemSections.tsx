@@ -449,6 +449,15 @@ export const CollaborationSection: FC = () => {
           </h2>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* QNBS-v3: Security warning always shown so users understand public-relay implications before configuring signaling URLs */}
+          <div
+            role="alert"
+            aria-live="polite"
+            className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-700 dark:text-amber-300 space-y-1"
+          >
+            <p className="font-semibold">{t('collab.securityWarning')}</p>
+            <p>{t('collab.securityWarningDetail')}</p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ToggleSwitch
               label={t('settings.collaboration.realTimeCollaboration')}

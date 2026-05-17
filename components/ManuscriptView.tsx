@@ -1259,6 +1259,7 @@ const ManuscriptViewUI: FC = () => {
           onClick={() => setIsInspectorDrawerOpen(true)}
           size="sm"
           className="-mr-1"
+          aria-label={t('manuscript.inspector.title')}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

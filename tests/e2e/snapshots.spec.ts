@@ -16,7 +16,8 @@ async function seedManuscriptContent(page: import('@playwright/test').Page): Pro
   // QNBS-v3: clickNavItem — sidebar scoping fails on Mobile Chrome (Pixel 5)
   await clickNavItem(page, /AI Writing Studio/i);
   await selectFirstEnabledWriterSection(page);
-  const textarea = page.getByTestId('writer-studio-editor');
+  // QNBS-v3: .first() — ContextPanel renders in both mobile and desktop panels; mobile is first in DOM
+  const textarea = page.getByTestId('writer-studio-editor').first();
   await expect(textarea).toBeVisible();
   await textarea.fill('Snapshot seed content — this text will be captured in a snapshot.');
   await flushWriterDebounce(page);
@@ -92,7 +93,10 @@ test.describe('Snapshot Flow (CI-only)', () => {
 
     // Now change the manuscript
     await clickNavItem(page, /AI Writing Studio/i);
-    const textarea = page.getByTestId('writer-studio-editor');
+    // QNBS-v3: Mobile tab state resets on re-mount; re-activate context tab so textarea is visible
+    await selectFirstEnabledWriterSection(page);
+    // QNBS-v3: .first() — dual-render (mobile + desktop ContextPanel); mobile is first in DOM
+    const textarea = page.getByTestId('writer-studio-editor').first();
     await expect(textarea).toBeVisible({ timeout: 6000 });
     await textarea.fill('Completely different content after the snapshot.');
     await flushWriterDebounce(page);
@@ -111,7 +115,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
     // Manuscript should reflect seed content again
     await clickNavItem(page, /AI Writing Studio/i);
     await selectFirstEnabledWriterSection(page);
-    const restoredTextarea = page.getByTestId('writer-studio-editor');
+    // QNBS-v3: .first() — dual-render (mobile + desktop ContextPanel); mobile is first in DOM
+    const restoredTextarea = page.getByTestId('writer-studio-editor').first();
     await expect(restoredTextarea).toHaveValue(/Snapshot seed content/i, { timeout: 10000 });
   });
 
