@@ -80,6 +80,7 @@ const AiScratchpad: FC = React.memo(() => {
                   size="sm"
                   variant="ghost"
                   className="px-2"
+                  aria-label={t('writer.studio.result.prev')}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -88,6 +89,7 @@ const AiScratchpad: FC = React.memo(() => {
                     strokeWidth={1.5}
                     stroke="currentColor"
                     className="w-4 h-4"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -106,6 +108,7 @@ const AiScratchpad: FC = React.memo(() => {
                   size="sm"
                   variant="ghost"
                   className="px-2"
+                  aria-label={t('writer.studio.result.next')}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -114,6 +117,7 @@ const AiScratchpad: FC = React.memo(() => {
                     strokeWidth={1.5}
                     stroke="currentColor"
                     className="w-4 h-4"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -139,7 +143,7 @@ const AiScratchpad: FC = React.memo(() => {
                     onClick={() => (isSpeaking ? stop() : speak(currentResult, ttsLang))}
                     variant="ghost"
                     size="sm"
-                    title={isSpeaking ? t('writer.tts.stop') : t('writer.tts.start')}
+                    aria-label={isSpeaking ? t('writer.tts.stop') : t('writer.tts.start')}
                     disabled={!currentResult || isLoading}
                   >
                     {isSpeaking ? (
@@ -150,6 +154,7 @@ const AiScratchpad: FC = React.memo(() => {
                         strokeWidth={1.5}
                         stroke="currentColor"
                         className="w-4 h-4"
+                        aria-hidden="true"
                       >
                         <path
                           strokeLinecap="round"
@@ -165,6 +170,7 @@ const AiScratchpad: FC = React.memo(() => {
                         strokeWidth={1.5}
                         stroke="currentColor"
                         className="w-4 h-4"
+                        aria-hidden="true"
                       >
                         <path
                           strokeLinecap="round"
@@ -179,7 +185,7 @@ const AiScratchpad: FC = React.memo(() => {
                   onClick={() => navigator.clipboard.writeText(currentResult)}
                   variant="ghost"
                   size="sm"
-                  title={t('common.copyToClipboard')}
+                  aria-label={t('common.copyToClipboard')}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -188,6 +194,7 @@ const AiScratchpad: FC = React.memo(() => {
                     strokeWidth={1.5}
                     stroke="currentColor"
                     className="w-4 h-4"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"

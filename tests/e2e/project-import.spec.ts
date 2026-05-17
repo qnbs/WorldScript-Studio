@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  clickNavItem,
   ensureBlankProject,
   selectEnglish,
-  sidebar,
+  selectFirstEnabledWriterSection,
   waitForSpaReady,
-  writerSectionSelect,
 } from './helpers';
 
 const isCI = process.env['CI'] === 'true';
@@ -25,9 +25,8 @@ async function importJsonViaModal(
   page: import('@playwright/test').Page,
   file: { name: string; buffer: Buffer },
 ): Promise<void> {
-  await sidebar(page)
-    .getByRole('button', { name: /^Export$/i })
-    .click();
+  // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+  await clickNavItem(page, /^Export$/i);
   const importProjectBtn = page.getByRole('button', { name: /Import Project/i });
   await importProjectBtn.scrollIntoViewIfNeeded();
   await importProjectBtn.click();
@@ -68,12 +67,13 @@ test.describe('Project Import (CI-only)', () => {
     });
 
     // Navigate to Writer to verify manuscript section landed
-    await sidebar(page)
-      .getByRole('button', { name: /AI Writing Studio/i })
-      .click();
-    const sectionSelect = writerSectionSelect(page);
-    await expect(sectionSelect).toBeVisible({ timeout: 8000 });
-    await expect(sectionSelect.locator('option', { hasText: /Chapter One/i })).toBeAttached();
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /AI Writing Studio/i);
+    // QNBS-v3: selectFirstEnabledWriterSection activates context tab on mobile so the select is visible;
+    // first() avoids strict-mode violation when both mobile + desktop ContextPanel are in DOM
+    await selectFirstEnabledWriterSection(page);
+    const sectionSel = page.locator('#writer-section-select').first();
+    await expect(sectionSel.locator('option', { hasText: /Chapter One/i })).toBeAttached();
   });
 
   test('import survives a page reload (IndexedDB persistence)', async ({ page }) => {
@@ -88,10 +88,9 @@ test.describe('Project Import (CI-only)', () => {
       timeout: 15000,
     });
 
-    // QNBS-v3: listenerMiddleware debounced save ~1000ms — Reload vor IndexedDB-Write lädt „My Untitled Story“.
-    await sidebar(page)
-      .getByRole('button', { name: /Dashboard/i })
-      .click();
+    // QNBS-v3: listenerMiddleware debounced save ~1000ms — Reload vor IndexedDB-Write lädt „My Untitled Story”.
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /Dashboard/i);
     await expect(page.locator('#projectTitle')).toHaveValue('Imported Test Novel', {
       timeout: 10000,
     });
@@ -101,9 +100,7 @@ test.describe('Project Import (CI-only)', () => {
     await page.reload();
     await waitForSpaReady(page);
     await selectEnglish(page);
-    await sidebar(page)
-      .getByRole('button', { name: /Dashboard/i })
-      .click();
+    await clickNavItem(page, /Dashboard/i);
     await expect(page.locator('#projectTitle')).toHaveValue('Imported Test Novel', {
       timeout: 15000,
     });

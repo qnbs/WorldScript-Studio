@@ -5,7 +5,7 @@
   "vitest": {
     "configFile": "vitest.config.ts"
   },
-  "coverageAnalysis": "all",
+  "coverageAnalysis": "perTest",
   "ignoreStatic": true,
   "plugins": ["@stryker-mutator/vitest-runner"],
   "mutate": [

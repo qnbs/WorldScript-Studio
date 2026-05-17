@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ensureBlankProject, selectEnglish, sidebar, waitForSpaReady } from './helpers';
+import { clickNavItem, ensureBlankProject, selectEnglish, waitForSpaReady } from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -13,9 +13,8 @@ test.describe('Character CRUD (CI-only)', () => {
   });
 
   test('creates a character manually and it appears in the list', async ({ page }) => {
-    await sidebar(page)
-      .getByRole('button', { name: /Characters/i })
-      .click();
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /Characters/i);
     await page
       .getByRole('button', { name: /Add Manually/i })
       .waitFor({ state: 'visible', timeout: 15000 });
@@ -38,9 +37,8 @@ test.describe('Character CRUD (CI-only)', () => {
   });
 
   test('edits a character name and the change persists', async ({ page }) => {
-    await sidebar(page)
-      .getByRole('button', { name: /Characters/i })
-      .click();
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /Characters/i);
     await page
       .getByRole('button', { name: /Add Manually/i })
       .waitFor({ state: 'visible', timeout: 15000 });
@@ -68,9 +66,8 @@ test.describe('Character CRUD (CI-only)', () => {
   });
 
   test('deletes a character and it disappears from the list', async ({ page }) => {
-    await sidebar(page)
-      .getByRole('button', { name: /Characters/i })
-      .click();
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /Characters/i);
     await page
       .getByRole('button', { name: /Add Manually/i })
       .waitFor({ state: 'visible', timeout: 15000 });
@@ -102,9 +99,8 @@ test.describe('Character CRUD (CI-only)', () => {
   });
 
   test('adding two characters shows both in the list', async ({ page }) => {
-    await sidebar(page)
-      .getByRole('button', { name: /Characters/i })
-      .click();
+    // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+    await clickNavItem(page, /Characters/i);
     await page
       .getByRole('button', { name: /Add Manually/i })
       .waitFor({ state: 'visible', timeout: 15000 });

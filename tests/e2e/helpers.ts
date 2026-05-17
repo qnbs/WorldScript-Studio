@@ -28,7 +28,10 @@ export async function clickNavItem(page: Page, name: RegExp): Promise<void> {
 
 /** Writer section `<Select>` — stable id to avoid picking tone/tool comboboxes elsewhere on the page. */
 export function writerSectionSelect(page: Page) {
-  return page.locator('#writer-section-select');
+  // QNBS-v3: ContextPanel exists in both mobile tab panel and always-rendered desktop grid (hidden
+  // md:grid); first() picks the mobile-panel instance when context tab is active (it is first in DOM
+  // order), and the sole desktop instance otherwise — prevents strict-mode violation from duplicate IDs.
+  return page.locator('#writer-section-select').first();
 }
 
 /**
@@ -37,12 +40,19 @@ export function writerSectionSelect(page: Page) {
 export async function selectFirstEnabledWriterSection(page: Page): Promise<void> {
   // QNBS-v3: ContextPanel is only rendered when the context tab is active on mobile (default tab = tools)
   const contextTab = page.getByTestId('writer-tab-context');
+  let sel: import('@playwright/test').Locator;
   if (await contextTab.isVisible({ timeout: 2000 }).catch(() => false)) {
     if ((await contextTab.getAttribute('aria-selected')) !== 'true') {
       await contextTab.click();
     }
+    // QNBS-v3: After clicking context tab on mobile, ContextPanel renders in BOTH the mobile tab panel
+    // (#writer-panel-context, visible) and the always-rendered desktop grid (hidden md:grid, display:none).
+    // Wait for the mobile panel to mount, then scope the select to it to avoid picking the hidden one.
+    await page.locator('#writer-panel-context').waitFor({ state: 'visible' });
+    sel = page.locator('#writer-panel-context #writer-section-select');
+  } else {
+    sel = writerSectionSelect(page);
   }
-  const sel = writerSectionSelect(page);
   await expect(sel).toBeVisible();
   const enabled = sel.locator('option:not([disabled])');
   await expect.poll(async () => enabled.count()).toBeGreaterThan(0);
@@ -57,9 +67,8 @@ export async function flushWriterDebounce(page: Page): Promise<void> {
 }
 
 export async function seedGeminiApiKey(page: Page): Promise<void> {
-  await sidebar(page)
-    .getByRole('button', { name: /Settings/i })
-    .click();
+  // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
+  await clickNavItem(page, /Settings/i);
   await page.getByRole('button', { name: /AI Configuration|KI-Konfiguration/i }).click();
   await page
     .getByLabel(/Enter your Gemini API Key|Geben Sie Ihren Gemini API-Schlüssel ein/i)

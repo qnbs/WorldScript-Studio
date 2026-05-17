@@ -372,6 +372,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             type="search"
             autoComplete="off"
             spellCheck={false}
+            aria-label={t('palette.ariaLabel')}
             aria-activedescendant={
               flatItems[selectedIndex] ? `palette-opt-${selectedIndex}` : undefined
             }

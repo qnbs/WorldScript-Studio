@@ -203,6 +203,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         id="sidebar-mobile"
         aria-label={t('sidebar.overflowMenuAria')}
         aria-hidden={!isSidebarOpen ? true : undefined}
+        inert={!isSidebarOpen ? true : undefined}
         className={`
           md:hidden fixed left-0 right-0 bottom-0 z-50
           bg-[var(--background-secondary)] backdrop-blur-3xl
