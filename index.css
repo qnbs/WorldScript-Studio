@@ -107,7 +107,8 @@
   --sc-surface-inverse: #0f172a;
   --sc-text-primary: #0f172a;
   --sc-text-secondary: #475569;
-  --sc-text-muted: #94a3b8;
+  /* QNBS-v3: #94a3b8 failed Lighthouse color-contrast (2.56:1 on white); #64748b = 5.0:1 ✓ */
+  --sc-text-muted: #64748b;
   --sc-text-on-accent: #ffffff;
   --sc-accent: #4f46e5;
   --sc-accent-hover: #4338ca;
