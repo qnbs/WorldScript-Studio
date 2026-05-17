@@ -288,5 +288,10 @@
   "crossSearch.matchType.title": "Title",
   "crossSearch.matchType.logline": "Logline",
   "crossSearch.matchType.manuscript": "Manuscript",
-  "crossSearch.matchType.character": "Character"
+  "crossSearch.matchType.character": "Character",
+  "crossSearch.panelLabel": "Search current project",
+  "crossSearch.inputLabel": "Search query",
+  "crossSearch.resultsLabel": "Search results",
+  "crossSearch.hint": "Type to search title, logline, manuscript sections, and characters.",
+  "crossSearch.scopeNote": "Searching the current project — multi-project search coming in v2."
 }

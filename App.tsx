@@ -6,6 +6,14 @@ import type { RootState } from './app/store';
 import { useTransientUiStore } from './app/transientUiStore';
 import { CollaborationPanel } from './components/CollaborationPanel';
 import { CommandPalette } from './components/CommandPalette';
+
+// QNBS-v3: lazy-load cross-project search panel so it's excluded from the initial bundle
+const CrossProjectSearchPanelConnected = lazy(() =>
+  import('./components/CrossProjectSearchPanel').then((m) => ({
+    default: m.CrossProjectSearchPanelConnected,
+  })),
+);
+
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -472,6 +480,9 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                 onClose={() => setIsCollabPanelOpen(false)}
                 projectId={project?.id ?? 'default'}
               />
+              <Suspense fallback={null}>
+                <CrossProjectSearchPanelConnected />
+              </Suspense>
               <PWAUpdateToast />
               <PWAInstallBanner />
               <OfflineIndicator />

@@ -288,5 +288,10 @@
   "crossSearch.matchType.title": "Titolo",
   "crossSearch.matchType.logline": "Logline",
   "crossSearch.matchType.manuscript": "Manoscritto",
-  "crossSearch.matchType.character": "Personaggio"
+  "crossSearch.matchType.character": "Personaggio",
+  "crossSearch.panelLabel": "Cerca nel progetto corrente",
+  "crossSearch.inputLabel": "Testo di ricerca",
+  "crossSearch.resultsLabel": "Risultati della ricerca",
+  "crossSearch.hint": "Digita per cercare titolo, logline, sezioni del manoscritto e personaggi.",
+  "crossSearch.scopeNote": "Ricerca nel progetto corrente — ricerca multi-progetto in v2."
 }

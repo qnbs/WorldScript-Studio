@@ -288,5 +288,10 @@
   "crossSearch.matchType.title": "Titel",
   "crossSearch.matchType.logline": "Logline",
   "crossSearch.matchType.manuscript": "Manuskript",
-  "crossSearch.matchType.character": "Figur"
+  "crossSearch.matchType.character": "Figur",
+  "crossSearch.panelLabel": "Aktuelles Projekt durchsuchen",
+  "crossSearch.inputLabel": "Suchanfrage",
+  "crossSearch.resultsLabel": "Suchergebnisse",
+  "crossSearch.hint": "Tippen, um Titel, Logline, Manuskriptabschnitte und Charaktere zu durchsuchen.",
+  "crossSearch.scopeNote": "Aktuelles Projekt wird durchsucht – Mehrprojekt-Suche kommt in v2."
 }
