@@ -35,8 +35,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await seedManuscriptContent(page);
 
     // Open version control panel from Writer toolbar
-    // QNBS-v3: getByTestId — VC button is hidden md:flex on mobile; testid works on both viewports
-    const vcBtn = page.getByTestId('writer-version-control-btn').first();
+    // QNBS-v3: getByRole — ARIA excludes display:none elements; works for both mobile + desktop VC buttons
+    const vcBtn = page.getByRole('button', { name: /Versions/i });
     await expect(vcBtn).toBeVisible({ timeout: 8000 });
     await vcBtn.click();
 
@@ -70,8 +70,8 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await seedManuscriptContent(page);
 
     // Create a snapshot to restore later
-    // QNBS-v3: getByTestId — VC button is hidden md:flex on mobile; testid works on both viewports
-    const vcBtn = page.getByTestId('writer-version-control-btn').first();
+    // QNBS-v3: getByRole — ARIA excludes display:none elements; works for both mobile + desktop VC buttons
+    const vcBtn = page.getByRole('button', { name: /Versions/i });
     await vcBtn.click();
     await expect(page.getByText(/Version History/i)).toBeVisible({ timeout: 8000 });
     await page
@@ -98,7 +98,7 @@ test.describe('Snapshot Flow (CI-only)', () => {
     await flushWriterDebounce(page);
 
     // Re-open panel and restore
-    await page.getByTestId('writer-version-control-btn').first().click();
+    await page.getByRole('button', { name: /Versions/i }).click();
     await expect(page.getByText('Restore Target')).toBeVisible({ timeout: 8000 });
     await page.getByRole('button', { name: /Restore snapshot "Restore Target"/i }).click();
 

@@ -52,8 +52,8 @@ test.describe('Accessibility (axe)', () => {
     await ensureBlankProject(page);
     // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
     await clickNavItem(page, /AI Writing Studio|Writer/i);
-    // QNBS-v3: getByTestId — VC button is hidden md:flex on mobile; testid stable on both viewports
-    await page.getByTestId('writer-version-control-btn').first().click();
+    // QNBS-v3: getByRole — ARIA excludes display:none elements; works for both mobile + desktop VC buttons
+    await page.getByRole('button', { name: /Versions/i }).click();
     await expect(page.locator('#version-control-heading')).toBeVisible({ timeout: 15000 });
     await assertNoSeriousViolations(page, 'writer-version-control');
     await page.keyboard.press('Escape');
