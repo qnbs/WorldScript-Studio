@@ -28,6 +28,22 @@ updates:
           - 'stryker*'
           - '@stryker-mutator/*'
 
+  # Cargo / Rust (Tauri desktop backend)
+  # QNBS-v3: separate from npm — Cargo updates affect src-tauri/ only; group all together to reduce PR noise
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      tauri-deps:
+        patterns:
+          - 'tauri*'
+          - 'tauri-*'
+          - 'wry'
+          - 'tao'
+
   # GitHub Actions
   - package-ecosystem: github-actions
     directory: /

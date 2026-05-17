@@ -12,57 +12,57 @@
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0411"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "gdkwayland-sys 0.18.x: unmaintained GTK3 Wayland sys binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0412"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "gdk 0.18.x: unmaintained GTK3 Rust binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0413"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "atk 0.18.x: unmaintained GTK3 accessibility binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0414"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "gdkx11-sys 0.18.x: unmaintained GTK3 X11 sys binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0415"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "gtk 0.18.x: unmaintained GTK3 Rust binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0416"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "atk-sys 0.18.x: unmaintained GTK3 accessibility sys binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0417"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "gdkx11 0.18.x: unmaintained GTK3 X11 Rust binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0418"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "gdk-sys 0.18.x: unmaintained GTK3 sys binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0419"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "gtk3-macros 0.18.x: unmaintained GTK3 macro crate; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0420"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "gtk-sys 0.18.x: unmaintained GTK3 sys binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0429"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "glib 0.18.5 (CVSS 6.9, GHSA-wrw7-89jp-8q8g): memory safety issue in GTK3 glib Rust binding; only exploitable on Linux desktop via WebKit process; glib 0.22.x fixes it but requires webkit2gtk 4.1+ which Tauri 2.x does not yet support on this platform. Track upstream: https://github.com/tauri-apps/wry/issues"
 
 # ─── proc-macro-error ────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ reason = "glib 0.18.5 (CVSS 6.9, GHSA-wrw7-89jp-8q8g): memory safety issue in GT
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0370"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "proc-macro-error 1.0.4: unmaintained build-time proc-macro helper; no runtime exposure; no newer version exists"
 
 # ─── unic-* Unicode data crates ──────────────────────────────────────────────
@@ -82,25 +82,25 @@ reason = "proc-macro-error 1.0.4: unmaintained build-time proc-macro helper; no 
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0075"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "unic-char-range 0.9.0: unmaintained Unicode data crate; final version; no exploitable attack surface"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0080"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "unic-common 0.9.0: unmaintained Unicode data crate; final version; no exploitable attack surface"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0081"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "unic-char-property 0.9.0: unmaintained Unicode data crate; final version; no exploitable attack surface"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0098"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "unic-ucd-version 0.9.0: unmaintained Unicode data crate; final version; no exploitable attack surface"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0100"
-ignoreUntil = "2027-01-01T00:00:00Z"
+ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; no exploitable attack surface"
