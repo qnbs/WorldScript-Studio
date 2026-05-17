@@ -20,8 +20,8 @@ jobs:
   stryker:
     name: 🧬 Stryker Mutation Report
     runs-on: ubuntu-latest
-    # QNBS-v3: 9 files × timeoutMS:120s × concurrency:2; 45 min to be safe on shared runners
-    timeout-minutes: 45
+    # QNBS-v3: ignoreStatic:true skips ~51 static mutants (was 99% of runtime); 20 min covers 861 non-static mutants at concurrency:2
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

@@ -125,8 +125,8 @@ jobs:
   mutation:
     name: 🧬 Mutation Tests (Stryker)
     runs-on: ubuntu-latest
-    # QNBS-v3: 30 min — 9 files × timeoutMS:120s × concurrency:2; raised from 20 to avoid premature job kill
-    timeout-minutes: 30
+    # QNBS-v3: ignoreStatic:true drops runtime from ~90 min to ~10 min; 20 min is ample headroom on shared runners
+    timeout-minutes: 20
     needs: [quality]
     # QNBS-v3: informational only — break:null in stryker.conf.json; baseline TBD before enforcing a hard gate
     continue-on-error: true

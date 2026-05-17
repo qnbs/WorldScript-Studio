@@ -6,6 +6,7 @@
     "configFile": "vitest.config.ts"
   },
   "coverageAnalysis": "all",
+  "ignoreStatic": true,
   "plugins": ["@stryker-mutator/vitest-runner"],
   "mutate": [
     "services/codexService.ts",
@@ -28,6 +29,7 @@
   "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
   "timeoutMS": 120000,
   "concurrency": 2,
+  "warnings": { "slow": false },
   "ignorePatterns": [
     "**/dist/**",
     "**/node_modules/**",
