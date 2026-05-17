@@ -243,7 +243,8 @@ const OutlineResult: FC = () => {
       </CardHeader>
       <CardContent className="flex-grow flex flex-col">
         {outline.length > 0 ? (
-          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 flex-grow">
+          // QNBS-v3: role="list" required by axe aria-required-parent for child role="listitem"
+          <div role="list" className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 flex-grow">
             {outline.map((section, index) => (
               <div
                 key={section.id}

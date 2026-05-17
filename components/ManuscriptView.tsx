@@ -388,7 +388,8 @@ const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(({ onSec
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-grow space-y-1 overflow-y-auto p-2 no-scrollbar">
+      {/* QNBS-v3: role="list" required so child role="listitem" elements satisfy aria-required-parent (axe) */}
+      <div role="list" className="flex-grow space-y-1 overflow-y-auto p-2 no-scrollbar">
         {(Array.isArray(manuscript) ? manuscript : []).map((section, index) => (
           <NavigatorItem
             key={section.id}
