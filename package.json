@@ -111,7 +111,7 @@
     "@vitest/coverage-v8": "^4.1.6",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.0.5",
     "rollup-plugin-visualizer": "^7.0.1",
     "simple-git-hooks": "^2.13.1",
     "storybook": "^10.4.0",
