@@ -14,6 +14,7 @@ import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
 
@@ -624,6 +625,13 @@ const WorldViewUI: FC = () => {
     useWorldViewContext();
   return (
     <div>
+      {/* QNBS-v3: view-level section header with colored SSOT icon */}
+      <div className="flex items-center gap-3 mb-6">
+        <SectionIcon section="world" size="lg" />
+        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+          {t('sidebar.world')}
+        </h1>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
         <div className="animate-in" style={{ '--index': 0 } as React.CSSProperties}>
           <AddNewCard

@@ -10,6 +10,7 @@ import {
 import { useCharacterGraphView } from '../hooks/useCharacterGraphView';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
+import { SectionIcon } from './ui/SectionIcon';
 
 const RELATIONSHIP_COLORS: Record<string, string> = {
   family: '#ef4444',
@@ -179,9 +180,12 @@ const CharacterGraphUI: FC = () => {
   return (
     <div className="h-full flex flex-col">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
-          {t('characterGraph.title')}
-        </h1>
+        <div className="flex items-center gap-3">
+          <SectionIcon section="characterGraph" size="lg" />
+          <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+            {t('characterGraph.title')}
+          </h1>
+        </div>
         <div className="flex flex-wrap items-center gap-2 justify-between sm:justify-end">
           <div
             className="flex rounded-lg border border-[var(--border-primary)] p-0.5 bg-[var(--background-tertiary)]/60"

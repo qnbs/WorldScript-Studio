@@ -11,6 +11,7 @@ import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
 
@@ -455,6 +456,13 @@ const TemplateViewUI: FC = () => {
 
   return (
     <div>
+      {/* QNBS-v3: view-level header with colored SSOT icon */}
+      <div className="flex items-center gap-3 mb-6">
+        <SectionIcon section="templates" size="lg" />
+        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+          {t('sidebar.templates')}
+        </h1>
+      </div>
       {/* Tab Switcher */}
       <div className="flex items-center gap-2 mb-6 border-b border-[var(--border-primary)] pb-4">
         <button

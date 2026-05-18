@@ -19,6 +19,7 @@ import { SceneTimelinePanel } from './SceneTimelinePanel';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
@@ -536,9 +537,12 @@ const SceneBoardUI: FC = () => {
     <div className="h-full flex flex-col">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
-            {t('sceneboard.title')}
-          </h1>
+          <div className="flex items-center gap-3">
+            <SectionIcon section="sceneboard" size="lg" />
+            <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+              {t('sceneboard.title')}
+            </h1>
+          </div>
           <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
             {sections.length} {t('sceneboard.scenes')} · {totalWords} {t('sceneboard.words')}
           </p>

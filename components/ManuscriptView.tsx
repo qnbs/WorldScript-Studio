@@ -23,6 +23,7 @@ import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { Drawer } from './ui/Drawer';
 import { EmptyState } from './ui/EmptyState';
 import { Modal } from './ui/Modal';
+import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
 
@@ -1356,9 +1357,13 @@ const ManuscriptViewUI: FC = () => {
                   </button>
                 </div>
               ) : (
-                <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--foreground-muted)]">
-                  {t('manuscript.navigator.title')}
-                </h2>
+                <div className="flex items-center gap-2">
+                  {/* QNBS-v3: manuscript section icon from SSOT */}
+                  <SectionIcon section="manuscript" size="xs" />
+                  <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--foreground-muted)]">
+                    {t('manuscript.navigator.title')}
+                  </h2>
+                </div>
               )}
             </CardHeader>
             <div className="flex-grow overflow-y-auto min-h-0">
@@ -1414,9 +1419,12 @@ const ManuscriptViewUI: FC = () => {
         >
           <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
             <CardHeader className="py-3 min-h-[50px]">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--foreground-muted)]">
-                {t('manuscript.inspector.title')}
-              </h2>
+              <div className="flex items-center gap-2">
+                <SectionIcon section="manuscript" size="xs" />
+                <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--foreground-muted)]">
+                  {t('manuscript.inspector.title')}
+                </h2>
+              </div>
             </CardHeader>
             <div className="flex-grow overflow-y-auto">
               <InspectorPanel />

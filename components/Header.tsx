@@ -7,6 +7,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { viewNavigationLabelKey } from '../services/viewNavigationLabels';
 import type { View } from '../types';
 import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
+import { SectionIcon } from './ui/SectionIcon';
 import { Tooltip } from './ui/Tooltip';
 
 interface HeaderProps {
@@ -77,19 +78,10 @@ export const Header: React.FC<HeaderProps> = ({
           </svg>
         </button>
         <div className="flex items-center gap-3">
-          <div className="p-1.5 rounded-lg bg-indigo-500/10 hidden xs:block" aria-hidden="true">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-5 h-5 text-[var(--background-interactive)]"
-              aria-hidden="true"
-            >
-              {ICONS.WRITER}
-            </svg>
-          </div>
+          {/* QNBS-v3: dynamic section icon — color derives from APP_SECTIONS SSOT per currentView */}
+          <span className="hidden xs:flex">
+            <SectionIcon section={currentView} size="sm" />
+          </span>
           <h1 className="text-lg font-bold tracking-tight text-[var(--foreground-primary)]">
             {pageTitle}
           </h1>

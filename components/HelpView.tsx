@@ -11,6 +11,7 @@ import type { HelpCategory } from '../types';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Input } from './ui/Input';
+import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 
 // --- SUB-COMPONENTS ---
@@ -211,9 +212,12 @@ const AiAssistant: FC = () => {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t('help.ai.title')}
-        </h2>
+        <div className="flex items-center gap-3">
+          <SectionIcon section="help" size="sm" />
+          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+            {t('help.ai.title')}
+          </h2>
+        </div>
       </CardHeader>
       <CardContent className="p-0 flex flex-col flex-grow min-h-0">
         <div ref={chatContainerRef} className="flex-grow p-4 space-y-4 overflow-y-auto">

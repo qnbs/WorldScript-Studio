@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { ICONS } from '../constants';
+import { APP_SECTIONS } from '../constants/sections';
 import { useTranslation } from '../hooks/useTranslation';
 import type { View } from '../types';
 
@@ -15,15 +16,23 @@ const NavItem: React.FC<{
   label: string;
   isActive: boolean;
   onClick: () => void;
+  /** Section id for colored icon badge */
+  sectionId?: string;
   /** Spotlight tour anchor (`data-tour`) */
   dataTour?: string;
-}> = React.memo(({ icon, label, isActive, onClick, dataTour }) => {
+}> = React.memo(({ icon, label, isActive, onClick, sectionId, dataTour }) => {
+  // QNBS-v3: per-section color from SSOT; fallback to muted for unlisted sections
+  const sectionConfig = sectionId ? APP_SECTIONS[sectionId as keyof typeof APP_SECTIONS] : null;
+  const iconColorClass = sectionConfig
+    ? sectionConfig.colorClass
+    : 'text-[var(--foreground-muted)] bg-transparent';
+
   return (
     <button
       type="button"
       onClick={onClick}
       data-tour={dataTour}
-      className={`relative flex items-center w-full px-4 py-3 text-left rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] overflow-hidden ${
+      className={`relative flex items-center w-full px-3 py-2.5 text-left rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] overflow-hidden ${
         isActive
           ? 'bg-gradient-to-r from-[var(--nav-background-active)] to-transparent text-[var(--nav-text-active)] shadow-sm font-semibold'
           : 'text-[var(--foreground-secondary)] hover:bg-[var(--nav-background-hover)] hover:text-[var(--foreground-primary)] font-medium'
@@ -36,18 +45,27 @@ const NavItem: React.FC<{
           <span className="absolute inset-0 bg-gradient-to-r from-[var(--nav-border-active)]/10 to-transparent pointer-events-none"></span>
         </>
       )}
-      <div className={`relative z-10 flex items-center`}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={isActive ? 2 : 1.5}
-          stroke="currentColor"
-          className={`w-5 h-5 mr-3 transition-transform duration-300 ${isActive ? 'scale-110 text-[var(--nav-text-active)]' : 'group-hover:scale-110 text-[var(--foreground-muted)] group-hover:text-[var(--foreground-primary)]'}`}
+      <div className="relative z-10 flex items-center gap-3">
+        {/* QNBS-v3: colored icon badge per section SSOT; active state dims to nav accent */}
+        <div
+          className={`p-1.5 rounded-lg flex-shrink-0 transition-all duration-300 ${
+            isActive
+              ? 'bg-[var(--nav-border-active)]/15 text-[var(--nav-text-active)]'
+              : `${iconColorClass} group-hover:scale-105`
+          }`}
           aria-hidden="true"
         >
-          {icon}
-        </svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={isActive ? 2 : 1.5}
+            stroke="currentColor"
+            className="w-4 h-4"
+          >
+            {icon}
+          </svg>
+        </div>
         <span className="text-sm tracking-wide">{label}</span>
       </div>
     </button>
@@ -61,36 +79,43 @@ const BottomTabItem: React.FC<{
   label: string;
   isActive: boolean;
   onClick: () => void;
-}> = React.memo(({ icon, label, isActive, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`relative flex flex-col items-center justify-center flex-1 min-h-[44px] py-2 transition-colors duration-200 touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded-lg ${
-      isActive ? 'text-[var(--nav-text-active)]' : 'text-[var(--foreground-muted)]'
-    }`}
-    aria-current={isActive ? 'page' : undefined}
-  >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={isActive ? 2 : 1.5}
-      stroke="currentColor"
-      className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}
-      aria-hidden="true"
+  sectionId?: string;
+}> = React.memo(({ icon, label, isActive, onClick, sectionId }) => {
+  // QNBS-v3: colored icon dot for mobile tab bar via section SSOT
+  const sectionConfig = sectionId ? APP_SECTIONS[sectionId as keyof typeof APP_SECTIONS] : null;
+  const iconColor = sectionConfig && !isActive ? sectionConfig.textColor : '';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative flex flex-col items-center justify-center flex-1 min-h-[44px] py-2 transition-colors duration-200 touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded-lg ${
+        isActive ? 'text-[var(--nav-text-active)]' : 'text-[var(--foreground-muted)]'
+      }`}
+      aria-current={isActive ? 'page' : undefined}
     >
-      {icon}
-    </svg>
-    <span
-      className={`text-[10px] mt-0.5 leading-tight ${isActive ? 'font-semibold' : 'font-medium'}`}
-    >
-      {label}
-    </span>
-    {isActive && (
-      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-[var(--nav-border-active)] shadow-[0_0_8px_1px_var(--nav-border-active)]" />
-    )}
-  </button>
-));
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth={isActive ? 2 : 1.5}
+        stroke="currentColor"
+        className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : iconColor}`}
+        aria-hidden="true"
+      >
+        {icon}
+      </svg>
+      <span
+        className={`text-[10px] mt-0.5 leading-tight ${isActive ? 'font-semibold' : 'font-medium'}`}
+      >
+        {label}
+      </span>
+      {isActive && (
+        <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-[var(--nav-border-active)] shadow-[0_0_8px_1px_var(--nav-border-active)]" />
+      )}
+    </button>
+  );
+});
 BottomTabItem.displayName = 'BottomTabItem';
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -116,28 +141,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSidebarOpen, setIsSidebarOpen]);
 
+  // QNBS-v3: icon comes from APP_SECTIONS SSOT — no duplicate icon definitions here
   const allNavItems = [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: ICONS.DASHBOARD },
     { id: 'manuscript', label: t('sidebar.manuscript'), icon: ICONS.WRITER },
     { id: 'writer', label: t('sidebar.writer'), icon: ICONS.SPARKLES },
     { id: 'templates', label: t('sidebar.templates'), icon: ICONS.TEMPLATES },
     { id: 'outline', label: t('sidebar.outline'), icon: ICONS.OUTLINE },
-    {
-      id: 'characters',
-      label: t('sidebar.characters'),
-      icon: ICONS.CHARACTERS,
-    },
+    { id: 'characters', label: t('sidebar.characters'), icon: ICONS.CHARACTERS },
     { id: 'world', label: t('sidebar.world'), icon: ICONS.WORLD },
-    {
-      id: 'sceneboard',
-      label: t('sidebar.sceneboard'),
-      icon: ICONS.SCENEBOARD,
-    },
-    {
-      id: 'characterGraph',
-      label: t('sidebar.characterGraph'),
-      icon: ICONS.CHARACTERGRAPH,
-    },
+    { id: 'sceneboard', label: t('sidebar.sceneboard'), icon: ICONS.SCENEBOARD },
+    { id: 'characterGraph', label: t('sidebar.characterGraph'), icon: ICONS.CHARACTERGRAPH },
     {
       id: 'consistencyChecker',
       label: t('sidebar.consistencyChecker'),
@@ -153,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const desktopNavItems = allNavItems.filter((i) => i.id !== 'settings' && i.id !== 'help');
   const desktopBottomItems = allNavItems.filter((i) => i.id === 'settings' || i.id === 'help');
 
-  // Mobile bottom tab bar: 5 key views (the 5th is "More" to open the sheet)
+  // Mobile bottom tab bar: 4 key views + "More" button
   const mobileTabBarItems = [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: ICONS.DASHBOARD },
     { id: 'manuscript', label: t('sidebar.manuscript'), icon: ICONS.WRITER },
@@ -180,6 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             label={item.label}
             isActive={currentView === item.id}
             onClick={() => handleNavigation(item.id as View)}
+            sectionId={item.id}
           />
         ))}
         {/* "More" button opens the bottom sheet */}
@@ -232,6 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               label={item.label}
               isActive={currentView === item.id}
               onClick={() => handleNavigation(item.id as View)}
+              sectionId={item.id}
               {...(item.id === 'settings' ? { dataTour: 'nav-settings' as const } : {})}
             />
           ))}
@@ -261,6 +277,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 label={item.label}
                 isActive={currentView === item.id}
                 onClick={() => handleNavigation(item.id as View)}
+                sectionId={item.id}
               />
             ))}
           </nav>
@@ -276,6 +293,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               label={item.label}
               isActive={currentView === item.id}
               onClick={() => handleNavigation(item.id as View)}
+              sectionId={item.id}
               {...(item.id === 'settings' ? { dataTour: 'nav-settings' as const } : {})}
             />
           ))}

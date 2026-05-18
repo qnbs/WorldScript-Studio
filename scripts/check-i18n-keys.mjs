@@ -79,6 +79,33 @@ function buildKeyModuleMap() {
 }
 
 const fix = process.argv.includes('--fix');
+const quality = process.argv.includes('--quality');
+
+// Patterns for values that are legitimately the same across languages
+const SKIP_PATTERNS = [
+  /^(PDF|DOCX?|HTML|RTF|EPUB|JSON|CSV|TXT|ZIP|PNG|JPG|SVG|MD)(\s|$|\s*\()/i,
+  /^(Gemini|OpenAI|Ollama|Claude|GPT|API|URL|HTTP|HTTPS|WebRTC|WebSocket|Yjs|IndexedDB|LZ-String|AES-256|CRDT|PWA|Tauri|GitHub|Google\s|Discord|LM Studio|vLLM|WebLLM|Dropbox|OneDrive|iCloud|StoryCraft)/i,
+  /^Ctrl\+|^Alt\+|^Shift\+|^Meta\+|^\+\s/,
+  /^\d+(\.\d+)?(\s*(KB|MB|GB|px|ms|s|%))?$/,
+  /^v\d+\.\d+/,
+  /^(OK|ID|UI|UX|AI|LLM|NLP|P2P|E2E|CI|CD|PR|QA|Top P|Sans-Serif|Serif|Monospace|Passphrase|Version|Status|Screen reader|Board|Offline|Logline)$/i,
+  /^(Protanopia|Deuteranopia|Tritanopia|Adapter|Navigator|Inspector|Editor|General|Final|Format|Motivation|Notes|Description|Synopsis|Culture|Suggestions|Collaboration|Notifications|Community|Snapshot|Branch|Versions|Section|Style)$/i,
+  /^https?:\/\//,
+  /^[A-Za-z]+([A-Z][a-z]+)+$/, // camelCase product names
+  /^(Anime|Genre|Thriller|Fantasy|Horror|Romance|Mystery|Space Opera|Finale|Climax|Debate|Showdown|Suspense|Commercial|Rebellion|Emotional|Navigation)$/i,
+  /^(en|de|fr|es|it|ja|zh|ko|pt|ru)$/,
+  /^wss?:\/\//,
+  /~\{\{time\}\}/,
+  /Lorem ipsum/,
+  /^\{\{.*\}\}\s*—\s*/,
+  /^URL\s*\(/,
+  /^\+\s*(Snapshot|Branch|Segment)/,
+];
+
+function isLegitimatelySame(val) {
+  if (!val || typeof val !== 'string' || val.length < 2) return true;
+  return SKIP_PATTERNS.some((p) => p.test(val.trim()));
+}
 
 const refSet = loadBundleKeys(REF);
 const keyModule = buildKeyModuleMap();
@@ -144,3 +171,43 @@ if (report.length) {
 }
 
 console.log(`[i18n] OK — ${LANGS.length} locales match ${refSet.size} keys (reference: ${REF}).`);
+
+if (quality) {
+  // Quality mode: report likely-untranslated strings (same value as EN, not a known technical term)
+  console.log('\n[i18n:quality] Scanning for likely-untranslated strings...\n');
+  let totalGaps = 0;
+  for (const lang of LANGS) {
+    if (lang === REF) continue;
+    const langData = loadModuleData(lang);
+    const gaps = [];
+    for (const mod of MODULES) {
+      const enMod = refData[mod];
+      const langMod = langData[mod];
+      for (const [key, enVal] of Object.entries(enMod)) {
+        if (typeof enVal !== 'string') continue;
+        const langVal = langMod[key];
+        if (langVal === enVal && !isLegitimatelySame(enVal)) {
+          gaps.push({ mod, key, val: enVal });
+        }
+      }
+    }
+    const byMod = {};
+    for (const g of gaps) {
+      if (!byMod[g.mod]) byMod[g.mod] = [];
+      byMod[g.mod].push(g);
+    }
+    totalGaps += gaps.length;
+    if (gaps.length === 0) {
+      console.log(`  ${lang}: ✓ no obvious gaps`);
+    } else {
+      console.log(`  ${lang}: ${gaps.length} likely untranslated`);
+      for (const [mod, items] of Object.entries(byMod).sort((a, b) => b[1].length - a[1].length)) {
+        console.log(`    ${mod}: ${items.length}`);
+      }
+    }
+  }
+  console.log(`\n[i18n:quality] Total likely-untranslated: ${totalGaps}`);
+  console.log(
+    '[i18n:quality] Run `node scripts/check-i18n-keys.mjs --quality` to recheck after fixing.',
+  );
+}

@@ -4,6 +4,7 @@ import { CriticViewContext, useCriticViewContext } from '../contexts/CriticViewC
 import { useCriticView } from '../hooks/useCriticView';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
+import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
 
@@ -24,7 +25,12 @@ const CriticUI: FC = () => {
   return (
     <div className="h-full">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">{t('critic.title')}</h1>
+        <div className="flex items-center gap-3">
+          <SectionIcon section="critic" size="lg" />
+          <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+            {t('critic.title')}
+          </h1>
+        </div>
         <p className="text-[var(--foreground-secondary)] mt-2">{t('critic.description')}</p>
       </div>
 

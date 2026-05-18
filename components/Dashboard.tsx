@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ICONS } from '../constants';
+import { APP_SECTIONS } from '../constants/sections';
 import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useDashboard } from '../hooks/useDashboard';
@@ -14,6 +15,7 @@ import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { Progress } from './ui/Progress';
+import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 
 // --- Generic Components ---
@@ -133,10 +135,11 @@ const AuthorInsightsCard: FC = () => {
 const QuickAccessCard: FC<{
   title: string;
   description: string;
-  icon: React.ReactNode;
+  view: View;
   onClick: () => void;
   animationIndex: number;
-}> = React.memo(({ title, description, icon, onClick, animationIndex }) => (
+}> = React.memo(({ title, description, view, onClick, animationIndex }) => (
+  // QNBS-v3: SectionIcon replaces generic icon — derives color from APP_SECTIONS SSOT
   <Card
     as="button"
     onClick={onClick}
@@ -145,18 +148,11 @@ const QuickAccessCard: FC<{
   >
     <div>
       <div className="flex items-center mb-4">
-        <div className="p-3 rounded-xl bg-[var(--background-secondary)] group-hover:bg-[var(--background-interactive)] group-hover:text-white transition-colors shrink-0 shadow-sm border border-[var(--border-primary)] group-hover:border-[var(--border-interactive)]">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-6 h-6"
-          >
-            {icon}
-          </svg>
-        </div>
+        <SectionIcon
+          section={view}
+          size="lg"
+          className="group-hover:scale-110 transition-transform duration-300 shadow-sm"
+        />
       </div>
       <h3 className="font-bold text-lg text-[var(--foreground-primary)] mb-2 group-hover:text-[var(--background-interactive)] transition-colors">
         {title}
@@ -202,16 +198,8 @@ const ProjectDetails: FC = () => {
     >
       <CardHeader className="border-b-0 pb-0 pt-6">
         <h1 className="text-base font-semibold text-[var(--foreground-primary)] flex items-center gap-2">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-5 h-5 text-indigo-500"
-          >
-            {ICONS.WRITER}
-          </svg>
+          {/* QNBS-v3: dashboard section icon from SSOT */}
+          <SectionIcon section="dashboard" size="xs" />
           {t('dashboard.details.title')}
         </h1>
       </CardHeader>
@@ -358,35 +346,36 @@ const GoalTracker: FC = () => {
 
 const StatsGrid: FC = () => {
   const { t, wordCount, characters, worlds, project } = useDashboardContext();
+  // QNBS-v3: colorClass from APP_SECTIONS SSOT — no hardcoded color strings here
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
       <StatCard
         title={t('dashboard.stats.totalWordCount')}
         value={wordCount.toLocaleString()}
-        icon={ICONS.WRITER}
+        icon={APP_SECTIONS.manuscript.icon}
         animationIndex={1}
-        colorClass="text-emerald-500 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-500/10"
+        colorClass={APP_SECTIONS.manuscript.colorClass}
       />
       <StatCard
         title={t('dashboard.stats.characters')}
         value={characters.length}
-        icon={ICONS.CHARACTERS}
+        icon={APP_SECTIONS.characters.icon}
         animationIndex={2}
-        colorClass="text-blue-500 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-500/10"
+        colorClass={APP_SECTIONS.characters.colorClass}
       />
       <StatCard
         title={t('dashboard.stats.worlds')}
         value={worlds.length}
-        icon={ICONS.WORLD}
+        icon={APP_SECTIONS.world.icon}
         animationIndex={3}
-        colorClass="text-purple-500 bg-purple-500/10 dark:text-purple-400 dark:bg-purple-500/10"
+        colorClass={APP_SECTIONS.world.colorClass}
       />
       <StatCard
         title={t('dashboard.stats.outlineSections')}
         value={project.outline?.length || 0}
-        icon={ICONS.OUTLINE}
+        icon={APP_SECTIONS.outline.icon}
         animationIndex={4}
-        colorClass="text-amber-500 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-500/10"
+        colorClass={APP_SECTIONS.outline.colorClass}
       />
     </div>
   );
@@ -429,41 +418,32 @@ const ProjectHealthCard: FC = () => {
 const QuickActions: FC = () => {
   const { t, onNavigate } = useDashboardContext();
 
-  const quickAccessItems = [
+  // QNBS-v3: no icon field here — QuickAccessCard derives icon from APP_SECTIONS via view id
+  const quickAccessItems: { title: string; description: string; view: View }[] = [
     {
       title: t('sidebar.manuscript'),
       description: t('dashboard.quickAccess.manuscriptDesc'),
-      icon: ICONS.WRITER,
       view: 'manuscript',
     },
     {
       title: t('sidebar.writer'),
       description: t('dashboard.quickAccess.writerDesc'),
-      icon: ICONS.SPARKLES,
       view: 'writer',
     },
     {
       title: t('sidebar.outline'),
       description: t('dashboard.quickAccess.outlineDesc'),
-      icon: ICONS.OUTLINE,
       view: 'outline',
     },
     {
       title: t('sidebar.characters'),
       description: t('dashboard.quickAccess.charactersDesc'),
-      icon: ICONS.CHARACTERS,
       view: 'characters',
     },
-    {
-      title: t('sidebar.world'),
-      description: t('dashboard.quickAccess.worldDesc'),
-      icon: ICONS.WORLD,
-      view: 'world',
-    },
+    { title: t('sidebar.world'), description: t('dashboard.quickAccess.worldDesc'), view: 'world' },
     {
       title: t('sidebar.export'),
       description: t('dashboard.quickAccess.exportDesc'),
-      icon: ICONS.EXPORT,
       view: 'export',
     },
   ];
@@ -483,8 +463,8 @@ const QuickActions: FC = () => {
             key={item.view}
             title={item.title}
             description={item.description}
-            icon={item.icon}
-            onClick={() => onNavigate(item.view as View)}
+            view={item.view}
+            onClick={() => onNavigate(item.view)}
             animationIndex={6 + i}
           />
         ))}
