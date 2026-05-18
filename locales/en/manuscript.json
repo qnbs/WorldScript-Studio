@@ -54,5 +54,13 @@
   "manuscript.sectionHistory.saveSnapshot": "Save section snapshot",
   "manuscript.sectionHistory.snapshotLabel": "{{title}} — checkpoint",
   "manuscript.sectionHistory.empty": "No snapshots for this section yet.",
-  "manuscript.sectionHistory.restore": "Restore"
+  "manuscript.sectionHistory.restore": "Restore",
+  "manuscript.spellcheck.didYouMean": "Did you mean?",
+  "manuscript.spellcheck.applyFix": "Apply Fix",
+  "manuscript.grammar.checkButton": "Check Grammar & Style",
+  "manuscript.zenMode.enter": "Enter Zen Mode",
+  "manuscript.zenMode.exit": "Exit Zen Mode",
+  "manuscript.zenMode.label": "Zen Mode",
+  "manuscript.resizer.left": "Adjust left panel",
+  "manuscript.resizer.right": "Adjust right panel"
 }

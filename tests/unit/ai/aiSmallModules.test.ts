@@ -3,7 +3,7 @@
  * creativityTemperature, localBackendPresets, modelRecommendations, fetchAdapter.
  * QNBS-v3: Covers 4 previously untested AI helper files in one suite.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // creativityTemperature
@@ -108,5 +108,63 @@ describe('createStoryCraftFetch', () => {
     expect(res.status).toBe(200);
 
     vi.unstubAllGlobals();
+  });
+});
+
+// QNBS-v3: Tauri-Fetch-Branches — vi.resetModules() + dynamischer Import für saubere Cache-Isolation.
+describe('fetchAdapter Tauri paths (isolated)', () => {
+  afterEach(() => {
+    vi.resetModules();
+    delete (window as unknown as Record<string, unknown>)['__TAURI__'];
+    vi.unstubAllGlobals();
+  });
+
+  it('Tauri detected + plugin-http import succeeds → uses Tauri fetch', async () => {
+    const tauriFetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.resetModules();
+    vi.doMock('@tauri-apps/plugin-http', () => ({ fetch: tauriFetchMock }));
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true, writable: true });
+
+    const { createStoryCraftFetch: freshCreate } = await import(
+      '../../../services/ai/fetchAdapter'
+    );
+    const fetcher = freshCreate();
+    await fetcher('https://api.example.com', undefined);
+
+    expect(tauriFetchMock).toHaveBeenCalledWith('https://api.example.com', undefined);
+  });
+
+  it('Tauri detected + plugin-http import fails → falls back to globalThis.fetch', async () => {
+    const globalFetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', globalFetchMock);
+    vi.resetModules();
+    // async factory throws → dynamic import in fetchAdapter.ts throws → caught by try/catch
+    vi.doMock('@tauri-apps/plugin-http', async () => {
+      throw new Error('@tauri-apps/plugin-http not available');
+    });
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true, writable: true });
+
+    const { createStoryCraftFetch: freshCreate } = await import(
+      '../../../services/ai/fetchAdapter'
+    );
+    const fetcher = freshCreate();
+    await fetcher('https://api.example.com');
+
+    expect(globalFetchMock).toHaveBeenCalled();
+  });
+
+  it('cache hit → second call skips Tauri resolution', async () => {
+    vi.resetModules();
+    const { createStoryCraftFetch: freshCreate } = await import(
+      '../../../services/ai/fetchAdapter'
+    );
+    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', mockFetch);
+
+    const fetcher = freshCreate();
+    await fetcher('https://a.com'); // first: no Tauri → cachedTauriFetch = null
+    await fetcher('https://b.com'); // second: cache hit (null) → globalThis.fetch
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });

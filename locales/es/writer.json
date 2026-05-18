@@ -65,5 +65,10 @@
   "writer.tools.show": "Mostrar herramientas",
   "writer.tts.start": "Leer en voz alta",
   "writer.tts.stop": "Detener lectura",
-  "writer.versionControl.label": "Versiones"
+  "writer.versionControl.label": "Versiones",
+  "writer.stopGenerating": "Detener generación",
+  "writer.tools.selectLabel": "Selección de herramienta",
+  "writer.studio.controls.custom": "Personalizado…",
+  "writer.studio.controls.customTonePlaceholder": "p. ej., Sarcástico, Melancólico, Dinámico",
+  "writer.versionControl.tooltip": "Control de versiones (ramas e instantáneas)"
 }

@@ -365,6 +365,23 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
             <p className="text-xs text-[var(--foreground-muted)] mt-1">
               {t('collab.passwordHint')}
             </p>
+            {/* QNBS-v3: Encryption badge visible after connect — shows AES-GCM key status vs PSK-only isolation. */}
+            {isConnected && (
+              <span
+                role="status"
+                aria-live="polite"
+                className={`mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  roomPassword.trim()
+                    ? 'bg-emerald-500/15 text-emerald-300'
+                    : 'bg-amber-500/15 text-amber-300'
+                }`}
+                aria-label={t('collab.encryptionAriaLabel')}
+              >
+                {roomPassword.trim()
+                  ? t('collab.encryptionDerived')
+                  : t('collab.encryptionPskOnly')}
+              </span>
+            )}
           </section>
 
           {/* Error */}

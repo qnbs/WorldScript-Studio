@@ -332,5 +332,20 @@
   "settings.advancedAi.modelRecommendationsIntro": "Popular local checkpoints (verify names in your runtime):",
   "settings.ai.webllm.model": "WebLLM model",
   "settings.ai.webllm.downloadProgress": "Download progress",
-  "settings.ai.webllm.downloading": "Downloading model…"
+  "settings.ai.webllm.downloading": "Downloading model…",
+  "settings.ai.webllm.gpuStatus": "GPU status",
+  "settings.ai.webllm.gpuAvailable": "WebGPU available",
+  "settings.ai.webllm.gpuUnavailable": "WebGPU not available",
+  "settings.ai.webllm.gpuUnknown": "WebGPU status unknown",
+  "settings.ai.webllm.adapterLabel": "Adapter",
+  "settings.ai.webllm.vramLabel": "VRAM tier",
+  "settings.ai.webllm.modelSelect": "Select WebLLM model",
+  "settings.ai.webllm.modelSelectAriaLabel": "Select a WebLLM model for local inference",
+  "settings.ai.webllm.fallbackChain": "Fallback chain: WebLLM → ONNX WASM → Transformers.js",
+  "settings.ai.webllm.tabLeaderNote": "Only one browser tab runs local inference at a time.",
+  "settings.ai.onnx.modelSelect": "Select ONNX model",
+  "settings.ai.onnx.wasmNote": "ONNX Runtime Web runs models via WebAssembly — no GPU required.",
+  "settings.ai.temperature.precise": "0 – Precise",
+  "settings.ai.temperature.balanced": "1 – Balanced",
+  "settings.ai.temperature.creative": "2 – Creative"
 }

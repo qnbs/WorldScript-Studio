@@ -183,10 +183,10 @@ Vereinfachte automatische Konsistenzprüfung:
 
 **Status:** ✅ Abgeschlossen (2026-05-16) — Teil-Release von v1.4.0-Zyklus; Details in [`CHANGELOG.md`](CHANGELOG.md) und [`TODO.md`](TODO.md).
 
-### Unit-Test-Coverage: Phase 1–2
+### Unit-Test-Coverage: Phase 1–5
 
-- **17 neue Test-Dateien**, insgesamt 733 Tests; Vitest-Schwellen erhöht auf **35/30/22/33** (Lines/Functions/Branches/Statements)
-- Gemessene Coverage: ~36 % Lines · ~30 % Functions · ~25 % Branches (Phase 2: Ziel 50 % noch offen — große Komponenten, aiProviderService-Streaming, collaborationService)
+- **150 Test-Dateien**, insgesamt **1 641 Tests**; Vitest-Schwellen auf **55/53/37/50** (Lines/Statements/Branches/Functions) erhöht
+- Gemessene Coverage (2026-05-18): **64.68 % Lines · 62.86 % Statements · 49.06 % Branches · 54.10 % Functions** — alle Schwellen grün
 
 ### Phase 3A — Cross-Project-Search Service ✅
 
@@ -218,7 +218,7 @@ Vereinfachte automatische Konsistenzprüfung:
 
 **Status:** 📋 Geplant
 
-- **Unit-Test-Coverage Phase 2** (Ziel 50 % Lines / 45 % Functions / 32 % Branches): große Komponenten, aiProviderService-Streaming, collaborationService
+- **Unit-Test-Coverage** (gemessen 2026-05-18: 64.68 % Lines / 54.10 % Functions / 49.06 % Branches — 1 641 Tests / 150 Dateien; Phase-2-Ziele übertroffen); nächster Schritt: Branches Richtung 55 % (aiProviderService-Streaming, große Komponenten)
 - **Cross-Project-Search Panel** (UI-Komponente für `crossProjectSearchService`; v2 multi-project erfordert DB_VERSION-Bump)
 - Mobile-First Touch-Optimierungen (Swipe-Navigation, Touch-DnD); **responsive E2E primär in CI** ([`docs/CI.md`](docs/CI.md))
 - AI-Creativity-Presets pro Projekt (nicht global)

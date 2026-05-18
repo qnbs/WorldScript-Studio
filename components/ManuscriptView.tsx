@@ -795,7 +795,7 @@ const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFocusMode
           onKeyDown={(e) => e.stopPropagation()}
         >
           <p className="text-xs text-[var(--foreground-muted)] mb-1 uppercase tracking-wide px-2">
-            Did you mean?
+            {t('manuscript.spellcheck.didYouMean')}
           </p>
           <button
             type="button"
@@ -1066,7 +1066,7 @@ const InspectorPanel: FC = React.memo(() => {
                   />
                 </svg>
               )}
-              Check Grammar & Style
+              {t('manuscript.grammar.checkButton')}
             </Button>
             {proofreadSuggestions.length > 0 && (
               <div className="space-y-2 mt-4 max-h-60 overflow-y-auto pr-1">
@@ -1090,7 +1090,7 @@ const InspectorPanel: FC = React.memo(() => {
                       onClick={() => applyProofreadSuggestion(idx)}
                       className="w-full text-xs h-7"
                     >
-                      Apply Fix
+                      {t('manuscript.spellcheck.applyFix')}
                     </Button>
                   </div>
                 ))}
@@ -1285,7 +1285,7 @@ const ManuscriptViewUI: FC = () => {
           size="sm"
           onClick={() => setIsFocusMode(!isFocusMode)}
           className={`transition-colors ${isFocusMode ? 'text-[var(--background-interactive)] bg-[var(--background-interactive)]/10' : 'text-[var(--foreground-muted)]'}`}
-          title={isFocusMode ? 'Exit Zen Mode' : 'Enter Zen Mode'}
+          title={isFocusMode ? t('manuscript.zenMode.exit') : t('manuscript.zenMode.enter')}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -1309,7 +1309,7 @@ const ManuscriptViewUI: FC = () => {
               />
             )}
           </svg>
-          {isFocusMode ? 'Exit Zen Mode' : 'Zen Mode'}
+          {isFocusMode ? t('manuscript.zenMode.exit') : t('manuscript.zenMode.label')}
         </Button>
       </div>
 
@@ -1371,7 +1371,7 @@ const ManuscriptViewUI: FC = () => {
           <Resizer
             onMouseDown={startLeftResize}
             onKeyAdjust={(delta) => setLeftPanelWidth((w) => Math.max(15, Math.min(50, w + delta)))}
-            label="Linkes Panel anpassen"
+            label={t('manuscript.resizer.left')}
           />
         )}
 
@@ -1403,7 +1403,7 @@ const ManuscriptViewUI: FC = () => {
             onKeyAdjust={(delta) =>
               setRightPanelWidth((w) => Math.max(15, Math.min(50, w + delta)))
             }
-            label="Rechtes Panel anpassen"
+            label={t('manuscript.resizer.right')}
           />
         )}
 

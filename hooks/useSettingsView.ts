@@ -249,6 +249,7 @@ export const useSettingsView = () => {
       projectActions.resetProject({
         title: t('initialProject.title'),
         logline: t('initialProject.logline'),
+        chapter1Title: t('initialProject.chapter1'),
       }),
     );
     setModal({ state: 'closed', payload: {} });

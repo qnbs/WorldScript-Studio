@@ -5,8 +5,11 @@ import { selectFeatureFlags } from '../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { useTranslation } from '../hooks/useTranslation';
+import type { ProjectSearchIndex } from '../services/crossProjectIndexService';
+import { listIndexedProjects } from '../services/crossProjectIndexService';
 import {
   type CrossProjectSearchResult,
+  searchAcrossProjectIndex,
   searchAcrossProjects,
 } from '../services/crossProjectSearchService';
 
@@ -64,16 +67,24 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
     const debouncedQuery = useDebounce(query, 200);
     const inputRef = useRef<HTMLInputElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
+    // QNBS-v3: Load project index once on open for Phase-1 multi-project search.
+    const [indexes, setIndexes] = useState<ProjectSearchIndex[]>([]);
+    const [indexLoading, setIndexLoading] = useState(false);
 
     const close = useCallback(() => {
       setOpen(false);
       setQuery('');
     }, [setOpen]);
 
-    // Focus input when panel opens
+    // Focus input when panel opens; load project index
     useEffect(() => {
       if (isOpen) {
         requestAnimationFrame(() => inputRef.current?.focus());
+        setIndexLoading(true);
+        listIndexedProjects()
+          .then(setIndexes)
+          .catch(() => setIndexes([]))
+          .finally(() => setIndexLoading(false));
       }
     }, [isOpen]);
 
@@ -102,10 +113,22 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
       return () => document.removeEventListener('mousedown', handler);
     }, [isOpen, close]);
 
+    // QNBS-v3: Phase 1 (index) + Phase 2 (current project) merged and de-duped by projectId+matchType.
     const results: CrossProjectSearchResult[] = React.useMemo(() => {
-      if (!debouncedQuery.trim() || !projectData) return [];
-      return searchAcrossProjects(debouncedQuery, projectData);
-    }, [debouncedQuery, projectData]);
+      if (!debouncedQuery.trim()) return [];
+      const indexResults = searchAcrossProjectIndex(debouncedQuery, indexes);
+      const currentResults = projectData ? searchAcrossProjects(debouncedQuery, projectData) : [];
+      const seen = new Set<string>();
+      const merged: CrossProjectSearchResult[] = [];
+      for (const r of [...indexResults, ...currentResults]) {
+        const key = `${r.projectId}:${r.matchType}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(r);
+        }
+      }
+      return merged.sort((a, b) => b.score - a.score);
+    }, [debouncedQuery, projectData, indexes]);
 
     if (!featureFlags.enableCrossProjectSearch || !isOpen) return null;
 
@@ -181,9 +204,13 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
             ))}
           </div>
 
-          {/* Footer note: v1 scope */}
+          {/* Footer: multi-project index scope */}
           <div className="px-4 py-2 border-t border-[var(--border-primary)] text-xs text-[var(--foreground-secondary)] text-center">
-            {t('crossSearch.scopeNote')}
+            {indexLoading
+              ? t('crossSearch.loadingIndex')
+              : indexes.length === 0
+                ? t('crossSearch.indexEmpty')
+                : t('crossSearch.scopeMultiProject').replace('{{count}}', String(indexes.length))}
           </div>
         </div>
       </div>

@@ -62,7 +62,7 @@ const WriterViewUI: FC = () => {
           type="button"
           data-testid="writer-version-control-btn"
           onClick={() => dispatch(versionControlActions.togglePanel())}
-          title="Version Control (Branches &amp; Snapshots)"
+          title={t('writer.versionControl.tooltip')}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
           className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}

@@ -128,14 +128,23 @@ const projectSlice = createSlice({
         }
       }
     },
-    resetProject: (state, action: PayloadAction<{ title: string; logline: string }>) => {
+    resetProject: (
+      state,
+      action: PayloadAction<{ title: string; logline: string; chapter1Title?: string }>,
+    ) => {
       state.data = {
         ...initialState.data,
         title: action.payload.title,
         logline: action.payload.logline,
         characters: charactersAdapter.getInitialState(),
         worlds: worldsAdapter.getInitialState(),
-        manuscript: [{ id: `sec-${Date.now()}`, title: 'Chapter 1', content: '' }],
+        manuscript: [
+          {
+            id: `sec-${Date.now()}`,
+            title: action.payload.chapter1Title ?? 'Chapter 1',
+            content: '',
+          },
+        ],
         binderNodes: [],
       };
     },

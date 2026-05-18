@@ -441,8 +441,7 @@ const OutlineResult: FC = () => {
               {t('outline.result.placeholder')}
             </h3>
             <p className="text-[var(--foreground-secondary)] max-w-sm">
-              Fill out the form on the left and click Generate to see your story structure come to
-              life here.
+              {t('outline.result.body')}
             </p>
           </div>
         )}

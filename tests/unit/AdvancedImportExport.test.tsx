@@ -82,7 +82,7 @@ describe('AdvancedImportExport', () => {
 
   it('shows Google Docs / Notion section heading', () => {
     render(<AdvancedImportExport />);
-    expect(screen.getByText('Google Docs / Notion')).toBeTruthy();
+    expect(screen.getByText('export.pasteSection.heading')).toBeTruthy();
   });
 
   it('shows copy as markdown button', () => {

@@ -208,5 +208,7 @@
   "templates.mystery.sections.3": "Suspects and Motives",
   "templates.mystery.sections.4": "The Dead End",
   "templates.mystery.sections.5": "The Solution",
-  "templates.mystery.sections.6": "Aftermath"
+  "templates.mystery.sections.6": "Aftermath",
+  "templates.tabs.myTemplates": "My Templates",
+  "templates.tabs.community": "Community"
 }

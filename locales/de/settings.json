@@ -119,6 +119,18 @@
   "settings.ai.webllm.model": "WebLLM-Modell",
   "settings.ai.webllm.downloadProgress": "Download-Fortschritt",
   "settings.ai.webllm.downloading": "Modell wird heruntergeladen…",
+  "settings.ai.webllm.gpuStatus": "GPU-Status",
+  "settings.ai.webllm.gpuAvailable": "WebGPU verfügbar",
+  "settings.ai.webllm.gpuUnavailable": "WebGPU nicht verfügbar",
+  "settings.ai.webllm.gpuUnknown": "WebGPU-Status unbekannt",
+  "settings.ai.webllm.adapterLabel": "Adapter",
+  "settings.ai.webllm.vramLabel": "VRAM-Kategorie",
+  "settings.ai.webllm.modelSelect": "WebLLM-Modell auswählen",
+  "settings.ai.webllm.modelSelectAriaLabel": "WebLLM-Modell für lokale Inferenz auswählen",
+  "settings.ai.webllm.fallbackChain": "Fallback-Kette: WebLLM → ONNX WASM → Transformers.js",
+  "settings.ai.webllm.tabLeaderNote": "Nur ein Browser-Tab führt lokale Inferenz gleichzeitig durch.",
+  "settings.ai.onnx.modelSelect": "ONNX-Modell auswählen",
+  "settings.ai.onnx.wasmNote": "ONNX Runtime Web führt Modelle via WebAssembly aus – kein GPU erforderlich.",
   "settings.apiKey.configured": "API-Schlüssel konfiguriert",
   "settings.apiKey.encryptedNote": "Verschlüsselt in IndexedDB gespeichert",
   "settings.apiKey.errorEmpty": "Bitte geben Sie einen API-Schlüssel ein",
@@ -332,5 +344,8 @@
   "settings.theme.auto": "Automatisch",
   "settings.theme.dark": "Dunkel",
   "settings.theme.light": "Hell",
-  "settings.title": "Einstellungen"
+  "settings.title": "Einstellungen",
+  "settings.ai.temperature.precise": "0 – Präzise",
+  "settings.ai.temperature.balanced": "1 – Ausgewogen",
+  "settings.ai.temperature.creative": "2 – Kreativ"
 }

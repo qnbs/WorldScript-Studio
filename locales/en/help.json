@@ -171,5 +171,6 @@
   "help.faq.api.title": "Do I need an API key?",
   "help.faq.api.content": "<p>Yes. To use any of the AI-powered features (like generation, improvement, or brainstorming), the application requires a Google Gemini API key. You can obtain a free key from <a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a>.</p><p>Go to <b>Settings → AI Configuration</b> and enter your key. It will be encrypted using AES-256-GCM and stored securely in your browser's IndexedDB. Your key never leaves your device and is never transmitted to any server.</p>",
   "help.faq.privacy.title": "Is my story private?",
-  "help.faq.privacy.content": "<p><b>Absolutely.</b> Your privacy is paramount. Because all data is stored locally in your browser, we never have access to your work. Your story remains completely private and under your control. When you use AI features, only the specific text needed for that request is sent to the Google Gemini API, and it is not used to train their models.</p>"
+  "help.faq.privacy.content": "<p><b>Absolutely.</b> Your privacy is paramount. Because all data is stored locally in your browser, we never have access to your work. Your story remains completely private and under your control. When you use AI features, only the specific text needed for that request is sent to the Google Gemini API, and it is not used to train their models.</p>",
+  "help.tryTour": "Start Interactive Tour"
 }

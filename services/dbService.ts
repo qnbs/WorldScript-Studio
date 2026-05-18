@@ -9,6 +9,7 @@ import {
   DATA_DB_NAME,
   DB_VERSION,
   IMAGES_STORE,
+  PROJECTS_INDEX_STORE,
   RAG_VECTORS_STORE,
   SNAPSHOTS_STORE,
   STATE_DB_NAME,
@@ -436,6 +437,11 @@ class IndexedDBService implements StorageBackend {
         }
         if (event.oldVersion < 7 && !db.objectStoreNames.contains(BINDER_ASSETS_STORE)) {
           db.createObjectStore(BINDER_ASSETS_STORE);
+        }
+        // QNBS-v3: v8 — privacy-preserving project index for cross-project search (no plaintext content).
+        if (event.oldVersion < 8 && !db.objectStoreNames.contains(PROJECTS_INDEX_STORE)) {
+          const idx = db.createObjectStore(PROJECTS_INDEX_STORE, { keyPath: 'projectId' });
+          idx.createIndex('lastIndexed', 'lastIndexed', { unique: false });
         }
       };
       request.onsuccess = () => {

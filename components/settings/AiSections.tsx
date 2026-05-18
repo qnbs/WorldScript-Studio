@@ -491,9 +491,9 @@ export const AdvancedAiSection: FC = () => {
                 className="w-full"
               />
               <div className="flex justify-between text-xs text-[var(--foreground-muted)] mt-1">
-                <span>0 – Precise</span>
-                <span>1 – Balanced</span>
-                <span>2 – Creative</span>
+                <span>{t('settings.ai.temperature.precise')}</span>
+                <span>{t('settings.ai.temperature.balanced')}</span>
+                <span>{t('settings.ai.temperature.creative')}</span>
               </div>
             </div>
             <div>

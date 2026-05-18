@@ -54,5 +54,13 @@
   "manuscript.visualize.hint": "Gemini (oder ein bildfähiger Anbieter) erzeugt ein Bild aus diesem Abschnitt. Lokal pro Abschnitt gespeichert.",
   "manuscript.visualize.successBody": "Vorschau unten; das vollständige Bild liegt im lokalen Speicher.",
   "manuscript.visualize.successTitle": "Szenenbild fertig",
-  "manuscript.visualize.title": "Szenen-Illustration"
+  "manuscript.visualize.title": "Szenen-Illustration",
+  "manuscript.spellcheck.didYouMean": "Meinten Sie?",
+  "manuscript.spellcheck.applyFix": "Korrektur anwenden",
+  "manuscript.grammar.checkButton": "Grammatik & Stil prüfen",
+  "manuscript.zenMode.enter": "Zen-Modus aktivieren",
+  "manuscript.zenMode.exit": "Zen-Modus verlassen",
+  "manuscript.zenMode.label": "Zen-Modus",
+  "manuscript.resizer.left": "Linkes Panel anpassen",
+  "manuscript.resizer.right": "Rechtes Panel anpassen"
 }

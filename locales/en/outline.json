@@ -29,6 +29,7 @@
   "outline.result.regenerateTooltip": "Regenerate this section",
   "outline.result.addTooltip": "Add section below",
   "outline.result.deleteTooltip": "Delete section",
+  "outline.result.body": "Fill out the form on the left and click Generate to see your story structure come to life here.",
   "outline.error.generationFailed": "Failed to generate content. Please try again.",
   "outline.deleteConfirm": "Are you sure you want to delete this outline section?",
   "outline.overwriteConfirm": "You already have an outline. Generating a new one will replace it. Are you sure you want to continue?",

@@ -89,5 +89,6 @@
   "export.compileWizard.presets.novelPdf": "Novel manuscript (PDF)",
   "export.compileWizard.presets.fullMd": "Full project archive (Markdown)",
   "export.compileWizard.presets.ebookEpub": "eBook chapters (EPUB)",
-  "export.compileWizard.presets.normTxt": "Norm manuscript (.txt)"
+  "export.compileWizard.presets.normTxt": "Norm manuscript (.txt)",
+  "export.pasteSection.heading": "Google Docs / Notion"
 }

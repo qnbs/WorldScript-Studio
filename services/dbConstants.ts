@@ -6,7 +6,11 @@ export const STATE_DB_NAME = 'storycraft-state-db';
 export const DATA_DB_NAME = 'storycraft-data-db';
 
 /** Current schema version for both state and data DBs. */
-export const DB_VERSION = 7;
+// QNBS-v3: v8 — projects-index-store for Cross-Project-Search v2; backwards-compatible addStore migration.
+export const DB_VERSION = 8;
+
+/** Privacy-preserving project index for cross-project search — no manuscript plaintext stored. */
+export const PROJECTS_INDEX_STORE = 'projects-index-store';
 
 export const APP_DATA_STORE = 'app-data-store';
 export const SNAPSHOTS_STORE = 'snapshots-store';

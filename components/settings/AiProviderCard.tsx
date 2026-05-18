@@ -1,7 +1,10 @@
+import { ONNX_SUPPORTED_MODELS, WEBLLM_SUPPORTED_MODELS } from '@domain/ai-core';
 import type { FC } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { LOCAL_BACKEND_PRESET_DEFAULT_URL } from '../../services/ai/localBackendPresets';
+import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService';
+import { detectWebGpuDetails } from '../../services/ai/webGpuDetectorService';
 import {
   listOllamaModels,
   scanLocalOpenAiCompatibleEndpoints,
@@ -41,6 +44,8 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const [scanRows, setScanRows] = useState<{ labelKey: string; baseUrl: string; ok: boolean }[]>(
     [],
   );
+  // QNBS-v3: GPU probe runs once when WebLLM tab is selected — no polling.
+  const [gpuInfo, setGpuInfo] = useState<WebGpuAdapterInfo | null>(null);
 
   useEffect(() => {
     storageService
@@ -110,6 +115,10 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       void handleTest();
     } else if (provider === 'webllm') {
       void handleTest();
+      // QNBS-v3: Probe WebGPU once on WebLLM selection; result shown as status badge.
+      detectWebGpuDetails()
+        .then(setGpuInfo)
+        .catch(() => setGpuInfo({ status: 'unknown' }));
     }
   }, [provider, handleLoadOllamaModels, handleTest]);
 
@@ -369,8 +378,106 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         )}
 
         {provider === 'webllm' && (
-          <div className="p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-sm text-[var(--foreground-secondary)] space-y-2">
+          <div className="p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-sm text-[var(--foreground-secondary)] space-y-3">
             <p>{t('settings.ai.webllmHint')}</p>
+
+            {/* GPU status badge */}
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{t('settings.ai.webllm.gpuStatus')}:</span>
+              {gpuInfo === null ? (
+                <Spinner className="w-3 h-3" />
+              ) : (
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    gpuInfo.status === 'available'
+                      ? 'bg-emerald-500/15 text-emerald-300'
+                      : gpuInfo.status === 'unavailable'
+                        ? 'bg-red-500/15 text-red-300'
+                        : 'bg-amber-500/15 text-amber-300'
+                  }`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {gpuInfo.status === 'available' && t('settings.ai.webllm.gpuAvailable')}
+                  {gpuInfo.status === 'unavailable' && t('settings.ai.webllm.gpuUnavailable')}
+                  {gpuInfo.status === 'unknown' && t('settings.ai.webllm.gpuUnknown')}
+                </span>
+              )}
+            </div>
+
+            {/* Adapter info when available */}
+            {gpuInfo?.adapterDescription && (
+              <p className="text-xs text-[var(--foreground-muted)]">
+                {t('settings.ai.webllm.adapterLabel')}: {gpuInfo.adapterDescription}
+                {gpuInfo.vramTier && (
+                  <>
+                    {' '}
+                    · {t('settings.ai.webllm.vramLabel')}: {gpuInfo.vramTier}
+                  </>
+                )}
+              </p>
+            )}
+
+            {/* WebLLM model selector */}
+            <div className="space-y-1">
+              <label
+                htmlFor="webllm-model-select"
+                className="text-xs font-medium text-[var(--foreground-muted)] block"
+              >
+                {t('settings.ai.webllm.modelSelect')}
+              </label>
+              <select
+                id="webllm-model-select"
+                aria-label={t('settings.ai.webllm.modelSelectAriaLabel')}
+                className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-tertiary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                onChange={(e) => onModelSelect?.(e.target.value)}
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  {t('settings.ai.webllm.modelSelect')}
+                </option>
+                {WEBLLM_SUPPORTED_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* ONNX model selector */}
+            <div className="space-y-1">
+              <label
+                htmlFor="onnx-model-select"
+                className="text-xs font-medium text-[var(--foreground-muted)] block"
+              >
+                {t('settings.ai.onnx.modelSelect')}
+              </label>
+              <select
+                id="onnx-model-select"
+                className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-tertiary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                onChange={(e) => onModelSelect?.(e.target.value)}
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  {t('settings.ai.onnx.modelSelect')}
+                </option>
+                {ONNX_SUPPORTED_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-[var(--foreground-muted)]">
+                {t('settings.ai.onnx.wasmNote')}
+              </p>
+            </div>
+
+            <p className="text-xs text-[var(--foreground-muted)]">
+              {t('settings.ai.webllm.fallbackChain')}
+            </p>
+            <p className="text-xs text-[var(--foreground-muted)]">
+              {t('settings.ai.webllm.tabLeaderNote')}
+            </p>
           </div>
         )}
 

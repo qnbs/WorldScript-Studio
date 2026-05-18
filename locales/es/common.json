@@ -42,6 +42,9 @@
   "collab.securityWarning": "Servidor de señalización público",
   "collab.securityWarningDetail": "Las conexiones usan un servidor de retransmisión público por defecto. El contenido de la sala está cifrado P2P, pero los metadatos de conexión (IDs de sala) pasan por el relé. Para proyectos sensibles, considera el autoalojamiento.",
   "collab.selfHostLinkLabel": "Más sobre el autoalojamiento",
+  "collab.encryptionDerived": "Clave E2E derivada (AES-256-GCM)",
+  "collab.encryptionPskOnly": "Solo aislamiento de sala",
+  "collab.encryptionAriaLabel": "Estado del cifrado",
   "common.appLoading": "Application is loading",
   "common.cancel": "Cancelar",
   "common.close": "Cerrar",
@@ -93,6 +96,7 @@
   "error.apiErrorTitle": "AI Assistant Error",
   "error.boundary.description": "An unexpected error occurred. You can try resetting the view or reloading the page.",
   "error.boundary.reload": "Reload Page",
+  "error.boundary.report": "Reportar problema",
   "error.boundary.reset": "Reset View",
   "error.boundary.title": "Something went wrong.",
   "error.db.aborted": "Database operation was aborted.",
@@ -293,5 +297,8 @@
   "crossSearch.inputLabel": "Consulta de búsqueda",
   "crossSearch.resultsLabel": "Resultados de búsqueda",
   "crossSearch.hint": "Escribe para buscar título, logline, secciones del manuscrito y personajes.",
-  "crossSearch.scopeNote": "Buscando en el proyecto actual — búsqueda multiproyecto en v2."
+  "crossSearch.scopeNote": "Buscando en el proyecto actual — búsqueda multiproyecto en v2.",
+  "crossSearch.scopeMultiProject": "Buscando en {{count}} proyecto(s) indexado(s)",
+  "crossSearch.indexEmpty": "Aún no hay proyectos indexados. Abre otros proyectos para agregarlos.",
+  "crossSearch.loadingIndex": "Cargando índice de proyectos…"
 }

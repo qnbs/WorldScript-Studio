@@ -89,5 +89,6 @@
   "export.preview.title": "Live Preview",
   "export.title": "Export Publishing Suite",
   "export.toggleSection": "Toggle visibility for {{title}}",
-  "export.worldsLabel": "Worlds"
+  "export.worldsLabel": "Worlds",
+  "export.pasteSection.heading": "Google Docs / Notion"
 }

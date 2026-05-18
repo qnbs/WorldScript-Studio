@@ -37,6 +37,7 @@ import {
   generateJson,
   generateText,
   listOllamaModels,
+  scanLocalOpenAiCompatibleEndpoints,
   streamText,
   testAIConnection,
 } from '../../services/aiProviderService';
@@ -313,5 +314,195 @@ describe('listOllamaModels', () => {
   it('delegates to ollamaService', async () => {
     const result = await listOllamaModels('http://localhost:11434');
     expect(result).toEqual(['llama3']);
+  });
+});
+
+// QNBS-v3: streamOpenAI-Fehler-Branches — HTTP-Fehler, null-Body, aborted-Signal.
+describe('streamOpenAI error paths', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('throws on non-ok HTTP response (429)', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      json: async () => ({ error: { message: 'rate limited' } }),
+    } as unknown as Response);
+
+    await expect(
+      streamText(
+        'hello',
+        'Balanced',
+        { provider: 'openai', model: 'gpt-4o-mini' },
+        { onChunk: vi.fn() },
+      ),
+    ).rejects.toThrow('OpenAI API Error 429');
+  });
+
+  it('throws when response body is null', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: null,
+    } as unknown as Response);
+
+    await expect(
+      streamText(
+        'hello',
+        'Balanced',
+        { provider: 'openai', model: 'gpt-4o-mini' },
+        { onChunk: vi.fn() },
+      ),
+    ).rejects.toThrow('No response body');
+  });
+
+  it('breaks without emitting chunks when signal is already aborted', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
+    const ac = new AbortController();
+    ac.abort();
+    const onChunk = vi.fn();
+    const encoder = new TextEncoder();
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"X"}}]}\n\n'));
+          controller.close();
+        },
+      }),
+    } as unknown as Response);
+
+    await streamText(
+      'hello',
+      'Balanced',
+      { provider: 'openai', model: 'gpt-4o-mini' },
+      { onChunk },
+      ac.signal,
+    );
+    // aborted → loop breaks before reading; onChunk never called
+    expect(onChunk).not.toHaveBeenCalled();
+  });
+});
+
+// QNBS-v3: streamGrok-Fehler-Branch — !res.ok wirft API-Fehler.
+describe('streamGrok error paths', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('throws on non-ok HTTP response from Grok', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-key');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+    } as unknown as Response);
+
+    await expect(
+      streamText(
+        'hello',
+        'Balanced',
+        { provider: 'grok', model: 'grok-3-mini' },
+        { onChunk: vi.fn() },
+      ),
+    ).rejects.toThrow('Grok API Error 503');
+  });
+});
+
+// QNBS-v3: testAIConnection-Branches — HTTP-Fehler, grok kein Key, gemini HTTP-Fehler, catch.
+describe('testAIConnection additional branches', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('openai: returns ok:true on HTTP 200', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-key');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({ ok: true, status: 200 } as Response);
+    const result = await testAIConnection('openai', {});
+    expect(result.ok).toBe(true);
+  });
+
+  it('openai: returns ok:false on HTTP 403', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-key');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 403 } as Response);
+    const result = await testAIConnection('openai', {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('403');
+  });
+
+  it('grok: returns ok:false when no API key', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce(null);
+    const result = await testAIConnection('grok', {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Key');
+  });
+
+  it('grok: returns ok:false on HTTP 429', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-key');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 429 } as Response);
+    const result = await testAIConnection('grok', {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('429');
+  });
+
+  it('gemini: returns ok:true on HTTP 200', async () => {
+    vi.mocked(storageService.getGeminiApiKey).mockResolvedValueOnce('gemini-key');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({ ok: true, status: 200 } as Response);
+    const result = await testAIConnection('gemini', {});
+    expect(result.ok).toBe(true);
+  });
+
+  it('gemini: returns ok:false on HTTP 401', async () => {
+    vi.mocked(storageService.getGeminiApiKey).mockResolvedValueOnce('gemini-key');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 401 } as Response);
+    const result = await testAIConnection('gemini', {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('401');
+  });
+
+  it('returns ok:false with error message when fetch throws (catch branch)', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-key');
+    globalThis.fetch = vi.fn().mockRejectedValueOnce(new Error('network error'));
+    const result = await testAIConnection('openai', {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('network error');
+  });
+});
+
+// QNBS-v3: scanLocalOpenAiCompatibleEndpoints-Branches — fetch wirft / HTTP-401 gilt als ok.
+describe('scanLocalOpenAiCompatibleEndpoints', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('returns ok:false for all candidates when fetch throws', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    expect(results).toHaveLength(3);
+    for (const r of results) {
+      expect(r.ok).toBe(false);
+    }
+  });
+
+  it('returns ok:true when HTTP 401 (auth required but reachable)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response);
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    for (const r of results) {
+      expect(r.ok).toBe(true);
+      expect(r.status).toBe(401);
+    }
   });
 });

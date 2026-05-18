@@ -14,11 +14,12 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ### Hoch (🟡)
 
-- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — Phase 4.5 erreicht (Schwellen 55/53/37/50 gesetzt); gemessene Coverage **63.32 % Zeilen · 61.5 % Statements · 47.1 % Branches · 53.2 % Funktionen** (Stand 2026-05-17, 1561 Tests); nächster Schritt: Branches Richtung 55 % (große Komponenten, aiProviderService-Streaming, collaborationService)
+- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — Phase 5 läuft (gemessen 2026-05-18: **62.86 % Statements · 49.06 % Branches · 54.10 % Functions · 64.68 % Lines** — 1 641 Tests / 150 Dateien; Schwellen 53/37/50/55 alle grün); nächster Schritt: Branches Richtung 55 % (große Komponenten, aiProviderService-Streaming)
 - ✅ **E2E mobile Selectors (2026-05-17)** — `clickNavItem()` Helper + ARIA-Tabs in WriterViewUI + `data-testid`-Anker in VersionControlPanel/ExportView; alle 4 Spec-Dateien auf 2026 Golden Hierarchy umgestellt (CI-Gate wieder grün)
 - ✅ **CI-Hardening (2026-05-17)** — Stryker `break: 30` erzwungen, Lighthouse Performance→error, OSV-Scanner in Security-Job, Concurrency-Fix (cancel-in-progress nur PRs), Artifact-Retention vereinheitlicht, JUnit-E2E-Upload
 - ✅ **WebLLM Modell-Selektor** — `WEBLLM_SUPPORTED_MODELS` (4 MLC-Checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress`-Parameter, Settings-UI mit Dropdown + Fortschrittsanzeige (WCAG 2.2 `role="progressbar"`, `useRef`-Mounted-Guard) — [`packages/ai-core`](packages/ai-core), [`services/localAiFacade.ts`](services/localAiFacade.ts), [`components/settings/AiSections.tsx`](components/settings/AiSections.tsx)
-- ✅ **Cross-Project-Search Service** — `services/crossProjectSearchService.ts`, `searchAcrossProjects()` via fuzzyScore, transientUiStore-Integration (`isCrossProjectSearchOpen`), commandDefinitions-Command — v1: Einzelprojekt (multi-project erfordert DB_VERSION-Bump)
+- ✅ **Cross-Project-Search v2 (2026-05-18)** — DB_VERSION 8, `projects-index-store`, `crossProjectIndexService.ts` (privacy-preserving IDB index), `searchAcrossProjectIndex()`, two-phase CrossProjectSearchPanel; indexing on save via listenerMiddleware is the next step
+- ✅ **Cross-Project-Search Service v1** — `services/crossProjectSearchService.ts`, `searchAcrossProjects()` via fuzzyScore, transientUiStore-Integration (`isCrossProjectSearchOpen`), commandDefinitions-Command
 - ✅ **Collaboration Security Warning** — Sicherheitshinweis-Banner in CollaborationPanel (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) vor Verbindungsaufbau sichtbar; verschwindet nach Connect
 - ✅ **Phase 1+2 Unit Tests** — 17 neue Test-Dateien, 733 Tests gesamt; Vitest-Schwellen auf 35/30/22/33 erhöht (zuvor 25/21/17/24)
 - ✅ **Stryker Erweiterung (Phase 4)** — `fuzzyScore.ts`, `palettePreferences.ts`, `commandBuilder.ts` als zusätzliche Mutations-Ziele
@@ -28,6 +29,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ### Niedrig (🟢)
 
+- ✅ **i18n Comprehensive Sweep (2026-05-18)** — alle hardcodierten Strings eliminiert; 1 440 Keys in 5 Locales (`help.tryTour`, `Chapter 1`, `manifest.resizer.*`, `export.pasteSection.heading`, `outline.result.body`, `templates.tabs.*`, `error.boundary.*` u. v. m.); ErrorBoundary mit `ErrorFallback`-Funktionskomponente für `useTranslation()` refaktoriert; TypeScript-6-Strict-Fixes (TS2322/TS2352/TS4111/TS2375); Testmocks für `ErrorBoundary.test.tsx` + `AdvancedImportExport.test.tsx` angepasst
 - ✅ Vollständige Markdown-Doku-Synchronisation (README Hub, CONTRIBUTING, docs/CI, AUDIT, Copilot, CLAUDE, SECURITY, TAURI/graphify, CHANGELOG/ROADMAP/TODO) — 2026-05-16
 
 ---
@@ -43,7 +45,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 ### Mittel (🟠)
 
 - ✅ Signaling-URL für Collaboration in Settings konfigurierbar machen (`webrtcSignalingUrls`, Einstellungen → Zusammenarbeit)
-- ⬜ Yjs E2E-Verschlüsselung (libsodium SecretBox, deferred to v2.0)
+- ✅ **Yjs AES-256-GCM Encryption Foundation (2026-05-18)** — `collaborationService.ts` gains `encryptUpdate/decryptUpdate/deriveEncryptionKey/getEncryptionStatus`; CollaborationPanel shows encryption badge; full RTCDataChannel in-flight encryption requires y-webrtc patching (v2.0)
 
 ### Niedrig (🟢)
 
@@ -53,7 +55,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — inhaltliche Übersetzungen können iterativ verbessert werden
 - ✅ Renovate Auto-Merge für Patch-Updates ([`renovate.json`](renovate.json))
 - ✅ Onboarding-Spotlight-Tour (`driver.js`, Dashboard + Hilfe)
-- ⬜ Tauri v2 Release-Pipeline: auto-update + code-signing — **Installer an GitHub Releases** bei `v*`-Tags ✅ ([`docs/TAURI-CI.md`](docs/TAURI-CI.md))
+- ✅ **Tauri v2 Release-Pipeline (2026-05-18)** — `tauri-build.yml` generates `latest.json` from signed `.sig` artifacts; `TAURI-UPDATER.md` has full secrets table; `TAURI-CI.md` has 7-step first-release checklist; macOS notarization + Windows Authenticode still require maintainer certificates
 
 ---
 

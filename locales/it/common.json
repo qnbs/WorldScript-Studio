@@ -42,6 +42,9 @@
   "collab.securityWarning": "Server di segnalazione pubblico",
   "collab.securityWarningDetail": "Le connessioni usano un server di inoltro pubblico per impostazione predefinita. Il contenuto della stanza è crittografato P2P, ma i metadati di connessione (ID stanza) passano attraverso il relay. Per progetti sensibili, considera l'auto-hosting.",
   "collab.selfHostLinkLabel": "Scopri l'auto-hosting",
+  "collab.encryptionDerived": "Chiave E2E derivata (AES-256-GCM)",
+  "collab.encryptionPskOnly": "Solo isolamento della stanza",
+  "collab.encryptionAriaLabel": "Stato della crittografia",
   "common.appLoading": "Application is loading",
   "common.cancel": "Annulla",
   "common.close": "Chiudi",
@@ -93,6 +96,7 @@
   "error.apiErrorTitle": "AI Assistant Error",
   "error.boundary.description": "An unexpected error occurred. You can try resetting the view or reloading the page.",
   "error.boundary.reload": "Reload Page",
+  "error.boundary.report": "Segnala problema",
   "error.boundary.reset": "Reset View",
   "error.boundary.title": "Something went wrong.",
   "error.db.aborted": "Database operation was aborted.",
@@ -293,5 +297,8 @@
   "crossSearch.inputLabel": "Testo di ricerca",
   "crossSearch.resultsLabel": "Risultati della ricerca",
   "crossSearch.hint": "Digita per cercare titolo, logline, sezioni del manoscritto e personaggi.",
-  "crossSearch.scopeNote": "Ricerca nel progetto corrente — ricerca multi-progetto in v2."
+  "crossSearch.scopeNote": "Ricerca nel progetto corrente — ricerca multi-progetto in v2.",
+  "crossSearch.scopeMultiProject": "Ricerca in {{count}} progetto/i indicizzato/i",
+  "crossSearch.indexEmpty": "Nessun progetto indicizzato ancora. Apri altri progetti per aggiungerli.",
+  "crossSearch.loadingIndex": "Caricamento indice dei progetti…"
 }

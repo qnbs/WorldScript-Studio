@@ -42,5 +42,7 @@
   "worlds.tabs.overview": "Overview",
   "worlds.tabs.timeline": "History & Timeline",
   "worlds.title": "World Atlas",
-  "worlds.yourWorlds": "Your Worlds"
+  "worlds.yourWorlds": "Your Worlds",
+  "worlds.uploadImage": "Télécharger une image",
+  "worlds.editorTabsAriaLabel": "Onglets de l'éditeur de monde"
 }

@@ -202,5 +202,7 @@
   "templates.thriller.sections.7": "Nachspiel",
   "templates.title": "Vorlagen-Bibliothek",
   "templates.types.Genre": "Genre",
-  "templates.types.Structure": "Struktur"
+  "templates.types.Structure": "Struktur",
+  "templates.tabs.myTemplates": "Meine Templates",
+  "templates.tabs.community": "Community"
 }

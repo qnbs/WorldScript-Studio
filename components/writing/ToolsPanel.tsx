@@ -59,7 +59,7 @@ const ToolsPanel: FC = React.memo(() => {
           <div
             className="grid grid-cols-3 sm:grid-cols-6 md:grid-cols-5 gap-2 flex-shrink-0"
             role="group"
-            aria-label="Tool selection"
+            aria-label={t('writer.tools.selectLabel')}
           >
             {tools.map((tool) => (
               <button
@@ -164,7 +164,7 @@ const ToolsPanel: FC = React.memo(() => {
                     d="M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z"
                   />
                 </svg>
-                Stop Generating
+                {t('writer.stopGenerating')}
               </Button>
             ) : (
               <Button
