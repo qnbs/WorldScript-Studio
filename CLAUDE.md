@@ -134,6 +134,7 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 - No direct `@tauri-apps/api` imports in `components/ui/` atoms; abstract through services or hooks so the web build stays unaffected
 - File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors
 - Never comment out or skip failing tests to green CI — fix the root cause. `it.skip` requires a file-level comment with a reason and a ticket/TODO reference
+- **Modus operandi — tests:** Whenever you modify, add, or delete a code file, always check whether a corresponding test file exists (in `tests/unit/` for components/hooks/services, or `tests/e2e/` for flows). If it does, update or extend it to cover the change. If it doesn't exist yet and the change is non-trivial, create one. Run the relevant test file with `pnpm exec vitest run <path>` to verify before committing.
 
 ## Known Technical Debt
 

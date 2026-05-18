@@ -7,6 +7,7 @@ import {
 import { useConsistencyCheckerView } from '../hooks/useConsistencyCheckerView';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
+import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 
@@ -31,9 +32,12 @@ const ConsistencyCheckerUI: FC = () => {
   return (
     <div className="h-full">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
-          {t('consistencyChecker.title')}
-        </h1>
+        <div className="flex items-center gap-3">
+          <SectionIcon section="consistencyChecker" size="lg" />
+          <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+            {t('consistencyChecker.title')}
+          </h1>
+        </div>
         <p className="text-[var(--foreground-secondary)] mt-2">
           {t('consistencyChecker.description')}
         </p>

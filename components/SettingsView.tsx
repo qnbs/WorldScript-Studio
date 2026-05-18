@@ -20,6 +20,7 @@ import {
   PrivacySection,
 } from './settings/SystemSections';
 import { Input } from './ui/Input';
+import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 
 // --- SUB-COMPONENTS ---
@@ -207,6 +208,13 @@ const SettingsViewUI: FC = () => {
 
   return (
     <div>
+      {/* QNBS-v3: view-level header with colored SSOT icon */}
+      <div className="flex items-center gap-3 mb-6">
+        <SectionIcon section="settings" size="lg" />
+        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+          {t('sidebar.settings')}
+        </h1>
+      </div>
       <div className="mb-6 max-w-xl">
         <Input
           type="search"

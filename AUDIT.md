@@ -172,6 +172,7 @@
 - **Settings hub:** Search metadata `services/settingsSearchHints.ts`; JSON subset import/export `services/settingsExchange.ts` (Data section).
 - **Help:** Static chunk retrieval `services/help/helpDocRetrieval.ts` → doc context in `streamAiHelpResponse`; locale **`tryActionId`** on articles; `services/spotlightTour.ts` **`tourId`** for multiple guided flows.
 - **UI primitives:** `components/ui/Tooltip.tsx`, `EmptyState.tsx`; `features/status/statusSlice.ts` toast fields **`commandId`** / **`actionLabel`**; ErrorBoundary GitHub issue link.
+- **Section icon SSOT:** `constants/sections.tsx` → `APP_SECTIONS: Record<View, SectionConfig>` maps every view to icon, colorClass, textColor, accentColor. `components/ui/SectionIcon.tsx` renders the colored badge (sizes xs/sm/md/lg/xl, `aria-hidden`). All 14+ view headers, card headers, and nav items consume this SSOT. Tested in `tests/unit/SectionIcon.test.tsx`.
 - **Feature flags:** `enableProjectHealthScore` (dashboard health card), `enableCrossProjectSearch` (stub) in `features/featureFlags/featureFlagsSlice.ts`.
 
 ### Documentation

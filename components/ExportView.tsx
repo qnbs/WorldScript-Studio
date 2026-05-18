@@ -12,6 +12,7 @@ import { CompileWizardModal } from './CompileWizardModal';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Checkbox } from './ui/Checkbox';
+import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
@@ -116,9 +117,12 @@ const ExportControls: FC = () => {
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t('export.options.title')}
-        </h2>
+        <div className="flex items-center gap-3">
+          <SectionIcon section="export" size="sm" />
+          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+            {t('export.options.title')}
+          </h2>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4 p-0">
         <AccordionSection title={t('export.content.title')} idSuffix="content">
@@ -456,9 +460,12 @@ const ExportPreview: FC = () => {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t('export.preview.title')}
-        </h2>
+        <div className="flex items-center gap-3">
+          <SectionIcon section="export" size="sm" />
+          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+            {t('export.preview.title')}
+          </h2>
+        </div>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col min-h-0">
         {/* QNBS-v3: data-testid disambiguates this preview <pre> from ConsistencyChecker/CriticView <pre> elements */}
