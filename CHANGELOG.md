@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **WebGPU detector service (2026-05-18):** New `services/ai/webGpuDetectorService.ts` — `detectWebGpuDetails()` queries `navigator.gpu.requestAdapter()`, reads `adapter.limits.maxBufferSize` for VRAM tier heuristic (≥8 GB = high, ≥4 GB = medium, else low). AiProviderCard gains live GPU status badge, WebLLM model dropdown, and ONNX model dropdown. `LOCAL_INFERENCE_PROVIDERS` + `isLocalInferenceProvider()` added to `orchestrationProviders.ts`. 12 new settings i18n keys across all 5 locales (1408 → 1414 total).
+
+- **ONNX Runtime Web Layer-2 in ai-core (2026-05-18):** `packages/ai-core/src/index.ts` adds an ONNX WASM fallback layer between WebLLM and Transformers.js. `LocalAiLayer` type includes `'onnx'`. `ONNX_SUPPORTED_MODELS` exported. `vite.config.ts` gains `vendor-ai-onnx` manual chunk to keep onnxruntime-web + @xenova/transformers under Workbox's 8 MiB SW cache limit.
+
+- **Yjs AES-256-GCM encryption foundation (2026-05-18):** `collaborationService.ts` gains `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 310 000 iterations, SHA-256, AES-256-GCM), and `getEncryptionStatus()` (`'encrypted' | 'psk-only' | 'plaintext'`). `CollaborationPanel.tsx` shows green/amber encryption status badge post-connect. 3 new collab i18n keys.
+
+- **Tauri v2 auto-updater pipeline (2026-05-18):** `tauri-build.yml` gains a `Generate latest.json` step that builds the Tauri v2 update manifest from signed `.sig` files and uploads it to GitHub Release. `docs/TAURI-UPDATER.md` extended with a full GitHub Secrets table. `docs/TAURI-CI.md` gains a 7-step first-release checklist.
+
+- **Cross-Project-Search v2 (2026-05-18):** DB_VERSION 7→8 with new `projects-index-store`. New `crossProjectIndexService.ts` — `indexProject()`, `listIndexedProjects()`, `removeProjectIndex()` (privacy-preserving: no manuscript plaintext). `searchAcrossProjectIndex()` added to `crossProjectSearchService.ts`. `CrossProjectSearchPanel.tsx` runs two-phase search (index first, then current project). 3 new `crossSearch.*` i18n keys (1414 total).
+
 - **Mobile-aware E2E helpers (2026-05-17):** `clickNavItem(page, name)` in `tests/e2e/helpers.ts` — tries desktop `#sidebar` (hidden md:flex), then mobile bottom-tab-bar (`[data-tour="nav-mobile"]`), then the "More" sheet; eliminates all `sidebar(page)` calls that fail on Pixel 5 viewport. `selectFirstEnabledWriterSection` now switches to the context tab on mobile before locating the section selector.
 - **ARIA tablist on WriterView mobile segmented control:** Each tab button gains `role="tab"`, `aria-selected`, `aria-controls`, `data-testid="writer-tab-{context|tools|result}"`; container gains `role="tablist"`; panel divs gain `role="tabpanel"` + `aria-labelledby` — axe-compliant and stably selectable in Playwright.
 - **Mobile VC button in WriterViewUI:** `md:hidden` version of the version-control toggle button with `data-testid="writer-version-control-btn"` and `aria-expanded` — mirrors the desktop button that is hidden on Pixel 5 viewport.
@@ -18,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **i18n Comprehensive Sweep (2026-05-18):** All remaining hardcoded user-facing strings eliminated across 5 locales — **1 440 keys** total (up from 1 414). Fixes include: `help.tryTour` (was rendering raw key `"try.Help"` in the command palette), `initialProject.chapter1` (`"Chapter 1"` in projectSlice + AdvancedImportExport — extended `resetProject` payload with optional `chapter1Title`), `manuscript.resizer.left/right` (hardcoded German string `"Linkes Panel anpassen"` remained in source), `writer.stopGenerating / tools.selectLabel / versionControl.tooltip`, `settings.ai.temperature.precise/balanced/creative`, `export.pasteSection.heading` (`"Google Docs / Notion"`), `outline.result.body`, `characters.uploadImage / editorTabsAriaLabel`, `worlds.uploadImage / editorTabsAriaLabel`, `templates.tabs.myTemplates / community`, `error.boundary.title/description/reset/reload/report`, `manuscript.spellcheck.didYouMean/applyFix`, `manuscript.grammar.checkButton`, `manuscript.zenMode.enter/exit/label`, and `writer.studio.controls.custom/customTonePlaceholder`.
+
+- **ErrorBoundary fully localized (2026-05-18):** `components/ui/ErrorBoundary.tsx` refactored with inner `ErrorFallback` functional component — accesses `useTranslation()` hook to render title, description, and all buttons (Reset View, Reload Page, Report issue) in the active locale. Import path corrected to `hooks/useTranslation`; `onReset` passed conditionally to satisfy `exactOptionalPropertyTypes`.
+
+- **Unit-test coverage — 1 641 tests / 150 test files (2026-05-18):** Measured **62.86 % statements · 49.06 % branches · 54.10 % functions · 64.68 % lines**. Vitest thresholds at statements 53 / branches 37 / functions 50 / lines 55 — all passing.
+
 - **Unit-test coverage — Phase 4.5 thresholds met (2026-05-17):** Measured **63.32 % lines · 61.5 % statements · 47.1 % branches · 53.2 % functions** (1 561 tests). Vitest thresholds at lines 55 / statements 53 / branches 37 / functions 50.
 - **Stryker mutation gate enforced:** `thresholds.break` raised `null` → `30`; `timeoutMS` lowered 180 000 → 120 000 ms; CI mutation job `continue-on-error` → `false`, `timeout-minutes: 20` → `30`.
 - **Lighthouse performance promoted to error:** `categories:performance` `warn:0.5` → `error:0.4`; `categories:seo` added as `warn:0.8`; FCP tightened 6 000 → 5 000 ms; LCP tightened 8 000 → 7 000 ms.
@@ -25,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Artifact retention aligned:** `dist` 7 → 3 days; `lighthouse-report` and `storybook` 14 → 7 days.
 
 ### Fixed
+
+- **TypeScript 6 strict hardening (2026-05-18):** `'grok-3'` and `'grok-3-mini'` added to `AiModel` union in `types.ts` (TS2322 in `aiProviderService.test.ts`); double-cast `(x as unknown as Record<string, unknown>)['key']` pattern for `CollaborationService` private member access (TS2352); bracket notation `['gpu']` / `['__TAURI__']` required by TypeScript 6 index-signature enforcement (TS4111); PBKDF2 `Uint8Array<ArrayBuffer>` generic in `collaborationService.ts` for Web Crypto API strict typing.
+
+- **Test mocks (2026-05-18):** `tests/unit/ErrorBoundary.test.tsx` gains `vi.mock('../../hooks/useTranslation', …)` with an EN string map so rendered-text assertions survive the i18n refactor. `tests/unit/AdvancedImportExport.test.tsx` heading assertion updated from hardcoded `'Google Docs / Notion'` to `'export.pasteSection.heading'` (consistent with the `t: (k) => k` mock pattern already used in that file).
 
 - **E2E Desktop + Mobile Chrome (2026-05-17):** `writer`, `snapshots`, `a11y`, `export` spec files migrated to 2026 Golden Hierarchy selectors (getByRole > getByTestId; no CSS, no XPath). Fixes CI exit-code 1 after WriterView component split.
 

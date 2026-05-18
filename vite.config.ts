@@ -136,6 +136,10 @@ export default defineConfig({
           if (id.includes('/docx/') || id.includes('/jszip/') || id.includes('mammoth')) {
             return 'export-vendor-docx-ebook';
           }
+          // QNBS-v3: onnx/transformers exceed Workbox 8 MiB SW cache limit — separate chunk prevents exclusion.
+          if (id.includes('onnxruntime-web') || id.includes('@xenova/transformers')) {
+            return 'vendor-ai-onnx';
+          }
           return undefined;
         },
       },

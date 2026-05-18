@@ -34,6 +34,41 @@ Linux dev deps match the Ubuntu job (WebKitGTK 4.1, AppIndicator, librsvg, patch
 - Updater plugin is wired in Rust + `tauri.conf.json`; full operational steps (keys, `latest.json`, CI secrets) are in [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md).
 - The **Tauri desktop build** workflow passes `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` when configured in repository secrets (optional — omit until keys exist).
 
+## First-release checklist
+
+Complete these steps once before pushing the first signed release tag:
+
+```
+1. pnpm exec tauri signer generate -- -w ~/.storycraft-tauri.key
+   # Copy the public key → tauri.conf.json → plugins.updater.pubkey
+   # Copy the private key material → GitHub repo secret TAURI_SIGNING_PRIVATE_KEY
+
+2. Set GitHub repo secrets (Settings → Secrets → Actions):
+   - TAURI_SIGNING_PRIVATE_KEY      (private key from step 1)
+   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD  (key password or empty string)
+
+3. Push a v*.* tag  (e.g. git tag v1.4.0 && git push --tags)
+   → All 3 matrix jobs build and sign bundles
+   → release job uploads installers + latest.json to GitHub Release
+
+4. Verify release-assets in the GitHub Release:
+   - tauri-bundle-ubuntu-22.04  → .deb, .AppImage + .sig files
+   - tauri-bundle-windows-latest → .msi/.exe + .sig files
+   - tauri-bundle-macos-latest  → .dmg + .sig files
+   - latest.json  (auto-updater manifest with signatures)
+
+5. Download the installer for your OS, install the app, open it.
+   Verify the version shown in Settings matches the tag.
+
+6. Set plugins.updater.active = true in tauri.conf.json  (commit + push)
+
+7. Push a v*.*.+1 tag to test auto-update:
+   - Installed app should detect the new release and prompt to update
+```
+
+See [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) for full secrets reference and platform code-signing details.
+
 ## Follow-ups (not automated here)
 
-- Production code signing (especially macOS notarization) and publishing `latest.json` for each release remain maintainer-specific; track progress in [`ROADMAP.md`](../ROADMAP.md) / [`TODO.md`](../TODO.md).
+- macOS notarization requires `APPLE_*` secrets — see [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) § macOS code signing.
+- Windows Authenticode signing requires a CA-issued Authenticode certificate — track in [`TODO.md`](../TODO.md).

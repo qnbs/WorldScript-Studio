@@ -14,6 +14,22 @@ vi.mock('../../services/logger', () => ({
   logger: { error: vi.fn() },
 }));
 
+vi.mock('../../hooks/useTranslation', () => ({
+  useTranslation: () => ({
+    t: (k: string) => {
+      const m: Record<string, string> = {
+        'error.boundary.title': 'Something went wrong.',
+        'error.boundary.description':
+          'An unexpected error occurred. You can try resetting the view or reloading the page.',
+        'error.boundary.reset': 'Reset View',
+        'error.boundary.reload': 'Reload Page',
+        'error.boundary.report': 'Report issue',
+      };
+      return m[k] ?? k;
+    },
+  }),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

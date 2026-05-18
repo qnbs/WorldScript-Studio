@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectData } from '../../features/project/projectSlice';
-import { searchAcrossProjects } from '../../services/crossProjectSearchService';
+import type { ProjectSearchIndex } from '../../services/crossProjectIndexService';
+import {
+  searchAcrossProjectIndex,
+  searchAcrossProjects,
+} from '../../services/crossProjectSearchService';
 import type { Character } from '../../types';
 
 function makeCharacter(overrides: Partial<Character> = {}): Character {
@@ -135,5 +139,70 @@ describe('searchAcrossProjects', () => {
     const data = makeProject({ title: 'Test Story' });
     const results = searchAcrossProjects('test', data);
     expect(results[0]?.projectId).toBe('current');
+  });
+});
+
+// ─── searchAcrossProjectIndex ─────────────────────────────────────────────────
+
+function makeIndex(overrides: Partial<ProjectSearchIndex> = {}): ProjectSearchIndex {
+  return {
+    projectId: 'idx-1',
+    title: 'Index Project',
+    logline: 'An adventure begins.',
+    manuscriptWordCount: 1000,
+    characterNames: ['Alice', 'Bob'],
+    lastIndexed: Date.now(),
+    ...overrides,
+  };
+}
+
+describe('searchAcrossProjectIndex', () => {
+  it('returns empty array for empty query', () => {
+    expect(searchAcrossProjectIndex('', [makeIndex()])).toEqual([]);
+  });
+
+  it('returns empty array for empty indexes array', () => {
+    expect(searchAcrossProjectIndex('adventure', [])).toEqual([]);
+  });
+
+  it('matches on title', () => {
+    const results = searchAcrossProjectIndex('Index', [makeIndex()]);
+    expect(results.some((r) => r.matchType === 'title')).toBe(true);
+    expect(results[0]?.projectId).toBe('idx-1');
+  });
+
+  it('matches on logline', () => {
+    const results = searchAcrossProjectIndex('adventure', [makeIndex()]);
+    expect(results.some((r) => r.matchType === 'logline')).toBe(true);
+  });
+
+  it('matches on character name', () => {
+    const results = searchAcrossProjectIndex('Alice', [makeIndex()]);
+    expect(results.some((r) => r.matchType === 'character')).toBe(true);
+    expect(results[0]?.excerpt).toBe('Alice');
+  });
+
+  it('returns no result for zero-scoring query', () => {
+    const results = searchAcrossProjectIndex('zzzxxx', [makeIndex()]);
+    expect(results).toHaveLength(0);
+  });
+
+  it('merges results from multiple indexes, sorted by score', () => {
+    const idx1 = makeIndex({ projectId: 'p1', title: 'Dragon Quest' });
+    const idx2 = makeIndex({
+      projectId: 'p2',
+      title: 'Dragon Age',
+      logline: 'Dragon dragons everywhere',
+    });
+    const results = searchAcrossProjectIndex('dragon', [idx1, idx2]);
+    expect(results.length).toBeGreaterThan(0);
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i - 1]!.score).toBeGreaterThanOrEqual(results[i]!.score);
+    }
+  });
+
+  it('result includes projectTitle from index', () => {
+    const results = searchAcrossProjectIndex('adventure', [makeIndex()]);
+    expect(results[0]?.projectTitle).toBe('Index Project');
   });
 });

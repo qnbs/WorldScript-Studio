@@ -65,5 +65,10 @@
   "writer.versionControl.label": "Versions",
   "writer.imagePrompt.description": "Generates an optimized DALL·E 3 / Midjourney prompt from the current scene or text selection.",
   "writer.imagePrompt.tip": "Tip: Select a specific text section for a focused scene prompt.",
-  "writer.imagePrompt.note": "The generated prompt works directly in DALL·E 3 and Midjourney."
+  "writer.imagePrompt.note": "The generated prompt works directly in DALL·E 3 and Midjourney.",
+  "writer.stopGenerating": "Stop Generating",
+  "writer.tools.selectLabel": "Tool selection",
+  "writer.studio.controls.custom": "Custom...",
+  "writer.studio.controls.customTonePlaceholder": "e.g., Sarcastic, Melancholic, Fast-paced",
+  "writer.versionControl.tooltip": "Version Control (Branches & Snapshots)"
 }

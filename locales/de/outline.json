@@ -33,6 +33,7 @@
   "outline.result.addTooltip": "Abschnitt darunter hinzufügen",
   "outline.result.applyButton": "Gliederung auf Manuskript anwenden",
   "outline.result.deleteTooltip": "Abschnitt löschen",
+  "outline.result.body": "Füllen Sie das Formular links aus und klicken Sie auf 'Generieren', um Ihre Geschichtenstruktur zu sehen.",
   "outline.result.dragHandleTooltip": "Ziehen zum Neuanordnen",
   "outline.result.loading": "Ihre Story-Gliederung wird generiert...",
   "outline.result.newSectionTitle": "Neuer Abschnitt",

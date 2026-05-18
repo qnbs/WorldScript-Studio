@@ -202,5 +202,7 @@
   "templates.thriller.sections.7": "Aftermath",
   "templates.title": "Template Library",
   "templates.types.Genre": "Genre",
-  "templates.types.Structure": "Structure"
+  "templates.types.Structure": "Structure",
+  "templates.tabs.myTemplates": "Mes modèles",
+  "templates.tabs.community": "Communauté"
 }

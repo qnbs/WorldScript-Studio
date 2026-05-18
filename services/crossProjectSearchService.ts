@@ -1,7 +1,7 @@
-// QNBS-v3: v1 scope — single-project search only; multi-project requires DB_VERSION bump + IDB migration
 import type { ProjectData } from '../features/project/projectSlice';
 import type { Character, StorySection } from '../types';
 import { normalizeSearch, scoreAgainstQuery } from './commands/fuzzyScore';
+import type { ProjectSearchIndex } from './crossProjectIndexService';
 
 export type CrossProjectSearchMatchType = 'title' | 'logline' | 'manuscript' | 'character';
 
@@ -99,6 +99,63 @@ export function searchAcrossProjects(
         excerpt: character.name,
         score: charScore,
       });
+    }
+  }
+
+  return results.sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Lightweight search across the privacy-preserving project index (no full project load required).
+ * Phase-1 of a two-phase search: title/logline/character hits load the full project on demand.
+ */
+// QNBS-v3: v2 multi-project search — scans IDB index instead of in-memory Redux state.
+export function searchAcrossProjectIndex(
+  query: string,
+  indexes: ProjectSearchIndex[],
+): CrossProjectSearchResult[] {
+  const queryNorm = normalizeSearch(query);
+  if (!queryNorm || indexes.length === 0) return [];
+
+  const results: CrossProjectSearchResult[] = [];
+
+  for (const idx of indexes) {
+    const titleScore = scoreAgainstQuery(queryNorm, idx.title);
+    if (titleScore > 0) {
+      results.push({
+        projectId: idx.projectId,
+        projectTitle: idx.title,
+        matchType: 'title',
+        excerpt: idx.title,
+        score: titleScore,
+      });
+    }
+
+    if (idx.logline) {
+      const loglineScore = scoreAgainstQuery(queryNorm, idx.logline);
+      if (loglineScore > 0) {
+        results.push({
+          projectId: idx.projectId,
+          projectTitle: idx.title,
+          matchType: 'logline',
+          excerpt: buildExcerpt(idx.logline),
+          score: loglineScore,
+        });
+      }
+    }
+
+    for (const name of idx.characterNames) {
+      const charScore = scoreAgainstQuery(queryNorm, name);
+      if (charScore > 0) {
+        results.push({
+          projectId: idx.projectId,
+          projectTitle: idx.title,
+          matchType: 'character',
+          excerpt: name,
+          score: charScore,
+        });
+        break;
+      }
     }
   }
 

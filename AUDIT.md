@@ -1,9 +1,74 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16 → 2026-05-17  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16 → 2026-05-17 → 2026-05-18 → 2026-05-18 (Session 2)  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
 **Current version:** **1.4.1** (unreleased); active development on unreleased enhancements  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-18 Session 2 (i18n Comprehensive Sweep + TypeScript Hardening)
+
+### i18n — All Hardcoded Strings Eliminated
+
+- **1 440 total i18n keys** across de/en/es/fr/it — all 5 locales fully in sync (`pnpm run i18n:check` gate passes).
+- Root causes found and fixed: `help.tryTour` missing in all locales (command palette was rendering raw key `"try.Help"`); `"Chapter 1"` in `projectSlice.ts` `resetProject` action (extended payload with optional `chapter1Title`) and `AdvancedImportExport.tsx`; German string `"Linkes Panel anpassen"` hardcoded in `ManuscriptView.tsx` for a resizer aria-label; `"Google Docs / Notion"` hardcoded in `AdvancedImportExport.tsx`; `"Meine Templates"` and `"🌐 Community"` hardcoded tabs in `TemplateView.tsx`; placeholder paragraph in `OutlineGeneratorView.tsx`.
+- New locale keys added (all 5 languages): `help.tryTour`, `manuscript.spellcheck.didYouMean/applyFix`, `manuscript.grammar.checkButton`, `manuscript.zenMode.enter/exit/label`, `manuscript.resizer.left/right`, `writer.stopGenerating`, `writer.tools.selectLabel`, `writer.versionControl.tooltip`, `writer.studio.controls.custom/customTonePlaceholder`, `characters.uploadImage/editorTabsAriaLabel`, `worlds.uploadImage/editorTabsAriaLabel`, `settings.ai.temperature.precise/balanced/creative`, `export.pasteSection.heading`, `outline.result.body`, `templates.tabs.myTemplates/community`, `error.boundary.title/description/reset/reload/report`.
+
+### ErrorBoundary Refactored
+
+- `components/ui/ErrorBoundary.tsx`: inner `ErrorFallback` functional component accesses `useTranslation()` (from `hooks/useTranslation`) to render all strings in the active locale. Import path corrected (`contexts/I18nContext` → `hooks/useTranslation`). `onReset` prop passed conditionally to satisfy `exactOptionalPropertyTypes` (TS2375).
+
+### TypeScript 6 Strict Fixes
+
+- `types.ts`: `'grok-3'` and `'grok-3-mini'` added to `AiModel` union (TS2322 in test).
+- Double-cast pattern `(x as unknown as Record<string, unknown>)['key']` for `CollaborationService` private member access (TS2352).
+- Bracket notation `['gpu']` / `['__TAURI__']` throughout test files — required by TypeScript 6 index-signature enforcement (TS4111).
+- `Uint8Array<ArrayBuffer>` generics in `collaborationService.ts` for Web Crypto API strict typing.
+
+### Test Quality
+
+- `tests/unit/ErrorBoundary.test.tsx`: `vi.mock('../../hooks/useTranslation', …)` with EN string map — 7/7 pass.
+- `tests/unit/AdvancedImportExport.test.tsx`: heading assertion updated to use translation key `'export.pasteSection.heading'` (consistent with `t: (k) => k` mock pattern). 5/5 pass.
+- **Coverage (2026-05-18, clean single-run):** **62.86 % statements · 49.06 % branches · 54.10 % functions · 64.68 % lines** — 1 641 tests / 150 test files. All Vitest thresholds pass (53/37/50/55).
+
+### Documentation
+
+- `CHANGELOG.md [Unreleased]`: i18n sweep, ErrorBoundary refactor, TypeScript strict fixes, test mock fixes, updated coverage numbers. `AUDIT.md`, `TODO.md`, `ROADMAP.md` all updated.
+
+---
+
+## Follow-up Audit — 2026-05-18 (Master-Perfection-Plan v1.5 — Tasks 1–5)
+
+### AI Local Inference Stack
+
+- **WebGPU detector service:** `services/ai/webGpuDetectorService.ts` — `detectWebGpuDetails()` returns `{status, adapterDescription, architecture, vramTier}` using `navigator.gpu.requestAdapter()` + `adapter.limits.maxBufferSize` heuristic. `AiProviderCard.tsx` (WebLLM tab) shows live GPU status badge (green/yellow/red), WebLLM model dropdown (4 MLC checkpoints), and ONNX model dropdown (DistilGPT-2, GPT-2).
+- **ONNX Runtime Web Layer-2:** `packages/ai-core/src/index.ts` adds an ONNX WASM fallback between WebLLM and Transformers.js. `LocalAiLayer` type extended with `'onnx'`. `ONNX_SUPPORTED_MODELS` exported. `vite.config.ts` gains `vendor-ai-onnx` chunk (prevents onnxruntime-web + @xenova/transformers exceeding Workbox's 8 MiB SW cache limit).
+- **Orchestration cleanup:** `orchestrationProviders.ts` gains `LOCAL_INFERENCE_PROVIDERS`, `LocalInferenceProvider`, and `isLocalInferenceProvider()` — WebLLM/ONNX/Transformers.js confirmed out of the Vercel AI SDK chain.
+- **i18n:** 12 new `settings.ai.webllm.*` and `settings.ai.onnx.*` keys in all 5 locales (1408 → 1414 total after all Phase 5 additions).
+
+### Collaboration Encryption
+
+- **AES-256-GCM foundation:** `collaborationService.ts` gains `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 310 000 iterations, SHA-256, AES-256-GCM), and `getEncryptionStatus()` returning `'encrypted' | 'psk-only' | 'plaintext'`. Key derivation uses a deterministic SHA-256 salt from projectId. Full in-flight P2P encryption requires y-webrtc RTCDataChannel patching (deferred to v2.0). Implemented: encrypted persistence foundation + key derivation.
+- **CollaborationPanel badge:** Green `E2E Key Derived (AES-256-GCM)` badge post-connect with password; amber `Room isolation only` without. `role="status"`, `aria-live="polite"`.
+
+### Tauri Release Pipeline
+
+- **Auto-updater `latest.json` generation:** `tauri-build.yml` release job now runs a `Generate latest.json` step after artifact upload — collects signed `.sig` files for Linux (AppImage), Windows (msi/exe), macOS (dmg) and builds a Tauri v2 update manifest using `jq`. Uploaded to GitHub Release via `gh release upload --clobber`.
+- **Docs extended:** `TAURI-UPDATER.md` gains full GitHub Secrets table (signing + Apple + Windows Authenticode). `TAURI-CI.md` gains a 7-step first-release checklist.
+
+### Cross-Project-Search v2
+
+- **DB_VERSION 7→8:** New `projects-index-store` with `lastIndexed` index. `crossProjectIndexService.ts` — `indexProject()`, `listIndexedProjects()`, `removeProjectIndex()` (privacy-preserving: title, logline, characterNames, wordCount; no manuscript plaintext). `searchAcrossProjectIndex()` added to `crossProjectSearchService.ts`. `CrossProjectSearchPanel.tsx` runs two-phase search (index + current project, merged/de-duped). Footer shows live index count or "no projects indexed" hint.
+
+### Testing
+
+- **New test files:** `tests/unit/aiCoreFallbackPaths.test.ts` (12 tests), `tests/unit/settings/WebLlmPanel.test.tsx` (8 tests), `tests/unit/crossProjectIndexService.test.ts` (7 tests). Extended: `collaborationService.test.ts` (+6 encryption tests, 27 total), `crossProjectSearchService.test.ts` (+8 index search tests, 21 total).
+- **Key test pattern:** onnxruntime-web mock path = `../../packages/ai-core/node_modules/onnxruntime-web/dist/ort.node.min.mjs` (Node ESM export condition used by Vitest); `vi.spyOn(crypto.subtle, 'deriveKey')` to bypass PBKDF2 overhead; `vi.hoisted(() => vi.fn())` for detectWebGpuDetails; fake-indexeddb without `deleteDatabase` (use per-test `removeProjectIndex` cleanup instead to avoid blocking on open connections).
+
+### Documentation
+
+- `CHANGELOG.md [Unreleased]`: 5 new entries for all Phase 5 tasks. `TODO.md` + `AUDIT.md` updated. `locales/*/common.json`: 1414 keys (up from 1408 at session start).
 
 ---
 
@@ -297,7 +362,7 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 | PWA / Offline    | ★★★★★  | Workbox, versioned caches, smart strategies                |
 | State Management | ★★★★☆  | Redux-Undo well integrated, auto-save validated            |
 | Security         | ★★★★☆  | CSP hardened, non-extractable CryptoKey, PSK collab, import validation |
-| Test Coverage    | ★★★★☆  | 300+ Vitest-Tests (Unit), Playwright-E2E, glob-basierte Coverage-Floors in `vitest.config.ts` |
+| Test Coverage    | ★★★★☆  | 1 641 Vitest-Tests (Unit) / 150 Dateien; 62.86 % Statements, 64.68 % Lines, 49.06 % Branches; Playwright-E2E, glob-basierte Coverage-Floors |
 | Documentation    | ★★★★★  | README, CONTRIBUTING, ROADMAP, TODO, CHANGELOG, AUDIT      |
 | Performance      | ★★★★☆  | Code-splitting with 10+ manual chunks, Lighthouse CI       |
 | CI/CD            | ★★★★★  | security→quality→build (inkl. i18n-Gate, bundle:budget, analyze-Artifact), e2e, Lighthouse, Storybook, Pages-Deploy |

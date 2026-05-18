@@ -59,12 +59,12 @@ export const ToolInputs: FC<ToolInputsProps> = ({
             <option value="More Humorous">{t('writer.studio.controls.tones.humorous')}</option>
             <option value="More Formal">{t('writer.studio.controls.tones.formal')}</option>
             <option value="More Poetic">{t('writer.studio.controls.tones.poetic')}</option>
-            <option value="Custom">Custom...</option>
+            <option value="Custom">{t('writer.studio.controls.custom')}</option>
           </Select>
           {isCustomTone && (
             <div className="mt-2 animate-in">
               <Input
-                placeholder="e.g., Sarcastic, Melancholic, Fast-paced"
+                placeholder={t('writer.studio.controls.customTonePlaceholder')}
                 value={tone}
                 onChange={(e) => dispatch(writerActions.setTone(e.target.value))}
               />

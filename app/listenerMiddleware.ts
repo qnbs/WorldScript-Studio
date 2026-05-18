@@ -3,6 +3,7 @@ import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
+import { indexProject } from '../services/crossProjectIndexService';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
@@ -76,6 +77,16 @@ listenerMiddleware.startListening({
       }
 
       await storageService.saveProject(projectDataToSave);
+
+      // QNBS-v3: Index project metadata for cross-project search (privacy-preserving, behind flag).
+      if (
+        (listenerApi.getState() as RootState).featureFlags.enableCrossProjectSearch &&
+        presentData.id
+      ) {
+        indexProject(presentData.id, enriched).catch((err: unknown) =>
+          logger.warn('Cross-project index update failed (non-critical):', err),
+        );
+      }
 
       listenerApi.dispatch(statusActions.setSavingStatus('saved'));
       await listenerApi.delay(2000);

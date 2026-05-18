@@ -275,7 +275,7 @@ const CharacterDossier: FC = () => {
               onClick={handleUploadClick}
               variant="secondary"
               className="col-span-1 px-0 flex items-center justify-center"
-              title="Upload Image"
+              title={t('characters.uploadImage')}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -366,7 +366,7 @@ const CharacterDossier: FC = () => {
           <div className="border-b border-[var(--border-primary)] overflow-x-auto">
             <div
               role="tablist"
-              aria-label="Character editor tabs"
+              aria-label={t('characters.editorTabsAriaLabel')}
               className="flex items-center space-x-1 min-w-max"
             >
               <TabButton

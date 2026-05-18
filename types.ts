@@ -258,6 +258,9 @@ export type AiModel =
   // OpenAI
   | 'gpt-4o'
   | 'gpt-4o-mini'
+  // Grok (xAI)
+  | 'grok-3'
+  | 'grok-3-mini'
   // Ollama – any local model (e.g. "ollama/gemma3" or "ollama/qwen3:8b")
   | `ollama/${string}`
   // WebLLM – specific MLC-packaged checkpoints (see WEBLLM_SUPPORTED_MODELS in @domain/ai-core)

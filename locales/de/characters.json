@@ -59,5 +59,7 @@
   "characters.tabs.profile": "Profil",
   "characters.tabs.relationships": "Beziehungen",
   "characters.title": "Charakter-Dossiers",
-  "characters.yourCharacters": "Ihre Charaktere"
+  "characters.yourCharacters": "Ihre Charaktere",
+  "characters.uploadImage": "Bild hochladen",
+  "characters.editorTabsAriaLabel": "Charaktereditor-Reiter"
 }

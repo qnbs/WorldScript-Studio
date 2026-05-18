@@ -33,6 +33,7 @@
   "outline.result.addTooltip": "Add section below",
   "outline.result.applyButton": "Apply Outline to Manuscript",
   "outline.result.deleteTooltip": "Delete section",
+  "outline.result.body": "Complete el formulario a la izquierda y haga clic en Generar para ver la estructura de su historia aquí.",
   "outline.result.dragHandleTooltip": "Drag to reorder",
   "outline.result.loading": "Generating your story outline...",
   "outline.result.newSectionTitle": "New Section",

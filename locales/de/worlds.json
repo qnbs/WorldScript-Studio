@@ -42,5 +42,7 @@
   "worlds.tabs.overview": "Übersicht",
   "worlds.tabs.timeline": "Geschichte & Zeitachse",
   "worlds.title": "Welt-Atlas",
-  "worlds.yourWorlds": "Ihre Welten"
+  "worlds.yourWorlds": "Ihre Welten",
+  "worlds.uploadImage": "Bild hochladen",
+  "worlds.editorTabsAriaLabel": "Welteditor-Reiter"
 }

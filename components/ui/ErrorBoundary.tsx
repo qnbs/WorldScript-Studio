@@ -1,6 +1,7 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
 import { ICONS } from '../../constants';
+import { useTranslation } from '../../hooks/useTranslation';
 import { logger } from '../../services/logger';
 import { Button } from './Button';
 import { Card, CardContent, CardHeader } from './Card';
@@ -12,6 +13,58 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
   hasError: boolean;
+}
+
+// QNBS-v3: Functional inner component enables useTranslation inside class-based ErrorBoundary.
+function ErrorFallback({ onReset }: { onReset?: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex h-full w-full items-center justify-center p-4">
+      <Card className="max-w-lg w-full text-center animate-in">
+        <CardHeader className="flex items-center justify-center space-x-2">
+          <div className="text-red-500">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-8 h-8"
+            >
+              {ICONS.LIGHTNING_BOLT}
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-red-500">{t('error.boundary.title')}</h1>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-[var(--foreground-secondary)]">{t('error.boundary.description')}</p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {onReset && (
+              <Button onClick={onReset} variant="primary">
+                {t('error.boundary.reset')}
+              </Button>
+            )}
+            <Button onClick={() => window.location.reload()} variant="secondary">
+              {t('error.boundary.reload')}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() =>
+                window.open(
+                  'https://github.com/qnbs/StoryCraft-Studio/issues/new',
+                  '_blank',
+                  'noopener,noreferrer',
+                )
+              }
+            >
+              {t('error.boundary.report')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -29,63 +82,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render() {
     if (this.state.hasError) {
-      return (
-        <div className="flex h-full w-full items-center justify-center p-4">
-          <Card className="max-w-lg w-full text-center animate-in">
-            <CardHeader className="flex items-center justify-center space-x-2">
-              <div className="text-red-500">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-8 h-8"
-                >
-                  {ICONS.LIGHTNING_BOLT}
-                </svg>
-              </div>
-              <h1 className="text-xl font-bold text-red-500">Something went wrong.</h1>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-[var(--foreground-secondary)]">
-                A critical error occurred in this part of the application. Please try reloading the
-                view. If the problem persists, the application state might be corrupted. You may
-                need to reset the project from the settings menu.
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {this.props.onReset && (
-                  <Button
-                    onClick={() => {
-                      this.setState({ hasError: false });
-                      this.props.onReset?.();
-                    }}
-                    variant="primary"
-                  >
-                    Reset View
-                  </Button>
-                )}
-                <Button onClick={() => window.location.reload()} variant="secondary">
-                  Reload Page
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() =>
-                    window.open(
-                      'https://github.com/qnbs/StoryCraft-Studio/issues/new',
-                      '_blank',
-                      'noopener,noreferrer',
-                    )
-                  }
-                >
-                  Report issue
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      );
+      const handleReset = this.props.onReset
+        ? () => {
+            this.setState({ hasError: false });
+            this.props.onReset?.();
+          }
+        : undefined;
+      return handleReset ? <ErrorFallback onReset={handleReset} /> : <ErrorFallback />;
     }
 
     return this.props.children;

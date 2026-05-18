@@ -65,5 +65,10 @@
   "writer.tools.show": "Tools einblenden",
   "writer.tts.start": "Vorlesen",
   "writer.tts.stop": "Vorlesen stoppen",
-  "writer.versionControl.label": "Versionen"
+  "writer.versionControl.label": "Versionen",
+  "writer.stopGenerating": "Generierung stoppen",
+  "writer.tools.selectLabel": "Werkzeugauswahl",
+  "writer.studio.controls.custom": "Benutzerdefiniert…",
+  "writer.studio.controls.customTonePlaceholder": "z. B. Sarkastisch, Melancholisch, Schnell",
+  "writer.versionControl.tooltip": "Versionskontrolle (Zweige & Schnappschüsse)"
 }

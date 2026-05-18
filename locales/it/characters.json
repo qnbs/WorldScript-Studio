@@ -59,5 +59,7 @@
   "characters.tabs.profile": "Profile",
   "characters.tabs.relationships": "Relationships",
   "characters.title": "Character Dossiers",
-  "characters.yourCharacters": "Your Characters"
+  "characters.yourCharacters": "Your Characters",
+  "characters.uploadImage": "Carica immagine",
+  "characters.editorTabsAriaLabel": "Schede editor personaggio"
 }

@@ -54,5 +54,13 @@
   "manuscript.visualize.hint": "Gemini (or your configured image-capable provider) generates one illustration from this section. Stored locally per section.",
   "manuscript.visualize.successBody": "Preview below; full image saved in local storage.",
   "manuscript.visualize.successTitle": "Scene image ready",
-  "manuscript.visualize.title": "Scene illustration"
+  "manuscript.visualize.title": "Scene illustration",
+  "manuscript.spellcheck.didYouMean": "¿Quiso decir?",
+  "manuscript.spellcheck.applyFix": "Aplicar corrección",
+  "manuscript.grammar.checkButton": "Revisar gramática y estilo",
+  "manuscript.zenMode.enter": "Activar modo Zen",
+  "manuscript.zenMode.exit": "Salir del modo Zen",
+  "manuscript.zenMode.label": "Modo Zen",
+  "manuscript.resizer.left": "Ajustar panel izquierdo",
+  "manuscript.resizer.right": "Ajustar panel derecho"
 }

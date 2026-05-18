@@ -42,6 +42,9 @@
   "collab.securityWarning": "Öffentlicher Signalserver",
   "collab.securityWarningDetail": "Verbindungen nutzen standardmäßig einen öffentlichen Relay-Server. Rauminhalte sind P2P-verschlüsselt, aber Verbindungsmetadaten (Raum-IDs) laufen durch den Relay. Für sensible Projekte empfiehlt sich Self-Hosting.",
   "collab.selfHostLinkLabel": "Mehr über Self-Hosting",
+  "collab.encryptionDerived": "E2E-Schlüssel abgeleitet (AES-256-GCM)",
+  "collab.encryptionPskOnly": "Nur Raumisolierung",
+  "collab.encryptionAriaLabel": "Verschlüsselungsstatus",
   "common.appLoading": "Anwendung wird geladen",
   "common.cancel": "Abbrechen",
   "common.close": "Schließen",
@@ -93,6 +96,7 @@
   "error.apiErrorTitle": "KI-Fehler",
   "error.boundary.description": "Ein unerwarteter Fehler ist aufgetreten. Versuchen Sie die Ansicht zurückzusetzen oder die Seite neu zu laden.",
   "error.boundary.reload": "Seite neu laden",
+  "error.boundary.report": "Problem melden",
   "error.boundary.reset": "Ansicht zurücksetzen",
   "error.boundary.title": "Etwas ist schiefgelaufen.",
   "error.db.aborted": "Datenbankoperation wurde abgebrochen.",
@@ -293,5 +297,8 @@
   "crossSearch.inputLabel": "Suchanfrage",
   "crossSearch.resultsLabel": "Suchergebnisse",
   "crossSearch.hint": "Tippen, um Titel, Logline, Manuskriptabschnitte und Charaktere zu durchsuchen.",
-  "crossSearch.scopeNote": "Aktuelles Projekt wird durchsucht – Mehrprojekt-Suche kommt in v2."
+  "crossSearch.scopeNote": "Aktuelles Projekt wird durchsucht – Mehrprojekt-Suche kommt in v2.",
+  "crossSearch.scopeMultiProject": "{{count}} indizierte Projekt(e) werden durchsucht",
+  "crossSearch.indexEmpty": "Noch keine Projekte indiziert. Öffne andere Projekte, um sie hinzuzufügen.",
+  "crossSearch.loadingIndex": "Projektindex wird geladen…"
 }

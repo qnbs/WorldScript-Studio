@@ -136,7 +136,9 @@ export const AdvancedImportExport: React.FC = () => {
       const content = lines.slice(1).join('\n').trim();
       dispatch(projectActions.updateTitle(title));
       dispatch(
-        projectActions.setManuscript([{ id: `docx-${Date.now()}`, title: 'Chapter 1', content }]),
+        projectActions.setManuscript([
+          { id: `docx-${Date.now()}`, title: t('initialProject.chapter1'), content },
+        ]),
       );
       toast.success(t('export.importSuccess'), title);
     } catch (error) {
@@ -160,7 +162,9 @@ export const AdvancedImportExport: React.FC = () => {
       <Card className="mt-4">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[var(--foreground)]">Google Docs / Notion</h3>
+            <h3 className="text-sm font-semibold text-[var(--foreground)]">
+              {t('export.pasteSection.heading')}
+            </h3>
             <Button
               variant="ghost"
               size="sm"

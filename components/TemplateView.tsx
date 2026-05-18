@@ -462,14 +462,14 @@ const TemplateViewUI: FC = () => {
           onClick={() => setActiveTab('local')}
           className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'local' ? 'text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'}`}
         >
-          Meine Templates
+          {t('templates.tabs.myTemplates')}
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('community')}
           className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'community' ? 'text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'}`}
         >
-          🌐 Community
+          🌐 {t('templates.tabs.community')}
         </button>
       </div>
 

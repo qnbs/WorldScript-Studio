@@ -104,3 +104,44 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate latest.json for auto-updater
+        if: steps.collect.outputs.has_assets == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # QNBS-v3: Tauri v2 update manifest — collect .sig files from signed bundles.
+          VERSION="${GITHUB_REF_NAME}"
+          REPO_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}"
+          PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          LINUX_URL="" LINUX_SIG="" WIN_URL="" WIN_SIG="" MAC_URL="" MAC_SIG=""
+
+          for SIG_FILE in release-assets/*.sig; do
+            [ -f "$SIG_FILE" ] || continue
+            BASE="${SIG_FILE%.sig}"
+            FNAME="$(basename "$BASE")"
+            SIG_CONTENT="$(cat "$SIG_FILE")"
+            case "$FNAME" in
+              *.AppImage)          LINUX_URL="${REPO_URL}/${FNAME}"; LINUX_SIG="$SIG_CONTENT" ;;
+              *.msi|*-setup.exe)   WIN_URL="${REPO_URL}/${FNAME}";   WIN_SIG="$SIG_CONTENT"   ;;
+              *.dmg)               MAC_URL="${REPO_URL}/${FNAME}";   MAC_SIG="$SIG_CONTENT"   ;;
+            esac
+          done
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg pub_date "$PUB_DATE" \
+            --arg linux_url "$LINUX_URL" --arg linux_sig "$LINUX_SIG" \
+            --arg win_url "$WIN_URL"     --arg win_sig "$WIN_SIG" \
+            --arg mac_url "$MAC_URL"     --arg mac_sig "$MAC_SIG" \
+            '{version:$version, notes:"See release notes", pub_date:$pub_date,
+              platforms:({}
+                | if $linux_sig!="" then .+{"linux-x86_64":{signature:$linux_sig,url:$linux_url}} else . end
+                | if $win_sig!=""   then .+{"windows-x86_64":{signature:$win_sig,url:$win_url}}   else . end
+                | if $mac_sig!=""   then .+{"darwin-x86_64":{signature:$mac_sig,url:$mac_url}}     else . end)}' \
+            > latest.json
+
+          echo "Generated latest.json:"
+          cat latest.json
+          gh release upload "$VERSION" latest.json --clobber

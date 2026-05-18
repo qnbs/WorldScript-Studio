@@ -41,6 +41,8 @@ class CollaborationService {
   private provider: WebrtcProvider | null = null;
   private _roomId: string | null = null;
   private readonly listeners = new Set<() => void>();
+  // QNBS-v3: AES-256-GCM key derived from password — null when no password was supplied.
+  private encryptionKey: CryptoKey | null = null;
 
   private stripControlChars(value: string): string {
     let output = '';
@@ -53,6 +55,51 @@ class CollaborationService {
 
   private sanitizeRoomValue(value: string): string {
     return this.stripControlChars(value).trim().replace(/\s+/g, ' ').slice(0, 128);
+  }
+
+  // QNBS-v3: PBKDF2 310 000 iterations per OWASP 2024 — SHA-256 KDF, AES-256-GCM output.
+  // QNBS-v3: Explicit Uint8Array<ArrayBuffer> generic required by TS6 strict BufferSource typing.
+  private async deriveEncryptionKey(
+    password: string,
+    salt: Uint8Array<ArrayBuffer>,
+  ): Promise<CryptoKey> {
+    const encoded = new TextEncoder().encode(password);
+    const keyMaterial = await crypto.subtle.importKey('raw', encoded, 'PBKDF2', false, [
+      'deriveKey',
+    ]);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 310_000, hash: 'SHA-256' },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt'],
+    );
+  }
+
+  // QNBS-v3: 12-byte random IV prepended to ciphertext — required for GCM nonce uniqueness.
+  async encryptUpdate(key: CryptoKey, data: Uint8Array<ArrayBuffer>): Promise<ArrayBuffer> {
+    const iv = crypto.getRandomValues(new Uint8Array(12)) as Uint8Array<ArrayBuffer>;
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
+    const result = new Uint8Array(12 + ciphertext.byteLength);
+    result.set(iv, 0);
+    result.set(new Uint8Array(ciphertext), 12);
+    return result.buffer as ArrayBuffer;
+  }
+
+  async decryptUpdate(
+    key: CryptoKey,
+    iv: Uint8Array<ArrayBuffer>,
+    ciphertext: ArrayBuffer,
+  ): Promise<Uint8Array<ArrayBuffer>> {
+    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return new Uint8Array(plaintext) as Uint8Array<ArrayBuffer>;
+  }
+
+  /** Returns current encryption level: 'encrypted' (AES-GCM key derived), 'psk-only' (room isolation), or 'plaintext'. */
+  getEncryptionStatus(): 'encrypted' | 'psk-only' | 'plaintext' {
+    if (this.encryptionKey !== null) return 'encrypted';
+    if (this._roomId !== null) return 'psk-only';
+    return 'plaintext';
   }
 
   /** Hash projectId + password into a deterministic room name for PSK isolation. */
@@ -82,6 +129,18 @@ class CollaborationService {
 
     this._roomId = await this.deriveRoomId(projectId, password);
     this.doc = new Y.Doc();
+
+    // QNBS-v3: Derive AES-256-GCM key when password supplied — salt is SHA-256 of projectId for determinism.
+    if (password) {
+      const saltBuffer = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(this.sanitizeRoomValue(projectId)),
+      );
+      this.encryptionKey = await this.deriveEncryptionKey(
+        password,
+        new Uint8Array(saltBuffer).slice(0, 16) as Uint8Array<ArrayBuffer>,
+      );
+    }
 
     const signaling = resolveWebRtcSignalingUrls(signalingUrls);
 
@@ -131,6 +190,7 @@ class CollaborationService {
     this.provider = null;
     this.doc = null;
     this._roomId = null;
+    this.encryptionKey = null;
     this.listeners.forEach((l) => void l());
   }
 

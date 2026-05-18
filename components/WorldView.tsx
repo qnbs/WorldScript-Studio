@@ -223,7 +223,7 @@ const WorldAtlas: FC = () => {
               onClick={handleUploadClick}
               variant="secondary"
               className="col-span-1 px-0 flex items-center justify-center"
-              title="Upload Image"
+              title={t('worlds.uploadImage')}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -310,7 +310,7 @@ const WorldAtlas: FC = () => {
           <div className="border-b border-[var(--border-primary)] overflow-x-auto">
             <div
               role="tablist"
-              aria-label="World editor tabs"
+              aria-label={t('worlds.editorTabsAriaLabel')}
               className="flex items-center space-x-1 min-w-max"
             >
               <TabButton
