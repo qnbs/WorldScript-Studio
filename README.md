@@ -5,10 +5,13 @@
   <img src="https://img.shields.io/badge/Redux_Toolkit-2.x-764ABC?logo=redux" alt="Redux Toolkit">
   <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
   <img src="https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript 6">
-  <img src="https://img.shields.io/badge/AI-Gemini_%7C_Ollama-4285F4?logo=google" alt="Gemini + Ollama">
-  <img src="https://img.shields.io/badge/Storage-IndexedDB-F59E0B" alt="IndexedDB">
+  <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · Ollama · WebLLM">
+  <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
+  <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT-0EA5E9" alt="i18n DE EN FR ES IT">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1440_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1440 keys">
+  <img src="https://img.shields.io/badge/Tests-1641_%2F_150_files-22C55E" alt="1641 tests / 150 files">
+  <img src="https://img.shields.io/badge/Coverage-62.86%25_Stmts_%7C_49.06%25_Branch-brightgreen" alt="Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
@@ -32,11 +35,11 @@
 ### PWA & Desktop
 
 - **Install as PWA:** In Chromium/Edge, open the Live Demo → use the install icon in the address bar (or browser menu) for an offline-capable app shortcut.
-- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — see [`docs/TAURI-CI.md`](docs/TAURI-CI.md) for signing secrets and artifact layout.
+- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — signed `.appimage`, `.msi`, and `.dmg` artifacts with an auto-generated `latest.json` update manifest. See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) for signing secrets and the first-release checklist, and [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) for the full auto-updater setup.
 
 ---
 
-**StoryCraft Studio is a cutting-edge, AI-enhanced application meticulously engineered for authors, screenwriters, and creators.** It transforms the daunting task of writing into a seamless, inspiring journey from a fleeting idea to a polished manuscript. By integrating the power of Google's Gemini API with an intuitive, offline-first interface, StoryCraft Studio acts as your all-in-one creative co-pilot — empowering you to build, write, and refine your narrative universe without compromise.
+**StoryCraft Studio is a cutting-edge, AI-enhanced application meticulously engineered for authors, screenwriters, and creators.** It transforms the daunting task of writing into a seamless, inspiring journey from a fleeting idea to a polished manuscript. By integrating a multi-provider AI stack — including Google Gemini, OpenAI, Grok, Claude, Ollama, and a fully browser-native 4-layer local inference engine — with an intuitive, offline-first interface, StoryCraft Studio acts as your all-in-one creative co-pilot, empowering you to build, write, and refine your narrative universe without compromise.
 
 ---
 
@@ -44,6 +47,7 @@
 
 - [Why StoryCraft Studio?](#-why-storycraft-studio)
 - [Features: A Comprehensive Creative Suite](#-features-a-comprehensive-creative-suite)
+- [AI Provider Stack](#-ai-provider-stack)
 - [Technology Deep Dive](#️-technology-deep-dive)
 - [Project Structure](#-project-structure)
 - [Getting Started](#getting-started)
@@ -61,8 +65,9 @@ In a world of generic text editors and bloated writing software, StoryCraft Stud
 
 - **✍️ From Macro to Micro:** Most tools focus only on writing. We cover the _entire_ creative lifecycle — from high-level plot structure and world-building down to sentence-by-sentence prose refinement.
 - **🧠 Intelligent Partnership:** The AI is not a ghostwriter — it's a Socratic partner, a tireless brainstormer, and a creative muse. It's designed to break blocks and expand your own potential, not replace it.
-- **🔒 Ultimate Privacy & Ownership:** Your manuscript and project data stay on this device by default (IndexedDB in the browser, or local files in the desktop app). Cloud AI features send only the prompts and context you trigger to the provider you configure (for example Google Gemini); use local/Ollama mode if you want AI without sending text to a cloud API. There is no StoryCraft account — you stay in control of exports and backups.
+- **🔒 Ultimate Privacy & Ownership:** Your manuscript and project data stay on this device by default (IndexedDB in the browser, or local files in the desktop app). Cloud AI features send only the prompts and context you trigger to the provider you configure. Use local/Ollama/WebLLM mode if you want AI without sending text to any cloud API. There is no StoryCraft account — you stay in control of exports and backups.
 - **🔬 Built-in Quality Tools:** Go beyond writing with the AI Critic, Plot-Hole Detector, and RAG Consistency Checker — tools that help you catch narrative weaknesses before your readers do.
+- **⚡ Browser-Native AI:** A 4-layer local inference stack (WebGPU → ONNX WASM → Transformers.js → heuristics) means local AI works even without Ollama — entirely in-browser, no server, no download manager.
 
 ---
 
@@ -70,11 +75,11 @@ In a world of generic text editors and bloated writing software, StoryCraft Stud
 
 ### 📊 Dynamic Project Dashboard
 
-Your mission control. Track word counts against custom goals, visualize project statistics, manage your title and logline with AI assistance, and access all views from a single hub. Includes **readability sampling** (Flesch-style heuristic) and **scene-timeline rule hints** without sending manuscript text to the cloud.
+Your mission control. Track word counts against custom goals, visualize project statistics, manage your title and logline with AI assistance, and access all views from a single hub. Includes **readability sampling** (Flesch-style heuristic), **scene-timeline rule hints**, and the optional **Project Health Score** card — all computed locally without sending manuscript text to the cloud.
 
 ### ✍️ Three-Panel Manuscript Editor
 
-A focused, distraction-free writing environment. The central editor is flanked by a draggable chapter **Navigator** and a project **Inspector**. An advanced overlay provides real-time highlighting and linking for `@character` and `#world` mentions, turning your manuscript into a living document.
+A focused, distraction-free writing environment. The central editor is flanked by a draggable chapter **Navigator** and a project **Inspector**. An advanced overlay provides real-time highlighting and linking for `@character` and `#world` mentions, turning your manuscript into a living document. Includes **Zen Mode** for full-screen distraction-free writing, **spell-check with suggestions**, and **grammar & style hints**.
 
 ### 🎬 Scene Board _(Visual Story Planning)_
 
@@ -86,7 +91,7 @@ An interactive, force-directed graph that visualizes all relationships between y
 
 ### 📚 Intelligent Story Template Library
 
-Jumpstart your creativity with a library of classic structures (Three-Act, Hero's Journey, Save the Cat! Beat Sheet, Fichtean Curve) and genre templates (Fantasy, Thriller, Horror, Romance, Space Opera, and more). **Remix any template** by dragging, editing, or adding sections. **Personalize with AI** to generate chapter-specific prompts based on your unique concept.
+Jumpstart your creativity with a library of classic structures (Three-Act, Hero's Journey, Save the Cat! Beat Sheet, Fichtean Curve) and genre templates (Fantasy, Thriller, Horror, Romance, Space Opera, and more). **Remix any template** by dragging, editing, or adding sections. **Personalize with AI** to generate chapter-specific prompts based on your unique concept. Browse **Community Templates** alongside your own saved templates.
 
 ### 🤖 AI Outline Generator
 
@@ -123,66 +128,40 @@ A dedicated view using **Retrieval-Augmented Generation (RAG)** to give the AI d
 
 ### 🗣️ Voice Dictation
 
-Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor.
+Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field.
 
-### ⌨️ Command Palette & productivity hub
+### ⌨️ Command Palette & Productivity Hub
 
 A keyboard-first **command palette** (⌘K / Ctrl+K, plus configurable bindings in **Settings → Shortcuts**) drives navigation, AI actions, editor helpers, and project tools from one surface:
 
 - **Typed command registry** (`services/commands/`) — fuzzy scoring with highlighted matches, category sections, optional AI-suggested rows from lightweight project signals (no extra network call required).
 - **Recent & pinned commands** — persisted preferences (versioned local storage); pin/unpin from the palette context menu.
-- **Voice input** — unchanged Web Speech integration for dictating palette queries where supported.
-- **Global shortcuts** — `hooks/useGlobalKeyboardShortcuts.ts` + `services/keyboard/` evaluate Redux-backed shortcut bindings (save, new section, search, export, theme toggle, palette, and more); conflicts surface in the Shortcuts editor.
+- **Voice input** — Web Speech integration for dictating palette queries where supported.
+- **Global shortcuts** — `hooks/useGlobalKeyboardShortcuts.ts` + `services/keyboard/` evaluate Redux-backed shortcut bindings; conflicts surface in the Shortcuts editor.
 - **Settings** — filter controls via the Settings search bar (`services/settingsSearchHints.ts`); **Import / Export** of a Zod-validated, privacy-conscious settings JSON subset (**Settings → Data** via `services/settingsExchange.ts`).
-- **Help** — client-side help doc chunks feed optional **RAG-lite** context into `streamAiHelpResponse`; articles can expose **„Try it“** actions (`tryActionId`) that execute registry commands; spotlight tours support multiple **`tourId`** presets (`services/spotlightTour.ts`).
-- **UI primitives** — shared **`Tooltip`**, **`EmptyState`**, and toast rows that can trigger a **registered command** via `commandId` (see `features/status/statusSlice.ts`).
-- **Feature flags** — e.g. **`enableProjectHealthScore`** (dashboard card) and **`enableCrossProjectSearch`** (stub / future wiring) live in `features/featureFlags/featureFlagsSlice.ts`.
+- **Help** — client-side help doc chunks feed optional **RAG-lite** context into `streamAiHelpResponse`; articles expose **"Try it"** actions (`tryActionId`) that execute registry commands; spotlight tours support multiple `tourId` presets (`services/spotlightTour.ts`).
+- **UI primitives** — shared **`Tooltip`**, **`EmptyState`**, and toast rows that trigger a **registered command** via `commandId` (see `features/status/statusSlice.ts`).
+- **Feature flags** — `enableProjectHealthScore` (dashboard card) and `enableCrossProjectSearch` (cross-project index) live in `features/featureFlags/featureFlagsSlice.ts`.
 
-### 🦙 Local AI via Ollama _(Privacy-First)_
+### 🔭 Cross-Project Search _(v2 — Privacy-Preserving Index)_
 
-Run all AI features entirely on your own hardware — no API key, no internet, no data leaving your machine.
+Search across **all your projects** without loading them into memory. An IndexedDB-based privacy-preserving index (DB v8, `projects-index-store`) stores only lightweight metadata per project — title, logline, word count, character names — never manuscript plaintext.
 
-- Auto-detects installed models via Ollama's `/api/tags` endpoint
-- Default model: **Qwen3 8B** (multilingual, reasoning-optimized, 6 GB VRAM)
-- Configurable server URL (default `http://localhost:11434`)
-- Automatic fallback to Gemini if Ollama is unreachable and a Gemini key is set
-- Real-time connection status indicator in Settings
+- **Two-phase search:** Phase 1 queries the index (instant); Phase 2 loads the full project on demand for deep-match excerpts.
+- **Auto-indexing** on every save via `listenerMiddleware` (behind the `enableCrossProjectSearch` flag).
+- **Index management:** `crossProjectIndexService.ts` exposes `indexProject`, `listIndexedProjects`, `removeProjectIndex`.
+- Fully localized across all 5 UI languages.
 
-### 🎨 Highly Customizable Workspace
+### 🤝 Real-Time Collaboration with Encryption Foundation
 
-- **Dark / Light** themes
-- Adjustable **font family, size, line height**, and **paragraph spacing**
-- **Indent first line** toggle for traditional novel formatting
-- Tunable **AI Creativity Level** (Focused → Balanced → Imaginative)
-- Full **Accessibility settings** (high contrast, reduced motion, color-blind modes)
+Real-time P2P co-editing via **Yjs + y-webrtc** with multiple signaling endpoints for automatic failover:
 
-### 💾 Robust Offline-First Data Management
-
-- **Auto-save** to IndexedDB on every change (debounced, non-blocking)
-- **Snapshot system** — automatic and manual project backups, restorable to any point
-- **Import / Export** project files as JSON backups
-- **Undo / Redo** with a 100-step history (Redux-Undo)
-
-### 📤 Polished Export Suite
-
-- **Markdown** (`.md`), **Plain Text** (`.txt`), **PDF** (with titlepage, configurable font and spacing)
-- **AI Synopsis** — generate a one-page synopsis before exporting
-- Selective content inclusion (title & logline, characters, worlds, manuscript)
-
-### 📱 Progressive Web App (PWA) v3.0
-
-- **Offline-first** — all assets cached via Service Worker
-- **Installable** on desktop and mobile (iOS & Android)
-- **App shortcuts** for quick access from the home screen icon
-- Update notifications and background sync support
-
-### 🤝 Real-Time Collaboration Resilience
-
-- Collaboration uses Yjs + y-webrtc with multiple signaling endpoints for failover.
+- **Room isolation** — room IDs are derived from a SHA-256 hash of the room name.
+- **AES-256-GCM key derivation foundation** — `collaborationService.ts` includes `deriveEncryptionKey()` (PBKDF2, 310 000 iterations, SHA-256), `encryptUpdate()` / `decryptUpdate()` (AES-256-GCM, 12-byte random IV), and `getEncryptionStatus()` — the groundwork for full in-flight P2P transport encryption.
+- **Encryption status badge** — CollaborationPanel shows green `E2E Key Derived (AES-256-GCM)` or amber `Room isolation only` based on whether a room password is set.
+- **Security warning banner** (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) visible before connecting explains that public signaling relays observe connection metadata; disappears after connect.
+- **Configurable signaling URLs** in Settings → Collaboration.
 - Default signaling endpoints: `wss://y-webrtc-signaling.fly.dev`, `wss://signaling.yjs.dev`.
-- Room IDs are derived from a hash, but signaling operators can still observe connection metadata (timing and room identifier traffic patterns).
-
-For production or sensitive collaboration environments, host your own signaling server.
 
 #### Self-host signaling (Cloudflare Worker)
 
@@ -191,9 +170,49 @@ For production or sensitive collaboration environments, host your own signaling 
 3. Allow your endpoint in the CSP `connect-src` directive in `index.html`.
 4. Keep at least one fallback endpoint during migration to avoid downtime.
 
+### 🔐 Encrypted Library Backup
+
+One-click encrypted export of your entire project library from **Settings → Data**:
+
+- Archives all projects as a **ZIP** containing `META.json` + `vault.bin`.
+- `vault.bin` is encrypted with **AES-256-GCM** — the decryption key is derived from your chosen passphrase using PBKDF2.
+- No plaintext project data ever leaves your device unencrypted.
+- Import on any device using the same passphrase to restore your full library.
+
+### 💾 Robust Offline-First Data Management
+
+- **Auto-save** to IndexedDB on every change (debounced, non-blocking)
+- **Snapshot system** — automatic and manual project backups, restorable to any point in time
+- **Import / Export** project files as JSON or encrypted ZIP backups
+- **Undo / Redo** with a 100-step history (Redux-Undo)
+- **IndexedDB v8** schema with dedicated stores per data type and automatic migration
+
+### 📤 Polished Export Suite
+
+- **Markdown** (`.md`), **Plain Text** (`.txt`), **PDF** (with titlepage, configurable font and spacing)
+- **Word / DOCX** — `.docx` generation via `docx` + `jszip` (lazy-loaded)
+- **AI Synopsis** — generate a one-page synopsis before exporting
+- **Paste-friendly format** — copy rich text for Google Docs / Notion
+- Selective content inclusion (title & logline, characters, worlds, manuscript sections)
+
+### 📱 Progressive Web App (PWA) v3.0
+
+- **Offline-first** — all assets cached via Service Worker (Workbox-based)
+- **Installable** on desktop and mobile (iOS & Android)
+- **App shortcuts** for quick access from the home screen icon
+- Update notifications and background sync support
+
+### 🎨 Highly Customizable Workspace
+
+- **Dark / Light** themes with smooth transitions
+- Adjustable **font family, size, line height**, and **paragraph spacing**
+- **Indent first line** toggle for traditional novel formatting
+- Tunable **AI Creativity Level** (Focused → Balanced → Imaginative)
+- Full **Accessibility settings** (high contrast, reduced motion, color-blind modes) — WCAG 2.2 AA–oriented
+
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales (selector in Settings, Welcome Portal, and Command Palette):
+Shipped UI locales with **1 440 i18n keys** across all 5 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -201,11 +220,37 @@ Shipped UI locales (selector in Settings, Welcome Portal, and Command Palette):
 - 🇪🇸 **Spanish** (Español)
 - 🇮🇹 **Italian** (Italiano)
 
-All five trees stay in key parity (`pnpm run i18n:check`). Copy is tuned per locale; ongoing polish via community PRs is welcome.
+All five trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette.
 
-Language selection persists across sessions via `localStorage`.
+**Spotlight tour:** After first launch, a short guided tour (driver.js) highlights navigation, command palette, and Settings; restart anytime from the Dashboard ("Guided tour") or Help.
 
-**Spotlight tour:** After first launch, a short guided tour (driver.js) highlights navigation, optional desktop command palette, and Settings; restart it anytime from the Dashboard (“Guided tour”) or Help.
+---
+
+## 🧠 AI Provider Stack
+
+StoryCraft Studio supports **8 distinct AI execution paths**, automatically routing to the best available option:
+
+| Layer | Provider | Requires | Notes |
+|-------|----------|----------|-------|
+| **Cloud 1** | Google Gemini | API key (BYOK) | Primary cloud path; Gemini 2.0 Flash |
+| **Cloud 2** | OpenAI | API key (BYOK) | GPT-4o, GPT-4o-mini |
+| **Cloud 3** | Anthropic Claude | API key (BYOK) | Claude 3.5 Sonnet |
+| **Cloud 4** | Grok (xAI) | API key (BYOK) | grok-3, grok-3-mini |
+| **Local 1** | Ollama | Local server | Default model: Qwen3 8B; configurable URL |
+| **Local 2** | WebLLM (WebGPU) | GPU + browser | MLC-packaged: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B |
+| **Local 3** | ONNX Runtime Web | WASM (any device) | Fallback when no WebGPU; runs fully in-browser |
+| **Local 4** | Transformers.js | WASM / WebGPU | Xenova/distilgpt2 and compatible Hugging Face models |
+
+> **Privacy-first routing:** WebLLM, ONNX, and Transformers.js run entirely in your browser — no network call, no API key needed. Automatic fallback down the stack ensures AI features always work, even offline.
+
+### WebGPU Hardware Detection
+
+`services/ai/webGpuDetectorService.ts` queries `navigator.gpu.requestAdapter()` and reports:
+- **Status:** `available` / `unavailable` / `unknown`
+- **Adapter name** and **architecture** (via `requestAdapterInfo()`)
+- **VRAM tier:** `high` (≥ 8 GB) / `medium` (≥ 4 GB) / `low` — heuristic from `adapter.limits.maxBufferSize`
+
+The Settings → AI panel shows a live GPU status badge with adapter details and model selectors for WebLLM and ONNX models.
 
 ---
 
@@ -215,26 +260,36 @@ Language selection persists across sessions via `localStorage`.
 - **AI as a Partner, Not a Replacement** — The AI augments your creativity; you remain the author.
 - **Seamless Workflow** — Tools that get out of the way and keep you in your creative flow.
 - **Quality Over Quantity** — Each AI tool has a single, specific purpose crafted for a real creative need.
+- **Accessibility by Default** — WCAG 2.2 AA orientation, ARIA roles throughout, Lighthouse accessibility gate enforced in CI.
 
 ---
 
 ## 🛠️ Technology Deep Dive
 
-| Layer                | Technology                           | Purpose                                                              |
-| -------------------- | ------------------------------------ | -------------------------------------------------------------------- |
-| **UI Framework**     | React 19 + TypeScript                | Component-based, fully type-safe UI                                  |
-| **Build Tool**       | Vite 8 + Turborepo                   | App build + workspace orchestration (`turbo.json`)                   |
-| **State Management** | Redux Toolkit + Redux-Undo + RTK Query + Zustand | Persistent, cached, and transient state layers              |
-| **Styling**          | Tailwind CSS + CSS Variables         | Utility-first design with theme-aware custom properties              |
-| **AI Integration**   | Gemini / OpenAI / Claude / Grok (BYOK) | Provider routing with policy guardrails and schema validation      |
-| **Local AI**         | `@domain/ai-core` facade + WorkerBus  | 3-layer local fallback (WebGPU → CPU model layer → heuristics)       |
-| **Storage**          | Dual IndexedDB (`StateDB` + `DataDB`) | Split state/data persistence for resilience and migration clarity     |
-| **Encryption**       | Web Crypto API (AES-256-GCM)         | Client-side API key encryption before IndexedDB storage              |
-| **PDF Export**       | jsPDF                                | Client-side, configurable PDF document generation                    |
-| **Document Export**  | docx + jszip                         | Word-compatible `.docx` generation (lazy-loaded for export actions)  |
-| **PWA**              | Service Worker + Web App Manifest v3 | Offline support, installability, app shortcuts                       |
-| **i18n**             | Custom React Context system          | JSON locale files, EN fallback, `localStorage` persistence           |
-| **Visualization**    | Force-directed graph                 | Interactive character relationship network                           |
+| Layer                | Technology                                                | Purpose                                                              |
+| -------------------- | --------------------------------------------------------- | -------------------------------------------------------------------- |
+| **UI Framework**     | React 19 + TypeScript 6 (strict)                         | Component-based, fully type-safe UI with `exactOptionalPropertyTypes` |
+| **Build Tool**       | Vite 8 + pnpm 10 workspaces                              | App build + workspace orchestration (`packages/ai-core`, `packages/ui`) |
+| **State Management** | Redux Toolkit 2.x + Redux-Undo + Zustand                 | Persistent (Redux), ephemeral (Zustand `transientUiStore`) state layers |
+| **Styling**          | Tailwind CSS 4.x + CSS Variables                         | Utility-first design with theme-aware custom properties              |
+| **Cloud AI**         | Gemini / OpenAI / Claude / Grok (BYOK)                   | Provider routing via `aiProviderService.ts`; Vercel AI SDK for streaming |
+| **Local AI Layer 1** | WebLLM (`@mlc-ai/web-llm`)                               | WebGPU-accelerated LLM inference in-browser (MLC-packaged models)   |
+| **Local AI Layer 2** | ONNX Runtime Web (`onnxruntime-web`)                      | WASM-based inference fallback; `vendor-ai-onnx` Vite chunk           |
+| **Local AI Layer 3** | Transformers.js (`@xenova/transformers`)                  | Hugging Face model inference; WebGPU or WASM backend                 |
+| **Local AI Layer 4** | Heuristic fallback (`@domain/ai-core`)                   | Rule-based responses when no model is available (always works)       |
+| **Local Server AI**  | Ollama HTTP adapter                                       | Any locally served model; auto-detect via `/api/tags`                |
+| **AI Facade**        | `packages/ai-core` workspace package                     | Unified local inference interface; sanitizeForPrompt truncation      |
+| **Storage**          | Dual IndexedDB v8 (`StateDB` + `DataDB`)                 | Split state/asset persistence; LZ-String compression + AES-256-GCM  |
+| **Collaboration**    | Yjs + y-webrtc + AES-256-GCM key derivation              | P2P CRDT editing; PBKDF2 encryption foundation (310 000 iterations)  |
+| **Encryption**       | Web Crypto API (AES-256-GCM + PBKDF2)                    | API-key encryption at rest; library backup vault; collab key derivation |
+| **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
+| **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
+| **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 1 440 keys × 5 locales; EN fallback; `localStorage` persistence      |
+| **Testing**          | Vitest 3 (1 641 tests / 150 files) + Playwright E2E      | Unit/integration + cross-browser E2E; Stryker mutation gate          |
+| **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
+| **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
+| **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
 
 ---
 
@@ -243,22 +298,36 @@ Language selection persists across sessions via `localStorage`.
 ```text
 StoryCraft-Studio/
 ├── packages/
-│   ├── ai-core/          # Local AI facade (WorkerBus, sanitizing, fallback layers)
-│   └── ui/               # Shared design tokens + tailwind preset
-├── app/                  # Redux store, RTK Query API slices, transient ui state
+│   ├── ai-core/          # Local AI facade: 4-layer stack (WebLLM → ONNX → Transformers.js → heuristic)
+│   └── ui/               # Shared design tokens + Tailwind preset
+├── app/                  # Redux store, typed hooks, listenerMiddleware, transientUiStore (Zustand)
 ├── components/           # All UI view components
-│   └── ui/               # Reusable generic components (Button, Modal, Toast, …)
-├── features/             # Redux Toolkit slices (project, settings, status, writer)
-├── hooks/                # Custom hooks with all view business logic
-├── contexts/             # React Context providers (i18n, per-view state sharing)
-├── services/             # External API & storage adapters (ai, db, storage, commands, keyboard, help)
-├── locales/              # i18n source files (per language × per module)
+│   ├── settings/         # Settings panel sections (AiProviderCard, AiSections, ShortcutsSection, …)
+│   ├── writing/          # WriterViewUI, ToolsPanel, ToolInputs
+│   └── ui/               # Reusable design-system atoms (Button, Modal, Toast, ErrorBoundary, …)
+├── features/             # Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
+├── hooks/                # View business logic (use*View.ts naming); useGlobalKeyboardShortcuts
+├── contexts/             # React Context providers: I18nContext, CommandExecutorContext, per-view contexts
+├── services/             # External adapters and domain services
+│   ├── ai/               # webGpuDetectorService, orchestrationProviders, fetchAdapter
+│   ├── commands/         # Command registry: definitions, fuzzyScore, palettePreferences, commandBuilder
+│   ├── keyboard/         # Shortcut matching, OS normalization, conflict detection
+│   ├── help/             # RAG-lite retrieval for in-app help articles
+│   └── settingsExchange/ # Zod-validated settings import/export
+├── locales/              # i18n source JSON (de/en/es/fr/it × 15 modules each)
 ├── public/
-│   ├── locales/          # i18n runtime files (copied from locales/ at build)
+│   ├── locales/          # i18n runtime bundles (rebuilt by pnpm run i18n:check / prebuild)
 │   ├── sw.js             # PWA Service Worker
-│   └── manifest.json     # PWA Web App Manifest
+│   └── manifest.json     # PWA Web App Manifest v3
+├── tests/
+│   ├── unit/             # Vitest unit tests (1 641 tests, 150 files)
+│   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
+│   │   └── settings/     # WebLlmPanel, AiSections
+│   └── e2e/              # Playwright specs + helpers.ts
+├── docs/                 # Extended documentation (CI, A11y, Design System, Tauri, Deployment, …)
+├── src-tauri/            # Tauri v2 desktop app shell + Rust config
 ├── turbo.json            # Turborepo pipeline
-└── types.ts              # Shared TypeScript interfaces and types
+└── types.ts              # Shared TypeScript interfaces and types (root level)
 ```
 
 ---
@@ -267,29 +336,42 @@ StoryCraft-Studio/
 
 ### Prerequisites
 
-A modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+) is all you need — no installation required.
+A modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+) is all you need for the web app — no installation required.
+
+For local development: **Node ≥ 22**, **pnpm 10** (`npm install -g pnpm`). For the desktop app: **Rust + Tauri CLI** (`cargo install tauri-cli`).
 
 ### 🔐 Setting Up AI
 
-StoryCraft Studio supports local AI plus BYOK cloud providers:
+StoryCraft Studio supports local-only AI (no API key) as well as BYOK cloud providers:
 
 #### Option A: Google Gemini / OpenAI / Claude / Grok (BYOK cloud)
 
-1. **Get your key** at [Google AI Studio](https://aistudio.google.com/app/apikey) — it's free
+1. **Get your key** — e.g. at [Google AI Studio](https://aistudio.google.com/app/apikey) (free tier available)
 2. **Open Settings** → AI Provider → select your provider
-3. **Enter your API key** — encrypted with AES-256-GCM and stored only in your browser's IndexedDB
+3. **Enter your API key** — encrypted with AES-256-GCM and stored only in your browser's IndexedDB; never transmitted except to the provider you select
 
 **Security best practices:**
-- ✅ Your key never leaves your device
+- ✅ Your key never leaves your device in plaintext
 - ✅ Encrypted at rest via the Web Crypto API
-- 🔒 **Recommended:** Restrict your key to `*.github.io` in Google AI Studio
+- 🔒 **Recommended:** Restrict your Gemini key to `*.github.io` in Google AI Studio
 
-#### Option B: Local AI (offline-first)
+#### Option B: Ollama (local server)
 
 1. **Install Ollama** and pull a model: `ollama pull qwen3:8b`
-2. Local facade uses layered execution (WebGPU-preferred, then CPU-compatible layer, then heuristic fallback)
-3. Optional Ollama endpoint can still be used for local model serving (default `http://localhost:11434`)
-4. All local inference runs on your machine; no internet required
+2. Start Ollama (it runs a local HTTP server at `http://localhost:11434` by default)
+3. In Settings → AI Provider → select **Ollama** and verify the connection
+
+#### Option C: Browser-Native AI (WebGPU / ONNX / Transformers.js)
+
+No installation, no server, no API key — AI runs directly in your browser:
+
+1. **Open Settings → AI Provider** → select **WebLLM**
+2. StoryCraft Studio auto-detects WebGPU support and displays your GPU adapter + VRAM tier
+3. **Choose a model** from the dropdown (Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B) and click pre-download
+4. If no WebGPU is available, the ONNX Runtime Web layer activates automatically (WASM, any device)
+5. Transformers.js serves as a further fallback — WebGPU or WASM backend, no manual config needed
+
+> All local-inference layers run entirely in-browser. No network call is made for AI inference.
 
 ### 🚀 Deploying to GitHub Pages
 
@@ -309,7 +391,7 @@ Vercel is a **first-class** hosting option alongside Pages: connect the repo, us
 git clone https://github.com/qnbs/StoryCraft-Studio.git
 cd StoryCraft-Studio
 
-# Install dependencies
+# Install dependencies (Node ≥ 22, pnpm 10)
 pnpm install
 
 # Start the development server (http://localhost:3000)
@@ -320,40 +402,27 @@ pnpm run build
 
 # Preview the production build locally
 pnpm run preview
+
+# Run unit tests
+pnpm run test:run
+
+# Run unit tests with coverage
+pnpm run test:coverage
+
+# Type check
+pnpm run typecheck
+
+# Lint (Biome — warnings fail like CI)
+pnpm run lint
+
+# Check i18n key parity + rebuild runtime bundles
+pnpm run i18n:check
+
+# Tauri desktop app (requires Rust)
+pnpm run tauri:dev
 ```
 
-> Note: The production build uses Vite manual chunking and lazy-loaded export libraries (`docx` / `jszip`) to keep the main app bundle smaller and improve load performance.
-
-### 🧪 CI & Local Validation
-
-The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Optional **desktop** bundles: [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) (`workflow_dispatch` / `v*` tags). Full reference: **[`docs/CI.md`](docs/CI.md)** and **[`docs/TAURI-CI.md`](docs/TAURI-CI.md)**.
-
-| Job          | When / needs        | What it does |
-| ------------ | -------------------- | ------------ |
-| `security`   | every run            | `pnpm audit --audit-level=high`; PRs: dependency review |
-| `quality`    | after `security`     | Biome, **i18n key check**, `tsc`, Vitest + coverage (Node **LTS** + **current**) |
-| `build`      | after `quality`      | Production Vite build, **chunk budget** (`bundle:budget`), **rollup analyze** artifact; on `main` (non-PR): Pages artifact |
-| `e2e`        | after `quality`      | Playwright **Chromium**, `CI=true` (Firefox optional locally — see `playwright.config.ts`) |
-| `mutation`   | after `quality`      | Stryker (`pnpm run mutation` if `stryker.conf.json` exists); **does not fail** the workflow (`continue-on-error`) |
-| `lighthouse` | after `build`        | LHCI against `dist` (assertions in **`.lighthouserc.cjs`**) |
-| `storybook`  | after `quality`      | Static Storybook build artifact |
-| `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
-
-Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, sidebar-scoped clicks) live in **`tests/e2e/helpers.ts`** — **do not** rely on `networkidle` with the Vite dev server (HMR/WebSocket). Details: **`docs/CI.md`**.
-
-**Low-resource / laptop workflow:** Run **`pnpm run typecheck`**, **`pnpm run lint`** (Biome with `--error-on-warnings`), and **`pnpm run i18n:check`** before pushing. **`pnpm run test:run`** exercises Vitest only — still meaningful but lighter than Playwright. Full **E2E** (`CI=true pnpm run test:e2e`) is intentionally heavy; rely on the **`e2e` job in CI** unless you are debugging a specific spec locally.
-
-**Vollparität mit dem Quality-Job (Zeit & RAM):** `pnpm install --frozen-lockfile && pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage` — entspricht der CI-Matrix ohne zweites Node-Setup.
-
-Simulate parts of the pipeline with [Act](https://github.com/nektos/act) (job ids must match `ci.yml`):
-
-```bash
-npm install -g act
-act pull_request --job security --job quality
-act push --job build --job e2e
-```
-
-Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
+> **Note:** The production build uses Vite manual chunking — `vendor-ai-onnx` for `onnxruntime-web`, separate chunks for `docx`/`jszip`/Yjs — to keep the main bundle small and comply with Workbox's 8 MiB Service Worker cache limit.
 
 ### 🌐 Custom Domain Setup
 
@@ -376,7 +445,50 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | Blank page after deploy   | Verify `base` in `vite.config.ts` matches your repo name              |
 | Assets not loading (404)  | Check `manifest.json` `start_url`; verify `404.html` is in `public/`  |
 | AI features not working   | Check API key in Settings; verify it starts with `AIza` and has quota |
-| Language resets on reload | Clear site data and re-select — should now persist via `localStorage` |
+| WebLLM not loading        | Requires a WebGPU-capable browser (Chrome 113+); check GPU status badge in Settings |
+| Language resets on reload | Clear site data and re-select — should persist via `localStorage`     |
+| IndexedDB migration error | Open DevTools → Application → IndexedDB → delete both stores and reload |
+
+---
+
+## 🧪 CI & Local Validation
+
+The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Optional **desktop** bundles: [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) (`workflow_dispatch` / `v*` tags). Full reference: **[`docs/CI.md`](docs/CI.md)** and **[`docs/TAURI-CI.md`](docs/TAURI-CI.md)**.
+
+| Job          | When / needs        | What it does |
+| ------------ | -------------------- | ------------ |
+| `security`   | every run            | `pnpm audit --audit-level=high`; `osv-scanner` vulnerability scan; gitleaks secrets scan; PRs: dependency review |
+| `quality`    | after `security`     | Biome lint + format, **i18n key parity** (`pnpm run i18n:check`), `tsc --noEmit`, Vitest + V8 coverage (Node **LTS** + **current**); Codecov upload |
+| `build`      | after `quality`      | Production Vite build, **chunk budget** (`bundle:budget`, max 7 000 KB), **rollup analyze** artifact; on `main`: SLSA provenance attestation + Pages artifact |
+| `e2e`        | after `quality`      | Playwright **Chromium**, `CI=true`; JUnit artifact uploaded for per-test PR annotations |
+| `mutation`   | after `quality`      | Stryker (`pnpm run mutation`); `break: 30` enforced |
+| `lighthouse` | after `build`        | LHCI against `dist` — performance `error:0.4`, accessibility `error:0.88`, SEO `warn:0.8` |
+| `storybook`  | after `quality`      | Static Storybook build artifact |
+| `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
+| `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
+
+**Current test metrics (2026-05-18):**
+- **1 641 unit tests** across **150 test files** — all passing
+- Coverage: **62.86 % statements · 49.06 % branches · 54.10 % functions · 64.68 % lines**
+- Vitest thresholds: statements ≥ 60 · branches ≥ 46 · functions ≥ 52 · lines ≥ 62
+
+**Low-resource / laptop workflow:** Run **`pnpm run typecheck`**, **`pnpm run lint`**, and **`pnpm run i18n:check`** before pushing. **`pnpm run test:run`** exercises Vitest only — lighter than Playwright. Full E2E (`CI=true pnpm run test:e2e`) is intentionally heavy; rely on the `e2e` job in CI unless you are debugging a specific spec.
+
+**Quality-gate parity (matches CI `quality` job exactly):**
+
+```bash
+pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage
+```
+
+**Simulate CI locally with [Act](https://github.com/nektos/act):**
+
+```bash
+npm install -g act
+act pull_request --job security --job quality
+act push --job build --job e2e
+```
+
+Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, `clickNavItem`) live in **`tests/e2e/helpers.ts`** — do **not** rely on `networkidle` with the Vite dev server (HMR/WebSocket). Details: **`docs/CI.md`**.
 
 ---
 
@@ -388,8 +500,8 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 4. **Write** — Immerse yourself in the **Manuscript** editor. `@mentions` link characters and worlds. Progress is saved automatically.
 5. **Enhance** — Use the **AI Writing Studio** to continue, improve, generate dialogue, or brainstorm.
 6. **Review** — Run the **AI Critic** for literary feedback, the **Plot-Hole Detector** for logic issues, and the **Consistency Checker** for continuity.
-7. **Snapshot** — Save a project version in Settings before major revisions. Restore anytime.
-8. **Publish** — Export as Markdown, plain text, or a formatted **PDF** with an AI-generated synopsis.
+7. **Snapshot** — Save a project version before major revisions. Restore to any snapshot anytime.
+8. **Export** — Export as Markdown, plain text, Word/DOCX, or a formatted **PDF** with an AI-generated synopsis. Back up your entire library as an encrypted ZIP.
 
 ---
 
@@ -397,7 +509,10 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 
 - **🐛 Report Bugs** — Open a GitHub Issue with details and reproduction steps
 - **💡 Suggest Features** — Open a Discussion or Issue
-- **🌍 Improve Translations** — five locale trees (`en` reference); native polish for FR/ES/IT especially welcome in PRs
+- **🌍 Improve Translations** — Five locale trees (`en` is the reference); native polish for FR/ES/IT especially welcome in PRs
+- **🧪 Write Tests** — Branch coverage target is ≥ 55 %; contributions to large components (collaboration, AI streaming paths) are particularly valuable
+
+See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vitest / Playwright guide, and architecture notes.
 
 ---
 
@@ -407,44 +522,51 @@ Optional Codecov: `act … -s CODECOV_TOKEN=<token>`.
 | -------- | ----------- |
 | [`README.md`](README.md) | Product overview, features, getting started (this file) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, Biome/Vitest/Playwright, architecture notes |
+| [`CHANGELOG.md`](CHANGELOG.md) | Keep a Changelog–style release notes |
+| [`ROADMAP.md`](ROADMAP.md) | Long-term features and quarterly planning |
+| [`TODO.md`](TODO.md) | Current sprint tasks and status |
+| [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
+| [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
+| [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, tests, Lighthouse) |
 | [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
 | [`docs/Design-System.md`](docs/Design-System.md) | Tokens, Tailwind preset, UI primitives under `components/ui` |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Pages + Vercel — static SPA, `base`, keys/privacy |
-| [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
-| [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y-Architektur (Live-Regionen, Fokus, Tests, Lighthouse) |
-| [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow (manual/tag builds, artifacts) |
-| [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
-| [`ROADMAP.md`](ROADMAP.md) / [`TODO.md`](TODO.md) | Planning and sprint tasks |
-| [`CHANGELOG.md`](CHANGELOG.md) | Keep a Changelog–style release notes |
-| [`docs/graphify.md`](docs/graphify.md) | Optional Graphify graph (`pnpm run graphify:update`, `pip install graphifyy`) |
-| [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Tauri plugin-updater: keys, signing secrets, `latest.json` |
-| [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md) | Archivierte Release-Notizen (v1.1.x) |
-| [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) | Historische CI-Optimierungsnotizen — **kanonisch:** [`docs/CI.md`](docs/CI.md) + [`ci.yml`](.github/workflows/ci.yml) |
-| [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) | Playwright-Helfer (kein `networkidle` unter Vite, Portal-Bootstrap, Sidebar-Scope) |
-| [`.cursorrules`](.cursorrules) | **QNBS v3** — Cursor AI behavior for qnbs repos (context-first, StoryCraft “soul”) |
+| [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow: manual/tag builds, 7-step first-release checklist |
+| [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Tauri plugin-updater: secrets table, `latest.json` auto-generation, signing |
+| [`docs/graphify.md`](docs/graphify.md) | Optional Graphify knowledge graph (`pnpm run graphify:update`) |
+| [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md) | Archived release notes (v1.1.x) |
+| [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) | Playwright helpers (no `networkidle` under Vite, portal bootstrap, sidebar scope) |
+| [`.cursorrules`](.cursorrules) | **QNBS v3** — Cursor AI behavior for qnbs repos |
 | [`CLAUDE.md`](CLAUDE.md) | Guidance for Claude Code |
 | [`.github/copilot-instructions.md`](.github/copilot-instructions.md) | GitHub Copilot Chat context |
-| [`.github/SECURITY.md`](.github/SECURITY.md) | Vulnerability reporting |
+| [`.github/SECURITY.md`](.github/SECURITY.md) | Vulnerability reporting policy |
+| [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) | Historical CI optimization notes (canonical: [`docs/CI.md`](docs/CI.md)) |
 
 ---
 
 # 📖 StoryCraft Studio (Deutsch)
 
-StoryCraft Studio ist eine hochmoderne, KI-gestützte Anwendung für Autoren, Drehbuchautoren und Kreative. Sie verwandelt das Schreiben in eine nahtlose, inspirierende Reise — von der ersten Idee bis zum fertigen Manuskript. Durch die Integration der Google Gemini API mit einer intuitiven, offline-fähigen Benutzeroberfläche ist StoryCraft Studio Ihr kreativer All-in-One-Copilot.
+StoryCraft Studio ist eine hochmoderne, KI-gestützte Anwendung für Autoren, Drehbuchautoren und Kreative. Sie verwandelt das Schreiben in eine nahtlose, inspirierende Reise — von der ersten Idee bis zum fertigen Manuskript. Durch die Integration eines Multi-Provider-KI-Stacks — darunter Google Gemini, OpenAI, Grok, Ollama und ein vollständig browser-natives 4-Schichten-Inferenz-System (WebGPU → ONNX → Transformers.js → Heuristik) — mit einer intuitiven, offline-fähigen Benutzeroberfläche ist StoryCraft Studio Ihr kreativer All-in-One-Copilot.
+
+## 🌐 Live-Demo
+
+**🚀 [StoryCraft Studio im Browser starten!](https://qnbs.github.io/StoryCraft-Studio/) 🚀**
+
+✨ _Sofort ausprobieren — keine Installation, kein Konto. Alle Daten werden sicher im IndexedDB des Browsers gespeichert._ ✨
 
 ## 🚀 Funktionen
 
 ### 📊 Dynamisches Projekt-Dashboard
 
-Ihre Kommandozentrale. Wortziele verfolgen, Projektstatistiken einsehen, Titel und Logline mit KI verwalten — alles auf einen Blick.
+Ihre Kommandozentrale: Wortziele verfolgen, Projektstatistiken einsehen, Titel und Logline mit KI verwalten — alles auf einen Blick. Optionale **Projekt-Gesundheitsbewertung** (hinter Feature-Flag) zeigt Lesbarkeit und Szenen-Timing-Hinweise lokal, ohne Manuskript-Text in die Cloud zu senden.
 
 ### ✍️ Drei-Fenster-Manuskript-Editor
 
-Ablenkungsfreie Schreibumgebung mit Kapitel-**Navigator** und Projekt-**Inspektor**. Echtzeit-Hervorhebung für `@Charakter`- und `#Welt`-Erwähnungen.
+Ablenkungsfreie Schreibumgebung mit Kapitel-**Navigator** und Projekt-**Inspektor**. Echtzeit-Hervorhebung für `@Charakter`- und `#Welt`-Erwähnungen. **Zen-Modus**, **Rechtschreib-Vorschläge** und **Grammatik-Hinweise** integriert.
 
 ### 🎬 Szenen-Board _(Visuelle Story-Planung)_
 
-Kanban-Board zum Drag-and-Drop-Anordnen von Szenen. Tempo und Struktur visuell erkunden.
+Kanban-Board zum Drag-and-Drop-Anordnen von Szenen. Tempo und Struktur visuell erkunden, ohne das Manuskript zu berühren.
 
 ### 🕸️ Charakter-Beziehungsgraph _(Interaktive Visualisierung)_
 
@@ -452,15 +574,15 @@ Kräftebasierter Graph aller Charakter-Beziehungen — unverzichtbar für komple
 
 ### 📚 Intelligente Story-Vorlagen
 
-Klassische Strukturen (Drei-Akt, Heldenreise, Save the Cat!, Fichtean-Kurve) und Genre-Vorlagen. Anpassen und mit KI personalisieren.
+Klassische Strukturen (Drei-Akt, Heldenreise, Save the Cat!, Fichtean-Kurve) und Genre-Vorlagen. Vorlagen anpassen, mit KI personalisieren und eigene Templates neben Community-Vorlagen verwalten.
 
 ### 🤖 KI-Gliederungsgenerator
 
-Detaillierte, interaktive Kapitelgliederung aus einer Idee — mit Genre, Tempo, Wendungen.
+Detaillierte, interaktive Kapitelgliederung aus einer Idee — mit Genre, Tempo, Charakteren, Wendungen. Ergebnis direkt auf das Manuskript anwenden.
 
 ### 👥 Charakter-Dossiers
 
-KI-Profilgenerator, Beziehungen & Charakterentwicklung, KI-generierte Porträts in verschiedenen Stilen.
+KI-Profilgenerator, Beziehungen & Charakterentwicklung, KI-generierte Porträts in verschiedenen Stilen (realistisch, Anime, Cartoon, Comic).
 
 ### 🌍 Weltenbau-Atlas
 
@@ -481,57 +603,87 @@ KI-generierte Lore, Zeitachsen, Orte, atmosphärische Stimmungsbilder.
 | **Handlungsloch-Detektor**  | Logische Widersprüche aufdecken                      |
 | **Konsistenz-Prüfer (RAG)** | Manuskript gegen Charakter- und Weltdaten abgleichen |
 
-### 🔍 RAG-Konsistenz-Prüfer
+### 🔍 Projektübergreifende Suche _(v2)_
 
-Nutzt **Retrieval-Augmented Generation** für tiefgehende Konsistenzprüfung über das gesamte Projekt.
+Suche über **alle Projekte** gleichzeitig, ohne diese laden zu müssen. Datenschutzkonformer IndexedDB-Index (DB v8) speichert nur Metadaten — kein Klartextmanuskript. Zwei-Phasen-Suche: Phase 1 im Index (sofort), Phase 2 lädt das Vollprojekt bei Bedarf.
+
+### 🤝 Echtzeit-Zusammenarbeit mit Verschlüsselungs-Fundament
+
+P2P-Co-Editing via Yjs + y-webrtc. Verschlüsselungs-Fundament: AES-256-GCM-Schlüsselableitung (PBKDF2, 310 000 Iterationen) in `collaborationService.ts`. Sicherheitshinweis-Banner vor Verbindungsaufbau (WCAG 2.2 AA). Signaling-URL in Einstellungen konfigurierbar.
+
+### 🔐 Verschlüsseltes Bibliotheks-Backup
+
+Ein-Klick-Export aller Projekte als verschlüsselte ZIP-Datei (AES-256-GCM, passwortgeschützt) unter **Einstellungen → Daten**. Import auf jedem Gerät mit demselben Passwort.
+
+### 💾 Robustes Offline-Datenmanagement
+
+Auto-Speicherung, Snapshot-System (manuell + automatisch), Import/Export, 100-Schritt Undo/Redo.
+
+### 📤 Export-Suite
+
+Markdown, Nur-Text, **PDF** (konfigurierbar), **Word/DOCX**, KI-Synopse, Einfüge-Format für Google Docs / Notion. Verschlüsselter ZIP-Bibliotheks-Export.
 
 ### 📱 Progressive Web App (PWA) v3.0
 
 Installierbar auf Desktop und Smartphone. Offline-fähig. App-Shortcuts vom Home-Bildschirm.
 
-### 🌐 Mehrsprachigkeit
+### 🌐 Mehrsprachigkeit — 1 440 Übersetzungsschlüssel
 
-Fünf Oberflächensprachen in der App wählbar (Einstellungen, Willkommensportal, Befehlspalette): **Deutsch**, **Englisch**, **Französisch**, **Spanisch**, **Italienisch**. Schlüsselparität wird per CI geprüft (`pnpm run i18n:check`).
+Fünf Oberflächensprachen (**Deutsch, Englisch, Französisch, Spanisch, Italienisch**) — vollständig übersetzt, null hartcodierte Zeichenketten. Schlüsselparität per CI (`pnpm run i18n:check`) gewährleistet. Spotlight-Tour nach erstem Start; erneut startbar über Dashboard oder Hilfe.
 
-**Spotlight-Tour:** Kurze geführte Tour nach dem ersten Start; erneut startbar über das Dashboard („Geführte Tour“) oder Hilfe.
+## 🧠 KI-Provider-Stack
 
-Sprachauswahl dauerhaft in `localStorage` gespeichert.
+| Schicht | Provider | Voraussetzung |
+|---------|----------|---------------|
+| Cloud 1–4 | Gemini / OpenAI / Claude / Grok | API-Schlüssel (BYOK) |
+| Lokal 1 | Ollama | Lokaler Server |
+| Lokal 2 | WebLLM (WebGPU) | GPU + moderner Browser |
+| Lokal 3 | ONNX Runtime Web | WASM (jedes Gerät) |
+| Lokal 4 | Transformers.js | WASM / WebGPU |
 
----
+Automatisches Fallback von Schicht zu Schicht — KI-Funktionen arbeiten immer, auch komplett offline ohne Internetverbindung.
 
 ## 💡 Unsere Philosophie
 
-- **Datenschutz an erster Stelle** — Alle Daten bleiben lokal; keine Konten, keine Cloud.
+- **Datenschutz an erster Stelle** — Alle Daten bleiben lokal; keine Konten, keine Cloud, kein Tracking.
 - **KI als Partner** — Die KI erweitert Ihre Kreativität, ersetzt Sie nicht.
 - **Nahtloser Workflow** — Werkzeuge, die nicht im Weg stehen.
 - **Qualität vor Quantität** — Jedes KI-Werkzeug hat eine klare, spezifische Aufgabe.
-
----
+- **Barrierefreiheit** — WCAG 2.2 AA-orientiert; Lighthouse-Barrierefreiheits-Gate in CI aktiv.
 
 ## 🛠️ Technologie-Stack
 
-| Schicht            | Technologie                                        |
-| ------------------ | -------------------------------------------------- |
-| UI-Framework       | React 19 + TypeScript                              |
-| Build              | Vite 8                                             |
-| Zustandsverwaltung | Redux Toolkit + Redux-Undo                         |
-| Styling            | Tailwind CSS + CSS-Variablen                       |
-| KI (Cloud)         | Google Gemini API (`@google/genai`)                |
-| KI (Lokal)         | Ollama HTTP-Client (localhost:11434)               |
-| Speicher           | Dual IndexedDB (`storycraft-state-db` / `storycraft-data-db`), Migration aus Legacy-DB |
-| Verschlüsselung    | Web Crypto API (AES-256-GCM)                       |
-| PDF-Export         | jsPDF                                              |
-| PWA                | Service Worker + Manifest v3                       |
-| i18n               | Eigenes Context-System mit localStorage-Persistenz |
-
----
+| Schicht              | Technologie                                                      |
+| -------------------- | ---------------------------------------------------------------- |
+| UI-Framework         | React 19 + TypeScript 6 (strict + exactOptionalPropertyTypes)    |
+| Build                | Vite 8 + pnpm 10 Workspaces                                      |
+| Zustandsverwaltung   | Redux Toolkit 2.x + Redux-Undo + Zustand                         |
+| Styling              | Tailwind CSS 4.x + CSS-Variablen                                 |
+| KI (Cloud)           | Gemini / OpenAI / Claude / Grok API (BYOK)                       |
+| KI (Lokal, L1)       | WebLLM (`@mlc-ai/web-llm`) — WebGPU                              |
+| KI (Lokal, L2)       | ONNX Runtime Web — WASM-Fallback                                 |
+| KI (Lokal, L3)       | Transformers.js (`@xenova/transformers`)                         |
+| KI (Lokal, L4)       | Heuristischer Fallback (`@domain/ai-core`)                       |
+| KI (Server)          | Ollama HTTP-Client (localhost:11434)                             |
+| Speicher             | Dual IndexedDB v8 (`storycraft-state-db` / `storycraft-data-db`) |
+| Verschlüsselung      | Web Crypto API (AES-256-GCM + PBKDF2)                            |
+| Zusammenarbeit       | Yjs + y-webrtc + AES-256-GCM-Schlüsselableitung                 |
+| PDF-Export           | jsPDF                                                            |
+| Dokument-Export      | docx + jszip (lazy-loaded)                                       |
+| PWA                  | Service Worker + Web App Manifest v3                             |
+| i18n                 | Eigenes Context-System; 1 440 Schlüssel × 5 Sprachen             |
+| Tests                | Vitest (1 641 Tests / 150 Dateien) + Playwright E2E + Stryker   |
+| Desktop              | Tauri v2 (Auto-Updater via `latest.json`)                        |
 
 ## Erste Schritte
 
-### 🔐 Gemini API-Schlüssel einrichten
+### 🔐 KI einrichten
 
-1. Kostenlosen Schlüssel bei [Google AI Studio](https://aistudio.google.com/app/apikey) holen
-2. Einstellungen → Gemini API-Schlüssel → Eingeben und Speichern
+**Option A — Cloud (BYOK):** Kostenlosen Schlüssel bei [Google AI Studio](https://aistudio.google.com/app/apikey) holen → Einstellungen → KI-Provider → Schlüssel eingeben (AES-256-GCM-verschlüsselt im IndexedDB).
+
+**Option B — Ollama (lokal):** `ollama pull qwen3:8b` → Server starten → Einstellungen → Ollama auswählen.
+
+**Option C — Browser-KI (kein Server, kein Schlüssel):** Einstellungen → WebLLM → GPU-Status prüfen → Modell wählen → herunterladen. Bei fehlendem WebGPU: ONNX WASM oder Transformers.js greifen automatisch.
 
 ### 💻 Lokale Entwicklung
 
@@ -539,37 +691,36 @@ Sprachauswahl dauerhaft in `localStorage` gespeichert.
 git clone https://github.com/qnbs/StoryCraft-Studio.git
 cd StoryCraft-Studio
 pnpm install
-pnpm run dev
+pnpm run dev        # http://localhost:3000
+pnpm run build      # Produktions-Build → dist/
+pnpm run test:run   # Vitest Einzel-Lauf
+pnpm run typecheck  # TypeScript-Prüfung
+pnpm run lint       # Biome-Lint
 ```
-
----
 
 ## 🚀 Kreativer Arbeitsablauf
 
 1. **Konzipieren** — Willkommensportal: Template, KI-Gliederung oder leeres Manuskript
-2. **Erschaffen** — Charaktere, Welten und Beziehungen mit KI aufbauen
-3. **Strukturieren** — Gliederungsgenerator oder Szenen-Board
-4. **Schreiben** — Manuskript-Editor mit `@Erwähnungen` und Auto-Speichern
-5. **Verbessern** — KI-Schreibstudio für alle kreativen Aufgaben
-6. **Prüfen** — KI-Kritiker, Handlungsloch-Detektor, Konsistenz-Prüfer
-7. **Sichern** — Snapshot erstellen vor großen Änderungen
-8. **Exportieren** — Markdown, Text oder PDF
-
----
+2. **Erschaffen** — Charaktere und Welten mit KI aufbauen, Beziehungsgraph erkunden
+3. **Strukturieren** — Gliederungsgenerator oder Szenen-Board für visuelles Planen
+4. **Schreiben** — Manuskript-Editor mit `@Erwähnungen`, Auto-Speichern, Zen-Modus
+5. **Verbessern** — KI-Schreibstudio: weiterschreiben, verbessern, Dialog generieren, brainstormen
+6. **Prüfen** — KI-Kritiker, Handlungsloch-Detektor, RAG-Konsistenz-Prüfer
+7. **Sichern** — Snapshot vor großen Änderungen; verschlüsselter ZIP-Bibliotheks-Export
+8. **Exportieren** — Markdown, Text, PDF, DOCX oder verschlüsseltes Archiv
 
 ## 🤝 Mitwirken
 
-- **🐛 Fehler melden** — GitHub Issue mit Beschreibung
+- **🐛 Fehler melden** — GitHub Issue mit Beschreibung und Reproduktionsschritten
 - **💡 Features vorschlagen** — GitHub Issue oder Discussion
 - **🌍 Übersetzungen verbessern** — `locales/`-Ordner; PRs für FR/ES/IT willkommen
+- **🧪 Tests schreiben** — Branch-Coverage-Ziel ≥ 55 %; insbesondere Kollaborations- und KI-Streaming-Pfade
 
-**Entwickler-Dokumentation (engl.):** Siehe den Abschnitt *Documentation Hub* im englischen Teil dieser README sowie [`CONTRIBUTING.md`](CONTRIBUTING.md) und [`docs/CI.md`](docs/CI.md) für CI-Details.
-
----
+**Entwickler-Dokumentation:** Englischer README-Teil oben sowie [`CONTRIBUTING.md`](CONTRIBUTING.md) und [`docs/CI.md`](docs/CI.md).
 
 ## Fehlerverhalten & Hinweise
 
-- Alle KI-Funktionen zeigen klare Fehlermeldungen bei API- oder Netzwerkproblemen.
-- Die `ErrorBoundary` fängt globale Fehler ab und zeigt eine verständliche Meldung.
-- Nutzer erhalten klare Hinweise, falls Export, KI oder Speicherung fehlschlägt.
+- Alle KI-Funktionen zeigen klare Fehlermeldungen bei API- oder Netzwerkproblemen (offline-Erkennung, ungültiger Schlüssel, Rate-Limit).
+- `ErrorBoundary` fängt globale Fehler ab und zeigt verständliche, lokalisierte Meldungen mit Reset- und Reload-Optionen.
+- Bei Export-, KI- oder Speicherfehlern erhalten Nutzer klare, aktionsorientierte Hinweise in der aktiven Sprache.
 - Die Sprachauswahl wird dauerhaft in `localStorage` gespeichert und beim nächsten Öffnen wiederhergestellt.
