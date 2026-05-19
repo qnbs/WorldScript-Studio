@@ -56,6 +56,20 @@
       "description": "Open the AI writing studio",
       "url": "/StoryCraft-Studio/?view=writer&source=shortcut",
       "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "New Scene",
+      "short_name": "New Scene",
+      "description": "Jump to the Plot Board and add a new scene",
+      "url": "/StoryCraft-Studio/#/board?action=add-scene",
+      "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Start Writing Session",
+      "short_name": "Session",
+      "description": "Open the Progress Tracker and start a writing session",
+      "url": "/StoryCraft-Studio/#/progress?action=start-session",
+      "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ],
 

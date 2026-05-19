@@ -80,7 +80,7 @@ pnpm run dev:tauri    # Tauri desktop app (requires Rust)
 | Frontend  | React 19, TypeScript (strict + exactOptionalPropertyTypes)   |
 | State     | Redux Toolkit 2.x + redux-undo                             |
 | Styling   | Tailwind CSS 4 via `@tailwindcss/vite` + CSS custom props    |
-| AI        | Gemini (`@google/genai`), OpenAI, Ollama via `aiProviderService.ts` |
+| AI        | Gemini (`@google/genai`), OpenAI, Ollama, WebLLM, ONNX, Transformers.js via `aiProviderService.ts` |
 | Storage   | IndexedDB (`dbService`) / Tauri filesystem (`fileSystemService`)   |
 | Build     | Vite 8 + vite-plugin-pwa                                     |
 | Lint      | Biome (`pnpm run lint` / `lint:fix`)                         |
@@ -98,7 +98,7 @@ StoryCraft-Studio/
 ├── components/       # React UI components
 │   └── ui/           # Primitive design-system components (Button, Card, Modal…)
 ├── contexts/         # React contexts per view + I18n + CommandExecutor
-├── features/         # Redux slices (project, settings, writer, status, featureFlags)
+├── features/         # Redux slices (project, settings, writer, status, featureFlags, plotBoard, progressTracker, sceneComments)
 ├── hooks/            # Custom React hooks per view + shared hooks (e.g. useGlobalKeyboardShortcuts)
 ├── locales/          # i18n source JSON (de, en, fr, es, it — key parity vs en)
 ├── services/         # Adapters: AI, DB, storage, collaboration, EPUB; commands/, keyboard/, help/, settingsExchange
@@ -114,7 +114,7 @@ StoryCraft-Studio/
         └── ci.yml    # security → quality → build / e2e / storybook → lighthouse → deploy (main)
 ```
 
-**Documentation index:** [`README.md`](README.md) § **Documentation Hub** lists every maintainer-facing `.md`; [`AUDIT.md`](AUDIT.md) § *Markdown corpus* lists the **19** curated sources; canonical CI details → [`docs/CI.md`](docs/CI.md) (including **Cloud CI-first** — heavy E2E, coverage, Lighthouse run on GitHub Actions).
+**Documentation index:** [`README.md`](README.md) § **Documentation Hub** lists every maintainer-facing `.md`; [`AUDIT.md`](AUDIT.md) § *Markdown corpus* lists the **22** curated sources; canonical CI details → [`docs/CI.md`](docs/CI.md) (including **Cloud CI-first** — heavy E2E, coverage, Lighthouse run on GitHub Actions).
 
 ---
 
@@ -233,7 +233,7 @@ Tests live in `tests/e2e/`. Playwright tests verify core user flows:
 
 ### Mutation testing (Stryker)
 
-Targets `services/codexService.ts` and `services/dbMigration.ts` (see [`stryker.conf.json`](stryker.conf.json)). HTML report: `reports/mutation/`. `thresholds.break` is `null` until kill-rate improves; the CI mutation job uses `continue-on-error: true`.
+Targets 9 service files (see [`stryker.conf.json`](stryker.conf.json)): `codexService`, `dbMigration`, `fuzzyScore`, `palettePreferences`, `commandBuilder`, `hybridFallback`, `providerFactory`, `helpDocRetrieval`, `listenerMiddleware`. HTML report: `reports/mutation/`. `thresholds.break` is `null` until kill-rate improves; the CI mutation job uses `continue-on-error: true`.
 
 ```bash
 pnpm run mutation

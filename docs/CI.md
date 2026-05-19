@@ -32,7 +32,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 | Types | **TypeScript** `pnpm run typecheck` |
 | Unit tests | **Vitest** with V8 coverage (`pnpm exec vitest run --coverage`) |
 | E2E | **Playwright** (`pnpm run test:e2e` with `CI=true`) |
-| Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs`) — **accessibility** category asserted at **`error`** level `minScore: 0.88` (blocks CI); performance `warn`; CLS `error` ≤ 0.1 |
+| Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs`) — **accessibility** asserted at **`error`** level `minScore: 0.95` (blocks CI); performance `warn` ≥ 0.4; SEO `warn` ≥ 0.8; CLS `error` ≤ 0.1; FCP `warn` ≤ 5 s; LCP `warn` ≤ 7 s |
 | Bundle guardrails | **`pnpm run bundle:budget`** (max chunk KB) + **`pnpm run analyze`** (rollup visualizer → `dist/bundle-analysis.html`, artifact in CI) |
 
 ---
@@ -73,7 +73,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 | Job | Needs | Purpose |
 |-----|--------|---------|
-| `security` | — | `pnpm audit --audit-level=high`; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
+| `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `quality` | `security` | Matrix **Node `lts/*`** and **`node` (current)** → Biome lint, **`pnpm run i18n:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation** (`actions/attest-build-provenance@v2`) |
 | `e2e` | `quality` | Playwright **Chromium** + **mobile emulation** (Pixel 5, same browser install), `CI=true`. Firefox and optional mobile locally — see [`playwright.config.ts`](../playwright.config.ts). |

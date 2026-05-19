@@ -1,24 +1,52 @@
 # Accessibility (StoryCraft Studio)
 
-Kurzleitfaden für Maintainer: wo Barrierefreiheit in der App verankert ist und wie wir sie prüfen.
+Maintainer reference: where accessibility is anchored in the app and how we verify it.
 
-## Architektur
+## Architecture
 
-- **Live-Regionen:** `LiveRegionProvider` / `useAnnounce()` in [`contexts/LiveRegionContext.tsx`](../contexts/LiveRegionContext.tsx). View-Wechsel werden mit übersetztem Seitentitel angesagt (nicht mit internen View-Keys).
-- **Fokus:** `useFocusTrap()` in [`hooks/useFocusTrap.ts`](../hooks/useFocusTrap.ts) — genutzt von Modal und Command Palette.
-- **Einstellungen:** Hub unter Settings → Accessibility inkl. Presets und `liveRegionVerbosity`; Persistenz über Redux, Validierung mit Zod in [`features/settings/accessibilitySchema.ts`](../features/settings/accessibilitySchema.ts).
+- **Live regions:** `LiveRegionProvider` / `useAnnounce()` in [`contexts/LiveRegionContext.tsx`](../contexts/LiveRegionContext.tsx). View transitions are announced with the translated page title (not internal view keys).
+- **Focus trapping:** `useFocusTrap()` in [`hooks/useFocusTrap.ts`](../hooks/useFocusTrap.ts) — used by Modal and Command Palette.
+- **Settings hub:** Settings → Accessibility — presets and `liveRegionVerbosity`; persisted via Redux, validated with Zod in [`features/settings/accessibilitySchema.ts`](../features/settings/accessibilitySchema.ts).
+- **WCAG standard:** WCAG 2.2 AA. Lighthouse CI gate: `minScore: 0.95` (error level — blocks CI).
 
-## Manuelle Checks
+## Component ARIA Patterns
 
-- Tastatur: Skip-Link (`App`), Command Palette (⌘/Strg+K), alle primären Dialoge (Tab bleibt gefangen, ESC schließt wo vorgesehen).
-- Screenreader-Stichprobe: Navigation zwischen Views, Palette öffnen/schließen, Accessibility-Hub in den Einstellungen.
+### Global
+| Component | Pattern |
+|-----------|---------|
+| Command Palette | `role="combobox"` + `role="listbox"` (ARIA combobox pattern) |
+| Modal | Focus trap + `role="dialog"` + `aria-modal="true"` |
+| Toast | `role="status"` or `role="alert"` depending on urgency |
+| Navigation tabs | `role="tablist"` / `role="tab"` / `role="tabpanel"` |
+| Skip link | `#main-content` anchor at top of `App.tsx` |
 
-## Automatisierte Checks
+### v1.6 Additions (Plot-Board v2, Reference Panel, Progress Tracker)
+| Component | Pattern |
+|-----------|---------|
+| `PlotCanvas` | `role="application"` + `aria-label` + keyboard shortcuts documented in tooltip |
+| `ConnectionLayer` SVG | `role="img"` on `<svg>` + `aria-label` listing connection count; per-connection `<path>` with `role="button"` + `tabIndex={0}` + `onKeyDown` (Enter/Space to select) |
+| `TensionCurvePanel` SVG | `role="img"` on container SVG + `aria-label` with data summary for screen readers |
+| `ProgressTrackerView` charts | `role="img"` on VelocityChart and Heatmap SVGs + `aria-label` with human-readable summary (e.g., "30-day writing velocity: peak 1 200 words on May 15") |
+| Session elapsed timer | `role="timer"` + `aria-label` on the `<p>` element (supports `aria-label` per spec) |
+| `CommentsPanel` | `role="list"` on comment list, `role="listitem"` per comment, `aria-label` on reply inputs |
+| `ReferencePanelView` | `role="complementary"` on panel, `aria-label` from i18n; tab bar uses ARIA tablist/tab/tabpanel |
+| `BookPreviewView` | `role="article"` per section (semantic HTML already), `aria-live="off"` on container |
+| `SubplotPanel` | Color picker `<input type="color">` labelled via `aria-label` |
+| Download-progress modal | `role="progressbar"` + `aria-valuenow` / `aria-valuemin` / `aria-valuemax` (WCAG 2.2) |
 
-- **Playwright:** [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts) — axe-core, schwere Verstöße (critical/serious) müssen fehlen; Farbkontrast-Regel ist bewusst deaktiviert (Designtokens werden separat beobachtet — bei Bedarf gezielt in Storybook **addon-a11y** oder ein lokaler axe-Lauf mit aktivierter `color-contrast`-Regel auf Einzelscreens).
-- **Lighthouse CI:** [`.lighthouserc.cjs`](../.lighthouserc.cjs) — Accessibility-Kategorie als warn mit Mindest-Score (mobile Preview-URL).
-- **Storybook:** Dev-Dependency `@storybook/addon-a11y` — nach `pnpm run storybook` die A11y-Registerkarte nutzen.
+## Manual Checks
+
+- **Keyboard:** Skip-link (`App`), Command Palette (Ctrl/Cmd+K), all primary dialogs (focus stays trapped, Escape closes where expected), Plot Board mode tabs, session start/stop (Ctrl+Shift+S).
+- **Screen reader sample:** Navigate between views, open/close palette, Accessibility hub in Settings, start a writing session in Progress Tracker, add a subplot in Plot Board.
+- **High contrast:** Apply `.accessibility-high-contrast` class (Settings → Accessibility) — verify SVG charts and connection lines remain visible.
+
+## Automated Checks
+
+- **Playwright:** [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts) — axe-core; critical/serious violations must be zero. Color-contrast rule is intentionally disabled (design tokens are tracked separately — use Storybook `addon-a11y` or a targeted local axe run with `color-contrast` enabled when refining tokens).
+- **Lighthouse CI:** [`.lighthouserc.cjs`](../.lighthouserc.cjs) — Accessibility category at **`error`** level `minScore: 0.95` — blocks CI on regression.
+- **Storybook:** Dev-dependency `@storybook/addon-a11y` — use the A11y tab after `pnpm run storybook`.
+- **Biome:** `a11y/*` lint rules run on every commit via pre-commit hook; warnings fail CI.
 
 ## i18n
 
-Alle neuen nutzersichtbaren A11y-Texte liegen unter `locales/*/…` und werden per `pnpm run i18n:check` / Bundle-Build mit `public/locales/` synchronisiert.
+All new user-visible accessibility strings live under `locales/*/…` and are synced to `public/locales/` by `pnpm run i18n:check` / the bundle build step. ARIA labels that use dynamic data (e.g., chart summaries) are constructed in the component using `t('key', { count })` pattern.
