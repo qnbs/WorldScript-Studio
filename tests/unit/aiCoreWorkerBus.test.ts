@@ -6,7 +6,7 @@ import {
   WEBLLM_SUPPORTED_MODELS,
   WorkerBus,
 } from '@domain/ai-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // WorkerBus
@@ -83,6 +83,82 @@ describe('WorkerBus', () => {
     const t = bus.getTelemetry();
     expect(t.failedTasks).toBe(1);
     expect(t.processedTasks).toBe(1);
+  });
+
+  // QNBS-v3: v2 WorkerBus — backpressure, cancel, abort, preemption-promotion, extended telemetry
+  it('isBackpressured returns false for critical regardless of queue size', () => {
+    const bus = new WorkerBus();
+    // Fill queue to MAX_QUEUE_SIZE (32) with normal tasks
+    for (let i = 0; i < 32; i++) {
+      bus.enqueue(makeTask('normal', `n${i}`));
+    }
+    expect(bus.isBackpressured('critical')).toBe(false);
+    expect(bus.isBackpressured('high')).toBe(true);
+    expect(bus.isBackpressured('normal')).toBe(true);
+    expect(bus.isBackpressured('low')).toBe(true);
+  });
+
+  it('enqueue returns false when queue is backpressured (non-critical)', () => {
+    const bus = new WorkerBus();
+    for (let i = 0; i < 32; i++) {
+      bus.enqueue(makeTask('normal', `n${i}`));
+    }
+    const rejected = bus.enqueue(makeTask('high', 'rejected'));
+    expect(rejected).toBe(false);
+    // Critical still gets through
+    const accepted = bus.enqueue(makeTask('critical', 'critical-bypass'));
+    expect(accepted).toBe(true);
+  });
+
+  it('cancel removes a queued task', () => {
+    const bus = new WorkerBus();
+    bus.enqueue(makeTask('normal', 'target'));
+    bus.enqueue(makeTask('normal', 'other'));
+    const removed = bus.cancel('target');
+    expect(removed).toBe(true);
+    // Only 'other' remains
+    expect(bus.dequeue()?.id).toBe('other');
+    expect(bus.dequeue()).toBeUndefined();
+  });
+
+  it('cancel returns false for unknown taskId', () => {
+    const bus = new WorkerBus();
+    expect(bus.cancel('nonexistent')).toBe(false);
+  });
+
+  it('registerTask returns an AbortSignal; cancel aborts in-flight task', () => {
+    const bus = new WorkerBus();
+    const signal = bus.registerTask('inflight-1');
+    expect(signal.aborted).toBe(false);
+    bus.cancel('inflight-1');
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('getTelemetry includes peakLatencyMs, errorRate, lastSuccessAt', () => {
+    const bus = new WorkerBus();
+    expect(bus.getTelemetry().peakLatencyMs).toBe(0);
+    expect(bus.getTelemetry().errorRate).toBe(0);
+    expect(bus.getTelemetry().lastSuccessAt).toBeNull();
+
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    bus.recordResult(500, true);
+    bus.recordResult(200, false);
+    const t = bus.getTelemetry();
+    expect(t.peakLatencyMs).toBe(500);
+    expect(t.errorRate).toBeCloseTo(0.5);
+    expect(t.lastSuccessAt).toBe(1_000_000);
+    vi.useRealTimers();
+  });
+
+  it('low-priority task re-queued MAX_PREEMPTIONS times gets promoted to normal', () => {
+    const bus = new WorkerBus();
+    // Enqueue a low task that has been re-queued 3 times (= MAX_PREEMPTIONS)
+    bus.enqueue({ ...makeTask('low', 'promoted'), requeueCount: 3 });
+    // Dequeue should give us 'promoted' with normal priority (promoted)
+    const dequeued = bus.dequeue();
+    expect(dequeued?.id).toBe('promoted');
+    expect(dequeued?.priority).toBe('normal');
   });
 });
 

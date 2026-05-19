@@ -19,6 +19,7 @@ import {
   stripJsonFences,
 } from './aiUtils';
 import { logger } from './logger';
+import { getPrompt as libGetPrompt } from './promptLibrary';
 import { storageService } from './storageService';
 
 // === DYNAMIC API KEY MANAGEMENT ===
@@ -181,7 +182,10 @@ type PromptType =
   | 'proofread'
   | 'consistencyCheck'
   | 'criticAnalysis'
-  | 'plotHoleDetection';
+  | 'plotHoleDetection'
+  | 'styleTransfer'
+  | 'plotHoleFix'
+  | 'chapterAutoGeneration';
 
 type BasePromptParams = { lang: string };
 
@@ -224,6 +228,13 @@ type ConsistencyCheckParams = BasePromptParams & {
 };
 type CriticAnalysisParams = BasePromptParams & { text: string; context?: string };
 type PlotHoleDetectionParams = BasePromptParams & { text: string };
+type StyleTransferParams = BasePromptParams & { authorStyle: string; passage: string };
+type PlotHoleFixParams = BasePromptParams & { analysis: string; manuscript: string };
+type ChapterAutoGenParams = BasePromptParams & {
+  outlineSection: string;
+  existingChapters: string;
+  wordTarget: number;
+};
 
 type PromptParamsMap = {
   logline: LoglineParams;
@@ -243,6 +254,9 @@ type PromptParamsMap = {
   consistencyCheck: ConsistencyCheckParams;
   criticAnalysis: CriticAnalysisParams;
   plotHoleDetection: PlotHoleDetectionParams;
+  styleTransfer: StyleTransferParams;
+  plotHoleFix: PlotHoleFixParams;
+  chapterAutoGeneration: ChapterAutoGenParams;
 };
 
 // --- THINKING CONFIGURATION ---
@@ -503,6 +517,29 @@ ${langInstruction}`,
       const p = params as PlotHoleDetectionParams;
       return {
         prompt: `Analyze the following text for any logical inconsistencies, plot holes, or unresolved narrative threads.\n\nText: ${sanitizePromptBlock(p.text)}\n${langInstruction}`,
+      };
+    }
+    case 'styleTransfer': {
+      // QNBS-v3: Delegates to promptLibrary — single source of truth for prompt strings.
+      const p = params as StyleTransferParams;
+      return {
+        prompt: `${libGetPrompt('styleTransfer', { authorStyle: sanitizePromptBlock(p.authorStyle), passage: sanitizePromptBlock(p.passage) })}\n${langInstruction}`,
+      };
+    }
+    case 'plotHoleFix': {
+      const p = params as PlotHoleFixParams;
+      return {
+        prompt: `${libGetPrompt('plotHoleFix', { analysis: sanitizePromptBlock(p.analysis), manuscript: sanitizePromptBlock(p.manuscript) })}\n${langInstruction}`,
+        // QNBS-v3: 2048-token thinking budget for fix generation — more complex than detection alone.
+        thinkingBudget: 2048,
+      };
+    }
+    case 'chapterAutoGeneration': {
+      // QNBS-v3: Extended thinking budget 8192 tokens for narrative generation.
+      const p = params as ChapterAutoGenParams;
+      return {
+        prompt: `${libGetPrompt('chapterAutoGeneration', { outlineSection: sanitizePromptBlock(p.outlineSection), existingChapters: sanitizePromptBlock(p.existingChapters), wordTarget: String(p.wordTarget) })}\n${langInstruction}`,
+        thinkingBudget: 8192,
       };
     }
     default:

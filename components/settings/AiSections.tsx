@@ -16,6 +16,8 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
 import { AiProviderCard } from './AiProviderCard';
+import { GpuMetricsPanel } from './GpuMetricsPanel';
+import { LocalAiDownloadProgress } from './LocalAiDownloadProgress';
 import { ToggleSwitch } from './SettingsShared';
 
 const KNOWN_OLLAMA_MODELS = new Set([
@@ -47,6 +49,9 @@ export const AiSection: FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* QNBS-v3: Download progress modal renders above settings panel (portal-like absolute position). */}
+      <LocalAiDownloadProgress />
+      <GpuMetricsPanel />
       <AiProviderCard
         advancedAi={settings.advancedAi}
         onAdvancedAiPatch={(patch) =>
@@ -376,8 +381,20 @@ export const AdvancedAiSection: FC = () => {
                 </>
               ) : settings.advancedAi.provider === 'openai' ? (
                 <>
-                  <option value="gpt-4o">GPT-4o</option>
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  <optgroup label="GPT-4.1 (2025)">
+                    <option value="gpt-4.1">GPT-4.1</option>
+                    <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
+                    <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+                  </optgroup>
+                  <optgroup label="o-Series Reasoning">
+                    <option value="o3">o3</option>
+                    <option value="o4-mini">o4-mini</option>
+                    <option value="o3-mini">o3-mini</option>
+                  </optgroup>
+                  <optgroup label="Legacy">
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  </optgroup>
                 </>
               ) : settings.advancedAi.provider === 'anthropic' ? (
                 <>

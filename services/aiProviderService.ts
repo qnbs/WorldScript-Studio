@@ -81,9 +81,11 @@ async function streamOpenAI(
   if (!apiKey) throw new Error('NO_API_KEY: OpenAI API key missing. Please enter it in Settings.');
 
   const usesOfficialOpenAi = !opts.openAiCompatibleBaseUrl?.trim();
-  if (usesOfficialOpenAi && !opts.model.startsWith('gpt-')) {
+  // QNBS-v3: Allow gpt-, o1-, o3-, o4- prefixes; o-series reasoning models ship alongside GPT-4.1.
+  const isValidOpenAiModel = opts.model.startsWith('gpt-') || /^o\d/.test(opts.model);
+  if (usesOfficialOpenAi && !isValidOpenAiModel) {
     throw new Error(
-      `OpenAI: Model "${opts.model}" is not a valid OpenAI model. Please select a GPT model (e.g. gpt-4o, gpt-4o-mini) in Settings.`,
+      `OpenAI: Model "${opts.model}" is not a valid OpenAI model. Please select a GPT or o-series model (e.g. gpt-4.1, o3, o4-mini) in Settings.`,
     );
   }
   const model = opts.model;

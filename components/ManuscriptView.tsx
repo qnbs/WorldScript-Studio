@@ -45,7 +45,8 @@ const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
 
-  const handleLeftResize = useCallback((e: MouseEvent) => {
+  // QNBS-v3: PointerEvent replaces MouseEvent for reliable mobile drag (touch + stylus + mouse).
+  const handleLeftResize = useCallback((e: PointerEvent) => {
     if (!isResizingLeft.current) return;
     const newWidth = (e.clientX / window.innerWidth) * 100;
     if (newWidth > 15 && newWidth < 50) {
@@ -53,7 +54,7 @@ const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
     }
   }, []);
 
-  const handleRightResize = useCallback((e: MouseEvent) => {
+  const handleRightResize = useCallback((e: PointerEvent) => {
     if (!isResizingRight.current) return;
     const newWidth = ((window.innerWidth - e.clientX) / window.innerWidth) * 100;
     if (newWidth > 15 && newWidth < 50) {
@@ -61,33 +62,40 @@ const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
     }
   }, []);
 
-  const stopResizing = useCallback(() => {
+  const stopResizing = useCallback((e: PointerEvent) => {
+    const el = e.currentTarget as Element | null;
+    if (el && 'releasePointerCapture' in el) {
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+    }
     isResizingLeft.current = false;
     isResizingRight.current = false;
     setActiveResize(null);
     document.body.style.cursor = 'default';
   }, []);
 
-  const startLeftResize = useCallback((e: React.MouseEvent) => {
+  const startLeftResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
+    // QNBS-v3: setPointerCapture ensures pointermove fires even when cursor leaves the handle.
+    e.currentTarget.setPointerCapture(e.pointerId);
     isResizingLeft.current = true;
     isResizingRight.current = false;
     setActiveResize('left');
     document.body.style.cursor = 'col-resize';
   }, []);
 
-  const startRightResize = useCallback((e: React.MouseEvent) => {
+  const startRightResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     isResizingRight.current = true;
     isResizingLeft.current = false;
     setActiveResize('right');
     document.body.style.cursor = 'col-resize';
   }, []);
 
-  // Effect-managed resize listeners ensure cleanup on unmount and avoid stale
-  // callback references that could leak when the component is removed.
-  // Test hint: verify mousemove/mouseup listeners are removed on unmount,
-  // and that AbortController is used to cancel outstanding listener registration.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -97,7 +105,7 @@ const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
       };
     }
 
-    const handleMove = (e: MouseEvent) => {
+    const handleMove = (e: PointerEvent) => {
       if (activeResize === 'left') {
         handleLeftResize(e);
       }
@@ -108,12 +116,12 @@ const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
 
     const throttledMove = throttle(handleMove, 16);
 
-    window.addEventListener('mousemove', throttledMove, { signal: controller.signal });
-    window.addEventListener('mouseup', stopResizing, { signal: controller.signal });
+    window.addEventListener('pointermove', throttledMove, { signal: controller.signal });
+    window.addEventListener('pointerup', stopResizing, { signal: controller.signal });
 
     return () => {
-      window.removeEventListener('mousemove', throttledMove);
-      window.removeEventListener('mouseup', stopResizing);
+      window.removeEventListener('pointermove', throttledMove);
+      window.removeEventListener('pointerup', stopResizing);
       controller.abort();
     };
   }, [activeResize, handleLeftResize, handleRightResize, stopResizing]);
@@ -130,11 +138,11 @@ const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
 
 // --- Resizer Component ---
 interface ResizerProps {
-  onMouseDown: (e: React.MouseEvent) => void;
+  onPointerDown: (e: React.PointerEvent) => void;
   onKeyAdjust: (delta: number) => void;
   label: string;
 }
-const Resizer: FC<ResizerProps> = React.memo(({ onMouseDown, onKeyAdjust, label }) => {
+const Resizer: FC<ResizerProps> = React.memo(({ onPointerDown, onKeyAdjust, label }) => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -152,8 +160,10 @@ const Resizer: FC<ResizerProps> = React.memo(({ onMouseDown, onKeyAdjust, label 
       aria-orientation="vertical"
       aria-valuenow={50}
       tabIndex={0}
-      onMouseDown={onMouseDown}
+      onPointerDown={onPointerDown}
       onKeyDown={handleKeyDown}
+      // QNBS-v3: touch-action none prevents scroll conflict on mobile during drag.
+      style={{ touchAction: 'none' }}
       className="w-2 h-full cursor-col-resize flex items-center justify-center group -ml-1 z-10 hover:scale-x-110 transition-transform duration-sc-fast ease-sc-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)]"
     >
       <div
@@ -1374,7 +1384,7 @@ const ManuscriptViewUI: FC = () => {
 
         {!isFocusMode && (
           <Resizer
-            onMouseDown={startLeftResize}
+            onPointerDown={startLeftResize}
             onKeyAdjust={(delta) => setLeftPanelWidth((w) => Math.max(15, Math.min(50, w + delta)))}
             label={t('manuscript.resizer.left')}
           />
@@ -1404,7 +1414,7 @@ const ManuscriptViewUI: FC = () => {
 
         {!isFocusMode && (
           <Resizer
-            onMouseDown={startRightResize}
+            onPointerDown={startRightResize}
             onKeyAdjust={(delta) =>
               setRightPanelWidth((w) => Math.max(15, Math.min(50, w + delta)))
             }

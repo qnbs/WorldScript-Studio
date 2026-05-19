@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/qnbs/StoryCraft-Studio)
+
 # ✨ StoryCraft Studio: Your AI-Powered Narrative Universe ✨
 
 <p align="center">

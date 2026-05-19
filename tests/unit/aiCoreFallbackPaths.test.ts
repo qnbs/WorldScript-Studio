@@ -99,11 +99,14 @@ describe('runLocalTextGeneration branches', () => {
     expect(result.text).toContain('Transformers.js pipeline available');
   });
 
-  it('no WebGPU + pipeline not a function → layer:transformers placeholder', async () => {
+  it('no WebGPU + pipeline not a function → layer:heuristic (all inference unavailable)', async () => {
+    // QNBS-v3: Fixed bug — when pipeline is not a function AND onnx/webllm unavailable,
+    //          the correct fallback is 'heuristic', not 'transformers'.
     xenovaState.hasPipeline = false;
     const result = await runLocalTextGeneration('write a story');
-    expect(result.layer).toBe('transformers');
-    expect(result.text).toContain('Transformers placeholder');
+    expect(result.layer).toBe('heuristic');
+    // Heuristic echoes the sanitized prompt (no longer says 'Transformers placeholder')
+    expect(result.text).toContain('write a story');
   });
 
   it('no WebGPU + ONNX InferenceSession.create available → layer:onnx', async () => {
