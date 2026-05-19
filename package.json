@@ -67,7 +67,7 @@
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-http": "^2.5.9",
-    "ai": "^6.0.184",
+    "ai": "^6.0.185",
     "diff-match-patch": "^1.0.5",
     "docx": "^9.6.1",
     "dompurify": "^3.4.4",
