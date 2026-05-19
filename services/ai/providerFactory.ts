@@ -9,7 +9,7 @@ import { createStoryCraftFetch } from './fetchAdapter';
 export type StoryCraftLanguageModelConfig =
   | {
       provider: 'gemini';
-      /** Gemini-Modell-ID (z. B. `gemini-2.5-flash`). */
+      /** Gemini-Modell-ID (z. B. `gemini-3.5-flash`). */
       modelId: string;
       apiKey: string;
     }

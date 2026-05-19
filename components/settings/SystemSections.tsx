@@ -55,7 +55,7 @@ export const AccessibilitySection: FC = () => {
           <p className="text-xs text-[var(--foreground-tertiary)] mt-2">
             {t('settings.accessibility.activePreset')}:{' '}
             <span className="font-medium text-[var(--foreground-secondary)]">
-              {t(`settings.accessibility.preset.${settings.accessibility.presetId}`)}
+              {t(`settings.accessibility.preset.${settings.accessibility.presetId ?? 'custom'}`)}
             </span>
           </p>
         </CardHeader>

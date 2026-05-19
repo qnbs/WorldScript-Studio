@@ -665,7 +665,7 @@ class IndexedDBService implements StorageBackend {
       const collabDefaults: Settings['collaboration'] = {
         realTimeCollaboration: false,
         publicSharing: false,
-        commentSystem: false,
+        commentSystem: true,
         versionHistory: true,
         webrtcSignalingUrls: [...DEFAULT_WEBRTC_SIGNALING_URLS],
       };
@@ -695,7 +695,7 @@ class IndexedDBService implements StorageBackend {
 
       // QNBS-v3: Hybrid-AI-Felder nachziehen — ältere IndexedDB-Stände ohne neue Keys bleiben kompatibel.
       const advancedAiDefaults: Settings['advancedAi'] = {
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         provider: 'gemini',
         temperature: 0.7,
         maxTokens: 4096,

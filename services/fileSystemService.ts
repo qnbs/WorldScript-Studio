@@ -466,7 +466,7 @@ class FileSystemService implements StorageBackend {
       const collabDefaults = {
         realTimeCollaboration: false,
         publicSharing: false,
-        commentSystem: false,
+        commentSystem: true,
         versionHistory: true,
         webrtcSignalingUrls: [...DEFAULT_WEBRTC_SIGNALING_URLS],
       };

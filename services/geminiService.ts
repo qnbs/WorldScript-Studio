@@ -101,8 +101,8 @@ const creativityToTemperature: Record<AiCreativity, number> = {
 };
 
 const getModelForText = (model?: string): string =>
-  model?.startsWith('gemini-') ? model : 'gemini-2.5-flash';
-const getModelForImage = () => 'gemini-2.5-flash-image';
+  model?.startsWith('gemini-') ? model : 'gemini-3.5-flash';
+const getModelForImage = () => 'gemini-3.1-flash-image-preview';
 
 // --- Hilfsfunktion für Retry mit 401/429-Handling ---
 async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promise<T> {

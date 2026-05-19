@@ -49,7 +49,7 @@ const defaultSettings: Settings = {
     { type: 'time', target: 120, period: 'daily', enabled: false },
   ],
   advancedAi: {
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.5-flash',
     provider: 'gemini',
     temperature: 0.7,
     maxTokens: 4096,
@@ -99,7 +99,7 @@ const defaultSettings: Settings = {
   collaboration: {
     realTimeCollaboration: false,
     publicSharing: false,
-    commentSystem: false,
+    commentSystem: true,
     versionHistory: true,
     webrtcSignalingUrls: ['wss://y-webrtc-signaling.fly.dev', 'wss://signaling.yjs.dev'],
   },

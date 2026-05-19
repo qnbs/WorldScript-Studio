@@ -1,0 +1,17 @@
+services:
+  storycraft:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: storycraft-studio:latest
+    container_name: storycraft-studio
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

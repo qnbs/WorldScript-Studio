@@ -58,12 +58,12 @@ export const AiSection: FC = () => {
           handleSettingChange('advancedAi', { ...settings.advancedAi, ...patch })
         }
         onProviderChange={(p) => {
-          const currentModel = settings.advancedAi?.model ?? 'gemini-2.5-flash';
+          const currentModel = settings.advancedAi?.model ?? 'gemini-3.5-flash';
           let newModel = currentModel;
           if (p === 'ollama') {
             newModel = currentModel.startsWith('ollama/') ? currentModel : 'ollama/qwen3:8b';
           } else if (p === 'gemini') {
-            newModel = currentModel.startsWith('ollama/') ? 'gemini-2.5-flash' : currentModel;
+            newModel = currentModel.startsWith('ollama/') ? 'gemini-3.5-flash' : currentModel;
           } else if (p === 'openai') {
             newModel = currentModel.startsWith('gpt-') ? currentModel : 'gpt-4o-mini';
           } else if (p === 'anthropic') {
@@ -410,13 +410,18 @@ export const AdvancedAiSection: FC = () => {
                 ))
               ) : (
                 <>
-                  <optgroup label="Current Generation">
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash ✦</option>
+                  <optgroup label="Gemini 3 — Latest">
+                    <option value="gemini-3.5-flash">Gemini 3.5 Flash ✦</option>
+                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+                    <option value="gemini-3.1-flash">Gemini 3.1 Flash</option>
+                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+                  </optgroup>
+                  <optgroup label="Gemini 2.5 — Stable">
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                     <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
                   </optgroup>
                   <optgroup label="Legacy">
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
                     <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
                     <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                   </optgroup>

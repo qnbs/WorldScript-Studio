@@ -47,7 +47,7 @@ Complete these steps once before pushing the first signed release tag:
    - TAURI_SIGNING_PRIVATE_KEY      (private key from step 1)
    - TAURI_SIGNING_PRIVATE_KEY_PASSWORD  (key password or empty string)
 
-3. Push a v*.* tag  (e.g. git tag v1.4.0 && git push --tags)
+3. Push a v*.* tag  (e.g. git tag v1.6.0 && git push --tags)
    → All 3 matrix jobs build and sign bundles
    → release job uploads installers + latest.json to GitHub Release
 

@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.github
+graphify-out
+coverage
+storybook-static
+src-tauri/target
+*.log
+.env*
+!.env.example

@@ -389,6 +389,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ fontSize: '16px' }}
+            // QNBS-v3: on touch devices tabIndex=-1 prevents dialog focus-management from
+            // auto-focusing the input (which opens the virtual keyboard). User taps to type.
+            tabIndex={isTouchDevice ? -1 : 0}
           />
           <button
             type="button"

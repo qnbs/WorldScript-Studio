@@ -242,12 +242,17 @@ export type AppearancePreset = 'default' | 'sepia' | 'fantasy' | 'romance';
 export type EditorFont = 'serif' | 'sans-serif' | 'monospace' | 'custom';
 export type AiCreativity = 'Focused' | 'Balanced' | 'Imaginative';
 export type AiModel =
-  // Gemini – current generation
+  // Gemini – latest generation (3.x)
+  | 'gemini-3.5-flash'
+  | 'gemini-3.1-pro-preview'
+  | 'gemini-3.1-flash'
+  | 'gemini-3.1-flash-lite'
+  // Gemini – 2.5 stable (backward compat for stored values)
   | 'gemini-2.5-flash'
   | 'gemini-2.5-pro'
+  // Gemini – legacy (backward compat for stored values)
   | 'gemini-2.0-flash'
   | 'gemini-2.0-flash-lite'
-  // Gemini – legacy (still available)
   | 'gemini-1.5-flash'
   | 'gemini-1.5-pro'
   // Anthropic – Claude 4.x

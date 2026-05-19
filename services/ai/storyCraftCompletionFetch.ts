@@ -58,7 +58,7 @@ async function resolveModelConfig(
     if (!apiKey) {
       return { error: 'No Gemini API key configured.', status: 401 };
     }
-    const modelId = model.startsWith('gemini-') ? model : 'gemini-2.5-flash';
+    const modelId = model.startsWith('gemini-') ? model : 'gemini-3.5-flash';
     return { provider: 'gemini', apiKey, modelId };
   }
   if (kind === 'openai') {
