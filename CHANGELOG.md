@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — 2026-05-18
+
+### Added (v1.5 Master Perfection Run)
+
+- **WorkerBus v2:** Backpressure cap (32-task queue), priority preemption (max 3× requeue), AbortController map, `cancel(taskId)`, extended telemetry (`peakLatencyMs`, `errorRate`, `lastSuccessAt`).
+- **GpuResourceManager:** Mutex for WebLLM/ONNX-WebGPU consumers; priority queue; 30s auto-release deadlock prevention.
+- **DeviceHealthService:** Full device report (CPU cores, memory heap, storage quota, battery level, GPU VRAM tier, device class). `getModelRecommendation()` maps tier × task to concrete model IDs.
+- **EcoModeService:** Battery API integration; explicit override API; `applyAdaptiveMode()`.
+- **InferenceProgressEmitter:** Pub/sub progress snapshots for WebLLM loading; `subscribeWebLlmLoading()`, `reportWebLlmProgress()`, `reportWebLlmReady()`, `reportWebLlmError()`, `reset()`.
+- **Active ONNX + Transformers.js inference:** `inference.worker.ts` — WorkerBus protocol, pipeline cache (8 entries), trusted-message origin guard, AbortController integration. Layers 2 & 3 now perform real inference instead of returning echo strings.
+- **AiInferenceCacheService:** Two-layer LRU — in-memory 64 entries (DJB2+FNV hash) + IndexedDB 256 entries (7-day TTL). Skips cache for prompts > 512 chars.
+- **LocalEmbeddingService:** `Xenova/all-MiniLM-L6-v2` 384-dim embeddings; L2-normalised; worker-offloaded; micro-batch (8); `embedText()`, `embedBatch()`, `cosineSimilarity()`.
+- **LocalNlpService:** Sentiment analysis (distilbert), summarisation (distilbart), keyword topic classification — all worker-offloaded via WorkerBus.
+- **LocalAiDownloadProgress:** WCAG 2.2 AA modal (`role="progressbar"`, `aria-valuenow`, `aria-valuetext` with ETA, `aria-live="polite"/"assertive"`, `role="dialog"`, focus on open, cancel button).
+- **GpuMetricsPanel:** GPU queue state, WorkerBus telemetry, device-class badge, eco-mode toggle (`role="switch"`). Feature-gated by `enableAppHealthPanel`.
+- **Model recommendations engine:** `getModelRecommendationForTask(task, report, ecoMode)` — VRAM tier × task → concrete model IDs. `getProviderSpeedEstimate()` for Ollama ping.
+- **Hybrid RAG service (`localRagService.ts`):** Token-based chunking (300 tokens, 50-token overlap), MAX_CHUNKS 500, `indexedAt` recency field. `retrieveContext()` with `'lexical'|'semantic'|'hybrid'` modes; hybrid = 60% semantic + 30% token overlap + 10% recency; sliding window 3 most-recent chunks always included.
+- **Cross-Project AI enrichment:** `enrichProjectIndex()` generates `aiSummary` (100 chars) + `embeddingVector` from local model. `semanticSearchProjects()` uses cosine similarity with keyword fallback.
+- **Mobile: PointerEvent resize handles:** `ManuscriptView.tsx` upgraded from `MouseEvent` to `PointerEvent` with `setPointerCapture()` / `releasePointerCapture()`. `touch-action: none` on drag handles.
+- **useSwipeGesture:** PointerEvent swipe detection; threshold + velocity window; dominant-axis direction. Wired to `WriterViewUI` mobile panel switching.
+- **useLongPress:** PointerEvent long-press; 10px movement cancel threshold; configurable ms duration.
+- **useHaptics:** `navigator.vibrate()` wrapper with graceful degradation.
+- **BottomSheet:** WCAG 2.2 compliant drawer; `role="dialog"`, `aria-modal`, focus trap (querySelectorAll-based), Escape to close, drag-to-dismiss (> 30% height), `touch-action: none`.
+- **PromptLibrary:** 17 original prompts + 3 new (styleTransfer, plotHoleFix, chapterAutoGeneration) in a versioned, category-organised registry. `getPrompt(id, vars)`, `listByCategory()`, `exportPromptLibrary()`, `importPromptLibrary()` with JSON validation. A/B variant selection.
+- **StyleTransfer prompt:** `geminiService` case `'styleTransfer'` — author voice mimicry with `authorStyle` exemplar. Returns JSON `{ transformed, voiceNotes }`.
+- **PlotHoleFix prompt:** `geminiService` case `'plotHoleFix'` — extends detection with chainable fix generation. 2048-token thinking budget.
+- **ChapterAutoGeneration prompt:** `geminiService` case `'chapterAutoGeneration'` — outline section → full chapter. 8192-token extended thinking budget.
+- **PluginRegistry:** `PluginDescriptor` interface; `register()`, `unregister()`, `getByType()`, `list()`, `size`, `clear()`. Singleton `pluginRegistry` export.
+- **UsageAnalyticsService:** Opt-in only (default: off). Ring buffer 500 events. `track()`, `getAnonymizedSummary()`, `flush()`. No PII — event type + timestamp + device class only.
+- **Updated AI model catalogue (2025 releases):** WebLLM list now includes Qwen 2.5 0.5B, Phi-4 Mini 3.8B, Gemma 3 1B/4B, Llama 3.3 70B. ONNX default model updated to SmolLM2-135M-Instruct (replaces DistilGPT-2). OpenAI model list adds GPT-4.1, o3, o4-mini. aiProviderService validates `o\d` prefixes alongside `gpt-`.
+- **DeepWiki badge** added to README header.
+
+### Changed
+
+- i18n: 20 new keys for download progress + GPU panel (1459 total across 5 locales).
+- `services/ai/index.ts` now re-exports all Day 4 service functions.
+- `crossProjectIndexService.ts`: `ProjectSearchIndex` gains optional `aiSummary` and `embeddingVector` fields.
+
 ## [Unreleased]
 
 ### Added

@@ -105,6 +105,16 @@ vi.mock('../../../app/hooks', () => ({
         },
       },
       status: { isAiGenerating: false },
+      featureFlags: {
+        enableAppHealthPanel: false,
+        enableCompileWizard: false,
+        enableManuscriptResearchSplit: false,
+        enableCodexAutoTracking: false,
+        enableStoryBibleAdvanced: false,
+        enableBinderResearch: false,
+        enableProjectHealthScore: false,
+        enableCrossProjectSearch: false,
+      },
     }),
   ),
 }));

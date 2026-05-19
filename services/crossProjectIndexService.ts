@@ -5,6 +5,7 @@
  */
 import type { ProjectData } from '../features/project/projectSlice';
 import type { Character } from '../types';
+import { cosineSimilarity, embedText } from './ai/localEmbeddingService';
 import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
 
 export interface ProjectSearchIndex {
@@ -14,6 +15,10 @@ export interface ProjectSearchIndex {
   manuscriptWordCount: number;
   characterNames: string[];
   lastIndexed: number;
+  // QNBS-v3: AI-generated 100-char summary for semantic search; absent when model not loaded.
+  aiSummary?: string;
+  /** Serialised Float32Array (Array<number>) for semantic search — stored lazily. */
+  embeddingVector?: number[];
 }
 
 // QNBS-v3: Own connection to data-db — avoids circular import with dbService singleton.
@@ -107,4 +112,89 @@ export async function removeProjectIndex(projectId: string): Promise<void> {
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+}
+
+/**
+ * Enrich an existing index record with an AI-generated summary + embedding.
+ * QNBS-v3: Feature-gated — only runs when embedding model is available; silently
+ *          no-ops if the project is not yet indexed or the model isn't ready.
+ */
+export async function enrichProjectIndex(projectId: string): Promise<void> {
+  const db = await getDb();
+
+  const record = await new Promise<ProjectSearchIndex | undefined>((resolve, reject) => {
+    const tx = db.transaction(PROJECTS_INDEX_STORE, 'readonly');
+    const req = tx.objectStore(PROJECTS_INDEX_STORE).get(projectId);
+    req.onsuccess = () => resolve(req.result as ProjectSearchIndex | undefined);
+    req.onerror = () => reject(req.error);
+  });
+
+  if (!record) return;
+
+  // Build a short plaintext synopsis from available metadata (no manuscript text).
+  const synopsis = [record.title, record.logline, ...record.characterNames.slice(0, 5)]
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 512);
+
+  let embedding: Float32Array;
+  try {
+    embedding = await embedText(synopsis);
+  } catch {
+    // QNBS-v3: If the embedding worker isn't loaded, skip enrichment silently.
+    return;
+  }
+
+  const aiSummary = synopsis.slice(0, 100);
+  const enriched: ProjectSearchIndex = {
+    ...record,
+    aiSummary,
+    embeddingVector: Array.from(embedding),
+    lastIndexed: Date.now(),
+  };
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(PROJECTS_INDEX_STORE, 'readwrite');
+    const req = tx.objectStore(PROJECTS_INDEX_STORE).put(enriched);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Semantic search over all indexed projects using embedding similarity.
+ * Falls back to keyword match on `title + logline` when no embedding stored.
+ */
+export async function semanticSearchProjects(
+  query: string,
+  topK = 5,
+): Promise<ProjectSearchIndex[]> {
+  const all = await listIndexedProjects();
+  if (!all.length) return [];
+
+  let queryEmbedding: Float32Array | null = null;
+  try {
+    queryEmbedding = await embedText(query);
+  } catch {
+    // QNBS-v3: Graceful degrade — keyword fallback below.
+  }
+
+  const scored = all.map((p) => {
+    let score = 0;
+    if (queryEmbedding && p.embeddingVector?.length) {
+      score = cosineSimilarity(queryEmbedding, new Float32Array(p.embeddingVector));
+    } else {
+      // Keyword fallback: count query terms found in title/logline
+      const q = query.toLowerCase();
+      const hay = `${p.title} ${p.logline}`.toLowerCase();
+      const terms = q.match(/\p{L}+|\d+/gu) ?? [];
+      score = terms.filter((t) => hay.includes(t)).length / (terms.length || 1);
+    }
+    return { project: p, score };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK)
+    .map((s) => s.project);
 }

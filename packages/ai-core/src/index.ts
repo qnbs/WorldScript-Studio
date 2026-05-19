@@ -5,6 +5,7 @@ export type WorkerPriority = 'critical' | 'high' | 'normal' | 'low';
 // QNBS-v3: 'onnx' added as Layer-2 between WebLLM and Transformers.js (WASM fallback when no GPU).
 export type LocalAiLayer = 'webllm' | 'onnx' | 'transformers' | 'heuristic';
 
+// QNBS-v3: requeueCount tracks preemption history; auto-promote to 'normal' after MAX_PREEMPTIONS.
 export interface WorkerTask<TPayload = unknown> {
   id: string;
   type: string;
@@ -12,6 +13,7 @@ export interface WorkerTask<TPayload = unknown> {
   priority: WorkerPriority;
   transferables?: Transferable[];
   createdAt: number;
+  requeueCount?: number;
 }
 
 export interface WorkerBusTelemetry {
@@ -19,6 +21,10 @@ export interface WorkerBusTelemetry {
   processedTasks: number;
   failedTasks: number;
   avgExecutionMs: number;
+  // QNBS-v3: W-03 extended telemetry — peak latency, error rate, last success timestamp
+  peakLatencyMs: number;
+  errorRate: number;
+  lastSuccessAt: number | null;
 }
 
 export interface LocalAiResponse {
@@ -42,6 +48,11 @@ export const SUPPORTED_WORKER_CHANNELS = [
 
 const PRIORITY_ORDER: readonly WorkerPriority[] = ['critical', 'high', 'normal', 'low'];
 
+// QNBS-v3: tasks beyond this threshold are rejected (non-critical) to prevent OOM under load.
+const MAX_QUEUE_SIZE = 32;
+// QNBS-v3: low-priority tasks are auto-promoted after this many preemptions to prevent starvation.
+const MAX_PREEMPTIONS = 3;
+
 export class WorkerBus {
   private readonly queues: Record<WorkerPriority, WorkerTask[]> = {
     critical: [],
@@ -53,9 +64,30 @@ export class WorkerBus {
   private processedTasks = 0;
   private failedTasks = 0;
   private totalExecutionMs = 0;
+  // QNBS-v3: W-03 extended telemetry fields
+  private peakLatencyMs = 0;
+  private lastSuccessAt: number | null = null;
+  // QNBS-v3: per-task AbortControllers for in-flight cancellation
+  private readonly taskAbortControllers = new Map<string, AbortController>();
 
-  enqueue(task: WorkerTask): void {
-    this.queues[task.priority].push(task);
+  private totalQueueDepth(): number {
+    return PRIORITY_ORDER.reduce((sum, p) => sum + this.queues[p].length, 0);
+  }
+
+  // QNBS-v3: W-01 backpressure — critical tasks always bypass; others are blocked when queue is full.
+  isBackpressured(priority: WorkerPriority): boolean {
+    if (priority === 'critical') return false;
+    return this.totalQueueDepth() >= MAX_QUEUE_SIZE;
+  }
+
+  enqueue(task: WorkerTask): boolean {
+    if (this.isBackpressured(task.priority)) return false;
+    // QNBS-v3: W-02 preemption — low tasks re-queued > MAX_PREEMPTIONS times get promoted to 'normal'.
+    const requeued = task.requeueCount ?? 0;
+    const effectivePriority: WorkerPriority =
+      task.priority === 'low' && requeued >= MAX_PREEMPTIONS ? 'normal' : task.priority;
+    this.queues[effectivePriority].push({ ...task, priority: effectivePriority });
+    return true;
   }
 
   dequeue(): WorkerTask | undefined {
@@ -66,10 +98,40 @@ export class WorkerBus {
     return undefined;
   }
 
-  recordResult(durationMs: number, isSuccess: boolean): void {
+  // QNBS-v3: Register an AbortController for a dequeued in-flight task; caller checks signal.aborted.
+  registerTask(taskId: string): AbortSignal {
+    const controller = new AbortController();
+    this.taskAbortControllers.set(taskId, controller);
+    return controller.signal;
+  }
+
+  // QNBS-v3: Cancel a queued task (removes from queue) or an in-flight task (signals AbortController).
+  cancel(taskId: string): boolean {
+    for (const priority of PRIORITY_ORDER) {
+      const idx = this.queues[priority].findIndex((t) => t.id === taskId);
+      if (idx !== -1) {
+        this.queues[priority].splice(idx, 1);
+        this.taskAbortControllers.delete(taskId);
+        return true;
+      }
+    }
+    const controller = this.taskAbortControllers.get(taskId);
+    if (controller) {
+      controller.abort();
+      this.taskAbortControllers.delete(taskId);
+      return true;
+    }
+    return false;
+  }
+
+  recordResult(durationMs: number, isSuccess: boolean, taskId?: string): void {
     this.processedTasks += 1;
     if (!isSuccess) this.failedTasks += 1;
+    else this.lastSuccessAt = Date.now();
     this.totalExecutionMs += durationMs;
+    if (durationMs > this.peakLatencyMs) this.peakLatencyMs = durationMs;
+    // QNBS-v3: clean up controller for completed/failed in-flight task
+    if (taskId !== undefined) this.taskAbortControllers.delete(taskId);
   }
 
   getTelemetry(): WorkerBusTelemetry {
@@ -84,6 +146,9 @@ export class WorkerBus {
       failedTasks: this.failedTasks,
       avgExecutionMs:
         this.processedTasks === 0 ? 0 : Math.round(this.totalExecutionMs / this.processedTasks),
+      peakLatencyMs: this.peakLatencyMs,
+      errorRate: this.processedTasks === 0 ? 0 : this.failedTasks / this.processedTasks,
+      lastSuccessAt: this.lastSuccessAt,
     };
   }
 }
@@ -91,19 +156,28 @@ export class WorkerBus {
 export { electSingleHeavyInferenceTab };
 
 // QNBS-v3: curated list of ONNX models for WASM backend; no GPU required, ~50-500 MB WASM footprint.
+//          Updated 2025: SmolLM2-135M is the best tiny ONNX text-gen model for inference.
 export const ONNX_SUPPORTED_MODELS = [
-  { id: 'Xenova/distilgpt2', label: 'DistilGPT-2 (~82 MB WASM)', requiresGpu: false },
-  { id: 'Xenova/gpt2', label: 'GPT-2 (~548 MB WASM)', requiresGpu: false },
+  {
+    id: 'HuggingFaceTB/SmolLM2-135M-Instruct',
+    label: 'SmolLM2 135M Instruct (~270 MB WASM)',
+    requiresGpu: false,
+  },
+  { id: 'Xenova/distilgpt2', label: 'DistilGPT-2 (~82 MB WASM, legacy)', requiresGpu: false },
+  { id: 'Xenova/gpt2', label: 'GPT-2 (~548 MB WASM, legacy)', requiresGpu: false },
 ] as const;
 
 export type OnnxModelId = (typeof ONNX_SUPPORTED_MODELS)[number]['id'];
 
-// QNBS-v3: curated list of MLC-packaged checkpoints small enough for browser RAM; expand as new quants ship
+// QNBS-v3: curated MLC checkpoints; updated 2025 to include Llama 3.3, Phi-4, Gemma 3 releases.
 export const WEBLLM_SUPPORTED_MODELS = [
+  { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', label: 'Qwen 2.5 0.5B (eco, ~0.4 GB)' },
   { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Llama 3.2 1B (fast, ~0.7 GB)' },
   { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', label: 'Llama 3.2 3B (~1.8 GB)' },
-  { id: 'Phi-3.5-mini-instruct-q4f16_1-MLC', label: 'Phi-3.5 Mini (~2.2 GB)' },
-  { id: 'gemma-2-2b-it-q4f16_1-MLC', label: 'Gemma 2 2B (~1.4 GB)' },
+  { id: 'Phi-4-mini-instruct-q4f16_1-MLC', label: 'Phi-4 Mini 3.8B (~2.3 GB)' },
+  { id: 'gemma-3-1b-it-q4f16_1-MLC', label: 'Gemma 3 1B (~0.8 GB)' },
+  { id: 'gemma-3-4b-it-q4f32_1-MLC', label: 'Gemma 3 4B (~4.9 GB)' },
+  { id: 'Llama-3.3-70B-Instruct-q3f16_1-MLC', label: 'Llama 3.3 70B (high-end, ~35 GB)' },
 ] as const;
 
 export type WebLlmModelId = (typeof WEBLLM_SUPPORTED_MODELS)[number]['id'];
@@ -243,8 +317,9 @@ export async function runLocalTextGeneration(
     /* optional */
   }
 
+  // QNBS-v3: Layer-4 heuristic — all inference layers unavailable; echo sanitized prompt as fallback.
   return {
-    layer: 'transformers',
-    text: `Transformers placeholder response: ${sanitizedPrompt.slice(0, 280)}${sanitizedPrompt.length > 280 ? '…' : ''}`,
+    layer: 'heuristic',
+    text: `${sanitizedPrompt.slice(0, 280)}${sanitizedPrompt.length > 280 ? '…' : ''}`,
   };
 }

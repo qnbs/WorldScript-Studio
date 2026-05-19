@@ -1,11 +1,12 @@
 // QNBS-v3: Extracted from WriterView.tsx to keep each file ≤350 lines per architecture rules
 import type { FC } from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import {
   selectIsPanelOpen,
   versionControlActions,
 } from '../../features/versionControl/versionControlSlice';
+import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AiScratchpad } from './AiScratchpad';
 import { ContextPanel } from './ContextPanel';
@@ -18,6 +19,22 @@ const WriterViewUI: FC = () => {
   const [activeMobileTab, setActiveMobileTab] = useState<'context' | 'tools' | 'result'>('tools');
   const [collapsedPanels, setCollapsedPanels] = useState<Record<string, boolean>>({});
   const [focusMode, setFocusMode] = useState(false);
+
+  // Mobile swipe gesture for panel switching (outline → tools → result)
+  const mobilePanelRef = useRef<HTMLDivElement>(null);
+  const MOBILE_TABS = ['context', 'tools', 'result'] as const;
+
+  useSwipeGesture(mobilePanelRef, {
+    onSwipeLeft: () => {
+      // QNBS-v3: Swipe left = next panel in tab order.
+      const idx = MOBILE_TABS.indexOf(activeMobileTab);
+      if (idx < MOBILE_TABS.length - 1) setActiveMobileTab(MOBILE_TABS[idx + 1]!);
+    },
+    onSwipeRight: () => {
+      const idx = MOBILE_TABS.indexOf(activeMobileTab);
+      if (idx > 0) setActiveMobileTab(MOBILE_TABS[idx - 1]!);
+    },
+  });
 
   const togglePanel = (panel: string) => {
     setCollapsedPanels((prev) => ({ ...prev, [panel]: !prev[panel] }));
@@ -114,7 +131,7 @@ const WriterViewUI: FC = () => {
       </div>
 
       {/* Mobile Views (Conditional Render) */}
-      <div className="md:hidden flex-grow min-h-0 overflow-hidden">
+      <div ref={mobilePanelRef} className="md:hidden flex-grow min-h-0 overflow-hidden">
         {activeMobileTab === 'context' && (
           <div
             id="writer-panel-context"

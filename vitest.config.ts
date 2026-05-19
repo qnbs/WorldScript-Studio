@@ -1,16 +1,27 @@
 /// <reference types="vitest" />
 
+import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
+  // QNBS-v3: Map optional ai-core peer deps so workers/ and services/ can import them in tests.
+  resolve: {
+    alias: {
+      '@xenova/transformers': path.resolve(
+        './packages/ai-core/node_modules/@xenova/transformers/src/transformers.js',
+      ),
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
     testTimeout: 30000,
-    // QNBS-v3: Fork-Worker-Timeouts unter Last/jsdom — Threads-Pool stabiler als forks bei wenigen Workern.
+    // QNBS-v3: maxWorkers:1 + single test-run avoids RAM exhaustion on the low-end dev machine.
+    //          Run pnpm exec vitest run as ONE sequential process — never concurrently with other
+    //          heavy commands.  isolate:true (default) keeps module state clean between files.
     pool: 'threads',
     maxWorkers: 1,
     include: ['tests/**/*.{test,spec}.{ts,tsx}', 'components/**/*.{test,spec}.{ts,tsx}'],
@@ -37,12 +48,12 @@ export default defineConfig({
         '**/*.stories.{ts,tsx}',
         '**/*.d.ts',
       ],
-      // QNBS-v3: Phase-5-Schwellen — 148 Testdateien, 1611 Tests; 64 % Lines / 48 % Branches.
+      // QNBS-v3: v1.5-Schwellen — 166 Testdateien, 1851 Tests; 66 % Lines / 51 % Branches.
       thresholds: {
-        lines: 62,
-        functions: 52,
-        branches: 46,
-        statements: 60,
+        lines: 64,
+        functions: 54,
+        branches: 49,
+        statements: 62,
         perFile: false,
       },
     },
