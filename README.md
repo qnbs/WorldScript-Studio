@@ -83,9 +83,60 @@ Your mission control. Track word counts against custom goals, visualize project 
 
 A focused, distraction-free writing environment. The central editor is flanked by a draggable chapter **Navigator** and a project **Inspector**. An advanced overlay provides real-time highlighting and linking for `@character` and `#world` mentions, turning your manuscript into a living document. Includes **Zen Mode** for full-screen distraction-free writing, **spell-check with suggestions**, and **grammar & style hints**.
 
-### 🎬 Scene Board _(Visual Story Planning)_
+### 🎬 Plot-Board v2 _(Visual Story Planning)_
 
-A kanban-style drag-and-drop board for visual story planning. Organize your scenes across custom lanes, see your plot structure at a glance, and rearrange sections to check pacing and narrative flow without touching the manuscript.
+Three co-existing modes for visual story planning:
+
+| Mode | What it does |
+|------|-------------|
+| **Swimlane** | Kanban drag-and-drop across 3-act columns |
+| **Canvas** | Free-form pan/zoom board — position scenes anywhere; pinch-to-zoom on mobile |
+| **Timeline** | Gantt-style scene timeline with rule hints |
+
+**SVG Connection Layer:** Draw cause-effect, parallel, subplot, temporal, and character-arc arrows between scenes. Hover to edit label or type; click to select and delete. Keyboard accessible (`role="button"` + `tabIndex`).
+
+**Subplot System:** Color-coded subplot lanes with filter toggle — dims unrelated scenes to focus on one storyline at a time.
+
+**Tension Curve:** 800×200 SVG chart showing auto-computed dramatic tension (status-based 0–10 score) with drag-to-override points. Beat sheet overlays: Three-Act, Save the Cat!, Hero's Journey marker presets.
+
+**Mini-map:** Fixed 80×50 px SVG overview in corner for spatial orientation on the free-form canvas.
+
+### 📖 Real-Time Book Preview
+
+Scrivener-style "Scrivenings" mode — a scrollable, paginated view of your entire manuscript rendered as formatted prose. Updates live as you write:
+
+- **Collapsible TOC sidebar** with IntersectionObserver-driven active chapter highlight
+- **Font controls:** family (system-ui / serif / monospace), size (12–24 px), word-count margin annotations
+- **Fullscreen mode** (`position: fixed inset-0`) with ESC-to-dismiss; independent of the app theme
+- **Export button** opens the Export view in EPUB mode
+
+### 📊 Progress Tracker Dashboard
+
+Dedicated analytics view — the first thing a writer sees each day:
+
+- **Circular SVG progress ring** for today's word-count goal
+- **Live session timer** (`role="timer"`) with start/stop; shortcut `Ctrl+Shift+S`
+- **Streak display** — current streak and longest streak computed from writing history
+- **30-day velocity area chart** (pure SVG, no external chart library)
+- **12-week GitHub-style heatmap** (84 `<rect>` cells, 5 intensity shades)
+- **Inline goal editor** for daily/weekly word targets
+
+### 🗒️ Reference Panel & Threaded Comments
+
+**Reference Panel** — an iPad-style 6-tab sidebar in the manuscript editor:
+
+| Tab | Content |
+|-----|---------|
+| Characters | Mini-cards for scene's characters with backstory excerpt |
+| World | Linked locations with geography excerpt |
+| Notes | Inline editable notes synced to the scene |
+| Binder | Linked binder node content |
+| Comments | Threaded comment panel (see below) |
+| Revisions | Per-scene snapshot history |
+
+**Threaded Comments:** Add comments anchored to any scene, reply inline, resolve/unresolve with a badge counter in the toolbar.
+
+**Per-Scene Revision History:** IndexedDB-backed snapshots with word-level diff view and named snapshot labels. Two-step restore with confirmation.
 
 ### 🕸️ Character Relationship Graph _(Interactive Visualization)_
 

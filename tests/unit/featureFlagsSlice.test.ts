@@ -13,6 +13,7 @@ describe('featureFlagsSlice', () => {
     enableProjectHealthScore: false,
     enableCrossProjectSearch: true,
     enableAppHealthPanel: false,
+    enablePlotBoardV2: true,
   };
 
   it('should match default feature flag state on init', () => {
@@ -37,6 +38,7 @@ describe('featureFlagsSlice', () => {
       enableProjectHealthScore: false,
       enableCrossProjectSearch: true,
       enableAppHealthPanel: false,
+      enablePlotBoardV2: true,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

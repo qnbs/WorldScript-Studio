@@ -1,0 +1,64 @@
+// QNBS-v3: URL-hash deep linking — parse on load, update on navigation, no full reload.
+import type { View } from '../types';
+
+/** Maps hash path segments to View keys. */
+const HASH_TO_VIEW: Record<string, View> = {
+  dashboard: 'dashboard',
+  manuscript: 'manuscript',
+  writer: 'writer',
+  templates: 'templates',
+  outline: 'outline',
+  characters: 'characters',
+  world: 'world',
+  export: 'export',
+  settings: 'settings',
+  help: 'help',
+  sceneboard: 'sceneboard',
+  board: 'sceneboard',
+  characterGraph: 'characterGraph',
+  consistencyChecker: 'consistencyChecker',
+  critic: 'critic',
+  preview: 'preview',
+  progress: 'progress',
+};
+
+export interface ParsedDeepLink {
+  view: View | null;
+  sectionId: string | null;
+  action: string | null;
+}
+
+/**
+ * Parses a URL hash fragment into view/section/action.
+ * Supported formats:
+ *   #/preview
+ *   #/board
+ *   #/manuscript/scene/{sectionId}
+ *   #/progress?action=start-session
+ */
+export function parseHash(hash: string = window.location.hash): ParsedDeepLink {
+  const trimmed = hash.replace(/^#\/?/, '');
+  const [pathPart = '', queryPart = ''] = trimmed.split('?');
+  const segments = pathPart.split('/').filter(Boolean);
+  const params = new URLSearchParams(queryPart);
+
+  const viewKey = segments[0] ?? '';
+  const view = HASH_TO_VIEW[viewKey] ?? null;
+
+  const sectionId = segments[1] === 'scene' && segments[2] ? segments[2] : null;
+
+  const action = params.get('action');
+
+  return { view, sectionId, action };
+}
+
+/** Writes a view (and optional section) into the URL hash without a page reload. */
+export function pushHash(view: View, sectionId?: string): void {
+  const path = sectionId ? `/${view}/scene/${sectionId}` : `/${view}`;
+  history.replaceState(null, '', `#${path}`);
+}
+
+/** Reads the current hash and returns the view, or null if unrecognised. */
+export function readCurrentView(): View | null {
+  return parseHash(window.location.hash).view;
+}

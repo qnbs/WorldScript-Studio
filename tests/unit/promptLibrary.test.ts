@@ -92,7 +92,7 @@ describe('getPrompt', () => {
       name: 'Outline',
       category: 'outline' as const,
       localeKey: 'promptLibrary.outline',
-      template: () => 'base',
+      template: (_v: Record<string, string>) => 'base',
       abTestVariants: [
         {
           id: 'outline-v2',
@@ -100,7 +100,7 @@ describe('getPrompt', () => {
           name: 'Outline v2',
           category: 'outline' as const,
           localeKey: 'promptLibrary.outline',
-          template: () => 'variant',
+          template: (_v: Record<string, string>) => 'variant',
         },
       ],
     };

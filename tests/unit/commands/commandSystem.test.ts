@@ -36,6 +36,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableProjectHealthScore: false,
   enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
+  enablePlotBoardV2: true,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

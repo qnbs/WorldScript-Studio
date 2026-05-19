@@ -214,18 +214,36 @@ Vereinfachte automatische Konsistenzprüfung:
 
 ---
 
-## Post-v1.4.0 / v1.5 — UX, Touch & weitere Qualität
+## v1.5 — Local AI, Mobile Touch & Collaboration Security
 
-**Status:** 📋 Geplant
+**Status:** ✅ Released 2026-05-19
 
-- **Unit-Test-Coverage** (gemessen 2026-05-18: 64.68 % Lines / 54.10 % Functions / 49.06 % Branches — 1 641 Tests / 150 Dateien; Phase-2-Ziele übertroffen); nächster Schritt: Branches Richtung 55 % (aiProviderService-Streaming, große Komponenten)
-- **Cross-Project-Search Panel** (UI-Komponente für `crossProjectSearchService`; v2 multi-project erfordert DB_VERSION-Bump)
-- Mobile-First Touch-Optimierungen (Swipe-Navigation, Touch-DnD); **responsive E2E primär in CI** ([`docs/CI.md`](docs/CI.md))
-- AI-Creativity-Presets pro Projekt (nicht global)
-- Erweiterte Keyboard Navigation
-- High-Contrast-Mode Verbesserungen (teilweise durch Accessibility-Hub ergänzt — iterativ)
-- Visual Regression Tests (Playwright Screenshots + Storybook chromatic)
-- Tauri v2 Auto-Update + Code-Signing (aus v1.2.1 verschoben)
+- ✅ WorkerBus v2, GpuResourceManager, EcoModeService, InferenceProgressEmitter
+- ✅ Active ONNX + Transformers.js inference (worker-offloaded)
+- ✅ LocalEmbeddingService (MiniLM-L6-v2), LocalNlpService (sentiment / summary / topics)
+- ✅ Hybrid RAG service (lexical + semantic + recency, 60/30/10)
+- ✅ Cross-Project Search v2 (privacy-preserving IDB index, two-phase search)
+- ✅ Yjs AES-256-GCM encryption foundation
+- ✅ Tauri v2 auto-updater pipeline + signing pipeline
+- ✅ Mobile PointerEvent resize, useLongPress, useSwipeGesture, BottomSheet, useHaptics
+- ✅ PromptLibrary + StyleTransfer / PlotHoleFix / ChapterAutoGeneration prompts
+- ✅ PluginRegistry + UsageAnalyticsService (opt-in)
+- ✅ 1 851 tests / 166 files; coverage 64.68 % lines / 49.06 % branches / 54.10 % functions
+
+---
+
+## v1.6 — Plot-Board v2 & Writer Experience
+
+**Status:** ✅ Released 2026-05-19
+
+- ✅ **Plot-Board v2** — free-form canvas, SVG connections (5 types), subplot system, tension curve, beat-sheet overlays, snap-to-grid, mobile pinch/pan gestures
+- ✅ **Real-Time Book Preview** — scrollable Scrivener-style book view, live TOC, fullscreen, font controls
+- ✅ **Reference Panel / Split-View** — 6-tab panel (Characters, World, Notes, Binder, Comments, Revisions)
+- ✅ **Per-Scene Revision History** — IDB-backed snapshots, word-level diff, two-step restore
+- ✅ **Threaded Comments** — resolve/unresolve, nested replies, unresolved badge
+- ✅ **Progress Tracker Dashboard** — circular progress ring, live session timer, 30-day velocity chart, 12-week heatmap, streak system
+- ✅ **Mobile Polish** — foldable layout hook (Device Posture API), URL hash deep-linking, named haptic pattern library
+- ✅ 1 966 tests / 174 files; coverage maintained; lint ✅ typecheck ✅ i18n 1590 keys ✅
 
 ---
 
@@ -233,12 +251,14 @@ Vereinfachte automatische Konsistenzprüfung:
 
 **Status:** 💡 Vision
 
-- Full E2E-Encryption für P2P-Collaboration
+- Full E2E-Encryption für P2P-Collaboration (RTCDataChannel in-flight encryption)
 - Community-Model-Liste (kuratierte Ollama-Modelle für kreatives Schreiben)
-- Plugin-System für benutzerdefinierte AI-Tools
+- RTL language support (Arabic, Hebrew, Persian)
 - Fine-Tuning/LoRA-Support für personalisierte Schreibstile
 - Cloud-Sync Option (optional, E2E-verschlüsselt)
-- Tauri Release-Pipeline — in v1.2.1 vorgezogen (Auto-Update, Code-Signing)
+- Plugin-System für benutzerdefinierte AI-Tools (build on PluginRegistry)
+- AI-Creativity-Presets pro Projekt (nicht global)
+- Visual Regression Tests (Playwright Screenshots + Storybook chromatic)
 
 ---
 

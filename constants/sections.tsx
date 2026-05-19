@@ -109,4 +109,17 @@ export const APP_SECTIONS: Record<View, SectionConfig> = {
     textColor: 'text-rose-500 dark:text-rose-400',
     accentColor: '#f43f5e',
   },
+  // QNBS-v3: preview + progress views added in v1.6 — stub icons reuse nearest thematic icon.
+  preview: {
+    icon: ICONS.WRITER,
+    colorClass: 'text-lime-500 bg-lime-500/10 dark:text-lime-400 dark:bg-lime-500/10',
+    textColor: 'text-lime-500 dark:text-lime-400',
+    accentColor: '#84cc16',
+  },
+  progress: {
+    icon: ICONS.DASHBOARD,
+    colorClass: 'text-fuchsia-500 bg-fuchsia-500/10 dark:text-fuchsia-400 dark:bg-fuchsia-500/10',
+    textColor: 'text-fuchsia-500 dark:text-fuchsia-400',
+    accentColor: '#d946ef',
+  },
 };

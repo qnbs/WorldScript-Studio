@@ -76,6 +76,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableProjectHealthScore: false,
     enableCrossProjectSearch: true,
     enableAppHealthPanel: false,
+    enablePlotBoardV2: true,
   },
 };
 

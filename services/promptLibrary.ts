@@ -60,7 +60,7 @@ register({
   category: 'manuscript',
   localeKey: 'promptLibrary.logline',
   template: (v) =>
-    `Based on the following story details, generate 4 compelling and diverse logline suggestions.\nTitle: ${v.title ?? ''}\nOutline: ${v.outline ?? ''}`,
+    `Based on the following story details, generate 4 compelling and diverse logline suggestions.\nTitle: ${v['title'] ?? ''}\nOutline: ${v['outline'] ?? ''}`,
 });
 
 register({
@@ -70,7 +70,7 @@ register({
   category: 'character',
   localeKey: 'promptLibrary.characterProfile',
   template: (v) =>
-    `Generate a detailed character profile based on this concept: "${v.concept ?? ''}". The profile should include fields for 'name', 'backstory', 'motivation', 'appearance', 'personalityTraits', 'flaws', 'characterArc', and 'relationships'.`,
+    `Generate a detailed character profile based on this concept: "${v['concept'] ?? ''}". The profile should include fields for 'name', 'backstory', 'motivation', 'appearance', 'personalityTraits', 'flaws', 'characterArc', and 'relationships'.`,
 });
 
 register({
@@ -80,7 +80,7 @@ register({
   category: 'character',
   localeKey: 'promptLibrary.regenerateCharacterField',
   template: (v) =>
-    `Given the character profile:\n${v.character ?? ''}\n\nRewrite or expand upon the "${v.field ?? ''}" field to be more compelling and detailed.`,
+    `Given the character profile:\n${v['character'] ?? ''}\n\nRewrite or expand upon the "${v['field'] ?? ''}" field to be more compelling and detailed.`,
 });
 
 register({
@@ -90,7 +90,7 @@ register({
   category: 'character',
   localeKey: 'promptLibrary.characterPortrait',
   template: (v) =>
-    `Generate portrait of ${v.description ?? ''} in style of ${v.style || 'vivid, artistic, digital painting'}. Centered, chest-up, simple atmospheric background. No text or watermarks.`,
+    `Generate portrait of ${v['description'] ?? ''} in style of ${v['style'] || 'vivid, artistic, digital painting'}. Centered, chest-up, simple atmospheric background. No text or watermarks.`,
 });
 
 register({
@@ -100,7 +100,7 @@ register({
   category: 'world',
   localeKey: 'promptLibrary.worldProfile',
   template: (v) =>
-    `Generate a detailed world profile based on this concept: "${v.concept ?? ''}". Include 'name', 'description', 'geography', 'magicSystem', and 'culture'.`,
+    `Generate a detailed world profile based on this concept: "${v['concept'] ?? ''}". Include 'name', 'description', 'geography', 'magicSystem', and 'culture'.`,
 });
 
 register({
@@ -110,7 +110,7 @@ register({
   category: 'world',
   localeKey: 'promptLibrary.regenerateWorldField',
   template: (v) =>
-    `Given the world profile:\n${v.world ?? ''}\n\nRewrite or expand upon the "${v.field ?? ''}" field to be more detailed and imaginative.`,
+    `Given the world profile:\n${v['world'] ?? ''}\n\nRewrite or expand upon the "${v['field'] ?? ''}" field to be more detailed and imaginative.`,
 });
 
 register({
@@ -120,7 +120,7 @@ register({
   category: 'world',
   localeKey: 'promptLibrary.worldImage',
   template: (v) =>
-    `Generate a breathtaking atmospheric digital painting of a landscape that captures: "${v.description ?? ''}". No text or watermarks.`,
+    `Generate a breathtaking atmospheric digital painting of a landscape that captures: "${v['description'] ?? ''}". No text or watermarks.`,
 });
 
 register({
@@ -130,7 +130,7 @@ register({
   category: 'manuscript',
   localeKey: 'promptLibrary.sceneVisualization',
   template: (v) =>
-    `Create a single cinematic illustration for this scene from "${v.projectTitle ?? ''}".\nScene: ${v.sectionTitle ?? ''}\nExcerpt:\n${v.excerpt ?? ''}\n\nOne coherent image, no text, captions, or watermarks.`,
+    `Create a single cinematic illustration for this scene from "${v['projectTitle'] ?? ''}".\nScene: ${v['sectionTitle'] ?? ''}\nExcerpt:\n${v['excerpt'] ?? ''}\n\nOne coherent image, no text, captions, or watermarks.`,
 });
 
 register({
@@ -140,7 +140,7 @@ register({
   category: 'outline',
   localeKey: 'promptLibrary.outline',
   template: (v) =>
-    `Generate a story outline with ${v.numChapters ?? '10'} sections for a ${v.pacing ?? ''} ${v.genre ?? ''} story.\nCore Idea: ${v.idea ?? ''}\n${v.characters ? `Key Characters: ${v.characters}` : ''}\n${v.setting ? `Setting: ${v.setting}` : ''}\n${v.includeTwist === 'true' ? 'Include a significant plot twist in one of the later sections.' : ''}\nFor each section, provide a "title" and "description". If a section is a plot twist, add "isTwist": true.`,
+    `Generate a story outline with ${v['numChapters'] ?? '10'} sections for a ${v['pacing'] ?? ''} ${v['genre'] ?? ''} story.\nCore Idea: ${v['idea'] ?? ''}\n${v['characters'] ? `Key Characters: ${v['characters']}` : ''}\n${v['setting'] ? `Setting: ${v['setting']}` : ''}\n${v['includeTwist'] === 'true' ? 'Include a significant plot twist in one of the later sections.' : ''}\nFor each section, provide a "title" and "description". If a section is a plot twist, add "isTwist": true.`,
 });
 
 register({
@@ -150,7 +150,7 @@ register({
   category: 'outline',
   localeKey: 'promptLibrary.regenerateOutlineSection',
   template: (v) =>
-    `Given the current outline:\n${v.outline ?? ''}\n\nRegenerate section ${v.sectionIndex ?? '0'} ("${v.sectionTitle ?? ''}") to be more engaging and detailed, keeping it consistent with the rest.`,
+    `Given the current outline:\n${v['outline'] ?? ''}\n\nRegenerate section ${v['sectionIndex'] ?? '0'} ("${v['sectionTitle'] ?? ''}") to be more engaging and detailed, keeping it consistent with the rest.`,
 });
 
 register({
@@ -160,7 +160,7 @@ register({
   category: 'outline',
   localeKey: 'promptLibrary.personalizeTemplate',
   template: (v) =>
-    `Adapt the following story template to fit the user's concept.\nTemplate: ${v.template ?? ''}\nUser Concept: ${v.concept ?? ''}\nPersonalize all plot points to the user's genre (${v.genre ?? ''}) and idea.`,
+    `Adapt the following story template to fit the user's concept.\nTemplate: ${v['template'] ?? ''}\nUser Concept: ${v['concept'] ?? ''}\nPersonalize all plot points to the user's genre (${v['genre'] ?? ''}) and idea.`,
 });
 
 register({
@@ -170,7 +170,7 @@ register({
   category: 'outline',
   localeKey: 'promptLibrary.customTemplate',
   template: (v) =>
-    `Generate a story outline based on this custom template:\n${v.template ?? ''}\nAdapt it for: ${v.concept ?? ''}.`,
+    `Generate a story outline based on this custom template:\n${v['template'] ?? ''}\nAdapt it for: ${v['concept'] ?? ''}.`,
 });
 
 register({
@@ -180,7 +180,7 @@ register({
   category: 'manuscript',
   localeKey: 'promptLibrary.synopsis',
   template: (v) =>
-    `Write a compelling ${v.length || 'one-paragraph'} synopsis for the following story.\nTitle: ${v.title ?? ''}\nOutline: ${v.outline ?? ''}`,
+    `Write a compelling ${v['length'] || 'one-paragraph'} synopsis for the following story.\nTitle: ${v['title'] ?? ''}\nOutline: ${v['outline'] ?? ''}`,
 });
 
 register({
@@ -190,7 +190,7 @@ register({
   category: 'manuscript',
   localeKey: 'promptLibrary.proofread',
   template: (v) =>
-    `Proofread the following manuscript section for grammar, spelling, and style. Return a corrected version and a list of changes made.\n\n${v.content ?? ''}`,
+    `Proofread the following manuscript section for grammar, spelling, and style. Return a corrected version and a list of changes made.\n\n${v['content'] ?? ''}`,
 });
 
 register({
@@ -200,7 +200,7 @@ register({
   category: 'consistency',
   localeKey: 'promptLibrary.consistencyCheck',
   template: (v) =>
-    `Analyse the following manuscript for consistency issues (character names, timeline, world rules, plot continuity).\n\n${v.manuscript ?? ''}`,
+    `Analyse the following manuscript for consistency issues (character names, timeline, world rules, plot continuity).\n\n${v['manuscript'] ?? ''}`,
 });
 
 register({
@@ -210,7 +210,7 @@ register({
   category: 'consistency',
   localeKey: 'promptLibrary.criticAnalysis',
   template: (v) =>
-    `Provide a detailed literary critique of the following manuscript excerpt. Cover: prose quality, pacing, characterisation, dialogue, and overall impact.\n\n${v.excerpt ?? ''}`,
+    `Provide a detailed literary critique of the following manuscript excerpt. Cover: prose quality, pacing, characterisation, dialogue, and overall impact.\n\n${v['excerpt'] ?? ''}`,
 });
 
 register({
@@ -220,7 +220,7 @@ register({
   category: 'plot-hole',
   localeKey: 'promptLibrary.plotHoleDetection',
   template: (v) =>
-    `Identify all plot holes, logical inconsistencies, and unresolved threads in the following story outline and manuscript excerpt.\n\nOutline:\n${v.outline ?? ''}\n\nManuscript:\n${v.manuscript ?? ''}`,
+    `Identify all plot holes, logical inconsistencies, and unresolved threads in the following story outline and manuscript excerpt.\n\nOutline:\n${v['outline'] ?? ''}\n\nManuscript:\n${v['manuscript'] ?? ''}`,
 });
 
 // ---------------------------------------------------------------------------
@@ -234,7 +234,7 @@ register({
   category: 'style-transfer',
   localeKey: 'promptLibrary.styleTransfer',
   template: (v) =>
-    `Rewrite the following passage in the style of the provided author voice example.\n\nAuthor Style Example:\n${v.authorStyle ?? ''}\n\nOriginal Passage:\n${v.passage ?? ''}\n\nReturn JSON with keys "transformed" (the rewritten passage) and "voiceNotes" (array of style observations).`,
+    `Rewrite the following passage in the style of the provided author voice example.\n\nAuthor Style Example:\n${v['authorStyle'] ?? ''}\n\nOriginal Passage:\n${v['passage'] ?? ''}\n\nReturn JSON with keys "transformed" (the rewritten passage) and "voiceNotes" (array of style observations).`,
 });
 
 register({
@@ -246,7 +246,7 @@ register({
   chainable: true,
   inputFromPreviousId: 'plotHoleDetection',
   template: (v) =>
-    `Given the following detected plot holes and the manuscript context, generate specific fix suggestions for each hole.\n\nDetected Plot Holes:\n${v.analysis ?? ''}\n\nManuscript Context:\n${v.manuscript ?? ''}\n\nReturn JSON with key "fixes": an array of objects with "hole", "suggestion", and optional "chapter".`,
+    `Given the following detected plot holes and the manuscript context, generate specific fix suggestions for each hole.\n\nDetected Plot Holes:\n${v['analysis'] ?? ''}\n\nManuscript Context:\n${v['manuscript'] ?? ''}\n\nReturn JSON with key "fixes": an array of objects with "hole", "suggestion", and optional "chapter".`,
 });
 
 register({
@@ -256,7 +256,7 @@ register({
   category: 'chapter-gen',
   localeKey: 'promptLibrary.chapterAutoGeneration',
   template: (v) =>
-    `Write a full chapter based on the following outline section.\n\nOutline Section:\n${v.outlineSection ?? ''}\n\nExisting Chapter Context (for continuity):\n${v.existingChapters ?? ''}\n\nTarget word count: approximately ${v.wordTarget || '1000'} words.\n\nReturn JSON with keys "title", "content", "endingHook", and "wordCount".`,
+    `Write a full chapter based on the following outline section.\n\nOutline Section:\n${v['outlineSection'] ?? ''}\n\nExisting Chapter Context (for continuity):\n${v['existingChapters'] ?? ''}\n\nTarget word count: approximately ${v['wordTarget'] || '1000'} words.\n\nReturn JSON with keys "title", "content", "endingHook", and "wordCount".`,
 });
 
 // ---------------------------------------------------------------------------
@@ -331,14 +331,14 @@ export function importPromptLibrary(json: string): ValidationResult {
       continue;
     }
     const t = item as Record<string, unknown>;
-    if (typeof t.id !== 'string' || !t.id) {
+    if (typeof t['id'] !== 'string' || !t['id']) {
       errors.push('Template missing required "id"');
       continue;
     }
     // QNBS-v3: Imported templates are metadata-only — no executable template() fn from untrusted JSON.
     //          Callers that need to getPrompt() must use the built-in registry.
-    if (!registry.has(t.id as string)) {
-      errors.push(`Template "${String(t.id)}" is not in the built-in registry — ignored`);
+    if (!registry.has(t['id'] as string)) {
+      errors.push(`Template "${String(t['id'])}" is not in the built-in registry — ignored`);
     }
   }
 

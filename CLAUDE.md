@@ -136,6 +136,24 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 - Never comment out or skip failing tests to green CI — fix the root cause. `it.skip` requires a file-level comment with a reason and a ticket/TODO reference
 - **Modus operandi — tests:** Whenever you modify, add, or delete a code file, always check whether a corresponding test file exists (in `tests/unit/` for components/hooks/services, or `tests/e2e/` for flows). If it does, update or extend it to cover the change. If it doesn't exist yet and the change is non-trivial, create one. Run the relevant test file with `pnpm exec vitest run <path>` to verify before committing.
 
+## v1.6 Patterns (new in this release)
+
+**plotBoardSlice:** `features/plotBoard/plotBoardSlice.ts` — canvas viewport (zoom/pan), connections, subplots, tension overrides. NOT undo-able; persists to `localStorage`. Import selectors: `selectConnections`, `selectAllSubplots`, `selectActiveMode`, `selectZoom`, `selectTensionOverrides`.
+
+**plotBoardService:** `services/plotBoardService.ts` — `computeTensionCurve(sections, overrides)`, `autoLayoutScenes(sections)`, `exportBoardAsSvg(svgEl)`.
+
+**sceneRevisionService:** `services/sceneRevisionService.ts` — IDB `scene-revisions` store; `saveRevision(sectionId, snapshot, label?)`, `listRevisions(sectionId)`, `deleteRevision(id)`. Tests: use `@vitest-environment node` + `new IDBFactory()` per test in `beforeEach` + `_resetDbForTest()`.
+
+**sceneCommentsSlice:** `features/sceneComments/sceneCommentsSlice.ts` — EntityAdapter; selectors `selectCommentsBySection(sectionId)`, `selectUnresolvedCount`, `selectUnresolvedCountBySection(sectionId)`. Root state key: `sceneComments`.
+
+**progressTrackerSlice:** `features/progressTracker/progressTrackerSlice.ts` — `startSession(wordCount)`, `endSession({ currentWordCount })`, `setDailyGoal`, `setWeeklyGoal`, `syncStreak`. Exported: `computeStreak(history)` pure function.
+
+**deepLinkService:** `services/deepLinkService.ts` — `parseHash(hash)`, `pushHash(view, sectionId?)`, `readCurrentView()`. Views: `'board' | 'preview' | 'progress' | 'project'`.
+
+**Test mock pattern for useAppSelectorShallow with plotBoard:** Tests must include `plotBoard: { activeMode: 'swimlane', connections: [], subplots: { ids: [], entities: {} }, snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0, tensionOverrides: {} }` in the mock state. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines in test files.
+
+**ConnectionLayer test IDs:** Connection `<g>` elements use `data-testid="connection-group"` (biome correctly removed redundant `role="img"` from `<g>` inside an `role="img"` SVG; tests should query by testid, not role).
+
 ## Known Technical Debt
 
 See `AUDIT.md` and `TODO.md`. Key items:
@@ -143,7 +161,7 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - **`StorageBackend` + `SaveProjectInput`** — contract in `services/storageBackend.ts`; use `storageService` in app code; backends implement the same `saveProject` union (Redux envelope or flat `StoryProject`).
 - `components/AdvancedImportExport.tsx` — keep browser vs Tauri export paths explicit
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
-- Several hooks still need removal of `as any` casts
+- `workers/inference.worker.ts:50` — `@ts-expect-error` on `@xenova/transformers` dynamic import (lives in `packages/ai-core`; Vite resolves at build time but `tsc` can't see it from root)
 
 ## graphify
 

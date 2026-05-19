@@ -28,6 +28,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableProjectHealthScore: false,
   enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
+  enablePlotBoardV2: true,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -91,6 +92,7 @@ afterEach(() => {
     enableProjectHealthScore: false,
     enableCrossProjectSearch: true,
     enableAppHealthPanel: false,
+    enablePlotBoardV2: true,
   };
 });
 

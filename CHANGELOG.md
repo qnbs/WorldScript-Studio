@@ -43,6 +43,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `services/ai/index.ts` now re-exports all Day 4 service functions.
 - `crossProjectIndexService.ts`: `ProjectSearchIndex` gains optional `aiSummary` and `embeddingVector` fields.
 
+## [1.6.0] — 2026-05-19
+
+### Added (v1.6 — Plot-Board v2 & Writer Experience Sprint)
+
+**Plot-Board v2** (Days 1–3 — the Killer Feature):
+- **Free-form canvas mode:** Scene cards positioned absolutely on a pannable/zoomable CSS-transform canvas; tap/drag updates `sceneBoardLayout` in Redux. Pan: pointer-capture on background; zoom: wheel + two-pointer pinch (0.25×–4×). Mini-map: 80×50 px fixed SVG overview in corner.
+- **SVG Connection Layer:** Cubic-bezier paths between scene cards rendered in `ConnectionLayer.tsx`; connection types: `cause-effect`, `parallel`, `subplot`, `temporal`, `character-arc`. Invisible 18 px thick hit-test `<path>` (`pointer-events: stroke`) with `role="button"` + `tabIndex` for keyboard access.
+- **Subplot System:** `SubplotPanel.tsx` — collapsible sidebar with color-swatch list, inline name edit, `<input type="color">` picker, filter toggle that dims unrelated scenes.
+- **Connection Toolbar:** Floating `ConnectionToolbar.tsx` appearing when a connection is selected — type select, label input, delete.
+- **Tension Curve Panel:** `TensionCurvePanel.tsx` — 800×200 SVG chart with auto-computed tension (status-based score 0–10) and user drag-overrides. Beat sheet overlays: Three-Act, Save the Cat!, Hero's Journey marker presets. Collapsible below the canvas.
+- **Mode Tab Bar:** Swimlane | Canvas | Timeline three-segment control in `SceneBoardView.tsx` toolbar dispatches `plotBoardActions.setActiveMode`.
+- **Feature flag:** `enablePlotBoardV2: boolean` (default `true`) in `featureFlagsSlice.ts`.
+- **Snap-to-grid option** (8 px) for canvas drag in `PlotCanvas.tsx`.
+- **New Redux slice `features/plotBoard/plotBoardSlice.ts`:** Manages canvas viewport (zoom, pan), connections, subplots, tension overrides, draw-mode state. Persists to `localStorage` key `storycraft-plot-board`. NOT wrapped by `redux-undo`.
+- **New service `services/plotBoardService.ts`:** `computeTensionCurve()`, `autoLayoutScenes()`, `exportBoardAsSvg()`.
+- **Architecture doc `docs/PLOT-BOARD.md`:** Connection types, beat sheet reference, canvas gesture guide.
+- **Mobile canvas gestures:** Pinch-to-zoom, two-finger pan, long-press background → add scene at pointer position.
+
+**Real-Time Book Preview** (Day 4):
+- **`components/BookPreviewView.tsx` + `hooks/useBookPreviewView.ts` + `contexts/BookPreviewContext.ts`:** Scrollable book-style rendering of all manuscript sections as `<article>` elements. IntersectionObserver (threshold 0.3) drives an active TOC entry.
+- **Controls bar:** Font size (12–24 px), font family (system-ui / serif / monospace), word-count annotation toggle, fullscreen mode (`position: fixed inset-0 z-50`).
+- **Collapsible TOC sidebar:** Fixed-position; keyboard scroll via `scrollIntoView`; active section highlighted.
+- **Registered** as lazy-loaded view in `App.tsx` (`case 'preview'`) and `APP_SECTIONS` in `constants/sections.tsx`.
+
+**Reference Panel / Split-View** (Day 5):
+- **`components/manuscript/ReferencePanelView.tsx`:** 6-tab panel (`Characters | World | Notes | Binder | Comments | Revisions`) with `role="complementary"` + `aria-label`. Tab buttons use `role="tablist"` / `role="tab"` / `aria-selected` / `aria-controls`.
+- **Characters tab:** Mini-cards for scene's `characterIds[]` with avatar placeholder and backstory excerpt.
+- **World tab:** Linked location mini-description and geography excerpt.
+- **Notes tab:** Inline editable `<textarea>` synced to `currentSection.notes` via `updateManuscriptSection`.
+- **Binder tab:** BinderNode links for current section.
+- **Comments & Revisions tabs:** Integrate `CommentsPanel` and `SceneRevisionPanel` (see Day 6).
+
+**Per-Scene Revision History + Threaded Comments** (Day 6):
+- **`services/sceneRevisionService.ts`:** IndexedDB `scene-revisions` store; `saveRevision()`, `listRevisions()` (newest-first, max 50 per scene), `deleteRevision()`. `_resetDbForTest()` exported for test isolation.
+- **`components/manuscript/SceneRevisionPanel.tsx`:** Word-level diff view using `services/wordDiff.ts`; two-step restore (confirm button); labeled snapshot save.
+- **`features/sceneComments/sceneCommentsSlice.ts`:** EntityAdapter for `SceneComment` with selectors `selectCommentsBySection`, `selectUnresolvedCount`, `selectUnresolvedCountBySection`. Actions: `addComment`, `resolveComment`, `unresolveComment`, `addReply`, `deleteComment`, `deleteCommentsForSection`.
+- **`components/manuscript/CommentsPanel.tsx`:** Thread expand/collapse, inline reply input (Enter to send), resolve/unresolve/delete buttons with `role="list"` / `role="listitem"` ARIA semantics.
+- **New types in `types.ts`:** `SceneRevision`, `SceneComment`, `CommentReply`.
+
+**Progress Tracker Dashboard** (Day 7):
+- **`features/progressTracker/progressTrackerSlice.ts`:** `startSession`, `endSession` (calculates `wordsWritten = current - start`, prevents negative delta), `setDailyGoal` (clamps ≥ 1), `setWeeklyGoal`, `syncStreak`. Exported pure function `computeStreak(history)`.
+- **`components/ProgressTrackerView.tsx` + `hooks/useProgressTrackerView.ts` + `contexts/ProgressTrackerContext.ts`:** 2-column dashboard (single-column mobile): circular SVG progress ring, live session timer (`role="timer"`), daily/weekly goal bars, 30-day SVG area velocity chart with gradient fill, 12-week GitHub-style heatmap (84 `<rect>` cells, 5 intensity shades).
+- **Registered** as lazy-loaded view (`case 'progress'`) in `App.tsx` and `APP_SECTIONS`.
+- **Session shortcut `Ctrl+Shift+S`** to start/stop writing sessions.
+
+**Mobile Polish** (Days 8–9):
+- **`hooks/useFoldableLayout.ts`:** Reads `env(fold-top)` / `env(fold-left)` CSS environment variables (W3C Device Posture API). Returns `{ isFolded, foldAxis: 'horizontal'|'vertical'|null, foldPosition }`. Applied in `App.tsx` as `data-fold-axis` on `<body>`.
+- **`services/deepLinkService.ts`:** URL hash routing (`#/project/{id}`, `#/project/{id}/scene/{sectionId}`, `#/board`, `#/preview`, `#/progress`). `parseHash()`, `pushHash()`, `readCurrentView()`.
+- **`hooks/useHaptics.ts` upgraded:** Named `HAPTIC_PATTERNS` library — `scene-drop`, `connection-made`, `streak-milestone`, `session-start`, `goal-achieved`, `error`. `HapticPattern` type exported.
+
+### Changed
+
+- **`hooks/useSceneBoardView.ts`:** Extended with `handleAddConnection`, `handleDeleteConnection`, `handleStartDrawConnection`, `handleFinishDrawConnection`, `handleCancelDrawConnection`, `handleAddSubplot`, `handleDeleteSubplot`, `handleAssignToSubplot`.
+- **`contexts/SceneBoardViewContext.ts`:** Extended with new connection/subplot handlers.
+- **`components/SceneBoardView.tsx`:** Refactored to orchestrate `PlotCanvas`, `ConnectionLayer`, `SubplotPanel`, `TensionCurvePanel`, `ConnectionToolbar`; mode tab bar wired to `plotBoardActions.setActiveMode`.
+- **`components/scene-board/` subcomponents extracted:** `SceneCard.tsx`, `ActSwimlane.tsx` (previously inline in `SceneBoardView.tsx`).
+- **i18n:** 131 new keys (preview 21 + progress 25 + reference 11 + comments 13 + revisions 13 + plotboard 20 + mobile 6 + haptics 2 = 131) → **1590 keys × 5 locales**.
+- **`app/store.ts`:** Registered `plotBoard`, `progressTracker`, `sceneComments` reducers.
+- **`types.ts`:** Added `Subplot`, `PlotConnection`, `SceneRevision`, `SceneComment`, `CommentReply` interfaces.
+- **`workers/inference.worker.ts`:** Added `@ts-expect-error` for `@xenova/transformers` dynamic import (lives in `packages/ai-core`; Vite resolves at build time — pre-existing resolution gap in `tsc`).
+
+### Tests
+
+- **174 test files / 1966 tests** (up from 166/1851) — 0 failures.
+- New: `plotBoardSlice.test.ts`, `plotBoardService.test.ts`, `ConnectionLayer.test.tsx`, `SubplotPanel.test.tsx`, `TensionCurvePanel.test.tsx`, `sceneRevisionService.test.ts`, `sceneCommentsSlice.test.ts`, `progressTrackerSlice.test.ts`.
+- Fixed: `useSceneBoardView.test.ts` mock state extended with `plotBoard` shape; `ConnectionLayer.test.tsx` updated to use `data-testid="connection-group"` (biome correctly removed redundant `role="img"` from `<g>` inside `role="img"` SVG).
+
 ## [Unreleased]
 
 ### Added
