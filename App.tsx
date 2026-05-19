@@ -105,6 +105,13 @@ const WelcomePortal = lazy(() =>
     default: m.WelcomePortal,
   })),
 );
+// QNBS-v3: v1.6 views lazy-loaded to keep initial bundle lean
+const BookPreviewView = lazy(() =>
+  import('./components/BookPreviewView').then((m) => ({ default: m.BookPreviewView })),
+);
+const ProgressTrackerView = lazy(() =>
+  import('./components/ProgressTrackerView').then((m) => ({ default: m.ProgressTrackerView })),
+);
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
@@ -397,6 +404,10 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         return <ConsistencyCheckerView />;
       case 'critic':
         return <CriticView />;
+      case 'preview':
+        return <BookPreviewView />;
+      case 'progress':
+        return <ProgressTrackerView />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }

@@ -47,6 +47,7 @@ const mockFeatureFlags = {
   enableProjectHealthScore: false,
   enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
+  enablePlotBoardV2: true,
 };
 
 vi.mock('../../../app/hooks', () => ({

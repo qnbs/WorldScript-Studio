@@ -4,12 +4,21 @@ import undoable from 'redux-undo';
 import featureFlagsReducer, {
   featureFlagsPersistenceMiddleware,
 } from '../features/featureFlags/featureFlagsSlice';
+import plotBoardReducer, {
+  plotBoardPersistenceMiddleware,
+} from '../features/plotBoard/plotBoardSlice';
+import progressTrackerReducer, {
+  progressTrackerPersistenceMiddleware,
+} from '../features/progressTracker/progressTrackerSlice';
 import type { ProjectData } from '../features/project/projectSlice';
 import projectReducer, { projectActions } from '../features/project/projectSlice';
 import {
   importProjectThunk,
   restoreSnapshotThunk,
 } from '../features/project/thunks/projectManagementThunks';
+import sceneCommentsReducer, {
+  sceneCommentsPersistenceMiddleware,
+} from '../features/sceneComments/sceneCommentsSlice';
 import settingsReducer from '../features/settings/settingsSlice';
 import statusReducer from '../features/status/statusSlice';
 import writerReducer from '../features/writer/writerSlice';
@@ -58,6 +67,11 @@ const combinedReducer = combineReducers({
   writer: writerReducer,
   versionControl: versionControlReducer,
   featureFlags: featureFlagsReducer,
+  // QNBS-v3: plotBoard is viewport/connection state only — not undo-able, persisted to localStorage
+  plotBoard: plotBoardReducer,
+  // QNBS-v3: progressTracker and sceneComments are ephemeral session + user data, localStorage-backed
+  progressTracker: progressTrackerReducer,
+  sceneComments: sceneCommentsReducer,
   [aiApi.reducerPath]: aiApi.reducer,
 });
 
@@ -125,6 +139,9 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
         .prepend(listenerMiddleware.middleware)
         .concat(
           featureFlagsPersistenceMiddleware,
+          plotBoardPersistenceMiddleware,
+          progressTrackerPersistenceMiddleware,
+          sceneCommentsPersistenceMiddleware,
           loggerMiddleware,
           aiApi.middleware as Middleware,
         ),

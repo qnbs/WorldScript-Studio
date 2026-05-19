@@ -1,10 +1,15 @@
 import { useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../app/hooks';
 import type { RootState } from '../app/store';
+import {
+  plotBoardActions,
+  selectAllSubplots,
+  selectConnections,
+} from '../features/plotBoard/plotBoardSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import { useTranslation } from '../hooks/useTranslation';
-import type { StorySection } from '../types';
+import type { PlotConnectionType, StorySection } from '../types';
 
 export const useSceneBoardView = () => {
   const { t } = useTranslation();
@@ -80,16 +85,107 @@ export const useSceneBoardView = () => {
     [dispatch],
   );
 
+  // ── Connection handlers ───────────────────────────────────────────────────
+
+  const connections = useAppSelectorShallow(selectConnections);
+
+  const handleAddConnection = useCallback(
+    (fromSectionId: string, toSectionId: string, type: PlotConnectionType = 'cause-effect') => {
+      dispatch(
+        plotBoardActions.addConnection({
+          id: `conn-${Date.now()}`,
+          fromSectionId,
+          toSectionId,
+          type,
+        }),
+      );
+    },
+    [dispatch],
+  );
+
+  const handleDeleteConnection = useCallback(
+    (id: string) => {
+      dispatch(plotBoardActions.removeConnection(id));
+    },
+    [dispatch],
+  );
+
+  const handleStartDrawConnection = useCallback(
+    (fromId: string) => {
+      dispatch(plotBoardActions.startDrawConnection(fromId));
+    },
+    [dispatch],
+  );
+
+  const handleFinishDrawConnection = useCallback(
+    (toId: string, type: PlotConnectionType = 'cause-effect') => {
+      dispatch(
+        plotBoardActions.finishDrawConnection({
+          toSectionId: toId,
+          type,
+          newId: `conn-${Date.now()}`,
+        }),
+      );
+    },
+    [dispatch],
+  );
+
+  const handleCancelDrawConnection = useCallback(() => {
+    dispatch(plotBoardActions.cancelDrawConnection());
+  }, [dispatch]);
+
+  // ── Subplot handlers ──────────────────────────────────────────────────────
+
+  const subplots = useAppSelectorShallow(selectAllSubplots);
+
+  const handleAddSubplot = useCallback(
+    (name: string, color: string) => {
+      dispatch(
+        plotBoardActions.addSubplot({
+          id: `sp-${Date.now()}`,
+          name,
+          color,
+          sectionIds: [],
+        }),
+      );
+    },
+    [dispatch],
+  );
+
+  const handleDeleteSubplot = useCallback(
+    (id: string) => {
+      dispatch(plotBoardActions.deleteSubplot(id));
+    },
+    [dispatch],
+  );
+
+  const handleAssignToSubplot = useCallback(
+    (sectionId: string, subplotId: string) => {
+      dispatch(plotBoardActions.assignSectionToSubplot({ sectionId, subplotId }));
+    },
+    [dispatch],
+  );
+
   return {
     t,
     project,
     sections,
     characters,
     locationOptions,
+    connections,
+    subplots,
     handleUpdateSection,
     handleDeleteSection,
     handleMoveSection,
     handleMoveSectionWithinAct,
     handleAddSection,
+    handleAddConnection,
+    handleDeleteConnection,
+    handleStartDrawConnection,
+    handleFinishDrawConnection,
+    handleCancelDrawConnection,
+    handleAddSubplot,
+    handleDeleteSubplot,
+    handleAssignToSubplot,
   };
 };

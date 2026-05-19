@@ -18,7 +18,9 @@ export type View =
   | 'zen'
   | 'characterGraph'
   | 'consistencyChecker'
-  | 'critic';
+  | 'critic'
+  | 'preview'
+  | 'progress';
 
 export interface Character {
   id: string;
@@ -268,6 +270,8 @@ export type AiModel =
   | 'Llama-3.2-3B-Instruct-q4f16_1-MLC'
   | 'Phi-3.5-mini-instruct-q4f16_1-MLC'
   | 'gemma-2-2b-it-q4f16_1-MLC'
+  // QNBS-v3: Qwen 2.5 added in v1.5 WEBLLM_SUPPORTED_MODELS — keep AiModel in sync.
+  | 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
   /** Browser-only WebGPU path via @mlc-ai/web-llm (generic fallback for stored values). */
   | 'webllm/browser';
 export type AIProvider =
@@ -496,6 +500,76 @@ export interface PersistedVersionControlState {
   branches: VersionBranch[];
   snapshots: VersionSnapshot[];
   currentBranchId: string;
+}
+
+// ─── Plot-Board v2 Types ─────────────────────────────────────────────────────
+
+/** A named subplot grouping scenes by a secondary story thread. */
+export interface Subplot {
+  id: string;
+  name: string;
+  /** Hex color, e.g. "#a855f7". */
+  color: string;
+  sectionIds: string[];
+}
+
+export type PlotConnectionType =
+  | 'cause-effect'
+  | 'parallel'
+  | 'subplot'
+  | 'temporal'
+  | 'character-arc';
+
+/** Directed edge between two scenes on the Plot-Board canvas. */
+export interface PlotConnection {
+  id: string;
+  fromSectionId: string;
+  toSectionId: string;
+  type: PlotConnectionType;
+  /** When set, inherits color from the linked subplot. */
+  subplotId?: string;
+  label?: string;
+  /** Override color (hex). Falls back to connection-type default. */
+  color?: string;
+}
+
+// ─── Scene Revision + Comment Types ──────────────────────────────────────────
+
+/** Snapshot of a single scene at a point in time (stored in IDB, not Redux). */
+export interface SceneRevision {
+  id: string;
+  sectionId: string;
+  createdAt: number; // Date.now()
+  title: string;
+  content: string;
+  wordCount: number;
+  /** User-supplied label, e.g. "Draft 2". */
+  label?: string;
+  authorName?: string;
+}
+
+export interface CommentReply {
+  id: string;
+  createdAt: number;
+  authorName: string;
+  authorColor: string;
+  body: string;
+}
+
+/** Threaded comment anchored to a scene, optionally to a text range. */
+export interface SceneComment {
+  id: string;
+  sectionId: string;
+  createdAt: number;
+  authorName: string;
+  /** Hex color assigned to the author for avatar/highlight. */
+  authorColor: string;
+  body: string;
+  resolved: boolean;
+  /** Optional text selection anchor within the scene content. */
+  selectionStart?: number;
+  selectionEnd?: number;
+  replies: CommentReply[];
 }
 
 // ─── Community Template Types ────────────────────────────────────────────────

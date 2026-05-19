@@ -114,6 +114,7 @@ vi.mock('../../../app/hooks', () => ({
         enableBinderResearch: false,
         enableProjectHealthScore: false,
         enableCrossProjectSearch: false,
+        enablePlotBoardV2: true,
       },
     }),
   ),

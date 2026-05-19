@@ -20,8 +20,26 @@ let mockWorlds: World[] = [];
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
   // QNBS-v3: useAppSelectorShallow used by useSceneBoardView — must be mocked alongside useAppSelector
-  useAppSelectorShallow: (selector: (s: unknown) => unknown) =>
-    selector({ project: { present: { data: mockProject } } }),
+  // plotBoard added in v1.6 so selectConnections/selectAllSubplots resolve without crashing
+  // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
+  useAppSelectorShallow: (selector: (s: any) => unknown) =>
+    selector({
+      project: { present: { data: mockProject } },
+      plotBoard: {
+        activeMode: 'swimlane',
+        connections: [],
+        subplots: { ids: [], entities: {} },
+        snapToGrid: false,
+        selectedConnectionId: null,
+        isDrawingConnection: false,
+        drawFromSectionId: null,
+        activeSubplotFilter: null,
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+        tensionOverrides: {},
+      },
+    }),
 }));
 
 vi.mock('../../../hooks/useTranslation', () => ({

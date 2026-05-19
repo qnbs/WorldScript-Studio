@@ -63,6 +63,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      // QNBS-v3: @xenova/transformers lives in packages/ai-core; Rolldown can't hoist it from
+      // a nested workspace node_modules. Alias mirrors the vitest.config.ts fix.
+      '@xenova/transformers': path.resolve(
+        __dirname,
+        './packages/ai-core/node_modules/@xenova/transformers/src/transformers.js',
+      ),
     },
   },
 

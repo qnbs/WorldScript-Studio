@@ -8,6 +8,29 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## v1.6 — Plot-Board v2 & Writer Experience (RELEASED 2026-05-19)
+
+- ✅ **Plot-Board v2** — `plotBoardSlice`, `plotBoardService`, `PlotCanvas`, `ConnectionLayer`, `SubplotPanel`, `TensionCurvePanel`, `ConnectionToolbar`, beat-sheet overlays, mobile pinch/pan
+- ✅ **Real-Time Book Preview** — `BookPreviewView`, `useBookPreviewView`, `BookPreviewContext`, IntersectionObserver TOC, fullscreen
+- ✅ **Reference Panel** — `ReferencePanelView` (6 tabs: Characters, World, Notes, Binder, Comments, Revisions)
+- ✅ **Per-Scene Revision History** — `sceneRevisionService` (IDB), `SceneRevisionPanel`, word-level diff, named snapshots
+- ✅ **Threaded Comments** — `sceneCommentsSlice`, `CommentsPanel`, resolve/reply/delete
+- ✅ **Progress Tracker** — `progressTrackerSlice`, `ProgressTrackerView`, session timer, streak, velocity chart, heatmap
+- ✅ **Mobile Polish** — `useFoldableLayout`, `deepLinkService`, `HAPTIC_PATTERNS` named library
+- ✅ **i18n** — 1590 keys × 5 locales
+- ✅ **Quality gate** — lint ✅ typecheck ✅ 1966 tests / 174 files (0 failures) ✅
+
+### v2.0 Open Items
+
+- ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
+- ⬜ RTL language support (Arabic, Hebrew, Persian)
+- ⬜ Fine-Tuning / LoRA-Support für personalisierte Schreibstile
+- ⬜ Cloud-Sync (optional, E2E-verschlüsselt)
+- ⬜ AI-Creativity-Presets pro Projekt (nicht global)
+- ⬜ Branches coverage ≥ 55 % (aiProviderService-Streaming, große Komponenten)
+
+---
+
 ## v1.4.x — Qualitätssteigerung (Master Perfection Plan)
 
 > Vollständige **`.md`-Inventur** (19 kuratierte Quellen): [`AUDIT.md`](AUDIT.md) § *Markdown corpus*; Navigation: [`README.md`](README.md#-documentation-hub). Schwere Tests **CI-first**: [`docs/CI.md`](docs/CI.md).

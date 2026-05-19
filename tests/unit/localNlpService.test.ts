@@ -35,13 +35,11 @@ afterEach(() => {
 });
 
 // Helper: fire the message handler captured by the last addEventListener call
-function resolveWorkerMessage(
-  responseOverride?: Partial<{
-    ok: boolean;
-    result: string;
-    error: string;
-  }>,
-) {
+function resolveWorkerMessage(responseOverride?: {
+  ok?: boolean;
+  result?: string | undefined;
+  error?: string;
+}) {
   const [, handler] =
     workerAddEventListener.mock.calls[workerAddEventListener.mock.calls.length - 1] ?? [];
   if (typeof handler !== 'function') throw new Error('No handler registered');

@@ -15,6 +15,8 @@ export interface FeatureFlagsState {
   enableCrossProjectSearch: boolean;
   /** Experimental: About-page runtime diagnostics (default: false). */
   enableAppHealthPanel: boolean;
+  /** Plot-Board v2: free-form canvas, SVG connections, tension curve (default: true). */
+  enablePlotBoardV2: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -28,6 +30,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   // QNBS-v3: v1 panel ready; promote from experimental to default-on
   enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
+  // QNBS-v3: Plot-Board v2 is the new default scene board mode in v1.6
+  enablePlotBoardV2: true,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -90,6 +94,9 @@ const featureFlagsSlice = createSlice({
     setEnableAppHealthPanel(state, action: PayloadAction<boolean>) {
       state.enableAppHealthPanel = action.payload;
     },
+    setEnablePlotBoardV2(state, action: PayloadAction<boolean>) {
+      state.enablePlotBoardV2 = action.payload;
+    },
   },
 });
 
@@ -110,6 +117,8 @@ export const selectEnableCrossProjectSearch = (state: { featureFlags: FeatureFla
   state.featureFlags.enableCrossProjectSearch;
 export const selectEnableAppHealthPanel = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableAppHealthPanel;
+export const selectEnablePlotBoardV2 = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enablePlotBoardV2;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

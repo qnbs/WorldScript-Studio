@@ -6,38 +6,66 @@ import { SceneBoardView } from '../../components/SceneBoardView';
 // Mocks
 // ---------------------------------------------------------------------------
 
+const mockSceneBoardViewBase = {
+  t: (k: string) => k,
+  project: {
+    title: 'Test Project',
+    manuscript: [],
+    outline: [],
+    characters: { ids: [], entities: {} },
+    worlds: { ids: [], entities: {} },
+    logline: '',
+    genre: '',
+    sceneBoardLayout: {},
+  },
+  sections: [],
+  characters: [],
+  locationOptions: [],
+  connections: [],
+  subplots: [],
+  handleUpdateSection: vi.fn(),
+  handleDeleteSection: vi.fn(),
+  handleMoveSection: vi.fn(),
+  handleMoveSectionWithinAct: vi.fn(),
+  handleAddSection: vi.fn(),
+  handleAddConnection: vi.fn(),
+  handleDeleteConnection: vi.fn(),
+  handleStartDrawConnection: vi.fn(),
+  handleFinishDrawConnection: vi.fn(),
+  handleCancelDrawConnection: vi.fn(),
+  handleAddSubplot: vi.fn(),
+  handleDeleteSubplot: vi.fn(),
+  handleAssignToSubplot: vi.fn(),
+};
+
 vi.mock('../../hooks/useSceneBoardView', () => ({
-  useSceneBoardView: vi.fn(() => ({
-    t: (k: string) => k,
-    project: {
-      title: 'Test Project',
-      manuscript: [],
-      outline: [],
-      characters: { ids: [], entities: {} },
-      worlds: { ids: [], entities: {} },
-      logline: '',
-      genre: '',
-      sceneBoardLayout: {},
-    },
-    sections: [],
-    characters: [],
-    locationOptions: [],
-    handleUpdateSection: vi.fn(),
-    handleDeleteSection: vi.fn(),
-    handleMoveSection: vi.fn(),
-    handleMoveSectionWithinAct: vi.fn(),
-    handleAddSection: vi.fn(),
-  })),
+  useSceneBoardView: vi.fn(() => mockSceneBoardViewBase),
 }));
+
+const mockAppState = {
+  settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 },
+  plotBoard: {
+    activeMode: 'swimlane',
+    snapToGrid: false,
+    connections: [],
+    selectedConnectionId: null,
+    isDrawingConnection: false,
+    drawFromSectionId: null,
+    subplots: { ids: [], entities: {} },
+    activeSubplotFilter: null,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    tensionOverrides: {},
+  },
+};
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => vi.fn()),
-  useAppSelector: vi.fn((selector: (s: unknown) => unknown) =>
-    selector({ settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 } }),
-  ),
-  useAppSelectorShallow: vi.fn((selector: (s: unknown) => unknown) =>
-    selector({ settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 } }),
-  ),
+  // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
+  useAppSelector: vi.fn((selector: (s: any) => unknown) => selector(mockAppState)),
+  // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
+  useAppSelectorShallow: vi.fn((selector: (s: any) => unknown) => selector(mockAppState)),
 }));
 
 vi.mock('../../hooks/useSpeechRecognition', () => ({
@@ -79,17 +107,7 @@ describe('SceneBoardView', () => {
   it('shows scene count when sections exist', async () => {
     const { useSceneBoardView } = await import('../../hooks/useSceneBoardView');
     vi.mocked(useSceneBoardView).mockReturnValueOnce({
-      t: (k: string) => k,
-      project: {
-        title: 'Test Project',
-        manuscript: [],
-        outline: [],
-        characters: { ids: [], entities: {} },
-        worlds: { ids: [], entities: {} },
-        logline: '',
-        genre: '',
-        sceneBoardLayout: {},
-      },
+      ...mockSceneBoardViewBase,
       sections: [
         {
           id: 's1',
@@ -99,13 +117,6 @@ describe('SceneBoardView', () => {
           wordCount: 4,
         },
       ],
-      characters: [],
-      locationOptions: [],
-      handleUpdateSection: vi.fn(),
-      handleDeleteSection: vi.fn(),
-      handleMoveSection: vi.fn(),
-      handleMoveSectionWithinAct: vi.fn(),
-      handleAddSection: vi.fn(),
     } as never);
     render(<SceneBoardView />);
     // Section count appears in the header
