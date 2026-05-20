@@ -1,30 +1,43 @@
 import { useCallback, useEffect, useState } from 'react';
+import { parseHash, pushHash } from '../services/deepLinkService';
 import { logger } from '../services/logger';
 import type { View } from '../types';
 
-// QNBS-v3: Validates deep-link ?view= values against manifest shortcuts / sidebar ids.
+// QNBS-v3: All View values listed here — kept in sync with the View union in types.ts.
+//          Previously missing: analytics, zen, preview, progress.
+const VALID_VIEWS = new Set<View>([
+  'dashboard',
+  'manuscript',
+  'writer',
+  'templates',
+  'outline',
+  'characters',
+  'world',
+  'export',
+  'settings',
+  'help',
+  'sceneboard',
+  'analytics',
+  'zen',
+  'characterGraph',
+  'consistencyChecker',
+  'critic',
+  'preview',
+  'progress',
+]);
+
 function isValidView(value: string): value is View {
-  return (
-    value === 'dashboard' ||
-    value === 'manuscript' ||
-    value === 'writer' ||
-    value === 'templates' ||
-    value === 'outline' ||
-    value === 'characters' ||
-    value === 'world' ||
-    value === 'export' ||
-    value === 'settings' ||
-    value === 'help' ||
-    value === 'sceneboard' ||
-    value === 'analytics' ||
-    value === 'zen' ||
-    value === 'characterGraph' ||
-    value === 'consistencyChecker' ||
-    value === 'critic'
-  );
+  return VALID_VIEWS.has(value as View);
 }
 
 function readInitialView(): View {
+  try {
+    // Hash-based deep links take priority over query params and localStorage.
+    const { view: hashView } = parseHash(window.location.hash);
+    if (hashView) return hashView;
+  } catch {
+    /* ignore */
+  }
   try {
     const fromUrl = new URLSearchParams(window.location.search).get('view');
     if (fromUrl && isValidView(fromUrl)) return fromUrl;
@@ -65,6 +78,18 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
     }
   }, []);
 
+  // QNBS-v3: Listen for hash changes so browser back/forward and external deep links work.
+  useEffect(() => {
+    function onHashChange() {
+      const { view } = parseHash(window.location.hash);
+      if (view && view !== currentView) {
+        setCurrentView(view);
+      }
+    }
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [currentView]);
+
   // Save the current view to localStorage whenever it changes.
   useEffect(() => {
     try {
@@ -77,12 +102,15 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   const handlePortalExit = useCallback((view?: View) => {
     if (view) {
       setCurrentView(view);
+      pushHash(view);
     }
     setIsPortalActive(false);
   }, []);
 
+  // QNBS-v3: Keep URL hash in sync with navigation so all views are shareable/bookmarkable.
   const handleNavigate = useCallback((view: View) => {
     setCurrentView(view);
+    pushHash(view);
   }, []);
 
   return {

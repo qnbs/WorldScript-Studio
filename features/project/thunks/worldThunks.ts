@@ -3,7 +3,7 @@ import type { RootState } from '../../../app/store';
 import { storageService } from '../../../services/storageService';
 import type { World } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
-import { buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
+import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateWorldProfileThunk = createDeduplicatedThunk(
   'project/generateWorldProfile',
@@ -17,13 +17,8 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('worldProfile', { concept, lang });
     registerDuplicateRequest(prompt, 'worldProfile');
-    return await generateJson<Omit<World, 'id'>>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
+    const creativity = buildAiCreativity(state);
+    return await generateJson<Omit<World, 'id'>>(prompt, creativity, schema!, aiOptions, signal);
   },
 );
 
@@ -39,7 +34,8 @@ export const regenerateWorldFieldThunk = createDeduplicatedThunk(
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateWorldField', { world, field, lang });
     registerDuplicateRequest(prompt, 'regenerateWorldField');
-    const response = await generateText(prompt, state.settings.aiCreativity, aiOptions, signal);
+    const creativity = buildAiCreativity(state);
+    const response = await generateText(prompt, creativity, aiOptions, signal);
     return { field, value: response };
   },
 );

@@ -1,14 +1,14 @@
 import type { RootState } from '../../../app/store';
 import { storageService } from '../../../services/storageService';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
-import { buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
+import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
   'project/generateLogline',
   async (lang: string, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present.data;
-    const creativity = state.settings.aiCreativity;
+    const creativity = buildAiCreativity(state);
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
@@ -23,7 +23,7 @@ export const generateSynopsisThunk = createDeduplicatedThunk(
   async (lang: string, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present.data;
-    const creativity = state.settings.aiCreativity;
+    const creativity = buildAiCreativity(state);
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
@@ -40,7 +40,7 @@ export const proofreadTextThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
-    const creativity = state.settings.aiCreativity;
+    const creativity = buildAiCreativity(state);
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
@@ -95,9 +95,10 @@ export const streamGenerationThunk = createDeduplicatedThunk(
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const creativity = buildAiCreativity(state);
     const fullPrompt = `${prompt}\n\nRespond in ${lang === 'de' ? 'German' : 'English'}.`;
     registerDuplicateRequest(fullPrompt, 'streamGeneration');
     const { streamText } = await loadAiProvider();
-    await streamText(fullPrompt, state.settings.aiCreativity, aiOptions, { onChunk }, signal);
+    await streamText(fullPrompt, creativity, aiOptions, { onChunk }, signal);
   },
 );

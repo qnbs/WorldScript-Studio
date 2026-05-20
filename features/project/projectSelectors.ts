@@ -103,6 +103,57 @@ export const selectPlotTensionOverrides = createSelector(
   (data) => data?.plotTensionOverrides ?? {},
 );
 
+// --- Project AI Preset ---
+export const selectProjectAiPreset = createSelector([selectProjectData], (data) => data?.aiPreset);
+
+// --- Parameterised section selectors (factory pattern for per-instance memoisation) ---
+
+/** Factory: creates a memoised selector that finds a section by id. */
+export const makeSelectSectionById = () =>
+  createSelector(
+    [selectManuscript, (_state: RootState, sectionId: string) => sectionId],
+    (manuscript, sectionId) => manuscript.find((s) => s.id === sectionId),
+  );
+
+/** Factory: creates a memoised selector that returns sections for a given act. */
+export const makeSelectSectionsForAct = () =>
+  createSelector(
+    [selectManuscript, (_state: RootState, act: 1 | 2 | 3) => act],
+    (manuscript, act) => manuscript.filter((s) => (s.act ?? 1) === act),
+  );
+
+export const selectManuscriptSectionCount = createSelector(
+  [selectManuscript],
+  (manuscript) => manuscript.length,
+);
+
+// --- Effective AI settings (preset overlay) ---
+
+/** Active creativity level — project preset overrides global when enabled. */
+export const selectEffectiveAiCreativity = (state: RootState) => {
+  const preset = state.project.present?.data?.aiPreset;
+  if (preset?.enabled && preset.creativity) return preset.creativity;
+  return state.settings.aiCreativity;
+};
+
+/** Merged AI provider/model — project preset fields override global advancedAi when enabled. */
+export const selectEffectiveAiOptions = createSelector(
+  [
+    (state: RootState) => state.settings.advancedAi,
+    (state: RootState) => state.project.present?.data?.aiPreset,
+  ],
+  (advancedAi, preset) => {
+    const use = preset?.enabled === true;
+    return {
+      provider: use && preset.provider ? preset.provider : advancedAi.provider,
+      model: use && preset.model ? preset.model : advancedAi.model,
+      temperature:
+        use && preset.temperature !== undefined ? preset.temperature : advancedAi.temperature,
+      maxTokens: use && preset.maxTokens !== undefined ? preset.maxTokens : advancedAi.maxTokens,
+    };
+  },
+);
+
 // --- Settings-derived selectors (re-render prevention) ---
 export const selectTheme = (state: RootState) => state.settings.theme;
 export const selectAiCreativity = (state: RootState) => state.settings.aiCreativity;

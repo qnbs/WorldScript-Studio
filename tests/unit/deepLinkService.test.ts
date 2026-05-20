@@ -76,10 +76,24 @@ describe('deepLinkService', () => {
         ['critic', 'critic'],
         ['preview', 'preview'],
         ['progress', 'progress'],
+        ['analytics', 'analytics'],
+        ['zen', 'zen'],
       ];
       for (const [hash, view] of routes) {
         expect(parseHash(`#/${hash}`).view).toBe(view);
       }
+    });
+
+    it('maps plotboard alias to sceneboard', () => {
+      expect(parseHash('#/plotboard').view).toBe('sceneboard');
+    });
+
+    it('maps analytics to analytics', () => {
+      expect(parseHash('#/analytics').view).toBe('analytics');
+    });
+
+    it('maps zen to zen', () => {
+      expect(parseHash('#/zen').view).toBe('zen');
     });
 
     it('falls back to window.location.hash when called with no argument', () => {

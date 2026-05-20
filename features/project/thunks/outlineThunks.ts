@@ -1,24 +1,19 @@
 import type { RootState } from '../../../app/store';
 import type { CustomTemplateParams, OutlineGenerationParams, OutlineSection } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
-import { buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
+import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateOutlineThunk = createDeduplicatedThunk(
   'project/generateOutline',
   async (params: OutlineGenerationParams, { getState, signal, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
+    const creativity = buildAiCreativity(state);
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('outline', params);
     registerDuplicateRequest(prompt, 'outline');
-    return await generateJson<OutlineSection[]>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
+    return await generateJson<OutlineSection[]>(prompt, creativity, schema!, aiOptions, signal);
   },
 );
 
@@ -36,6 +31,7 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
+    const creativity = buildAiCreativity(state);
     const { prompt, schema } = getPrompts('regenerateOutlineSection', {
       allSections,
       sectionToIndex,
@@ -44,7 +40,7 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
     registerDuplicateRequest(prompt, 'regenerateOutlineSection');
     const response = await generateJson<OutlineSection>(
       prompt,
-      state.settings.aiCreativity,
+      creativity,
       schema!,
       aiOptions,
       signal,
@@ -64,10 +60,11 @@ export const personalizeTemplateThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('personalizeTemplate', { sections, concept, lang });
+    const creativity = buildAiCreativity(state);
     registerDuplicateRequest(prompt, 'personalizeTemplate');
     return await generateJson<{ title: string; prompt: string }[]>(
       prompt,
-      state.settings.aiCreativity,
+      creativity,
       schema!,
       aiOptions,
       signal,
@@ -83,13 +80,8 @@ export const generateCustomTemplateThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('customTemplate', params);
+    const creativity = buildAiCreativity(state);
     registerDuplicateRequest(prompt, 'customTemplate');
-    return await generateJson<{ title: string }[]>(
-      prompt,
-      state.settings.aiCreativity,
-      schema!,
-      aiOptions,
-      signal,
-    );
+    return await generateJson<{ title: string }[]>(prompt, creativity, schema!, aiOptions, signal);
   },
 );

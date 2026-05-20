@@ -297,6 +297,28 @@ export type AIProvider =
   | 'onnx'
   /** Transformers.js — Xenova/HuggingFace WASM/WebGPU inference. */
   | 'transformers';
+/**
+ * Per-project AI preset — overrides global advancedAi settings for this project only.
+ * When enabled, buildAiOptions() merges these values over the global settings.
+ * LoRA fields are preparatory (webllm/onnx/transformers layer accepts them; actual
+ * weight loading is handled by localAiFacade once LoRA adapters are bundled).
+ */
+// QNBS-v3: exactOptionalPropertyTypes requires explicit `| undefined` so patch calls can clear fields.
+export interface ProjectAiPreset {
+  enabled: boolean;
+  provider?: AIProvider | undefined;
+  model?: AiModel | undefined;
+  creativity?: AiCreativity | undefined;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  /** Optional system-prompt override injected before the standard story prompts. */
+  customSystemPrompt?: string | undefined;
+  /** Path/id of a LoRA adapter compatible with the selected local model (future). */
+  loraModelPath?: string | undefined;
+  /** Adapter scale α (0–2, default 1.0). Controls LoRA influence strength. */
+  loraScale?: number | undefined;
+}
+
 export type NotificationFrequency = 'never' | 'daily' | 'weekly' | 'monthly';
 export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
 export type SyncProvider = 'none' | 'google-drive' | 'dropbox' | 'onedrive' | 'icloud';

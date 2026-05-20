@@ -10,6 +10,7 @@ import type {
   PersistedVersionControlState,
   PlotConnection,
   PlotConnectionType,
+  ProjectAiPreset,
   StorySection,
   Subplot,
   World,
@@ -87,6 +88,8 @@ export interface ProjectData {
   plotConnections?: PlotConnection[];
   plotSubplots?: Subplot[];
   plotTensionOverrides?: Record<string, number>;
+  // QNBS-v3: Per-project AI preset — overrides global settings when enabled; supports LoRA path for v2.0.
+  aiPreset?: ProjectAiPreset;
 }
 
 // --- Initial State ---
@@ -467,6 +470,16 @@ const projectSlice = createSlice({
     },
     updateCompileProfile: (state, action: PayloadAction<Partial<CompileProfile>>) => {
       state.data.compileProfile = { ...state.data.compileProfile, ...action.payload };
+    },
+    // QNBS-v3: Per-project AI preset — patch individual fields to avoid full-object overwrites.
+    setProjectAiPreset: (state, action: PayloadAction<ProjectAiPreset>) => {
+      state.data.aiPreset = action.payload;
+    },
+    patchProjectAiPreset: (state, action: PayloadAction<Partial<ProjectAiPreset>>) => {
+      state.data.aiPreset = { enabled: false, ...state.data.aiPreset, ...action.payload };
+    },
+    clearProjectAiPreset: (state) => {
+      delete state.data.aiPreset;
     },
   },
   extraReducers: (builder) => {

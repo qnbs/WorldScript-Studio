@@ -8,6 +8,7 @@ import { AdvancedAiSection, AiSection } from './settings/AiSections';
 import { DataSection } from './settings/DataSection';
 import { AdvancedEditorSection, EditorSection } from './settings/EditorSections';
 import { AboutSection, AppearanceSection, GeneralSection } from './settings/GeneralSections';
+import { ProjectAiPresetSection } from './settings/ProjectAiPresetSection';
 import { SettingsModals } from './settings/SettingsModals';
 import { ShortcutsSection } from './settings/ShortcutsSection';
 import {
@@ -81,6 +82,13 @@ const SettingsViewUI: FC = () => {
         label: t('settings.categories.advancedAi'),
         icon: (
           <path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        ),
+      },
+      {
+        id: 'project-ai',
+        label: t('settings.categories.projectAi'),
+        icon: (
+          <path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />
         ),
       },
       {
@@ -181,6 +189,8 @@ const SettingsViewUI: FC = () => {
         return <AiSection />;
       case 'advanced-ai':
         return <AdvancedAiSection />;
+      case 'project-ai':
+        return <ProjectAiPresetSection />;
       case 'accessibility':
         return <AccessibilitySection />;
       case 'privacy':

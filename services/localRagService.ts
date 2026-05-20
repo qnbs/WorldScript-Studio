@@ -75,7 +75,7 @@ function buildTokenChunks(content: string): string[] {
 interface HybridRagRecord extends LocalRagChunkRecord {
   indexedAt: number;
   // QNBS-v3: populated by embedText() during index build; undefined when embedding unavailable.
-  semanticVec?: Float32Array;
+  semanticVec?: Float32Array | undefined;
 }
 
 /**

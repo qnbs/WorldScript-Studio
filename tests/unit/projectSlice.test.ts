@@ -482,6 +482,48 @@ describe('projectSlice', () => {
     });
   });
 
+  describe('aiPreset actions', () => {
+    it('patchProjectAiPreset sets enabled and merges fields', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.patchProjectAiPreset({ enabled: true, provider: 'openai' }));
+      const preset = store.getState().project.present.data.aiPreset;
+      expect(preset?.enabled).toBe(true);
+      expect(preset?.provider).toBe('openai');
+    });
+
+    it('patchProjectAiPreset preserves existing fields', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.patchProjectAiPreset({
+          enabled: true,
+          provider: 'ollama',
+          temperature: 0.3,
+        }),
+      );
+      store.dispatch(projectActions.patchProjectAiPreset({ model: 'ollama/llama3' }));
+      const preset = store.getState().project.present.data.aiPreset;
+      expect(preset?.provider).toBe('ollama');
+      expect(preset?.model).toBe('ollama/llama3');
+      expect(preset?.temperature).toBe(0.3);
+    });
+
+    it('clearProjectAiPreset removes preset', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.patchProjectAiPreset({ enabled: true }));
+      store.dispatch(projectActions.clearProjectAiPreset());
+      expect(store.getState().project.present.data.aiPreset).toBeUndefined();
+    });
+
+    it('setProjectAiPreset replaces preset entirely', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.patchProjectAiPreset({ enabled: true, provider: 'ollama' }));
+      store.dispatch(projectActions.setProjectAiPreset({ enabled: false, temperature: 1.0 }));
+      const preset = store.getState().project.present.data.aiPreset;
+      expect(preset?.provider).toBeUndefined();
+      expect(preset?.temperature).toBe(1.0);
+    });
+  });
+
   describe('undo/redo', () => {
     it('should support undo/redo for synchronous actions', () => {
       const store = createTestStore();
