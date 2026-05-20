@@ -16,7 +16,11 @@
     "services/commands/commandBuilder.ts",
     "services/ai/hybridFallback.ts",
     "services/ai/providerFactory.ts",
+    "services/ai/aiPolicy.ts",
     "services/help/helpDocRetrieval.ts",
+    "services/localRagService.ts",
+    "features/project/aiThunkUtils.ts",
+    "services/aiProviderService.ts",
     "app/listenerMiddleware.ts"
   ],
   "thresholds": {
