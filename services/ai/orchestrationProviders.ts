@@ -12,7 +12,11 @@ export function isOrchestrationReadyProvider(p: AIProvider): boolean {
 }
 
 // QNBS-v3: webllm/onnx/transformers run entirely in-browser without HTTP — stay in localAiFacade path.
-export const LOCAL_INFERENCE_PROVIDERS = ['webllm'] as const satisfies readonly AIProvider[];
+export const LOCAL_INFERENCE_PROVIDERS = [
+  'webllm',
+  'onnx',
+  'transformers',
+] as const satisfies readonly AIProvider[];
 
 export type LocalInferenceProvider = (typeof LOCAL_INFERENCE_PROVIDERS)[number];
 

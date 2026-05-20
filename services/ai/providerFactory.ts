@@ -85,6 +85,8 @@ export function providerToKind(
     case 'ollama':
       return 'openaiCompatible';
     case 'webllm':
+    case 'onnx':
+    case 'transformers':
       return 'unsupported';
     case 'anthropic':
     case 'grok':
