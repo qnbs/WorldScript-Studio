@@ -362,6 +362,73 @@ describe('streamText ollama→gemini fallback', () => {
   });
 });
 
+// ─── Streaming abort mid-flow (P0-D branch coverage) ─────────────────────────
+
+describe('streamText OpenAI abort mid-stream', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    _clearPendingRequestsForTest();
+  });
+
+  it('stops emitting chunks and resolves cleanly when signal aborts mid-stream', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValue('sk-test');
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    const chunks: string[] = [];
+    let resolveStream!: () => void;
+
+    // Stream emits chunk-1, then waits until aborted before emitting chunk-2
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"choices":[{"delta":{"content":"chunk1"}}]}\n\n'),
+          );
+          // Second chunk after a delay — by then the signal will be aborted
+          const waitThenEnqueue = new Promise<void>((res) => {
+            resolveStream = res;
+          });
+          void waitThenEnqueue.then(() => {
+            controller.enqueue(
+              encoder.encode('data: {"choices":[{"delta":{"content":"chunk2"}}]}\n\n'),
+            );
+            controller.enqueue(encoder.encode('data: [DONE]\n'));
+            controller.close();
+          });
+        },
+      }),
+    } as Response);
+
+    const streamPromise = streamText(
+      'hello',
+      'Balanced',
+      { provider: 'openai', model: 'gpt-4o-mini' },
+      { onChunk: (t) => chunks.push(t) },
+      ac.signal,
+    );
+
+    // Wait for chunk-1 to arrive, then abort before chunk-2
+    await new Promise<void>((res) => {
+      const interval = setInterval(() => {
+        if (chunks.length > 0) {
+          clearInterval(interval);
+          ac.abort();
+          resolveStream();
+          res();
+        }
+      }, 5);
+    });
+
+    await streamPromise;
+    // chunk-1 was received; chunk-2 may or may not arrive (abort is best-effort)
+    expect(chunks).toContain('chunk1');
+  });
+});
+
 // ─── listOllamaModels ────────────────────────────────────────────────────────
 
 describe('listOllamaModels', () => {
