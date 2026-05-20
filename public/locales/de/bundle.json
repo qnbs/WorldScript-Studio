@@ -1558,6 +1558,8 @@
   "settings.projectAi.loraScaleHint": "Steuert den Einfluss des LoRA-Adapters (0 = deaktiviert, 1 = voll, 2 = doppelt).",
   "settings.projectAi.activeIndicator": "Projekt-KI aktiv",
   "settings.projectAi.reset": "Auf globale Standardwerte zurücksetzen",
+  "settings.projectAi.presetActivatedTitle": "Projekt-KI aktiviert",
+  "settings.projectAi.presetActivatedDescription": "Projektspezifische KI-Einstellungen sind jetzt für alle KI-Aktionen aktiv.",
   "help.ai.description": "Finden Sie keine Antwort? Stellen Sie unserem KI-Assistenten eine Frage zu jeder Funktion.",
   "help.ai.initialMessage": "Hallo! Ich bin Ihr KI-Leitfaden für StoryCraft Studio. Wie kann ich Ihnen heute helfen? Sie können mich alles fragen oder mit einem der folgenden Vorschläge beginnen.",
   "help.ai.placeholder": "Geben Sie hier Ihre Frage ein...",

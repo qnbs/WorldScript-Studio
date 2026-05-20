@@ -391,5 +391,7 @@
   "settings.projectAi.loraScale": "Scala LoRA (α)",
   "settings.projectAi.loraScaleHint": "Controlla l'influenza dell'adattatore LoRA (0 = disabilitato, 1 = pieno, 2 = doppio).",
   "settings.projectAi.activeIndicator": "IA progetto attiva",
-  "settings.projectAi.reset": "Ripristina valori globali"
+  "settings.projectAi.reset": "Ripristina valori globali",
+  "settings.projectAi.presetActivatedTitle": "IA progetto attivata",
+  "settings.projectAi.presetActivatedDescription": "Le impostazioni IA specifiche del progetto sono ora attive per tutte le azioni IA."
 }

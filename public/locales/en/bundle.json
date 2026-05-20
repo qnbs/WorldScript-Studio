@@ -1558,6 +1558,8 @@
   "settings.projectAi.loraScaleHint": "Controls the influence of the LoRA adapter (0 = disabled, 1 = full, 2 = double).",
   "settings.projectAi.activeIndicator": "Project AI active",
   "settings.projectAi.reset": "Reset to global defaults",
+  "settings.projectAi.presetActivatedTitle": "Project AI activated",
+  "settings.projectAi.presetActivatedDescription": "Per-project AI overrides are now active for all AI actions.",
   "help.title": "Help & Learning Center",
   "help.description": "Find answers, learn how to master StoryCraft Studio, or ask our AI assistant for help.",
   "help.searchPlaceholder": "Search for a topic...",

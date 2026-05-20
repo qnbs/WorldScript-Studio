@@ -1558,6 +1558,8 @@
   "settings.projectAi.loraScaleHint": "Controla la influencia del adaptador LoRA (0 = desactivado, 1 = completo, 2 = doble).",
   "settings.projectAi.activeIndicator": "IA de proyecto activa",
   "settings.projectAi.reset": "Restablecer valores globales",
+  "settings.projectAi.presetActivatedTitle": "IA del proyecto activada",
+  "settings.projectAi.presetActivatedDescription": "Los ajustes de IA específicos del proyecto están ahora activos para todas las acciones de IA.",
   "help.ai.description": "¿No encuentras respuesta? Pregunta a nuestro asistente de IA sobre cualquier función.",
   "help.ai.initialMessage": "¡Hola! Soy tu guía de IA para StoryCraft Studio. ¿En qué puedo ayudarte hoy? Puedes preguntarme cualquier cosa, o empezar con una de las sugerencias a continuación.",
   "help.ai.placeholder": "Escribe tu pregunta aquí...",

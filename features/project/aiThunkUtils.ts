@@ -1,5 +1,6 @@
 import type { AsyncThunkConfig, GetThunkAPI } from '@reduxjs/toolkit';
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import type { RootState } from '../../app/store';
 
 type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
   registerDuplicateRequest: (prompt: string, viewType: string) => string;
@@ -22,7 +23,14 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
       let activeController: AbortController | null = null;
 
       const registerDuplicateRequest = (prompt: string, viewType: string) => {
-        const baseKey = JSON.stringify({ prompt, viewType });
+        // QNBS-v3: Include preset hash so changing provider/model/temperature aborts stale requests.
+        const state = thunkAPI.getState() as RootState;
+        const preset = state.project.present?.data?.aiPreset;
+        const presetHash =
+          preset?.enabled === true
+            ? JSON.stringify({ p: preset.provider, m: preset.model, t: preset.temperature })
+            : '';
+        const baseKey = JSON.stringify({ prompt, viewType, presetHash });
         const uniqueKey = `${baseKey}|${Date.now()}`;
 
         for (const entry of Array.from(activeControllers.entries())) {

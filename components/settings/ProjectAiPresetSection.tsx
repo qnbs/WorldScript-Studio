@@ -7,12 +7,15 @@ import {
   selectProjectAiPreset,
 } from '../../features/project/projectSelectors';
 import { projectActions } from '../../features/project/projectSlice';
+import { statusActions } from '../../features/status/statusSlice';
 import type { AIProvider, AiCreativity, AiModel, ProjectAiPreset } from '../../types';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { ToggleSwitch } from './SettingsShared';
+
+const MAX_CUSTOM_PROMPT_LENGTH = 2000;
 
 const AI_PROVIDERS: { id: AIProvider; label: string }[] = [
   { id: 'gemini', label: 'Google Gemini' },
@@ -47,6 +50,16 @@ export const ProjectAiPresetSection: FC = () => {
 
   function handleToggle(val: boolean) {
     dispatch(projectActions.patchProjectAiPreset({ enabled: val }));
+    // QNBS-v3: Inform the user that preset is active so they know it overrides global settings.
+    if (val) {
+      dispatch(
+        statusActions.addNotification({
+          type: 'success',
+          title: t('settings.projectAi.presetActivatedTitle'),
+          description: t('settings.projectAi.presetActivatedDescription'),
+        }),
+      );
+    }
   }
 
   function handleReset() {
@@ -237,15 +250,24 @@ export const ProjectAiPresetSection: FC = () => {
 
             {/* Custom system prompt */}
             <div className="space-y-1">
-              <label
-                htmlFor="project-ai-prompt"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                {t('settings.projectAi.systemPrompt')}
-              </label>
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="project-ai-prompt"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {t('settings.projectAi.systemPrompt')}
+                </label>
+                {/* QNBS-v3: Character counter prevents excessively long prompts that bloat the project snapshot. */}
+                <span
+                  className={`text-xs tabular-nums ${(preset?.customSystemPrompt?.length ?? 0) > MAX_CUSTOM_PROMPT_LENGTH - 100 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}
+                >
+                  {preset?.customSystemPrompt?.length ?? 0}&nbsp;/&nbsp;{MAX_CUSTOM_PROMPT_LENGTH}
+                </span>
+              </div>
               <textarea
                 id="project-ai-prompt"
                 rows={4}
+                maxLength={MAX_CUSTOM_PROMPT_LENGTH}
                 value={preset?.customSystemPrompt ?? ''}
                 placeholder={t('settings.projectAi.systemPromptHint')}
                 onChange={(e) => patch({ customSystemPrompt: e.target.value || undefined })}
