@@ -29,6 +29,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
   enablePlotBoardV2: true,
+  enableDuckDbAnalytics: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -93,6 +94,7 @@ afterEach(() => {
     enableCrossProjectSearch: true,
     enableAppHealthPanel: false,
     enablePlotBoardV2: true,
+    enableDuckDbAnalytics: false,
   };
 });
 

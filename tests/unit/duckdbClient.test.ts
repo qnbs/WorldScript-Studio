@@ -115,7 +115,7 @@ describe('duckdbClient.terminate', () => {
 describe('duckdbClient abort', () => {
   it('posts WORKER_CANCEL when AbortSignal fires', async () => {
     const controller = new AbortController();
-    const _promise = duckdbClient.query('SELECT 1', undefined, controller.signal);
+    void duckdbClient.query('SELECT 1', undefined, controller.signal);
 
     const req = mockPostMessage.mock.calls[0]?.[0] as { messageId: string };
     controller.abort();

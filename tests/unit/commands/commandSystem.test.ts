@@ -37,6 +37,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
   enablePlotBoardV2: true,
+  enableDuckDbAnalytics: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

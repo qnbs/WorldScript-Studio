@@ -8,8 +8,8 @@ export type DuckDbRequestType = 'INIT' | 'QUERY' | 'EXEC' | 'MIGRATE' | 'SHUTDOW
 export interface DuckDbRequest {
   messageId: string;
   type: DuckDbRequestType;
-  sql?: string;
-  params?: readonly unknown[];
+  sql?: string | undefined;
+  params?: readonly unknown[] | undefined;
 }
 
 export interface DuckDbResponse {
