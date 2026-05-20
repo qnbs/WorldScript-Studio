@@ -4,6 +4,7 @@
  */
 
 import type { StorySection } from '../types';
+import { querySceneOverlapsWithTitles } from './duckdb/duckdbAnalytics';
 
 export type SceneTimelineSeverity = 'info' | 'warn';
 
@@ -59,6 +60,24 @@ export function parseSceneDurationMs(duration: string | undefined): number | nul
 }
 
 const MAX_HINTS = 32;
+
+/**
+ * Async DuckDB-backed version of evaluateSceneTimeline — P3.
+ * Queries v_scene_overlap (self-JOIN on scene_start) instead of iterating in JS.
+ * Falls back gracefully when DuckDB returns no rows (e.g. scene_start not yet populated).
+ */
+export async function evaluateSceneTimelineDuckDb(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<SceneTimelineHint[]> {
+  const rows = await querySceneOverlapsWithTitles(projectId, MAX_HINTS, signal);
+  return rows.map((row) => ({
+    id: `overlap-${row.section_a}-${row.section_b}`,
+    severity: 'warn' as SceneTimelineSeverity,
+    messageKey: 'sceneboard.timeline.overlap',
+    params: { prev: row.title_a, next: row.title_b },
+  }));
+}
 
 export function evaluateSceneTimeline(sections: StorySection[]): SceneTimelineHint[] {
   const hints: SceneTimelineHint[] = [];

@@ -25,9 +25,47 @@ export interface SceneOverlapRow {
   scene_start_b: string;
 }
 
+export interface SceneOverlapWithTitlesRow {
+  section_a: string;
+  section_b: string;
+  title_a: string;
+  title_b: string;
+}
+
+export interface RagSimilarityRow {
+  chunk_id: string;
+  section_id: string;
+  chunk_index: number;
+  score: number;
+}
+
+export interface CharacterCoOccurrenceRow {
+  character_a: string;
+  character_b: string;
+  project_id: string;
+  shared_sections: number;
+}
+
+export interface CrossProjectSearchRow {
+  project_id: string;
+  title: string;
+  logline: string;
+  manuscript_word_count: number;
+  character_names: string[];
+  last_indexed: string;
+  score: number;
+}
+
 /** Escape single-quotes in a SQL string literal. */
 function esc(s: string): string {
   return s.replace(/'/g, "''");
+}
+
+/** Convert a number/Float32Array vector to a DuckDB FLOAT[] literal. */
+function vecToSqlLiteral(vec: Float32Array | number[]): string {
+  return `[${Array.from(vec)
+    .map((v) => v.toFixed(8))
+    .join(',')}]::FLOAT[]`;
 }
 
 export async function queryDailyProgress(
@@ -95,6 +133,86 @@ export async function querySceneOverlaps(
   return res.ok ? (res.rows as unknown as SceneOverlapRow[]) : [];
 }
 
+/** Scene overlaps enriched with section titles via LEFT JOIN — used by evaluateSceneTimelineDuckDb. */
+export async function querySceneOverlapsWithTitles(
+  projectId: string,
+  limit = 32,
+  signal?: AbortSignal,
+): Promise<SceneOverlapWithTitlesRow[]> {
+  const res = await duckdbClient.query(
+    `SELECT v.section_a, v.section_b,
+            COALESCE(sa.title, v.section_a) AS title_a,
+            COALESCE(sb.title, v.section_b) AS title_b
+     FROM v_scene_overlap v
+     LEFT JOIN sections sa ON sa.section_id = v.section_a
+     LEFT JOIN sections sb ON sb.section_id = v.section_b
+     WHERE v.project_id = '${esc(projectId)}'
+     LIMIT ${limit}`,
+    undefined,
+    signal,
+  );
+  return res.ok ? (res.rows as unknown as SceneOverlapWithTitlesRow[]) : [];
+}
+
+/** Vector similarity search over rag_chunks using DuckDB list_dot_product — P2. */
+export async function queryRagSimilarity(
+  projectId: string,
+  queryVector: Float32Array | number[],
+  topK = 5,
+  signal?: AbortSignal,
+): Promise<RagSimilarityRow[]> {
+  const vecLiteral = vecToSqlLiteral(queryVector);
+  const res = await duckdbClient.query(
+    `SELECT chunk_id, section_id, chunk_index,
+            list_dot_product(vector, ${vecLiteral}) AS score
+     FROM rag_chunks
+     WHERE project_id = '${esc(projectId)}'
+       AND vector IS NOT NULL
+     ORDER BY score DESC
+     LIMIT ${topK}`,
+    undefined,
+    signal,
+  );
+  return res.ok ? (res.rows as unknown as RagSimilarityRow[]) : [];
+}
+
+/** Character co-occurrence via v_character_cooccurrence — P3. */
+export async function queryCharacterCoOccurrence(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<CharacterCoOccurrenceRow[]> {
+  const res = await duckdbClient.query(
+    `SELECT character_a, character_b, project_id, shared_sections
+     FROM v_character_cooccurrence
+     WHERE project_id = '${esc(projectId)}'
+     ORDER BY shared_sections DESC`,
+    undefined,
+    signal,
+  );
+  return res.ok ? (res.rows as unknown as CharacterCoOccurrenceRow[]) : [];
+}
+
+/** Semantic cross-project search via list_dot_product on cross_project_index — P3. */
+export async function queryCrossProjectSearch(
+  queryVector: Float32Array | number[],
+  topK = 5,
+  signal?: AbortSignal,
+): Promise<CrossProjectSearchRow[]> {
+  const vecLiteral = vecToSqlLiteral(queryVector);
+  const res = await duckdbClient.query(
+    `SELECT project_id, title, logline, manuscript_word_count, character_names,
+            last_indexed::TEXT AS last_indexed,
+            list_dot_product(embedding_vector, ${vecLiteral}) AS score
+     FROM cross_project_index
+     WHERE embedding_vector IS NOT NULL
+     ORDER BY score DESC
+     LIMIT ${topK}`,
+    undefined,
+    signal,
+  );
+  return res.ok ? (res.rows as unknown as CrossProjectSearchRow[]) : [];
+}
+
 /** Upsert project metadata and writing history rows (non-sensitive plaintext only). */
 export async function duckdbDualWrite(
   projectId: string,
@@ -110,6 +228,8 @@ export async function duckdbDualWrite(
     wordCount: number;
     status?: string | undefined;
     position: number;
+    // QNBS-v3: scene_start populated for v_scene_overlap; absent for pre-P3 callers.
+    scene_start?: string | undefined;
   }[],
 ): Promise<void> {
   const now = new Date().toISOString();
@@ -138,16 +258,96 @@ export async function duckdbDualWrite(
     );
   }
 
-  // Upsert section word counts (plaintext analytics columns only)
+  // Upsert section word counts + scene_start for timeline overlap view
   if (sections.length > 0) {
     for (const s of sections) {
       await duckdbClient.exec(
-        `INSERT INTO sections (section_id, project_id, title, word_count, status, position, indexed_at)
+        `INSERT INTO sections (section_id, project_id, title, word_count, status, position, scene_start, indexed_at)
          VALUES ('${esc(s.id)}', '${esc(projectId)}', '${esc(s.title)}',
-           ${s.wordCount}, '${esc(s.status ?? 'draft')}', ${s.position}, '${now}')
+           ${s.wordCount}, '${esc(s.status ?? 'draft')}', ${s.position},
+           ${s.scene_start ? `'${esc(s.scene_start)}'` : 'NULL'}, '${now}')
          ON CONFLICT (section_id) DO UPDATE SET
            word_count = EXCLUDED.word_count, status = EXCLUDED.status,
-           position = EXCLUDED.position, indexed_at = EXCLUDED.indexed_at`,
+           position = EXCLUDED.position, scene_start = EXCLUDED.scene_start,
+           indexed_at = EXCLUDED.indexed_at`,
+      );
+    }
+  }
+}
+
+/** Upsert RAG chunk vectors (text stays in IDB; only vectors written to DuckDB) — P2. */
+export async function duckdbRagWrite(
+  projectId: string,
+  chunks: { id: string; sectionId: string; chunkIndex: number; vector: number[] }[],
+): Promise<void> {
+  if (chunks.length === 0) return;
+  const now = new Date().toISOString();
+  for (const c of chunks) {
+    const vecLiteral = vecToSqlLiteral(c.vector);
+    await duckdbClient.exec(
+      `INSERT INTO rag_chunks (chunk_id, project_id, section_id, chunk_index, vector, indexed_at)
+       VALUES ('${esc(c.id)}', '${esc(projectId)}', '${esc(c.sectionId)}', ${c.chunkIndex},
+         ${vecLiteral}, '${now}')
+       ON CONFLICT (chunk_id) DO UPDATE SET
+         vector = EXCLUDED.vector, indexed_at = EXCLUDED.indexed_at`,
+    );
+  }
+}
+
+/** Upsert cross-project index entry (metadata + optional embedding) — P3. */
+export async function duckdbCrossProjectWrite(entry: {
+  projectId: string;
+  title: string;
+  logline: string;
+  manuscriptWordCount: number;
+  characterNames: string[];
+  embeddingVector?: Float32Array | number[] | undefined;
+}): Promise<void> {
+  const now = new Date().toISOString();
+  const vecLiteral = entry.embeddingVector ? vecToSqlLiteral(entry.embeddingVector) : 'NULL';
+  const charNamesLiteral =
+    entry.characterNames.length > 0
+      ? `['${entry.characterNames.map((n) => esc(n)).join("','")}']`
+      : '[]::VARCHAR[]';
+  await duckdbClient.exec(
+    `INSERT INTO cross_project_index
+       (project_id, title, logline, manuscript_word_count, character_names, embedding_vector, last_indexed)
+     VALUES ('${esc(entry.projectId)}', '${esc(entry.title)}', '${esc(entry.logline)}',
+       ${entry.manuscriptWordCount}, ${charNamesLiteral}, ${vecLiteral}, '${now}')
+     ON CONFLICT (project_id) DO UPDATE SET
+       title = EXCLUDED.title, logline = EXCLUDED.logline,
+       manuscript_word_count = EXCLUDED.manuscript_word_count,
+       character_names = EXCLUDED.character_names,
+       embedding_vector = COALESCE(EXCLUDED.embedding_vector, cross_project_index.embedding_vector),
+       last_indexed = EXCLUDED.last_indexed`,
+  );
+}
+
+/** Upsert codex entities and their section mentions (names/types only — no content) — P3. */
+export async function duckdbCodexWrite(
+  projectId: string,
+  entities: {
+    id: string;
+    name: string;
+    type: string;
+    mentionCount: number;
+    mentions: { sectionId: string; excerpt: string }[];
+  }[],
+): Promise<void> {
+  if (entities.length === 0) return;
+  for (const e of entities) {
+    await duckdbClient.exec(
+      `INSERT INTO codex_entities (entity_id, project_id, name, entity_type, mention_count)
+       VALUES ('${esc(e.id)}', '${esc(projectId)}', '${esc(e.name)}', '${esc(e.type)}', ${e.mentionCount})
+       ON CONFLICT (entity_id, project_id) DO UPDATE SET
+         name = EXCLUDED.name, entity_type = EXCLUDED.entity_type,
+         mention_count = EXCLUDED.mention_count`,
+    );
+    for (const m of e.mentions) {
+      await duckdbClient.exec(
+        `INSERT INTO codex_mentions (entity_id, project_id, section_id, excerpt)
+         VALUES ('${esc(e.id)}', '${esc(projectId)}', '${esc(m.sectionId)}', '${esc(m.excerpt)}')
+         ON CONFLICT (entity_id, project_id, section_id) DO UPDATE SET excerpt = EXCLUDED.excerpt`,
       );
     }
   }

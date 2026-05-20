@@ -7,6 +7,7 @@ import type { ProjectData } from '../features/project/projectSlice';
 import type { Character } from '../types';
 import { cosineSimilarity, embedText } from './ai/localEmbeddingService';
 import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
+import { duckdbCrossProjectWrite, queryCrossProjectSearch } from './duckdb/duckdbAnalytics';
 
 export interface ProjectSearchIndex {
   projectId: string;
@@ -65,7 +66,12 @@ function countWords(data: ProjectData): number {
 }
 
 /** Persist a project's index record. Creates or replaces the entry for projectId. */
-export async function indexProject(projectId: string, data: ProjectData): Promise<void> {
+export async function indexProject(
+  projectId: string,
+  data: ProjectData,
+  // QNBS-v3: P3 dual-write — metadata mirrored to DuckDB when analytics flag is on.
+  duckDbEnabled = false,
+): Promise<void> {
   const db = await getDb();
 
   const record: ProjectSearchIndex = {
@@ -77,12 +83,22 @@ export async function indexProject(projectId: string, data: ProjectData): Promis
     lastIndexed: Date.now(),
   };
 
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(PROJECTS_INDEX_STORE, 'readwrite');
     const req = tx.objectStore(PROJECTS_INDEX_STORE).put(record);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+
+  if (duckDbEnabled) {
+    void duckdbCrossProjectWrite({
+      projectId,
+      title: record.title,
+      logline: record.logline,
+      manuscriptWordCount: record.manuscriptWordCount,
+      characterNames: record.characterNames,
+    }).catch(() => {});
+  }
 }
 
 /** Return all indexed project records, sorted by lastIndexed descending. */
@@ -119,7 +135,7 @@ export async function removeProjectIndex(projectId: string): Promise<void> {
  * QNBS-v3: Feature-gated — only runs when embedding model is available; silently
  *          no-ops if the project is not yet indexed or the model isn't ready.
  */
-export async function enrichProjectIndex(projectId: string): Promise<void> {
+export async function enrichProjectIndex(projectId: string, duckDbEnabled = false): Promise<void> {
   const db = await getDb();
 
   const record = await new Promise<ProjectSearchIndex | undefined>((resolve, reject) => {
@@ -159,25 +175,56 @@ export async function enrichProjectIndex(projectId: string): Promise<void> {
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+
+  // QNBS-v3: P3 — update DuckDB entry with the now-computed embedding vector.
+  if (duckDbEnabled) {
+    void duckdbCrossProjectWrite({
+      projectId,
+      title: enriched.title,
+      logline: enriched.logline,
+      manuscriptWordCount: enriched.manuscriptWordCount,
+      characterNames: enriched.characterNames,
+      embeddingVector: embedding,
+    }).catch(() => {});
+  }
 }
 
 /**
  * Semantic search over all indexed projects using embedding similarity.
  * Falls back to keyword match on `title + logline` when no embedding stored.
+ * When duckDbEnabled=true and embedding is available, delegates ranking to DuckDB.
  */
 export async function semanticSearchProjects(
   query: string,
   topK = 5,
+  // QNBS-v3: P3 — DuckDB list_dot_product replaces JS cosine loop when analytics flag is on.
+  duckDbEnabled = false,
 ): Promise<ProjectSearchIndex[]> {
-  const all = await listIndexedProjects();
-  if (!all.length) return [];
-
   let queryEmbedding: Float32Array | null = null;
   try {
     queryEmbedding = await embedText(query);
   } catch {
     // QNBS-v3: Graceful degrade — keyword fallback below.
   }
+
+  // DuckDB path: skip IDB load when embedding available; DuckDB does the ranking.
+  if (duckDbEnabled && queryEmbedding) {
+    const rows = await queryCrossProjectSearch(queryEmbedding, topK);
+    if (rows.length > 0) {
+      return rows.map((r) => ({
+        projectId: r.project_id,
+        title: r.title,
+        logline: r.logline,
+        manuscriptWordCount: r.manuscript_word_count,
+        characterNames: r.character_names,
+        lastIndexed: r.last_indexed ? new Date(r.last_indexed).getTime() : Date.now(),
+      }));
+    }
+    // Fall through to IDB path when DuckDB has no entries yet.
+  }
+
+  const all = await listIndexedProjects();
+  if (!all.length) return [];
 
   const scored = all.map((p) => {
     let score = 0;

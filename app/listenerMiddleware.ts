@@ -5,7 +5,7 @@ import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { indexProject } from '../services/crossProjectIndexService';
-import { duckdbDualWrite } from '../services/duckdb/duckdbAnalytics';
+import { duckdbCodexWrite, duckdbDualWrite } from '../services/duckdb/duckdbAnalytics';
 import { runIfNeeded as duckdbMigrateIfNeeded } from '../services/duckdb/duckdbMigration';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
@@ -86,7 +86,8 @@ listenerMiddleware.startListening({
         (listenerApi.getState() as RootState).featureFlags.enableCrossProjectSearch &&
         presentData.id
       ) {
-        indexProject(presentData.id, enriched).catch((err: unknown) =>
+        const duckDbOn = (listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics;
+        indexProject(presentData.id, enriched, duckDbOn).catch((err: unknown) =>
           logger.warn('Cross-project index update failed (non-critical):', err),
         );
       }
@@ -100,6 +101,8 @@ listenerMiddleware.startListening({
           wordCount: (s.content?.match(/\S+/g) ?? []).length,
           status: s.status,
           position: idx,
+          // QNBS-v3: P3 — scene_start feeds v_scene_overlap for DuckDB timeline analysis.
+          scene_start: s.sceneStart,
         }));
         const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
         void duckdbDualWrite(
@@ -203,6 +206,20 @@ listenerMiddleware.startListening({
         binderResearchSections,
       );
       await saveStoryCodex(codex);
+
+      // QNBS-v3: P3 dual-write — codex entity names/types to DuckDB for co-occurrence queries.
+      if ((listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics) {
+        void duckdbCodexWrite(
+          projectId,
+          codex.entities.map((e) => ({
+            id: e.id,
+            name: e.name,
+            type: e.type,
+            mentionCount: e.mentionCount,
+            mentions: e.mentions.map((m) => ({ sectionId: m.sectionId, excerpt: m.excerpt })),
+          })),
+        ).catch((err: unknown) => logger.warn('DuckDB codex write failed (non-critical):', err));
+      }
     } catch (error) {
       logger.warn('Story Codex auto-tracking failed:', error);
     }

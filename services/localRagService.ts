@@ -5,6 +5,7 @@
 
 import type { StorySection } from '../types';
 import { embedText } from './ai/localEmbeddingService';
+import { duckdbRagWrite, queryRagSimilarity } from './duckdb/duckdbAnalytics';
 import {
   hashEmbedText,
   type LocalRagChunkRecord,
@@ -86,6 +87,8 @@ interface HybridRagRecord extends LocalRagChunkRecord {
 export async function rebuildHybridRagIndex(
   projectId: string,
   manuscript: StorySection[],
+  // QNBS-v3: P2 dual-write — vectors (not text) mirrored to DuckDB when analytics flag is on.
+  duckDbEnabled = false,
 ): Promise<number> {
   const records: HybridRagRecord[] = [];
   const now = Date.now();
@@ -120,6 +123,20 @@ export async function rebuildHybridRagIndex(
   }
 
   await storageService.saveRagVectors(projectId, records);
+
+  // QNBS-v3: Mirror vector-only data to DuckDB; text stays in IDB to avoid BLOB encryption.
+  if (duckDbEnabled && records.length > 0) {
+    void duckdbRagWrite(
+      projectId,
+      records.map((r) => ({
+        id: r.id,
+        sectionId: r.sectionId,
+        chunkIndex: r.chunkIndex,
+        vector: r.vector,
+      })),
+    ).catch(() => {});
+  }
+
   return records.length;
 }
 
@@ -155,7 +172,14 @@ export async function retrieveContext(
   topK = 5,
   mode: RagMode = 'lexical',
   queryEmbedding?: Float32Array,
+  // QNBS-v3: P2 — when true and queryEmbedding is provided, delegates ranking to DuckDB.
+  useDuckDb = false,
 ): Promise<RagChunk[]> {
+  // DuckDB path: vector similarity via list_dot_product; text fetched from IDB after ranking.
+  if (useDuckDb && queryEmbedding) {
+    return retrieveContextViaDuckDb(projectId, topK, queryEmbedding);
+  }
+
   const raw = (await storageService.getRagVectors(projectId)) as HybridRagRecord[];
   if (!raw.length) return [];
 
@@ -216,6 +240,38 @@ export async function retrieveContext(
   const merged = [...slidingWindow, ...ranked].sort((a, b) => b.score - a.score).slice(0, topK);
 
   return merged.map(({ _raw: _r, ...rest }) => rest);
+}
+
+// ---------------------------------------------------------------------------
+// DuckDB retrieval path (P2)
+// ---------------------------------------------------------------------------
+
+// QNBS-v3: Ranking from DuckDB list_dot_product; text resolved from IDB map to avoid BLOB decryption.
+async function retrieveContextViaDuckDb(
+  projectId: string,
+  topK: number,
+  queryEmbedding: Float32Array,
+): Promise<RagChunk[]> {
+  const duckRows = await queryRagSimilarity(projectId, queryEmbedding, topK);
+  if (duckRows.length === 0) return [];
+
+  const raw = (await storageService.getRagVectors(projectId)) as HybridRagRecord[];
+  const rawById = new Map(raw.map((r) => [r.id, r]));
+  const now = Date.now();
+
+  return duckRows
+    .map((row) => {
+      const rec = rawById.get(row.chunk_id);
+      if (!rec) return null;
+      return {
+        score: row.score,
+        text: rec.text,
+        sectionId: row.section_id,
+        chunkIndex: row.chunk_index,
+        indexedAt: rec.indexedAt ?? now,
+      };
+    })
+    .filter((r): r is RagChunk => r !== null);
 }
 
 // ---------------------------------------------------------------------------
