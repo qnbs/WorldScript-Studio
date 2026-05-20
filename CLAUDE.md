@@ -30,6 +30,8 @@ pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 
 **CI pipeline order:** `security` → `quality` (Biome + tsc + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
+**Local CI simulation:** `act pull_request --job quality` (requires Docker + [`act`](https://github.com/nektos/act)) runs the quality job locally — useful for debugging CI failures without pushing.
+
 **CI-cloud-first workflow (recommended for this project):** On constrained hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, Playwright E2E, Lighthouse, and Stryker mutation are CI-gate jobs — run them in the cloud, not locally. The authoritative metric source is CI artifacts (Codecov, JUnit). After each push, monitor CI and update docs (README.md badges, AUDIT.md quality-gate line) with the CI-reported numbers. The merge bar is a green CI workflow — not a full local coverage run. Local test runner (`pnpm run test:run`) is useful for rapid TDD cycles on a single file; full coverage (`pnpm run test:coverage`) belongs in CI.
 
 **CI audit & housekeeping policy (ALL CI runs must be fully green):**
@@ -87,6 +89,8 @@ Every major view follows this three-file structure:
 - `contexts/XyzContext.ts` — React context that passes the hook return to child components
 
 React conventions: `React.memo()` for expensive renders; `React.forwardRef()` for `components/ui/` primitives; always clean up event listeners, timeouts, and subscriptions in `useEffect` return.
+
+**Props conventions:** Event handler props use `onX` prefix (`onClick`, `onSave`). Boolean props use `is*`/`has*` prefix (`isOpen`, `hasError`). Prefer Tailwind classes over inline styles; inline styles are only acceptable for dynamic values derived from measurement (e.g., computed pixel positions or sizes).
 
 ### AI Services
 
@@ -157,7 +161,7 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 - No direct `@tauri-apps/api` imports in `components/ui/` atoms; abstract through services or hooks so the web build stays unaffected
 - File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors
 - Never comment out or skip failing tests to green CI — fix the root cause. `it.skip` requires a file-level comment with a reason and a ticket/TODO reference
-- **Modus operandi — tests:** Whenever you modify, add, or delete a code file, always check whether a corresponding test file exists (in `tests/unit/` for components/hooks/services, or `tests/e2e/` for flows). If it does, update or extend it to cover the change. If it doesn't exist yet and the change is non-trivial, create one. Run the relevant test file with `pnpm exec vitest run <path>` to verify before committing.
+- **Modus operandi — tests:** Whenever you modify, add, or delete a code file, always check whether a corresponding test file exists (in `tests/unit/` for components/hooks/services, or `tests/e2e/` for flows). If it does, update or extend it to cover the change. If it doesn't exist yet and the change is non-trivial, create one. Run the relevant test file with `pnpm exec vitest run <path>` to verify before committing. Write tests to be fully deterministic: mock `Date.now()` / use fake timers; never depend on real network or test execution order; reset global state (Redux store, localStorage, IndexedDB) in `beforeEach` using patterns from `tests/setup.ts`. Use `@testing-library/user-event` for user interactions (not `.click()` directly); use `findBy*` / `waitFor` for async assertions.
 
 ## v1.6 Patterns (new in this release)
 

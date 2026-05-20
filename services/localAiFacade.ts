@@ -4,6 +4,7 @@ import {
   type WebLlmProgressReport,
   WorkerBus,
 } from '@domain/ai-core';
+import { logger } from './logger';
 
 const localWorkerBus = new WorkerBus();
 
@@ -17,13 +18,18 @@ export async function generateLocalText(
       ? crypto.randomUUID()
       : `local-ai-${Date.now()}`;
 
-  localWorkerBus.enqueue({
+  // QNBS-v3: Check backpressure before enqueue — returns false when queue ≥ MAX_QUEUE_SIZE.
+  const enqueued = localWorkerBus.enqueue({
     id: taskId,
     type: 'local.text.generate',
     payload: { prompt, modelId },
     priority: 'normal',
     createdAt: Date.now(),
   });
+  if (!enqueued) {
+    logger.warn('WorkerBus backpressure: local AI task rejected (queue full)');
+    return { layer: 'heuristic', text: 'AI system busy — please try again in a moment.' };
+  }
 
   const task = localWorkerBus.dequeue();
   if (!task) {
