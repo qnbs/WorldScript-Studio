@@ -42,8 +42,8 @@ tests/e2e/results/
 # Storybook static build output
 storybook-static/
 
-# Graphify knowledge graph output
-graphify-out/
+# Graphify knowledge graph — cache only (GRAPH_REPORT.md, graph.json, graph.html are committed)
+graphify-out/cache/
 
 # Claude Code local config and Lighthouse CI results
 .claude/

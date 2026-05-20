@@ -18,7 +18,8 @@
       "!!**/playwright-report",
       "!!**/test-results",
       "!!**/reports",
-      "!!**/storybook-static"
+      "!!**/storybook-static",
+      "!!**/graphify-out"
     ]
   },
   "formatter": {
