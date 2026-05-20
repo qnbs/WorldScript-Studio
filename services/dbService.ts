@@ -255,6 +255,11 @@ class IndexedDBService implements StorageBackend {
     });
   }
 
+  /** Expose the local non-extractable CryptoKey for callers that need to encrypt before writing to DuckDB. */
+  async getCryptoKey(): Promise<CryptoKey> {
+    return this.getLocalCryptoKey();
+  }
+
   async getGeminiApiKey(): Promise<string | null> {
     return retryDb(async () => {
       try {

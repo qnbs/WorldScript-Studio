@@ -1,9 +1,12 @@
 import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
+import { analyticsActions } from '../features/analytics/analyticsSlice';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { indexProject } from '../services/crossProjectIndexService';
+import { duckdbDualWrite } from '../services/duckdb/duckdbAnalytics';
+import { runIfNeeded as duckdbMigrateIfNeeded } from '../services/duckdb/duckdbMigration';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
@@ -86,6 +89,29 @@ listenerMiddleware.startListening({
         indexProject(presentData.id, enriched).catch((err: unknown) =>
           logger.warn('Cross-project index update failed (non-critical):', err),
         );
+      }
+
+      // QNBS-v3: Dual-write plaintext analytics columns to DuckDB (non-blocking, fire-and-forget).
+      if ((listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics) {
+        const projectId = presentData.id ?? 'default';
+        const sections = presentData.manuscript.map((s, idx) => ({
+          id: s.id,
+          title: s.title,
+          wordCount: (s.content?.match(/\S+/g) ?? []).length,
+          status: s.status,
+          position: idx,
+        }));
+        const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
+        void duckdbDualWrite(
+          projectId,
+          presentData.title,
+          presentData.logline,
+          totalWordCount,
+          presentData.projectGoals?.totalWordCount,
+          presentData.projectGoals?.targetDate,
+          presentData.writingHistory ?? [],
+          sections,
+        ).catch((err: unknown) => logger.warn('DuckDB dual-write failed (non-critical):', err));
       }
 
       listenerApi.dispatch(statusActions.setSavingStatus('saved'));
@@ -210,6 +236,37 @@ listenerMiddleware.startListening({
         description: errorDescription,
       }),
     );
+  },
+});
+
+// --- 3. DuckDB Migration Trigger ---
+// QNBS-v3: Fires once when DuckDB becomes ready; seeds IDB→DuckDB if marker is absent.
+listenerMiddleware.startListening({
+  predicate: (_action, currentState, previousState) => {
+    const curr = currentState as RootState;
+    const prev = previousState as RootState;
+    return (
+      curr.featureFlags.enableDuckDbAnalytics &&
+      curr.analytics?.duckDbStatus === 'ready' &&
+      curr.analytics?.migrationStatus === 'idle' &&
+      prev.analytics?.duckDbStatus !== 'ready'
+    );
+  },
+  effect: async (_action, listenerApi) => {
+    const state = listenerApi.getState() as RootState;
+    const project = state.project.present?.data;
+    if (!project) return;
+
+    listenerApi.dispatch(analyticsActions.setMigrationStatus('running'));
+    try {
+      await duckdbMigrateIfNeeded(project);
+      listenerApi.dispatch(analyticsActions.setMigrationStatus('done'));
+      listenerApi.dispatch(analyticsActions.setLastSyncAt(new Date().toISOString()));
+    } catch (err) {
+      listenerApi.dispatch(
+        analyticsActions.setMigrationError(err instanceof Error ? err.message : String(err)),
+      );
+    }
   },
 });
 
