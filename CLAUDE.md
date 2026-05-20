@@ -59,14 +59,18 @@ StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini 
 app/              → Redux store, typed hooks, listener middleware, transientUiStore (Zustand)
 components/       → View components; components/ui/ = design-system atoms (Button, Modal, Toast…)
 contexts/         → React context providers — one per major view + I18nContext + CommandExecutorContext
-features/         → Redux slices: project, settings, status, writer, versionControl, featureFlags
+features/         → Redux slices: project, settings, status, writer, versionControl, featureFlags,
+                     plotBoard, sceneComments, progressTracker
 hooks/            → View business logic (use*View.ts naming); useGlobalKeyboardShortcuts here too
-services/         → External adapters: geminiService, aiProviderService, dbService, storageService,
-                     collaborationService; sub-dirs: commands/, keyboard/, help/, settingsExchange/
-packages/         → Internal workspace packages: ai-core, ui
+services/         → External adapters: geminiService, aiProviderService, ollamaService,
+                     localAiFacade (WebLLM), dbService, storageService, collaborationService,
+                     crossProjectIndexService, crossProjectSearchService, libraryBackupService,
+                     codexService, logger; sub-dirs: commands/, keyboard/, help/, settingsExchange/
+packages/         → Internal workspace packages: ai-core (WebLLM worker), ui
 locales/          → i18n source JSON (de/en/es/fr/it × 15 modules); runtime bundles → public/locales/
 tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
 types.ts          → Core shared interfaces and types (root level)
+workers/          → inference.worker.ts (@xenova/transformers, lives in packages/ai-core)
 ```
 
 ### State Management
@@ -86,7 +90,19 @@ React conventions: `React.memo()` for expensive renders; `React.forwardRef()` fo
 
 ### AI Services
 
-`geminiService.ts` is the primary adapter (Gemini API, retry logic, prompt construction). `aiProviderService.ts` provides a multi-provider abstraction (Gemini, OpenAI, Ollama). All AI calls go through one of these. `features/project/aiThunkUtils.ts` provides a deduplicated async-thunk wrapper to prevent duplicate in-flight requests.
+`geminiService.ts` is the primary adapter (Gemini API, retry logic, prompt construction). `aiProviderService.ts` provides a multi-provider abstraction (Gemini, OpenAI, Ollama, WebLLM). All AI calls go through one of these. `features/project/aiThunkUtils.ts` provides a deduplicated async-thunk wrapper to prevent duplicate in-flight requests.
+
+**WebLLM / local inference:** `services/localAiFacade.ts` wraps `@mlc-ai/web-llm` (via `packages/ai-core` + `workers/inference.worker.ts`). Supported models defined in `WEBLLM_SUPPORTED_MODELS` (Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B). Provider key: `webllm/browser`. Settings UI in `components/settings/AiSections.tsx` (model dropdown + progress bar).
+
+**Local RAG:** `services/localRagIndex.ts` + `services/localRagService.ts` — retrieval-augmented generation over local project content via `@xenova/transformers` embeddings. Lazy-loaded; never sends data to the cloud.
+
+### Logging
+
+Use `services/logger.ts` (ring-buffer + sink) for all diagnostic output. Never use `console.log` in production paths — Biome `noConsole` rule enforces this. `console.warn`/`console.error` are allowed per the Biome allowlist. Never write API keys, IVs, or plaintext payloads to any log.
+
+### Environment Variables
+
+Client-side env vars must use the `VITE_*` prefix (from `.env` / `.env.local`, which are git-ignored). Access via `import.meta.env.VITE_*`. Sensitive user keys (Gemini, etc.) are never stored in env files — they go through the AES-256-GCM IDB path in `dbService.ts`.
 
 ### Storage
 
@@ -160,6 +176,12 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 **Test mock pattern for useAppSelectorShallow with plotBoard:** Tests must include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in the mock state (connections/subplots/tensionOverrides are now in `project.present.data` — mock those via `selectPlotConnections: () => []` etc. in the `projectSelectors` mock). Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines in test files.
 
 **ConnectionLayer test IDs:** Connection `<g>` elements use `data-testid="connection-group"` (biome correctly removed redundant `role="img"` from `<g>` inside an `role="img"` SVG; tests should query by testid, not role).
+
+**crossProjectIndexService / crossProjectSearchService:** `services/crossProjectIndexService.ts` — IDB `projects-index-store` (DB_VERSION 8); `services/crossProjectSearchService.ts` — `searchAcrossProjects()` via fuzzyScore. Indexing triggered on save via `listenerMiddleware.ts`. UI: `CrossProjectSearchPanel`; Zustand transient key: `isCrossProjectSearchOpen`.
+
+**libraryBackupService:** `services/libraryBackupService.ts` — one-click encrypted ZIP export (AES-GCM, `META.json` + `vault.bin`). Entry point: Settings → Data. No new IDB keys; reads from existing `dbService` stores.
+
+**localAiFacade / WebLLM:** `services/localAiFacade.ts` wraps WebLLM with the same provider interface as `aiProviderService.ts`. Model download progress is surfaced via `onProgress` callback; mount-guard via `useRef` prevents stale updates after unmount.
 
 ## Known Technical Debt
 
