@@ -1,0 +1,74 @@
+name: Prune old deployments
+
+on:
+  workflow_run:
+    workflows: [CI / CD]
+    types: [completed]
+  schedule:
+    # Weekly cleanup on Sundays at 03:00 UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+# QNBS-v3: top-level read-only; deployments:write scoped to job (CodeQL Token-Permissions).
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    name: Keep latest 3 deployments
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      deployments: write
+    steps:
+      - name: Delete stale deployments — keep latest 3
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const KEEP = 3;
+            const env = 'github-pages';
+
+            // List all deployments for the environment, newest first
+            const { data: deployments } = await github.rest.repos.listDeployments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment: env,
+              per_page: 100,
+            });
+
+            // Sort descending by ID (newest first) and skip the ones we want to keep
+            const toDelete = deployments
+              .sort((a, b) => b.id - a.id)
+              .slice(KEEP);
+
+            if (toDelete.length === 0) {
+              core.info(`Nothing to prune — only ${deployments.length} deployment(s) found.`);
+              return;
+            }
+
+            core.info(`Pruning ${toDelete.length} deployment(s), keeping ${KEEP} latest.`);
+
+            for (const dep of toDelete) {
+              // A deployment must be marked inactive before it can be deleted
+              try {
+                await github.rest.repos.createDeploymentStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: dep.id,
+                  state: 'inactive',
+                });
+              } catch (e) {
+                core.warning(`Could not inactivate deployment ${dep.id}: ${e.message}`);
+              }
+
+              try {
+                await github.rest.repos.deleteDeployment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: dep.id,
+                });
+                core.info(`Deleted deployment ${dep.id} (${dep.ref} @ ${dep.created_at})`);
+              } catch (e) {
+                core.warning(`Could not delete deployment ${dep.id}: ${e.message}`);
+              }
+            }
