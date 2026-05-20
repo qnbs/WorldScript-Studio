@@ -4,6 +4,7 @@
  */
 
 import type { StorySection } from '../types';
+import { embedText } from './ai/localEmbeddingService';
 import {
   hashEmbedText,
   type LocalRagChunkRecord,
@@ -73,6 +74,8 @@ function buildTokenChunks(content: string): string[] {
 
 interface HybridRagRecord extends LocalRagChunkRecord {
   indexedAt: number;
+  // QNBS-v3: populated by embedText() during index build; undefined when embedding unavailable.
+  semanticVec?: Float32Array;
 }
 
 /**
@@ -95,6 +98,13 @@ export async function rebuildHybridRagIndex(
       const text = chunks[ci] ?? '';
       if (!text.trim()) continue;
       if (records.length >= MAX_CHUNKS) break;
+      // QNBS-v3: attempt semantic embedding; graceful degradation to BoW when model not loaded.
+      let semanticVec: Float32Array | undefined;
+      try {
+        semanticVec = await embedText(text);
+      } catch {
+        // embedding model not ready — hybrid scoring will fall back to BoW proxy
+      }
       records.push({
         id: `${sec.id}:${ci}`,
         sectionId: sec.id,
@@ -102,6 +112,7 @@ export async function rebuildHybridRagIndex(
         text,
         vector: hashEmbedText(text),
         indexedAt: now - (manuscript.length - i) * 1000,
+        semanticVec,
       });
     }
     if (records.length >= MAX_CHUNKS) break;
@@ -172,10 +183,10 @@ export async function retrieveContext(
     } else if (activeMode === 'semantic' && queryEmbedding) {
       // Pure semantic — use the semantic embedding stored in a parallel field if present,
       // otherwise fall through to BoW as proxy
-      const semVec = (r as HybridRagRecord & { semanticVec?: Float32Array }).semanticVec;
+      const semVec = r.semanticVec;
       score = semVec ? cosineSim(semVec, queryEmbedding) : 0;
     } else if (activeMode === 'hybrid' && queryEmbedding) {
-      const semVec = (r as HybridRagRecord & { semanticVec?: Float32Array }).semanticVec;
+      const semVec = r.semanticVec;
       const semScore = semVec ? cosineSim(semVec, queryEmbedding) : 0;
       const lexScore = tokenOverlapScore(queryTokens, r.text);
       const recencyScore = ((r.indexedAt ?? minTs) - minTs) / tsRange;

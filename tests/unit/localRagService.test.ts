@@ -216,3 +216,69 @@ describe('token overlap influence in hybrid scoring', () => {
     expect(s2Idx).toBeGreaterThanOrEqual(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// P0-C: semanticVec population during rebuildHybridRagIndex
+// ---------------------------------------------------------------------------
+import * as localEmbeddingService from '../../services/ai/localEmbeddingService';
+
+describe('rebuildHybridRagIndex — semantic embedding population', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockSaveRagVectors.mockResolvedValue(undefined);
+    mockGetRagVectors.mockResolvedValue([]);
+  });
+
+  it('stores semanticVec in records when embedText succeeds', async () => {
+    const fakeVec = new Float32Array(64).fill(0.5);
+    vi.spyOn(localEmbeddingService, 'embedText').mockResolvedValue(fakeVec);
+
+    await rebuildHybridRagIndex('proj1', [
+      makeSection('s1', 'the quick brown fox jumps over the lazy dog'),
+    ]);
+
+    const savedRecords: Array<{ semanticVec?: Float32Array }> =
+      mockSaveRagVectors.mock.calls[0]?.[1] ?? [];
+    expect(savedRecords.length).toBeGreaterThan(0);
+    for (const rec of savedRecords) {
+      expect(rec.semanticVec).toBeInstanceOf(Float32Array);
+    }
+  });
+
+  it('stores undefined semanticVec when embedText throws (graceful degradation)', async () => {
+    vi.spyOn(localEmbeddingService, 'embedText').mockRejectedValue(new Error('model not loaded'));
+
+    await rebuildHybridRagIndex('proj1', [makeSection('s1', 'some content here')]);
+
+    const savedRecords: Array<{ semanticVec?: Float32Array }> =
+      mockSaveRagVectors.mock.calls[0]?.[1] ?? [];
+    expect(savedRecords.length).toBeGreaterThan(0);
+    for (const rec of savedRecords) {
+      expect(rec.semanticVec).toBeUndefined();
+    }
+  });
+
+  it('hybrid mode uses semanticVec when present and changes ranking vs. lexical', async () => {
+    // Build two chunks with opposite semantic embeddings
+    // chunk-A: semanticVec pointing strongly toward query direction
+    // chunk-B: semanticVec pointing away
+    const queryEmb = new Float32Array(4).fill(1);
+    const semHigh = new Float32Array([1, 1, 1, 1]); // dot product 4 → high semantic score
+    const semLow = new Float32Array([-1, -1, -1, -1]); // dot product −4 → low semantic score
+
+    const recA = {
+      ...makeRecord('a', 's1', 0, 'xyz abc', Date.now() - 2000),
+      semanticVec: semHigh,
+    };
+    const recB = { ...makeRecord('b', 's2', 0, 'xyz abc', Date.now() - 1000), semanticVec: semLow };
+    mockGetRagVectors.mockResolvedValue([recB, recA]);
+
+    const hybridResult = await retrieveContext('p1', 'xyz', 2, 'hybrid', queryEmb);
+    const lexResult = await retrieveContext('p1', 'xyz', 2, 'lexical');
+
+    // In hybrid mode, s1 (high semantic score) should rank above s2 (low)
+    expect(hybridResult[0]?.sectionId).toBe('s1');
+    // In lexical mode, recency wins → s2 (more recent) ranks first
+    expect(lexResult[0]?.sectionId).toBe('s2');
+  });
+});
