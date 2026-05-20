@@ -8,7 +8,9 @@ import {
 } from '../../features/project/projectSelectors';
 import { projectActions } from '../../features/project/projectSlice';
 import { selectCommentsBySection } from '../../features/sceneComments/sceneCommentsSlice';
+import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
+import { rebuildHybridRagIndex } from '../../services/localRagService';
 import type { StorySection } from '../../types';
 import { CommentsPanel } from './CommentsPanel';
 import { SceneRevisionPanel } from './SceneRevisionPanel';
@@ -175,9 +177,39 @@ const BinderTab: FC<{ section: StorySection }> = ({ section }) => {
 export const ReferencePanelView: FC<{ section: StorySection }> = ({ section }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>('characters');
+  const [reindexBusy, setReindexBusy] = useState(false);
+  const dispatch = useAppDispatch();
+  const projectData = useAppSelector(selectProjectData);
+  const duckDbEnabled = useAppSelector((s) => s.featureFlags.enableDuckDbAnalytics);
   const commentCount = useAppSelector(selectCommentsBySection(section.id)).filter(
     (c) => !c.resolved,
   ).length;
+
+  const handleReindex = async () => {
+    if (!projectData) return;
+    setReindexBusy(true);
+    try {
+      // QNBS-v3: re-index from the panel so the AI context is fresh after heavy edits.
+      const chunks = await rebuildHybridRagIndex(
+        projectData.id ?? 'browser-project',
+        projectData.manuscript,
+        duckDbEnabled,
+      );
+      dispatch(
+        statusActions.addNotification({
+          type: 'success',
+          title: t('reference.reindex.done'),
+          description: t('reference.reindex.doneDetail', { count: String(chunks) }),
+        }),
+      );
+    } catch {
+      dispatch(
+        statusActions.addNotification({ type: 'error', title: t('reference.reindex.error') }),
+      );
+    } finally {
+      setReindexBusy(false);
+    }
+  };
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'characters', label: t('reference.tabs.characters') },
@@ -203,7 +235,7 @@ export const ReferencePanelView: FC<{ section: StorySection }> = ({ section }) =
       {/* Tab bar */}
       <div
         role="tablist"
-        className="flex overflow-x-auto border-b border-[var(--border-primary)] flex-shrink-0"
+        className="flex overflow-x-auto border-b border-[var(--border-primary)] flex-shrink-0 items-center"
       >
         {TABS.map((tab) => (
           <button
@@ -237,6 +269,19 @@ export const ReferencePanelView: FC<{ section: StorySection }> = ({ section }) =
         {activeTab === 'binder' && <BinderTab section={section} />}
         {activeTab === 'comments' && <CommentsPanel sectionId={section.id} />}
         {activeTab === 'revisions' && <SceneRevisionPanel section={section} />}
+      </div>
+
+      {/* Re-index for AI — always visible footer action */}
+      <div className="flex-shrink-0 border-t border-[var(--border-primary)] px-3 py-2">
+        <button
+          type="button"
+          disabled={reindexBusy}
+          onClick={() => void handleReindex()}
+          aria-busy={reindexBusy}
+          className="text-xs text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {reindexBusy ? t('reference.reindex.busy') : t('reference.reindex.action')}
+        </button>
       </div>
     </section>
   );

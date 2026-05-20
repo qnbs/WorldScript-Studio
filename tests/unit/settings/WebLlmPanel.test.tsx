@@ -67,6 +67,7 @@ const baseAi = {
   openAiSiteTitle: 'StoryCraft Studio',
   hybridFallbackEnabled: false,
   hybridFallbackChain: [] as import('../../../types').AIProvider[],
+  ragMode: 'hybrid' as const,
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

@@ -374,6 +374,8 @@ export interface AdvancedAiSettings {
   hybridFallbackEnabled: boolean;
   /** Reihenfolge der Fallback-Provider (ohne Duplikate; Primär kommt immer zuerst). */
   hybridFallbackChain: AIProvider[];
+  // QNBS-v3: lexical = fast BoW only; hybrid = semantic MiniLM + lexical token-overlap + recency (default).
+  ragMode: 'lexical' | 'hybrid';
 }
 
 export type AccessibilityPresetId = 'custom' | 'motor' | 'lowVision' | 'cognitive' | 'screenReader';

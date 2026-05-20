@@ -65,6 +65,7 @@ const defaultSettings: Settings = {
     openAiSiteTitle: 'StoryCraft Studio',
     hybridFallbackEnabled: false,
     hybridFallbackChain: [],
+    ragMode: 'hybrid',
   },
   accessibility: normalizeAccessibilitySettings({
     highContrast: false,

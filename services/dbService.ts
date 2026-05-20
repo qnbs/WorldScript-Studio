@@ -716,6 +716,7 @@ class IndexedDBService implements StorageBackend {
         openAiSiteTitle: 'StoryCraft Studio',
         hybridFallbackEnabled: false,
         hybridFallbackChain: [],
+        ragMode: 'hybrid',
       };
       validSettings.advancedAi = {
         ...advancedAiDefaults,

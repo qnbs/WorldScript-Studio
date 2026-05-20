@@ -225,6 +225,8 @@ type ConsistencyCheckParams = BasePromptParams & {
   manuscript: { title: string; content: string }[];
   relationships?: CharacterRelationship[];
   codex?: StoryCodex;
+  // QNBS-v3: RAG-retrieved excerpts replace the full manuscript block when present.
+  ragChunks?: string;
 };
 type CriticAnalysisParams = BasePromptParams & { text: string; context?: string };
 type PlotHoleDetectionParams = BasePromptParams & { text: string };
@@ -475,16 +477,20 @@ export const getPrompts = <T extends PromptType>(type: T, params: PromptParamsMa
       const p = params as ConsistencyCheckParams;
       const character = p.characters.find((c) => c.id === p.characterId);
       if (!character) throw new Error('Character not found');
+      // QNBS-v3: prefer RAG-retrieved excerpts over the full manuscript to reduce prompt size.
+      const manuscriptBlock = p.ragChunks
+        ? `Relevant manuscript excerpts (RAG-retrieved):\n${sanitizePromptBlock(p.ragChunks)}`
+        : `Manuscript: ${sanitizePromptBlock(
+            p.manuscript
+              .map((s) => `${sanitizePromptValue(s.title)}: ${sanitizePromptBlock(s.content)}`)
+              .join('\n\n')
+              .substring(0, 50000),
+          )}`;
       const context = `
 Characters: ${sanitizePromptBlock(JSON.stringify(p.characters))}
 Worlds: ${sanitizePromptBlock(JSON.stringify(p.worlds))}
 Relationships: ${sanitizePromptBlock(JSON.stringify(p.relationships || []))}
-Manuscript: ${sanitizePromptBlock(
-        p.manuscript
-          .map((s) => `${sanitizePromptValue(s.title)}: ${sanitizePromptBlock(s.content)}`)
-          .join('\n\n')
-          .substring(0, 50000),
-      )}
+${manuscriptBlock}
             `;
       const codexSummary = p.codex
         ? p.codex.entities

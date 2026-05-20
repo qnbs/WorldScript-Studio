@@ -7,7 +7,7 @@ import { selectProjectData } from '../../features/project/projectSelectors';
 import { statusActions } from '../../features/status/statusSlice';
 import { RECOMMENDED_OLLAMA_MODEL_IDS } from '../../services/ai/modelRecommendations';
 import { generateLocalText } from '../../services/localAiFacade';
-import { rebuildLocalRagIndex } from '../../services/localRagIndex';
+import { rebuildHybridRagIndex } from '../../services/localRagService';
 import type { AIProvider } from '../../types';
 import { ApiKeySection } from '../ApiKeySection';
 import { Button } from '../ui/Button';
@@ -286,7 +286,12 @@ export const AdvancedAiSection: FC = () => {
     const pid = project.id ?? 'browser-project';
     setRagBusy(true);
     try {
-      const chunks = await rebuildLocalRagIndex(pid, project.manuscript);
+      // QNBS-v3: use hybrid rebuilder so semantic embeddings + DuckDB dual-write fire together.
+      const chunks = await rebuildHybridRagIndex(
+        pid,
+        project.manuscript,
+        featureFlags.enableDuckDbAnalytics,
+      );
       dispatch(
         statusActions.addNotification({
           type: 'success',
@@ -620,6 +625,27 @@ export const AdvancedAiSection: FC = () => {
             <p className="text-sm text-[var(--foreground-muted)]">
               {t('settings.advancedAi.localRagDescription')}
             </p>
+            <div>
+              <label
+                htmlFor="rag-mode-select"
+                className="block text-sm font-medium text-[var(--foreground-primary)] mb-1"
+              >
+                {t('settings.advancedAi.ragModeLabel')}
+              </label>
+              <Select
+                id="rag-mode-select"
+                value={settings.advancedAi.ragMode ?? 'hybrid'}
+                onChange={(e) =>
+                  handleSettingChange('advancedAi', {
+                    ...settings.advancedAi,
+                    ragMode: e.target.value as 'lexical' | 'hybrid',
+                  })
+                }
+              >
+                <option value="hybrid">{t('settings.advancedAi.ragModeHybrid')}</option>
+                <option value="lexical">{t('settings.advancedAi.ragModeLexical')}</option>
+              </Select>
+            </div>
             <Button
               type="button"
               variant="secondary"

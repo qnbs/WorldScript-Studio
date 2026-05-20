@@ -7,9 +7,12 @@ import {
   selectProjectData,
 } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
+import { embedText } from '../services/ai/localEmbeddingService';
 import { generateText } from '../services/aiProviderService';
 import { loadStoryCodex } from '../services/codexService';
 import { getPrompts } from '../services/geminiService';
+import { retrieveContext } from '../services/localRagService';
+import { logger } from '../services/logger';
 import type { CharacterRelationship, StoryCodex } from '../types';
 
 export const useConsistencyCheckerView = () => {
@@ -19,6 +22,8 @@ export const useConsistencyCheckerView = () => {
   const worlds = useAppSelector(selectAllWorlds);
   const projectData = useAppSelector(selectProjectData);
   const aiSettings = useAppSelector((state) => state.settings.advancedAi);
+  const ragMode = useAppSelector((state) => state.settings.advancedAi.ragMode ?? 'hybrid');
+  const duckDbEnabled = useAppSelector((state) => state.featureFlags.enableDuckDbAnalytics);
   const aiOptions = useMemo(
     () => ({
       provider: aiSettings.provider,
@@ -80,6 +85,33 @@ export const useConsistencyCheckerView = () => {
 
       setIsChecking(true);
       try {
+        const projectId = projectData.id || 'default';
+        const character = characters.find((c) => c.id === characterId);
+
+        // QNBS-v3: retrieve relevant chunks so we avoid sending the full manuscript to the AI.
+        let ragChunks: string | undefined;
+        if (character) {
+          try {
+            let queryEmb: Float32Array | undefined;
+            if (ragMode === 'hybrid') {
+              queryEmb = await embedText(character.name).catch(() => undefined);
+            }
+            const chunks = await retrieveContext(
+              projectId,
+              character.name,
+              8,
+              ragMode,
+              queryEmb,
+              duckDbEnabled && ragMode === 'hybrid',
+            );
+            if (chunks.length > 0) {
+              ragChunks = chunks.map((c) => c.text).join('\n\n---\n\n');
+            }
+          } catch (ragErr) {
+            logger.warn('RAG retrieval failed (non-critical):', ragErr);
+          }
+        }
+
         const promptArgs: {
           characterId: string;
           characters: typeof characters;
@@ -88,6 +120,7 @@ export const useConsistencyCheckerView = () => {
           relationships: CharacterRelationship[];
           lang: string;
           codex?: StoryCodex;
+          ragChunks?: string;
         } = {
           characterId,
           characters,
@@ -95,6 +128,8 @@ export const useConsistencyCheckerView = () => {
           manuscript: projectData.manuscript,
           relationships: projectData.relationships || [],
           lang: language,
+          // QNBS-v3: conditional spread avoids exactOptionalPropertyTypes violation.
+          ...(ragChunks !== undefined ? { ragChunks } : {}),
         };
 
         if (storyCodex) {
@@ -112,7 +147,17 @@ export const useConsistencyCheckerView = () => {
         abortControllerRef.current = null;
       }
     },
-    [characters, worlds, projectData, language, aiCreativity, aiOptions, storyCodex],
+    [
+      characters,
+      worlds,
+      projectData,
+      language,
+      aiCreativity,
+      aiOptions,
+      storyCodex,
+      ragMode,
+      duckDbEnabled,
+    ],
   );
 
   return {
