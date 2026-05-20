@@ -1,5 +1,5 @@
 import type { FC, PointerEvent } from 'react';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../../app/hooks';
 import {
   plotBoardActions,
@@ -214,6 +214,16 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
   } | null>(null);
 
   const activePointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  // QNBS-v3: rAF ref to coalesce burst pointer events — cancel pending frame before scheduling next.
+  const rafRef = useRef<number | null>(null);
+
+  // Cancel any pending rAF on unmount to prevent dispatching into an unmounted tree.
+  useEffect(
+    () => () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    },
+    [],
+  );
 
   // Canvas virtual dimensions for the mini-map
   const [canvasBounds] = useState({ w: 2400, h: 1600 });
@@ -307,18 +317,11 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
 
   const handlePointerMove = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
+      // Always update pointer map synchronously — pinch needs fresh positions immediately.
       activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      // Track cursor in canvas-space for ConnectionLayer draw preview
-      if (wrapperRef.current) {
-        const rect = wrapperRef.current.getBoundingClientRect();
-        setCursorCanvasPos({
-          x: (e.clientX - rect.left - panX) / zoom,
-          y: (e.clientY - rect.top - panY) / zoom,
-        });
-      }
 
       if (pinchState.current && activePointers.current.size >= 2) {
-        // Pinch-to-zoom
+        // QNBS-v3: pinch-to-zoom dispatches synchronously — rAF would introduce a perceptible lag.
         const entries = [...activePointers.current.entries()];
         const p1e = entries[0]!;
         const p2e = entries[1]!;
@@ -339,26 +342,42 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
 
       if (!dragState.current || dragState.current.pointerId !== e.pointerId) return;
 
-      const dx = e.clientX - dragState.current.startX;
-      const dy = e.clientY - dragState.current.startY;
+      // QNBS-v3: rAF throttle — collapses burst pointer events on High-DPI into one Redux dispatch per frame.
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      const captured = dragState.current;
+      const rect = wrapperRef.current?.getBoundingClientRect() ?? null;
 
-      if (dragState.current.type === 'pan') {
-        dispatch(
-          plotBoardActions.setPan({
-            panX: dragState.current.origX + dx,
-            panY: dragState.current.origY + dy,
-          }),
-        );
-      } else if (dragState.current.type === 'card' && dragState.current.sectionId) {
-        // Move card — scale delta by zoom so canvas-space matches screen-space
-        const newX = snapToGrid(dragState.current.origX + dx / zoom, snapGrid);
-        const newY = snapToGrid(dragState.current.origY + dy / zoom, snapGrid);
-        dispatch(
-          projectActions.updateSceneBoardLayout({
-            [dragState.current.sectionId]: { x: newX, y: newY },
-          }),
-        );
-      }
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        // Track cursor in canvas-space for ConnectionLayer draw preview
+        if (rect) {
+          setCursorCanvasPos({
+            x: (clientX - rect.left - panX) / zoom,
+            y: (clientY - rect.top - panY) / zoom,
+          });
+        }
+        const dx = clientX - captured.startX;
+        const dy = clientY - captured.startY;
+        if (captured.type === 'pan') {
+          dispatch(
+            plotBoardActions.setPan({
+              panX: captured.origX + dx,
+              panY: captured.origY + dy,
+            }),
+          );
+        } else if (captured.type === 'card' && captured.sectionId) {
+          // Move card — scale delta by zoom so canvas-space matches screen-space
+          const newX = snapToGrid(captured.origX + dx / zoom, snapGrid);
+          const newY = snapToGrid(captured.origY + dy / zoom, snapGrid);
+          dispatch(
+            projectActions.updateSceneBoardLayout({
+              [captured.sectionId]: { x: newX, y: newY },
+            }),
+          );
+        }
+      });
     },
     [dispatch, snapGrid, zoom, panY, panX],
   );
