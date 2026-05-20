@@ -11,6 +11,7 @@ import analyticsReducer, {
 const initial: AnalyticsState = {
   duckDbStatus: 'idle',
   duckDbError: null,
+  duckDbPersistenceMode: null,
   migrationStatus: 'idle',
   migrationError: null,
   lastSyncAt: null,

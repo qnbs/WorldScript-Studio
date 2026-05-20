@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// QNBS-v3: hoisted spy captures WebrtcProvider constructor options so we can assert on password wiring.
+const mockWebrtcConstructorSpy = vi.hoisted(() => vi.fn());
+
 // Mock crypto.subtle for SHA-256 room derivation
 const mockDigest = vi.fn().mockImplementation(async (_algo: string, data: ArrayBuffer) => {
   // Simple deterministic hash mock: use the data bytes to create a unique ArrayBuffer
@@ -45,6 +48,9 @@ vi.mock('y-webrtc', () => {
     };
     disconnect = vi.fn();
     destroy = vi.fn();
+    constructor(roomId: string, doc: unknown, options?: Record<string, unknown>) {
+      mockWebrtcConstructorSpy(roomId, doc, options);
+    }
   }
   return { WebrtcProvider: MockWebrtcProvider };
 });
@@ -447,5 +453,20 @@ describe('collaborationService encryption', () => {
     await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }, 'pw');
     collaborationService.disconnect();
     expect(collaborationService.getEncryptionStatus()).toBe('plaintext');
+  });
+
+  it('passes password to WebrtcProvider constructor enabling y-webrtc E2E encryption', async () => {
+    mockWebrtcConstructorSpy.mockClear();
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }, 'mysecret');
+    const lastCall = mockWebrtcConstructorSpy.mock.calls.at(-1);
+    // QNBS-v3: opt-in E2E — password forwarded so y-webrtc activates its AES-GCM-256 path.
+    expect(lastCall?.[2]).toMatchObject({ password: 'mysecret' });
+  });
+
+  it('does not pass password to WebrtcProvider when connecting without password', async () => {
+    mockWebrtcConstructorSpy.mockClear();
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' });
+    const lastCall = mockWebrtcConstructorSpy.mock.calls.at(-1);
+    expect(lastCall?.[2]).not.toHaveProperty('password');
   });
 });
