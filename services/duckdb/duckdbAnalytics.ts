@@ -104,7 +104,13 @@ export async function duckdbDualWrite(
   targetWordCount: number | undefined,
   targetDate: string | null | undefined,
   writingHistory: { date: string; words: number }[],
-  sections: { id: string; title: string; wordCount: number; status?: string; position: number }[],
+  sections: {
+    id: string;
+    title: string;
+    wordCount: number;
+    status?: string | undefined;
+    position: number;
+  }[],
 ): Promise<void> {
   const now = new Date().toISOString();
 
