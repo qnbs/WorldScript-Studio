@@ -55,6 +55,7 @@ const loggerMiddleware: Middleware = (store) => (next) => (action) => {
   return next(action);
 };
 
+import analyticsReducer from '../features/analytics/analyticsSlice';
 import versionControlReducer from '../features/versionControl/versionControlSlice';
 
 const combinedReducer = combineReducers({
@@ -72,6 +73,8 @@ const combinedReducer = combineReducers({
   // QNBS-v3: progressTracker and sceneComments are ephemeral session + user data, localStorage-backed
   progressTracker: progressTrackerReducer,
   sceneComments: sceneCommentsReducer,
+  // QNBS-v3: analytics tracks DuckDB-WASM boot + migration status; ephemeral, not persisted
+  analytics: analyticsReducer,
   [aiApi.reducerPath]: aiApi.reducer,
 });
 

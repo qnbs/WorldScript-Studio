@@ -44,6 +44,8 @@ export default defineConfig({
           'community-templates/**/*.json',
           'locales/**/bundle.json',
         ],
+        // QNBS-v3: Exclude DuckDB chunks + WASM blobs from SW precache — loaded lazily when flag=on.
+        globIgnores: ['**/vendor-duckdb*', '**/*.wasm'],
       },
       // Manifest bereits in public/manifest.json eingebunden
       manifest: false,
@@ -145,6 +147,10 @@ export default defineConfig({
           // QNBS-v3: onnx/transformers exceed Workbox 8 MiB SW cache limit — separate chunk prevents exclusion.
           if (id.includes('onnxruntime-web') || id.includes('@xenova/transformers')) {
             return 'vendor-ai-onnx';
+          }
+          // QNBS-v3: DuckDB-WASM bundle is ~2 MB gzip; isolate so SW cache exclusion glob matches vendor-duckdb*.
+          if (id.includes('@duckdb/duckdb-wasm')) {
+            return 'vendor-duckdb';
           }
           return undefined;
         },
