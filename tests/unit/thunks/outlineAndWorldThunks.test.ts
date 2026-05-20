@@ -7,6 +7,7 @@ vi.mock('../../../features/project/thunks/thunkUtils', () => ({
   loadAiProvider: vi.fn(),
   loadPrompts: vi.fn(),
   buildAiOptions: vi.fn().mockReturnValue({ provider: 'gemini' }),
+  buildAiCreativity: vi.fn().mockReturnValue('Balanced'),
 }));
 
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
