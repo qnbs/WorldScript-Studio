@@ -103,6 +103,7 @@ export function useAnalytics(): AnalyticsData {
         setData({
           isEnabled: true,
           isLoading: false,
+          duckDbUnavailable: false,
           dailyProgress: daily,
           weeklyProgress: weekly,
           streak,

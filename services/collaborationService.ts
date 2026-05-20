@@ -144,8 +144,11 @@ class CollaborationService {
 
     const signaling = resolveWebRtcSignalingUrls(signalingUrls);
 
+    // QNBS-v3: opt-in E2E — only when roomPassword is set. y-webrtc derives AES-GCM-256 from password
+    // internally; all WebRTC messages are encrypted before leaving the browser.
     this.provider = new WebrtcProvider(this._roomId, this.doc, {
       signaling,
+      ...(password ? { password: this.sanitizeRoomValue(password) } : {}),
     });
 
     // Publish our identity to peers
