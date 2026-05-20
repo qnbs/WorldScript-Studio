@@ -19,6 +19,13 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 **Optional local deep dive:** `CI=true pnpm run test:e2e`, `pnpm exec vitest run --coverage`, `pnpm exec lhci autorun` — only when the machine has enough CPU/RAM and time. Mobile Playwright project locally: set `RUN_MOBILE_E2E=1` (see [`playwright.config.ts`](../playwright.config.ts)).
 
+**Post-merge doc update workflow:**
+1. Push the commit → CI starts automatically.
+2. `gh run watch $(gh run list --limit 1 --json databaseId -q '.[0].databaseId')` — stream the live run.
+3. When `quality` job completes, read the coverage summary from the CI logs or Codecov badge.
+4. Update `README.md` badges (`Tests-NNN_%2F_NNN_files`, `Coverage-XX.XX%25_Lines`), `AUDIT.md` quality-gate line, and `CLAUDE.md` v1.x Patterns if the test count changed significantly.
+5. Commit the doc update: `chore(docs): update metrics from CI vX.Y.Z`.
+
 ---
 
 ## Toolchain (CI parity)

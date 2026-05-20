@@ -17,6 +17,7 @@ interface SceneBoardViewContextType {
   locationOptions: { id: string; label: string }[];
   connections: PlotConnection[];
   subplots: Subplot[];
+  activeSubplotFilter: string | null;
   handleUpdateSection: (id: string, updates: Partial<StorySection>) => void;
   handleDeleteSection: (id: string) => void;
   handleMoveSection: (id: string, position: { x: number; y: number }) => void;
@@ -25,11 +26,13 @@ interface SceneBoardViewContextType {
   handleAddConnection: (from: string, to: string, type?: PlotConnectionType) => void;
   handleDeleteConnection: (id: string) => void;
   handleStartDrawConnection: (fromId: string) => void;
-  handleFinishDrawConnection: (toId: string, type?: PlotConnectionType) => void;
+  // QNBS-v3: fromId added to allow ProjectSlice dispatch without reading draw state from plotBoard.
+  handleFinishDrawConnection: (toId: string, fromId: string, type?: PlotConnectionType) => void;
   handleCancelDrawConnection: () => void;
   handleAddSubplot: (name: string, color: string) => void;
   handleDeleteSubplot: (id: string) => void;
   handleAssignToSubplot: (sectionId: string, subplotId: string) => void;
+  handleRemoveSectionFromSubplot: (sectionId: string, subplotId: string) => void;
 }
 
 export const SceneBoardViewContext = createContext<SceneBoardViewContextType | null>(null);

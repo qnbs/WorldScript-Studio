@@ -1,13 +1,14 @@
-// QNBS-v3: Collapsible subplot sidebar — reads/writes plotBoardSlice directly to avoid
-//          prop-drilling through PlotCanvas. Sections list passes through for assignment.
+// QNBS-v3: Subplot sidebar — reads subplots from projectSlice (undo-able), subplot filter
+//          stays in plotBoardSlice (ephemeral viewport state).
 import type { FC } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../../app/hooks';
 import {
   plotBoardActions,
   selectActiveSubplotFilter,
-  selectAllSubplots,
 } from '../../features/plotBoard/plotBoardSlice';
+import { selectPlotSubplots } from '../../features/project/projectSelectors';
+import { projectActions } from '../../features/project/projectSlice';
 import type { StorySection, Subplot } from '../../types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -42,9 +43,9 @@ const AssignPopover: FC<AssignPopoverProps> = ({ subplot, sections, onClose, t }
   const toggle = useCallback(
     (sectionId: string) => {
       if (subplot.sectionIds.includes(sectionId)) {
-        dispatch(plotBoardActions.removeSectionFromSubplot({ sectionId, subplotId: subplot.id }));
+        dispatch(projectActions.removeSectionFromPlotSubplot({ sectionId, subplotId: subplot.id }));
       } else {
-        dispatch(plotBoardActions.assignSectionToSubplot({ sectionId, subplotId: subplot.id }));
+        dispatch(projectActions.assignSectionToPlotSubplot({ sectionId, subplotId: subplot.id }));
       }
     },
     [dispatch, subplot],
@@ -122,7 +123,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
   const commitName = useCallback(() => {
     const trimmed = draftName.trim();
     if (trimmed && trimmed !== subplot.name) {
-      dispatch(plotBoardActions.updateSubplot({ id: subplot.id, changes: { name: trimmed } }));
+      dispatch(projectActions.updatePlotSubplot({ id: subplot.id, changes: { name: trimmed } }));
     } else {
       setDraftName(subplot.name);
     }
@@ -221,7 +222,7 @@ interface SubplotPanelProps {
 
 export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
   const dispatch = useAppDispatch();
-  const subplots = useAppSelectorShallow(selectAllSubplots);
+  const subplots = useAppSelectorShallow(selectPlotSubplots);
   const activeFilter = useAppSelectorShallow(selectActiveSubplotFilter);
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -232,7 +233,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
   const handleAddSubplot = useCallback(() => {
     const name = newName.trim() || t('sceneboard.subplot.defaultName');
     dispatch(
-      plotBoardActions.addSubplot({
+      projectActions.addPlotSubplot({
         id: generateId(),
         name,
         color: newColor,
@@ -252,7 +253,9 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
 
   const handleDelete = useCallback(
     (id: string) => {
-      dispatch(plotBoardActions.deleteSubplot(id));
+      dispatch(projectActions.deletePlotSubplot(id));
+      // Clear viewport filter so deleted subplot doesn't stay highlighted
+      dispatch(plotBoardActions.setActiveSubplotFilter(null));
     },
     [dispatch],
   );

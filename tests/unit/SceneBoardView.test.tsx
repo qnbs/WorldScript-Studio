@@ -23,6 +23,7 @@ const mockSceneBoardViewBase = {
   locationOptions: [],
   connections: [],
   subplots: [],
+  activeSubplotFilter: null,
   handleUpdateSection: vi.fn(),
   handleDeleteSection: vi.fn(),
   handleMoveSection: vi.fn(),
@@ -47,16 +48,13 @@ const mockAppState = {
   plotBoard: {
     activeMode: 'swimlane',
     snapToGrid: false,
-    connections: [],
     selectedConnectionId: null,
     isDrawingConnection: false,
     drawFromSectionId: null,
-    subplots: { ids: [], entities: {} },
     activeSubplotFilter: null,
     zoom: 1,
     panX: 0,
     panY: 0,
-    tensionOverrides: {},
   },
 };
 

@@ -3,9 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useFoldableLayout } from '../../hooks/useFoldableLayout';
 
 describe('useFoldableLayout', () => {
-  // biome-ignore lint/correctness/noUnusedVariables: used inside test callbacks via closure
-  let getComputedStyleMock: ReturnType<typeof vi.spyOn>;
-
   const makeMediaQuery = () => ({
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
@@ -22,9 +19,7 @@ describe('useFoldableLayout', () => {
   });
 
   it('returns no-fold state by default (no fold CSS env)', () => {
-    getComputedStyleMock = vi
-      .spyOn(window, 'getComputedStyle')
-      .mockReturnValue({ height: '0px' } as CSSStyleDeclaration);
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue({ height: '0px' } as CSSStyleDeclaration);
     const { result } = renderHook(() => useFoldableLayout());
     expect(result.current.isFolded).toBe(false);
     expect(result.current.foldAxis).toBeNull();
@@ -33,7 +28,7 @@ describe('useFoldableLayout', () => {
 
   it('detects horizontal fold when fold-top is non-zero', () => {
     let callCount = 0;
-    getComputedStyleMock = vi.spyOn(window, 'getComputedStyle').mockImplementation(() => {
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(() => {
       callCount++;
       return { height: callCount === 1 ? '200px' : '0px' } as CSSStyleDeclaration;
     });
@@ -46,7 +41,7 @@ describe('useFoldableLayout', () => {
 
   it('detects vertical fold when fold-left is non-zero', () => {
     let callCount = 0;
-    getComputedStyleMock = vi.spyOn(window, 'getComputedStyle').mockImplementation(() => {
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(() => {
       callCount++;
       return { height: callCount === 1 ? '0px' : '400px' } as CSSStyleDeclaration;
     });
@@ -58,7 +53,7 @@ describe('useFoldableLayout', () => {
   });
 
   it('falls back to no-fold when getComputedStyle throws', () => {
-    getComputedStyleMock = vi.spyOn(window, 'getComputedStyle').mockImplementation(() => {
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(() => {
       throw new Error('CSS env unsupported');
     });
 
@@ -69,9 +64,7 @@ describe('useFoldableLayout', () => {
 
   it('registers resize listener on mount', () => {
     const addEventSpy = vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
-    getComputedStyleMock = vi
-      .spyOn(window, 'getComputedStyle')
-      .mockReturnValue({ height: '0px' } as CSSStyleDeclaration);
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue({ height: '0px' } as CSSStyleDeclaration);
 
     renderHook(() => useFoldableLayout());
     expect(addEventSpy).toHaveBeenCalledWith('resize', expect.any(Function));
@@ -80,9 +73,7 @@ describe('useFoldableLayout', () => {
   it('removes resize listener on unmount', () => {
     const removeListenerSpy = vi.spyOn(window, 'removeEventListener');
     vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
-    getComputedStyleMock = vi
-      .spyOn(window, 'getComputedStyle')
-      .mockReturnValue({ height: '0px' } as CSSStyleDeclaration);
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue({ height: '0px' } as CSSStyleDeclaration);
 
     const { unmount } = renderHook(() => useFoldableLayout());
     unmount();

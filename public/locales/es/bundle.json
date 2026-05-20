@@ -499,7 +499,7 @@
   "portal.welcome.subtitle": "Tu compañero creativo con IA para escribir.",
   "portal.welcome.title": "Bienvenido a StoryCraft Studio",
   "portal.welcome.tryDemo": "Cargar demo",
-  "dashboard.authorInsights.readability": "Legibilidad (estilo Flesch, heurística EN)",
+  "dashboard.authorInsights.readability": "Legibilidad (Fernández Huerta, heurística ES)",
   "dashboard.authorInsights.readabilityFootnote": "Puntuaciones más altas suelen leerse más fácil; afina según el género.",
   "dashboard.authorInsights.readabilityNeedMore": "Escribe un poco más — se necesitan ~40+ palabras para un valor estable.",
   "dashboard.authorInsights.timeline": "Comprobaciones de línea temporal",

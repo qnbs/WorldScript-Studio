@@ -57,9 +57,10 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
     [project.manuscript],
   );
 
+  // QNBS-v3: Pass locale so the correct language-specific heuristic (DE/Amstad, FR/Kandel-Moles…) is used.
   const readability = useMemo(
-    () => computeReadabilitySnapshot(readabilitySample),
-    [readabilitySample],
+    () => computeReadabilitySnapshot(readabilitySample, language),
+    [readabilitySample, language],
   );
 
   const sceneTimelineHints = useMemo(

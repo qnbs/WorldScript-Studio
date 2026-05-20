@@ -6,13 +6,22 @@ Plot-Board v2 is StoryCraft's free-form scene canvas, replacing the swimlane-onl
 
 ## State Architecture
 
-The canvas viewport, connections, subplots, and tension overrides live in a **separate Redux slice** (`features/plotBoard/plotBoardSlice.ts`) that is:
+State is split across two slices by mutability tier:
 
+### `features/plotBoard/plotBoardSlice.ts` — Ephemeral viewport / UI state
 - **NOT** wrapped by `redux-undo` — pan/zoom actions should not enter the undo history.
 - Persisted to `localStorage` (key `storycraft-plot-board`) via `plotBoardPersistenceMiddleware`.
 - Reset on page load for drawing state (`isDrawingConnection`, `drawFromSectionId`, `selectedConnectionId`).
+- Holds: `activeMode`, `zoom`, `panX`, `panY`, `snapToGrid`, `selectedConnectionId`, `isDrawingConnection`, `drawFromSectionId`, `activeSubplotFilter`.
 
-**Scene content** (title, summary, status, color, `position`) stays in `projectSlice` and is undo-able.
+### `features/project/projectSlice.ts` — Story content (undo-able)
+- **Wrapped** by `redux-undo` (100-step history) — Ctrl+Z restores deleted connections.
+- Persisted via IndexedDB (part of the project save).
+- Holds: `plotConnections[]`, `plotSubplots[]`, `plotTensionOverrides` (via `ProjectData` fields).
+- Selectors from `features/project/projectSelectors.ts`: `selectPlotConnections`, `selectPlotSubplots`, `selectPlotTensionOverrides`.
+- Actions: `addPlotConnection`, `updatePlotConnection`, `removePlotConnection`, `removePlotConnectionsForSection`, `finishPlotDrawConnection`, `addPlotSubplot`, `updatePlotSubplot`, `deletePlotSubplot`, `assignSectionToPlotSubplot`, `removeSectionFromPlotSubplot`, `setPlotTensionOverride`, `clearPlotTensionOverride`, `clearAllPlotTensionOverrides`.
+
+**Scene content** (title, summary, status, color, `position`) also stays in `projectSlice` and is undo-able.
 
 ## Components
 
@@ -44,16 +53,18 @@ When a connection has a `subplotId`, it inherits the subplot's color (overrides 
 1. Click the draw-connection button on a card (or trigger via `plotBoardActions.startDrawConnection`).
 2. `isDrawingConnection` becomes `true`; the canvas cursor turns crosshair.
 3. A dashed preview line tracks the cursor (canvas-space cursor position passed from `PlotCanvas` → `ConnectionLayer`).
-4. Click a destination card → `finishDrawConnection` is dispatched (self-loops rejected).
+4. Click a destination card → `projectActions.finishPlotDrawConnection` is dispatched (self-loops rejected), then `plotBoardActions.finishDrawConnection` clears the draw UI state.
 5. Press Escape or change mode to cancel.
 
 ## Subplots
 
-Subplots are stored as an `EntityState<Subplot>` in `plotBoardSlice`. Each subplot has a color and an array of `sectionIds`. The **SubplotPanel** dispatches:
+Subplots are stored as a plain `Subplot[]` array in `projectSlice.data.plotSubplots` (undo-able). Each subplot has a color and an array of `sectionIds`. The **SubplotPanel** dispatches `projectActions`:
 
-- `addSubplot` / `deleteSubplot` / `updateSubplot`
-- `assignSectionToSubplot` / `removeSectionFromSubplot`
-- `setActiveSubplotFilter` — dims canvas cards not in the active subplot
+- `addPlotSubplot` / `deletePlotSubplot` / `updatePlotSubplot`
+- `assignSectionToPlotSubplot` / `removeSectionFromPlotSubplot`
+
+The active filter (viewport-only) stays in `plotBoardSlice`:
+- `plotBoardActions.setActiveSubplotFilter` — dims canvas cards not in the active subplot
 
 ## Tension Curve
 
@@ -67,7 +78,7 @@ Subplots are stored as an `EntityState<Subplot>` in `plotBoardSlice`. Each subpl
 | `revised` | 7 |
 | `final` | 9 |
 
-User can drag a dot to override. Overrides dispatch `setTensionOverride`. Reset dispatches `clearAllTensionOverrides`.
+User can drag a dot to override. Overrides dispatch `projectActions.setPlotTensionOverride` (undo-able). Reset dispatches `projectActions.clearAllPlotTensionOverrides`.
 
 ## Beat Sheet Presets
 

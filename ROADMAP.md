@@ -185,8 +185,8 @@ Vereinfachte automatische Konsistenzprüfung:
 
 ### Unit-Test-Coverage: Phase 1–5
 
-- **150 Test-Dateien**, insgesamt **1 641 Tests**; Vitest-Schwellen auf **55/53/37/50** (Lines/Statements/Branches/Functions) erhöht
-- Gemessene Coverage (2026-05-18): **64.68 % Lines · 62.86 % Statements · 49.06 % Branches · 54.10 % Functions** — alle Schwellen grün
+- **174 Test-Dateien**, insgesamt **1 966 Tests** (v1.6.0); Vitest-Schwellen auf **63/62/48/54** (Lines/Statements/Branches/Functions)
+- Gemessene Coverage (2026-05-19, v1.6.0): **63.88 % Lines · 48.87 % Branches · 54.35 % Functions** — alle Schwellen grün
 
 ### Phase 3A — Cross-Project-Search Service ✅
 
@@ -243,7 +243,7 @@ Vereinfachte automatische Konsistenzprüfung:
 - ✅ **Threaded Comments** — resolve/unresolve, nested replies, unresolved badge
 - ✅ **Progress Tracker Dashboard** — circular progress ring, live session timer, 30-day velocity chart, 12-week heatmap, streak system
 - ✅ **Mobile Polish** — foldable layout hook (Device Posture API), URL hash deep-linking, named haptic pattern library
-- ✅ 1 966 tests / 174 files; coverage maintained; lint ✅ typecheck ✅ i18n 1590 keys ✅
+- ✅ 1 966+ tests / 174+ files; coverage ≥ 63.88% lines; lint ✅ typecheck ✅ i18n 1590 keys ✅
 
 ---
 

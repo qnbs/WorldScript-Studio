@@ -83,7 +83,6 @@ describe('deepLinkService', () => {
     });
 
     it('falls back to window.location.hash when called with no argument', () => {
-      // @ts-expect-error – test env has window
       Object.defineProperty(window, 'location', {
         value: { hash: '#/settings' },
         configurable: true,

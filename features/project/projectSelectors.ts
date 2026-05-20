@@ -87,6 +87,22 @@ export const selectCharactersForGraph = createSelector(
   (characters, relationships) => ({ characters, relationships }),
 );
 
+// --- Plot-Board v2 selectors (content lives in projectSlice for undo support) ---
+export const selectPlotConnections = createSelector(
+  [selectProjectData],
+  (data) => data?.plotConnections ?? [],
+);
+
+export const selectPlotSubplots = createSelector(
+  [selectProjectData],
+  (data) => data?.plotSubplots ?? [],
+);
+
+export const selectPlotTensionOverrides = createSelector(
+  [selectProjectData],
+  (data) => data?.plotTensionOverrides ?? {},
+);
+
 // --- Settings-derived selectors (re-render prevention) ---
 export const selectTheme = (state: RootState) => state.settings.theme;
 export const selectAiCreativity = (state: RootState) => state.settings.aiCreativity;

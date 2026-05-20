@@ -3,6 +3,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../../app/hooks';
 import {
   plotBoardActions,
+  selectDrawFromSectionId,
   selectIsDrawingConnection,
   selectPan,
   selectSnapToGrid,
@@ -181,6 +182,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
   const { panX, panY } = useAppSelectorShallow(selectPan);
   const snapGrid = useAppSelectorShallow(selectSnapToGrid);
   const isDrawing = useAppSelectorShallow(selectIsDrawingConnection);
+  const drawFromSectionId = useAppSelectorShallow(selectDrawFromSectionId);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -270,15 +272,20 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
   const handleCardPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>, sectionId: string) => {
       if (isDrawing) {
-        // In draw mode, clicking a card starts or finishes the connection
+        // In draw mode, clicking a card finishes the connection.
+        // QNBS-v3: Connection created in projectSlice (undo-able); draw UI state cleared separately.
         e.stopPropagation();
-        dispatch(
-          plotBoardActions.finishDrawConnection({
-            toSectionId: sectionId,
-            type: 'cause-effect',
-            newId: `conn-${Date.now()}`,
-          }),
-        );
+        if (drawFromSectionId) {
+          dispatch(
+            projectActions.finishPlotDrawConnection({
+              fromSectionId: drawFromSectionId,
+              toSectionId: sectionId,
+              type: 'cause-effect',
+              newId: `conn-${Date.now()}`,
+            }),
+          );
+        }
+        dispatch(plotBoardActions.finishDrawConnection());
         return;
       }
       e.stopPropagation();
@@ -295,7 +302,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
         pointerId: e.pointerId,
       };
     },
-    [dispatch, isDrawing, layout],
+    [dispatch, drawFromSectionId, isDrawing, layout],
   );
 
   const handlePointerMove = useCallback(

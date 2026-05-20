@@ -27,8 +27,6 @@ vi.mock('../../../app/hooks', () => ({
       project: { present: { data: mockProject } },
       plotBoard: {
         activeMode: 'swimlane',
-        connections: [],
-        subplots: { ids: [], entities: {} },
         snapToGrid: false,
         selectedConnectionId: null,
         isDrawingConnection: false,
@@ -37,7 +35,6 @@ vi.mock('../../../app/hooks', () => ({
         zoom: 1,
         panX: 0,
         panY: 0,
-        tensionOverrides: {},
       },
     }),
 }));
@@ -49,6 +46,8 @@ vi.mock('../../../hooks/useTranslation', () => ({
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllCharacters: () => [],
   selectAllWorlds: () => mockWorlds,
+  selectPlotConnections: () => [],
+  selectPlotSubplots: () => [],
 }));
 
 // ---------------------------------------------------------------------------
@@ -156,7 +155,7 @@ describe('handleUpdateSection', () => {
 // handleDeleteSection
 // ---------------------------------------------------------------------------
 describe('handleDeleteSection', () => {
-  it('dispatches deleteManuscriptSection with the section id', () => {
+  it('dispatches deleteManuscriptSection and removePlotConnectionsForSection', () => {
     const { result } = renderHook(() => useSceneBoardView());
     act(() => {
       result.current.handleDeleteSection('s1');
@@ -164,6 +163,12 @@ describe('handleDeleteSection', () => {
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'project/deleteManuscriptSection',
+        payload: 's1',
+      }),
+    );
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'project/removePlotConnectionsForSection',
         payload: 's1',
       }),
     );

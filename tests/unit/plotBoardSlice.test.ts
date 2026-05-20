@@ -1,38 +1,17 @@
+// QNBS-v3: plotBoardSlice now only holds viewport/UI state (mode, zoom, pan, draw state).
+//          Connection/subplot/tension tests moved to projectSlice (they are undo-able there).
 import { describe, expect, it } from 'vitest';
 import plotBoardReducer, {
   type PlotBoardState,
   plotBoardActions,
   selectActiveMode,
-  selectAllSubplots,
-  selectConnections,
+  selectActiveSubplotFilter,
   selectIsDrawingConnection,
   selectSelectedConnectionId,
   selectSnapToGrid,
-  selectTensionOverrides,
 } from '../../features/plotBoard/plotBoardSlice';
-import type { PlotConnection, Subplot } from '../../types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function makeSubplot(overrides?: Partial<Subplot>): Subplot {
-  return {
-    id: 'sp-1',
-    name: 'Love arc',
-    color: '#a855f7',
-    sectionIds: [],
-    ...overrides,
-  };
-}
-
-function makeConnection(overrides?: Partial<PlotConnection>): PlotConnection {
-  return {
-    id: 'conn-1',
-    fromSectionId: 'scene-a',
-    toSectionId: 'scene-b',
-    type: 'cause-effect',
-    ...overrides,
-  };
-}
 
 function getInitialState(): PlotBoardState {
   return plotBoardReducer(undefined, { type: '@@INIT' });
@@ -100,109 +79,7 @@ describe('plotBoard — viewport', () => {
   });
 });
 
-// ── Subplots ──────────────────────────────────────────────────────────────
-
-describe('plotBoard — subplots', () => {
-  it('adds a subplot', () => {
-    const sp = makeSubplot();
-    const state = plotBoardReducer(getInitialState(), plotBoardActions.addSubplot(sp));
-    expect(selectAllSubplots({ plotBoard: state })).toHaveLength(1);
-    expect(selectAllSubplots({ plotBoard: state })[0]!.name).toBe('Love arc');
-  });
-
-  it('updates a subplot name', () => {
-    let state = plotBoardReducer(getInitialState(), plotBoardActions.addSubplot(makeSubplot()));
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.updateSubplot({ id: 'sp-1', changes: { name: 'Rivalry arc' } }),
-    );
-    expect(selectAllSubplots({ plotBoard: state })[0]!.name).toBe('Rivalry arc');
-  });
-
-  it('deletes a subplot and clears its filter', () => {
-    let state = plotBoardReducer(getInitialState(), plotBoardActions.addSubplot(makeSubplot()));
-    state = plotBoardReducer(state, plotBoardActions.setActiveSubplotFilter('sp-1'));
-    state = plotBoardReducer(state, plotBoardActions.deleteSubplot('sp-1'));
-    expect(selectAllSubplots({ plotBoard: state })).toHaveLength(0);
-    expect(state.activeSubplotFilter).toBeNull();
-  });
-
-  it('assigns and removes a section from a subplot', () => {
-    let state = plotBoardReducer(getInitialState(), plotBoardActions.addSubplot(makeSubplot()));
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.assignSectionToSubplot({ sectionId: 'scene-x', subplotId: 'sp-1' }),
-    );
-    expect(selectAllSubplots({ plotBoard: state })[0]!.sectionIds).toContain('scene-x');
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.removeSectionFromSubplot({ sectionId: 'scene-x', subplotId: 'sp-1' }),
-    );
-    expect(selectAllSubplots({ plotBoard: state })[0]!.sectionIds).not.toContain('scene-x');
-  });
-});
-
-// ── Connections ───────────────────────────────────────────────────────────
-
-describe('plotBoard — connections', () => {
-  it('adds a connection', () => {
-    const conn = makeConnection();
-    const state = plotBoardReducer(getInitialState(), plotBoardActions.addConnection(conn));
-    expect(selectConnections({ plotBoard: state })).toHaveLength(1);
-  });
-
-  it('prevents duplicate connections', () => {
-    let state = plotBoardReducer(
-      getInitialState(),
-      plotBoardActions.addConnection(makeConnection()),
-    );
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.addConnection(makeConnection({ id: 'conn-2' })),
-    );
-    expect(selectConnections({ plotBoard: state })).toHaveLength(1);
-  });
-
-  it('updates a connection type', () => {
-    let state = plotBoardReducer(
-      getInitialState(),
-      plotBoardActions.addConnection(makeConnection()),
-    );
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.updateConnection({ id: 'conn-1', changes: { type: 'parallel' } }),
-    );
-    expect(selectConnections({ plotBoard: state })[0]!.type).toBe('parallel');
-  });
-
-  it('removes a connection and deselects it', () => {
-    let state = plotBoardReducer(
-      getInitialState(),
-      plotBoardActions.addConnection(makeConnection()),
-    );
-    state = plotBoardReducer(state, plotBoardActions.setSelectedConnection('conn-1'));
-    state = plotBoardReducer(state, plotBoardActions.removeConnection('conn-1'));
-    expect(selectConnections({ plotBoard: state })).toHaveLength(0);
-    expect(selectSelectedConnectionId({ plotBoard: state })).toBeNull();
-  });
-
-  it('removes all connections for a deleted section', () => {
-    let state = plotBoardReducer(
-      getInitialState(),
-      plotBoardActions.addConnection(makeConnection()),
-    );
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.addConnection(
-        makeConnection({ id: 'c2', fromSectionId: 'scene-c', toSectionId: 'scene-a' }),
-      ),
-    );
-    state = plotBoardReducer(state, plotBoardActions.removeConnectionsForSection('scene-a'));
-    expect(selectConnections({ plotBoard: state })).toHaveLength(0);
-  });
-});
-
-// ── Draw mode ─────────────────────────────────────────────────────────────
+// ── Draw mode (UI state — connection creation is in projectSlice) ──────────
 
 describe('plotBoard — draw mode', () => {
   it('starts draw mode', () => {
@@ -224,75 +101,55 @@ describe('plotBoard — draw mode', () => {
     expect(state.drawFromSectionId).toBeNull();
   });
 
-  it('finishes draw and creates connection', () => {
+  it('finishDrawConnection clears draw UI state (connection created separately in projectSlice)', () => {
     let state = plotBoardReducer(
       getInitialState(),
       plotBoardActions.startDrawConnection('scene-a'),
     );
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.finishDrawConnection({
-        toSectionId: 'scene-b',
-        type: 'cause-effect',
-        newId: 'new-conn',
-      }),
-    );
-    expect(selectConnections({ plotBoard: state })).toHaveLength(1);
+    state = plotBoardReducer(state, plotBoardActions.finishDrawConnection());
     expect(selectIsDrawingConnection({ plotBoard: state })).toBe(false);
-  });
-
-  it('rejects self-loop in draw mode', () => {
-    let state = plotBoardReducer(
-      getInitialState(),
-      plotBoardActions.startDrawConnection('scene-a'),
-    );
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.finishDrawConnection({
-        toSectionId: 'scene-a',
-        type: 'cause-effect',
-        newId: 'self',
-      }),
-    );
-    expect(selectConnections({ plotBoard: state })).toHaveLength(0);
+    expect(state.drawFromSectionId).toBeNull();
   });
 });
 
-// ── Tension overrides ─────────────────────────────────────────────────────
+// ── Connection selection (UI state) ──────────────────────────────────────
 
-describe('plotBoard — tension overrides', () => {
-  it('sets a tension override clamped to 0–10', () => {
-    let state = plotBoardReducer(
+describe('plotBoard — connection selection', () => {
+  it('sets selected connection', () => {
+    const state = plotBoardReducer(
       getInitialState(),
-      plotBoardActions.setTensionOverride({ sectionId: 's1', score: 15 }),
+      plotBoardActions.setSelectedConnection('conn-1'),
     );
-    expect(selectTensionOverrides({ plotBoard: state })['s1']).toBe(10);
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.setTensionOverride({ sectionId: 's1', score: -5 }),
-    );
-    expect(selectTensionOverrides({ plotBoard: state })['s1']).toBe(0);
+    expect(selectSelectedConnectionId({ plotBoard: state })).toBe('conn-1');
   });
 
-  it('clears a single tension override', () => {
+  it('deselects connection with null', () => {
     let state = plotBoardReducer(
       getInitialState(),
-      plotBoardActions.setTensionOverride({ sectionId: 's1', score: 7 }),
+      plotBoardActions.setSelectedConnection('conn-1'),
     );
-    state = plotBoardReducer(state, plotBoardActions.clearTensionOverride('s1'));
-    expect(selectTensionOverrides({ plotBoard: state })['s1']).toBeUndefined();
+    state = plotBoardReducer(state, plotBoardActions.setSelectedConnection(null));
+    expect(selectSelectedConnectionId({ plotBoard: state })).toBeNull();
+  });
+});
+
+// ── Subplot filter (UI state) ─────────────────────────────────────────────
+
+describe('plotBoard — subplot filter', () => {
+  it('sets active subplot filter', () => {
+    const state = plotBoardReducer(
+      getInitialState(),
+      plotBoardActions.setActiveSubplotFilter('sp-1'),
+    );
+    expect(selectActiveSubplotFilter({ plotBoard: state })).toBe('sp-1');
   });
 
-  it('clears all tension overrides', () => {
+  it('clears subplot filter with null', () => {
     let state = plotBoardReducer(
       getInitialState(),
-      plotBoardActions.setTensionOverride({ sectionId: 's1', score: 7 }),
+      plotBoardActions.setActiveSubplotFilter('sp-1'),
     );
-    state = plotBoardReducer(
-      state,
-      plotBoardActions.setTensionOverride({ sectionId: 's2', score: 3 }),
-    );
-    state = plotBoardReducer(state, plotBoardActions.clearAllTensionOverrides());
-    expect(Object.keys(selectTensionOverrides({ plotBoard: state }))).toHaveLength(0);
+    state = plotBoardReducer(state, plotBoardActions.setActiveSubplotFilter(null));
+    expect(selectActiveSubplotFilter({ plotBoard: state })).toBeNull();
   });
 });
