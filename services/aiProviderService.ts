@@ -66,6 +66,43 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
   return { ...opts, signal };
 }
 
+// ─── Service-level request deduplication ─────────────────────────────────────
+// QNBS-v3: prevents duplicate cloud/local calls when components call the service
+// directly (complementary to thunk-level dedup in aiThunkUtils).
+
+const _pendingRequests = new Map<string, AbortController>();
+
+function _pendingKey(provider: AIProvider, model: AiModel, prompt: string): string {
+  return `${provider}:${model}:${prompt.slice(0, 128)}`;
+}
+
+/** @internal Only for test isolation — clears in-flight dedup state between tests. */
+export function _clearPendingRequestsForTest(): void {
+  _pendingRequests.clear();
+}
+
+function _deduplicateRequest(
+  provider: AIProvider,
+  model: AiModel,
+  prompt: string,
+): { key: string; controller: AbortController } {
+  const key = _pendingKey(provider, model, prompt);
+  const existing = _pendingRequests.get(key);
+  if (existing) {
+    existing.abort();
+    _pendingRequests.delete(key);
+  }
+  const controller = new AbortController();
+  _pendingRequests.set(key, controller);
+  return { key, controller };
+}
+
+function _cleanupPendingRequest(key: string, controller: AbortController): void {
+  if (_pendingRequests.get(key) === controller) {
+    _pendingRequests.delete(key);
+  }
+}
+
 // ─── Gemini Provider ──────────────────────────────────────────────────────────
 // Gemini streaming is handled by the existing geminiService.ts.
 // We re-export a compatible interface here.
@@ -296,24 +333,32 @@ export async function generateText(
   opts: AIRequestOptions,
   signal?: AbortSignal,
 ): Promise<string> {
-  const o = withMergedAbortSignal(opts, signal);
+  const { key, controller } = _deduplicateRequest(opts.provider, opts.model, prompt);
+  const o = withMergedAbortSignal(opts, signal ?? controller.signal);
   const chain = resolveProviderFallbackChain(o);
   let lastError: unknown;
-  for (let i = 0; i < chain.length; i++) {
-    const nextProvider = chain[i];
-    if (nextProvider === undefined) continue;
-    try {
-      return await generateTextSingleProvider(prompt, creativity, { ...o, provider: nextProvider });
-    } catch (err) {
-      lastError = err;
-      if (i === chain.length - 1) break;
-    }
-  }
   try {
-    const local = await generateLocalText(prompt);
-    return providerTextSchema.parse({ text: local.text }).text;
-  } catch {
-    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    for (let i = 0; i < chain.length; i++) {
+      const nextProvider = chain[i];
+      if (nextProvider === undefined) continue;
+      try {
+        return await generateTextSingleProvider(prompt, creativity, {
+          ...o,
+          provider: nextProvider,
+        });
+      } catch (err) {
+        lastError = err;
+        if (i === chain.length - 1) break;
+      }
+    }
+    try {
+      const local = await generateLocalText(prompt);
+      return providerTextSchema.parse({ text: local.text }).text;
+    } catch {
+      throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    }
+  } finally {
+    _cleanupPendingRequest(key, controller);
   }
 }
 
@@ -376,23 +421,34 @@ export async function streamText(
   callbacks: AIStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const o = withMergedAbortSignal(opts, signal);
+  const { key, controller } = _deduplicateRequest(opts.provider, opts.model, prompt);
+  const o = withMergedAbortSignal(opts, signal ?? controller.signal);
   const chain = resolveProviderFallbackChain(o);
   let lastError: unknown;
-  for (let i = 0; i < chain.length; i++) {
-    const nextProvider = chain[i];
-    if (nextProvider === undefined) continue;
-    try {
-      await streamProvider(prompt, creativity, { ...o, provider: nextProvider }, callbacks, signal);
-      return;
-    } catch (error) {
-      lastError = error;
-      if (i === chain.length - 1) {
-        throw error;
+  try {
+    for (let i = 0; i < chain.length; i++) {
+      const nextProvider = chain[i];
+      if (nextProvider === undefined) continue;
+      try {
+        await streamProvider(
+          prompt,
+          creativity,
+          { ...o, provider: nextProvider },
+          callbacks,
+          signal,
+        );
+        return;
+      } catch (error) {
+        lastError = error;
+        if (i === chain.length - 1) {
+          throw error;
+        }
       }
     }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  } finally {
+    _cleanupPendingRequest(key, controller);
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 export async function streamAiHelpResponse(

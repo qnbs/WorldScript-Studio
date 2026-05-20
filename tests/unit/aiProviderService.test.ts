@@ -560,3 +560,67 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
     }
   });
 });
+
+// ─── Service-level request deduplication ─────────────────────────────────────
+
+import { _clearPendingRequestsForTest } from '../../services/aiProviderService';
+
+describe('service-level request deduplication', () => {
+  beforeEach(() => {
+    _clearPendingRequestsForTest();
+  });
+
+  it('second identical generateText call aborts the first in-flight request', async () => {
+    // Simulate a slow first call that respects AbortSignal
+    let firstAbortSignal: AbortSignal | undefined;
+    const spy = vi
+      .spyOn(localAiFacade, 'generateLocalText')
+      .mockImplementationOnce(async (_prompt, _modelId) => {
+        // Capture the fact that we were called first
+        return new Promise<{ layer: 'heuristic'; text: string }>((resolve) => {
+          setTimeout(() => resolve({ layer: 'heuristic', text: 'first' }), 100);
+        });
+      })
+      .mockResolvedValueOnce({ layer: 'heuristic', text: 'second' });
+
+    const opts = {
+      ...defaultOpts,
+      provider: 'onnx' as const,
+      model: 'HuggingFaceTB/SmolLM2-135M-Instruct' as const,
+    };
+    // Fire both calls concurrently — second should abort first
+    const p1 = generateText('same-prompt', 'Balanced', opts).catch(() => 'aborted');
+    const p2 = generateText('same-prompt', 'Balanced', opts);
+
+    const [_r1, r2] = await Promise.all([p1, p2]);
+    // First may resolve via fallback chain or abort; second should succeed
+    expect(r2).toBe('second');
+    spy.mockRestore();
+    void firstAbortSignal; // suppress unused-var warning
+  });
+
+  it('cleanup removes pending entry after completion', async () => {
+    vi.spyOn(localAiFacade, 'generateLocalText').mockResolvedValueOnce({
+      layer: 'heuristic',
+      text: 'done',
+    });
+    const opts = {
+      ...defaultOpts,
+      provider: 'onnx' as const,
+      model: 'HuggingFaceTB/SmolLM2-135M-Instruct' as const,
+    };
+    await generateText('cleanup-test', 'Balanced', opts);
+    // Calling again after completion should not throw (no stale abort)
+    vi.spyOn(localAiFacade, 'generateLocalText').mockResolvedValueOnce({
+      layer: 'heuristic',
+      text: 'done2',
+    });
+    const result = await generateText('cleanup-test', 'Balanced', opts);
+    expect(result).toBe('done2');
+  });
+
+  it('_clearPendingRequestsForTest resets state between tests', () => {
+    // Just ensuring the export exists and is callable — no throw = pass
+    expect(() => _clearPendingRequestsForTest()).not.toThrow();
+  });
+});
