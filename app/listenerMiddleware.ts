@@ -30,11 +30,12 @@ listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
     const currentRoot = currentState as RootState;
     const prevRoot = previousState as RootState;
-    const projectChanged = currentRoot.project.present !== prevRoot.project.present;
+    // QNBS-v3: optional chaining guards test stores that omit these slices
+    const projectChanged = currentRoot.project?.present !== prevRoot.project?.present;
     const vcChanged =
-      currentRoot.versionControl.snapshots !== prevRoot.versionControl.snapshots ||
-      currentRoot.versionControl.branches !== prevRoot.versionControl.branches ||
-      currentRoot.versionControl.currentBranchId !== prevRoot.versionControl.currentBranchId;
+      currentRoot.versionControl?.snapshots !== prevRoot.versionControl?.snapshots ||
+      currentRoot.versionControl?.branches !== prevRoot.versionControl?.branches ||
+      currentRoot.versionControl?.currentBranchId !== prevRoot.versionControl?.currentBranchId;
     return projectChanged || vcChanged;
   },
   effect: async (_action, listenerApi) => {
@@ -172,8 +173,8 @@ listenerMiddleware.startListening({
     const currentRoot = currentState as RootState;
     const prevRoot = previousState as RootState;
 
-    const currentManuscript = currentRoot.project.present?.data?.manuscript;
-    const previousManuscript = prevRoot.project.present?.data?.manuscript;
+    const currentManuscript = currentRoot.project?.present?.data?.manuscript;
+    const previousManuscript = prevRoot.project?.present?.data?.manuscript;
 
     return currentManuscript !== previousManuscript;
   },
@@ -272,7 +273,8 @@ listenerMiddleware.startListening({
     const curr = currentState as RootState;
     const prev = previousState as RootState;
     return (
-      curr.featureFlags.enableDuckDbAnalytics &&
+      // QNBS-v3: optional chaining — featureFlags absent in partial test stores
+      curr.featureFlags?.enableDuckDbAnalytics === true &&
       curr.analytics?.duckDbStatus === 'ready' &&
       curr.analytics?.migrationStatus === 'idle' &&
       prev.analytics?.duckDbStatus !== 'ready'
@@ -303,7 +305,7 @@ listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
     const curr = currentState as RootState;
     const prev = previousState as RootState;
-    return curr.project.present?.data?.manuscript !== prev.project.present?.data?.manuscript;
+    return curr.project?.present?.data?.manuscript !== prev.project?.present?.data?.manuscript;
   },
   effect: async (_action, listenerApi) => {
     listenerApi.cancelActiveListeners();
