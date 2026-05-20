@@ -12,8 +12,8 @@
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1590_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1590 keys">
-  <img src="https://img.shields.io/badge/Tests-1966%2B_%2F_174%2B_files-22C55E" alt="1966+ tests / 174+ files">
-  <img src="https://img.shields.io/badge/Coverage-63.88%25_Lines_%7C_48.87%25_Branch-brightgreen" alt="Coverage">
+  <img src="https://img.shields.io/badge/Tests-2024_%2F_178_files-22C55E" alt="2024 tests / 178 files">
+  <img src="https://img.shields.io/badge/Coverage-65.91%25_Lines_%7C_50.59%25_Branch-brightgreen" alt="Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
@@ -339,7 +339,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
 | **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 1 590 keys × 5 locales; EN fallback; `localStorage` persistence      |
-| **Testing**          | Vitest 4.x (1 966+ tests / 174+ files) + Playwright E2E  | Unit/integration + cross-browser E2E; Stryker mutation gate          |
+| **Testing**          | Vitest 4.x (2 024 tests / 178 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation gate          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -373,7 +373,7 @@ StoryCraft-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (1 966+ tests, 174+ files)
+│   ├── unit/             # Vitest unit tests (2 024 tests, 178 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -521,9 +521,9 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
 **Current test metrics (2026-05-20, v1.6.2):**
-- **1 966+ unit tests** across **174+ test files** — all passing
-- Coverage (v1.6.0 baseline): **63.88 % lines · 48.87 % branches · 54.35 % functions**
-- Vitest thresholds: lines ≥ 63 · statements ≥ 62 · branches ≥ 48 · functions ≥ 54
+- **2 024 unit tests** across **178 test files** — all passing
+- Coverage: **65.91 % lines · 50.59 % branches · 56.74 % functions · 64.25 % statements**
+- Vitest thresholds: lines ≥ 63 · statements ≥ 62 · branches ≥ 48 · functions ≥ 54 — all green
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

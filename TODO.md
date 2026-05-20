@@ -18,7 +18,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ✅ **Progress Tracker** — `progressTrackerSlice`, `ProgressTrackerView`, session timer, streak, velocity chart, heatmap
 - ✅ **Mobile Polish** — `useFoldableLayout`, `deepLinkService`, `HAPTIC_PATTERNS` named library
 - ✅ **i18n** — 1590 keys × 5 locales
-- ✅ **Quality gate** — lint ✅ typecheck ✅ 1966 tests / 174 files (0 failures) ✅
+- ✅ **Quality gate** — lint ✅ typecheck ✅ 2024 tests / 178 files (0 failures) ✅ coverage 65.91% lines ✅
 
 ### v2.0 Open Items
 
@@ -37,7 +37,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ### Hoch (🟡)
 
-- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — Phase 5/6 (gemessen 2026-05-19, v1.6.0: **63.88 % Lines · 48.87 % Branches · 54.35 % Functions** — 1 966 Tests / 174 Dateien; Schwellen 63/62/48/54 alle grün); nächster Schritt: Branches Richtung 55 % (große Komponenten, aiProviderService-Streaming)
+- 🔄 Unit-Test-Coverage Zielkorridor **50–70 %** — Phase 5/6 (gemessen 2026-05-20, v1.6.2: **65.91 % Lines · 50.59 % Branches · 56.74 % Functions · 64.25 % Statements** — 2 024 Tests / 178 Dateien; Schwellen 63/62/48/54 alle grün); nächster Schritt: Branches Richtung 55 % (große Komponenten, aiProviderService-Streaming)
 - ✅ **E2E mobile Selectors (2026-05-17)** — `clickNavItem()` Helper + ARIA-Tabs in WriterViewUI + `data-testid`-Anker in VersionControlPanel/ExportView; alle 4 Spec-Dateien auf 2026 Golden Hierarchy umgestellt (CI-Gate wieder grün)
 - ✅ **CI-Hardening (2026-05-17)** — Stryker `break: 30` erzwungen, Lighthouse Performance→error, OSV-Scanner in Security-Job, Concurrency-Fix (cancel-in-progress nur PRs), Artifact-Retention vereinheitlicht, JUnit-E2E-Upload
 - ✅ **WebLLM Modell-Selektor** — `WEBLLM_SUPPORTED_MODELS` (4 MLC-Checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress`-Parameter, Settings-UI mit Dropdown + Fortschrittsanzeige (WCAG 2.2 `role="progressbar"`, `useRef`-Mounted-Guard) — [`packages/ai-core`](packages/ai-core), [`services/localAiFacade.ts`](services/localAiFacade.ts), [`components/settings/AiSections.tsx`](components/settings/AiSections.tsx)

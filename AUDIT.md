@@ -65,7 +65,7 @@ Delivered: WorkerBus v2 (priority preemption, backpressure, transferables), GPU 
 
 **biome.json:** Schema version `2.4.12 → 2.4.15`.
 
-**Quality gate at v1.6.2:** lint ✅ typecheck ✅ i18n 1590 keys × 5 locales ✅ **1 966+ tests / 174+ files — 0 failures** ✅ build ✅ bundle ≤ 7000 KB ✅
+**Quality gate at v1.6.2:** lint ✅ typecheck ✅ i18n 1590 keys × 5 locales ✅ **2 024 tests / 178 files — 0 failures** ✅ coverage 65.91% lines / 50.59% branches / 56.74% functions ✅ build ✅ E2E ✅ Lighthouse ✅ bundle ≤ 7000 KB ✅
 
 ---
 

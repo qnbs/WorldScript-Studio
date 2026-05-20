@@ -131,6 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/unit/projectSlice.test.ts`: 15 new tests covering plot connections (incl. undo, dedup, self-loop guard), subplots (CRUD, section-assign), and tension overrides.
 - `tests/unit/hooks/useSceneBoardView.test.ts`: `handleDeleteSection` test extended to verify `removePlotConnectionsForSection` dispatch; `plotBoard` mock state simplified (no connections/subplots/tensionOverrides).
 - `tests/unit/SceneBoardView.test.tsx`, `SubplotPanel.test.tsx`, `ConnectionLayer.test.tsx`, `TensionCurvePanel.test.tsx`: mock state updated to new plotBoard shape.
+- `tests/unit/thunkUtils.test.ts`: default model assertion updated `gemini-2.5-flash → gemini-3.5-flash` (settingsSlice default changed in v1.6.1).
+- **Total: 2 024 tests / 178 files — 0 failures. Coverage: 65.91% lines / 50.59% branches / 56.74% functions / 64.25% statements.**
 
 ## [1.6.1] — 2026-05-19
 
