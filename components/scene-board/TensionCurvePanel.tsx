@@ -3,7 +3,8 @@
 import type { FC, PointerEvent } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../../app/hooks';
-import { plotBoardActions, selectTensionOverrides } from '../../features/plotBoard/plotBoardSlice';
+import { selectPlotTensionOverrides } from '../../features/project/projectSelectors';
+import { projectActions } from '../../features/project/projectSlice';
 import { computeTensionCurve } from '../../services/plotBoardService';
 import type { StorySection } from '../../types';
 
@@ -164,7 +165,7 @@ interface TensionCurvePanelProps {
 
 export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) => {
   const dispatch = useAppDispatch();
-  const tensionOverrides = useAppSelectorShallow(selectTensionOverrides);
+  const tensionOverrides = useAppSelectorShallow(selectPlotTensionOverrides);
   const [collapsed, setCollapsed] = useState(true);
   const [activeBeatSheet, setActiveBeatSheet] = useState<BeatSheetKey>('three-act');
   const [showBeats, setShowBeats] = useState(false);
@@ -173,13 +174,13 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
 
   const handleDragScore = useCallback(
     (sectionId: string, score: number) => {
-      dispatch(plotBoardActions.setTensionOverride({ sectionId, score }));
+      dispatch(projectActions.setPlotTensionOverride({ sectionId, score }));
     },
     [dispatch],
   );
 
   const handleClearOverrides = useCallback(() => {
-    dispatch(plotBoardActions.clearAllTensionOverrides());
+    dispatch(projectActions.clearAllPlotTensionOverrides());
   }, [dispatch]);
 
   // Compute polyline coordinates

@@ -6,14 +6,25 @@ import type { StorySection } from '../../types';
 
 const mockDispatch = vi.fn();
 
+// QNBS-v3: tensionOverrides moved to projectSlice (undo-able); plotBoard is viewport-only.
 const makeMockState = (overrides?: { tensionOverrides?: Record<string, number> }) => ({
+  project: {
+    present: {
+      data: {
+        manuscript: [],
+        plotTensionOverrides: overrides?.tensionOverrides ?? {},
+        characters: { ids: [], entities: {} },
+        worlds: { ids: [], entities: {} },
+        outline: [],
+        logline: '',
+        title: '',
+      },
+    },
+  },
   plotBoard: {
-    tensionOverrides: overrides?.tensionOverrides ?? {},
-    connections: [],
     selectedConnectionId: null,
     isDrawingConnection: false,
     drawFromSectionId: null,
-    subplots: { ids: [], entities: {} },
     activeSubplotFilter: null,
     activeMode: 'canvas',
     zoom: 1,
@@ -124,7 +135,7 @@ describe('TensionCurvePanel', () => {
     const resetBtn = screen.getByText('sceneboard.tension.clearOverrides');
     fireEvent.click(resetBtn);
     expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: expect.stringContaining('clearAllTensionOverrides') }),
+      expect.objectContaining({ type: 'project/clearAllPlotTensionOverrides' }),
     );
   });
 

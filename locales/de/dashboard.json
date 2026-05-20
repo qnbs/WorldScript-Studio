@@ -1,5 +1,5 @@
 {
-  "dashboard.authorInsights.readability": "Lesbarkeit (Flesch-ähnlich, EN-Heuristik)",
+  "dashboard.authorInsights.readability": "Lesbarkeit (Flesch/Amstad, DE-Heuristik)",
   "dashboard.authorInsights.readabilityFootnote": "Höhere Werte wirken oft leichter lesbar; Genre bewusst steuern.",
   "dashboard.authorInsights.readabilityNeedMore": "Noch etwas schreiben — stabiler Wert ab ca. 40+ Wörtern.",
   "dashboard.authorInsights.timeline": "Szenen-Zeitleiste",

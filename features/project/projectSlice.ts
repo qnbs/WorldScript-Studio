@@ -8,7 +8,10 @@ import type {
   CompileProfile,
   OutlineSection,
   PersistedVersionControlState,
+  PlotConnection,
+  PlotConnectionType,
   StorySection,
+  Subplot,
   World,
   WritingGoal,
   WritingSession,
@@ -80,6 +83,10 @@ export interface ProjectData {
   compileProfile?: CompileProfile;
   /** Saved with project so version branches/snapshots survive reload (Embedded VC). */
   persistedVersionControl?: PersistedVersionControlState;
+  // QNBS-v3: Moved from plotBoardSlice so connections/subplots/tension are undo-able via redux-undo.
+  plotConnections?: PlotConnection[];
+  plotSubplots?: Subplot[];
+  plotTensionOverrides?: Record<string, number>;
 }
 
 // --- Initial State ---
@@ -300,6 +307,112 @@ const projectSlice = createSlice({
         ...state.data.sceneBoardLayout,
         ...action.payload,
       };
+    },
+    // --- Plot Connections (undo-able story content) ---
+    addPlotConnection: (state, action: PayloadAction<PlotConnection>) => {
+      if (!state.data.plotConnections) state.data.plotConnections = [];
+      const exists = state.data.plotConnections.some(
+        (c) =>
+          c.fromSectionId === action.payload.fromSectionId &&
+          c.toSectionId === action.payload.toSectionId,
+      );
+      if (!exists) state.data.plotConnections.push(action.payload);
+    },
+    updatePlotConnection: (
+      state,
+      action: PayloadAction<{ id: string; changes: Partial<Omit<PlotConnection, 'id'>> }>,
+    ) => {
+      const conn = state.data.plotConnections?.find((c) => c.id === action.payload.id);
+      if (conn) Object.assign(conn, action.payload.changes);
+    },
+    removePlotConnection: (state, action: PayloadAction<string>) => {
+      if (!state.data.plotConnections) return;
+      state.data.plotConnections = state.data.plotConnections.filter(
+        (c) => c.id !== action.payload,
+      );
+    },
+    removePlotConnectionsForSection: (state, action: PayloadAction<string>) => {
+      if (!state.data.plotConnections) return;
+      state.data.plotConnections = state.data.plotConnections.filter(
+        (c) => c.fromSectionId !== action.payload && c.toSectionId !== action.payload,
+      );
+    },
+    // --- Plot Subplots (undo-able story content) ---
+    addPlotSubplot: (state, action: PayloadAction<Subplot>) => {
+      if (!state.data.plotSubplots) state.data.plotSubplots = [];
+      state.data.plotSubplots.push(action.payload);
+    },
+    updatePlotSubplot: (
+      state,
+      action: PayloadAction<{ id: string; changes: Partial<Subplot> }>,
+    ) => {
+      const subplot = state.data.plotSubplots?.find((s) => s.id === action.payload.id);
+      if (subplot) Object.assign(subplot, action.payload.changes);
+    },
+    deletePlotSubplot: (state, action: PayloadAction<string>) => {
+      if (!state.data.plotSubplots) return;
+      state.data.plotSubplots = state.data.plotSubplots.filter((s) => s.id !== action.payload);
+      // Remove subplot reference from connections
+      if (state.data.plotConnections) {
+        for (const conn of state.data.plotConnections) {
+          if (conn.subplotId === action.payload) delete conn.subplotId;
+        }
+      }
+    },
+    assignSectionToPlotSubplot: (
+      state,
+      action: PayloadAction<{ sectionId: string; subplotId: string }>,
+    ) => {
+      const subplot = state.data.plotSubplots?.find((s) => s.id === action.payload.subplotId);
+      if (subplot && !subplot.sectionIds.includes(action.payload.sectionId)) {
+        subplot.sectionIds.push(action.payload.sectionId);
+      }
+    },
+    removeSectionFromPlotSubplot: (
+      state,
+      action: PayloadAction<{ sectionId: string; subplotId: string }>,
+    ) => {
+      const subplot = state.data.plotSubplots?.find((s) => s.id === action.payload.subplotId);
+      if (subplot) {
+        subplot.sectionIds = subplot.sectionIds.filter((id) => id !== action.payload.sectionId);
+      }
+    },
+    // --- Plot Tension Overrides (undo-able story content) ---
+    setPlotTensionOverride: (
+      state,
+      action: PayloadAction<{ sectionId: string; score: number }>,
+    ) => {
+      if (!state.data.plotTensionOverrides) state.data.plotTensionOverrides = {};
+      state.data.plotTensionOverrides[action.payload.sectionId] = Math.min(
+        10,
+        Math.max(0, action.payload.score),
+      );
+    },
+    clearPlotTensionOverride: (state, action: PayloadAction<string>) => {
+      if (state.data.plotTensionOverrides) delete state.data.plotTensionOverrides[action.payload];
+    },
+    clearAllPlotTensionOverrides: (state) => {
+      state.data.plotTensionOverrides = {};
+    },
+    // QNBS-v3: Finish draw creates connection in projectSlice so it's undo-able.
+    finishPlotDrawConnection: (
+      state,
+      action: PayloadAction<{
+        fromSectionId: string;
+        toSectionId: string;
+        type: PlotConnectionType;
+        newId: string;
+      }>,
+    ) => {
+      const { fromSectionId, toSectionId, type, newId } = action.payload;
+      if (fromSectionId === toSectionId) return; // no self-loops
+      if (!state.data.plotConnections) state.data.plotConnections = [];
+      const exists = state.data.plotConnections.some(
+        (c) => c.fromSectionId === fromSectionId && c.toSectionId === toSectionId,
+      );
+      if (!exists) {
+        state.data.plotConnections.push({ id: newId, fromSectionId, toSectionId, type });
+      }
     },
     // --- Writing Analytics ---
     addWritingSession: (state, action: PayloadAction<WritingSession>) => {

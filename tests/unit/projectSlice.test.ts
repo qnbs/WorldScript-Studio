@@ -234,6 +234,254 @@ describe('projectSlice', () => {
     });
   });
 
+  // QNBS-v3: Plot-board content (connections/subplots/tension) moved here so they are undo-able.
+  describe('plot connections', () => {
+    it('adds a plot connection', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotConnection({
+          id: 'c1',
+          fromSectionId: 'sec-1',
+          toSectionId: 'sec-2',
+          type: 'cause-effect',
+        }),
+      );
+      expect(store.getState().project.present.data.plotConnections).toHaveLength(1);
+    });
+
+    it('prevents duplicate connections', () => {
+      const store = createTestStore();
+      const conn = {
+        id: 'c1',
+        fromSectionId: 's1',
+        toSectionId: 's2',
+        type: 'cause-effect' as const,
+      };
+      store.dispatch(projectActions.addPlotConnection(conn));
+      store.dispatch(projectActions.addPlotConnection({ ...conn, id: 'c2' }));
+      expect(store.getState().project.present.data.plotConnections).toHaveLength(1);
+    });
+
+    it('updates a connection type', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotConnection({
+          id: 'c1',
+          fromSectionId: 's1',
+          toSectionId: 's2',
+          type: 'cause-effect',
+        }),
+      );
+      store.dispatch(
+        projectActions.updatePlotConnection({ id: 'c1', changes: { type: 'parallel' } }),
+      );
+      expect(store.getState().project.present.data.plotConnections?.[0]?.type).toBe('parallel');
+    });
+
+    it('removes a connection', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotConnection({
+          id: 'c1',
+          fromSectionId: 's1',
+          toSectionId: 's2',
+          type: 'cause-effect',
+        }),
+      );
+      store.dispatch(projectActions.removePlotConnection('c1'));
+      expect(store.getState().project.present.data.plotConnections).toHaveLength(0);
+    });
+
+    it('removes connections for a deleted section', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotConnection({
+          id: 'c1',
+          fromSectionId: 'sec-1',
+          toSectionId: 's2',
+          type: 'cause-effect',
+        }),
+      );
+      store.dispatch(
+        projectActions.addPlotConnection({
+          id: 'c2',
+          fromSectionId: 'other',
+          toSectionId: 'sec-1',
+          type: 'parallel',
+        }),
+      );
+      store.dispatch(projectActions.removePlotConnectionsForSection('sec-1'));
+      expect(store.getState().project.present.data.plotConnections).toHaveLength(0);
+    });
+
+    it('finishPlotDrawConnection creates connection and rejects self-loops', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.finishPlotDrawConnection({
+          fromSectionId: 's1',
+          toSectionId: 's1',
+          type: 'cause-effect',
+          newId: 'self',
+        }),
+      );
+      expect(store.getState().project.present.data.plotConnections ?? []).toHaveLength(0);
+      store.dispatch(
+        projectActions.finishPlotDrawConnection({
+          fromSectionId: 's1',
+          toSectionId: 's2',
+          type: 'cause-effect',
+          newId: 'c1',
+        }),
+      );
+      expect(store.getState().project.present.data.plotConnections).toHaveLength(1);
+    });
+
+    it('connections are undo-able', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotConnection({
+          id: 'c1',
+          fromSectionId: 's1',
+          toSectionId: 's2',
+          type: 'cause-effect',
+        }),
+      );
+      expect(store.getState().project.present.data.plotConnections).toHaveLength(1);
+      store.dispatch({ type: '@@redux-undo/UNDO' } as AnyAction);
+      expect(store.getState().project.present.data.plotConnections ?? []).toHaveLength(0);
+    });
+  });
+
+  describe('plot subplots', () => {
+    it('adds a subplot', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotSubplot({
+          id: 'sp-1',
+          name: 'Love arc',
+          color: '#a855f7',
+          sectionIds: [],
+        }),
+      );
+      expect(store.getState().project.present.data.plotSubplots).toHaveLength(1);
+    });
+
+    it('updates a subplot name', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotSubplot({
+          id: 'sp-1',
+          name: 'Love arc',
+          color: '#a855f7',
+          sectionIds: [],
+        }),
+      );
+      store.dispatch(
+        projectActions.updatePlotSubplot({ id: 'sp-1', changes: { name: 'Rivalry arc' } }),
+      );
+      expect(store.getState().project.present.data.plotSubplots?.[0]?.name).toBe('Rivalry arc');
+    });
+
+    it('deletes a subplot and removes subplot refs from connections', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotSubplot({
+          id: 'sp-1',
+          name: 'Love arc',
+          color: '#a855f7',
+          sectionIds: [],
+        }),
+      );
+      store.dispatch(
+        projectActions.addPlotConnection({
+          id: 'c1',
+          fromSectionId: 's1',
+          toSectionId: 's2',
+          type: 'subplot',
+          subplotId: 'sp-1',
+        }),
+      );
+      store.dispatch(projectActions.deletePlotSubplot('sp-1'));
+      expect(store.getState().project.present.data.plotSubplots).toHaveLength(0);
+      // Connection still exists but subplotId removed
+      expect(store.getState().project.present.data.plotConnections?.[0]?.subplotId).toBeUndefined();
+    });
+
+    it('assigns and removes a section from a subplot', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotSubplot({
+          id: 'sp-1',
+          name: 'Love arc',
+          color: '#a855f7',
+          sectionIds: [],
+        }),
+      );
+      store.dispatch(
+        projectActions.assignSectionToPlotSubplot({ sectionId: 'scene-x', subplotId: 'sp-1' }),
+      );
+      expect(store.getState().project.present.data.plotSubplots?.[0]?.sectionIds).toContain(
+        'scene-x',
+      );
+      store.dispatch(
+        projectActions.removeSectionFromPlotSubplot({ sectionId: 'scene-x', subplotId: 'sp-1' }),
+      );
+      expect(store.getState().project.present.data.plotSubplots?.[0]?.sectionIds).not.toContain(
+        'scene-x',
+      );
+    });
+
+    it('subplots are undo-able', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addPlotSubplot({
+          id: 'sp-1',
+          name: 'Love arc',
+          color: '#a855f7',
+          sectionIds: [],
+        }),
+      );
+      expect(store.getState().project.present.data.plotSubplots).toHaveLength(1);
+      store.dispatch({ type: '@@redux-undo/UNDO' } as AnyAction);
+      expect(store.getState().project.present.data.plotSubplots ?? []).toHaveLength(0);
+    });
+  });
+
+  describe('plot tension overrides', () => {
+    it('sets tension override clamped to 0–10', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.setPlotTensionOverride({ sectionId: 's1', score: 15 }));
+      expect(store.getState().project.present.data.plotTensionOverrides?.['s1']).toBe(10);
+      store.dispatch(projectActions.setPlotTensionOverride({ sectionId: 's1', score: -3 }));
+      expect(store.getState().project.present.data.plotTensionOverrides?.['s1']).toBe(0);
+    });
+
+    it('clears a single tension override', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.setPlotTensionOverride({ sectionId: 's1', score: 7 }));
+      store.dispatch(projectActions.clearPlotTensionOverride('s1'));
+      expect(store.getState().project.present.data.plotTensionOverrides?.['s1']).toBeUndefined();
+    });
+
+    it('clears all tension overrides', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.setPlotTensionOverride({ sectionId: 's1', score: 7 }));
+      store.dispatch(projectActions.setPlotTensionOverride({ sectionId: 's2', score: 3 }));
+      store.dispatch(projectActions.clearAllPlotTensionOverrides());
+      expect(
+        Object.keys(store.getState().project.present.data.plotTensionOverrides ?? {}),
+      ).toHaveLength(0);
+    });
+
+    it('tension overrides are undo-able', () => {
+      const store = createTestStore();
+      store.dispatch(projectActions.setPlotTensionOverride({ sectionId: 's1', score: 8 }));
+      expect(store.getState().project.present.data.plotTensionOverrides?.['s1']).toBe(8);
+      store.dispatch({ type: '@@redux-undo/UNDO' } as AnyAction);
+      expect(store.getState().project.present.data.plotTensionOverrides?.['s1']).toBeUndefined();
+    });
+  });
+
   describe('undo/redo', () => {
     it('should support undo/redo for synchronous actions', () => {
       const store = createTestStore();

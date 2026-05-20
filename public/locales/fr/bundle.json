@@ -499,7 +499,7 @@
   "portal.welcome.subtitle": "Votre partenaire créatif assisté par IA pour écrire.",
   "portal.welcome.title": "Bienvenue dans StoryCraft Studio",
   "portal.welcome.tryDemo": "Charger la démo",
-  "dashboard.authorInsights.readability": "Lisibilité (style Flesch, heuristique EN)",
+  "dashboard.authorInsights.readability": "Lisibilité (Kandel-Moles, heuristique FR)",
   "dashboard.authorInsights.readabilityFootnote": "Des scores plus élevés lisent souvent plus facilement ; adaptez selon le genre.",
   "dashboard.authorInsights.readabilityNeedMore": "Écrivez encore un peu — score stable vers 40+ mots.",
   "dashboard.authorInsights.timeline": "Contrôles chronologie des scènes",

@@ -11,9 +11,9 @@
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1440_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1440 keys">
-  <img src="https://img.shields.io/badge/Tests-1641_%2F_150_files-22C55E" alt="1641 tests / 150 files">
-  <img src="https://img.shields.io/badge/Coverage-62.86%25_Stmts_%7C_49.06%25_Branch-brightgreen" alt="Coverage">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1590_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1590 keys">
+  <img src="https://img.shields.io/badge/Tests-1966%2B_%2F_174%2B_files-22C55E" alt="1966+ tests / 174+ files">
+  <img src="https://img.shields.io/badge/Coverage-63.88%25_Lines_%7C_48.87%25_Branch-brightgreen" alt="Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
@@ -338,8 +338,8 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 1 440 keys × 5 locales; EN fallback; `localStorage` persistence      |
-| **Testing**          | Vitest 3 (1 641 tests / 150 files) + Playwright E2E      | Unit/integration + cross-browser E2E; Stryker mutation gate          |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 1 590 keys × 5 locales; EN fallback; `localStorage` persistence      |
+| **Testing**          | Vitest 4.x (1 966+ tests / 174+ files) + Playwright E2E  | Unit/integration + cross-browser E2E; Stryker mutation gate          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -373,7 +373,7 @@ StoryCraft-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (1 641 tests, 150 files)
+│   ├── unit/             # Vitest unit tests (1 966+ tests, 174+ files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -520,12 +520,14 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-05-18):**
-- **1 641 unit tests** across **150 test files** — all passing
-- Coverage: **62.86 % statements · 49.06 % branches · 54.10 % functions · 64.68 % lines**
-- Vitest thresholds: statements ≥ 60 · branches ≥ 46 · functions ≥ 52 · lines ≥ 62
+**Current test metrics (2026-05-20, v1.6.2):**
+- **1 966+ unit tests** across **174+ test files** — all passing
+- Coverage (v1.6.0 baseline): **63.88 % lines · 48.87 % branches · 54.35 % functions**
+- Vitest thresholds: lines ≥ 63 · statements ≥ 62 · branches ≥ 48 · functions ≥ 54
 
-**Low-resource / laptop workflow:** Run **`pnpm run typecheck`**, **`pnpm run lint`**, and **`pnpm run i18n:check`** before pushing. **`pnpm run test:run`** exercises Vitest only — lighter than Playwright. Full E2E (`CI=true pnpm run test:e2e`) is intentionally heavy; rely on the `e2e` job in CI unless you are debugging a specific spec.
+**CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
+
+**Low-resource / laptop workflow:** **`pnpm run test:run`** exercises Vitest without `--coverage` — fast and memory-light. Full coverage (`pnpm exec vitest run --coverage`) is intentionally RAM-heavy; rely on the CI `quality` job unless you are debugging a specific threshold.
 
 **Quality-gate parity (matches CI `quality` job exactly):**
 

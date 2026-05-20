@@ -1,18 +1,33 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Subplot } from '../../types';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 
 const mockDispatch = vi.fn();
 
+// QNBS-v3: subplots moved to projectSlice (undo-able); activeSubplotFilter stays in plotBoard.
 const makeMockState = (overrides?: {
-  subplots?: { ids: string[]; entities: Record<string, unknown> };
+  plotSubplots?: Subplot[];
   activeSubplotFilter?: string | null;
 }) => ({
+  project: {
+    present: {
+      data: {
+        manuscript: [],
+        plotSubplots: overrides?.plotSubplots ?? [],
+        plotConnections: [],
+        plotTensionOverrides: {},
+        characters: { ids: [], entities: {} },
+        worlds: { ids: [], entities: {} },
+        outline: [],
+        logline: '',
+        title: '',
+      },
+    },
+  },
   plotBoard: {
-    subplots: overrides?.subplots ?? { ids: [], entities: {} },
     activeSubplotFilter: overrides?.activeSubplotFilter ?? null,
-    connections: [],
     selectedConnectionId: null,
     isDrawingConnection: false,
     drawFromSectionId: null,
@@ -21,7 +36,6 @@ const makeMockState = (overrides?: {
     panX: 0,
     panY: 0,
     snapToGrid: false,
-    tensionOverrides: {},
   },
 });
 
@@ -38,6 +52,8 @@ const mockSections = [
   { id: 's1', title: 'Opening', content: '', color: '#3b82f6', status: 'draft' as const },
   { id: 's2', title: 'Rising Action', content: '', color: '#8b5cf6', status: 'outline' as const },
 ];
+
+const mockSubplot: Subplot = { id: 'sp-1', name: 'Love arc', color: '#a855f7', sectionIds: [] };
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -60,16 +76,7 @@ describe('SubplotPanel', () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
     // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
     vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
-      selector(
-        makeMockState({
-          subplots: {
-            ids: ['sp-1'],
-            entities: {
-              'sp-1': { id: 'sp-1', name: 'Love arc', color: '#a855f7', sectionIds: [] },
-            },
-          },
-        }),
-      ),
+      selector(makeMockState({ plotSubplots: [mockSubplot] })),
     );
 
     render(<SubplotPanel sections={mockSections} t={mockT} />);
@@ -81,15 +88,14 @@ describe('SubplotPanel', () => {
     expect(screen.getByText('sceneboard.subplot.addSubplot')).toBeTruthy();
   });
 
-  it('dispatches addSubplot when submitted', () => {
+  it('dispatches addPlotSubplot when submitted', () => {
     render(<SubplotPanel sections={mockSections} t={mockT} />);
     fireEvent.click(screen.getByText('sceneboard.subplot.addSubplot'));
-    // Enter a name
     const input = screen.getByPlaceholderText('sceneboard.subplot.namePlaceholder');
     fireEvent.change(input, { target: { value: 'Mystery arc' } });
     fireEvent.click(screen.getByText('common.add'));
     expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: expect.stringContaining('addSubplot') }),
+      expect.objectContaining({ type: 'project/addPlotSubplot' }),
     );
   });
 
@@ -97,48 +103,28 @@ describe('SubplotPanel', () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
     // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
     vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
-      selector(
-        makeMockState({
-          subplots: {
-            ids: ['sp-1'],
-            entities: {
-              'sp-1': { id: 'sp-1', name: 'Love arc', color: '#a855f7', sectionIds: [] },
-            },
-          },
-        }),
-      ),
+      selector(makeMockState({ plotSubplots: [mockSubplot] })),
     );
 
     render(<SubplotPanel sections={mockSections} t={mockT} />);
-    // Clicking the subplot name toggles the filter
     fireEvent.click(screen.getByText('Love arc'));
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: expect.stringContaining('setActiveSubplotFilter') }),
     );
   });
 
-  it('dispatches deleteSubplot when delete button clicked', async () => {
+  it('dispatches deletePlotSubplot when delete button clicked', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
     // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
     vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
-      selector(
-        makeMockState({
-          subplots: {
-            ids: ['sp-1'],
-            entities: {
-              'sp-1': { id: 'sp-1', name: 'Love arc', color: '#a855f7', sectionIds: [] },
-            },
-          },
-        }),
-      ),
+      selector(makeMockState({ plotSubplots: [mockSubplot] })),
     );
 
     render(<SubplotPanel sections={mockSections} t={mockT} />);
-    // Delete button is in a group-hover element; we can still click it
     const deleteBtn = screen.getByLabelText('sceneboard.subplot.delete Love arc');
     fireEvent.click(deleteBtn);
     expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: expect.stringContaining('deleteSubplot') }),
+      expect.objectContaining({ type: 'project/deletePlotSubplot' }),
     );
   });
 
@@ -146,7 +132,6 @@ describe('SubplotPanel', () => {
     render(<SubplotPanel sections={mockSections} t={mockT} />);
     const collapseBtn = screen.getByLabelText('sceneboard.subplot.collapsePanel');
     fireEvent.click(collapseBtn);
-    // In collapsed state, expand button appears
     expect(screen.getByLabelText('sceneboard.subplot.expandPanel')).toBeTruthy();
   });
 
@@ -156,7 +141,6 @@ describe('SubplotPanel', () => {
     fireEvent.click(collapseBtn);
     const expandBtn = screen.getByLabelText('sceneboard.subplot.expandPanel');
     fireEvent.click(expandBtn);
-    // Title should reappear
     expect(screen.getByText('sceneboard.subplot.title')).toBeTruthy();
   });
 });

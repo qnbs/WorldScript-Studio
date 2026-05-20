@@ -1,21 +1,15 @@
-// QNBS-v3: Plot-Board viewport/connection state is ephemeral — kept in localStorage,
-//          NOT in the undo-able projectSlice, so pan/zoom don't pollute undo history.
-import { createEntityAdapter, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { PlotConnection, PlotConnectionType, Subplot } from '../../types';
+// QNBS-v3: plotBoardSlice holds ONLY ephemeral viewport/UI state (zoom, pan, mode, draw state).
+//          Story content (connections, subplots, tensionOverrides) lives in projectSlice
+//          so those decisions are undo-able via redux-undo.
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 export type PlotBoardMode = 'swimlane' | 'canvas' | 'timeline';
-
-const subplotAdapter = createEntityAdapter<Subplot>();
 
 export interface PlotBoardState {
   activeMode: PlotBoardMode;
   zoom: number;
   panX: number;
   panY: number;
-  subplots: ReturnType<typeof subplotAdapter.getInitialState>;
-  connections: PlotConnection[];
-  /** User-overridden tension score per scene (sectionId → 0–10). Auto-computed otherwise. */
-  tensionOverrides: Record<string, number>;
   selectedConnectionId: string | null;
   isDrawingConnection: boolean;
   drawFromSectionId: string | null;
@@ -31,9 +25,6 @@ const defaultState: PlotBoardState = {
   zoom: 1,
   panX: 0,
   panY: 0,
-  subplots: subplotAdapter.getInitialState(),
-  connections: [],
-  tensionOverrides: {},
   selectedConnectionId: null,
   isDrawingConnection: false,
   drawFromSectionId: null,
@@ -92,89 +83,12 @@ const plotBoardSlice = createSlice({
       state.snapToGrid = action.payload;
     },
 
-    // ── Subplots ─────────────────────────────────────────────────────────────
-    addSubplot(state, action: PayloadAction<Subplot>) {
-      subplotAdapter.addOne(state.subplots, action.payload);
-    },
-    updateSubplot(state, action: PayloadAction<{ id: string; changes: Partial<Subplot> }>) {
-      subplotAdapter.updateOne(state.subplots, action.payload);
-    },
-    deleteSubplot(state, action: PayloadAction<string>) {
-      subplotAdapter.removeOne(state.subplots, action.payload);
-      // Clear filter if deleted subplot was active
-      if (state.activeSubplotFilter === action.payload) {
-        state.activeSubplotFilter = null;
-      }
-      // Remove deleted subplot reference from connections
-      for (const conn of state.connections) {
-        if (conn.subplotId === action.payload) {
-          // exactOptionalPropertyTypes: delete is the correct way to clear an optional property
-          delete conn.subplotId;
-        }
-      }
-    },
-    assignSectionToSubplot(state, action: PayloadAction<{ sectionId: string; subplotId: string }>) {
-      const { sectionId, subplotId } = action.payload;
-      const subplot = state.subplots.entities[subplotId];
-      if (!subplot) return;
-      if (!subplot.sectionIds.includes(sectionId)) {
-        subplotAdapter.updateOne(state.subplots, {
-          id: subplotId,
-          changes: { sectionIds: [...subplot.sectionIds, sectionId] },
-        });
-      }
-    },
-    removeSectionFromSubplot(
-      state,
-      action: PayloadAction<{ sectionId: string; subplotId: string }>,
-    ) {
-      const { sectionId, subplotId } = action.payload;
-      const subplot = state.subplots.entities[subplotId];
-      if (!subplot) return;
-      subplotAdapter.updateOne(state.subplots, {
-        id: subplotId,
-        changes: { sectionIds: subplot.sectionIds.filter((id) => id !== sectionId) },
-      });
-    },
-    setActiveSubplotFilter(state, action: PayloadAction<string | null>) {
-      state.activeSubplotFilter = action.payload;
-    },
-
-    // ── Connections ───────────────────────────────────────────────────────────
-    addConnection(state, action: PayloadAction<PlotConnection>) {
-      // Prevent duplicate connections between same pair in same direction
-      const exists = state.connections.some(
-        (c) =>
-          c.fromSectionId === action.payload.fromSectionId &&
-          c.toSectionId === action.payload.toSectionId,
-      );
-      if (!exists) {
-        state.connections.push(action.payload);
-      }
-    },
-    updateConnection(
-      state,
-      action: PayloadAction<{ id: string; changes: Partial<Omit<PlotConnection, 'id'>> }>,
-    ) {
-      const conn = state.connections.find((c) => c.id === action.payload.id);
-      if (conn) Object.assign(conn, action.payload.changes);
-    },
-    removeConnection(state, action: PayloadAction<string>) {
-      state.connections = state.connections.filter((c) => c.id !== action.payload);
-      if (state.selectedConnectionId === action.payload) {
-        state.selectedConnectionId = null;
-      }
-    },
-    removeConnectionsForSection(state, action: PayloadAction<string>) {
-      state.connections = state.connections.filter(
-        (c) => c.fromSectionId !== action.payload && c.toSectionId !== action.payload,
-      );
-    },
+    // ── Connection selection (UI state only) ─────────────────────────────────
     setSelectedConnection(state, action: PayloadAction<string | null>) {
       state.selectedConnectionId = action.payload;
     },
 
-    // ── Draw mode ────────────────────────────────────────────────────────────
+    // ── Draw mode (UI state only — actual connection created in projectSlice) ─
     startDrawConnection(state, action: PayloadAction<string>) {
       state.isDrawingConnection = true;
       state.drawFromSectionId = action.payload;
@@ -183,43 +97,16 @@ const plotBoardSlice = createSlice({
       state.isDrawingConnection = false;
       state.drawFromSectionId = null;
     },
-    finishDrawConnection(
-      state,
-      action: PayloadAction<{ toSectionId: string; type: PlotConnectionType; newId: string }>,
-    ) {
-      if (!state.drawFromSectionId) return;
-      const { toSectionId, type, newId } = action.payload;
-      if (toSectionId === state.drawFromSectionId) {
-        // Self-loop not allowed
-        state.isDrawingConnection = false;
-        state.drawFromSectionId = null;
-        return;
-      }
-      const exists = state.connections.some(
-        (c) => c.fromSectionId === state.drawFromSectionId && c.toSectionId === toSectionId,
-      );
-      if (!exists) {
-        state.connections.push({
-          id: newId,
-          fromSectionId: state.drawFromSectionId,
-          toSectionId,
-          type,
-        });
-      }
+    // QNBS-v3: finishDrawConnection now only clears draw UI state; connection is
+    //          created via projectActions.finishPlotDrawConnection for undo support.
+    finishDrawConnection(state) {
       state.isDrawingConnection = false;
       state.drawFromSectionId = null;
     },
 
-    // ── Tension overrides ────────────────────────────────────────────────────
-    setTensionOverride(state, action: PayloadAction<{ sectionId: string; score: number }>) {
-      const { sectionId, score } = action.payload;
-      state.tensionOverrides[sectionId] = Math.min(10, Math.max(0, score));
-    },
-    clearTensionOverride(state, action: PayloadAction<string>) {
-      delete state.tensionOverrides[action.payload];
-    },
-    clearAllTensionOverrides(state) {
-      state.tensionOverrides = {};
+    // ── Subplot filter (UI state — which subplot is highlighted on canvas) ────
+    setActiveSubplotFilter(state, action: PayloadAction<string | null>) {
+      state.activeSubplotFilter = action.payload;
     },
   },
 });
@@ -227,8 +114,6 @@ const plotBoardSlice = createSlice({
 export const plotBoardActions = plotBoardSlice.actions;
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
-const subplotSelectors = subplotAdapter.getSelectors();
-
 export const selectPlotBoard = (state: { plotBoard: PlotBoardState }) => state.plotBoard;
 export const selectActiveMode = (state: { plotBoard: PlotBoardState }) =>
   state.plotBoard.activeMode;
@@ -239,22 +124,14 @@ export const selectPan = (state: { plotBoard: PlotBoardState }) => ({
 });
 export const selectSnapToGrid = (state: { plotBoard: PlotBoardState }) =>
   state.plotBoard.snapToGrid;
-export const selectConnections = (state: { plotBoard: PlotBoardState }) =>
-  state.plotBoard.connections;
 export const selectSelectedConnectionId = (state: { plotBoard: PlotBoardState }) =>
   state.plotBoard.selectedConnectionId;
 export const selectIsDrawingConnection = (state: { plotBoard: PlotBoardState }) =>
   state.plotBoard.isDrawingConnection;
 export const selectDrawFromSectionId = (state: { plotBoard: PlotBoardState }) =>
   state.plotBoard.drawFromSectionId;
-export const selectTensionOverrides = (state: { plotBoard: PlotBoardState }) =>
-  state.plotBoard.tensionOverrides;
 export const selectActiveSubplotFilter = (state: { plotBoard: PlotBoardState }) =>
   state.plotBoard.activeSubplotFilter;
-export const selectAllSubplots = (state: { plotBoard: PlotBoardState }) =>
-  subplotSelectors.selectAll(state.plotBoard.subplots);
-export const selectSubplotById = (id: string) => (state: { plotBoard: PlotBoardState }) =>
-  subplotSelectors.selectById(state.plotBoard.subplots, id);
 
 // ── Persistence middleware ────────────────────────────────────────────────────
 import type { Middleware } from '@reduxjs/toolkit';

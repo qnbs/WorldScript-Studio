@@ -5,12 +5,11 @@ import { useCallback, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../../app/hooks';
 import {
   plotBoardActions,
-  selectAllSubplots,
-  selectConnections,
   selectDrawFromSectionId,
   selectIsDrawingConnection,
   selectSelectedConnectionId,
 } from '../../features/plotBoard/plotBoardSlice';
+import { selectPlotConnections, selectPlotSubplots } from '../../features/project/projectSelectors';
 import type { PlotConnectionType } from '../../types';
 
 const CARD_W = 200;
@@ -123,11 +122,11 @@ export const ConnectionLayer: FC<ConnectionLayerProps> = ({
   t,
 }) => {
   const dispatch = useAppDispatch();
-  const connections = useAppSelectorShallow(selectConnections);
+  const connections = useAppSelectorShallow(selectPlotConnections);
   const selectedId = useAppSelectorShallow(selectSelectedConnectionId);
   const isDrawing = useAppSelectorShallow(selectIsDrawingConnection);
   const drawFromId = useAppSelectorShallow(selectDrawFromSectionId);
-  const subplots = useAppSelectorShallow(selectAllSubplots);
+  const subplots = useAppSelectorShallow(selectPlotSubplots);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const subplotColorMap = useMemo(() => {

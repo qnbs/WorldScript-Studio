@@ -110,6 +110,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New: `plotBoardSlice.test.ts`, `plotBoardService.test.ts`, `ConnectionLayer.test.tsx`, `SubplotPanel.test.tsx`, `TensionCurvePanel.test.tsx`, `sceneRevisionService.test.ts`, `sceneCommentsSlice.test.ts`, `progressTrackerSlice.test.ts`.
 - Fixed: `useSceneBoardView.test.ts` mock state extended with `plotBoard` shape; `ConnectionLayer.test.tsx` updated to use `data-testid="connection-group"` (biome correctly removed redundant `role="img"` from `<g>` inside `role="img"` SVG).
 
+## [1.6.2] — 2026-05-20
+
+### Refactored
+
+- **Plot-Board content moved to projectSlice (undo-able):** Connections, subplots, and tension overrides now live in `features/project/projectSlice.ts` (and thus inside `redux-undo`) instead of `plotBoardSlice`. `plotBoardSlice` is now viewport/UI-state only (zoom, pan, mode, draw-state). New actions: `addPlotConnection`, `updatePlotConnection`, `removePlotConnection`, `removePlotConnectionsForSection`, `finishPlotDrawConnection`, `addPlotSubplot`, `updatePlotSubplot`, `deletePlotSubplot`, `assignSectionToPlotSubplot`, `removeSectionFromPlotSubplot`, `setPlotTensionOverride`, `clearPlotTensionOverride`, `clearAllPlotTensionOverrides`. New selectors in `projectSelectors.ts`: `selectPlotConnections`, `selectPlotSubplots`, `selectPlotTensionOverrides`. All five scene-board components (`ConnectionLayer`, `ConnectionToolbar`, `PlotCanvas`, `SubplotPanel`, `TensionCurvePanel`) updated to dispatch project actions and read from project selectors. `handleDeleteSection` now also dispatches `removePlotConnectionsForSection` to keep the board consistent.
+
+### Added
+
+- **Locale-aware readability metric:** `services/readabilityFlesch.ts` now supports five language-specific formulas — EN: Flesch Reading Ease, DE: Amstad (1978), FR: Kandel-Moles, ES: Fernández Huerta, IT: Gulpease — instead of a single English-centric heuristic. `estimateSyllables(word, locale)` uses per-locale vowel patterns (including diacritics). `useDashboard.ts` passes the active locale to `computeReadabilitySnapshot`. Dashboard i18n labels updated in all four non-English locales to name the correct formula.
+
+### Fixed
+
+- **docker.yml token permissions (CodeQL):** Top-level `permissions` block now sets only `contents: read`; `packages: write` scoped to the `build-push` job only — follows principle of least privilege as required by CodeQL Token-Permissions rule.
+- **biome.json schema version:** Updated `2.4.12` → `2.4.15` to match installed Biome CLI.
+
+### Tests
+
+- `tests/unit/plotBoardSlice.test.ts`: Subplot/connection/tension test suites removed (migrated to `projectSlice`); viewport tests retained.
+- `tests/unit/projectSlice.test.ts`: 15 new tests covering plot connections (incl. undo, dedup, self-loop guard), subplots (CRUD, section-assign), and tension overrides.
+- `tests/unit/hooks/useSceneBoardView.test.ts`: `handleDeleteSection` test extended to verify `removePlotConnectionsForSection` dispatch; `plotBoard` mock state simplified (no connections/subplots/tensionOverrides).
+- `tests/unit/SceneBoardView.test.tsx`, `SubplotPanel.test.tsx`, `ConnectionLayer.test.tsx`, `TensionCurvePanel.test.tsx`: mock state updated to new plotBoard shape.
+
+## [1.6.1] — 2026-05-19
+
+### Added
+
+- **Gemini 3.x model catalogue:** Default model bumped to `gemini-3.5-flash`; Gemini 3.1 Pro Preview, 3.1 Flash, and 3.1 Flash-Lite added to the provider dropdown. Legacy `gemini-2.0-flash` removed; `gemini-2.5-x` stable group retained. All fallback model IDs updated across `geminiService`, `storyCraftCompletionFetch`, `dbService` migration, `AiSections`, and `settingsSlice`.
+- **Docker image:** Multi-stage `Dockerfile` (builder → nginx:1.27-alpine runner); `.dockerignore`; `docker.yml` GitHub Actions workflow (GHCR push on `v*` tags / `workflow_dispatch`).
+- **Tauri v1.6:** `tauri.conf.json` + `Cargo.toml` version bumped `1.4.0 → 1.6.0`; auto-updater set `active: true`; `TAURI-CI.md` example tag updated to `v1.6.0`.
+
 ## [Unreleased]
 
 ### Added

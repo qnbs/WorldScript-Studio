@@ -1,12 +1,13 @@
 import { useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../app/hooks';
 import type { RootState } from '../app/store';
+import { plotBoardActions, selectActiveSubplotFilter } from '../features/plotBoard/plotBoardSlice';
 import {
-  plotBoardActions,
-  selectAllSubplots,
-  selectConnections,
-} from '../features/plotBoard/plotBoardSlice';
-import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
+  selectAllCharacters,
+  selectAllWorlds,
+  selectPlotConnections,
+  selectPlotSubplots,
+} from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import type { PlotConnectionType, StorySection } from '../types';
@@ -55,6 +56,8 @@ export const useSceneBoardView = () => {
   const handleDeleteSection = useCallback(
     (id: string) => {
       dispatch(projectActions.deleteManuscriptSection(id));
+      // QNBS-v3: Also remove plot connections for this section so the board stays consistent.
+      dispatch(projectActions.removePlotConnectionsForSection(id));
     },
     [dispatch],
   );
@@ -85,14 +88,14 @@ export const useSceneBoardView = () => {
     [dispatch],
   );
 
-  // ── Connection handlers ───────────────────────────────────────────────────
+  // ── Connection handlers (dispatch to projectSlice for undo support) ───────
 
-  const connections = useAppSelectorShallow(selectConnections);
+  const connections = useAppSelectorShallow(selectPlotConnections);
 
   const handleAddConnection = useCallback(
     (fromSectionId: string, toSectionId: string, type: PlotConnectionType = 'cause-effect') => {
       dispatch(
-        plotBoardActions.addConnection({
+        projectActions.addPlotConnection({
           id: `conn-${Date.now()}`,
           fromSectionId,
           toSectionId,
@@ -105,7 +108,8 @@ export const useSceneBoardView = () => {
 
   const handleDeleteConnection = useCallback(
     (id: string) => {
-      dispatch(plotBoardActions.removeConnection(id));
+      dispatch(projectActions.removePlotConnection(id));
+      dispatch(plotBoardActions.setSelectedConnection(null));
     },
     [dispatch],
   );
@@ -118,14 +122,17 @@ export const useSceneBoardView = () => {
   );
 
   const handleFinishDrawConnection = useCallback(
-    (toId: string, type: PlotConnectionType = 'cause-effect') => {
+    (toId: string, fromId: string, type: PlotConnectionType = 'cause-effect') => {
+      // QNBS-v3: Create connection in projectSlice (undo-able), then clear draw UI state.
       dispatch(
-        plotBoardActions.finishDrawConnection({
+        projectActions.finishPlotDrawConnection({
+          fromSectionId: fromId,
           toSectionId: toId,
           type,
           newId: `conn-${Date.now()}`,
         }),
       );
+      dispatch(plotBoardActions.finishDrawConnection());
     },
     [dispatch],
   );
@@ -134,14 +141,15 @@ export const useSceneBoardView = () => {
     dispatch(plotBoardActions.cancelDrawConnection());
   }, [dispatch]);
 
-  // ── Subplot handlers ──────────────────────────────────────────────────────
+  // ── Subplot handlers (dispatch to projectSlice for undo support) ──────────
 
-  const subplots = useAppSelectorShallow(selectAllSubplots);
+  const subplots = useAppSelectorShallow(selectPlotSubplots);
+  const activeSubplotFilter = useAppSelectorShallow(selectActiveSubplotFilter);
 
   const handleAddSubplot = useCallback(
     (name: string, color: string) => {
       dispatch(
-        plotBoardActions.addSubplot({
+        projectActions.addPlotSubplot({
           id: `sp-${Date.now()}`,
           name,
           color,
@@ -154,14 +162,23 @@ export const useSceneBoardView = () => {
 
   const handleDeleteSubplot = useCallback(
     (id: string) => {
-      dispatch(plotBoardActions.deleteSubplot(id));
+      dispatch(projectActions.deletePlotSubplot(id));
+      // Clear viewport filter if the deleted subplot was active
+      dispatch(plotBoardActions.setActiveSubplotFilter(null));
     },
     [dispatch],
   );
 
   const handleAssignToSubplot = useCallback(
     (sectionId: string, subplotId: string) => {
-      dispatch(plotBoardActions.assignSectionToSubplot({ sectionId, subplotId }));
+      dispatch(projectActions.assignSectionToPlotSubplot({ sectionId, subplotId }));
+    },
+    [dispatch],
+  );
+
+  const handleRemoveSectionFromSubplot = useCallback(
+    (sectionId: string, subplotId: string) => {
+      dispatch(projectActions.removeSectionFromPlotSubplot({ sectionId, subplotId }));
     },
     [dispatch],
   );
@@ -174,6 +191,7 @@ export const useSceneBoardView = () => {
     locationOptions,
     connections,
     subplots,
+    activeSubplotFilter,
     handleUpdateSection,
     handleDeleteSection,
     handleMoveSection,
@@ -187,5 +205,6 @@ export const useSceneBoardView = () => {
     handleAddSubplot,
     handleDeleteSubplot,
     handleAssignToSubplot,
+    handleRemoveSectionFromSubplot,
   };
 };

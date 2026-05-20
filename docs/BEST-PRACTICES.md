@@ -4,7 +4,7 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 
 ## Architecture (short)
 
-- **State:** Redux Toolkit feature slices + listener middleware for side effects; transient UI in Zustand (`app/transientUiStore.ts`). v1.6 adds `plotBoard` (canvas/connections/subplots — localStorage, not undo-able), `progressTracker` (session/streak/goals), and `sceneComments` (IDB-persisted via listenerMiddleware).
+- **State:** Redux Toolkit feature slices + listener middleware for side effects; transient UI in Zustand (`app/transientUiStore.ts`). v1.6 adds `plotBoard` (viewport/draw UI only — localStorage, NOT undo-able; connections/subplots/tension moved to `projectSlice` for undo support), `progressTracker` (session/streak/goals), and `sceneComments` (IDB-persisted via listenerMiddleware).
 - **Persistence:** `storageService` → `StorageBackend` (`IndexedDB` web / filesystem Tauri). No second ad-hoc storage for secrets. v1.6 adds `scene-revisions` IDB store (`services/sceneRevisionService.ts`).
 - **AI:** `geminiService` / `aiProviderService` — all network AI goes through these adapters. 4-layer local inference stack: WebLLM → ONNX → Transformers.js → BoW fallback.
 - **Commands:** `services/commands/` registry; execution via `CommandExecutorProvider` / `runCommandById`.
@@ -51,13 +51,22 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 - **E2E:** Playwright (CI-only `CI=true`); a11y smoke with axe (see `tests/e2e/a11y.spec.ts`). Plot-board E2E: `tests/e2e/plot-board.spec.ts`.
 - **Mutation:** Stryker job (`mutation.yml`) is informational until `break` threshold is raised. Current targets: 9 service files in `stryker.conf.json`.
 
-## CI gates (local parity)
+## CI gates — cloud-first workflow
 
-- `pnpm run lint` — Biome, warnings fail.
-- `pnpm run typecheck`
-- `pnpm run i18n:check` — keys + bundle build + `content:guard`
-- `pnpm run test:run` / `pnpm run test:coverage`
-- `pnpm run build` + `pnpm run bundle:budget`
+**Local (fast, low-RAM):**
+```bash
+pnpm run lint && pnpm run i18n:check && pnpm run typecheck
+# Optional: single test file during development
+pnpm exec vitest run tests/unit/myFile.test.ts
+```
+
+**CI (authoritative):** Every push triggers `security → quality → build → e2e → lighthouse → deploy`. Metrics (coverage %, test count) come from CI artifacts; update `README.md` badges and `AUDIT.md` quality-gate lines from CI output after each release.
+
+After CI goes green:
+1. Read coverage % from the `quality` job logs or Codecov badge.
+2. Update `README.md` `Tests-NNN_%2F_NNN_files` and `Coverage-XX.XX%25` badges.
+3. Update `AUDIT.md` quality-gate line for the new version.
+4. Commit: `chore(docs): update metrics from CI vX.Y.Z`.
 
 ## RTL & future locales
 

@@ -39,12 +39,10 @@ vi.mock('../../components/ui/SectionIcon', () => ({
   SectionIcon: () => null,
 }));
 
-// biome-ignore lint/complexity/noUselessConstructor: required to satisfy IntersectionObserver constructor contract
 class MockIntersectionObserver {
   observe = vi.fn();
   disconnect = vi.fn();
   unobserve = vi.fn();
-  constructor(_cb: IntersectionObserverCallback, _opts?: IntersectionObserverInit) {}
 }
 vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 

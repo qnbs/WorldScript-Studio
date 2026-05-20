@@ -30,7 +30,14 @@ pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 
 **CI pipeline order:** `security` → `quality` (Biome + tsc + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
-**Local vs CI:** On low-end hardware run only `lint`, `typecheck`, `i18n:check` locally; delegate Playwright, LHCI, and coverage-gate runs to CI (or debug via CI artifacts). The merge bar is a green workflow, not a full local run.
+**CI-cloud-first workflow (recommended for this project):** On constrained hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, Playwright E2E, Lighthouse, and Stryker mutation are CI-gate jobs — run them in the cloud, not locally. The authoritative metric source is CI artifacts (Codecov, JUnit). After each push, monitor CI and update docs (README.md badges, AUDIT.md quality-gate line) with the CI-reported numbers. The merge bar is a green CI workflow — not a full local coverage run. Local test runner (`pnpm run test:run`) is useful for rapid TDD cycles on a single file; full coverage (`pnpm run test:coverage`) belongs in CI.
+
+**CI audit & housekeeping policy (ALL CI runs must be fully green):**
+- After every commit, monitor ALL CI jobs: security (OSV + CodeQL), quality (Biome + tsc + Vitest), build, e2e, lighthouse, deploy, mutation, storybook.
+- **CodeQL scanning**: Check `https://github.com/qnbs/StoryCraft-Studio/security/code-scanning` after every push. For each open alert: read the rule (Token-Permissions, SQL-injection, etc.), fix the root cause in the relevant workflow or source file, verify the alert closes in the next CI run. Do not just suppress — fix the underlying issue.
+- **Token-Permissions**: All GitHub Actions workflows must set top-level `permissions: contents: read` and move any write permissions (e.g. `packages: write`) to the job level. Use `permissions:` blocks at the job scope, never at top level with write access.
+- **OSV vulnerabilities**: Run `pnpm audit` or check the security CI job for new CVEs. Add `pnpm.overrides` to `package.json` to force minimum safe versions. Pin exact override versions, not open ranges.
+- Correction loop: fix → commit → verify CI → fix any new issues until all jobs are green and security alerts are resolved.
 
 **E2E notes:** Do NOT use `networkidle` waits against the Vite dev server (HMR keeps WebSocket connections open). Scope sidebar navigation via `#sidebar` when both mobile and desktop nav exist. Shared bootstrap helpers live in `tests/e2e/helpers.ts`.
 
@@ -138,7 +145,7 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 
 ## v1.6 Patterns (new in this release)
 
-**plotBoardSlice:** `features/plotBoard/plotBoardSlice.ts` — canvas viewport (zoom/pan), connections, subplots, tension overrides. NOT undo-able; persists to `localStorage`. Import selectors: `selectConnections`, `selectAllSubplots`, `selectActiveMode`, `selectZoom`, `selectTensionOverrides`.
+**plotBoardSlice:** `features/plotBoard/plotBoardSlice.ts` — ephemeral viewport/UI state only (zoom/pan/mode/draw state). NOT undo-able; persists to `localStorage`. Import selectors: `selectActiveMode`, `selectZoom`, `selectPan`, `selectSnapToGrid`, `selectIsDrawingConnection`, `selectDrawFromSectionId`, `selectSelectedConnectionId`, `selectActiveSubplotFilter`. Story content (connections, subplots, tensionOverrides) lives in `projectSlice` so they are undo-able — use `selectPlotConnections`, `selectPlotSubplots`, `selectPlotTensionOverrides` from `features/project/projectSelectors.ts` and dispatch `projectActions.addPlotConnection / removePlotConnection / addPlotSubplot / deletePlotSubplot / setPlotTensionOverride / clearAllPlotTensionOverrides`.
 
 **plotBoardService:** `services/plotBoardService.ts` — `computeTensionCurve(sections, overrides)`, `autoLayoutScenes(sections)`, `exportBoardAsSvg(svgEl)`.
 
@@ -150,7 +157,7 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 
 **deepLinkService:** `services/deepLinkService.ts` — `parseHash(hash)`, `pushHash(view, sectionId?)`, `readCurrentView()`. Views: `'board' | 'preview' | 'progress' | 'project'`.
 
-**Test mock pattern for useAppSelectorShallow with plotBoard:** Tests must include `plotBoard: { activeMode: 'swimlane', connections: [], subplots: { ids: [], entities: {} }, snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0, tensionOverrides: {} }` in the mock state. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines in test files.
+**Test mock pattern for useAppSelectorShallow with plotBoard:** Tests must include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in the mock state (connections/subplots/tensionOverrides are now in `project.present.data` — mock those via `selectPlotConnections: () => []` etc. in the `projectSelectors` mock). Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines in test files.
 
 **ConnectionLayer test IDs:** Connection `<g>` elements use `data-testid="connection-group"` (biome correctly removed redundant `role="img"` from `<g>` inside an `role="img"` SVG; tests should query by testid, not role).
 

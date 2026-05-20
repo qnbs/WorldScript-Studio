@@ -5,9 +5,10 @@ import { useCallback, useState } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../../app/hooks';
 import {
   plotBoardActions,
-  selectConnections,
   selectSelectedConnectionId,
 } from '../../features/plotBoard/plotBoardSlice';
+import { selectPlotConnections } from '../../features/project/projectSelectors';
+import { projectActions } from '../../features/project/projectSlice';
 import type { PlotConnectionType } from '../../types';
 
 const CONNECTION_TYPE_OPTIONS: { value: PlotConnectionType; icon: string }[] = [
@@ -25,7 +26,7 @@ interface ConnectionToolbarProps {
 export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
   const dispatch = useAppDispatch();
   const selectedId = useAppSelectorShallow(selectSelectedConnectionId);
-  const connections = useAppSelectorShallow(selectConnections);
+  const connections = useAppSelectorShallow(selectPlotConnections);
   const [labelDraft, setLabelDraft] = useState('');
   const [labelInit, setLabelInit] = useState<string | null>(null);
 
@@ -44,7 +45,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
   const handleTypeChange = useCallback(
     (type: PlotConnectionType) => {
       if (!selectedId) return;
-      dispatch(plotBoardActions.updateConnection({ id: selectedId, changes: { type } }));
+      dispatch(projectActions.updatePlotConnection({ id: selectedId, changes: { type } }));
     },
     [dispatch, selectedId],
   );
@@ -53,12 +54,13 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
     if (!selectedId) return;
     // QNBS-v3: exactOptionalPropertyTypes requires spreading conditionally — can't pass undefined directly
     const changes = labelDraft ? { label: labelDraft } : {};
-    dispatch(plotBoardActions.updateConnection({ id: selectedId, changes }));
+    dispatch(projectActions.updatePlotConnection({ id: selectedId, changes }));
   }, [dispatch, labelDraft, selectedId]);
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return;
-    dispatch(plotBoardActions.removeConnection(selectedId));
+    dispatch(projectActions.removePlotConnection(selectedId));
+    dispatch(plotBoardActions.setSelectedConnection(null));
   }, [dispatch, selectedId]);
 
   const handleDeselect = useCallback(() => {

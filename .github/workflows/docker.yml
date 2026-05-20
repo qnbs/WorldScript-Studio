@@ -8,15 +8,19 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# QNBS-v3: top-level read-only follows principle of least privilege (CodeQL Token-Permissions).
 permissions:
   contents: read
-  packages: write
 
 jobs:
   build-push:
     name: Build & push image
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # QNBS-v3: packages:write scoped to this job only — prevents privilege escalation in future jobs.
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

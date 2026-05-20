@@ -1,8 +1,8 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16 → 2026-05-17 → 2026-05-18 → 2026-05-18 (Session 2) → **2026-05-19 (v1.5 + v1.6)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16 → 2026-05-17 → 2026-05-18 → 2026-05-18 (Session 2) → 2026-05-19 (v1.5 + v1.6) → **2026-05-20 (v1.6.1 + v1.6.2)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **1.6.0** — released 2026-05-19  
+**Current version:** **1.6.2** — released 2026-05-20  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
 
 ---
@@ -38,6 +38,34 @@ Delivered: WorkerBus v2 (priority preemption, backpressure, transferables), GPU 
 **Quality gate at v1.6.0:** lint ✅ typecheck ✅ i18n 1590 keys × 5 locales ✅ **1 966 tests / 174 files — 0 failures** ✅ coverage 63.88% lines / 48.87% branches / 54.35% functions ✅ build ✅ bundle ≤ 7000 KB ✅
 
 **Coverage thresholds recalibrated (vitest.config.ts):** lines 63 / branches 48 / functions 54 / statements 62. The 1 pt drop from v1.5 thresholds reflects 25+ new UI components (canvas, SVG interactions) that are harder to cover in unit tests. Target: branches ≥ 55% in v2.0 (tracked in TODO.md).
+
+---
+
+## Follow-up Audit — 2026-05-20 (v1.6.1 + v1.6.2 — AI Models, Docker, plotBoardSlice Refactor, Locale-Aware Readability)
+
+### Released: v1.6.1 (2026-05-19, commit aa9f21c)
+
+**AI model catalogue (Gemini 3.x):** Default model `gemini-2.5-flash` → `gemini-3.5-flash`. Added Gemini 3.1 Pro Preview, 3.1 Flash, 3.1 Flash-Lite. Removed legacy `gemini-2.0-flash`. All fallback IDs updated across `geminiService.ts`, `storyCraftCompletionFetch.ts`, `dbService.ts` migration, `AiSections.tsx`, `settingsSlice.ts`.
+
+**Docker:** Multi-stage `Dockerfile` (builder → nginx:1.27-alpine). `.dockerignore`. `docker.yml` GitHub Actions workflow (GHCR push on `v*` tags and `workflow_dispatch`).
+
+**Tauri v1.6:** `tauri.conf.json` and `Cargo.toml` version `1.4.0 → 1.6.0`. Auto-updater `active: true`. `TAURI-CI.md` example tag updated.
+
+**Security:** `ws` override tightened to `>=8.20.1`; `brace-expansion >=5.0.6` override added.
+
+---
+
+### Released: v1.6.2 (2026-05-20, current)
+
+**Plot-Board state architecture refactoring:** Connections, subplots, and tension overrides moved from `plotBoardSlice` into `projectSlice` (wrapped by `redux-undo`) so plot decisions are undo-able via Ctrl+Z. `plotBoardSlice` now holds only ephemeral viewport/UI state. New `ProjectData` fields: `plotConnections`, `plotSubplots`, `plotTensionOverrides`. Selectors: `selectPlotConnections`, `selectPlotSubplots`, `selectPlotTensionOverrides` in `projectSelectors.ts`. All 5 scene-board components updated. `handleDeleteSection` now also clears connections for the deleted scene.
+
+**Locale-aware readability:** `services/readabilityFlesch.ts` supports 5 language-specific formulas — EN: Flesch, DE: Amstad, FR: Kandel-Moles, ES: Fernández Huerta, IT: Gulpease. Dashboard label updated in all non-English locale files.
+
+**CodeQL fix:** `docker.yml` top-level `permissions` reduced to `contents: read`; `packages: write` scoped to job level.
+
+**biome.json:** Schema version `2.4.12 → 2.4.15`.
+
+**Quality gate at v1.6.2:** lint ✅ typecheck ✅ i18n 1590 keys × 5 locales ✅ **1 966+ tests / 174+ files — 0 failures** ✅ build ✅ bundle ≤ 7000 KB ✅
 
 ---
 
