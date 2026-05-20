@@ -12,6 +12,7 @@ import {
   rebuildLocalRagIndex,
   searchLocalRag,
 } from './localRagIndex';
+import { logger } from './logger';
 import { storageService } from './storageService';
 
 export type { LocalRagChunkRecord };
@@ -134,7 +135,7 @@ export async function rebuildHybridRagIndex(
         chunkIndex: r.chunkIndex,
         vector: r.vector,
       })),
-    ).catch(() => {});
+    ).catch((err: unknown) => logger.warn('DuckDB RAG vector write failed (non-critical):', err));
   }
 
   return records.length;

@@ -11,6 +11,7 @@ import {
   withDuckDbRetry,
 } from '../services/duckdb/duckdbAnalytics';
 import { runIfNeeded as duckdbMigrateIfNeeded } from '../services/duckdb/duckdbMigration';
+import { rebuildHybridRagIndex } from '../services/localRagService';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
@@ -291,6 +292,33 @@ listenerMiddleware.startListening({
       listenerApi.dispatch(
         analyticsActions.setMigrationError(err instanceof Error ? err.message : String(err)),
       );
+    }
+  },
+});
+
+// --- 4. Hybrid-RAG Auto-Rebuild ---
+// QNBS-v3: Rebuilds the local RAG index 5 s after any manuscript edit.
+//          cancelActiveListeners() acts as debounce — burst edits collapse into one rebuild.
+listenerMiddleware.startListening({
+  predicate: (_action, currentState, previousState) => {
+    const curr = currentState as RootState;
+    const prev = previousState as RootState;
+    return curr.project.present?.data?.manuscript !== prev.project.present?.data?.manuscript;
+  },
+  effect: async (_action, listenerApi) => {
+    listenerApi.cancelActiveListeners();
+    await listenerApi.delay(5000);
+
+    const state = listenerApi.getState() as RootState;
+    const project = state.project.present?.data;
+    if (!project) return;
+
+    const projectId = project.id || 'default';
+    const duckDbOn = state.featureFlags.enableDuckDbAnalytics;
+    try {
+      await rebuildHybridRagIndex(projectId, project.manuscript, duckDbOn);
+    } catch (err) {
+      logger.warn('RAG auto-rebuild failed (non-critical):', err);
     }
   },
 });
