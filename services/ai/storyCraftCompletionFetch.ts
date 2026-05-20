@@ -17,7 +17,16 @@ import {
   type StoryCraftLanguageModelConfig,
 } from './providerFactory';
 
-const aiProviderSchema = z.enum(['gemini', 'openai', 'anthropic', 'grok', 'ollama', 'webllm']);
+const aiProviderSchema = z.enum([
+  'gemini',
+  'openai',
+  'anthropic',
+  'grok',
+  'ollama',
+  'webllm',
+  'onnx',
+  'transformers',
+]);
 
 const completionBodySchema = z.object({
   prompt: z.string().min(1),

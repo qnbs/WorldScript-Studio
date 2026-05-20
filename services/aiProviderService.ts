@@ -210,11 +210,14 @@ async function streamProvider(
       return streamAnthropic(prompt, o, callbacks);
     case 'grok':
       return streamGrok(prompt, o, callbacks);
-    case 'webllm': {
+    case 'webllm':
+    case 'onnx':
+    case 'transformers': {
+      // QNBS-v3: all local-inference providers share the same facade; modelId selects the layer.
       const merged = o.systemPrompt?.trim()
         ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
         : sanitizePromptValue(prompt);
-      const local = await generateLocalText(merged);
+      const local = await generateLocalText(merged, o.model);
       callbacks.onChunk(local.text);
       callbacks.onDone?.();
       return;
@@ -270,11 +273,14 @@ async function generateTextSingleProvider(
       });
       return providerTextSchema.parse({ text: result }).text;
     }
-    case 'webllm': {
+    case 'webllm':
+    case 'onnx':
+    case 'transformers': {
+      // QNBS-v3: pass model to localAiFacade so the correct layer/model is loaded.
       const merged = o.systemPrompt?.trim()
         ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
         : sanitizePromptValue(prompt);
-      const local = await generateLocalText(merged);
+      const local = await generateLocalText(merged, o.model);
       return providerTextSchema.parse({ text: local.text }).text;
     }
     default: {
@@ -351,7 +357,9 @@ export async function generateImage(
         'Ollama image generation is currently not supported. Please use Gemini for images.',
       );
     case 'webllm':
-      throw new Error('WebLLM text-only path: use Gemini for image generation in the browser.');
+    case 'onnx':
+    case 'transformers':
+      throw new Error('Local inference is text-only: use Gemini for image generation.');
     case 'anthropic':
       throw new Error(
         'Anthropic image generation is not available. Please use Gemini or Ollama for image content.',
@@ -501,6 +509,12 @@ export async function testAIConnection(
               error:
                 'WebGPU unavailable in this browser — WebLLM needs WebGPU (try Chrome/Edge or enable flags).',
             };
+      case 'onnx':
+        // QNBS-v3: ONNX Runtime Web uses WASM — always available, no GPU required.
+        return { ok: true };
+      case 'transformers':
+        // QNBS-v3: Transformers.js uses WASM/WebGPU — connection test is always ok; model loads on first use.
+        return { ok: true };
       default:
         return { ok: false, error: 'Unknown provider' };
     }

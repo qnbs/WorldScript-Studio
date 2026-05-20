@@ -278,7 +278,13 @@ export type AiModel =
   // QNBS-v3: Qwen 2.5 added in v1.5 WEBLLM_SUPPORTED_MODELS — keep AiModel in sync.
   | 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
   /** Browser-only WebGPU path via @mlc-ai/web-llm (generic fallback for stored values). */
-  | 'webllm/browser';
+  | 'webllm/browser'
+  // ONNX Runtime Web — WASM CPU/GPU inference (see ONNX_SUPPORTED_MODELS in @domain/ai-core)
+  | 'HuggingFaceTB/SmolLM2-135M-Instruct'
+  | 'Xenova/distilgpt2'
+  | 'Xenova/gpt2'
+  // Transformers.js — any Xenova-compatible HuggingFace model
+  | `Xenova/${string}`;
 export type AIProvider =
   | 'gemini'
   | 'openai'
@@ -286,7 +292,11 @@ export type AIProvider =
   | 'grok'
   | 'ollama'
   /** Fully in-browser inference (WebLLM / Transformers.js stack in @domain/ai-core). */
-  | 'webllm';
+  | 'webllm'
+  /** ONNX Runtime Web — CPU/WASM inference, no API key needed. */
+  | 'onnx'
+  /** Transformers.js — Xenova/HuggingFace WASM/WebGPU inference. */
+  | 'transformers';
 export type NotificationFrequency = 'never' | 'daily' | 'weekly' | 'monthly';
 export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
 export type SyncProvider = 'none' | 'google-drive' | 'dropbox' | 'onedrive' | 'icloud';

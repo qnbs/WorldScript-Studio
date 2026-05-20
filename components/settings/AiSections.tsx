@@ -71,6 +71,11 @@ export const AiSection: FC = () => {
           } else if (p === 'webllm') {
             // QNBS-v3: default to first curated MLC model; 'webllm/browser' kept as legacy fallback
             newModel = WEBLLM_SUPPORTED_MODELS[0].id;
+          } else if (p === 'onnx') {
+            // QNBS-v3: default to SmolLM2-135M — smallest ONNX model, WASM CPU-compatible.
+            newModel = 'HuggingFaceTB/SmolLM2-135M-Instruct';
+          } else if (p === 'transformers') {
+            newModel = 'Xenova/distilgpt2';
           }
           handleSettingChange('advancedAi', {
             ...settings.advancedAi,

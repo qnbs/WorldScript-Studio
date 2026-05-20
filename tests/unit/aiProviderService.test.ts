@@ -93,8 +93,20 @@ describe('generateImage', () => {
 
   it('throws for webllm provider', async () => {
     await expect(generateImage('a cat', { ...defaultOpts, provider: 'webllm' })).rejects.toThrow(
-      'WebLLM text-only',
+      'Local inference is text-only',
     );
+  });
+
+  it('throws for onnx provider', async () => {
+    await expect(generateImage('a cat', { ...defaultOpts, provider: 'onnx' })).rejects.toThrow(
+      'Local inference is text-only',
+    );
+  });
+
+  it('throws for transformers provider', async () => {
+    await expect(
+      generateImage('a cat', { ...defaultOpts, provider: 'transformers' }),
+    ).rejects.toThrow('Local inference is text-only');
   });
 });
 
@@ -147,6 +159,38 @@ describe('generateText', () => {
       model: 'webllm/browser',
     });
     expect(text).toBe('browser-local-text');
+    spy.mockRestore();
+  });
+
+  it('delegates to local facade for onnx provider, passing model id', async () => {
+    const spy = vi.spyOn(localAiFacade, 'generateLocalText').mockResolvedValueOnce({
+      layer: 'onnx',
+      text: 'onnx-text',
+    });
+    const modelId = 'HuggingFaceTB/SmolLM2-135M-Instruct';
+    const text = await generateText('hello', 'Balanced', {
+      ...defaultOpts,
+      provider: 'onnx',
+      model: modelId,
+    });
+    expect(text).toBe('onnx-text');
+    expect(spy).toHaveBeenCalledWith(expect.any(String), modelId);
+    spy.mockRestore();
+  });
+
+  it('delegates to local facade for transformers provider, passing model id', async () => {
+    const spy = vi.spyOn(localAiFacade, 'generateLocalText').mockResolvedValueOnce({
+      layer: 'transformers',
+      text: 'transformers-text',
+    });
+    const modelId = 'Xenova/distilgpt2';
+    const text = await generateText('hello', 'Balanced', {
+      ...defaultOpts,
+      provider: 'transformers',
+      model: modelId,
+    });
+    expect(text).toBe('transformers-text');
+    expect(spy).toHaveBeenCalledWith(expect.any(String), modelId);
     spy.mockRestore();
   });
 });
@@ -230,6 +274,16 @@ describe('testAIConnection', () => {
     const result = await testAIConnection('webllm', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('WebGPU');
+  });
+
+  it('returns ok:true for onnx (WASM always available)', async () => {
+    const result = await testAIConnection('onnx', {});
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns ok:true for transformers (WASM always available)', async () => {
+    const result = await testAIConnection('transformers', {});
+    expect(result.ok).toBe(true);
   });
 });
 

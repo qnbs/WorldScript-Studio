@@ -127,6 +127,8 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     { id: 'openai', label: 'OpenAI' },
     { id: 'ollama', label: 'Ollama (lokal)' },
     { id: 'webllm', label: t('settings.ai.providerWebllm') },
+    { id: 'onnx', label: t('settings.ai.providerOnnx') },
+    { id: 'transformers', label: t('settings.ai.providerTransformers') },
     { id: 'anthropic', label: 'Anthropic Claude' },
   ];
 
@@ -444,7 +446,19 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               </select>
             </div>
 
-            {/* ONNX model selector */}
+            <p className="text-xs text-[var(--foreground-muted)]">
+              {t('settings.ai.webllm.fallbackChain')}
+            </p>
+            <p className="text-xs text-[var(--foreground-muted)]">
+              {t('settings.ai.webllm.tabLeaderNote')}
+            </p>
+          </div>
+        )}
+
+        {provider === 'onnx' && (
+          // QNBS-v3: ONNX is now a selectable primary provider — WASM path, no API key needed.
+          <div className="p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-sm text-[var(--foreground-secondary)] space-y-3">
+            <p>{t('settings.ai.onnx.wasmNote')}</p>
             <div className="space-y-1">
               <label
                 htmlFor="onnx-model-select"
@@ -454,30 +468,44 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               </label>
               <select
                 id="onnx-model-select"
+                aria-label={t('settings.ai.onnx.modelSelect')}
                 className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-tertiary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                value={advancedAi.model}
                 onChange={(e) => onModelSelect?.(e.target.value)}
-                defaultValue=""
               >
-                <option value="" disabled>
-                  {t('settings.ai.onnx.modelSelect')}
-                </option>
                 {ONNX_SUPPORTED_MODELS.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+        )}
+
+        {provider === 'transformers' && (
+          // QNBS-v3: Transformers.js runs any Xenova-compatible HuggingFace model via WASM/WebGPU.
+          <div className="p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-sm text-[var(--foreground-secondary)] space-y-3">
+            <p>{t('settings.ai.transformers.hint')}</p>
+            <div className="space-y-1">
+              <label
+                htmlFor="transformers-model-id"
+                className="text-xs font-medium text-[var(--foreground-muted)] block"
+              >
+                {t('settings.ai.transformers.modelId')}
+              </label>
+              <input
+                id="transformers-model-id"
+                type="text"
+                className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-tertiary)] px-3 py-2 text-sm text-[var(--foreground-primary)] font-mono focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                placeholder="Xenova/distilgpt2"
+                value={advancedAi.model}
+                onChange={(e) => onModelSelect?.(e.target.value)}
+              />
               <p className="text-xs text-[var(--foreground-muted)]">
-                {t('settings.ai.onnx.wasmNote')}
+                {t('settings.ai.transformers.wasmNote')}
               </p>
             </div>
-
-            <p className="text-xs text-[var(--foreground-muted)]">
-              {t('settings.ai.webllm.fallbackChain')}
-            </p>
-            <p className="text-xs text-[var(--foreground-muted)]">
-              {t('settings.ai.webllm.tabLeaderNote')}
-            </p>
           </div>
         )}
 
