@@ -391,5 +391,7 @@
   "settings.projectAi.loraScale": "LoRA scale (α)",
   "settings.projectAi.loraScaleHint": "Controls the influence of the LoRA adapter (0 = disabled, 1 = full, 2 = double).",
   "settings.projectAi.activeIndicator": "Project AI active",
-  "settings.projectAi.reset": "Reset to global defaults"
+  "settings.projectAi.reset": "Reset to global defaults",
+  "settings.projectAi.presetActivatedTitle": "Project AI activated",
+  "settings.projectAi.presetActivatedDescription": "Per-project AI overrides are now active for all AI actions."
 }
