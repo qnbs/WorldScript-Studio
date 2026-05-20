@@ -8,6 +8,33 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## v1.7 — DuckDB Analytics + Hybrid RAG + AI Extensions (RELEASED 2026-05-20)
+
+- ✅ **DuckDB-WASM P0–P3** — worker, client, schema (10 tables + 5 views), analytics queries, migration, dual-write, RAG vectors, cross-project, codex, scene timeline
+- ✅ **DuckDB resilience** — init retry (3×), dual-write retry (3×), OPFS fallback to in-memory, error surface to Redux
+- ✅ **Hybrid RAG wired end-to-end** — `ragMode` setting, mode selector UI, consistency checker uses RAG context, Re-Index button in Reference Panel, Settings button bug fix
+- ✅ **ONNX + Transformers.js** as selectable primary AI providers
+- ✅ **Service-level dedup** — `aiThunkUtils` prevents concurrent duplicate AI requests
+- ✅ **Per-project AI preset** — hash-based deep links, dedup key hardening
+- ✅ **WorkerBus backpressure** — `MAX_QUEUE_SIZE` = 32, telemetry extended
+- ✅ **Y-WebRTC E2E encryption** — AES-256-GCM, PBKDF2 310k iter, CollaborationPanel badge
+- ✅ **PlotCanvas rAF throttle** — eliminates 60 Hz Redux dispatch storm
+- ✅ **i18n** — 1 625 keys × 5 locales (+35 new keys)
+- ✅ **Quality gate** — lint ✅ typecheck ✅ i18n ✅ 2 024+ tests / 178 files ✅
+
+### v2.0 Open Items
+
+- ⬜ Writer view AI continuation using RAG context (complex prompt assembly)
+- ⬜ Plot Board AI suggestions using RAG
+- ⬜ DuckDB `rag_chunks` schema migration: `FLOAT[64]` BoW → `FLOAT[384]` semantic vectors
+- ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
+- ⬜ RTL language support (Arabic, Hebrew, Persian)
+- ⬜ Fine-Tuning / LoRA-Support für personalisierte Schreibstile
+- ⬜ Cloud-Sync (optional, E2E-verschlüsselt)
+- ⬜ Branches coverage ≥ 55 % (aiProviderService-Streaming, große Komponenten)
+
+---
+
 ## v1.6 — Plot-Board v2 & Writer Experience (RELEASED 2026-05-19)
 
 - ✅ **Plot-Board v2** — `plotBoardSlice`, `plotBoardService`, `PlotCanvas`, `ConnectionLayer`, `SubplotPanel`, `TensionCurvePanel`, `ConnectionToolbar`, beat-sheet overlays, mobile pinch/pan

@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] — 2026-05-20
+
+### Added
+
+**DuckDB-WASM Analytics Layer (P0–P3):**
+- `workers/duckdbWorker.ts` — off-main-thread DuckDB-WASM (duckdb-eh bundle), OPFS persistence with in-memory fallback. Message protocol mirrors inference.worker.ts (messageId correlation, AbortController, OPFS_FALLBACK event).
+- `services/duckdb/duckdbClient.ts` — singleton proxy with AbortSignal support, in-flight cancellation, init retry (3×, exponential backoff), OPFS fallback handler.
+- `services/duckdb/duckdbSchema.ts` — schema v1: `projects`, `sections`, `writing_history`, `writing_sessions`, `characters`, `rag_chunks` (FLOAT[] vector), `cross_project_index`, `codex_entities`, `codex_mentions`, `readability_snapshots`. Analytics views: `v_daily_progress`, `v_weekly_progress`, `v_section_metrics`, `v_scene_overlap`, `v_character_cooccurrence`.
+- `services/duckdb/duckdbAnalytics.ts` — `queryDailyProgress`, `queryWeeklyProgress`, `queryStreak`, `querySceneOverlaps`, `queryRagSimilarity` (via `list_dot_product()`), `queryCharacterCoOccurrence`, `queryCrossProjectSearch`. `duckdbDualWrite`, `duckdbRagWrite`, `duckdbCrossProjectWrite`, `duckdbCodexWrite`. `withDuckDbRetry` retry wrapper.
+- `services/duckdb/duckdbMigration.ts` — idempotent IDB→DuckDB seed migration with `_meta` version marker.
+- `hooks/useDuckDb.ts` — initialization hook with 30 s timeout, auto-retry, OPFS fallback dispatch, `queryAsync` / `execAsync`.
+- `hooks/useAnalytics.ts` — feature-flagged analytics hook; parallelizes 4 queries; OPFS-unavailable toast.
+- Feature flag `enableDuckDbAnalytics` in `featureFlagsSlice`.
+
+**Hybrid RAG — Wired End-to-End:**
+- `ragMode: 'lexical' | 'hybrid'` added to `AdvancedAiSettings` (default `'hybrid'`). Persisted to IDB via `dbService.ts` migration defaults.
+- Settings UI: RAG mode selector (Hybrid / Lexical) in Advanced AI → Local Search Index section.
+- Fix: Settings "Rebuild local search index" button now calls `rebuildHybridRagIndex` (was `rebuildLocalRagIndex` — lexical only). DuckDB dual-write enabled when `enableDuckDbAnalytics` flag is on.
+- Consistency Checker (`useConsistencyCheckerView`) now retrieves top-8 RAG chunks before the AI call and injects them into the prompt as `ragChunks`, replacing the full 50 000-char manuscript block. Graceful fallback when RAG index is empty or embedding model unavailable.
+- Re-Index for AI button added to `ReferencePanelView` footer — on-demand index refresh with success toast showing chunk count.
+- i18n: 3 new `settings.advancedAi.ragMode*` keys + 5 `reference.reindex.*` keys across all 5 locales.
+
+**AI Provider Extensions:**
+- ONNX Runtime Web (Layer 2) and Transformers.js (Layer 3) selectable as primary providers in AI Settings.
+- Service-level dedup wrapper (`aiThunkUtils.ts`) prevents concurrent duplicate AI requests.
+- Per-project AI preset: project-scoped provider/model stored in `advancedAi.localBackendPreset`; harden dedup key; hash-based deep links (`#/board`, `#/preview`, `#/progress`, `#/project/{id}/scene/{id}`).
+- `WorkerBus` backpressure guard: `MAX_QUEUE_SIZE` = 32; critical tasks bypass; telemetry extended (`peakLatencyMs`, `errorRate`).
+
+**Collaboration:**
+- Y-WebRTC E2E encryption (`collaborationService.ts`): `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 310 000 iter, SHA-256, AES-256-GCM). Deterministic salt from projectId. `CollaborationPanel` status badge (green `E2E Key Derived` / amber `Room isolation only`).
+
+**Performance:**
+- `PlotCanvas.tsx`: pointer-move handler throttled via `requestAnimationFrame`; prevents 60 Hz Redux dispatch storm during canvas pan/zoom.
+
+### Changed
+
+- `localRagService.ts` auto-rebuild now correctly dual-writes to DuckDB when `enableDuckDbAnalytics` is on (5 s debounce in `listenerMiddleware`).
+- `geminiService.ts` `consistencyCheck` case: accepts optional `ragChunks` param; uses RAG excerpts instead of full manuscript when present.
+- i18n: 1 590 → **1 625 keys** × 5 locales.
+
+### Fixed
+
+- `dbService.ts` migration defaults: `advancedAi.ragMode` added so existing IDB state without the key is upgraded to `'hybrid'` on first load.
+- `DuckDB` resilience: init retry (3×), dual-write retry (3×), OPFS fallback to in-memory when `navigator.storage.getDirectory()` unavailable, error surfaces to Redux `analyticsActions.setDuckDbError`.
+
 ## [1.5.0] — 2026-05-18
 
 ### Added (v1.5 Master Perfection Run)

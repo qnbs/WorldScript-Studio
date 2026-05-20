@@ -1,9 +1,35 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16 → 2026-05-17 → 2026-05-18 → 2026-05-18 (Session 2) → 2026-05-19 (v1.5 + v1.6) → **2026-05-20 (v1.6.1 + v1.6.2)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16 → 2026-05-17 → 2026-05-18 → 2026-05-18 (Session 2) → 2026-05-19 (v1.5 + v1.6) → 2026-05-20 (v1.6.1 + v1.6.2) → **2026-05-20 (v1.7.0)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **1.6.2** — released 2026-05-20  
+**Current version:** **1.7.0** — released 2026-05-20  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-20 (v1.7.0 — DuckDB Analytics + Hybrid RAG End-to-End + AI Extensions)
+
+### Released: v1.7.0 (2026-05-20)
+
+**DuckDB-WASM Analytics Layer (P0–P3 complete):** `workers/duckdbWorker.ts` (OPFS + in-memory fallback, messageId protocol), `services/duckdb/duckdbClient.ts` (singleton proxy, init retry 3×, AbortSignal, OPFS fallback handler), `services/duckdb/duckdbSchema.ts` (10 tables + 5 analytics views including `rag_chunks FLOAT[]`, `cross_project_index`, `codex_*`), `services/duckdb/duckdbAnalytics.ts` (typed query helpers, `withDuckDbRetry`, `queryRagSimilarity` via `list_dot_product()`), `services/duckdb/duckdbMigration.ts` (idempotent IDB→DuckDB seed). `hooks/useDuckDb.ts` + `hooks/useAnalytics.ts` integrate the layer into React with feature flag `enableDuckDbAnalytics`.
+
+**Hybrid RAG wired end-to-end:**
+- `types.ts` / `features/settings/settingsSlice.ts`: `ragMode: 'lexical' | 'hybrid'` added to `AdvancedAiSettings` (default `'hybrid'`).
+- `components/settings/AiSections.tsx`: settings button fixed (`rebuildHybridRagIndex` replaces `rebuildLocalRagIndex`); DuckDB dual-write enabled when `enableDuckDbAnalytics` flag is on; RAG mode selector dropdown added.
+- `hooks/useConsistencyCheckerView.ts`: calls `retrieveContext()` before AI call; passes top-8 RAG chunks as `ragChunks` to `geminiService.ts`, replacing the full 50 000-char manuscript block. Graceful degradation when index empty or embedding model not loaded.
+- `components/manuscript/ReferencePanelView.tsx`: "Re-Index for AI" footer button for on-demand rebuild.
+- `services/dbService.ts`: migration defaults include `ragMode: 'hybrid'` for IDB state upgrade.
+- i18n: +35 keys (3 RAG mode + 5 re-index × 5 locales + locale bundle rebuild) → **1 625 keys × 5 locales**.
+
+**AI Provider Extensions:** ONNX + Transformers.js as selectable primary providers. Service-level dedup in `aiThunkUtils.ts`. Per-project AI preset (hash-based deep links). `WorkerBus` backpressure guard (MAX_QUEUE_SIZE 32; critical bypass; telemetry extended).
+
+**Collaboration:** Y-WebRTC E2E AES-256-GCM encryption (`collaborationService.ts`); PBKDF2 310 000 iterations; `CollaborationPanel` E2E status badge.
+
+**Performance:** `PlotCanvas.tsx` pointer-move throttled via rAF; eliminates 60 Hz Redux dispatch storm.
+
+**Quality gate at v1.7.0:** lint ✅ typecheck ✅ i18n **1 625 keys × 5 locales** ✅ **2 024+ tests / 178 files — 0 failures** ✅ coverage (CI pending) ✅ build ✅ bundle ≤ 7000 KB ✅
+
+---
 
 ---
 

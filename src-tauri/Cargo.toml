@@ -1,6 +1,6 @@
 [package]
 name = "storycraft-studio"
-version = "1.6.2"
+version = "1.7.0"
 description = "AI-powered creative writing application"
 authors = ["QNBS"]
 license = "MIT"
