@@ -24,6 +24,7 @@ import {
   querySceneOverlapsWithTitles,
   queryStreak,
   queryWeeklyProgress,
+  withDuckDbRetry,
 } from '../../services/duckdb/duckdbAnalytics';
 import { duckdbClient } from '../../services/duckdb/duckdbClient';
 
@@ -399,5 +400,59 @@ describe('duckdbCodexWrite', () => {
     ]);
     const sql = mockExec.mock.calls[0]?.[0] as string;
     expect(sql).toContain("O''Brien");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// withDuckDbRetry
+// ---------------------------------------------------------------------------
+describe('withDuckDbRetry', () => {
+  it('returns result immediately on first success', async () => {
+    const fn = vi.fn().mockResolvedValue('ok');
+    const result = await withDuckDbRetry(fn, 3);
+    expect(result).toBe('ok');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries and succeeds on second attempt', async () => {
+    vi.useFakeTimers();
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('transient'))
+      .mockResolvedValueOnce('recovered');
+    const promise = withDuckDbRetry(fn, 3);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+    expect(result).toBe('recovered');
+    expect(fn).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it('throws after exhausting all attempts', async () => {
+    vi.useFakeTimers();
+    const fn = vi.fn().mockRejectedValue(new Error('permanent'));
+    // Pre-attach rejection handler before running timers to prevent unhandled-rejection warnings.
+    const settled = withDuckDbRetry(fn, 3).then(
+      () => ({ ok: true as const }),
+      (e: unknown) => ({ ok: false as const, error: e }),
+    );
+    await vi.runAllTimersAsync();
+    const result = await settled;
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: unknown }).error).toBeInstanceOf(Error);
+    expect(fn).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// duckdbDualWrite — throws on exec failure
+// ---------------------------------------------------------------------------
+describe('duckdbDualWrite exec failure', () => {
+  it('throws when exec returns ok: false', async () => {
+    mockExec.mockResolvedValueOnce({ messageId: 'm1', ok: false, error: 'disk full' });
+    await expect(duckdbDualWrite('p1', 'T', 'L', 100, undefined, null, [], [])).rejects.toThrow(
+      'disk full',
+    );
   });
 });

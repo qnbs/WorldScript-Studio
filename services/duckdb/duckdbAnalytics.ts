@@ -56,9 +56,35 @@ export interface CrossProjectSearchRow {
   score: number;
 }
 
+/**
+ * Retry wrapper for idempotent DuckDB operations (ON CONFLICT DO UPDATE is safe to replay).
+ * Exponential backoff with jitter: 1 s + jitter, 2 s + jitter, then throws.
+ */
+export async function withDuckDbRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        const jitter = Math.floor(Math.random() * 150) + 50;
+        await new Promise<void>((r) => setTimeout(r, 1000 * 2 ** (attempt - 1) + jitter));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 /** Escape single-quotes in a SQL string literal. */
 function esc(s: string): string {
   return s.replace(/'/g, "''");
+}
+
+/** Execute SQL or throw — enables withDuckDbRetry to detect partial write failures. */
+async function execOrThrow(sql: string): Promise<void> {
+  const res = await duckdbClient.exec(sql);
+  if (!res.ok) throw new Error(`DuckDB exec failed: ${res.error ?? 'unknown'}`);
 }
 
 /** Convert a number/Float32Array vector to a DuckDB FLOAT[] literal. */
@@ -235,7 +261,7 @@ export async function duckdbDualWrite(
   const now = new Date().toISOString();
 
   // Upsert project row
-  await duckdbClient.exec(
+  await execOrThrow(
     `INSERT INTO projects (project_id, title, logline, total_word_count, target_word_count, target_date, updated_at)
      VALUES ('${esc(projectId)}', '${esc(title)}', '${esc(logline)}', ${totalWordCount},
        ${targetWordCount ?? 'NULL'}, ${targetDate ? `'${esc(targetDate)}'` : 'NULL'}, '${now}')
@@ -252,7 +278,7 @@ export async function duckdbDualWrite(
     const vals = writingHistory
       .map((h) => `('${esc(projectId)}', '${esc(h.date)}', ${h.words})`)
       .join(',');
-    await duckdbClient.exec(
+    await execOrThrow(
       `INSERT INTO writing_history (project_id, date, words) VALUES ${vals}
        ON CONFLICT (project_id, date) DO UPDATE SET words = EXCLUDED.words`,
     );
@@ -261,7 +287,7 @@ export async function duckdbDualWrite(
   // Upsert section word counts + scene_start for timeline overlap view
   if (sections.length > 0) {
     for (const s of sections) {
-      await duckdbClient.exec(
+      await execOrThrow(
         `INSERT INTO sections (section_id, project_id, title, word_count, status, position, scene_start, indexed_at)
          VALUES ('${esc(s.id)}', '${esc(projectId)}', '${esc(s.title)}',
            ${s.wordCount}, '${esc(s.status ?? 'draft')}', ${s.position},
@@ -284,7 +310,7 @@ export async function duckdbRagWrite(
   const now = new Date().toISOString();
   for (const c of chunks) {
     const vecLiteral = vecToSqlLiteral(c.vector);
-    await duckdbClient.exec(
+    await execOrThrow(
       `INSERT INTO rag_chunks (chunk_id, project_id, section_id, chunk_index, vector, indexed_at)
        VALUES ('${esc(c.id)}', '${esc(projectId)}', '${esc(c.sectionId)}', ${c.chunkIndex},
          ${vecLiteral}, '${now}')
@@ -309,7 +335,7 @@ export async function duckdbCrossProjectWrite(entry: {
     entry.characterNames.length > 0
       ? `['${entry.characterNames.map((n) => esc(n)).join("','")}']`
       : '[]::VARCHAR[]';
-  await duckdbClient.exec(
+  await execOrThrow(
     `INSERT INTO cross_project_index
        (project_id, title, logline, manuscript_word_count, character_names, embedding_vector, last_indexed)
      VALUES ('${esc(entry.projectId)}', '${esc(entry.title)}', '${esc(entry.logline)}',
@@ -336,7 +362,7 @@ export async function duckdbCodexWrite(
 ): Promise<void> {
   if (entities.length === 0) return;
   for (const e of entities) {
-    await duckdbClient.exec(
+    await execOrThrow(
       `INSERT INTO codex_entities (entity_id, project_id, name, entity_type, mention_count)
        VALUES ('${esc(e.id)}', '${esc(projectId)}', '${esc(e.name)}', '${esc(e.type)}', ${e.mentionCount})
        ON CONFLICT (entity_id, project_id) DO UPDATE SET
@@ -344,7 +370,7 @@ export async function duckdbCodexWrite(
          mention_count = EXCLUDED.mention_count`,
     );
     for (const m of e.mentions) {
-      await duckdbClient.exec(
+      await execOrThrow(
         `INSERT INTO codex_mentions (entity_id, project_id, section_id, excerpt)
          VALUES ('${esc(e.id)}', '${esc(projectId)}', '${esc(m.sectionId)}', '${esc(m.excerpt)}')
          ON CONFLICT (entity_id, project_id, section_id) DO UPDATE SET excerpt = EXCLUDED.excerpt`,

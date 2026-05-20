@@ -5,7 +5,11 @@ import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { indexProject } from '../services/crossProjectIndexService';
-import { duckdbCodexWrite, duckdbDualWrite } from '../services/duckdb/duckdbAnalytics';
+import {
+  duckdbCodexWrite,
+  duckdbDualWrite,
+  withDuckDbRetry,
+} from '../services/duckdb/duckdbAnalytics';
 import { runIfNeeded as duckdbMigrateIfNeeded } from '../services/duckdb/duckdbMigration';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
@@ -92,7 +96,7 @@ listenerMiddleware.startListening({
         );
       }
 
-      // QNBS-v3: Dual-write plaintext analytics columns to DuckDB (non-blocking, fire-and-forget).
+      // QNBS-v3: Dual-write plaintext analytics columns to DuckDB (non-blocking, with retry).
       if ((listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics) {
         const projectId = presentData.id ?? 'default';
         const sections = presentData.manuscript.map((s, idx) => ({
@@ -105,16 +109,20 @@ listenerMiddleware.startListening({
           scene_start: s.sceneStart,
         }));
         const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
-        void duckdbDualWrite(
-          projectId,
-          presentData.title,
-          presentData.logline,
-          totalWordCount,
-          presentData.projectGoals?.totalWordCount,
-          presentData.projectGoals?.targetDate,
-          presentData.writingHistory ?? [],
-          sections,
-        ).catch((err: unknown) => logger.warn('DuckDB dual-write failed (non-critical):', err));
+        void withDuckDbRetry(() =>
+          duckdbDualWrite(
+            projectId,
+            presentData.title,
+            presentData.logline,
+            totalWordCount,
+            presentData.projectGoals?.totalWordCount,
+            presentData.projectGoals?.targetDate,
+            presentData.writingHistory ?? [],
+            sections,
+          ),
+        ).catch((err: unknown) =>
+          logger.warn('DuckDB dual-write failed after retries (non-critical):', err),
+        );
       }
 
       listenerApi.dispatch(statusActions.setSavingStatus('saved'));
@@ -209,16 +217,16 @@ listenerMiddleware.startListening({
 
       // QNBS-v3: P3 dual-write — codex entity names/types to DuckDB for co-occurrence queries.
       if ((listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics) {
-        void duckdbCodexWrite(
-          projectId,
-          codex.entities.map((e) => ({
-            id: e.id,
-            name: e.name,
-            type: e.type,
-            mentionCount: e.mentionCount,
-            mentions: e.mentions.map((m) => ({ sectionId: m.sectionId, excerpt: m.excerpt })),
-          })),
-        ).catch((err: unknown) => logger.warn('DuckDB codex write failed (non-critical):', err));
+        const entities = codex.entities.map((e) => ({
+          id: e.id,
+          name: e.name,
+          type: e.type,
+          mentionCount: e.mentionCount,
+          mentions: e.mentions.map((m) => ({ sectionId: m.sectionId, excerpt: m.excerpt })),
+        }));
+        void withDuckDbRetry(() => duckdbCodexWrite(projectId, entities)).catch((err: unknown) =>
+          logger.warn('DuckDB codex write failed after retries (non-critical):', err),
+        );
       }
     } catch (error) {
       logger.warn('Story Codex auto-tracking failed:', error);

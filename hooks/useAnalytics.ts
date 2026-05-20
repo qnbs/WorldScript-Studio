@@ -3,10 +3,15 @@
 //          flag=on   → fetches from DuckDB; exposes isLoading so UI can show skeleton.
 
 import { useEffect, useRef, useState } from 'react';
-import { useAppSelector } from '../app/hooks';
-import { selectIsDuckDbReady } from '../features/analytics/analyticsSlice';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
+import {
+  selectDuckDbError,
+  selectDuckDbStatus,
+  selectIsDuckDbReady,
+} from '../features/analytics/analyticsSlice';
 import { selectEnableDuckDbAnalytics } from '../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../features/project/projectSelectors';
+import { statusActions } from '../features/status/statusSlice';
 import {
   type DailyProgressRow,
   queryDailyProgress,
@@ -21,6 +26,8 @@ export interface AnalyticsData {
   /** Whether DuckDB analytics are active for this session. */
   isEnabled: boolean;
   isLoading: boolean;
+  // QNBS-v3: true when DuckDB init failed after all retries — UI should show degraded banner.
+  duckDbUnavailable: boolean;
   /** undefined = not yet fetched or flag off */
   dailyProgress: DailyProgressRow[] | undefined;
   weeklyProgress: WeeklyProgressRow[] | undefined;
@@ -31,6 +38,7 @@ export interface AnalyticsData {
 const DEFAULT: AnalyticsData = {
   isEnabled: false,
   isLoading: false,
+  duckDbUnavailable: false,
   dailyProgress: undefined,
   weeklyProgress: undefined,
   streak: undefined,
@@ -38,16 +46,39 @@ const DEFAULT: AnalyticsData = {
 };
 
 export function useAnalytics(): AnalyticsData {
+  const dispatch = useAppDispatch();
   const isEnabled = useAppSelector(selectEnableDuckDbAnalytics);
   const isReady = useAppSelector(selectIsDuckDbReady);
+  const duckDbStatus = useAppSelector(selectDuckDbStatus);
+  const duckDbError = useAppSelector(selectDuckDbError);
   const project = useAppSelector(selectProjectData);
 
   const [data, setData] = useState<AnalyticsData>({ ...DEFAULT, isEnabled });
   const abortRef = useRef<AbortController | null>(null);
+  // QNBS-v3: Track whether we've already shown the unavailability toast to avoid duplicates.
+  const unavailableToastShown = useRef(false);
+
+  // QNBS-v3: Show a one-time warning toast when DuckDB becomes unavailable after retries.
+  useEffect(() => {
+    const isUnavailable = duckDbStatus === 'error' || duckDbStatus === 'unavailable';
+    if (isEnabled && isUnavailable && !unavailableToastShown.current) {
+      unavailableToastShown.current = true;
+      setData((prev) => ({ ...prev, duckDbUnavailable: true }));
+      dispatch(
+        statusActions.addNotification({
+          type: 'info',
+          title: 'Analytics unavailable',
+          description: duckDbError
+            ? `DuckDB: ${duckDbError}`
+            : 'Analytics could not be initialized. Charts will be empty for this session.',
+        }),
+      );
+    }
+  }, [isEnabled, duckDbStatus, duckDbError, dispatch]);
 
   useEffect(() => {
     if (!isEnabled || !isReady) {
-      setData({ ...DEFAULT, isEnabled });
+      setData((prev) => ({ ...DEFAULT, isEnabled, duckDbUnavailable: prev.duckDbUnavailable }));
       return;
     }
 

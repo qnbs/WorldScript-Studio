@@ -2,11 +2,18 @@
 //          Exposes typed query/exec/init/shutdown helpers with AbortSignal cancellation.
 //          Worker is instantiated lazily on first call to init().
 
-import type { DuckDbRequest, DuckDbRequestType, DuckDbResponse } from '../../workers/duckdbWorker';
+import type {
+  DuckDbRequest,
+  DuckDbRequestType,
+  DuckDbResponse,
+  DuckDbWorkerEvent,
+} from '../../workers/duckdbWorker';
 
 let worker: Worker | null = null;
 const pendingResolvers = new Map<string, (res: DuckDbResponse) => void>();
 let messageIdCounter = 0;
+// QNBS-v3: Settable by useDuckDb to surface OPFS fallback state in Redux.
+let opfsFallbackCb: ((reason: string) => void) | null = null;
 
 function generateMessageId(): string {
   return `duckdb-${Date.now()}-${++messageIdCounter}`;
@@ -18,12 +25,18 @@ function getWorker(): Worker {
     worker = new Worker(new URL('../../workers/duckdbWorker.ts', import.meta.url), {
       type: 'module',
     });
-    worker.addEventListener('message', (event: MessageEvent<DuckDbResponse>) => {
-      const { messageId } = event.data;
+    worker.addEventListener('message', (event: MessageEvent) => {
+      const data = event.data as DuckDbResponse | DuckDbWorkerEvent;
+      // QNBS-v3: OPFS_FALLBACK is out-of-band — no messageId resolver to call.
+      if ((data as DuckDbWorkerEvent).type === 'OPFS_FALLBACK') {
+        opfsFallbackCb?.((data as DuckDbWorkerEvent).reason);
+        return;
+      }
+      const { messageId } = data as DuckDbResponse;
       const resolve = pendingResolvers.get(messageId);
       if (resolve) {
         pendingResolvers.delete(messageId);
-        resolve(event.data);
+        resolve(data as DuckDbResponse);
       }
     });
     worker.addEventListener('error', (event) => {
@@ -90,5 +103,10 @@ export const duckdbClient = {
     worker?.terminate();
     worker = null;
     pendingResolvers.clear();
+  },
+
+  /** Register a callback invoked when the worker falls back to in-memory (OPFS unavailable). */
+  setOpfsFallbackHandler(cb: ((reason: string) => void) | null): void {
+    opfsFallbackCb = cb;
   },
 };

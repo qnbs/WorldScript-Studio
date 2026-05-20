@@ -7,6 +7,21 @@ import { analyticsActions, selectDuckDbStatus } from '../features/analytics/anal
 import { selectEnableDuckDbAnalytics } from '../features/featureFlags/featureFlagsSlice';
 import { duckdbClient } from '../services/duckdb/duckdbClient';
 import { DUCKDB_DDL } from '../services/duckdb/duckdbSchema';
+import { logger } from '../services/logger';
+
+const MAX_INIT_ATTEMPTS = 3;
+const INIT_TIMEOUT_MS = 30_000;
+
+/** Race a promise against a timeout; clear the timeout when the signal fires. */
+function withTimeout<T>(p: Promise<T>, ms: number, msg: string, signal?: AbortSignal): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, rej) => {
+      const t = setTimeout(() => rej(new Error(msg)), ms);
+      signal?.addEventListener('abort', () => clearTimeout(t), { once: true });
+    }),
+  ]);
+}
 
 export function useDuckDb() {
   const dispatch = useAppDispatch();
@@ -21,30 +36,68 @@ export function useDuckDb() {
 
     dispatch(analyticsActions.setDuckDbStatus('initializing'));
 
+    // QNBS-v3: Relay OPFS fallback to Redux so Settings can show an in-memory badge.
+    duckdbClient.setOpfsFallbackHandler((reason) => {
+      if (!cancelled) {
+        dispatch(analyticsActions.setDuckDbPersistenceMode('memory'));
+        logger.warn('DuckDB OPFS unavailable — analytics will not persist across reloads:', reason);
+      }
+    });
+
     void (async () => {
-      const initRes = await duckdbClient.init(controller.signal);
-      if (cancelled) return;
+      for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
+        if (cancelled) return;
+        try {
+          const initRes = await withTimeout(
+            duckdbClient.init(controller.signal),
+            INIT_TIMEOUT_MS,
+            `DuckDB init timed out after ${INIT_TIMEOUT_MS / 1000}s`,
+            controller.signal,
+          );
+          if (cancelled) return;
+          if (!initRes.ok) throw new Error(initRes.error ?? 'DuckDB init failed');
 
-      if (!initRes.ok) {
-        dispatch(analyticsActions.setDuckDbError(initRes.error ?? 'DuckDB init failed'));
-        return;
+          // Apply schema DDL after worker boots
+          const ddlRes = await duckdbClient.exec(DUCKDB_DDL, undefined, controller.signal);
+          if (cancelled) return;
+          if (!ddlRes.ok) throw new Error(ddlRes.error ?? 'DuckDB schema DDL failed');
+
+          dispatch(analyticsActions.setDuckDbStatus('ready'));
+          return; // success
+        } catch (err) {
+          if (cancelled) return;
+          logger.warn(`DuckDB init attempt ${attempt}/${MAX_INIT_ATTEMPTS} failed:`, err);
+          if (attempt < MAX_INIT_ATTEMPTS) {
+            // QNBS-v3: Exponential backoff (1 s, 2 s) with abort-safe sleep.
+            const backoffMs = 1000 * 2 ** (attempt - 1);
+            await new Promise<void>((resolve) => {
+              const t = setTimeout(resolve, backoffMs);
+              controller.signal.addEventListener(
+                'abort',
+                () => {
+                  clearTimeout(t);
+                  resolve();
+                },
+                { once: true },
+              );
+            });
+          } else {
+            // QNBS-v3: All retries exhausted — mark 'unavailable' so callers degrade gracefully.
+            dispatch(
+              analyticsActions.setDuckDbError(
+                err instanceof Error ? err.message : 'DuckDB init failed after all retries',
+              ),
+            );
+            dispatch(analyticsActions.setDuckDbStatus('unavailable'));
+          }
+        }
       }
-
-      // Apply schema DDL after worker boots
-      const ddlRes = await duckdbClient.exec(DUCKDB_DDL, undefined, controller.signal);
-      if (cancelled) return;
-
-      if (!ddlRes.ok) {
-        dispatch(analyticsActions.setDuckDbError(ddlRes.error ?? 'DuckDB schema DDL failed'));
-        return;
-      }
-
-      dispatch(analyticsActions.setDuckDbStatus('ready'));
     })();
 
     return () => {
       cancelled = true;
       controller.abort();
+      duckdbClient.setOpfsFallbackHandler(null);
     };
   }, [isEnabled, status, dispatch]);
 

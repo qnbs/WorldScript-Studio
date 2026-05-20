@@ -5,6 +5,12 @@
 
 export type DuckDbRequestType = 'INIT' | 'QUERY' | 'EXEC' | 'MIGRATE' | 'SHUTDOWN';
 
+// QNBS-v3: Out-of-band event emitted when OPFS attach fails — no messageId, fires independently.
+export interface DuckDbWorkerEvent {
+  type: 'OPFS_FALLBACK';
+  reason: string;
+}
+
 export interface DuckDbRequest {
   messageId: string;
   type: DuckDbRequestType;
@@ -91,8 +97,12 @@ async function initDuckDb(): Promise<void> {
       );
       connection = await newDb.connect();
       await connection.query("ATTACH 'storycraft_analytics.duckdb' AS analytics (TYPE duckdb)");
-    } catch {
-      // OPFS attach failed — continue with in-memory
+    } catch (opfsErr) {
+      // QNBS-v3: Notify main thread so the hook can set persistence-mode badge in Redux.
+      self.postMessage({
+        type: 'OPFS_FALLBACK',
+        reason: opfsErr instanceof Error ? opfsErr.message : String(opfsErr),
+      } satisfies DuckDbWorkerEvent);
       connection = await newDb.connect();
     }
   } else {
