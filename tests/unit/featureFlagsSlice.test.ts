@@ -14,6 +14,7 @@ describe('featureFlagsSlice', () => {
     enableCrossProjectSearch: true,
     enableAppHealthPanel: false,
     enablePlotBoardV2: true,
+    enableDuckDbAnalytics: false,
   };
 
   it('should match default feature flag state on init', () => {
@@ -39,6 +40,7 @@ describe('featureFlagsSlice', () => {
       enableCrossProjectSearch: true,
       enableAppHealthPanel: false,
       enablePlotBoardV2: true,
+      enableDuckDbAnalytics: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

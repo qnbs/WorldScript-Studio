@@ -17,6 +17,8 @@ export interface FeatureFlagsState {
   enableAppHealthPanel: boolean;
   /** Plot-Board v2: free-form canvas, SVG connections, tension curve (default: true). */
   enablePlotBoardV2: boolean;
+  /** DuckDB-WASM analytics side-car: OPFS-backed query engine for dashboards (default: false). */
+  enableDuckDbAnalytics: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -32,6 +34,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableAppHealthPanel: false,
   // QNBS-v3: Plot-Board v2 is the new default scene board mode in v1.6
   enablePlotBoardV2: true,
+  // QNBS-v3: DuckDB-WASM analytics is experimental; off by default until P1 analytics features land
+  enableDuckDbAnalytics: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -97,6 +101,9 @@ const featureFlagsSlice = createSlice({
     setEnablePlotBoardV2(state, action: PayloadAction<boolean>) {
       state.enablePlotBoardV2 = action.payload;
     },
+    setEnableDuckDbAnalytics(state, action: PayloadAction<boolean>) {
+      state.enableDuckDbAnalytics = action.payload;
+    },
   },
 });
 
@@ -119,6 +126,8 @@ export const selectEnableAppHealthPanel = (state: { featureFlags: FeatureFlagsSt
   state.featureFlags.enableAppHealthPanel;
 export const selectEnablePlotBoardV2 = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enablePlotBoardV2;
+export const selectEnableDuckDbAnalytics = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableDuckDbAnalytics;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {
