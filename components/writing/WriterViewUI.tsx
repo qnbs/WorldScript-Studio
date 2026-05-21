@@ -68,7 +68,7 @@ const WriterViewUI: FC = () => {
           type="button"
           onClick={() => setFocusMode((f) => !f)}
           title={focusMode ? t('writer.focusMode.exit') : t('writer.focusMode.enter')}
-          className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
+          className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'bg-[var(--background-interactive)]/20 border-[var(--ring-focus)]/40 text-[var(--ring-focus)]' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
         >
           {focusMode
             ? `⊠ ${t('writer.focusMode.exitLabel')}`
@@ -82,7 +82,7 @@ const WriterViewUI: FC = () => {
           title={t('writer.versionControl.tooltip')}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
-          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--background-interactive)]/20 border-[var(--ring-focus)]/40 text-[var(--ring-focus)]' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>
@@ -96,7 +96,7 @@ const WriterViewUI: FC = () => {
           onClick={() => dispatch(versionControlActions.togglePanel())}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
-          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--background-interactive)]/20 border-[var(--ring-focus)]/40 text-[var(--ring-focus)]' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>

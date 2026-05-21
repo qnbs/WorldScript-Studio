@@ -98,6 +98,12 @@
   "empty.manuscript.description": "Add your first section to start writing in the manuscript editor.",
   "sceneboard.title": "Scene Board",
   "sceneboard.confirmDelete": "Are you sure you want to delete this scene?",
+  "sceneboard.ai.suggestBeat": "AI suggest beat",
+  "sceneboard.ai.suggesting": "Suggesting…",
+  "sceneboard.ai.panelTitle": "AI plot suggestions",
+  "sceneboard.ai.ragChunks": "{{count}} RAG context chunks",
+  "sceneboard.ai.empty": "No suggestions yet. Run again after adding scene content.",
+  "sceneboard.ai.retry": "Suggest again",
   "sceneboard.newSceneTitle": "New Scene",
   "sceneboard.addScene": "Add Scene",
   "sceneboard.noScenes": "No scenes yet. Add one to get started.",
@@ -640,6 +646,9 @@
   "writer.studio.context.selectSection": "Select a section to edit",
   "writer.studio.context.contentPlaceholder": "Select or create a manuscript section to begin.",
   "writer.studio.tools.title": "AI Tools",
+  "writer.studio.rag.useContext": "Use RAG story context",
+  "writer.studio.rag.chunksBadge": "{{count}} chunks",
+  "writer.studio.rag.chunksHint": "Retrieved manuscript excerpts injected into the prompt",
   "writer.studio.tools.continue.title": "Continue Writing",
   "writer.studio.tools.continue.instruction": "Place your cursor in the manuscript where you want the AI to start writing.",
   "writer.studio.tools.improve.title": "Improve Text",
@@ -1342,6 +1351,7 @@
   "settings.advancedAi.ragModeLabel": "Search index mode",
   "settings.advancedAi.ragModeHybrid": "Hybrid (semantic + lexical, recommended)",
   "settings.advancedAi.ragModeLexical": "Lexical only (fast, no ML model)",
+  "settings.advancedAi.ragModeHint": "Hybrid scoring: ~60% semantic similarity, ~30% lexical overlap, ~10% recency. DuckDB analytics (when enabled) ranks 384-dim embeddings; rebuild the index after large manuscript edits.",
   "settings.advancedAi.localRagBuild": "Rebuild local search index",
   "settings.advancedAi.localRagDone": "Local index updated",
   "settings.advancedAi.localRagDoneDetail": "Indexed {{count}} chunks.",
@@ -1657,6 +1667,11 @@
           "title": "help.aiStudio.tools.title",
           "content": "help.aiStudio.tools.content",
           "tryActionId": "nav-writer"
+        },
+        {
+          "title": "help.aiStudio.ragContext.title",
+          "content": "help.aiStudio.ragContext.content",
+          "tryActionId": "nav-writer"
         }
       ]
     },
@@ -1736,6 +1751,8 @@
   "help.aiStudio.overview.content": "<h3>Your Creative Co-Pilot</h3><p>The AI Writing Studio is your dedicated space for AI-assisted writing. The workflow is designed for power and flexibility:</p><ol><li><b>Select Context:</b> First, choose the manuscript section you want to work on from the dropdown menu in the 'Manuscript Context' panel.</li><li><b>Choose a Tool:</b> Select one of the powerful AI tools from the top of the 'AI Tools' panel.</li><li><b>Provide Input:</b> Depending on the tool, you might need to select text in the editor, choose characters, or write a prompt.</li><li><b>Generate:</b> Click the 'Generate' button. The output will appear in the 'AI Scratchpad' on the right.</li><li><b>Review and Accept:</b> You can edit the generated text in the scratchpad. Once you're happy, use the 'Insert' or 'Replace' buttons to apply it to your manuscript.</li></ol>",
   "help.aiStudio.tools.title": "Understanding the AI Tools",
   "help.aiStudio.tools.content": "<h3>The Right Tool for the Job</h3><p>Each tool in the studio serves a different purpose:</p><ul><li><b>Continue Writing:</b> Perfect for writer's block. Place your cursor in the text, and the AI will write what comes next.</li><li><b>Improve Text:</b> Highlight a sentence or paragraph, and the AI will rewrite it. Use the Style dropdown to guide the improvement (e.g., make it more 'Cinematic').</li><li><b>Change Tone:</b> Similar to 'Improve Text,' but uses the Tone dropdown to change the mood (e.g., make it more 'Suspenseful').</li><li><b>Generate Dialogue:</b> Select the characters in the scene, describe the scenario, and the AI will write their conversation.</li><li><b>Brainstorm Ideas:</b> Get a list of creative plot points for what could happen next.</li><li><b>Summarize Section:</b> Quickly generates a synopsis of the selected manuscript section, which is useful for checking pacing or writing chapter summaries.</li></ul>",
+  "help.aiStudio.ragContext.title": "RAG context for AI generation",
+  "help.aiStudio.ragContext.content": "<h3>Retrieval-augmented prompts (local)</h3><p>When <b>RAG context</b> is enabled in the AI Tools panel, StoryCraft retrieves relevant manuscript chunks before calling the model. Hybrid mode blends semantic embeddings (~60%), lexical overlap (~30%), and recency (~10%).</p><ol><li>Build the index under <b>Settings → Advanced AI → Rebuild local search index</b> (requires the local embedding model on capable devices).</li><li>Open the <b>AI Writing Studio</b>, enable <b>RAG context</b>, and run Continue, Brainstorm, or Critic.</li><li>The chunk badge shows how many passages were injected; Plot Board beat suggestions use the same pipeline.</li></ol><p>Your manuscript text stays in the browser; only the assembled prompt is sent to your chosen AI provider.</p>",
   "help.category.management": "Data & Settings",
   "help.management.export.title": "Exporting Your Work",
   "help.management.export.content": "<h3>From Draft to Document</h3><p>The <b>Export</b> view is a full publishing suite. You have a live preview of your formatted document on the right. In the 'Export Controls' panel, you can:</p><ul><li><b>Select Content:</b> Choose which parts of your project to include, such as Character Dossiers or World-Building notes.</li><li><b>Choose a Format:</b> We support <b>Markdown (.md)</b>, <b>Plain Text (.txt)</b>, and <b>PDF (.pdf)</b>.</li><li><b>Customize PDF:</b> For PDFs, you can set the font, font size, line spacing, and choose whether to include a professional title page.</li><li><b>Use AI Enhancements:</b> Check the 'Generate AI Synopsis' box to have the AI write a professional one-page summary of your entire manuscript to be included in the export.</li></ul>",

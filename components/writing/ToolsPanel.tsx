@@ -50,10 +50,31 @@ const ToolsPanel: FC = React.memo(() => {
   return (
     <div className="h-full flex flex-col">
       <Card className="h-full flex flex-col sticky top-0 lg:top-20 border-0 sm:border">
-        <CardHeader className="hidden md:block">
+        <CardHeader className="hidden md:block space-y-2">
           <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
             {t('writer.studio.tools.title')}
           </h2>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <label className="inline-flex items-center gap-1.5 text-[var(--foreground-secondary)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={writerState.useRagContext}
+                onChange={(e) => dispatch(writerActions.setUseRagContext(e.target.checked))}
+                className="rounded border-[var(--border-primary)]"
+              />
+              {t('writer.studio.rag.useContext')}
+            </label>
+            {writerState.lastRagChunkCount > 0 && (
+              <span
+                className="px-2 py-0.5 rounded-full bg-[var(--background-interactive)]/15 text-[var(--ring-focus)] border border-[var(--border-primary)]"
+                title={t('writer.studio.rag.chunksHint')}
+              >
+                {t('writer.studio.rag.chunksBadge', {
+                  count: String(writerState.lastRagChunkCount),
+                })}
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col space-y-4 flex-grow overflow-hidden p-4 sm:p-6">
           <div
@@ -67,7 +88,7 @@ const ToolsPanel: FC = React.memo(() => {
                 key={tool.id}
                 title={tool.title}
                 onClick={() => dispatch(writerActions.setActiveTool(tool.id as WriterTool))}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 touch-manipulation min-h-[44px] min-w-[44px] ${
+                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--ring-focus)] active:scale-95 touch-manipulation min-h-[44px] min-w-[44px] ${
                   activeTool === tool.id
                     ? 'bg-[var(--background-interactive)] text-white shadow-md transform scale-[1.02]'
                     : 'bg-[var(--glass-bg)] text-[var(--foreground-secondary)] hover:bg-[var(--glass-bg-hover)] border border-[var(--border-primary)]'

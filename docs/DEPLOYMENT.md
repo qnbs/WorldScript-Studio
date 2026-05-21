@@ -1,30 +1,109 @@
-# Deployment — GitHub Pages & Vercel
+# Deployment — GitHub Pages, Vercel & Cloudflare Pages
 
-StoryCraft Studio is a **static SPA** (Vite → `dist/`). API keys stay **client-side** in IndexedDB; do **not** put Gemini/OpenAI secrets in Vercel/GitHub **environment variables** for inference — optional `VITE_*` build-time flags only if the project introduces them.
+StoryCraft Studio is a **static SPA** (Vite → `dist/`). API keys stay **client-side** in IndexedDB; do **not** put Gemini/OpenAI secrets in host **environment variables** for inference.
 
-## GitHub Pages (canonical upstream)
+## Base path matrix
 
-1. Fork or use the repo; enable **Pages** → Source: **GitHub Actions**.
-2. Push to `main`; the **deploy** workflow runs after **build** + **e2e** succeed.
-3. Default live URL pattern: `https://<user>.github.io/StoryCraft-Studio/` — matches `vite.config.ts` **`base: '/StoryCraft-Studio/'`**.
-4. Custom domain: see **Custom Domain Setup** in [`README.md`](../README.md); `base` becomes `/` when a `public/CNAME` is present.
+| Target | Build command | Vite `base` | Typical URL |
+|--------|---------------|-------------|---------------|
+| **GitHub Pages** (default CI) | `pnpm run build` | `/StoryCraft-Studio/` | `https://<user>.github.io/StoryCraft-Studio/` |
+| **Vercel** | `pnpm run build:edge` | `/` | `https://<project>.vercel.app/` |
+| **Cloudflare Pages** | `pnpm run build:edge` | `/` | `https://<project>.pages.dev/` |
 
-## Vercel (equal deployment path)
-
-Use this when you prefer Vercel previews and hosting instead of (or alongside) Pages.
-
-1. **Import** the Git repository in Vercel; **Root Directory** = repo root.
-2. **Framework preset:** Vite (or Other). **Build Command:** `pnpm run build` (runs `prebuild` → i18n bundle + `vite build`). **Output Directory:** `dist`.
-3. **Production branch:** usually `main`; enable **Preview Deployments** for PRs.
-4. **`base` / asset paths:**
-   - **Custom domain at apex or subdomain (recommended on Vercel):** set Vite `base` to **`/`** for that deployment (or maintain a branch/env-specific config). Vercel serves the SPA from the domain root; [`vercel.json`](../vercel.json) includes SPA **rewrites** so client-side routing works.
-   - **Under a subpath:** rarely needed on Vercel; if you mirror the GitHub Pages path, align `base` with that path and asset URLs.
-5. **Security / privacy:** No AI keys in project Settings → Environment Variables for end-user inference. Keys remain **entered in the app** and encrypted locally — consistent with [`.github/SECURITY.md`](../.github/SECURITY.md).
-
-### Optional `vercel.json`
-
-The repo root [`vercel.json`](../vercel.json) documents the intended build/output and SPA fallback. Adjust only if your team uses a monorepo root or different output folder.
+Edge builds run [`scripts/build-edge.mjs`](../scripts/build-edge.mjs): sets `DEPLOY_TARGET=edge`, patches `public/manifest.json`, `offline.html`, `404.html`, then `vite build`.
 
 ---
 
-**Pricing / SLAs:** Cloud provider pricing changes frequently — treat any numeric claims as **“as of May 2026; check vendor pricing pages.”**
+## GitHub Pages (canonical upstream)
+
+1. Repo **Settings → Pages → Build and deployment**: source **GitHub Actions**.
+2. Push to `main`; workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs **build** + **e2e**, then **deploy** uploads `dist/` (built with `pnpm run build`, subpath base).
+3. Environment **github-pages** must exist (created on first successful deploy).
+
+### Health check after push
+
+```bash
+# Pages enabled?
+gh api repos/:owner/:repo/pages 2>/dev/null || echo "Pages API: not configured or billing/plan blocked"
+
+# Latest deploy workflow
+gh run list --workflow="CI / CD" --limit 3
+gh run view <run-id> --log-failed
+```
+
+**Billing / availability:** If the **deploy** job is skipped or fails with `Resource not accessible`, check **Settings → Billing** (Actions minutes, Pages for private repos). Public forks get Pages on the fork owner’s plan. The app remains buildable locally with `pnpm run build && pnpm run preview`.
+
+---
+
+## Vercel
+
+1. **Import** the Git repository; **Root Directory** = repo root.
+2. Framework: **Other** (or Vite). Settings are overridden by [`vercel.json`](../vercel.json):
+   - **Install:** `pnpm install --frozen-lockfile`
+   - **Build:** `pnpm run build:edge`
+   - **Output:** `dist`
+3. **Node.js** ≥ 22 (Project Settings → General).
+4. **Environment variables (optional):** `DEPLOY_TARGET=edge` — redundant if using `build:edge`; do **not** add AI API keys for end users.
+5. SPA routing: `rewrites` in `vercel.json` → `index.html`.
+6. **Preview deployments:** enabled per branch/PR by default.
+
+---
+
+## Cloudflare Pages
+
+### Dashboard (recommended first time)
+
+1. [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Pages** → Connect Git.
+2. **Build command:** `pnpm run build:edge`
+3. **Build output directory:** `dist`
+4. **Environment variables:** `NODE_VERSION=22`, `PNPM_VERSION=10` (or use Corepack).
+5. **Root:** repository root; **Package manager:** pnpm.
+
+Static extras in `public/`:
+
+- [`_redirects`](../public/_redirects) — SPA fallback `/* → /index.html`
+- [`_headers`](../public/_headers) — cache + security headers
+
+Local preview with Wrangler (optional):
+
+```bash
+pnpm run build:edge
+pnpm exec wrangler pages dev dist
+```
+
+Config: [`wrangler.toml`](../wrangler.toml).
+
+### GitHub Actions (optional)
+
+Workflow [`.github/workflows/deploy-cloudflare-pages.yml`](../.github/workflows/deploy-cloudflare-pages.yml) runs only when secrets are set:
+
+| Secret | Purpose |
+|--------|---------|
+| `CLOUDFLARE_API_TOKEN` | Pages deploy token |
+| `CLOUDFLARE_ACCOUNT_ID` | Account ID from dashboard |
+
+Without secrets the job is **skipped** (fork-safe).
+
+---
+
+## Local parity
+
+```bash
+# GitHub Pages-shaped build
+pnpm run build && pnpm run preview
+
+# Vercel / Cloudflare-shaped build (root base)
+pnpm run build:edge && pnpm exec vite preview --base /
+```
+
+---
+
+## Security notes
+
+- No server-side storage of manuscripts or API keys.
+- CSP in [`index.html`](../index.html) / Tauri [`tauri.conf.json`](../src-tauri/tauri.conf.json) — extend `connect-src` only when adding new AI hosts.
+- Service worker: AI hosts are **network-only** ([`public/sw.js`](../public/sw.js)); WASM/ONNX not precached.
+
+---
+
+**Pricing / SLAs:** Vendor pricing changes frequently — verify current Pages, Vercel, and Cloudflare plans before production commitments.

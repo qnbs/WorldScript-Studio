@@ -1,39 +1,50 @@
 ---
-description: Enforce accessible React UI patterns in shared components
+description: Enforce accessible,i18n-ready React UI in shared components
 globs: components/**/*.tsx
 alwaysApply: false
 ---
 
-# UI-Komponenten (React 19 + Vite)
+# UI-Komponenten (React 19)
 
 ## Paradigma
 
-- Funktionale Komponenten; State über Redux oder lokales UI-State wo angemessen. Kein Class-Component-Muster neu einführen.
-- Wiederverwendbare Primitive unter `components/ui/*`; fachliche Views bleiben composable.
+- Funktionale Komponenten; Redux für App-State, lokales UI-State nur wo sinnvoll.
+- Primitive: **`components/ui/*`**; Design-Tokens optional **`@domain/ui`**.
+- **Alle** nutzersichtlichen Strings über **i18n** (`useTranslation` / Kontext).
 
-## Props & Namen
+## Props & Struktur
 
-- Props explizit typisieren; optional mit `?`, konsistent mit `exactOptionalPropertyTypes`.
-- Event-Handler `onX`-Präfix; booleans `is*/has*`.
+- Props strikt typisiert (`exactOptionalPropertyTypes`).
+- Handler `onX`; Booleans `is*/has*`.
+- Teure Listen: `React.memo`; UI-Primitives mit `forwardRef` wo nötig.
 
-## Accessibility (Biome + Produkt)
+## Accessibility
 
-- Klickbare Flächen: `button` oder `role` + **Tastatur** (`onKeyDown`/`tabIndex` wo nötig); Regel `useKeyWithClickEvents`.
-- Formulare: Labels mit `htmlFor`/aria; `useButtonType` für Buttons.
-- `dangerouslySetInnerHtml` nur mit sanitisiertem Inhalt (DomPurify o. ä.) — sonst verboten.
+- Klick = `button` oder `role` + **Tastatur** (`useKeyWithClickEvents`).
+- Modale: Fokus-Falle (`useFocusTrap`), ESC, Backdrop als schließbarer `button` mit `aria-label` — siehe `Modal.tsx`, `CommandPalette.tsx`.
+- Formulare: `htmlFor`/ARIA; `useButtonType`.
+- Ladezustände KI: `aria-busy` + kurzes `aria-live` wo Status wechselt.
+- `dangerouslySetInnerHtml` nur sanitisiert (DOMPurify).
+- Status: `LiveRegionProvider` / `useAnnounce()` für wichtige Wechsel.
 
-## Styling
+## Command Center & Hilfe
 
-- Tailwind-Klassen bevorzugen; keine Inline-Styles außer dynamischen Werten (Größen, Position aus Messung).
+- Palette: keine zweite Open-State-Quelle neben `transientUiStore`.
+- Tooltips/EmptyState aus `components/ui/`; Toasts mit `commandId` wo passend.
 
-## Tauri vs. Web
+## Styling & Hosts
 
-- Keine direkten `@tauri-apps/api`-Imports in reinen UI-Atoms; Abstraktion über Services/Hooks, damit Web-Build stabil bleibt.
+- Tailwind; Inline nur für gemessene Werte.
+- **Keine** `@tauri-apps/api` in UI-Atoms — Services/Hooks.
+
+## Storybook
+
+- Neue Primitive: Story + **addon-a11y** prüfen (`pnpm run storybook`).
 
 <example>
-Neuer Dialog: `Modal`/`Button` aus `components/ui`, Fokus-Falle und ESC schließen wie bestehende Modale.
+Neues Panel: `Modal` + i18n-Titel; Fokus zurück auf Trigger; Tastatur-Reihenfolge in Scene Board wie `moveManuscriptSectionWithinAct`.
 </example>
 
 <example type="invalid">
-`<div onClick={...}>` ohne Tastaturbedienung für eine primäre Aktion; oder rohes `dangerouslySetInnerHtml` ohne Sanitizer.
+`<div onClick>` ohne Keyboard; hardcodierter Button-Text `"Save"`; rohes HTML aus KI-Output; Tauri-FS im Button-Handler.
 </example>

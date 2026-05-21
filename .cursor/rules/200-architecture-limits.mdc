@@ -1,30 +1,41 @@
 ---
-description: Keep files small and logic reusable across the TypeScript codebase
+description: Keep files small and reuse logic via services,hooks,and feature slices
 globs: **/*
 alwaysApply: false
 ---
 
-# Architektur: KISS, DRY, Dateigrößen
+# Architektur: KISS, DRY, Grenzen
 
 ## Prinzipien
 
-- **KISS:** Einfachste Lösung, die Typesafety und Tests nicht bricht.
-- **DRY:** Wiederholte Logik in `services/`, `hooks/` oder `features/*/thunks` auslagern, nicht copy-paste über Views.
+- **KISS:** Einfachste Lösung mit `strict` Types und testbaren Seams.
+- **DRY:** Logik in `services/`, `hooks/`, `features/*/thunks` — nicht in Views duplizieren.
+
+## View-Muster (StoryCraft)
+
+- **Component + Hook + Context:** Rendering in `components/*View.tsx`, Logik in `hooks/use*View.ts`, Kontext für Kindbaum.
+- **Redux** für persistierten App-State; **Zustand** nur transient (`app/transientUiStore.ts`).
+- **Undo:** `redux-undo` am Projekt-Slice; Plot-Board-**Viewport** lokal — Verbindungen/Subplots im `projectSlice` wenn undo-relevant.
+- Schwere Views: `React.lazy` in `App.tsx`; Export-/Graph-Chunks dynamisch importieren.
 
 ## Dateigrößen
 
-- **Ziel:** 200–700 Zeilen pro Datei. **Unter** 200 ist unkritisch; **über** 700: zwanghaft splitten (Untermodul, Hook, Selektoren, Tests).
-- Komplexe UI- oder Reducer-Logik in Hilfsfunktionen mit klaren Signaturen extrahieren.
+- **Ziel:** 200–700 Zeilen. **> 700:** splitten (Hook, Subkomponente, Selektoren, Tests).
+- Reducer schlank; Thunks in `features/project/thunks/` (inkl. `aiThunkUtils` für deduplizierte KI-Requests).
 
-## Aufteilung
+## Workspace & Typen
 
-- Neue Schnittstellen an `types.ts` oder Feature-Typdateien andocken, nicht „any“-Workarounds.
-- Redux: Slices schlank halten; schwere Nebenwirkungen in Thunks (`features/project/thunks`).
+- Shared Code in **`packages/ai-core`**, **`packages/ui`** — nicht ungefragt in Root duplizieren.
+- Schnittstellen an `types.ts` / Feature-Typen; kein `any`-Workaround.
+
+## Feature Flags
+
+- Experimentelles über `features/featureFlags/featureFlagsSlice.ts` — nicht verstreute `if (true)`-Hacks.
 
 <example>
-Manuskript-View >700 Zeilen: View splitten, Hilfen nach `hooks/useManuscript*.ts` oder Präsentationskomponenten unter `components/`.
+Manuskript >700 Zeilen: `ManuscriptInspector.tsx` + `hooks/useManuscript.ts`; Plot-Board-Canvas eigene Datei unter `components/plotBoard/`.
 </example>
 
 <example type="invalid">
-700+ Zeilen Datei nur mit Inline-Kommentaren „Abschnitt 5“ markieren, ohne echte Modulaufteilung.
+700+ Zeilen nur mit Kommentar-Abschnitten; Plot-Subplot-State nur in localStorage ohne Undo-Strategie; drittes State-Framework neben Redux/Zustand.
 </example>

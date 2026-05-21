@@ -28,6 +28,11 @@ const HELP_DOC_CHUNKS: HelpDocChunk[] = [
     title: 'AI Writing Studio',
     body: 'AI tools live under Writer and related views. Provider keys are stored locally; choose Gemini, OpenAI, Anthropic, Grok, or local Ollama.',
   },
+  {
+    id: 'rag-context',
+    title: 'RAG context (local retrieval)',
+    body: 'Enable RAG context in the Writer AI Tools panel. Rebuild the hybrid search index under Settings → Advanced AI. Hybrid mode uses semantic + lexical + recency scoring; DuckDB stores 384-dim embeddings when analytics is on.',
+  },
 ];
 
 function scoreChunk(queryNorm: string, chunk: HelpDocChunk): number {

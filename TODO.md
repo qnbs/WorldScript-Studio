@@ -22,11 +22,22 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ✅ **i18n** — 1 625 keys × 5 locales (+35 new keys)
 - ✅ **Quality gate** — lint ✅ typecheck ✅ i18n ✅ 2 024+ tests / 178 files ✅
 
+## v1.8 — RAG Prompt Assembly + UX (2026-05-21)
+
+- ✅ **`assembleRAGPrompt`** — `services/ragPromptAssembly.ts` + PromptLibrary templates
+- ✅ **Writer** — RAG toggle + chunk badge; continuation/brainstorm/critic use hybrid context
+- ✅ **Plot Board AI** — `suggestNextBeatThunk` + modal UI
+- ✅ **DuckDB embedding** — `rag_chunks.embedding` 384-dim migration + dual-write fix
+- ✅ **PWA audit** — [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md), `handle_links`, SW comment for WASM/ONNX
+- ✅ **Settings & Help** — RAG hybrid hint, help article + `tryActionId`, `helpDocRetrieval` chunk
+- ✅ **UI tokens** — Writer, Command Palette, Modal, Project AI preset (`--ring-focus`)
+- ✅ **Docs** — README hub, ROADMAP, CHANGELOG `[Unreleased]`, AUDIT, `.cursor/index.mdc`
+- ✅ **Tauri audit** — [`docs/TAURI-CI.md`](docs/TAURI-CI.md) checklist v1.8
+- ✅ **Sprint ref** — [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md)
+
 ### v2.0 Open Items
 
-- ⬜ Writer view AI continuation using RAG context (complex prompt assembly)
-- ⬜ Plot Board AI suggestions using RAG
-- ⬜ DuckDB `rag_chunks` schema migration: `FLOAT[64]` BoW → `FLOAT[384]` semantic vectors
+- ⬜ DuckDB `rag_chunks` schema migration: `FLOAT[64]` BoW → `FLOAT[384]` semantic vectors — **superseded by v1.8 embedding column** (verify on device)
 - ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
 - ⬜ RTL language support (Arabic, Hebrew, Persian)
 - ⬜ Fine-Tuning / LoRA-Support für personalisierte Schreibstile

@@ -203,6 +203,12 @@
   "sceneboard.addScene": "Aggiungi scena",
   "sceneboard.addSceneToAct": "Aggiungi scena a questo atto",
   "sceneboard.confirmDelete": "Sei sicuro di voler eliminare questa scena?",
+  "sceneboard.ai.suggestBeat": "Suggerisci beat IA",
+  "sceneboard.ai.suggesting": "Suggerimento…",
+  "sceneboard.ai.panelTitle": "Suggerimenti trama IA",
+  "sceneboard.ai.ragChunks": "{{count}} chunk RAG",
+  "sceneboard.ai.empty": "Nessun suggerimento. Riprova con contenuto.",
+  "sceneboard.ai.retry": "Suggerisci ancora",
   "sceneboard.dragAriaLabel": "Ordina scene – Trascina e rilascia o premi Invio per selezionare, frecce per spostare",
   "sceneboard.dragEmptyHint": "Trascina una scena qui",
   "sceneboard.editScene": "Modifica scena: {{title}}",
@@ -694,6 +700,9 @@
   "writer.studio.tools.synopsis.instruction": "L'IA genererà un riassunto della sezione del manoscritto attualmente selezionata.",
   "writer.studio.tools.synopsis.title": "Riassumi sezione",
   "writer.studio.tools.title": "Strumenti IA",
+  "writer.studio.rag.useContext": "Contesto RAG",
+  "writer.studio.rag.chunksBadge": "{{count}} chunk",
+  "writer.studio.rag.chunksHint": "Estratti del manoscritto nel prompt",
   "writer.tools.hide": "Nascondi strumenti",
   "writer.tools.label": "Strumenti",
   "writer.tools.show": "Mostra strumenti",
@@ -1218,6 +1227,7 @@
   "settings.advancedAi.ragModeLabel": "Modalità indice di ricerca",
   "settings.advancedAi.ragModeHybrid": "Ibrido (semantico + lessicale, consigliato)",
   "settings.advancedAi.ragModeLexical": "Solo lessicale (veloce, senza modello ML)",
+  "settings.advancedAi.ragModeHint": "Punteggio ibrido: ~60&nbsp;% similarità semantica, ~30&nbsp;% lessicale, ~10&nbsp;% recenza. DuckDB (se attivo) ordina embedding 384-dim; ricostruire l'indice dopo modifiche ampie.",
   "settings.advancedAi.localRagDone": "Indice locale aggiornato",
   "settings.advancedAi.localRagDoneDetail": "{{count}} frammenti indicizzati.",
   "settings.advancedAi.localRagTitle": "Indice di ricerca locale del manoscritto",
@@ -1581,6 +1591,8 @@
   "help.aiStudio.overview.content": "<h3>Il Tuo Co-Pilota Creativo</h3><p>Lo Studio di Scrittura IA è il tuo spazio dedicato alla scrittura assistita dall'IA. Il flusso di lavoro è progettato per potenza e flessibilità:</p><ol><li><b>Seleziona il Contesto:</b> Prima di tutto, scegli la sezione del manoscritto su cui vuoi lavorare dal menu a discesa nel pannello 'Contesto del Manoscritto'.</li><li><b>Scegli uno Strumento:</b> Seleziona uno dei potenti strumenti IA nella parte superiore del pannello 'Strumenti IA'.</li><li><b>Fornisci Input:</b> A seconda dello strumento, potrebbe essere necessario selezionare testo nell'editor, scegliere personaggi o scrivere un suggerimento.</li><li><b>Genera:</b> Fai clic sul pulsante 'Genera'. Il risultato apparirà nel 'Blocco Note IA' a destra.</li><li><b>Revisiona e Accetta:</b> Puoi modificare il testo generato nel blocco note. Quando sei soddisfatto, usa i pulsanti 'Inserisci' o 'Sostituisci' per applicarlo al tuo manoscritto.</li></ol>",
   "help.aiStudio.overview.title": "Panoramica dello Studio di Scrittura IA",
   "help.aiStudio.tools.content": "<h3>Lo Strumento Giusto per Ogni Compito</h3><p>Ogni strumento nello studio ha uno scopo diverso:</p><ul><li><b>Continua a Scrivere:</b> Perfetto per il blocco dello scrittore. Posiziona il cursore nel testo e l'IA scriverà ciò che segue.</li><li><b>Migliora il Testo:</b> Evidenzia una frase o un paragrafo e l'IA lo riscriverà. Usa il menu Stile per guidare il miglioramento (es., renderlo più 'Cinematografico').</li><li><b>Cambia Tono:</b> Simile a 'Migliora il Testo', ma usa il menu Tono per cambiare l'umore (es., renderlo più 'Suspensivo').</li><li><b>Genera Dialogo:</b> Seleziona i personaggi della scena, descrivi lo scenario e l'IA scriverà la loro conversazione.</li><li><b>Brainstorming di Idee:</b> Ottieni un elenco di punti di trama creativi su cosa potrebbe succedere dopo.</li><li><b>Riassumi la Sezione:</b> Genera rapidamente una sinossi della sezione del manoscritto selezionata, utile per verificare il ritmo o scrivere riassunti dei capitoli.</li></ul>",
+  "help.aiStudio.ragContext.title": "Contesto RAG per la generazione IA",
+  "help.aiStudio.ragContext.content": "<h3>Prompt arricchiti da recupero (locale)</h3><p>Con il <b>contesto RAG</b> attivo nel pannello Strumenti IA, StoryCraft recupera passaggi del manoscritto prima di chiamare il modello. La modalità ibrida combina similarità semantica (~60&nbsp;%), sovrapposizione lessicale (~30&nbsp;%) e recenza (~10&nbsp;%).</p><ol><li>Ricostruire l'indice in <b>Impostazioni → IA avanzata → Ricostruisci indice locale</b>.</li><li>Aprire lo <b>Studio di scrittura IA</b>, attivare <b>contesto RAG</b>, poi Continua, Brainstorm o Critica.</li><li>Il badge chunk mostra i passaggi iniettati; il Plot Board usa la stessa pipeline.</li></ol><p>Il manoscritto resta nel browser; solo il prompt assemblato viene inviato al provider IA scelto.</p>",
   "help.aiStudio.tools.title": "Comprendere gli Strumenti IA",
   "help.article.selectPrompt": "Seleziona un articolo a sinistra per leggerlo, o chiedi aiuto al nostro assistente IA.",
   "help.article.tryItNow": "Provalo ora",
@@ -1654,6 +1666,11 @@
         {
           "title": "help.aiStudio.tools.title",
           "content": "help.aiStudio.tools.content",
+          "tryActionId": "nav-writer"
+        },
+        {
+          "title": "help.aiStudio.ragContext.title",
+          "content": "help.aiStudio.ragContext.content",
           "tryActionId": "nav-writer"
         }
       ]

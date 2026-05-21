@@ -1,41 +1,53 @@
 ---
-description: Require deterministic Vitest tests with mocks; forbid silent green-washing skips
+description: Require deterministic Vitest mocks and CI-first heavy suites per docs/CI.md
 globs: tests/**/*.test.ts,tests/**/*.test.tsx,tests/**/*.spec.ts,tests/**/*.spec.tsx,components/**/*.test.ts,components/**/*.test.tsx
 alwaysApply: false
 ---
 
-# Testing (Vitest + Testing Library)
+# Testing (Vitest + Playwright)
 
 ## Determinismus
 
-- Jeder Test läuft **isoliert**: keine Abhängigkeit von Reihenfolge, echter Netzwerkzeit oder `Date.now()` ohne Mock/Fake-Timer.
-- Globale Zustände (Redux-Store, localStorage, IndexedDB) vor/nach Bedarf zurücksetzen oder mit Setup aus `tests/setup.ts` alignen.
+- Tests **isoliert**: keine Reihenfolge-, Netzwerk- oder `Date.now()`-Abhängigkeit ohne Mock/Fake-Timer.
+- Redux, `localStorage`, IDB: Reset via `tests/setup.ts` oder explizite Fixtures.
+- Vitest: **`maxWorkers: 1`** im Repo — keinen parallelen schweren Lauf neben Build/E2E auf Low-RAM-Maschinen.
 
 ## Mocks
 
-- Externe Module (`@google/genai`, Tauri-API, `fetch`) **mocken** (`vi.mock`), wie in bestehenden Unit-Tests.
-- Keine echten API-Keys oder Produktions-Endpunkte in Tests.
+- `@google/genai`, `@ai-sdk/*`, Tauri, `fetch`, schwere ML-Peers: **`vi.mock`** / Aliase wie in `vitest.config.ts`.
+- Keine echten API-Keys oder Produktions-URLs.
 
 ## Verbotene „Grün-Tricks“
 
-- **Streng verboten:** fehlschlagende Tests auskommentieren, Assertions entfernen oder flakys dauerhaft ignorieren, um CI grün zu tricksen.
-- **`it.skip` / `describe.skip`:** nur mit **Dateikommentar** (Grund, Ticket/TODO) und nur für bewusst **deaktivierte** Suites (z. B. Platzhalter-Visual-Regression bis Baselines existieren). Kein Skip statt Fix bei Unit-Tests.
-- Stattdessen: Root Cause fixen oder Test präzisieren.
+- Kein Auskommentieren von Assertions, kein dauerhaftes Ignorieren flakiger Unit-Tests.
+- `it.skip`/`describe.skip` nur mit **Dateikommentar** (Grund, Ticket) und bewusst deaktivierten Suites — nicht statt Fix.
 
-## Assertions
+## Assertions & E2E-Hilfen
 
-- Nutzerinteraktion mit `@testing-library/user-event`; async mit `findBy*`/`waitFor` wo nötig.
+- Interaktion: `@testing-library/user-event`; async: `findBy*`/`waitFor`.
+- E2E: [`tests/e2e/helpers.ts`](../../tests/e2e/helpers.ts) (SPA-ready, kein `networkidle` unter Vite).
+- **axe:** schwere/critical Verstöße in `tests/e2e/a11y.spec.ts` und erweiterten Routen vermeiden — [`docs/ACCESSIBILITY.md`](../../docs/ACCESSIBILITY.md).
 
-## Schwere Suites (CI-first)
+## Spezialfälle
 
-- **Canonical Gate:** GitHub Actions (`docs/CI.md`) — Vitest **mit** Coverage-Schwellen, Playwright E2E (inkl. **axe-core** über `tests/e2e/a11y.spec.ts` und erweiterte Modal-/Panel-Routen), Lighthouse CI, Bundle-Budget. Merge-Bar ist ein **grüner Workflow**, nicht ein voller lokaler Lauf auf Low-End-Hardware.
-- **Lokal:** `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage`. Playwright / LHCI / Coverage-Gates nur bei ausreichender Maschine oder zum Debuggen über **CI-Artefakte** (Reports).
-- **Accessibility:** Automatisierte schwere/critical **axe**-Verstöße müssen in den Playwright-Specs fehlen (Kontrastregel ggf. per Projektpolitik deaktiviert — siehe `docs/ACCESSIBILITY.md`).
+- `sceneRevisionService` / reine IDB: `@vitest-environment node` + `IDBFactory` + `_resetDbForTest()` (siehe `CLAUDE.md`).
+- Risiko-Hotspots bei Änderungen testen: `dbService`, `aiProviderService`, Import/Export, `storageBackend`.
+
+## CI-first (kanonisch: [`docs/CI.md`](../../docs/CI.md))
+
+| Tier | Befehle |
+|------|---------|
+| **Lokal schnell** | `lint`, `typecheck`, `i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage` |
+| **CI schwer** | Vitest **mit** Coverage (Schwellen ~63/48/54/62), `CI=true pnpm run test:e2e`, LHCI, `bundle:budget` |
+
+- Merge-Bar = **grüner GitHub-Workflow**, nicht voller lokaler E2E auf schwacher Hardware.
+- Mobile E2E lokal nur mit `RUN_MOBILE_E2E=1` (siehe `playwright.config.ts`).
+- **Stryker:** informativ (`continue-on-error`); Score-Gate nicht umgehen durch Test-Löschung.
 
 <example>
-`geminiService`: `@google/genai` mit `vi.mock` stubben; Antworten fest verdrahtet, Snapshot nur wenn stabil.
+`aiProviderService`: `vi.mock` für SDK; feste Antwort; bei IDB-Test `node`-Environment + Factory-Reset.
 </example>
 
 <example type="invalid">
-`// test('…')` auskommentieren, weil flaky — ohne Issue/Ticket und ohne Retry/Mock-Fix.
+Flaky Test auskommentieren ohne Ticket; Coverage-Schwelle senken statt Test hinzufügen; E2E mit echtem Gemini-Key.
 </example>

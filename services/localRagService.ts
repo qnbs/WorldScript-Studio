@@ -127,15 +127,20 @@ export async function rebuildHybridRagIndex(
 
   // QNBS-v3: Mirror vector-only data to DuckDB; text stays in IDB to avoid BLOB encryption.
   if (duckDbEnabled && records.length > 0) {
-    void duckdbRagWrite(
-      projectId,
-      records.map((r) => ({
+    const duckChunks = records
+      .filter((r) => r.semanticVec && r.semanticVec.length > 0)
+      .map((r) => ({
         id: r.id,
         sectionId: r.sectionId,
         chunkIndex: r.chunkIndex,
+        embedding: r.semanticVec as Float32Array,
         vector: r.vector,
-      })),
-    ).catch((err: unknown) => logger.warn('DuckDB RAG vector write failed (non-critical):', err));
+      }));
+    if (duckChunks.length > 0) {
+      void duckdbRagWrite(projectId, duckChunks).catch((err: unknown) =>
+        logger.warn('DuckDB RAG vector write failed (non-critical):', err),
+      );
+    }
   }
 
   return records.length;

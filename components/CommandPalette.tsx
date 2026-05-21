@@ -384,7 +384,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             aria-autocomplete="list"
             role="combobox"
             aria-expanded={true}
-            className="w-full bg-transparent border-none focus:ring-0 text-lg text-[var(--foreground-primary)] placeholder-[var(--foreground-muted)] h-10"
+            className="w-full bg-transparent border-none focus:ring-2 focus:ring-[var(--ring-focus)] focus:ring-offset-2 focus:ring-offset-[var(--background-primary)] rounded-md text-lg text-[var(--foreground-primary)] placeholder-[var(--foreground-muted)] h-10"
             placeholder={t('palette.placeholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}

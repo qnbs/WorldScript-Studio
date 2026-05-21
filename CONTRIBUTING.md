@@ -173,26 +173,26 @@ pnpm run bundle:budget   # fails if any dist/assets/*.js chunk exceeds default c
 pnpm run analyze         # writes dist/bundle-analysis.html (visualizer does not auto-open when CI=true)
 ```
 
-### Local CI Simulation
+### Low-end laptop: local CI instead of cloud
 
-You can simulate the GitHub Actions pipeline locally using [Act](https://github.com/nektos/act). This is especially useful for testing workflow logic and environment-specific behavior before opening a PR.
+On **2–4 GB RAM** (e.g. Ubuntu 20.04), use the bundled **act + Eco-Forgejo** stack — GitHub can stay an optional backup remote only:
+
+- **Install:** [`infra/low-end-ci/INSTALL.md`](infra/low-end-ci/INSTALL.md)
+- **Daily workflow:** [`infra/low-end-ci/DAILY-DRIVER.md`](infra/low-end-ci/DAILY-DRIVER.md)
+- **Quick gate (no Docker):** `pnpm run ci:quick` or `pnpm run ci:quick:unit`
+- **Full `ci.yml` locally:** `pnpm run ci:act` (sequential act jobs)
+
+Manual [Act](https://github.com/nektos/act) example:
 
 ```bash
-npm install -g act
-act pull_request --job security --job quality
+act pull_request --sequential -j security -j quality --matrix node-version:lts/* -W .github/workflows/ci.yml
 ```
 
-Build, E2E, Storybook, and Lighthouse (artifact-dependent steps) may need extra Act configuration:
-
-```bash
-act push --job build --job e2e --job storybook --job lighthouse
-```
-
-If you need Codecov support locally, export the token first:
+If you need Codecov support locally:
 
 ```bash
 export CODECOV_TOKEN="your_token_here"
-act pull_request -s CODECOV_TOKEN=${CODECOV_TOKEN}
+act pull_request -j quality -s CODECOV_TOKEN=${CODECOV_TOKEN} -W .github/workflows/ci.yml
 ```
 
 Tests live in `tests/unit/`. Each UI component and core hook should have a test file.

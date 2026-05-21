@@ -44,6 +44,7 @@
   "settings.advancedAi.ragModeLabel": "Suchindex-Modus",
   "settings.advancedAi.ragModeHybrid": "Hybrid (semantisch + lexikalisch, empfohlen)",
   "settings.advancedAi.ragModeLexical": "Nur lexikalisch (schnell, kein ML-Modell)",
+  "settings.advancedAi.ragModeHint": "Hybrid-Bewertung: ~60&nbsp;% semantische Ähnlichkeit, ~30&nbsp;% lexikalisch, ~10&nbsp;% Aktualität. DuckDB-Analytics (wenn aktiv) nutzt 384-dim-Embeddings; Index nach großen Manuskriptänderungen neu aufbauen.",
   "settings.advancedAi.localRagDone": "Lokaler Index aktualisiert",
   "settings.advancedAi.localRagDoneDetail": "{{count}} Textabschnitte indexiert.",
   "settings.advancedAi.localRagTitle": "Lokaler Manuskript-Suchindex",

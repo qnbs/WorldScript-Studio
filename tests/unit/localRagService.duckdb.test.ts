@@ -14,9 +14,8 @@ vi.mock('../../services/storageService', () => ({
   },
 }));
 
-// embedText may not be available in test env — mock it to avoid loading ONNX
 vi.mock('../../services/ai/localEmbeddingService', () => ({
-  embedText: vi.fn().mockRejectedValue(new Error('model not loaded')),
+  embedText: vi.fn().mockImplementation(async () => new Float32Array(384).fill(0.1)),
   cosineSimilarity: vi.fn(),
 }));
 
@@ -53,12 +52,12 @@ describe('rebuildHybridRagIndex — DuckDB dual-write', () => {
     expect(mockRagWrite).toHaveBeenCalledOnce();
     const [projectId, chunks] = mockRagWrite.mock.calls[0] as [
       string,
-      { id: string; sectionId: string; chunkIndex: number; vector: number[] }[],
+      { id: string; sectionId: string; chunkIndex: number; embedding: Float32Array }[],
     ];
     expect(projectId).toBe('p1');
     expect(chunks.length).toBeGreaterThan(0);
     expect(chunks[0]).toMatchObject({ sectionId: 's1', chunkIndex: 0 });
-    expect(Array.isArray(chunks[0]?.vector)).toBe(true);
+    expect(chunks[0]?.embedding).toBeInstanceOf(Float32Array);
   });
 
   it('does NOT call duckdbRagWrite when duckDbEnabled=false (default)', async () => {

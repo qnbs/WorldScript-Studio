@@ -6,7 +6,7 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { analyticsActions, selectDuckDbStatus } from '../features/analytics/analyticsSlice';
 import { selectEnableDuckDbAnalytics } from '../features/featureFlags/featureFlagsSlice';
 import { duckdbClient } from '../services/duckdb/duckdbClient';
-import { DUCKDB_DDL } from '../services/duckdb/duckdbSchema';
+import { DUCKDB_DDL, DUCKDB_MIGRATION_V2_DDL } from '../services/duckdb/duckdbSchema';
 import { logger } from '../services/logger';
 
 const MAX_INIT_ATTEMPTS = 3;
@@ -21,6 +21,37 @@ function withTimeout<T>(p: Promise<T>, ms: number, msg: string, signal?: AbortSi
       signal?.addEventListener('abort', () => clearTimeout(t), { once: true });
     }),
   ]);
+}
+
+async function sleepBackoff(attempt: number, signal: AbortSignal): Promise<void> {
+  const backoffMs = 1000 * 2 ** (attempt - 1);
+  await new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, backoffMs);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+async function bootstrapDuckDbSchema(signal: AbortSignal): Promise<void> {
+  const initRes = await withTimeout(
+    duckdbClient.init(signal),
+    INIT_TIMEOUT_MS,
+    `DuckDB init timed out after ${INIT_TIMEOUT_MS / 1000}s`,
+    signal,
+  );
+  if (!initRes.ok) throw new Error(initRes.error ?? 'DuckDB init failed');
+
+  const ddlRes = await duckdbClient.exec(DUCKDB_DDL, undefined, signal);
+  if (!ddlRes.ok) throw new Error(ddlRes.error ?? 'DuckDB schema DDL failed');
+
+  const v2Res = await duckdbClient.exec(DUCKDB_MIGRATION_V2_DDL, undefined, signal);
+  if (!v2Res.ok) throw new Error(v2Res.error ?? 'DuckDB v2 migration DDL failed');
 }
 
 export function useDuckDb() {
@@ -48,41 +79,16 @@ export function useDuckDb() {
       for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
         if (cancelled) return;
         try {
-          const initRes = await withTimeout(
-            duckdbClient.init(controller.signal),
-            INIT_TIMEOUT_MS,
-            `DuckDB init timed out after ${INIT_TIMEOUT_MS / 1000}s`,
-            controller.signal,
-          );
+          await bootstrapDuckDbSchema(controller.signal);
           if (cancelled) return;
-          if (!initRes.ok) throw new Error(initRes.error ?? 'DuckDB init failed');
-
-          // Apply schema DDL after worker boots
-          const ddlRes = await duckdbClient.exec(DUCKDB_DDL, undefined, controller.signal);
-          if (cancelled) return;
-          if (!ddlRes.ok) throw new Error(ddlRes.error ?? 'DuckDB schema DDL failed');
-
           dispatch(analyticsActions.setDuckDbStatus('ready'));
-          return; // success
+          return;
         } catch (err) {
           if (cancelled) return;
           logger.warn(`DuckDB init attempt ${attempt}/${MAX_INIT_ATTEMPTS} failed:`, err);
           if (attempt < MAX_INIT_ATTEMPTS) {
-            // QNBS-v3: Exponential backoff (1 s, 2 s) with abort-safe sleep.
-            const backoffMs = 1000 * 2 ** (attempt - 1);
-            await new Promise<void>((resolve) => {
-              const t = setTimeout(resolve, backoffMs);
-              controller.signal.addEventListener(
-                'abort',
-                () => {
-                  clearTimeout(t);
-                  resolve();
-                },
-                { once: true },
-              );
-            });
+            await sleepBackoff(attempt, controller.signal);
           } else {
-            // QNBS-v3: All retries exhausted — mark 'unavailable' so callers degrade gracefully.
             dispatch(
               analyticsActions.setDuckDbError(
                 err instanceof Error ? err.message : 'DuckDB init failed after all retries',

@@ -7,8 +7,21 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 const isAnalyze = process.env['ANALYZE'] === 'true';
 
+function resolveBase(): string {
+  const viteBase = process.env['VITE_BASE']?.trim();
+  if (viteBase) {
+    return viteBase.endsWith('/') ? viteBase : `${viteBase}/`;
+  }
+  if (process.env['DEPLOY_TARGET'] === 'edge') {
+    return '/';
+  }
+  return '/StoryCraft-Studio/';
+}
+
+const deployBase = resolveBase();
+
 export default defineConfig({
-  base: '/StoryCraft-Studio/',
+  base: deployBase,
 
   // Default dependency crawl uses every *.html under the repo; reports (Playwright, Storybook, etc.) are not app entries and can break `vite dev`.
   optimizeDeps: {
@@ -28,6 +41,13 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     react(),
+    {
+      name: 'storycraft-deploy-base-html',
+      transformIndexHtml(html) {
+        if (deployBase === '/StoryCraft-Studio/') return html;
+        return html.replaceAll('/StoryCraft-Studio/', deployBase);
+      },
+    },
     VitePWA({
       // register-sw.ts übernimmt die manuelle Registrierung
       injectRegister: false,

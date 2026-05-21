@@ -1,5 +1,5 @@
 ---
-description: Protect secrets and logs when touching any project file
+description: Protect secrets,logs,and CSP when touching any project file
 globs: **/*
 alwaysApply: false
 ---
@@ -8,23 +8,31 @@ alwaysApply: false
 
 ## Secrets & Konfiguration
 
-- API-Schlüssel (Gemini u. a.), Tokens und Passwörter **niemals** committen oder in Quelltext hardcoden. Konvention: `.env` / `.env.local` (nicht versioniert), nur `import.meta.env.VITE_*` für explizit exponierte Client-Variablen.
-- Verschlüsselte Nutzer-Keys folgen dem bestehenden **IndexedDB**-Muster (`services/dbService.ts`); keine zweite „Geheimablage“ erfinden ohne Abstimmung.
+- API-Schlüssel (Gemini, OpenRouter, OpenAI-kompatibel u. a.), Tokens und Passwörter **niemals** committen oder hardcoden.
+- Client-Env nur `import.meta.env.VITE_*` für explizit freigegebene Variablen; `.env` / `.env.local` nicht versionieren.
+- Nutzer-Keys: **IndexedDB** + Verschlüsselung wie in `dbService.ts` — keine parallele Geheimablage ohne Abstimmung.
+- **Settings-Exchange / Export-JSON:** keine Klartext-Keys in geteilten Dateien; dokumentierte Felder redigieren.
+
+## Tauri / CSP / Integrationen
+
+- Neue externe Endpunkte (KI, LanguageTool, Signaling): `src-tauri` **CSP** `connect-src` prüfen/erweitern — nicht nur Web-`fetch`.
+- LanguageTool und ähnliche Dienste: nur **nutzerkonfigurierte URL** + Privacy-Gating (`integrations.languageTool*`).
+- Community-Templates: Zod + `pnpm run content:guard` — keine eingebetteten Secrets oder `eval`-ähnliche Payloads.
 
 ## Fehlerbehandlung
 
-- Nutzer sichtbare Fehler: kurz, handlungsorientiert; technische Details nur in `services/logger.ts` oder für Dev (`warn`/`error` gemäß Biome).
-- Async-Pfade: sinnvolle `try/catch` oder Result-Patterns; keine stillen Swallows außer dokumentiert (z. B. erwarteter Abort).
+- Nutzerfehler: kurz, handlungsorientiert; Technik nur in `services/logger.ts` (`warn`/`error` per Biome).
+- Async: `try/catch` oder Result; keine stillen Swallows außer dokumentiert (Abort).
 
 ## Logging
 
-- Kein `console.log` in Produktionspfaden (Biome `noConsole` außer Allowlist). Für Diagnose `logger` oder erlaubte `console.warn`/`console.error`.
-- **Niemals** Schlüssel, IVs oder Klartext-Payloads in Logs ausgeben.
+- Kein `console.log` in Produktionspfaden (Biome `noConsole` außer Allowlist).
+- **Niemals** Keys, IVs, Entschlüsseltes oder vollständige Manuskript-Payloads loggen.
 
 <example>
-API-Key aus UI speichern: nur über bestehende DB-/Settings-Pfade; Validierung und Speicherung wie in `dbService`/`settingsSlice`.
+OpenAI-kompatible Base-URL in Settings speichern → Redux `settings.advancedAi` + bestehende Validierung; Tauri-CSP um Host ergänzen.
 </example>
 
 <example type="invalid">
-`const key = 'AIza...'` im TSX oder Log-Zeile `console.log('gemini key', key)`.
+`const key = 'sk-…'` in TSX; `console.log({ apiKey, manuscript })`; Signaling-URL ohne Nutzereinstellung hardcoden.
 </example>

@@ -9,6 +9,8 @@
   "help.aiStudio.overview.content": "<h3>Tu Co-Piloto Creativo</h3><p>El Estudio de Escritura IA es tu espacio dedicado para la escritura asistida por IA. El flujo de trabajo está diseñado para potencia y flexibilidad:</p><ol><li><b>Seleccionar Contexto:</b> Primero, elige la sección del manuscrito en la que quieres trabajar desde el menú desplegable en el panel 'Contexto del Manuscrito'.</li><li><b>Elegir una Herramienta:</b> Selecciona una de las potentes herramientas de IA en la parte superior del panel 'Herramientas de IA'.</li><li><b>Proporcionar Entrada:</b> Dependiendo de la herramienta, es posible que necesites seleccionar texto en el editor, elegir personajes o escribir un indicación.</li><li><b>Generar:</b> Haz clic en el botón 'Generar'. El resultado aparecerá en el 'Bloc de IA' a la derecha.</li><li><b>Revisar y Aceptar:</b> Puedes editar el texto generado en el bloc. Cuando estés satisfecho, usa los botones 'Insertar' o 'Reemplazar' para aplicarlo a tu manuscrito.</li></ol>",
   "help.aiStudio.overview.title": "Descripción General del Estudio de Escritura IA",
   "help.aiStudio.tools.content": "<h3>La Herramienta Adecuada para Cada Tarea</h3><p>Cada herramienta del estudio tiene un propósito diferente:</p><ul><li><b>Continuar Escribiendo:</b> Perfecto para el bloqueo del escritor. Coloca tu cursor en el texto y la IA escribirá lo que sigue.</li><li><b>Mejorar Texto:</b> Resalta una oración o párrafo y la IA lo reescribirá. Usa el menú de Estilo para guiar la mejora (p. ej., hacerlo más 'Cinematográfico').</li><li><b>Cambiar Tono:</b> Similar a 'Mejorar Texto', pero usa el menú de Tono para cambiar el estado de ánimo (p. ej., hacerlo más 'Suspensivo').</li><li><b>Generar Diálogo:</b> Selecciona los personajes de la escena, describe el escenario y la IA escribirá su conversación.</li><li><b>Lluvia de Ideas:</b> Obtén una lista de puntos de trama creativos sobre lo que podría suceder a continuación.</li><li><b>Resumir Sección:</b> Genera rápidamente una sinopsis de la sección del manuscrito seleccionada, útil para verificar el ritmo o escribir resúmenes de capítulos.</li></ul>",
+  "help.aiStudio.ragContext.title": "Contexto RAG para generación con IA",
+  "help.aiStudio.ragContext.content": "<h3>Prompts con recuperación local</h3><p>Con el <b>contexto RAG</b> activado en el panel de herramientas IA, StoryCraft recupera fragmentos del manuscrito antes de llamar al modelo. El modo híbrido combina similitud semántica (~60&nbsp;%), solapamiento léxico (~30&nbsp;%) y recencia (~10&nbsp;%).</p><ol><li>Reconstruya el índice en <b>Ajustes → IA avanzada → Reconstruir índice local</b>.</li><li>Abra el <b>Estudio de escritura IA</b>, active <b>contexto RAG</b> y use Continuar, Lluvia de ideas o Crítica.</li><li>La insignia de chunks muestra los pasajes inyectados; el Plot Board usa el mismo flujo.</li></ol><p>Su manuscrito permanece en el navegador; solo el prompt ensamblado se envía al proveedor de IA elegido.</p>",
   "help.aiStudio.tools.title": "Entendiendo las Herramientas de IA",
   "help.article.selectPrompt": "Selecciona un artículo a la izquierda para leerlo, o pide ayuda a nuestro asistente de IA.",
   "help.article.tryItNow": "Probar ahora",
@@ -82,6 +84,11 @@
         {
           "title": "help.aiStudio.tools.title",
           "content": "help.aiStudio.tools.content",
+          "tryActionId": "nav-writer"
+        },
+        {
+          "title": "help.aiStudio.ragContext.title",
+          "content": "help.aiStudio.ragContext.content",
           "tryActionId": "nav-writer"
         }
       ]

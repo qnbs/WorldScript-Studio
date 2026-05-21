@@ -23,7 +23,7 @@ Analysiere **jede Datei, jedes Feature und jedes Repo individuell und ganzheitli
 
 ## StoryCraft-Studio (dieses Repo) — Kurzkontext
 
-Offline-first, **Privacy**, Redux Toolkit + IndexedDB, Gemini/Ollama, PWA, i18n. Fokus: **Erzählung**, Schreibflow, KI als Co-Pilot — nicht als Ghostwriter. Änderungen sollen diesen Ton und diese Architektur stützen.
+Offline-first, **Privacy**, Redux Toolkit + IndexedDB + Zustand (transient UI), Hybrid-KI (Gemini, Vercel AI SDK, Ollama/WebLLM), pnpm-Workspace (`packages/*`), PWA, 5-Locale-i18n. Fokus: **Erzählung**, Schreibflow, KI als Co-Pilot — nicht als Ghostwriter. Vollständiger Stack und Regelkatalog: **`.cursor/index.mdc`**.
 
 ---
 
@@ -54,7 +54,8 @@ Kurz und konkret:
 ## Cursor & Zusammenarbeit mit Nutzerregeln
 
 - Wenn der Nutzer **Deutsch** wünscht: Antworten auf **Deutsch**; Code- und API-Bezeichner unverändert nach Repo-Konvention.
-- Zusätzliche Repo-Leitplanken: **`.cursor/rules/*.mdc`** (modular) und **`.cursor/index.mdc`** (Manifest); nach Code-Änderungen optional **`pnpm run graphify:update`** bzw. `graphify:bootstrap` für die Python-CLI.
+- Zusätzliche Repo-Leitplanken: **`.cursor/index.mdc`** (Manifest, `alwaysApply`) und **`.cursor/rules/*.mdc`** (001 Security, 100 KI/Storage, 150 i18n/Content, 200 Architektur, 300 UI, 800 Testing, 850 Doku/MCP). Nach Code-Änderungen optional **`pnpm run graphify:update`** bzw. `graphify:bootstrap`.
+- Qualität lokal (schnell): `pnpm run lint`, `typecheck`, `i18n:check`; schwere Suites CI-first — siehe **`docs/CI.md`** und Regel **`800-testing-standards.mdc`**.
 - Bestehende Projekt-Tools (z. B. **Biome**, **Vitest**, **Playwright**, **Vite**) vor neuen Hilfsmitteln bevorzugen.
 - Keine unnötigen neuen Markdown-Dateien; Ausnahme: ausdrücklich gewünschte Doku (z. B. diese Rules).
 

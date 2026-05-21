@@ -85,10 +85,10 @@ export const ProjectAiPresetSection: FC = () => {
       <CardHeader>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-lg font-semibold text-[var(--foreground-primary)]">
               {t('settings.projectAi.title')}
             </h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-[var(--foreground-muted)]">
               {t('settings.projectAi.description')}
             </p>
           </div>
@@ -120,7 +120,7 @@ export const ProjectAiPresetSection: FC = () => {
             <div className="space-y-1">
               <label
                 htmlFor="project-ai-provider"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-sm font-medium text-[var(--foreground-primary)]"
               >
                 {t('settings.projectAi.provider')}
               </label>
@@ -144,7 +144,7 @@ export const ProjectAiPresetSection: FC = () => {
             <div className="space-y-1">
               <label
                 htmlFor="project-ai-model"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-sm font-medium text-[var(--foreground-primary)]"
               >
                 {t('settings.projectAi.model')}
               </label>
@@ -178,7 +178,7 @@ export const ProjectAiPresetSection: FC = () => {
             <div className="space-y-1">
               <label
                 htmlFor="project-ai-creativity"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-sm font-medium text-[var(--foreground-primary)]"
               >
                 {t('settings.projectAi.creativity')}
               </label>
@@ -202,7 +202,7 @@ export const ProjectAiPresetSection: FC = () => {
             <div className="space-y-1">
               <label
                 htmlFor="project-ai-temp"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-sm font-medium text-[var(--foreground-primary)]"
               >
                 {t('settings.projectAi.temperature')}
                 {preset?.temperature !== undefined && (
@@ -219,7 +219,7 @@ export const ProjectAiPresetSection: FC = () => {
                 step="0.05"
                 value={preset?.temperature ?? effectiveOptions.temperature}
                 onChange={(e) => patch({ temperature: Number.parseFloat(e.target.value) })}
-                className="w-full accent-indigo-600"
+                className="w-full accent-[var(--background-interactive)]"
               />
               <div className="flex justify-between text-xs text-gray-400">
                 <span>0 — precise</span>
@@ -231,7 +231,7 @@ export const ProjectAiPresetSection: FC = () => {
             <div className="space-y-1">
               <label
                 htmlFor="project-ai-tokens"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-sm font-medium text-[var(--foreground-primary)]"
               >
                 {t('settings.projectAi.maxTokens')}
               </label>
@@ -253,7 +253,7 @@ export const ProjectAiPresetSection: FC = () => {
               <div className="flex items-center justify-between">
                 <label
                   htmlFor="project-ai-prompt"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  className="block text-sm font-medium text-[var(--foreground-primary)]"
                 >
                   {t('settings.projectAi.systemPrompt')}
                 </label>
@@ -271,7 +271,7 @@ export const ProjectAiPresetSection: FC = () => {
                 value={preset?.customSystemPrompt ?? ''}
                 placeholder={t('settings.projectAi.systemPromptHint')}
                 onChange={(e) => patch({ customSystemPrompt: e.target.value || undefined })}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+                className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] px-3 py-2 text-sm text-[var(--foreground-primary)] placeholder-[var(--foreground-muted)] focus:border-[var(--ring-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--ring-focus)]"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {t('settings.projectAi.systemPromptHint')}
@@ -287,7 +287,7 @@ export const ProjectAiPresetSection: FC = () => {
                 <div className="space-y-1">
                   <label
                     htmlFor="project-ai-lora-path"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    className="block text-sm font-medium text-[var(--foreground-primary)]"
                   >
                     {t('settings.projectAi.loraModelPath')}
                   </label>
@@ -305,7 +305,7 @@ export const ProjectAiPresetSection: FC = () => {
                 <div className="space-y-1">
                   <label
                     htmlFor="project-ai-lora-scale"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    className="block text-sm font-medium text-[var(--foreground-primary)]"
                   >
                     {t('settings.projectAi.loraScale')}
                     <span className="ml-2 font-mono text-xs text-gray-500">

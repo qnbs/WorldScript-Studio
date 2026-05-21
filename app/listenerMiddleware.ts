@@ -11,6 +11,7 @@ import {
   withDuckDbRetry,
 } from '../services/duckdb/duckdbAnalytics';
 import { runIfNeeded as duckdbMigrateIfNeeded } from '../services/duckdb/duckdbMigration';
+import { runRagVectorMigration } from '../services/duckdb/ragVectorMigration';
 import { rebuildHybridRagIndex } from '../services/localRagService';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
@@ -288,6 +289,8 @@ listenerMiddleware.startListening({
     listenerApi.dispatch(analyticsActions.setMigrationStatus('running'));
     try {
       await duckdbMigrateIfNeeded(project);
+      const projectId = project.id || 'default';
+      await runRagVectorMigration(projectId, project.manuscript);
       listenerApi.dispatch(analyticsActions.setMigrationStatus('done'));
       listenerApi.dispatch(analyticsActions.setLastSyncAt(new Date().toISOString()));
     } catch (err) {

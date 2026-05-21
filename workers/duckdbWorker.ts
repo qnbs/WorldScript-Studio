@@ -119,7 +119,7 @@ async function handleQuery(req: DuckDbRequest): Promise<DuckDbResponse> {
   }
   try {
     const result = await connection.query(req.sql ?? '');
-    const rows = result.toArray().map((row) => row.toJSON() as Record<string, unknown>);
+    const rows = result.toArray().map((row: { toJSON(): Record<string, unknown> }) => row.toJSON());
     return { messageId: req.messageId, ok: true, rows, latencyMs: Date.now() - start };
   } catch (err) {
     return {

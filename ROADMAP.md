@@ -21,6 +21,17 @@ Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku
 
 ---
 
+## v1.8 — RAG Prompt Assembly + UX (2026-05-21)
+
+**Status:** Implemented in tree — see [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md), [`CHANGELOG.md`](CHANGELOG.md) `[Unreleased]`.
+
+- RAG-aware prompts for Writer (continue/brainstorm/critic) and Plot Board beat suggestions
+- DuckDB semantic embedding column + migration from BoW dual-write
+- PWA audit doc; design-token touch-ups; expanded settings search hints for RAG
+- Local CI pack: [`infra/low-end-ci/`](infra/low-end-ci/)
+
+---
+
 ## v1.1 — Stabilisierung & Härtung
 
 **Status:** ✅ Abgeschlossen (siehe [docs/history/completed-v1.1.md](docs/history/completed-v1.1.md) für Details)
