@@ -45,6 +45,7 @@ import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
+import { repairProjectI18nFields } from './services/projectI18nRepair';
 import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services/tauriMenuService';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
@@ -151,7 +152,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const featureFlags = useAppSelector(selectFeatureFlags);
   const dispatch = useAppDispatch();
   const store = useStore();
-  const { t, language, setLanguage } = useTranslation();
+  const { t, language, setLanguage, isReady: isI18nReady } = useTranslation();
   const announce = useAnnounce();
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
@@ -314,24 +315,26 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   }, [currentView, announce, t, isInitialLoad, isPortalActive]);
 
   useEffect(() => {
-    if (!isPortalActive && project && project.title === '' && project.manuscript.length === 0) {
+    if (!isI18nReady || isPortalActive || !project) return;
+
+    const repair = repairProjectI18nFields(project, t);
+    if (repair) {
+      if (repair.title !== undefined) dispatch(projectActions.updateTitle(repair.title));
+      if (repair.logline !== undefined) dispatch(projectActions.updateLogline(repair.logline));
+      if (repair.manuscript !== undefined) dispatch(projectActions.setManuscript(repair.manuscript));
+      return;
+    }
+
+    if (project.title === '' && project.manuscript.length === 0) {
       dispatch(
         projectActions.resetProject({
           title: t('initialProject.title'),
           logline: t('initialProject.logline'),
+          chapter1Title: t('initialProject.chapter1'),
         }),
       );
-      dispatch(
-        projectActions.setManuscript([
-          {
-            id: `sec-${Date.now()}`,
-            title: t('initialProject.chapter1'),
-            content: '',
-          },
-        ]),
-      );
     }
-  }, [project, isPortalActive, dispatch, t]);
+  }, [project, isPortalActive, isI18nReady, language, dispatch, t]);
 
   const wordCountApprox = useMemo(() => approximateManuscriptWordCount(project), [project]);
 

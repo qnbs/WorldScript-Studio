@@ -19,7 +19,7 @@
     "content:guard": "node scripts/content-guard.mjs",
     "graphify": "node scripts/graphify-cli.mjs",
     "graphify:install": "node scripts/graphify-cli.mjs install",
-    "graphify:update": "node scripts/graphify-cli.mjs update .",
+    "graphify:update": "node scripts/graphify-update.mjs",
     "graphify:bootstrap": "node scripts/graphify-bootstrap.mjs",
     "graphify:hooks": "node scripts/graphify-cli.mjs hook install",
     "graphify:status": "node scripts/graphify-cli.mjs hook status",
@@ -168,6 +168,8 @@
     "pre-commit": "npm exec -- lint-staged"
   },
   "lint-staged": {
-    "*": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
+    "*.{ts,tsx,js,mjs,css,md,json}": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true",
+    "public/locales/**/bundle.json": "node -e \"process.exit(0)\"",
+    "graphify-out/**": "node -e \"process.exit(0)\""
   }
 }

@@ -1,0 +1,15 @@
+# GitHub Linguist — language stats should reflect app source, not generated assets
+graphify-out/GRAPH_REPORT.md linguist-documentation=true
+public/locales/**/bundle.json linguist-generated=true
+playwright-report/** linguist-vendored=true
+coverage/** linguist-vendored=true
+dist/** linguist-vendored=true
+reports/** linguist-vendored=true
+docs/** linguist-documentation=true
+*.md linguist-documentation=true
+community-templates/** linguist-documentation=true
+
+# App source
+*.ts linguist-language=TypeScript
+*.tsx linguist-language=TypeScript
+src-tauri/** linguist-language=Rust
