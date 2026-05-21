@@ -1,7 +1,7 @@
 # Graphify — Knowledge Graph Setup
 
 StoryCraft Studio has a fully configured [graphify](https://github.com/safishamsi/graphify) knowledge graph.  
-Graph output lives at `graphify-out/` (not committed to git).
+Graph output lives at `graphify-out/`. **Solo-repo policy (this project):** only `graphify-out/GRAPH_REPORT.md` is committed; `graph.json`, `graph.html`, and `cache/` stay local and are regenerated with `pnpm run graphify:update`.
 
 **Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*; inventory of all 15 maintainer `.md` files → [`AUDIT.md`](../AUDIT.md).
 
@@ -45,7 +45,8 @@ Tasks are pre-defined in [`.vscode/tasks.json`](../.vscode/tasks.json) (e.g. **G
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | `.graphifyignore` | repo root | Excludes `node_modules/`, `dist/`, `coverage/`, `graphify-out/`, binaries, `.env` |
-| `graphify-out/` in `.gitignore` | `.gitignore` | Generated output not committed |
+| Solo git policy | `.gitignore` | `graphify-out/*` ignored except `GRAPH_REPORT.md` (no multi-MB HTML/JSON history in git) |
+| `graphify-update.mjs` | `scripts/` | Cleans ephemeral outputs, then `graphify update .` |
 | `graphify-cli.mjs` | `scripts/` | PATH-independent launcher used by `pnpm run graphify:*` |
 | Claude Code integration | `CLAUDE.md` + `graphify install` | PreToolUse hook + instructions |
 | VS Code Copilot integration | `.github/copilot-instructions.md` | Copilot Chat reads the graph |
@@ -57,7 +58,8 @@ Tasks are pre-defined in [`.vscode/tasks.json`](../.vscode/tasks.json) (e.g. **G
 |--------|---------|
 | `pnpm run graphify:bootstrap` | `pip install graphifyy` via Python (first-time setup) |
 | `pnpm run graphify:install` | `graphify install` (skills / editor hooks) |
-| `pnpm run graphify:update` | `graphify update .` — refresh AST graph |
+| `pnpm run graphify:update` | `graphify update .` — refresh AST graph (CPU/RAM heavy; not in pre-commit) |
+| `GRAPHIFY_SKIP=1 pnpm run graphify:update` | Skip update (no-op) |
 | `pnpm run graphify:hooks` | `graphify hook install` — git hooks for auto-update |
 | `pnpm run graphify:status` | `graphify hook status` |
 

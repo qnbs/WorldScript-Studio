@@ -42,8 +42,16 @@ tests/e2e/results/
 # Storybook static build output
 storybook-static/
 
-# Graphify knowledge graph — cache only (GRAPH_REPORT.md, graph.json, graph.html are committed)
+# Graphify — solo policy: only GRAPH_REPORT.md is committed; regenerate locally via pnpm run graphify:update
+graphify-out/*
+!graphify-out/GRAPH_REPORT.md
 graphify-out/cache/
+graphify-out/manifest.json
+graphify-out/cost.json
+
+# Runtime i18n: only bundle.json is deployed (sources live in locales/<lang>/)
+public/locales/*/*.json
+!public/locales/*/bundle.json
 
 # Claude Code local config and Lighthouse CI results
 .claude/

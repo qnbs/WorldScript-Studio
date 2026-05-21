@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **i18n cold start:** Project title/logline no longer persist as raw keys (`initialProject.title`); sync bootstrap + repair on load.
+- **Repo languages:** `.gitattributes` + solo Graphify policy (`graphify-out/*` gitignored except `GRAPH_REPORT.md`); removed stale `public/locales/*` module copies (runtime uses `bundle.json` only).
+
+### Added
+
+- [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) — GitHub language stats and i18n layout.
+
 ## [1.10.0] — 2026-05-21
 
 ### Added

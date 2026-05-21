@@ -107,9 +107,9 @@ describe('setLanguage', () => {
 // t() — key lookup
 // ---------------------------------------------------------------------------
 describe('t()', () => {
-  it('returns the raw key as fallback before translations load', () => {
+  it('returns bootstrap strings for critical keys before bundle loads', () => {
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
-    // Translations haven't loaded yet (async fetch)
+    expect(result.current.t('initialProject.title')).toBe('My Untitled Story');
     expect(result.current.t('welcome.title')).toBe('welcome.title');
   });
 

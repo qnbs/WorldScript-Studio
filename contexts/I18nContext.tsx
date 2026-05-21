@@ -1,6 +1,7 @@
 import type React from 'react';
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
+import { bootstrapTranslation } from '../services/i18nBootstrap';
 import { logger } from '../services/logger';
 
 export type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
@@ -8,13 +9,17 @@ export type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
 interface I18nContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
+  /** True once the active language bundle has been fetched. */
+  isReady: boolean;
   t: <T = string>(key: string, replacements?: Record<string, string>) => T;
 }
 
 export const I18nContext = createContext<I18nContextType>({
   language: 'de',
   setLanguage: () => {},
-  t: <T = string>(key: string) => key as unknown as T,
+  isReady: false,
+  t: <T = string>(key: string) =>
+    (bootstrapTranslation('en', key) ?? key) as unknown as T,
 });
 
 interface I18nProviderProps {
@@ -91,10 +96,18 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
     Promise.all(loads).catch(() => {});
   }, [language, loadLanguage]);
 
+  const isReady = Boolean(
+    translations[language] && Object.keys(translations[language] as object).length > 0,
+  );
+
   const t = useCallback(
     <T = string>(key: string, replacements?: Record<string, string>): T => {
-      // Fallback chain: active lang → EN → raw key
-      const value = translations[language]?.[key] ?? translations['en']?.[key] ?? key;
+      // Fallback: active lang → EN → sync bootstrap (cold start) → raw key
+      const value =
+        translations[language]?.[key] ??
+        translations['en']?.[key] ??
+        bootstrapTranslation(language, key) ??
+        key;
 
       if (typeof value !== 'string') {
         return value as unknown as T;
@@ -114,6 +127,8 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   );
 
   return (
-    <I18nContext.Provider value={{ language, setLanguage, t }}>{children}</I18nContext.Provider>
+    <I18nContext.Provider value={{ language, setLanguage, isReady, t }}>
+      {children}
+    </I18nContext.Provider>
   );
 };

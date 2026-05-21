@@ -586,6 +586,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
 | [`docs/Design-System.md`](docs/Design-System.md) | Tokens, Tailwind preset, UI primitives under `components/ui` |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Pages + Vercel + Cloudflare Pages — `build` vs `build:edge`, SPA routing |
+| [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) | GitHub language stats (Linguist), i18n bundles, cold-start translation fixes |
 | [`docs/PLOT-BOARD.md`](docs/PLOT-BOARD.md) | Plot-Board v2 architecture: canvas, connections, subplots, tension curve |
 | [`docs/PROGRESS-TRACKER.md`](docs/PROGRESS-TRACKER.md) | Progress Tracker: session lifecycle, streak algorithm, SVG charts |
 | [`docs/SPRINT-V1.5.md`](docs/SPRINT-V1.5.md) | Sprint reference: v1.5 local-AI architecture implementation plan |
@@ -593,6 +594,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/SPRINT-V1.7.md`](docs/SPRINT-V1.7.md) | Sprint reference: v1.7 DuckDB Analytics + Hybrid RAG + AI Extensions |
 | [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md) | Sprint reference: v1.8 RAG prompt assembly + Writer/Plot Board AI |
 | [`docs/SPRINT-V1.9.md`](docs/SPRINT-V1.9.md) | Sprint reference: v1.9 lazy loading, Help/Settings hub, Tauri desktop UX |
+| [`docs/SPRINT-V1.10.md`](docs/SPRINT-V1.10.md) | Sprint reference: v1.10 mobile UX, coverage 55 %, deploy & help expansion |
 | [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA manifest, service worker, share-target checklist |
 | [`infra/low-end-ci/`](infra/low-end-ci/) | Local CI on low-end hardware (act + Eco-Forgejo) |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow: manual/tag builds, 7-step first-release checklist |
