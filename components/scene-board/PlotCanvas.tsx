@@ -10,17 +10,15 @@ import {
   selectZoom,
 } from '../../features/plotBoard/plotBoardSlice';
 import { projectActions } from '../../features/project/projectSlice';
+import { useLongPress } from '../../hooks/useLongPress';
 import type { Character, StorySection } from '../../types';
 import { ConnectionLayer } from './ConnectionLayer';
 import { ConnectionToolbar } from './ConnectionToolbar';
+import { PlotMinimap } from './PlotMinimap';
 
 // Canvas card dimensions (must match autoLayoutScenes constants)
 const CARD_W = 200;
 const CARD_H = 130;
-
-// Mini-map viewport size (px)
-const MINI_W = 120;
-const MINI_H = 75;
 
 function snapToGrid(value: number, snap: boolean, gridSize = 8): number {
   if (!snap) return value;
@@ -36,10 +34,12 @@ interface CanvasCardProps {
   isDrawing: boolean;
   onPointerDown: (e: PointerEvent<HTMLDivElement>, sectionId: string) => void;
   onCardClick: (sectionId: string) => void;
+  onCardLongPress: (sectionId: string) => void;
 }
 
 const CanvasCard: FC<CanvasCardProps> = React.memo(
-  ({ section, x, y, t, isDrawing, onPointerDown, onCardClick }) => {
+  ({ section, x, y, t, isDrawing, onPointerDown, onCardClick, onCardLongPress }) => {
+    const longPress = useLongPress(() => onCardLongPress(section.id), 550);
     const statusColors: Record<string, string> = {
       draft: '#6b7280',
       outline: '#f59e0b',
@@ -63,7 +63,13 @@ const CanvasCard: FC<CanvasCardProps> = React.memo(
           cursor: isDrawing ? 'crosshair' : 'grab',
         }}
         className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-sc-lg p-3 shadow-sc-sm hover:shadow-sc-md transition-[box-shadow] duration-sc-normal ease-sc-standard select-none"
-        onPointerDown={(e) => onPointerDown(e, section.id)}
+        onPointerDown={(e) => {
+          longPress.onPointerDown(e);
+          onPointerDown(e, section.id);
+        }}
+        onPointerUp={longPress.onPointerUp}
+        onPointerMove={longPress.onPointerMove}
+        onPointerCancel={longPress.onPointerCancel}
         onClick={() => {
           if (!isDrawing) onCardClick(section.id);
         }}
@@ -100,83 +106,22 @@ const CanvasCard: FC<CanvasCardProps> = React.memo(
 );
 CanvasCard.displayName = 'CanvasCard';
 
-// Mini-map: fixed-position overview showing scene positions at scale
-const MiniMap: FC<{
-  sections: StorySection[];
-  layout: Record<string, { x: number; y: number }>;
-  canvasW: number;
-  canvasH: number;
-  panX: number;
-  panY: number;
-  zoom: number;
-}> = ({ sections, layout, canvasW, canvasH, panX, panY, zoom }) => {
-  const scaleX = MINI_W / Math.max(canvasW, 1);
-  const scaleY = MINI_H / Math.max(canvasH, 1);
-
-  // Viewport rect in canvas-space → mini-map-space
-  const vpW = (window.innerWidth / zoom) * scaleX;
-  const vpH = (window.innerHeight / zoom) * scaleY;
-  const vpX = (-panX / zoom) * scaleX;
-  const vpY = (-panY / zoom) * scaleY;
-
-  return (
-    <svg
-      width={MINI_W}
-      height={MINI_H}
-      role="img"
-      aria-label="Canvas mini-map"
-      style={{
-        position: 'absolute',
-        bottom: 12,
-        right: 12,
-        background: 'var(--background-secondary)',
-        border: '1px solid var(--border-primary)',
-        borderRadius: 6,
-        opacity: 0.85,
-        zIndex: 20,
-        pointerEvents: 'none',
-      }}
-    >
-      {sections.map((s) => {
-        const pos = layout[s.id];
-        if (!pos) return null;
-        return (
-          <rect
-            key={s.id}
-            x={pos.x * scaleX}
-            y={pos.y * scaleY}
-            width={CARD_W * scaleX}
-            height={CARD_H * scaleY}
-            rx={2}
-            fill={s.color || '#3b82f6'}
-            opacity={0.7}
-          />
-        );
-      })}
-      {/* Viewport indicator */}
-      <rect
-        x={vpX}
-        y={vpY}
-        width={Math.max(vpW, 4)}
-        height={Math.max(vpH, 4)}
-        fill="none"
-        stroke="var(--sc-accent-primary, #6366f1)"
-        strokeWidth={1}
-        opacity={0.8}
-      />
-    </svg>
-  );
-};
-
 interface PlotCanvasProps {
   sections: StorySection[];
   characters: Character[];
   layout: Record<string, { x: number; y: number }>;
   t: (key: string, replacements?: Record<string, string>) => string;
   onEditSection: (id: string) => void;
+  onSectionLongPress?: (id: string) => void;
 }
 
-export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSection }) => {
+export const PlotCanvas: FC<PlotCanvasProps> = ({
+  sections,
+  layout,
+  t,
+  onEditSection,
+  onSectionLongPress,
+}) => {
   const dispatch = useAppDispatch();
   const zoom = useAppSelectorShallow(selectZoom);
   const { panX, panY } = useAppSelectorShallow(selectPan);
@@ -216,6 +161,9 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
   const activePointers = useRef<Map<number, { x: number; y: number }>>(new Map());
   // QNBS-v3: rAF ref to coalesce burst pointer events — cancel pending frame before scheduling next.
   const rafRef = useRef<number | null>(null);
+  const reducedMotion =
+    typeof document !== 'undefined' &&
+    document.body.classList.contains('storycraft-reduced-motion');
 
   // Cancel any pending rAF on unmount to prevent dispatching into an unmounted tree.
   useEffect(
@@ -348,10 +296,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
       const captured = dragState.current;
       const rect = wrapperRef.current?.getBoundingClientRect() ?? null;
 
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-        // Track cursor in canvas-space for ConnectionLayer draw preview
+      const applyMove = () => {
         if (rect) {
           setCursorCanvasPos({
             x: (clientX - rect.left - panX) / zoom,
@@ -368,7 +313,6 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
             }),
           );
         } else if (captured.type === 'card' && captured.sectionId) {
-          // Move card — scale delta by zoom so canvas-space matches screen-space
           const newX = snapToGrid(captured.origX + dx / zoom, snapGrid);
           const newY = snapToGrid(captured.origY + dy / zoom, snapGrid);
           dispatch(
@@ -377,9 +321,20 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
             }),
           );
         }
+      };
+
+      if (reducedMotion) {
+        applyMove();
+        return;
+      }
+
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        applyMove();
       });
     },
-    [dispatch, snapGrid, zoom, panY, panX],
+    [dispatch, snapGrid, zoom, panY, panX, reducedMotion],
   );
 
   const handlePointerUp = useCallback((e: PointerEvent<HTMLDivElement>) => {
@@ -457,6 +412,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
               isDrawing={isDrawing}
               onPointerDown={handleCardPointerDown}
               onCardClick={onEditSection}
+              onCardLongPress={onSectionLongPress ?? onEditSection}
             />
           );
         })}
@@ -474,8 +430,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
       {/* Connection toolbar — outside transform so it stays in screen-space */}
       <ConnectionToolbar t={t} />
 
-      {/* Mini-map */}
-      <MiniMap
+      <PlotMinimap
         sections={sections}
         layout={layout}
         canvasW={canvasBounds.w}
@@ -483,6 +438,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({ sections, layout, t, onEditSec
         panX={panX}
         panY={panY}
         zoom={zoom}
+        ariaLabel={t('sceneboard.minimap.ariaLabel')}
       />
 
       {/* Empty state */}

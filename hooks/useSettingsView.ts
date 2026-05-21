@@ -50,7 +50,19 @@ export const useSettingsView = () => {
   const characters = selectAllCharacters({ project: { present: projectState } } as RootState);
   const worlds = selectAllWorlds({ project: { present: projectState } } as RootState);
 
-  const [activeCategory, setActiveCategory] = useState('data');
+  const [activeCategory, setActiveCategory] = useState('general');
+
+  useEffect(() => {
+    try {
+      const pending = sessionStorage.getItem('storycraft-settings-category');
+      if (pending) {
+        setActiveCategory(pending);
+        sessionStorage.removeItem('storycraft-settings-category');
+      }
+    } catch {
+      /* storage blocked */
+    }
+  }, []);
   const [modal, setModal] = useState<{ state: ModalState; payload: ModalPayload }>({
     state: 'closed',
     payload: {},
@@ -180,6 +192,21 @@ export const useSettingsView = () => {
           break;
         case 'enableAppHealthPanel':
           dispatch(featureFlagsActions.setEnableAppHealthPanel(Boolean(value)));
+          break;
+        case 'enablePlotBoardV2':
+          dispatch(featureFlagsActions.setEnablePlotBoardV2(Boolean(value)));
+          break;
+        case 'enableDuckDbAnalytics':
+          dispatch(featureFlagsActions.setEnableDuckDbAnalytics(Boolean(value)));
+          break;
+        case 'enableObjectsGroups':
+          dispatch(featureFlagsActions.setEnableObjectsGroups(Boolean(value)));
+          break;
+        case 'enableMindMaps':
+          dispatch(featureFlagsActions.setEnableMindMaps(Boolean(value)));
+          break;
+        case 'enableCharacterInterviews':
+          dispatch(featureFlagsActions.setEnableCharacterInterviews(Boolean(value)));
           break;
         default:
           logger.warn(`Unknown setting key: ${key}`);

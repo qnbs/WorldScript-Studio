@@ -442,5 +442,8 @@
   "revisions.confirmRestore": "Confirmer la restauration",
   "revisions.cancel": "Annuler",
   "revisions.delete": "Supprimer la révision",
-  "revisions.diff.identical": "Le contenu est identique."
+  "revisions.diff.identical": "Le contenu est identique.",
+  "sceneboard.minimap.ariaLabel": "Plot board mini-map",
+  "error.boundary.retryAnnouncement": "{{view}} reloaded after an error.",
+  "error.boundary.retryAnnouncementGeneric": "View reloaded after an error."
 }

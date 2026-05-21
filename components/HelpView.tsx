@@ -8,6 +8,7 @@ import { HelpViewContext, useHelpViewContext } from '../contexts/HelpViewContext
 import { useHelpView } from '../hooks/useHelpView';
 import { startSpotlightTour } from '../services/spotlightTour';
 import type { HelpCategory } from '../types';
+import { HelpSearchInput, HelpSearchPanel } from './help/HelpSearchPanel';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Input } from './ui/Input';
@@ -24,6 +25,12 @@ const iconMap: { [key: string]: React.ReactNode } = {
   HELP: ICONS.HELP,
   WORLD: ICONS.WORLD,
   LIGHTNING_BOLT: ICONS.LIGHTNING_BOLT,
+  WRITER: ICONS.WRITER,
+  TEMPLATES: ICONS.TEMPLATES,
+  OUTLINE: ICONS.OUTLINE,
+  CHARACTERS: ICONS.CHARACTERS,
+  EXPORT: ICONS.EXPORT,
+  CRITIC: ICONS.CRITIC,
 };
 
 const NavButton: FC<{
@@ -331,8 +338,17 @@ const AiAssistant: FC = () => {
 };
 
 const HelpViewUI: FC = () => {
-  const { t, helpContent, activeCategory, selectedArticle, handleSelectCategory } =
-    useHelpViewContext();
+  const {
+    t,
+    helpContent,
+    activeCategory,
+    selectedArticle,
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    handleSelectCategory,
+    handleSearchSelect,
+  } = useHelpViewContext();
 
   const handleStartTour = () => {
     startSpotlightTour((key) => t(key));
@@ -357,6 +373,25 @@ const HelpViewUI: FC = () => {
 
   return (
     <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">{t('help.title')}</h1>
+        <p className="mt-2 text-sm text-[var(--foreground-secondary)] max-w-2xl">
+          {t('help.description')}
+        </p>
+      </div>
+      <HelpSearchInput
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder={t('help.searchPlaceholder')}
+      />
+      <HelpSearchPanel
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        results={searchResults}
+        translate={t}
+        onSelect={handleSearchSelect}
+        onClear={() => setSearchQuery('')}
+      />
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8">
         <div className="md:col-span-1">
           {/* Mobile: horizontal scroll strip · Desktop: vertical sticky sidebar */}

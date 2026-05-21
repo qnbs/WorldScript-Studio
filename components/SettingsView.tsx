@@ -7,9 +7,12 @@ import { SETTINGS_CATEGORY_SEARCH_HINTS } from '../services/settingsSearchHints'
 import { AdvancedAiSection, AiSection } from './settings/AiSections';
 import { DataSection } from './settings/DataSection';
 import { AdvancedEditorSection, EditorSection } from './settings/EditorSections';
+import { FeatureFlagsSection } from './settings/FeatureFlagsSection';
 import { AboutSection, AppearanceSection, GeneralSection } from './settings/GeneralSections';
 import { ProjectAiPresetSection } from './settings/ProjectAiPresetSection';
+import { SettingsGuideSection } from './settings/SettingsGuideSection';
 import { SettingsModals } from './settings/SettingsModals';
+import { SettingsOverviewCard } from './settings/SettingsOverviewCard';
 import { ShortcutsSection } from './settings/ShortcutsSection';
 import {
   AccessibilitySection,
@@ -145,6 +148,20 @@ const SettingsViewUI: FC = () => {
           <path d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125m17.25 0h.008v.008h-.008v-.008zm-17.25 0a1.125 1.125 0 00-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25 0h.008v.008h-.008v-.008zM6 16.5V9.75m6.75 6.75V9.75m6.75 6.75V9.75M9 9.75h.008v.008H9v-.008zm3.75 0h.008v.008h-.008v-.008zm3.75 0h.008v.008h-.008v-.008z" />
         ),
       },
+      {
+        id: 'guide',
+        label: t('settings.categories.guide'),
+        icon: (
+          <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+        ),
+      },
+      {
+        id: 'experimental',
+        label: t('settings.categories.experimental'),
+        icon: (
+          <path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 00 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 00 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 00 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 00 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456Z" />
+        ),
+      },
       { id: 'about', label: t('settings.categories.about'), icon: ICONS.HELP },
       {
         id: 'shortcuts',
@@ -177,8 +194,17 @@ const SettingsViewUI: FC = () => {
 
   const renderContent = () => {
     switch (activeCategory) {
+      case 'guide':
+        return <SettingsGuideSection />;
+      case 'experimental':
+        return <FeatureFlagsSection />;
       case 'general':
-        return <GeneralSection />;
+        return (
+          <div className="space-y-6">
+            <SettingsOverviewCard />
+            <GeneralSection />
+          </div>
+        );
       case 'appearance':
         return <AppearanceSection />;
       case 'editor':

@@ -8,6 +8,7 @@ import { useDashboard } from '../hooks/useDashboard';
 import { useTranslation } from '../hooks/useTranslation';
 import { startSpotlightTour } from '../services/spotlightTour';
 import type { View } from '../types';
+import { BackupQuickActionsCard } from './dashboard/BackupQuickActionsCard';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { DebouncedInput } from './ui/DebouncedInput';
@@ -644,9 +645,11 @@ const OnboardingTipsBanner: FC = () => {
 // --- Main Composition ---
 
 const DashboardUI: FC = () => {
+  const { onNavigate } = useDashboardContext();
   return (
     <div className="space-y-10 pb-16 max-w-7xl mx-auto">
       <OnboardingTipsBanner />
+      <BackupQuickActionsCard onNavigate={onNavigate} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-[minmax(340px,auto)]">
         <ProjectDetails />
         <GoalTracker />

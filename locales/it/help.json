@@ -14,130 +14,6 @@
   "help.aiStudio.tools.title": "Comprendere gli Strumenti IA",
   "help.article.selectPrompt": "Seleziona un articolo a sinistra per leggerlo, o chiedi aiuto al nostro assistente IA.",
   "help.article.tryItNow": "Provalo ora",
-  "help.categories": [
-    {
-      "id": "getting-started",
-      "title": "help.category.gettingStarted",
-      "icon": "DASHBOARD",
-      "articles": [
-        {
-          "title": "help.gettingStarted.tour.title",
-          "content": "help.gettingStarted.tour.content",
-          "tryActionId": "nav-dashboard"
-        },
-        {
-          "title": "help.gettingStarted.firstProject.title",
-          "content": "help.gettingStarted.firstProject.content",
-          "tryActionId": "nav-templates"
-        }
-      ]
-    },
-    {
-      "id": "writing",
-      "title": "help.category.writing",
-      "icon": "DOCUMENT_TEXT",
-      "articles": [
-        {
-          "title": "help.writing.manuscript.title",
-          "content": "help.writing.manuscript.content",
-          "tryActionId": "nav-manuscript"
-        },
-        {
-          "title": "help.writing.templates.title",
-          "content": "help.writing.templates.content",
-          "tryActionId": "nav-templates"
-        },
-        {
-          "title": "help.writing.outline.title",
-          "content": "help.writing.outline.content",
-          "tryActionId": "nav-outline"
-        }
-      ]
-    },
-    {
-      "id": "worldbuilding",
-      "title": "help.category.worldbuilding",
-      "icon": "WORLD",
-      "articles": [
-        {
-          "title": "help.worldbuilding.characters.title",
-          "content": "help.worldbuilding.characters.content",
-          "tryActionId": "nav-characters"
-        },
-        {
-          "title": "help.worldbuilding.worlds.title",
-          "content": "help.worldbuilding.worlds.content",
-          "tryActionId": "nav-world"
-        }
-      ]
-    },
-    {
-      "id": "ai-studio",
-      "title": "help.category.aiStudio",
-      "icon": "SPARKLES",
-      "articles": [
-        {
-          "title": "help.aiStudio.overview.title",
-          "content": "help.aiStudio.overview.content",
-          "tryActionId": "nav-writer"
-        },
-        {
-          "title": "help.aiStudio.tools.title",
-          "content": "help.aiStudio.tools.content",
-          "tryActionId": "nav-writer"
-        },
-        {
-          "title": "help.aiStudio.ragContext.title",
-          "content": "help.aiStudio.ragContext.content",
-          "tryActionId": "nav-writer"
-        }
-      ]
-    },
-    {
-      "id": "management",
-      "title": "help.category.management",
-      "icon": "SETTINGS",
-      "articles": [
-        {
-          "title": "help.management.export.title",
-          "content": "help.management.export.content",
-          "tryActionId": "nav-export"
-        },
-        {
-          "title": "help.management.data.title",
-          "content": "help.management.data.content",
-          "tryActionId": "nav-settings"
-        }
-      ]
-    },
-    {
-      "id": "pro-tips",
-      "title": "help.category.proTips",
-      "icon": "LIGHTNING_BOLT",
-      "articles": [
-        {
-          "title": "help.proTips.mentions.title",
-          "content": "help.proTips.mentions.content",
-          "tryActionId": "nav-manuscript"
-        },
-        {
-          "title": "help.proTips.snapshots.title",
-          "content": "help.proTips.snapshots.content",
-          "tryActionId": "nav-settings"
-        }
-      ]
-    },
-    {
-      "id": "faq",
-      "title": "help.category.faq",
-      "icon": "HELP",
-      "articles": [
-        { "title": "help.faq.saving.title", "content": "help.faq.saving.content" },
-        { "title": "help.faq.api.title", "content": "help.faq.api.content" },
-        { "title": "help.faq.privacy.title", "content": "help.faq.privacy.content" }
-      ]
-    }
-  ],
   "help.category.aiStudio": "Studio di Scrittura IA",
   "help.category.faq": "Domande Frequenti",
   "help.category.gettingStarted": "Per Iniziare",
@@ -179,5 +55,89 @@
   "help.writing.outline.title": "Padroneggiare il Generatore di Schema IA",
   "help.writing.templates.content": "<h3>Costruire su una Base Solida</h3><p>I modelli forniscono una struttura iniziale per la tua storia. Nella vista <b>Modelli</b>, puoi:</p><ul><li><b>Anteprima:</b> Fai clic su qualsiasi modello per vedere le sue sezioni.</li><li><b>Remix:</b> Prima di applicare, fai clic su 'Remix di questo Modello'. Questo ti permette di aggiungere, eliminare, rinominare e riorganizzare sezioni per creare una struttura personalizzata.</li><li><b>Personalizza con l'IA:</b> Inserisci il concetto centrale della tua storia e l'IA genererà suggerimenti unici e ispiratori per ogni sezione per guidare la tua scrittura.</li><li><b>Applica:</b> Una volta applicato un modello, sostituirà il tuo manoscritto e schema attuali, dandoti una lavagna pulita strutturata per il successo.</li></ul>",
   "help.writing.templates.title": "Lavorare con i Modelli",
-  "help.tryTour": "Avvia tour interattivo"
+  "help.tryTour": "Avvia tour interattivo",
+  "help.searchResultsTitle": "Risultati di ricerca",
+  "help.category.analysis": "Analisi e qualità",
+  "help.category.settingsGuide": "Guida alle impostazioni",
+  "help.category.documentation": "Documentazione tecnica",
+  "help.gettingStarted.palette.title": "Palette comandi e scorciatoie",
+  "help.gettingStarted.palette.content": "<h3>Navigazione rapida</h3><p>Premi <b>Ctrl+K</b> (Windows/Linux) o <b>Cmd+K</b> (macOS) per aprire la <b>palette comandi</b>. Cerca viste, azioni IA, temi e preferiti fissati. Clic destro su un comando per fissarlo.</p><p>Personalizza le combinazioni in <b>Impostazioni → Scorciatoie</b>. I conflitti sono evidenziati in ambra.</p>",
+  "help.gettingStarted.navigation.title": "Barra laterale e panoramica viste",
+  "help.gettingStarted.navigation.content": "<h3>Tutte le viste principali</h3><ul><li><b>Dashboard</b> — obiettivi, statistiche, azioni rapide di backup, tour di benvenuto.</li><li><b>Manoscritto</b> — editor a tre pannelli con tag @ e #mondo.</li><li><b>Studio di scrittura IA</b> — continua, migliora, dialogo, contesto RAG.</li><li><b>Scena board / Plot Board</b> — canvas, corsie, curva di tensione, suggerimenti beat IA.</li><li><b>Personaggi, mondi, oggetti, mappe mentali, interviste</b> — suite worldbuilding (alcune dietro flag).</li><li><b>Grafo personaggi, coerenza, critico</b> — strumenti di analisi.</li><li><b>Esporta, impostazioni, aiuto</b> — pubblicazione, configurazione, centro apprendimento.</li></ul>",
+  "help.gettingStarted.desktop.title": "App desktop (Tauri) e PWA",
+  "help.gettingStarted.desktop.content": "<h3>Dove esegui StoryCraft</h3><p><b>Browser / PWA:</b> installa dal browser per cache offline; i dati restano in IndexedDB.</p><p><b>Desktop (Tauri):</b> accesso FS nativo, Ollama su localhost, aggiornatore opzionale, ripristino stato finestra e «apri cartella dati» in Impostazioni → Dati.</p><p>Chiavi API e manoscritti non lasciano il dispositivo salvo invio di testo a un provider IA cloud.</p>",
+  "help.writing.writer.title": "Flusso dello studio di scrittura IA",
+  "help.writing.writer.content": "<h3>Vista scrittore</h3><p>Seleziona una sezione del manoscritto, scegli uno strumento IA, attiva il <b>contesto RAG</b> per il recupero locale, poi genera nel blocco note e inserisci/sostituisci nel manoscritto.</p><p>Le catene di fallback ibride (Impostazioni → IA avanzata) ritentano automaticamente i provider cloud.</p>",
+  "help.writing.sceneboard.title": "Plot Board e scena board",
+  "help.writing.sceneboard.content": "<h3>Trama visiva</h3><p>Attiva <b>Plot Board v2</b> in Impostazioni → Flag sperimentali. Modalità: <b>Canvas</b> (pan/zoom, pinch, minimappa, connessioni SVG), <b>Corsie</b> (tre atti), <b>Timeline</b>.</p><p>Pressione prolungata su una card beat per azioni contestuali; le linee di connessione hanno target touch da 44 px. L’IA può suggerire il beat successivo dal manoscritto.</p>",
+  "help.writing.bookPreview.title": "Anteprima libro e progressi",
+  "help.writing.bookPreview.content": "<p><b>Anteprima libro</b> mostra un flusso di lettura continuo. <b>Tracker progressi</b> traccia parole e obiettivi nel tempo. Entrambi leggono le stesse sezioni di Esporta.</p>",
+  "help.worldbuilding.objects.title": "Inventario oggetti e gruppi",
+  "help.worldbuilding.objects.content": "<p>Attiva <b>Oggetti e gruppi</b> in Impostazioni → Flag sperimentali. Traccia oggetti di scena, fazioni ed entità raggruppate collegate a scene e personaggi.</p>",
+  "help.worldbuilding.mindmaps.title": "Mappe mentali",
+  "help.worldbuilding.mindmaps.content": "<p>Attiva <b>Mappe mentali</b> nei flag. Canvas SVG con più forme di nodo, collegamenti a personaggi/mondi/oggetti e struttura esportabile.</p>",
+  "help.worldbuilding.interviews.title": "Interviste ai personaggi",
+  "help.worldbuilding.interviews.content": "<p>Attiva <b>Interviste ai personaggi</b> per sessioni IA guidate da archetipo che approfondiscono voce e motivazione.</p>",
+  "help.worldbuilding.graph.title": "Grafo delle relazioni tra personaggi",
+  "help.worldbuilding.graph.content": "<p>Il <b>grafo personaggi</b> visualizza le relazioni come rete force-directed. Filtra per tag, trascina nodi e apri dossier dal grafo.</p>",
+  "help.aiStudio.providers.title": "Provider IA e chiavi",
+  "help.aiStudio.providers.content": "<h3>Provider</h3><p>Configura Gemini, OpenAI, Anthropic, Grok, Ollama, WebLLM, ONNX e Transformers.js in <b>Impostazioni → IA</b> e <b>IA avanzata</b>. Le chiavi sono cifrate in IndexedDB (AES-256-GCM). Ollama richiede l’app desktop per localhost.</p>",
+  "help.aiStudio.localAi.title": "IA locale (WebLLM / ONNX)",
+  "help.aiStudio.localAi.content": "<p>Scarica modelli nel browser per inferenza offline. Le metriche GPU compaiono in IA avanzata se disponibili. Modelli ONNX piccoli usano WASM su CPU.</p>",
+  "help.aiStudio.critic.title": "Critico IA",
+  "help.aiStudio.critic.content": "<p>La vista <b>Critico</b> analizza ritmo, chiarezza e tono sui passaggi selezionati. Usa lo stesso provider e impostazioni RAG dello scrittore.</p>",
+  "help.aiStudio.plotAi.title": "Beat IA del Plot Board",
+  "help.aiStudio.plotAi.content": "<p>Nella barra della scena board, <b>Suggerisci beat successivo</b> usa contesto RAG del manoscritto e la tua scaletta per proporre la card successiva.</p>",
+  "help.analysis.consistency.title": "Controllo coerenza",
+  "help.analysis.consistency.content": "<p>Scansiona le menzioni del manoscritto rispetto a dossier personaggi/mondi e regole della timeline. Correggi gli avvisi dalla vista Coerenza.</p>",
+  "help.analysis.progress.title": "Progressi e leggibilità",
+  "help.analysis.progress.content": "<p>La dashboard mostra campioni di leggibilità stile Flesch e suggerimenti timeline delle scene. Il tracker progressi aggiunge grafici storici con obiettivi impostati.</p>",
+  "help.analysis.health.title": "Punteggio salute progetto",
+  "help.analysis.health.content": "<p>Attiva <b>Punteggio salute progetto</b> nei flag per una metrica combinata in dashboard (obiettivi, cast, copertura worldbuilding).</p>",
+  "help.analysis.crossProject.title": "Ricerca tra progetti",
+  "help.analysis.crossProject.content": "<p>Se attiva, cerca testo del manuscritto in tutti i progetti locali. La reindicizzazione avviene in background; i risultati aprono il progetto di destinazione.</p>",
+  "help.management.backupDashboard.title": "Azioni rapide backup in dashboard",
+  "help.management.backupDashboard.content": "<p>Dalla card <b>Backup</b> della dashboard: esporta JSON, importa backup, vedi l’ultimo snapshot o vai a Impostazioni → Backup per pianificazione e cifratura.</p>",
+  "help.management.versionControl.title": "Pannello controllo versioni",
+  "help.management.versionControl.content": "<p>Il pannello <b>Controllo versioni</b> nell’intestazione elenca branch/snapshot per sperimentare. Abbinalo a snapshot manuali prima di modifiche grandi.</p>",
+  "help.management.collaboration.title": "Collaborazione (sperimentale)",
+  "help.management.collaboration.content": "<p>Pannello collaborazione Yjs (se attivo) condivide sessioni di modifica tramite il provider configurato. Vedi Impostazioni → Collaborazione per WebRTC e stanze.</p>",
+  "help.settingsGuide.overview.title": "Panoramica impostazioni",
+  "help.settingsGuide.overview.content": "<p>Le impostazioni sono raggruppate: Generale, Aspetto, Editor, IA, Accessibilità, Privacy, Prestazioni, Notifiche, Collaborazione, Integrazioni, Backup, Dati, Scorciatoie, Informazioni e <b>Flag sperimentali</b>. Usa la ricerca in alto per filtrare le categorie.</p>",
+  "help.settingsGuide.ai.title": "Impostazioni IA e IA avanzata",
+  "help.settingsGuide.ai.content": "<p>Imposta provider/modello predefiniti, creatività, catena fallback ibrida, modalità indice RAG locale (lessicale o ibrida), ricostruisci indice, toggle analitiche DuckDB e metriche GPU.</p>",
+  "help.settingsGuide.accessibility.title": "Hub accessibilità",
+  "help.settingsGuide.accessibility.content": "<p>Preset per comfort motorio, bassa visione e carico cognitivo. Toggle: alto contrasto, movimento ridotto (anche rAF del plot board), testo grande, annunci screen reader, anelli focus, target comodi, modalità daltonismo.</p>",
+  "help.settingsGuide.backup.title": "Backup e dati",
+  "help.settingsGuide.backup.content": "<p><b>Backup</b>: intervallo snapshot automatici, passphrase di cifratura.<br/><b>Dati</b>: export/import JSON, ZIP libreria cifrato, reset progetto, ripristino snapshot, apri cartella dati (desktop).</p>",
+  "help.settingsGuide.flags.title": "Tutti i 12 feature flag",
+  "help.settingsGuide.flags.content": "<ul><li>Tracciamento automatico codex</li><li>Story Bible avanzata</li><li>Raccoglitore ricerche</li><li>Assistente compilazione</li><li>Punteggio salute progetto</li><li>Ricerca tra progetti</li><li>Pannello salute app</li><li>Plot Board v2</li><li>Analitiche DuckDB</li><li>Oggetti e gruppi</li><li>Mappe mentali</li><li>Interviste ai personaggi</li></ul><p>Salvato in localStorage <code>storycraft-feature-flags</code>.</p>",
+  "help.settingsGuide.shortcuts.title": "Scorciatoie da tastiera",
+  "help.settingsGuide.shortcuts.content": "<p>Registra accordi per azione; i conflitti sono elencati in ambra. Predefiniti: palette, salva, nuova sezione, cerca, esporta, tema.</p>",
+  "help.docs.architecture.title": "Architettura applicazione",
+  "help.docs.architecture.content": "<h3>Stack</h3><p>Frontend React + Vite, store Redux Toolkit, slice per funzionalità, layer servizi per IA/storage/export, viste lazy-load, shell desktop Tauri v2.</p><p>Moduli pesanti (DuckDB, force-graph, collaborazione/Yjs) si caricano on demand dopo navigazione o flag.</p>",
+  "help.docs.dataModel.title": "Modello dati del progetto",
+  "help.docs.dataModel.content": "<p>Un unico <code>StoryProject</code> in Redux: sezioni manoscritto, personaggi, mondi, layout scena board, connessioni trama, snapshot impostazioni, obiettivi. Persistito in IndexedDB o dati app Tauri via <code>storageService</code>.</p>",
+  "help.docs.featureFlags.title": "Sistema feature flag",
+  "help.docs.featureFlags.content": "<p>Dodici booleani in <code>featureFlagsSlice</code>, persistiti in localStorage, controllano voci barra laterale e listener (es. bootstrap analitiche DuckDB, listener codex).</p>",
+  "help.docs.ragPipeline.title": "RAG e assemblaggio prompt",
+  "help.docs.ragPipeline.content": "<p>Indice ibrido: embedding semantici (MiniLM) + lessicale + recenza. <code>assembleRAGPrompt</code> inietta chunk nelle chiamate Scrittore/Plot IA. Ricostruisci da Impostazioni → IA avanzata.</p>",
+  "help.docs.duckdb.title": "Analitiche DuckDB-WASM",
+  "help.docs.duckdb.content": "<p>Worker DuckDB opzionale con backing OPFS memorizza vettori 384 dim per dashboard quando <code>enableDuckDbAnalytics</code> è attivo. Il listener si importa dinamicamente per mantenere piccolo il bundle iniziale.</p>",
+  "help.docs.lazyLoading.title": "Lazy loading e bundle",
+  "help.docs.lazyLoading.content": "<p>Le viste usano <code>React.lazy</code>; subchunk Plot Board via <code>manualChunks</code> Vite; aiApi differisce il caricamento provider; il middleware listener importa DuckDB/RAG dinamicamente.</p>",
+  "help.docs.pwaDesktop.title": "Pacchetto PWA e desktop",
+  "help.docs.pwaDesktop.content": "<p>Il service worker PWA mette in cache gli asset dello shell. Tauri raggruppa plugin Rust: fs, dialogo, http, shell, updater, menu/bandeja/stato finestra opzionali.</p>",
+  "help.docs.deployment.title": "Opzioni di deployment",
+  "help.docs.deployment.content": "<p>Build statica con Vite; host: Vercel, Cloudflare Pages (<code>build:edge</code>), GitHub Pages. Release desktop via CI Tauri; firma lato maintainer.</p>",
+  "help.docs.privacySecurity.title": "Modello privacy e sicurezza",
+  "help.docs.privacySecurity.content": "<p>Local-first: nessun account cloud. Chiavi API cifrate a riposo. Le richieste IA inviano solo il testo selezionato al provider scelto. CSP blocca localhost arbitrario nelle build browser.</p>",
+  "help.proTips.featureFlags.title": "Strategia di rollout dei flag",
+  "help.proTips.featureFlags.content": "<p>Attiva i flag uno alla volta su un progetto con snapshot. Plot Board v2 + analitiche DuckDB aumentano memoria WASM — usa Prestazioni su dispositivi modesti.</p>",
+  "help.proTips.workflow.title": "Flusso di scrittura consigliato",
+  "help.proTips.workflow.content": "<ol><li>Scaletta o modello → manoscritto</li><li>Scena board per struttura</li><li>Scrittore + RAG per bozze</li><li>Passaggi coerenza + critico</li><li>Esporta + backup JSON</li></ol>",
+  "help.faq.offline.title": "Posso lavorare offline?",
+  "help.faq.offline.content": "<p>Sì per scrittura, snapshot e modelli locali già scaricati. I provider IA cloud richiedono rete. Installare la PWA migliora il caricamento dello shell offline.</p>",
+  "help.faq.providers.title": "Quale provider IA usare?",
+  "help.faq.providers.content": "<p><b>Gemini</b> — equilibrio cloud predefinito.<br/><b>Ollama</b> — privacy localhost su desktop.<br/><b>WebLLM/ONNX</b> — nel browser, senza chiave API.<br/>Attiva fallback ibrido per concatenare provider in caso di errore.</p>"
 }

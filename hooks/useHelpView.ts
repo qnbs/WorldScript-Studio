@@ -1,8 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
 import { streamAiHelpResponse } from '../services/aiProviderService';
+import { catalogToHelpCategories } from '../services/help/helpCatalog';
 import { retrieveHelpDocContext } from '../services/help/helpDocRetrieval';
-import type { AiCreativity, HelpArticle, HelpCategory } from '../types';
+import { flattenHelpArticles, searchHelpArticles } from '../services/help/helpSearch';
+import type { AiCreativity, HelpArticle } from '../types';
 import { useTranslation } from './useTranslation';
 
 interface ChatMessage {
@@ -19,15 +21,17 @@ export const useHelpView = () => {
   const { t } = useTranslation();
   const settings = useAppSelector((state) => state.settings);
 
-  const rawHelpContent = t<HelpCategory[]>('help.categories');
-  const helpContent: HelpCategory[] = Array.isArray(rawHelpContent)
-    ? rawHelpContent.filter(
-        (c): c is HelpCategory => c != null && typeof c === 'object' && 'id' in c,
-      )
-    : [];
+  const helpContent = useMemo(() => catalogToHelpCategories(), []);
+  const flatArticles = useMemo(() => flattenHelpArticles(helpContent), [helpContent]);
 
-  const [activeCategory, setActiveCategory] = useState<string>(helpContent[0]?.id || 'ai');
+  const [activeCategory, setActiveCategory] = useState<string>('getting-started');
   const [selectedArticle, setSelectedArticle] = useState<HelpArticle | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const searchResults = useMemo(
+    () => searchHelpArticles(flatArticles, searchQuery, t),
+    [flatArticles, searchQuery, t],
+  );
 
   // AI Assistant State
   const [userInput, setUserInput] = useState('');
@@ -38,8 +42,22 @@ export const useHelpView = () => {
 
   const handleSelectCategory = useCallback((categoryId: string) => {
     setActiveCategory(categoryId);
-    setSelectedArticle(null); // Reset article selection when changing category
+    setSelectedArticle(null);
+    setSearchQuery('');
   }, []);
+
+  const handleSearchSelect = useCallback(
+    (hit: { categoryId: string; titleKey: string; contentKey: string; tryActionId?: string }) => {
+      const cat = helpContent.find((c) => c.id === hit.categoryId);
+      const article = cat?.articles.find((a) => a.title === hit.titleKey);
+      if (article) {
+        setActiveCategory(hit.categoryId);
+        setSelectedArticle(article);
+        setSearchQuery('');
+      }
+    },
+    [helpContent],
+  );
 
   const handleSelectArticle = useCallback((article: HelpArticle) => {
     setSelectedArticle(article);
@@ -114,8 +132,12 @@ export const useHelpView = () => {
     helpContent,
     activeCategory,
     selectedArticle,
+    searchQuery,
+    setSearchQuery,
+    searchResults,
     handleSelectCategory,
     handleSelectArticle,
+    handleSearchSelect,
     handleBackToList,
     // AI state
     chatHistory,

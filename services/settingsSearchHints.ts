@@ -37,6 +37,17 @@ export const SETTINGS_CATEGORY_SEARCH_HINTS: Record<string, string[]> = {
   integrations: ['language tool', 'sync', 'notion'],
   backup: ['snapshot', 'frequency', 'encrypt'],
   data: ['export', 'import', 'reset', 'json'],
-  about: ['version', 'license', 'credits', 'health', 'diagnostics', 'locale'],
+  about: ['version', 'license', 'credits', 'health', 'diagnostics', 'locale', 'updater', 'tauri'],
   shortcuts: ['keyboard', 'hotkey', 'keybinding', 'ctrl', 'meta'],
+  guide: ['overview', 'help', 'map', 'categories', 'leitfaden'],
+  experimental: [
+    'feature flag',
+    'plot board',
+    'duckdb',
+    'mind map',
+    'objects',
+    'interviews',
+    'codex',
+    'cross project',
+  ],
 };

@@ -1,5 +1,39 @@
 mod pandoc;
 
+use tauri::Emitter;
+
+#[cfg(desktop)]
+fn install_app_menu(app: &tauri::App) -> tauri::Result<()> {
+  use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+  let handle = app.handle();
+  let file_menu = Submenu::with_items(
+    handle,
+    "File",
+    true,
+    &[
+      &MenuItem::with_id(handle, "menu-export", "Export Project", true, None::<&str>)?,
+      &MenuItem::with_id(handle, "menu-settings", "Settings", true, None::<&str>)?,
+      &PredefinedMenuItem::separator(handle)?,
+      &PredefinedMenuItem::quit(handle, None)?,
+    ],
+  )?;
+  let help_menu = Submenu::with_items(
+    handle,
+    "Help",
+    true,
+    &[&MenuItem::with_id(handle, "menu-help", "Help Center", true, None::<&str>)?],
+  )?;
+  let menu = Menu::with_items(handle, &[&file_menu, &help_menu])?;
+  app.set_menu(menu)?;
+  Ok(())
+}
+
+#[cfg(not(desktop))]
+fn install_app_menu(_app: &tauri::App) -> tauri::Result<()> {
+  Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -8,6 +42,11 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(
+      tauri_plugin_window_state::Builder::new()
+        .with_state_flags(tauri_plugin_window_state::StateFlags::all())
+        .build(),
+    )
     .invoke_handler(tauri::generate_handler![pandoc::pandoc_markdown_to_epub])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -17,7 +56,12 @@ pub fn run() {
             .build(),
         )?;
       }
+      install_app_menu(app)?;
       Ok(())
+    })
+    .on_menu_event(|app, event| {
+      let id = event.id().0.clone();
+      let _ = app.emit("menu-action", id);
     })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

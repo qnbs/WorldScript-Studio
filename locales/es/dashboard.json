@@ -60,5 +60,12 @@
   "dashboard.stats.worlds": "Mundos",
   "initialProject.chapter1": "Capítulo 1",
   "initialProject.logline": "Un viaje de mil millas comienza con un solo paso...",
-  "initialProject.title": "Mi historia sin título"
+  "initialProject.title": "Mi historia sin título",
+  "dashboard.backup.title": "Backup & Wiederherstellung",
+  "dashboard.backup.hint": "Projekt exportieren, Backup importieren oder Einstellungen öffnen.",
+  "dashboard.backup.exportJson": "JSON exportieren",
+  "dashboard.backup.importJson": "JSON importieren",
+  "dashboard.backup.openSettings": "Backup-Einstellungen",
+  "dashboard.backup.latestSnapshot": "Letzter Snapshot: {{name}} ({{date}})",
+  "dashboard.backup.unnamedSnapshot": "Unbenannter Snapshot"
 }

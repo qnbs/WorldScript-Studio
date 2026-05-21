@@ -342,10 +342,15 @@ export async function generateText(
       const nextProvider = chain[i];
       if (nextProvider === undefined) continue;
       try {
-        return await generateTextSingleProvider(prompt, creativity, {
-          ...o,
-          provider: nextProvider,
-        });
+        const { withTransientRetry } = await import('./ai/aiRetry');
+        return await withTransientRetry(
+          () =>
+            generateTextSingleProvider(prompt, creativity, {
+              ...o,
+              provider: nextProvider,
+            }),
+          { attempts: 2 },
+        );
       } catch (err) {
         lastError = err;
         if (i === chain.length - 1) break;

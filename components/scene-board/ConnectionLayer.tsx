@@ -206,12 +206,12 @@ export const ConnectionLayer: FC<ConnectionLayerProps> = ({
               markerEnd={markerEnd}
               pointerEvents="none"
             />
-            {/* Invisible thick hit-test path — pointer-events:stroke overrides parent none */}
+            {/* Invisible thick hit-test path (≥44px touch target) — pointer-events:stroke overrides parent none */}
             <path
               d={d}
               fill="none"
               stroke="transparent"
-              strokeWidth={18}
+              strokeWidth={44}
               tabIndex={0}
               role="button"
               aria-label={conn.label ?? `${conn.type} connection`}

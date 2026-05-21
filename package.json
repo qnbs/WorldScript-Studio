@@ -1,7 +1,7 @@
 {
   "name": "storycraft-studio",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.9.0",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {
@@ -48,7 +48,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "analyze": "ANALYZE=true vite build",
-    "bundle:budget": "node scripts/check-bundle-budget.mjs --max-kb 7000",
+    "bundle:budget": "node scripts/check-bundle-budget.mjs --max-kb 7000 --max-entry-kb 4500",
     "dev:tauri": "tauri dev",
     "ci:quick": "bash infra/low-end-ci/scripts/ci-quick.sh",
     "ci:quick:unit": "bash infra/low-end-ci/scripts/ci-quick.sh --unit",
@@ -76,6 +76,9 @@
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-http": "^2.5.9",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "ai": "^6.0.185",
     "diff-match-patch": "^1.0.5",
     "docx": "^9.6.1",

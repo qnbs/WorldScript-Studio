@@ -14,139 +14,6 @@
   "help.aiStudio.tools.title": "Die KI-Werkzeuge verstehen",
   "help.article.selectPrompt": "Wählen Sie links einen Artikel aus, um ihn zu lesen, oder fragen Sie unseren KI-Assistenten um Hilfe.",
   "help.article.tryItNow": "Jetzt ausprobieren",
-  "help.categories": [
-    {
-      "id": "getting-started",
-      "title": "help.category.gettingStarted",
-      "icon": "DASHBOARD",
-      "articles": [
-        {
-          "title": "help.gettingStarted.tour.title",
-          "content": "help.gettingStarted.tour.content",
-          "tryActionId": "nav-dashboard"
-        },
-        {
-          "title": "help.gettingStarted.firstProject.title",
-          "content": "help.gettingStarted.firstProject.content",
-          "tryActionId": "nav-templates"
-        }
-      ]
-    },
-    {
-      "id": "writing",
-      "title": "help.category.writing",
-      "icon": "DOCUMENT_TEXT",
-      "articles": [
-        {
-          "title": "help.writing.manuscript.title",
-          "content": "help.writing.manuscript.content",
-          "tryActionId": "nav-manuscript"
-        },
-        {
-          "title": "help.writing.templates.title",
-          "content": "help.writing.templates.content",
-          "tryActionId": "nav-templates"
-        },
-        {
-          "title": "help.writing.outline.title",
-          "content": "help.writing.outline.content",
-          "tryActionId": "nav-outline"
-        }
-      ]
-    },
-    {
-      "id": "worldbuilding",
-      "title": "help.category.worldbuilding",
-      "icon": "WORLD",
-      "articles": [
-        {
-          "title": "help.worldbuilding.characters.title",
-          "content": "help.worldbuilding.characters.content",
-          "tryActionId": "nav-characters"
-        },
-        {
-          "title": "help.worldbuilding.worlds.title",
-          "content": "help.worldbuilding.worlds.content",
-          "tryActionId": "nav-world"
-        }
-      ]
-    },
-    {
-      "id": "ai-studio",
-      "title": "help.category.aiStudio",
-      "icon": "SPARKLES",
-      "articles": [
-        {
-          "title": "help.aiStudio.overview.title",
-          "content": "help.aiStudio.overview.content",
-          "tryActionId": "nav-writer"
-        },
-        {
-          "title": "help.aiStudio.tools.title",
-          "content": "help.aiStudio.tools.content",
-          "tryActionId": "nav-writer"
-        },
-        {
-          "title": "help.aiStudio.ragContext.title",
-          "content": "help.aiStudio.ragContext.content",
-          "tryActionId": "nav-writer"
-        }
-      ]
-    },
-    {
-      "id": "management",
-      "title": "help.category.management",
-      "icon": "SETTINGS",
-      "articles": [
-        {
-          "title": "help.management.export.title",
-          "content": "help.management.export.content",
-          "tryActionId": "nav-export"
-        },
-        {
-          "title": "help.management.data.title",
-          "content": "help.management.data.content",
-          "tryActionId": "nav-settings"
-        }
-      ]
-    },
-    {
-      "id": "pro-tips",
-      "title": "help.category.proTips",
-      "icon": "LIGHTNING_BOLT",
-      "articles": [
-        {
-          "title": "help.proTips.mentions.title",
-          "content": "help.proTips.mentions.content",
-          "tryActionId": "nav-manuscript"
-        },
-        {
-          "title": "help.proTips.snapshots.title",
-          "content": "help.proTips.snapshots.content",
-          "tryActionId": "nav-settings"
-        }
-      ]
-    },
-    {
-      "id": "faq",
-      "title": "help.category.faq",
-      "icon": "HELP",
-      "articles": [
-        {
-          "title": "help.faq.saving.title",
-          "content": "help.faq.saving.content"
-        },
-        {
-          "title": "help.faq.api.title",
-          "content": "help.faq.api.content"
-        },
-        {
-          "title": "help.faq.privacy.title",
-          "content": "help.faq.privacy.content"
-        }
-      ]
-    }
-  ],
   "help.category.aiStudio": "KI-Schreibstudio",
   "help.category.faq": "Häufig gestellte Fragen",
   "help.category.gettingStarted": "Erste Schritte",
@@ -188,5 +55,89 @@
   "help.writing.outline.title": "Den KI-Gliederungsgenerator meistern",
   "help.writing.templates.content": "<h3>Auf einem soliden Fundament bauen</h3><p>Vorlagen bieten eine Startstruktur für Ihre Geschichte. In der <b>Vorlagen</b>-Ansicht können Sie:</p><ul><li><b>Vorschau anzeigen:</b> Klicken Sie auf eine Vorlage, um deren Abschnitte zu sehen.</li><li><b>Anpassen (Remix):</b> Klicken Sie vor dem Anwenden auf 'Vorlage anpassen'. Dies ermöglicht es Ihnen, Abschnitte hinzuzufügen, zu löschen, umzubenennen und neu anzuordnen, um eine benutzerdefinierte Struktur zu erstellen.</li><li><b>Mit KI personalisieren:</b> Geben Sie Ihr zentrales Story-Konzept ein, und die KI generiert einzigartige, inspirierende Anregungen für jeden Abschnitt, um Ihr Schreiben zu leiten.</li><li><b>Anwenden:</b> Sobald Sie eine Vorlage anwenden, ersetzt sie Ihr aktuelles Manuskript und Ihre Gliederung und gibt Ihnen eine saubere, strukturierte Basis für den Erfolg.</li></ul>",
   "help.writing.templates.title": "Mit Vorlagen arbeiten",
-  "help.tryTour": "Interaktive Tour starten"
+  "help.tryTour": "Interaktive Tour starten",
+  "help.searchResultsTitle": "Suchergebnisse",
+  "help.category.analysis": "Analyse & Qualität",
+  "help.category.settingsGuide": "Einstellungs-Leitfaden",
+  "help.category.documentation": "Technische Dokumentation",
+  "help.gettingStarted.palette.title": "Befehlspalette & Tastenkürzel",
+  "help.gettingStarted.palette.content": "<h3>Schnelle Navigation</h3><p><b>Strg+K</b> bzw. <b>Cmd+K</b> öffnet die <b>Befehlspalette</b>. Suche Views, KI-Aktionen und Themes. Rechtsklick pinnt Favoriten.</p><p>Shortcuts unter <b>Einstellungen → Tastenkürzel</b> anpassen.</p>",
+  "help.gettingStarted.navigation.title": "Seitenleiste & Views",
+  "help.gettingStarted.navigation.content": "<h3>Alle Hauptbereiche</h3><ul><li><b>Dashboard</b> — Ziele, Statistik, Backup-Schnellaktionen.</li><li><b>Manuskript</b> — Drei-Panel-Editor mit @- und #-Tags.</li><li><b>KI-Schreibstudio</b> — Tools inkl. RAG-Kontext.</li><li><b>Szenenbrett / Plot-Board</b> — Canvas, Swimlanes, Spannungskurve.</li><li><b>Figuren, Welten, Objekte, Mindmaps, Interviews</b> — Worldbuilding (teilweise per Flag).</li><li><b>Figurengraph, Konsistenz, Kritik</b> — Analyse.</li><li><b>Export, Einstellungen, Hilfe</b>.</li></ul>",
+  "help.gettingStarted.desktop.title": "Desktop-App (Tauri) & PWA",
+  "help.gettingStarted.desktop.content": "<h3>Laufzeitumgebungen</h3><p><b>Browser/PWA:</b> Offline-Cache, Daten in IndexedDB.</p><p><b>Desktop (Tauri):</b> natives FS, Ollama auf localhost, Updater, Fensterstatus, Datenordner öffnen.</p>",
+  "help.writing.writer.title": "KI-Schreibstudio-Ablauf",
+  "help.writing.writer.content": "<p>Abschnitt wählen, KI-Tool nutzen, optional <b>RAG-Kontext</b>, dann im Notizblock bearbeiten und ins Manuskript übernehmen.</p>",
+  "help.writing.sceneboard.title": "Plot-Board & Szenenbrett",
+  "help.writing.sceneboard.content": "<p><b>Plot Board v2</b> unter Experimentelle Flags aktivieren. Modi: Canvas (Minimap, Verbindungen), Swimlanes, Timeline. Long-Press auf Karten.</p>",
+  "help.writing.bookPreview.title": "Buchvorschau & Fortschritt",
+  "help.writing.bookPreview.content": "<p><b>Buchvorschau</b> für Lesefluss; <b>Fortschritt</b> für Ziel- und Wort-Charts.</p>",
+  "help.worldbuilding.objects.title": "Objekte & Gruppen",
+  "help.worldbuilding.objects.content": "<p>Flag <b>Objekte & Gruppen</b> aktivieren für Requisiten und Fraktionen.</p>",
+  "help.worldbuilding.mindmaps.title": "Mindmaps",
+  "help.worldbuilding.mindmaps.content": "<p>Flag <b>Mindmaps</b> für SVG-Canvas mit verknüpften Entitäten.</p>",
+  "help.worldbuilding.interviews.title": "Charakter-Interviews",
+  "help.worldbuilding.interviews.content": "<p>Flag <b>Charakter-Interviews</b> für KI-geführte Gespräche.</p>",
+  "help.worldbuilding.graph.title": "Beziehungsgraph",
+  "help.worldbuilding.graph.content": "<p><b>Figurengraph</b> als Force-Layout-Netzwerk.</p>",
+  "help.aiStudio.providers.title": "KI-Anbieter & Schlüssel",
+  "help.aiStudio.providers.content": "<p>Gemini, OpenAI, Anthropic, Grok, Ollama, WebLLM, ONNX in <b>Einstellungen → KI</b>. Schlüssel verschlüsselt in IndexedDB.</p>",
+  "help.aiStudio.localAi.title": "Lokale KI",
+  "help.aiStudio.localAi.content": "<p>Modelle im Browser laden; GPU-Metriken unter Erweiterte KI.</p>",
+  "help.aiStudio.critic.title": "KI-Kritik",
+  "help.aiStudio.critic.content": "<p><b>Kritik</b>-View analysiert Tempo und Klarheit.</p>",
+  "help.aiStudio.plotAi.title": "Plot-Board-KI-Beats",
+  "help.aiStudio.plotAi.content": "<p><b>Nächsten Beat vorschlagen</b> nutzt RAG-Kontext aus dem Manuskript.</p>",
+  "help.analysis.consistency.title": "Konsistenzprüfung",
+  "help.analysis.consistency.content": "<p>Prüft Erwähnungen gegen Dossiers und Timeline-Regeln.</p>",
+  "help.analysis.progress.title": "Fortschritt & Lesbarkeit",
+  "help.analysis.progress.content": "<p>Dashboard: Lesbarkeit und Szenen-Timeline-Hinweise.</p>",
+  "help.analysis.health.title": "Projekt-Gesundheit",
+  "help.analysis.health.content": "<p>Flag <b>Projekt-Gesundheit</b> für Dashboard-Score.</p>",
+  "help.analysis.crossProject.title": "Projektübergreifende Suche",
+  "help.analysis.crossProject.content": "<p>Manuskripte aller lokalen Projekte durchsuchen.</p>",
+  "help.management.backupDashboard.title": "Backup-Schnellaktionen",
+  "help.management.backupDashboard.content": "<p>Dashboard-Karte: JSON exportieren/importieren, letzter Snapshot, Link zu Einstellungen → Backup.</p>",
+  "help.management.versionControl.title": "Versionspanel",
+  "help.management.versionControl.content": "<p>Header-Panel für Snapshots/Branches.</p>",
+  "help.management.collaboration.title": "Kollaboration",
+  "help.management.collaboration.content": "<p>Yjs-Panel über Einstellungen → Kollaboration.</p>",
+  "help.settingsGuide.overview.title": "Einstellungen Überblick",
+  "help.settingsGuide.overview.content": "<p>Kategorien per Suche filtern; inkl. <b>Experimentelle Flags</b>.</p>",
+  "help.settingsGuide.ai.title": "KI-Einstellungen",
+  "help.settingsGuide.ai.content": "<p>Provider, Modell, RAG-Index, Hybrid-Fallback, DuckDB-Analytics.</p>",
+  "help.settingsGuide.accessibility.title": "Barrierefreiheit",
+  "help.settingsGuide.accessibility.content": "<p>Presets und Toggles inkl. reduzierter Bewegung für Plot-Board.</p>",
+  "help.settingsGuide.backup.title": "Backup & Daten",
+  "help.settingsGuide.backup.content": "<p>Auto-Snapshots, JSON, verschlüsselte Bibliothek, Datenordner (Desktop).</p>",
+  "help.settingsGuide.flags.title": "Alle 12 Feature-Flags",
+  "help.settingsGuide.flags.content": "<p>Liste aller experimentellen Schalter unter Einstellungen → Experimentelle Flags.</p>",
+  "help.settingsGuide.shortcuts.title": "Tastenkürzel",
+  "help.settingsGuide.shortcuts.content": "<p>Chords aufnehmen; Konflikte werden markiert.</p>",
+  "help.docs.architecture.title": "Anwendungsarchitektur",
+  "help.docs.architecture.content": "<p>React/Vite, Redux, Services, Lazy Views, Tauri v2.</p>",
+  "help.docs.dataModel.title": "Datenmodell",
+  "help.docs.dataModel.content": "<p><code>StoryProject</code> in Redux, Persistenz via storageService.</p>",
+  "help.docs.featureFlags.title": "Feature-Flags",
+  "help.docs.featureFlags.content": "<p>12 Booleans in featureFlagsSlice, localStorage.</p>",
+  "help.docs.ragPipeline.title": "RAG-Pipeline",
+  "help.docs.ragPipeline.content": "<p>Hybrid-Index und assembleRAGPrompt für Writer/Plot.</p>",
+  "help.docs.duckdb.title": "DuckDB-WASM",
+  "help.docs.duckdb.content": "<p>Optionale 384-dim-Analytics bei aktiviertem Flag.</p>",
+  "help.docs.lazyLoading.title": "Lazy Loading",
+  "help.docs.lazyLoading.content": "<p>Code-Splitting für Views, Plot-Board, KI, DuckDB-Listener.</p>",
+  "help.docs.pwaDesktop.title": "PWA & Desktop",
+  "help.docs.pwaDesktop.content": "<p>Service Worker; Tauri-Plugins für FS, Updater, Menü.</p>",
+  "help.docs.deployment.title": "Deployment",
+  "help.docs.deployment.content": "<p>Vercel, Cloudflare Pages, GitHub Pages, Tauri-CI.</p>",
+  "help.docs.privacySecurity.title": "Datenschutz & Sicherheit",
+  "help.docs.privacySecurity.content": "<p>Lokal-first, verschlüsselte API-Keys, CSP im Browser.</p>",
+  "help.proTips.featureFlags.title": "Feature-Flag-Strategie",
+  "help.proTips.featureFlags.content": "<p>Flags einzeln testen; Snapshot vorher anlegen.</p>",
+  "help.proTips.workflow.title": "Empfohlener Workflow",
+  "help.proTips.workflow.content": "<ol><li>Outline/Vorlage</li><li>Szenenbrett</li><li>Writer+RAG</li><li>Konsistenz+Kritik</li><li>Export+Backup</li></ol>",
+  "help.faq.offline.title": "Offline arbeiten?",
+  "help.faq.offline.content": "<p>Ja für Schreiben und lokale Modelle; Cloud-KI braucht Netz.</p>",
+  "help.faq.providers.title": "Welchen KI-Anbieter wählen?",
+  "help.faq.providers.content": "<p>Gemini (Cloud), Ollama (Desktop privat), WebLLM/ONNX (ohne Key).</p>"
 }

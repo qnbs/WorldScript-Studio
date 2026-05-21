@@ -8,7 +8,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import type { FC } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../app/hooks';
 import { ICONS } from '../constants';
 import { SceneBoardViewContext, useSceneBoardViewContext } from '../contexts/SceneBoardViewContext';
@@ -21,13 +21,27 @@ import { usePlotBoardAi } from '../hooks/usePlotBoardAi';
 import { useSceneBoardView } from '../hooks/useSceneBoardView';
 import { SceneTimelinePanel } from './SceneTimelinePanel';
 import { ActSwimlane } from './scene-board/ActSwimlane';
-import { PlotCanvas } from './scene-board/PlotCanvas';
-import { SubplotPanel } from './scene-board/SubplotPanel';
-import { TensionCurvePanel } from './scene-board/TensionCurvePanel';
+import { Spinner } from './ui/Spinner';
+
+const PlotCanvas = lazy(() =>
+  import('./scene-board/PlotCanvas').then((m) => ({ default: m.PlotCanvas })),
+);
+const SubplotPanel = lazy(() =>
+  import('./scene-board/SubplotPanel').then((m) => ({ default: m.SubplotPanel })),
+);
+const TensionCurvePanel = lazy(() =>
+  import('./scene-board/TensionCurvePanel').then((m) => ({ default: m.TensionCurvePanel })),
+);
+
+const SceneBoardChunkFallback: FC = () => (
+  <div className="flex items-center justify-center p-8" role="status">
+    <Spinner className="w-8 h-8" />
+  </div>
+);
+
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { SectionIcon } from './ui/SectionIcon';
-import { Spinner } from './ui/Spinner';
 
 // --- SUB-COMPONENTS ---
 
@@ -224,21 +238,26 @@ const SceneBoardUI: FC = () => {
       ) : activeMode === 'canvas' ? (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="flex flex-1 min-h-0 gap-0 overflow-hidden rounded-t-xl border border-b-0 border-[var(--border-primary)]">
-            <SubplotPanel sections={sections} t={t} />
+            <Suspense fallback={<SceneBoardChunkFallback />}>
+              <SubplotPanel sections={sections} t={t} />
+            </Suspense>
             <div className="flex-1 relative min-w-0">
-              <PlotCanvas
-                sections={sections}
-                characters={characters}
-                layout={project.sceneBoardLayout ?? {}}
-                t={t}
-                onEditSection={(id) => {
-                  void id;
-                }}
-              />
+              <Suspense fallback={<SceneBoardChunkFallback />}>
+                <PlotCanvas
+                  sections={sections}
+                  characters={characters}
+                  layout={project.sceneBoardLayout ?? {}}
+                  t={t}
+                  onEditSection={(id) => {
+                    void id;
+                  }}
+                />
+              </Suspense>
             </div>
           </div>
-          {/* QNBS-v3: TensionCurvePanel collapses by default on mobile to preserve canvas height */}
-          <TensionCurvePanel sections={sections} t={t} />
+          <Suspense fallback={<SceneBoardChunkFallback />}>
+            <TensionCurvePanel sections={sections} t={t} />
+          </Suspense>
         </div>
       ) : (
         <DndContext

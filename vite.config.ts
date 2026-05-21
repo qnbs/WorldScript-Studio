@@ -106,7 +106,7 @@ export default defineConfig({
       resolveDependencies: (_filename: string, deps: string[]) =>
         deps.filter(
           (d) =>
-            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|canvas-vendor/.test(
+            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx/.test(
               d,
             ),
         ),
@@ -127,6 +127,9 @@ export default defineConfig({
 
         // Code-Splitting für bessere Ladezeiten
         manualChunks: (id) => {
+          if (id.includes('components/scene-board/') || id.includes('SceneBoardView')) {
+            return 'plot-board';
+          }
           if (!id?.includes('node_modules')) return undefined;
           if (id.includes('/react-dom/') || id.includes('/react/')) {
             return 'react-vendor';

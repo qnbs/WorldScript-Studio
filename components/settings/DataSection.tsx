@@ -10,6 +10,7 @@ import {
   buildSettingsExportEnvelope,
   parseSettingsImportEnvelope,
 } from '../../services/settingsExchange';
+import { isTauriRuntime, openTauriDataDirectory } from '../../services/tauriRuntime';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -134,6 +135,20 @@ export const DataSection: FC = () => {
           <div className="text-xs text-center text-[var(--foreground-muted)] pt-2">
             {t('settings.data.projectSize', { size: projectSize })}
           </div>
+          {isTauriRuntime() && (
+            <div className="mt-4 space-y-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void openTauriDataDirectory()}
+              >
+                {t('settings.data.openDataFolder')}
+              </Button>
+              <p className="text-xs text-[var(--foreground-muted)]">
+                {t('settings.data.openDataFolderHint')}
+              </p>
+            </div>
+          )}
           <div className="mt-6 pt-6 border-t border-[var(--border-primary)] space-y-3">
             <h3 className="font-semibold text-[var(--foreground-primary)]">
               {t('settings.data.libraryExport.title')}

@@ -9,7 +9,7 @@ import {
 // ---------------------------------------------------------------------------
 describe('retrieveHelpDocContext', () => {
   it('returns non-empty string for an empty question (fallback path)', () => {
-    // QNBS-v3: empty query → all chunks score 1, first N chunks included up to maxChars
+    // QNBS-v3: empty query → all chunks score 1, first chunks included up to maxChars
     const result = retrieveHelpDocContext('');
     expect(result.length).toBeGreaterThan(0);
   });
@@ -29,13 +29,13 @@ describe('retrieveHelpDocContext', () => {
     expect(result).toContain('Snapshots');
   });
 
-  it('includes AI studio content for "gemini" query', () => {
-    const result = retrieveHelpDocContext('gemini');
+  it('includes AI studio content for "writer" query', () => {
+    const result = retrieveHelpDocContext('writer scratchpad');
     expect(result).toContain('AI Writing Studio');
   });
 
   it('returns fallback chunks when query has no matching content', () => {
-    // QNBS-v3: "xyzqwertyzzz" has no substring/subsequence match → ranked is empty → fallback 3 chunks
+    // QNBS-v3: "xyzqwertyzzz" has no substring/subsequence match → ranked is empty → fallback chunks
     const result = retrieveHelpDocContext('xyzqwertyzzz');
     expect(result.length).toBeGreaterThan(0);
   });
@@ -80,9 +80,14 @@ describe('retrieveHelpDocSources', () => {
     expect(sources).toContain('Command palette');
   });
 
-  it('returns at most 4 sources', () => {
+  it('returns at most 5 sources', () => {
     const sources = retrieveHelpDocSources('');
-    expect(sources.length).toBeLessThanOrEqual(4);
+    expect(sources.length).toBeLessThanOrEqual(5);
+  });
+
+  it('includes plot board for plot query', () => {
+    const result = retrieveHelpDocContext('plot board canvas');
+    expect(result).toContain('Plot Board');
   });
 
   it('returns empty array when nothing matches', () => {

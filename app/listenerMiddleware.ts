@@ -4,15 +4,12 @@ import { analyticsActions } from '../features/analytics/analyticsSlice';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
-import { indexProject } from '../services/crossProjectIndexService';
 import {
-  duckdbCodexWrite,
-  duckdbDualWrite,
-  withDuckDbRetry,
-} from '../services/duckdb/duckdbAnalytics';
-import { runIfNeeded as duckdbMigrateIfNeeded } from '../services/duckdb/duckdbMigration';
-import { runRagVectorMigration } from '../services/duckdb/ragVectorMigration';
-import { rebuildHybridRagIndex } from '../services/localRagService';
+  loadDuckdbAnalytics,
+  loadDuckdbMigration,
+  loadLocalRagService,
+  loadRagVectorMigration,
+} from '../services/duckdb/duckdbListenerLoader';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
@@ -31,7 +28,6 @@ listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
     const currentRoot = currentState as RootState;
     const prevRoot = previousState as RootState;
-    // QNBS-v3: optional chaining guards test stores that omit these slices
     const projectChanged = currentRoot.project?.present !== prevRoot.project?.present;
     const vcChanged =
       currentRoot.versionControl?.snapshots !== prevRoot.versionControl?.snapshots ||
@@ -83,23 +79,22 @@ listenerMiddleware.startListening({
           );
         }
       } catch {
-        /* non-critical — proceed with save */
+        /* non-critical */
       }
 
       await storageService.saveProject(projectDataToSave);
 
-      // QNBS-v3: Index project metadata for cross-project search (privacy-preserving, behind flag).
       if (
         (listenerApi.getState() as RootState).featureFlags.enableCrossProjectSearch &&
         presentData.id
       ) {
         const duckDbOn = (listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics;
+        const { indexProject } = await import('../services/crossProjectIndexService');
         indexProject(presentData.id, enriched, duckDbOn).catch((err: unknown) =>
           logger.warn('Cross-project index update failed (non-critical):', err),
         );
       }
 
-      // QNBS-v3: Dual-write plaintext analytics columns to DuckDB (non-blocking, with retry).
       if ((listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics) {
         const projectId = presentData.id ?? 'default';
         const sections = presentData.manuscript.map((s, idx) => ({
@@ -108,10 +103,10 @@ listenerMiddleware.startListening({
           wordCount: (s.content?.match(/\S+/g) ?? []).length,
           status: s.status,
           position: idx,
-          // QNBS-v3: P3 — scene_start feeds v_scene_overlap for DuckDB timeline analysis.
           scene_start: s.sceneStart,
         }));
         const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
+        const { duckdbDualWrite, withDuckDbRetry } = await loadDuckdbAnalytics();
         void withDuckDbRetry(() =>
           duckdbDualWrite(
             projectId,
@@ -173,10 +168,8 @@ listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
     const currentRoot = currentState as RootState;
     const prevRoot = previousState as RootState;
-
     const currentManuscript = currentRoot.project?.present?.data?.manuscript;
     const previousManuscript = prevRoot.project?.present?.data?.manuscript;
-
     return currentManuscript !== previousManuscript;
   },
   effect: async (_action, listenerApi) => {
@@ -211,15 +204,12 @@ listenerMiddleware.startListening({
         project.manuscript,
         characters,
         worlds,
-        {
-          advanced: state.featureFlags.enableStoryBibleAdvanced,
-        },
+        { advanced: state.featureFlags.enableStoryBibleAdvanced },
         binderResearchSections,
       );
       await saveStoryCodex(codex);
 
-      // QNBS-v3: P3 dual-write — codex entity names/types to DuckDB for co-occurrence queries.
-      if ((listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics) {
+      if (state.featureFlags.enableDuckDbAnalytics) {
         const entities = codex.entities.map((e) => ({
           id: e.id,
           name: e.name,
@@ -227,6 +217,7 @@ listenerMiddleware.startListening({
           mentionCount: e.mentionCount,
           mentions: e.mentions.map((m) => ({ sectionId: m.sectionId, excerpt: m.excerpt })),
         }));
+        const { duckdbCodexWrite, withDuckDbRetry } = await loadDuckdbAnalytics();
         void withDuckDbRetry(() => duckdbCodexWrite(projectId, entities)).catch((err: unknown) =>
           logger.warn('DuckDB codex write failed after retries (non-critical):', err),
         );
@@ -237,22 +228,12 @@ listenerMiddleware.startListening({
   },
 });
 
-// --- 2. Global Error Handling ---
-// Listen for any rejected Async Thunk and show a toast
 listenerMiddleware.startListening({
   matcher: isRejected,
   effect: (action, listenerApi) => {
-    // Skip if the action was aborted (e.g. cancelled request via AbortController)
     if (action.meta.aborted) return;
 
-    const errorTitle = 'Operation Failed';
-    let errorDescription = 'An unexpected error occurred.';
-
-    if (action.error?.message) {
-      errorDescription = action.error.message;
-    }
-
-    // Specific handling for Gemini API errors if identifiable
+    let errorDescription = action.error?.message ?? 'An unexpected error occurred.';
     if (errorDescription.includes('quota') || errorDescription.includes('API key')) {
       errorDescription = 'AI Service Error: Please check your API key and quota.';
     }
@@ -260,21 +241,18 @@ listenerMiddleware.startListening({
     listenerApi.dispatch(
       statusActions.addNotification({
         type: 'error',
-        title: errorTitle,
+        title: 'Operation Failed',
         description: errorDescription,
       }),
     );
   },
 });
 
-// --- 3. DuckDB Migration Trigger ---
-// QNBS-v3: Fires once when DuckDB becomes ready; seeds IDB→DuckDB if marker is absent.
 listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
     const curr = currentState as RootState;
     const prev = previousState as RootState;
     return (
-      // QNBS-v3: optional chaining — featureFlags absent in partial test stores
       curr.featureFlags?.enableDuckDbAnalytics === true &&
       curr.analytics?.duckDbStatus === 'ready' &&
       curr.analytics?.migrationStatus === 'idle' &&
@@ -288,8 +266,10 @@ listenerMiddleware.startListening({
 
     listenerApi.dispatch(analyticsActions.setMigrationStatus('running'));
     try {
-      await duckdbMigrateIfNeeded(project);
+      const { runIfNeeded } = await loadDuckdbMigration();
+      await runIfNeeded(project);
       const projectId = project.id || 'default';
+      const { runRagVectorMigration } = await loadRagVectorMigration();
       await runRagVectorMigration(projectId, project.manuscript);
       listenerApi.dispatch(analyticsActions.setMigrationStatus('done'));
       listenerApi.dispatch(analyticsActions.setLastSyncAt(new Date().toISOString()));
@@ -301,9 +281,6 @@ listenerMiddleware.startListening({
   },
 });
 
-// --- 4. Hybrid-RAG Auto-Rebuild ---
-// QNBS-v3: Rebuilds the local RAG index 5 s after any manuscript edit.
-//          cancelActiveListeners() acts as debounce — burst edits collapse into one rebuild.
 listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
     const curr = currentState as RootState;
@@ -321,6 +298,7 @@ listenerMiddleware.startListening({
     const projectId = project.id || 'default';
     const duckDbOn = state.featureFlags.enableDuckDbAnalytics;
     try {
+      const { rebuildHybridRagIndex } = await loadLocalRagService();
       await rebuildHybridRagIndex(projectId, project.manuscript, duckDbOn);
     } catch (err) {
       logger.warn('RAG auto-rebuild failed (non-critical):', err);
@@ -328,7 +306,6 @@ listenerMiddleware.startListening({
   },
 });
 
-// Type-safe export
 export const startAppListening = listenerMiddleware.startListening as TypedStartListening<
   RootState,
   AppDispatch
