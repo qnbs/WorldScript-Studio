@@ -202,6 +202,13 @@ Delivered: WorkerBus v2 (priority preemption, backpressure, transferables), GPU 
 
 ---
 
+## Follow-up Audit — 2026-05-21 (v1.8 RAG assembly + PWA)
+
+- **RAG prompt assembly:** `services/ragPromptAssembly.ts`; Writer + Plot Board wired; DuckDB `embedding` 384-dim + `ragVectorMigration.ts`.
+- **PWA:** [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) documents manifest/SW/share baseline.
+- **Local CI:** [`infra/low-end-ci/`](infra/low-end-ci/) (act-first + Eco-Forgejo) for low-RAM laptops.
+- **Docs:** [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md), README Documentation Hub rows.
+
 ## Follow-up Audit — 2026-05-10 (Global Best-Practices & content program)
 
 - **App-Inhalte:** Community-Templates auf **englischen Master** vereinheitlicht (`community-templates/index.json` ↔ `public/`); `content-guard` + Zod-Validierung in `fetchCommunityTemplates`; Help-Artikel mit **`tryActionId`** für Palette-/Nav-Sprünge; Demo/Import-Feedback über **Toasts** statt `alert` (`WelcomePortal`, `useSettingsView`).

@@ -125,7 +125,8 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-/** URLs that must never pass through SW caching strategies */
+/** URLs that must never pass through SW caching strategies.
+ *  Large runtime assets (duckdb-eh.wasm, ONNX/MiniLM) are loaded on demand — never add to precache manifest. */
 function isNetworkOnlyUrl(url) {
   if (url.protocol === 'chrome-extension:') return true;
   const h = url.hostname;

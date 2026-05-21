@@ -219,7 +219,13 @@ describe('duckdbDualWrite', () => {
 describe('duckdbRagWrite', () => {
   it('calls exec for each chunk with vector literal', async () => {
     await duckdbRagWrite('p1', [
-      { id: 's1:0', sectionId: 's1', chunkIndex: 0, vector: [0.5, 0.3, 0.1] },
+      {
+        id: 's1:0',
+        sectionId: 's1',
+        chunkIndex: 0,
+        embedding: Array.from({ length: 384 }, (_, i) => (i + 1) * 0.001),
+        vector: [0.5, 0.3, 0.1],
+      },
     ]);
     const sqls = mockExec.mock.calls.map(([sql]) => sql as string);
     expect(sqls.some((s) => s.includes('INSERT INTO rag_chunks'))).toBe(true);
@@ -233,10 +239,17 @@ describe('duckdbRagWrite', () => {
 
   it('encodes vector as SQL FLOAT[] literal', async () => {
     await duckdbRagWrite('p1', [
-      { id: 'c1', sectionId: 's1', chunkIndex: 0, vector: [0.25, 0.75] },
+      {
+        id: 'c1',
+        sectionId: 's1',
+        chunkIndex: 0,
+        embedding: [0.1, 0.2],
+        vector: [0.25, 0.75],
+      },
     ]);
     const sql = mockExec.mock.calls[0]?.[0] as string;
     expect(sql).toContain('[0.25000000,0.75000000]::FLOAT[]');
+    expect(sql).toContain('embedding');
   });
 });
 

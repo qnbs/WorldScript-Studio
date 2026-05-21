@@ -1,7 +1,7 @@
 {
   "name": "storycraft-studio",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {
@@ -24,6 +24,8 @@
     "graphify:hooks": "node scripts/graphify-cli.mjs hook install",
     "graphify:status": "node scripts/graphify-cli.mjs hook status",
     "build": "vite build",
+    "build:edge": "node scripts/build-edge.mjs",
+    "build:pages": "vite build",
     "build:turbo": "turbo run build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
@@ -47,7 +49,12 @@
     "build-storybook": "storybook build",
     "analyze": "ANALYZE=true vite build",
     "bundle:budget": "node scripts/check-bundle-budget.mjs --max-kb 7000",
-    "dev:tauri": "tauri dev"
+    "dev:tauri": "tauri dev",
+    "ci:quick": "bash infra/low-end-ci/scripts/ci-quick.sh",
+    "ci:quick:unit": "bash infra/low-end-ci/scripts/ci-quick.sh --unit",
+    "ci:quick:coverage": "bash infra/low-end-ci/scripts/ci-quick.sh --unit --coverage",
+    "ci:act": "bash infra/low-end-ci/scripts/ci-act-sequential.sh pull_request",
+    "ci:act:full": "bash infra/low-end-ci/scripts/ci-act-sequential.sh pull_request --with-storybook --e2e-chromium-only"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.75",

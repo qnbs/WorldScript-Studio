@@ -17,6 +17,7 @@ import {
   selectActiveMode,
   selectSnapToGrid,
 } from '../features/plotBoard/plotBoardSlice';
+import { usePlotBoardAi } from '../hooks/usePlotBoardAi';
 import { useSceneBoardView } from '../hooks/useSceneBoardView';
 import { SceneTimelinePanel } from './SceneTimelinePanel';
 import { ActSwimlane } from './scene-board/ActSwimlane';
@@ -112,6 +113,14 @@ const SceneBoardUI: FC = () => {
 
   const activeSection = activeId ? sections.find((s) => s.id === activeId) : null;
 
+  const plotSummary = sections
+    .map((s) => `${s.title}: ${(s.content ?? '').slice(0, 200)}`)
+    .join('\n')
+    .slice(0, 2000);
+  const selectedIds = activeId ? [activeId] : sections.slice(0, 3).map((s) => s.id);
+  const plotAi = usePlotBoardAi(plotSummary, selectedIds);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+
   if (!project)
     return (
       <div className="flex h-[80vh] w-full items-center justify-center">
@@ -174,13 +183,26 @@ const SceneBoardUI: FC = () => {
             <button
               type="button"
               onClick={() => dispatch(plotBoardActions.setSnapToGrid(!snapGrid))}
-              className={`text-xs px-2 py-1 rounded border transition-colors ${snapGrid ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'border-[var(--border-primary)] text-[var(--foreground-muted)]'}`}
+              className={`text-xs px-2 py-1 rounded border transition-colors ${snapGrid ? 'bg-[var(--background-interactive)]/20 border-[var(--ring-focus)]/40 text-[var(--ring-focus)]' : 'border-[var(--border-primary)] text-[var(--foreground-muted)]'}`}
               aria-pressed={snapGrid}
               title={t('sceneboard.canvas.snapToGrid')}
             >
               ⊞
             </button>
           )}
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setShowAiPanel(true);
+              void plotAi.suggestNextBeat();
+            }}
+            disabled={plotAi.isLoading || sections.length === 0}
+            aria-busy={plotAi.isLoading}
+          >
+            {plotAi.isLoading ? t('sceneboard.ai.suggesting') : t('sceneboard.ai.suggestBeat')}
+          </Button>
           <Button onClick={() => handleAddForAct(1)} size="sm">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -260,6 +282,46 @@ const SceneBoardUI: FC = () => {
           </DragOverlay>
         </DndContext>
       )}
+
+      <Modal
+        isOpen={showAiPanel}
+        onClose={() => setShowAiPanel(false)}
+        title={t('sceneboard.ai.panelTitle')}
+      >
+        {plotAi.ragChunkCount > 0 && (
+          <p className="text-xs text-[var(--foreground-muted)] mb-2">
+            {t('sceneboard.ai.ragChunks', { count: String(plotAi.ragChunkCount) })}
+          </p>
+        )}
+        {plotAi.error && (
+          <p className="text-sm text-red-400 mb-2" role="alert">
+            {plotAi.error}
+          </p>
+        )}
+        <ul className="space-y-3 max-h-[50vh] overflow-y-auto">
+          {plotAi.beats.map((beat) => (
+            <li
+              key={`${beat.title}-${beat.suggestedPosition}`}
+              className="p-3 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)]"
+            >
+              <p className="font-semibold text-[var(--foreground-primary)]">{beat.title}</p>
+              <p className="text-sm text-[var(--foreground-secondary)] mt-1">{beat.description}</p>
+              <p className="text-xs text-[var(--foreground-muted)] mt-2">{beat.rationale}</p>
+            </li>
+          ))}
+          {!plotAi.isLoading && plotAi.beats.length === 0 && (
+            <p className="text-sm text-[var(--foreground-muted)]">{t('sceneboard.ai.empty')}</p>
+          )}
+        </ul>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="ghost" onClick={() => setShowAiPanel(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void plotAi.suggestNextBeat()} disabled={plotAi.isLoading}>
+            {t('sceneboard.ai.retry')}
+          </Button>
+        </div>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal

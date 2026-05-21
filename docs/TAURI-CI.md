@@ -58,13 +58,24 @@ Complete these steps once before pushing the first signed release tag:
    - latest.json  (auto-updater manifest with signatures)
 
 5. Download the installer for your OS, install the app, open it.
-   Verify the version shown in Settings matches the tag.
 
-6. Set plugins.updater.active = true in tauri.conf.json  (commit + push)
+## Desktop audit checklist (v1.8)
 
-7. Push a v*.*.+1 tag to test auto-update:
-   - Installed app should detect the new release and prompt to update
-```
+| Area | Check |
+|------|--------|
+| CSP `connect-src` | OpenAI-compatible URLs, Ollama, WebRTC signaling — no DuckDB network |
+| FS parity | Import/export via `storageService`; no direct `@tauri-apps/api` in UI atoms |
+| Window / state | Single-window; close saves via listener middleware |
+| Pandoc EPUB | `pandoc_markdown_to_epub` optional; JS fallback when unavailable |
+| Updater | `docs/TAURI-UPDATER.md` when publishing signed tags |
+| Local CI | Heavy builds optional — `infra/low-end-ci/` act + native `pnpm run ci:quick` |
+| Version UI | Settings shows app version; matches release tag after install |
+
+**Post-release (updater):**
+
+6. Set `plugins.updater.active = true` in `tauri.conf.json` (commit + push).
+7. Push a patch tag (`v*.*.+1`) to test auto-update — installed app should prompt to update.
+8. Verify the version shown in Settings matches the tag.
 
 See [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) for full secrets reference and platform code-signing details.
 

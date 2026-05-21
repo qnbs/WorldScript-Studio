@@ -10,6 +10,7 @@ import { streamGenerationThunk } from '../features/project/thunks/writingThunks'
 import { writerActions } from '../features/writer/writerSlice';
 import { isOrchestrationReadyProvider } from '../services/ai/orchestrationProviders';
 import { logger } from '../services/logger';
+import { assembleRAGPrompt } from '../services/ragPromptAssembly';
 import { useStoryCraftAI } from './useStoryCraftAI';
 import { useTranslation } from './useTranslation';
 
@@ -20,6 +21,8 @@ export const useWriterView = () => {
   const characters = useAppSelector(selectAllCharacters);
   const manuscript = useAppSelector(selectManuscript);
   const aiProvider = useAppSelector((state) => state.settings.advancedAi.provider);
+  const ragMode = useAppSelector((state) => state.settings.advancedAi.ragMode ?? 'hybrid');
+  const duckDbEnabled = useAppSelector((state) => state.featureFlags.enableDuckDbAnalytics);
   const writerState = useAppSelectorShallow((state) => state.writer);
 
   const {
@@ -199,7 +202,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     project,
   ]);
 
-  const handleGenerate = useCallback(() => {
+  const handleGenerate = useCallback(async () => {
     // If already loading, checking explicitly to act as a "Stop" toggle
     if (isLoading) {
       stopOrchestrationStreaming();
@@ -212,12 +215,47 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
     if (isGenerateDisabled()) return;
 
-    const prompt = getPromptForTool();
-    if (!prompt) return;
+    const basePrompt = getPromptForTool();
+    if (!basePrompt) return;
 
     abortControllerRef.current = new AbortController();
 
-    const fullPrompt = `${prompt}\n\nRespond in ${language === 'de' ? 'German' : 'English'}.`;
+    const selectedSection = manuscript.find((s) => s.id === selectedSectionId);
+    const projectId = project?.id || 'default';
+    let fullPrompt = `${basePrompt}\n\nRespond in ${language === 'de' ? 'German' : 'English'}.`;
+
+    const ragEligibleTools = new Set<typeof activeTool>(['continue', 'brainstorm', 'critic']);
+    if (writerState.useRagContext && ragEligibleTools.has(activeTool) && project) {
+      try {
+        const assembled = await assembleRAGPrompt(
+          'writerContinuation',
+          {
+            projectId,
+            sectionId: selectedSectionId ?? undefined,
+            sectionTitle: selectedSection?.title,
+            currentText: selectedSection?.content ?? basePrompt,
+            cursorPosition: selection.start,
+            style: style || 'compelling',
+            lang: language,
+            manuscript,
+          },
+          {
+            topK: 8,
+            ragMode,
+            maxTokens: 6000,
+            duckDbEnabled,
+            useRag: true,
+          },
+        );
+        fullPrompt = assembled.prompt;
+        dispatch(writerActions.setLastRagChunkCount(assembled.chunks.length));
+      } catch (ragErr) {
+        logger.warn('Writer RAG assembly failed, using base prompt:', ragErr);
+        dispatch(writerActions.setLastRagChunkCount(0));
+      }
+    } else {
+      dispatch(writerActions.setLastRagChunkCount(0));
+    }
 
     dispatch(writerActions.startLoading());
     dispatch(writerActions.clearResultStream()); // Live-Preview reset
@@ -261,7 +299,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
     dispatch(
       streamGenerationThunk({
-        prompt,
+        prompt: fullPrompt,
         lang: language,
         onChunk,
       }),
@@ -281,6 +319,15 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     aiProvider,
     runCompletion,
     stopOrchestrationStreaming,
+    writerState.useRagContext,
+    ragMode,
+    duckDbEnabled,
+    manuscript,
+    project,
+    selectedSectionId,
+    selection.start,
+    style,
+    activeTool,
   ]);
 
   const handleNavigateHistory = useCallback(

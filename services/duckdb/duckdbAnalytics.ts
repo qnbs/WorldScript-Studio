@@ -190,10 +190,10 @@ export async function queryRagSimilarity(
   const vecLiteral = vecToSqlLiteral(queryVector);
   const res = await duckdbClient.query(
     `SELECT chunk_id, section_id, chunk_index,
-            list_dot_product(vector, ${vecLiteral}) AS score
+            list_dot_product(COALESCE(embedding, vector), ${vecLiteral}) AS score
      FROM rag_chunks
      WHERE project_id = '${esc(projectId)}'
-       AND vector IS NOT NULL
+       AND (embedding IS NOT NULL OR vector IS NOT NULL)
      ORDER BY score DESC
      LIMIT ${topK}`,
     undefined,
@@ -301,21 +301,34 @@ export async function duckdbDualWrite(
   }
 }
 
-/** Upsert RAG chunk vectors (text stays in IDB; only vectors written to DuckDB) — P2. */
+export interface DuckdbRagChunkWrite {
+  id: string;
+  sectionId: string;
+  chunkIndex: number;
+  /** 384-dim semantic embedding (preferred for similarity) */
+  embedding: number[] | Float32Array;
+  /** Legacy 64-dim BoW — optional, kept for backward compat */
+  vector?: number[] | undefined;
+}
+
+/** Upsert RAG chunk vectors (text stays in IDB; semantic embedding in DuckDB) — P2. */
 export async function duckdbRagWrite(
   projectId: string,
-  chunks: { id: string; sectionId: string; chunkIndex: number; vector: number[] }[],
+  chunks: DuckdbRagChunkWrite[],
 ): Promise<void> {
   if (chunks.length === 0) return;
   const now = new Date().toISOString();
   for (const c of chunks) {
-    const vecLiteral = vecToSqlLiteral(c.vector);
+    const embLiteral = vecToSqlLiteral(c.embedding);
+    const bowLiteral = c.vector && c.vector.length > 0 ? vecToSqlLiteral(c.vector) : 'NULL';
     await execOrThrow(
-      `INSERT INTO rag_chunks (chunk_id, project_id, section_id, chunk_index, vector, indexed_at)
+      `INSERT INTO rag_chunks (chunk_id, project_id, section_id, chunk_index, vector, embedding, indexed_at)
        VALUES ('${esc(c.id)}', '${esc(projectId)}', '${esc(c.sectionId)}', ${c.chunkIndex},
-         ${vecLiteral}, '${now}')
+         ${bowLiteral}, ${embLiteral}, '${now}')
        ON CONFLICT (chunk_id) DO UPDATE SET
-         vector = EXCLUDED.vector, indexed_at = EXCLUDED.indexed_at`,
+         vector = EXCLUDED.vector,
+         embedding = EXCLUDED.embedding,
+         indexed_at = EXCLUDED.indexed_at`,
     );
   }
 }

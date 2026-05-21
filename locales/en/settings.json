@@ -168,6 +168,7 @@
   "settings.advancedAi.ragModeLabel": "Search index mode",
   "settings.advancedAi.ragModeHybrid": "Hybrid (semantic + lexical, recommended)",
   "settings.advancedAi.ragModeLexical": "Lexical only (fast, no ML model)",
+  "settings.advancedAi.ragModeHint": "Hybrid scoring: ~60% semantic similarity, ~30% lexical overlap, ~10% recency. DuckDB analytics (when enabled) ranks 384-dim embeddings; rebuild the index after large manuscript edits.",
   "settings.advancedAi.localRagBuild": "Rebuild local search index",
   "settings.advancedAi.localRagDone": "Local index updated",
   "settings.advancedAi.localRagDoneDetail": "Indexed {{count}} chunks.",

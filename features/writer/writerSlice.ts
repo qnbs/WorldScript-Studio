@@ -28,6 +28,9 @@ export interface WriterState {
   activeHistoryIndex: number;
   resultStream: string;
   selectedSectionId: string | null;
+  /** When true, Writer AI tools use hybrid RAG context (v1.8). */
+  useRagContext: boolean;
+  lastRagChunkCount: number;
 }
 
 const initialState: WriterState = {
@@ -43,6 +46,8 @@ const initialState: WriterState = {
   activeHistoryIndex: -1,
   resultStream: '',
   selectedSectionId: null,
+  useRagContext: true,
+  lastRagChunkCount: 0,
 };
 
 const writerSlice = createSlice({
@@ -118,6 +123,12 @@ const writerSlice = createSlice({
     },
     clearResultStream: (state) => {
       state.resultStream = '';
+    },
+    setUseRagContext: (state, action: PayloadAction<boolean>) => {
+      state.useRagContext = action.payload;
+    },
+    setLastRagChunkCount: (state, action: PayloadAction<number>) => {
+      state.lastRagChunkCount = action.payload;
     },
   },
 });

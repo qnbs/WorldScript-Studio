@@ -1,0 +1,38 @@
+---
+description: Enforce i18n key parity and content guard when editing locales or copy
+globs: locales/**/*.json,public/locales/**/*,community-templates/**/*,scripts/build-i18n.mjs,scripts/check-i18n-keys.mjs,scripts/content-guard.mjs
+alwaysApply: false
+---
+
+# i18n & Content
+
+## Schlüssel & Bundles
+
+- Quelle: **`locales/<lang>/*.json`** (de, en, fr, es, it) — **alle fünf** Locales bei neuen Keys.
+- Runtime: **`public/locales/<lang>/bundle.json`** via `node scripts/build-i18n.mjs` (läuft in `predev` / `i18n:check`).
+- CI: **`pnpm run i18n:check`** (Key-Parität + Bundle + `content:guard`).
+- UI-Text nur als **Übersetzungsschlüssel** (Dot-Notation), nie hardcodiert in TSX — außer Dev-Debug.
+
+## Ton & Glossar
+
+- KI als **Co-Pilot**, nicht Ghostwriter; Fehler: Was passiert → Was tun → optional `tryActionId`/Command.
+- Begriffe konsistent (siehe [`docs/BEST-PRACTICES.md`](../../docs/BEST-PRACTICES.md)): Manuscript, Outline, Template, Snapshot vs. Scene Revision, Writing Session, Subplot, Connection.
+
+## Community & Help
+
+- Templates: kanonisches **Englisch** in `community-templates/index.json` + Spiegel unter `public/community-templates/`; Zod in `fetchCommunityTemplates`.
+- Help-Artikel: **`tryActionId`** für Palette/Navigation; Demo-Feedback über Toasts, nicht `alert`.
+
+## PR-Checkliste
+
+1. Keys in allen Locales
+2. `pnpm run i18n:check` lokal (Quick-Tier)
+3. Keine Secrets/PII in JSON-Beispielen
+
+<example>
+Neuer Settings-String: Key in `locales/en/settings.json` + de/fr/es/it; `i18n:check` grün; Help-Link mit `tryActionId: 'nav-settings'`.
+</example>
+
+<example type="invalid">
+Nur `en` befüllt; UI zeigt rohe Keys weil `bundle.json` nicht gebaut; deutscher Fließtext direkt in `components/Dashboard.tsx`.
+</example>

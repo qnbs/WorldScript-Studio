@@ -1,33 +1,43 @@
 ---
-description: Apply Gemini,Ollama,and IndexedDB patterns when editing integration paths
-globs: services/**/*.ts,features/**/*.ts
+description: Apply hybrid AI,IndexedDB,and storage patterns when editing services or features
+globs: services/**/*.ts,features/**/*.ts,packages/ai-core/**/*.ts
 alwaysApply: false
 ---
 
-# AI-Anbieter & lokale Speicherung
+# KI-Anbieter, Speicher & Workspace-Pakete
 
-## Google GenAI (`@google/genai`)
+## Orchestrierung (kanonisch)
 
-- Nutze bestehende Facade `services/geminiService.ts` und Typen aus `types.ts`; keine parallele SDK-Initialisierung ohne Grund.
-- Modelle/Parameter zentral halten; Streaming und Schema (`Schema`/`Type`) wie im bestehenden Code.
+- Einstieg **`services/ai/index.ts`**: Strangler neben Legacy; Writer-Streaming → **`writer`-Slice**, Manuskript erst nach **Accept**.
+- Netzwerk-KI: **`aiProviderService.ts`**, **`geminiService.ts`** — keine parallele SDK-Init in Komponenten.
+- Vercel AI SDK (`ai`, `@ai-sdk/google`, `@ai-sdk/openai`): neue Pfade über `services/ai/` und Hooks (`useStoryCraftAI` o. ä.), nicht doppelte Retry-Logik.
+- **`assertCloudAiAllowed`:** Cloud nur wenn Policy/Settings es erlauben.
 
-## Ollama & weitere Provider
+## Hybrid & lokale Inferenz
 
-- Lokale Endpunkte über `services/ollamaService.ts` / `aiProviderService.ts`; Annahmen zu Host und Ports nicht hart verdrahten, wo bereits Settings existieren.
+- Presets: Ollama/LM Studio/vLLM via `settings.advancedAi`; Cloud-Router über `openAiCompatibleBaseUrl` + Key-Slot.
+- Fallback-Kette in `aiProviderService` für Legacy-Thunks respektieren.
+- WebLLM/GPU: **`gpuResourceManager`**, Tab-Leader (`packages/ai-core` / BroadcastChannel) — kein zweiter schwerer Inferenz-Tab.
+- Lokales RAG/Embeddings: bestehende Speicher (`saveRagVectors`), chunked yields; `@xenova/transformers` nur über etablierte Pfade.
 
-## IndexedDB & Schlüssel
+## Google GenAI
 
-- Datenzugriff nur über etablierte Services (`dbService.ts`, Thunks). Migrationen und Record-Keys nicht willkürlich umbenennen.
-- Kollaboration: `collaborationService.ts` + Yjs — keine zweite CRDT-Schicht. Signaling-URLs aus Redux `settings.collaboration.webrtcSignalingUrls` (Settings-UI); CSP erlaubt `wss:`/`ws:` für benutzerdefinierte Server.
+- Facade `geminiService.ts`, Typen `types.ts`; Schema/Streaming wie im Bestand.
 
-## Netzwerk & Privacy
+## IndexedDB & Storage
 
-- Offline-first nicht untergraben: keine stillen Cloud-Uploads; neue Aufrufe dokumentieren und Nutzerkontrolle respektieren.
+- Zugriff über `dbService.ts`, `storageService.ts`, **`storageBackend.ts`** (`saveEnvelopeFromProjectData` — kein roher Cast im Listener).
+- Record-Keys/Migrationen nicht willkürlich umbenennen; Scene-Revisions → `sceneRevisionService.ts` (eigener Store).
+- Kollaboration: nur **eine** CRDT-Schicht (`collaborationService.ts` + Yjs).
+
+## Privacy
+
+- Offline-first: keine stillen Cloud-Uploads; neue Netzwerkpfade dokumentieren und nutzersteuerbar halten.
 
 <example>
-Neues KI-Feature: Thunk in `features/project/thunks/`, Aufruf über `geminiService`/`aiProviderService`, Fehler über Logger.
+Neuer Writer-Stream: Hook/`streamText` in `services/ai/`, Redux-Update im `writer`-Slice; Cloud-Gate via `assertCloudAiAllowed`.
 </example>
 
 <example type="invalid">
-Direkt `new GoogleGenAI({ apiKey: '…' })` in einer Komponente oder Roh-`fetch` zu Gemini ohne bestehende Fehler-/Retry-Politik.
+`new GoogleGenAI({ apiKey: '…' })` in `components/`; zweites IndexedDB-Schema für Projektstate; WebLLM ohne Tab-Leader auf allen Tabs starten.
 </example>

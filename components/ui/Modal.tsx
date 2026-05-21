@@ -77,7 +77,7 @@ export const Modal: React.FC<ModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 -mr-2 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors"
+            className="p-2 -mr-2 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)]"
             aria-label={t('common.close')}
           >
             <svg

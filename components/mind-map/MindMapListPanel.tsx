@@ -134,17 +134,16 @@ export function MindMapListPanel() {
 
       {isMapFormOpen && (
         <MapForm
-          initial={
-            editingMap
-              ? {
+          {...(editingMap
+            ? {
+                initial: {
                   name: editingMap.name,
-                  // QNBS-v3: exactOptionalPropertyTypes — conditional spread avoids undefined assigned to optional string
                   ...(editingMap.description !== undefined
                     ? { description: editingMap.description }
                     : {}),
-                }
-              : undefined
-          }
+                },
+              }
+            : {})}
           onSave={handleSaveMap}
           onCancel={handleCloseMapForm}
         />

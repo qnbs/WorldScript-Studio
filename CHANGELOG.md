@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] — 2026-05-21
+
+### Added
+
+- **RAG prompt assembly** (`services/ragPromptAssembly.ts`): Writer continuation, Plot Board beat suggestions, token-budgeted context blocks.
+- **DuckDB semantic vectors**: `rag_chunks.embedding` (384-dim), `ragVectorMigration.ts`, dual-write uses MiniLM embeddings.
+- **Writer UI**: RAG context toggle and retrieved-chunk badge.
+- **Plot Board**: AI suggest beat + modal (`plotBoardAiThunks`, `usePlotBoardAi`).
+- **Docs**: [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md), [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md).
+- **Deployment**: Vercel (`vercel.json` + `build:edge`), Cloudflare Pages (`wrangler.toml`, `_redirects`, `_headers`, optional GH workflow), expanded [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+### Fixed
+
+- **Typecheck**: `MindMapListPanel` `exactOptionalPropertyTypes`; DuckDB worker typings (`types/duckdb-wasm-worker.d.ts`).
+
 ## [1.7.0] — 2026-05-20
 
 ### Added

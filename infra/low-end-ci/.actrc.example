@@ -1,0 +1,10 @@
+# Copy to ~/.actrc (adjust paths if HOME differs)
+# Ubuntu 20.04 + StoryCraft Studio — Node 22 medium image, bind mounts, RAM cap
+
+-P ubuntu-latest=catthehacker/ubuntu:act-22.04
+--container-architecture linux/amd64
+--bind
+--env NODE_OPTIONS=--max-old-space-size=1536
+--env PNPM_STORE_DIR=/pnpm-store
+--secret-file ~/storycraft-ci/act.secrets
+--artifact-server-path ~/storycraft-ci/cache/act/artifacts

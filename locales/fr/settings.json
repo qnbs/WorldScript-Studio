@@ -44,6 +44,7 @@
   "settings.advancedAi.ragModeLabel": "Mode d'index de recherche",
   "settings.advancedAi.ragModeHybrid": "Hybride (sémantique + lexical, recommandé)",
   "settings.advancedAi.ragModeLexical": "Lexical uniquement (rapide, sans modèle ML)",
+  "settings.advancedAi.ragModeHint": "Score hybride : ~60&nbsp;% similarité sémantique, ~30&nbsp;% lexical, ~10&nbsp;% récence. DuckDB (si activé) classe les embeddings 384-dim ; reconstruire l'index après de grosses modifications.",
   "settings.advancedAi.localRagDone": "Index local mis à jour",
   "settings.advancedAi.localRagDoneDetail": "{{count}} fragments indexés.",
   "settings.advancedAi.localRagTitle": "Index de recherche local du manuscrit",

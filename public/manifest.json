@@ -77,6 +77,8 @@
     "client_mode": "navigate-existing"
   },
 
+  "handle_links": "preferred",
+
   "share_target": {
     "action": "/StoryCraft-Studio/",
     "method": "GET",

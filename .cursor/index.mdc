@@ -5,34 +5,48 @@ alwaysApply: true
 
 # StoryCraft Studio — Manifest
 
-**Zweck:** Offline-first Schreib- und Erzählwerkzeug: Dashboard, Manuskript, Szenenboard, Charaktergraph, KI-Copilot (kein Ghostwriting-Fokus). Datenhaltung lokal; Privacy-first.
+**Zweck:** Offline-first Schreib- und Erzählwerkzeug (v1.3+): Dashboard, Manuskript, Szenenboard, Plot Board, Charaktergraph, Version Control, KI-Copilot — **kein Ghostwriting-Fokus**. Daten lokal; Privacy-first; Cloud-KI nur nutzergetriggert.
 
-**Frontend:** React 19, Vite 8, TypeScript 6 (`strict`, `exactOptionalPropertyTypes`, restrike Index/Switch-Regeln). Alias `@` → Repo-Root. Paketmanager: pnpm 10; Node ≥22.
+**Frontend:** React 19, Vite 8, TypeScript 6 (`strict`, `exactOptionalPropertyTypes`, restrike Index/Switch). Alias `@` → Repo-Root. **pnpm 10** Workspace (`packages/*`); Node ≥22. Optional **Turbo** (`*:turbo`-Skripte).
 
-**State & Daten:** Redux Toolkit, `redux-undo`; Persistenz/Krypto über IndexedDB (`services/dbService.ts` u. a.). Kein serverseitiges ORM; keine Prisma/SQL-DB im Web-Stack.
+**State:** Redux Toolkit + `redux-undo` (Projekt/Undo); **Zustand** für transientes UI (`app/transientUiStore.ts` — z. B. Command-Palette). Listener-Middleware für Auto-Save/Side-Effects.
 
-**KI & APIs:** `@google/genai` (Gemini), lokale Ollama-Integration (`services/ollamaService.ts`); Thunks unter `features/project/`. API-Schlüssel niemals hardcoden; Nutzerkonfiguration/lokale Speicherung beachten.
+**Persistenz:** Dual IndexedDB (`dbService.ts`: State vs. Data, Migration, LZ-String, AES-GCM für Keys); **`storageService` → `storageBackend`** (Web/Tauri, Binder-Blobs, typisiertes Envelope). Kein serverseitiges ORM.
 
-**Desktop:** Tauri 2 (`src-tauri`): Rust-Backend, `@tauri-apps/api` im Vite-Bundle als `external`. Desktop-spezifische FS/Dialog-Pfade von Web trennen.
+**KI (Hybrid):** `@google/genai` + **Vercel AI SDK** (`ai`, `@ai-sdk/*`); Orchestrierung `services/ai/` (Strangler) + Legacy `aiProviderService.ts` / `geminiService.ts`. **RAG assembly:** `services/ragPromptAssembly.ts` (Writer, Plot Board, Consistency pattern). DuckDB `rag_chunks.embedding` (384-dim). Lokal: Ollama, WebLLM/ONNX/Transformers (`packages/ai-core`). Thunks: `features/project/thunks/`.
 
-**Realtime / Kollaboration:** Yjs, `y-webrtc` (`services/collaborationService.ts`); konfigurierbare **WebRTC-Signaling-URLs** in Settings → Zusammenarbeit (`settings.collaboration.webrtcSignalingUrls`).
+**Desktop:** Tauri 2 (`src-tauri`); `@tauri-apps/api` im Vite-Bundle **external**; FS/Dialog nur über Services — UI-Atoms ohne direkte Tauri-Imports.
 
-**UI:** Tailwind CSS 4 (`@tailwindcss/vite`), Komponenten unter `components/` (u. a. `components/ui/*`). Storybook 10. Biome 2: Lint+Format, `lineWidth` 100, Single Quotes, A11y-Regeln (u. a. `useKeyWithClickEvents`, `noDangerouslySetInnerHtml`).
+**Kollaboration:** Yjs + `y-webrtc` (`collaborationService.ts`); Signaling: `settings.collaboration.webrtcSignalingUrls`; CSP `connect-src` für benutzerdefinierte `wss:`/`https:`.
 
-**PWA:** `vite-plugin-pwa`, `injectManifest`, Service Worker unter `public/sw.js`.
+**UI:** Tailwind 4 (`@tailwindcss/vite`), Tokens optional `@domain/ui`; Primitive `components/ui/*`. Storybook 10 + **addon-a11y**. Biome 2 (`--error-on-warnings`), `lineWidth` 100.
 
-**i18n:** Build-Skripte `build-i18n`, `check-i18n-keys`; Locale-Bundles unter `public/locales`.
+**PWA:** `vite-plugin-pwa`, `injectManifest`, `public/sw.js` (Version-Sync via `scripts/sync-sw-version.mjs`).
 
-**Tests:** Vitest 4 + jsdom, `@testing-library/react`, Setup `tests/setup.ts`; Tests unter `tests/**/*` und `components/**/*.{test,spec}.*`. E2E: Playwright (Skripte CI-gated). Coverage-Schwellen in `vitest.config.ts` (u. a. Zeilen ~15 %).
+**i18n:** Quelle `locales/<lang>/*.json` (de, en, fr, es, it); Runtime **`public/locales/<lang>/bundle.json`** via `pnpm run i18n:bundle` / `i18n:check` + `content:guard`. Keine hardcodierten UI-Strings.
 
-**Qualität:** `pnpm lint` / `biome`, `pnpm typecheck`, `pnpm test:run`. CI-Build: `bundle:budget` + `analyze` (rollup visualizer). Graphify: `graphify:bootstrap` → `graphify:update`; Git-Hooks optional via `simple-git-hooks` + lint-staged.
+**Tests:** Vitest 4 (jsdom, `tests/setup.ts`, `maxWorkers: 1`); Coverage-Schwellen ~**63/48/54/62** % (lines/branches/functions/statements). E2E Playwright **CI-first** (`CI=true`). Stryker informativ. Siehe [`docs/CI.md`](../docs/CI.md).
 
-**Barrierefreiheit:** `LiveRegionProvider` / `useAnnounce()` ([`contexts/LiveRegionContext.tsx`](../contexts/LiveRegionContext.tsx)); Settings-Hub Presets + Zod ([`features/settings/accessibilitySchema.ts`](../features/settings/accessibilitySchema.ts)); Maintainer-Leitfaden [`docs/ACCESSIBILITY.md`](../docs/ACCESSIBILITY.md); E2E [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts).
+**Qualität (lokal schnell):** `pnpm run lint`, `typecheck`, `i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage`. Schwere Gates (E2E, LHCI, Coverage) = GitHub Actions.
 
-**Command Center:** Zentrale Befehlsliste `services/commands/` → Command Palette (Fuzzy, Recent/Pinned); Ausführung über `CommandExecutorContext`; globale Shortcuts `hooks/useGlobalKeyboardShortcuts.ts` + `services/keyboard/`; Palette-Sichtbarkeit `app/transientUiStore.ts`. Hilfe: statische Retrieval-Hilfe für KI (`services/help/helpDocRetrieval.ts`).
+**Barrierefreiheit:** `LiveRegionProvider` / `useAnnounce()`; Settings-Presets + Zod (`accessibilitySchema.ts`); [`docs/ACCESSIBILITY.md`](../docs/ACCESSIBILITY.md); E2E [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts).
 
-**Storage:** Auto-Save nutzt `saveEnvelopeFromProjectData()` aus `services/storageBackend.ts` (typisiertes Redux-Envelope, kein Cast im Listener).
+**Command Center:** `services/commands/` → Palette; `CommandExecutorContext`; Shortcuts `useGlobalKeyboardShortcuts` + `services/keyboard/`; Hilfe `helpDocRetrieval.ts` + `tryActionId`.
 
-**Pfad-Konventionen:** `app/` (Einstieg), `components/`, `features/*`, `hooks/`, `services/`, `types.ts`, `tests/`.
+**Pfad-Konventionen:** `app/`, `components/`, `features/*`, `hooks/`, `services/`, `packages/*`, `types.ts`, `tests/`.
 
-**Cursor-Regeln:** QNBS-Masterprompt in [`.cursorrules`](../.cursorrules); fachliche Leitplanken in **`.cursor/rules/*.mdc`** (modular, `alwaysApply` je Datei).
+## Cursor-Regelkatalog
+
+| Datei | Wann |
+|-------|------|
+| [`.cursorrules`](../.cursorrules) | QNBS-Masterprompt, Kommentar-Konvention |
+| [`000-cursor-rules.mdc`](rules/000-cursor-rules.mdc) | Neue/geänderte `.mdc` |
+| [`001-core-security.mdc`](rules/001-core-security.mdc) | Secrets, Logs, CSP |
+| [`100-ai-providers-and-storage.mdc`](rules/100-ai-providers-and-storage.mdc) | KI, IDB, Storage |
+| [`150-i18n-and-content.mdc`](rules/150-i18n-and-content.mdc) | Locales, Copy, Templates |
+| [`200-architecture-limits.mdc`](rules/200-architecture-limits.mdc) | KISS/DRY, Dateigrößen |
+| [`300-ui-components.mdc`](rules/300-ui-components.mdc) | React UI, A11y |
+| [`800-testing-standards.mdc`](rules/800-testing-standards.mdc) | Vitest, E2E, CI-first |
+| [`850-mcp-and-prd.mdc`](rules/850-mcp-and-prd.mdc) | Roadmap, MCP, Doku-Hub |
+
+**Maintainer-Doku:** [`docs/BEST-PRACTICES.md`](../docs/BEST-PRACTICES.md), [`AUDIT.md`](../AUDIT.md), [`ROADMAP.md`](../ROADMAP.md). Nach größeren Code-Änderungen optional `pnpm run graphify:update`.

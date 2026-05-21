@@ -9,6 +9,8 @@
   "help.aiStudio.overview.content": "<h3>Ihr kreativer Co-Pilot</h3><p>Das KI-Schreibstudio ist Ihr dedizierter Bereich für KI-gestütztes Schreiben. Der Arbeitsablauf ist auf Leistung und Flexibilität ausgelegt:</p><ol><li><b>Kontext auswählen:</b> Wählen Sie zuerst den Manuskriptabschnitt, an dem Sie arbeiten möchten, aus dem Dropdown-Menü im Panel 'Manuskript-Kontext'.</li><li><b>Ein Werkzeug wählen:</b> Wählen Sie eines der leistungsstarken KI-Werkzeuge oben im Panel 'KI-Werkzeuge'.</li><li><b>Eingaben machen:</b> Je nach Werkzeug müssen Sie möglicherweise Text im Editor auswählen, Charaktere auswählen oder eine Eingabeaufforderung schreiben.</li><li><b>Generieren:</b> Klicken Sie auf die Schaltfläche 'Generieren'. Die Ausgabe erscheint im 'KI-Notizblock' auf der rechten Seite.</li><li><b>Überprüfen und übernehmen:</b> Sie können den generierten Text im Notizblock bearbeiten. Sobald Sie zufrieden sind, verwenden Sie die Schaltflächen 'Einfügen' oder 'Ersetzen', um ihn auf Ihr Manuskript anzuwenden.</li></ol>",
   "help.aiStudio.overview.title": "Übersicht über das KI-Schreibstudio",
   "help.aiStudio.tools.content": "<h3>Das richtige Werkzeug für die Aufgabe</h3><p>Jedes Werkzeug im Studio dient einem anderen Zweck:</p><ul><li><b>Weiterschreiben:</b> Perfekt bei Schreibblockaden. Platzieren Sie Ihren Cursor im Text, und die KI schreibt, was als Nächstes kommt.</li><li><b>Text verbessern:</b> Markieren Sie einen Satz oder Absatz, und die KI schreibt ihn neu. Verwenden Sie das Stil-Dropdown, um die Verbesserung zu steuern (z. B. 'filmischer' machen).</li><li><b>Ton ändern:</b> Ähnlich wie 'Text verbessern', verwendet aber das Ton-Dropdown, um die Stimmung zu ändern (z. B. 'spannender' machen).</li><li><b>Dialog generieren:</b> Wählen Sie die Charaktere in der Szene aus, beschreiben Sie das Szenario, und die KI schreibt deren Gespräch.</li><li><b>Ideen brainstormen:</b> Erhalten Sie eine Liste kreativer Handlungspunkte für die Fortsetzung.</li><li><b>Abschnitt zusammenfassen:</b> Generiert schnell eine Synopse des ausgewählten Manuskriptabschnitts, nützlich zur Überprüfung des Tempos oder zum Schreiben von Kapitelzusammenfassungen.</li></ul>",
+  "help.aiStudio.ragContext.title": "RAG-Kontext für KI-Generierung",
+  "help.aiStudio.ragContext.content": "<h3>Lokale Retrieval-Augmented Prompts</h3><p>Wenn <b>RAG-Kontext</b> im KI-Werkzeuge-Panel aktiv ist, holt StoryCraft relevante Manuskriptabschnitte, bevor das Modell aufgerufen wird. Der Hybrid-Modus mischt semantische Embeddings (~60&nbsp;%), lexikalische Treffer (~30&nbsp;%) und Aktualität (~10&nbsp;%).</p><ol><li>Index unter <b>Einstellungen → Erweiterte KI → Lokalen Suchindex neu aufbauen</b> erstellen (lokales Embedding-Modell erforderlich).</li><li><b>KI-Schreibstudio</b> öffnen, <b>RAG-Kontext</b> aktivieren, dann Weiterschreiben, Brainstorm oder Kritik nutzen.</li><li>Das Chunk-Badge zeigt injizierte Passagen; Plot-Board-Vorschläge nutzen dieselbe Pipeline.</li></ol><p>Ihr Manuskript bleibt im Browser; nur der zusammengesetzte Prompt geht an den gewählten KI-Anbieter.</p>",
   "help.aiStudio.tools.title": "Die KI-Werkzeuge verstehen",
   "help.article.selectPrompt": "Wählen Sie links einen Artikel aus, um ihn zu lesen, oder fragen Sie unseren KI-Assistenten um Hilfe.",
   "help.article.tryItNow": "Jetzt ausprobieren",
@@ -82,6 +84,11 @@
         {
           "title": "help.aiStudio.tools.title",
           "content": "help.aiStudio.tools.content",
+          "tryActionId": "nav-writer"
+        },
+        {
+          "title": "help.aiStudio.ragContext.title",
+          "content": "help.aiStudio.ragContext.content",
           "tryActionId": "nav-writer"
         }
       ]

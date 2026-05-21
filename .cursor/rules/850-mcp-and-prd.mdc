@@ -1,28 +1,51 @@
 ---
-description: Use PRD notes and MCP config when planning cross-cutting product or integration work
+description: Consult roadmap and docs hub before cross-cutting product or integration work
 globs: ~
 alwaysApply: false
 ---
 
-# PRD, Bewusstseins-Stream & MCP-Bereitschaft
+# Produktkontext, Doku-Hub & MCP
 
-## Product Requirements
+## Vor großen Änderungen lesen
 
-- Vor **architektonischen** oder produktweiten Änderungen das jeweilige Product Requirements Document konsultieren: `instructions.md` oder `PRD.md` im Repo-Root (anlegen/pflegen, sobald das Team diese Dateien nutzt). Keine großen Richtungswechsel ohne Abgleich mit diesem Dokument.
+| Dokument | Rolle |
+|----------|--------|
+| [`ROADMAP.md`](../../ROADMAP.md) | Geplante Features, Prioritäten |
+| [`AUDIT.md`](../../AUDIT.md) | Inventar, Follow-ups, Metriken |
+| [`docs/BEST-PRACTICES.md`](../../docs/BEST-PRACTICES.md) | Architektur, Content, CI-first |
+| [`docs/CI.md`](../../docs/CI.md) | Workflow, lokale vs. CI-Tiers |
+| [`CHANGELOG.md`](../../CHANGELOG.md) | Release-Notizen |
+| [`README.md`](../../README.md) | Documentation Hub |
 
-## Consciousness Stream
+`PRD.md` / `instructions.md`: anlegen, sobald das Team sie nutzt — bis dahin ROADMAP + AUDIT als Quelle.
 
-- Kontextuelle Erinnerungen, Beschlüsse und Meeting-Hinweise in **`.notes/meeting_notes.md`** festhalten (kurz, chronologisch oder nach Thema), damit spätere Sessions denselben Stand haben.
+## Session-Gedächtnis
 
-## Model Context Protocol (Platzhalter)
+- Beschlüsse kurz in **`.notes/meeting_notes.md`** (chronologisch/thematisch).
 
-Projektbezogene MCP-Server bei Bedarf aktivieren und in Cursor konfigurieren:
+## Graphify & Hooks
 
-| Bereich | Beispiel-MCP / Rolle |
-|--------|------------------------|
-| Repository | GitHub-/Git-MCP für Issues, PRs, Diff-Kontext |
-| Qualität | CI/Test- oder Coverage-Einbindung falls verfügbar |
-| Dokumentation | Wiki-/Docs-MCP falls vorhanden |
-| Datenbank | Nur relevant, sobald ein serverseitiger DB-Stack existiert (aktuell primär IndexedDB im Client) |
+- Optional nach größeren Strukturänderungen: `pnpm run graphify:update` / `graphify:bootstrap` ([`docs/graphify.md`](../../docs/graphify.md)).
+- Git-Hooks: `simple-git-hooks` + lint-staged (siehe `CONTRIBUTING.md`).
 
-Konkrete Server-Namen und Secrets bleiben **lokal** in der Cursor-Konfiguration; nicht ins Repo committen.
+## MCP (lokal in Cursor)
+
+| Bereich | Rolle |
+|---------|--------|
+| Repository | GitHub/Git für Issues, PRs, Diffs |
+| Qualität | CI-Artefakte, Coverage-Reports |
+| Doku | Notion o. ä. — siehe [`.cursor/settings.json`](../settings.json) Plugins |
+
+Server-Namen und Tokens **nur** in lokaler Cursor-Konfiguration — nie ins Repo.
+
+## Agent-Parität
+
+- [`CLAUDE.md`](../../CLAUDE.md), [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md) und **diese `.mdc`-Regeln** sollten bei Stack-Updates zusammen gehalten werden.
+
+<example>
+Neues Plot-Board-Feature: ROADMAP-Eintrag prüfen; BEST-PRACTICES Glossar; nach Merge CI-Metriken in README/AUDIT (nur wenn Maintainer es verlangt).
+</example>
+
+<example type="invalid">
+Großer Architektur-Pivot ohne ROADMAP/AUDIT; MCP-Token in `.cursor/settings.json` committen; nur Copilot-Instructions aktualisieren, `.mdc` vergessen.
+</example>

@@ -645,6 +645,9 @@ export const AdvancedAiSection: FC = () => {
                 <option value="hybrid">{t('settings.advancedAi.ragModeHybrid')}</option>
                 <option value="lexical">{t('settings.advancedAi.ragModeLexical')}</option>
               </Select>
+              <p className="mt-2 text-xs text-[var(--foreground-muted)]">
+                {t('settings.advancedAi.ragModeHint')}
+              </p>
             </div>
             <Button
               type="button"

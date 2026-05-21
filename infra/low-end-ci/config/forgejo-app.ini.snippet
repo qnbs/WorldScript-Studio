@@ -1,0 +1,19 @@
+; Optional overrides — mount or merge into Forgejo config if env vars are insufficient.
+; Path on host: ~/storycraft-ci/forgejo/config/app.ini
+
+[database]
+DB_TYPE = sqlite3
+PATH = /data/gitea/gitea.db
+SQLITE_JOURNAL_MODE = WAL
+
+[server]
+DOMAIN = localhost
+ROOT_URL = http://127.0.0.1:3000/
+HTTP_PORT = 3000
+LFS_START_SERVER = false
+
+[service]
+DISABLE_REGISTRATION = true
+
+[log]
+LEVEL = Warn

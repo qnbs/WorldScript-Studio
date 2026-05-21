@@ -1,0 +1,39 @@
+# Eco-Forgejo for low-end Ubuntu 20.04 — bind to localhost only, SQLite + WAL, tight limits.
+# Data: ~/storycraft-ci/forgejo (set FORGEJO_DATA_DIR or use default below)
+
+services:
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:9
+    container_name: storycraft-forgejo
+    restart: unless-stopped
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__database__DB_TYPE=sqlite3
+      - FORGEJO__database__PATH=/data/gitea/gitea.db
+      - FORGEJO__server__DOMAIN=localhost
+      - FORGEJO__server__ROOT_URL=http://127.0.0.1:3000/
+      - FORGEJO__server__HTTP_PORT=3000
+      - FORGEJO__server__LFS_START_SERVER=false
+      - FORGEJO__service__DISABLE_REGISTRATION=true
+      - FORGEJO__service__REQUIRE_SIGNIN_VIEW=false
+      - FORGEJO__log__LEVEL=Warn
+      - FORGEJO__database__SQLITE_JOURNAL_MODE=WAL
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ${FORGEJO_DATA_DIR:-${HOME}/storycraft-ci/forgejo/data}:/data
+      - ${FORGEJO_CONFIG_DIR:-${HOME}/storycraft-ci/forgejo/config}:/data/gitea/conf
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/healthz"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

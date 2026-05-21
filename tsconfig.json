@@ -11,6 +11,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "types": ["vite/client", "react", "react-dom"],
+    "typeRoots": ["./types", "./node_modules/@types"],
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitAny": true,

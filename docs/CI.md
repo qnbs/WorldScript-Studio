@@ -138,25 +138,46 @@ pnpm exec lhci autorun   # after build + serve/preview as configured in .lightho
 
 ---
 
-## Local simulation with Act
+## Local CI/CD on low-end hardware (act + Forgejo)
 
-[Act](https://github.com/nektos/act) approximates runners; use **job ids from `ci.yml`**:
+For **Ubuntu 20.04 / 2–4 GB RAM** laptops: run the **Quick tier** natively (no Docker) and use **[act](https://github.com/nektos/act)** + optional **Forgejo** as a GitHub backup — not a second pipeline language.
+
+| Tier | Command | When |
+|------|---------|------|
+| **Quick (daily)** | `pnpm run ci:quick` / `ci:quick:unit` | Every commit |
+| **Full workflow (on-demand)** | `pnpm run ci:act` | Before release / weekly |
+| **Eco Git** | `infra/low-end-ci/scripts/ci-eco-start.sh` | Only when pushing to local Forgejo |
+
+**Full setup:** [`infra/low-end-ci/INSTALL.md`](../infra/low-end-ci/INSTALL.md) · **Daily checklist:** [`infra/low-end-ci/DAILY-DRIVER.md`](../infra/low-end-ci/DAILY-DRIVER.md)
+
+Baseline hardware eval: `infra/low-end-ci/eval-template.sh` → `~/storycraft-ci/eval-*.txt`
+
+---
+
+## Local simulation with Act (manual)
+
+If you already installed act (see INSTALL.md), use **job ids from `ci.yml`**. Prefer the repo wrapper (sequential, one matrix axis):
 
 ```bash
-npm install -g act
+pnpm run ci:act
+# or:
+./infra/low-end-ci/scripts/ci-act-sequential.sh pull_request
+```
 
-# Typical PR-equivalent slice
-act pull_request --job security --job quality
+Manual slices:
 
-# Jobs that depend on artifacts may need extra setup inside Act
-act push --job build --job e2e --job lighthouse --job storybook
+```bash
+act pull_request --sequential -j security -j quality --matrix node-version:lts/* -W .github/workflows/ci.yml
+act pull_request -j build -W .github/workflows/ci.yml
 ```
 
 Codecov (optional):
 
 ```bash
-act pull_request --job quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
+act pull_request -j quality -s CODECOV_TOKEN="$CODECOV_TOKEN" -W .github/workflows/ci.yml
 ```
+
+**Limits on 2 GB RAM:** run Forgejo **stopped** during act; use **6 GB swap**; skip `deploy` / SLSA / `dependency-review` locally; E2E may need `--e2e-chromium-only` (see DAILY-DRIVER.md).
 
 ---
 

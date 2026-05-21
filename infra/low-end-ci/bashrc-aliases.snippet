@@ -1,0 +1,17 @@
+# StoryCraft Studio — low-end local CI (append to ~/.bashrc)
+export STORYCRAFT_CI_HOME="${HOME}/storycraft-ci"
+export PNPM_STORE_DIR="${STORYCRAFT_CI_HOME}/cache/pnpm-store"
+export STORYCRAFT_REPO="${HOME}/githubcursor/StoryCraft-Studio"
+export PATH="${STORYCRAFT_REPO}/infra/low-end-ci/scripts:${PATH}"
+
+alias sc-ci='cd "${STORYCRAFT_REPO}" && ci-quick.sh'
+alias sc-ci-unit='cd "${STORYCRAFT_REPO}" && ci-quick.sh --unit'
+alias sc-ci-cov='cd "${STORYCRAFT_REPO}" && ci-quick.sh --unit --coverage'
+alias sc-act='cd "${STORYCRAFT_REPO}" && ci-act-sequential.sh pull_request'
+alias sc-act-full='cd "${STORYCRAFT_REPO}" && ci-act-sequential.sh pull_request --with-storybook --e2e-chromium-only'
+alias sc-eco-on='ci-eco-start.sh'
+alias sc-eco-off='ci-eco-stop.sh --prune'
+alias sc-status='ci-status.sh'
+alias sc-backup='backup-ci.sh'
+alias sc-mirror-up='cd "${STORYCRAFT_REPO}" && mirror-github-to-forgejo.sh --direction pull-from-github'
+alias sc-mirror-gh='cd "${STORYCRAFT_REPO}" && mirror-github-to-forgejo.sh --direction push-to-github'

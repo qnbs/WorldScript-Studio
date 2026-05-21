@@ -1,7 +1,15 @@
 // QNBS-v3: Canonical DDL for the DuckDB-WASM analytics layer.
 //          IDB remains the source of truth; this schema is the read-optimised side-car.
 
-export const DUCK_DB_SCHEMA_VERSION = 1;
+export const DUCK_DB_SCHEMA_VERSION = 2;
+
+/** MiniLM-L6-v2 semantic embedding dimension for rag_chunks.embedding */
+export const RAG_EMBEDDING_DIM = 384;
+
+/** v1→v2: adds rag_chunks.embedding for 384-dim semantic vectors */
+export const DUCKDB_MIGRATION_V2_DDL = `
+ALTER TABLE rag_chunks ADD COLUMN IF NOT EXISTS embedding FLOAT[];
+`;
 
 export const DUCKDB_DDL = `
 CREATE TABLE IF NOT EXISTS _meta (

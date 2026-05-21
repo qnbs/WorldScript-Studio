@@ -104,10 +104,12 @@ const ContextPanel: FC = React.memo(() => {
                 <>
                   <span>{selectedSection.content.substring(0, selection.start)}</span>
                   {shouldShowInsertionPoint && (
-                    <span className="inline-block w-0.5 h-5 bg-indigo-500 dark:bg-indigo-400 animate-pulse ml-px -mb-1 align-middle"></span>
+                    <span className="inline-block w-0.5 h-5 bg-[var(--ring-focus)] animate-pulse ml-px -mb-1 align-middle"></span>
                   )}
                   {shouldHighlightSelection && (
-                    <span className="bg-indigo-500/30 rounded-md">{selection.text}</span>
+                    <span className="bg-[var(--background-interactive)]/25 rounded-md">
+                      {selection.text}
+                    </span>
                   )}
                   <span>{selectedSection.content.substring(selection.end)}</span>
                 </>

@@ -204,6 +204,46 @@ register({
 });
 
 register({
+  id: 'writerContinuation',
+  version: '1.0.0',
+  name: 'Writer Continuation',
+  category: 'manuscript',
+  localeKey: 'promptLibrary.writerContinuation',
+  template: (v) =>
+    `Continue writing in a ${v['style'] ?? 'compelling'} style. Act as a Socratic co-author: suggest direction without overwriting the author's voice.\n\n=== CURRENT PASSAGE ===\n${v['currentText'] ?? ''}`,
+});
+
+register({
+  id: 'writerContinuationWithRAG',
+  version: '1.0.0',
+  name: 'Writer Continuation (RAG)',
+  category: 'manuscript',
+  localeKey: 'promptLibrary.writerContinuationWithRAG',
+  template: (v) =>
+    `Continue writing in a ${v['style'] ?? 'compelling'} style. Act as a Socratic co-author — stay consistent with retrieved story context.\n\n=== CURRENT PASSAGE ===\n${v['currentText'] ?? ''}\n\n=== RELEVANT STORY CONTEXT (RAG) ===\n${v['ragContext'] ?? ''}\n\n=== TASK ===\nExtend the passage naturally from the cursor position. No meta-commentary.`,
+});
+
+register({
+  id: 'plotSuggestion',
+  version: '1.0.0',
+  name: 'Plot Beat Suggestion',
+  category: 'outline',
+  localeKey: 'promptLibrary.plotSuggestion',
+  template: (v) =>
+    `Suggest the next story beats for a plot board. Be specific and JSON-ready.\n\n=== PLOT CONTEXT ===\n${v['plotSummary'] ?? ''}`,
+});
+
+register({
+  id: 'plotSuggestionWithRAG',
+  version: '1.0.0',
+  name: 'Plot Beat Suggestion (RAG)',
+  category: 'outline',
+  localeKey: 'promptLibrary.plotSuggestionWithRAG',
+  template: (v) =>
+    `Suggest 2–4 next plot beats as a critical story editor. Use RAG context for continuity.\n\n=== PLOT CONTEXT ===\n${v['plotSummary'] ?? ''}\n\n=== RELEVANT STORY CONTEXT (RAG) ===\n${v['ragContext'] ?? ''}\n\n=== TASK ===\nReturn JSON only: { "beats": [{ "title": string, "description": string, "suggestedPosition": string, "rationale": string }] }`,
+});
+
+register({
   id: 'criticAnalysis',
   version: '1.0.0',
   name: 'Critic Analysis',
