@@ -60,5 +60,12 @@
   "dashboard.authorInsights.readabilityFootnote": "Higher scores usually mean easier reading; tune for your genre intentionally.",
   "dashboard.authorInsights.timeline": "Scene timeline checks",
   "dashboard.authorInsights.timelineClear": "No timeline warnings from scene metadata.",
-  "dashboard.authorInsights.timelineWarnBadge": "{{count}} warnings — refine scene dates/durations on the Scene Board."
+  "dashboard.authorInsights.timelineWarnBadge": "{{count}} warnings — refine scene dates/durations on the Scene Board.",
+  "dashboard.backup.title": "Backup & restore",
+  "dashboard.backup.hint": "Export your project, import a backup, or open full backup settings.",
+  "dashboard.backup.exportJson": "Export JSON",
+  "dashboard.backup.importJson": "Import JSON",
+  "dashboard.backup.openSettings": "Backup settings",
+  "dashboard.backup.latestSnapshot": "Latest snapshot: {{name}} ({{date}})",
+  "dashboard.backup.unnamedSnapshot": "Unnamed snapshot"
 }

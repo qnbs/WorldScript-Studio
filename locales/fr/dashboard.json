@@ -60,5 +60,12 @@
   "dashboard.stats.worlds": "Mondes",
   "initialProject.chapter1": "Chapitre 1",
   "initialProject.logline": "Un voyage de mille lieues commence par un seul pas...",
-  "initialProject.title": "Mon histoire sans titre"
+  "initialProject.title": "Mon histoire sans titre",
+  "dashboard.backup.title": "Backup & restore",
+  "dashboard.backup.hint": "Export your project, import a backup, or open full backup settings.",
+  "dashboard.backup.exportJson": "Export JSON",
+  "dashboard.backup.importJson": "Import JSON",
+  "dashboard.backup.openSettings": "Backup settings",
+  "dashboard.backup.latestSnapshot": "Latest snapshot: {{name}} ({{date}})",
+  "dashboard.backup.unnamedSnapshot": "Unnamed snapshot"
 }

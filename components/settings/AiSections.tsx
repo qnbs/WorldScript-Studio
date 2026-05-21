@@ -659,53 +659,6 @@ export const AdvancedAiSection: FC = () => {
               {ragBusy ? <Spinner className="w-4 h-4" /> : t('settings.advancedAi.localRagBuild')}
             </Button>
           </div>
-
-          {/* Feature Flags */}
-          <div className="border-t border-[var(--border-primary)] pt-4">
-            <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-3">
-              {t('settings.featureFlags.title')}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ToggleSwitch
-                label={t('settings.featureFlags.enableCodexAutoTracking')}
-                checked={featureFlags.enableCodexAutoTracking}
-                onChange={(v) => handleSettingChange('enableCodexAutoTracking', v)}
-              />
-              <ToggleSwitch
-                label={t('settings.featureFlags.enableStoryBibleAdvanced')}
-                checked={featureFlags.enableStoryBibleAdvanced}
-                onChange={(v) => handleSettingChange('enableStoryBibleAdvanced', v)}
-              />
-              <ToggleSwitch
-                label={t('settings.featureFlags.enableBinderResearch')}
-                checked={featureFlags.enableBinderResearch}
-                onChange={(v) => handleSettingChange('enableBinderResearch', v)}
-              />
-              <ToggleSwitch
-                label={t('settings.featureFlags.enableCompileWizard')}
-                checked={featureFlags.enableCompileWizard}
-                onChange={(v) => handleSettingChange('enableCompileWizard', v)}
-              />
-              <ToggleSwitch
-                label={t('settings.featureFlags.enableProjectHealthScore')}
-                checked={featureFlags.enableProjectHealthScore}
-                onChange={(v) => handleSettingChange('enableProjectHealthScore', v)}
-              />
-              <ToggleSwitch
-                label={t('settings.featureFlags.enableCrossProjectSearch')}
-                checked={featureFlags.enableCrossProjectSearch}
-                onChange={(v) => handleSettingChange('enableCrossProjectSearch', v)}
-              />
-              <ToggleSwitch
-                label={t('settings.featureFlags.enableAppHealthPanel')}
-                checked={featureFlags.enableAppHealthPanel}
-                onChange={(v) => handleSettingChange('enableAppHealthPanel', v)}
-              />
-            </div>
-            <p className="text-sm text-[var(--foreground-muted)] mt-3">
-              {t('settings.featureFlags.description')}
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

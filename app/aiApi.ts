@@ -1,5 +1,5 @@
 import { createApi, fakeBaseQuery } from '@reduxjs/toolkit/query/react';
-import { generateText } from '../services/aiProviderService';
+import { loadAiProvider } from '../features/project/thunks/thunkUtils';
 import type { AIProvider, AiCreativity, AiModel } from '../types';
 
 export interface GenerateTextRequest {
@@ -34,7 +34,7 @@ export const aiApi = createApi({
           if (req.temperature !== undefined) options.temperature = req.temperature;
           if (req.maxTokens !== undefined) options.maxTokens = req.maxTokens;
 
-          // QNBS-v3: RTK Query kapselt AI-Responses zentral, damit Request-Dedupe/Caching im Redux-Layer stattfinden kann.
+          const { generateText } = await loadAiProvider();
           const text = await generateText(req.prompt, req.creativity, options);
           return { data: { text } };
         } catch (error) {

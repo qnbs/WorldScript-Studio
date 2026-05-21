@@ -4,8 +4,12 @@ import { useStore } from 'react-redux';
 import { useAppDispatch, useAppSelector } from './app/hooks';
 import type { RootState } from './app/store';
 import { useTransientUiStore } from './app/transientUiStore';
-import { CollaborationPanel } from './components/CollaborationPanel';
+import { AnalyticsBootstrap } from './components/AnalyticsBootstrap';
 import { CommandPalette } from './components/CommandPalette';
+
+const CollaborationPanel = lazy(() =>
+  import('./components/CollaborationPanel').then((m) => ({ default: m.CollaborationPanel })),
+);
 
 // QNBS-v3: lazy-load cross-project search panel so it's excluded from the initial bundle
 const CrossProjectSearchPanelConnected = lazy(() =>
@@ -20,6 +24,7 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { OfflineIndicator, PWAInstallBanner, PWAUpdateToast } from './components/ui/PWAComponents';
 import { Spinner } from './components/ui/Spinner';
 import { ToastProvider } from './components/ui/Toast';
+import { ViewErrorBoundary } from './components/ui/ViewErrorBoundary';
 import { VersionControlPanel } from './components/VersionControlPanel';
 import { AppContext } from './contexts/AppContext';
 import { CommandExecutorProvider } from './contexts/CommandExecutorContext';
@@ -40,6 +45,7 @@ import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
+import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services/tauriMenuService';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
 
@@ -380,6 +386,15 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     ],
   );
 
+  useEffect(() => {
+    void registerTauriMenuHandler((action) => {
+      if (action === 'menu-settings') executeCommand('nav-settings');
+      else if (action === 'menu-help') executeCommand('nav-help');
+      else if (action === 'menu-export') executeCommand('nav-export');
+    });
+    return () => unregisterTauriMenuHandler();
+  }, [executeCommand]);
+
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
@@ -457,6 +472,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
   return (
     <FeatureFlagsProvider value={featureFlags}>
+      <AnalyticsBootstrap />
       <CommandExecutorProvider execute={executeCommand}>
         <ToastProvider>
           <AppContext.Provider value={appState}>
@@ -487,7 +503,9 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   className="flex-1 overflow-y-auto p-4 pb-20 sm:p-6 sm:pb-20 md:p-8 md:pb-8 scroll-smooth overscroll-none"
                 >
                   <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>
-                    <Suspense fallback={<ViewLoader />}>{renderView()}</Suspense>
+                    <ViewErrorBoundary viewLabel={t(viewNavigationLabelKey(currentView))}>
+                      <Suspense fallback={<ViewLoader />}>{renderView()}</Suspense>
+                    </ViewErrorBoundary>
                   </ErrorBoundary>
                 </main>
               </div>
@@ -498,11 +516,13 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                 currentView={currentView}
               />
               <VersionControlPanel />
-              <CollaborationPanel
-                isOpen={isCollabPanelOpen}
-                onClose={() => setIsCollabPanelOpen(false)}
-                projectId={project?.id ?? 'default'}
-              />
+              <Suspense fallback={null}>
+                <CollaborationPanel
+                  isOpen={isCollabPanelOpen}
+                  onClose={() => setIsCollabPanelOpen(false)}
+                  projectId={project?.id ?? 'default'}
+                />
+              </Suspense>
               <Suspense fallback={null}>
                 <CrossProjectSearchPanelConnected />
               </Suspense>

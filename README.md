@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1625_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1625 keys">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1923_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1923 keys">
   <img src="https://img.shields.io/badge/Tests-2024_%2F_178_files-22C55E" alt="2024 tests / 178 files">
   <img src="https://img.shields.io/badge/Coverage-65.91%25_Lines_%7C_50.59%25_Branch-brightgreen" alt="Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
@@ -37,7 +37,7 @@
 ### PWA & Desktop
 
 - **Install as PWA:** In Chromium/Edge, open the Live Demo → use the install icon in the address bar (or browser menu) for an offline-capable app shortcut.
-- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — signed `.appimage`, `.msi`, and `.dmg` artifacts with an auto-generated `latest.json` update manifest. See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) for signing secrets and the first-release checklist, and [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) for the full auto-updater setup.
+- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — signed `.appimage`, `.msi`, and `.dmg` artifacts with an auto-generated `latest.json` update manifest. **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/SPRINT-V1.9.md`](docs/SPRINT-V1.9.md).
 
 ---
 
@@ -192,7 +192,7 @@ A keyboard-first **command palette** (⌘K / Ctrl+K, plus configurable bindings 
 - **Voice input** — Web Speech integration for dictating palette queries where supported.
 - **Global shortcuts** — `hooks/useGlobalKeyboardShortcuts.ts` + `services/keyboard/` evaluate Redux-backed shortcut bindings; conflicts surface in the Shortcuts editor.
 - **Settings** — filter controls via the Settings search bar (`services/settingsSearchHints.ts`); **Import / Export** of a Zod-validated, privacy-conscious settings JSON subset (**Settings → Data** via `services/settingsExchange.ts`).
-- **Help** — client-side help doc chunks feed optional **RAG-lite** context into `streamAiHelpResponse`; articles expose **"Try it"** actions (`tryActionId`) that execute registry commands; spotlight tours support multiple `tourId` presets (`services/spotlightTour.ts`).
+- **Help Center (v1.9)** — `services/help/helpCatalog.ts` drives 50+ articles across 10 categories (including **Technical Documentation** and **Settings Guide**); full-text search (`helpSearch.ts`); AI assistant uses 13 offline doc chunks; **Try it** actions via `tryActionId`; tours from `services/spotlightTour.ts`. All five locales include translated article bodies (es/fr/it complete as of v1.9).
 - **UI primitives** — shared **`Tooltip`**, **`EmptyState`**, and toast rows that trigger a **registered command** via `commandId` (see `features/status/statusSlice.ts`).
 - **Feature flags** — `enableProjectHealthScore` (dashboard card) and `enableCrossProjectSearch` (cross-project index) live in `features/featureFlags/featureFlagsSlice.ts`.
 
@@ -506,16 +506,16 @@ pnpm run tauri:dev
 
 ## 🧪 CI & Local Validation
 
-The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Optional **desktop** bundles: [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) (`workflow_dispatch` / `v*` tags). Full reference: **[`docs/CI.md`](docs/CI.md)** and **[`docs/TAURI-CI.md`](docs/TAURI-CI.md)**.
+The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Optional **desktop** bundles: [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) (`workflow_dispatch` / `v*` tags). Full reference: **[`docs/CI.md`](docs/CI.md)** and **[`docs/TAURI-CI.md`](docs/TAURI-CI.md)**. **CI health / audit log:** **[`.github/CI-AUDIT.md`](.github/CI-AUDIT.md)**.
 
 | Job          | When / needs        | What it does |
 | ------------ | -------------------- | ------------ |
 | `security`   | every run            | `pnpm audit --audit-level=high`; `osv-scanner` vulnerability scan; gitleaks secrets scan; PRs: dependency review |
-| `quality`    | after `security`     | Biome lint + format, **i18n key parity** (`pnpm run i18n:check`), `tsc --noEmit`, Vitest + V8 coverage (Node **LTS** + **current**); Codecov upload |
-| `build`      | after `quality`      | Production Vite build, **chunk budget** (`bundle:budget`, max 7 000 KB), **rollup analyze** artifact; on `main`: SLSA provenance attestation + Pages artifact |
+| `quality`    | after `security`     | Biome lint + format, **i18n key parity** (`pnpm run i18n:check`), `tsc --noEmit`, Vitest + V8 coverage (Node **22** + **24**); Codecov upload |
+| `build`      | after `quality`      | Production Vite build, **chunk budget** (max 7 000 KB/chunk, 4 500 KB entry), **rollup analyze** artifact; on `main`: SLSA provenance attestation + Pages artifact |
 | `e2e`        | after `quality`      | Playwright **Chromium**, `CI=true`; JUnit artifact uploaded for per-test PR annotations |
 | `mutation`   | after `quality`      | Stryker (`pnpm run mutation`); `break: 30` enforced |
-| `lighthouse` | after `build`        | LHCI against `dist` — performance `error:0.4`, accessibility `error:0.88`, SEO `warn:0.8` |
+| `lighthouse` | after `build`        | LHCI against `dist` — accessibility `error:0.95`, CLS `error:0.1`, performance `warn:0.4`, SEO `warn:0.8` |
 | `storybook`  | after `quality`      | Static Storybook build artifact |
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
@@ -592,6 +592,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/SPRINT-V1.6.md`](docs/SPRINT-V1.6.md) | Sprint reference: v1.6 Plot-Board v2 & Writer Experience |
 | [`docs/SPRINT-V1.7.md`](docs/SPRINT-V1.7.md) | Sprint reference: v1.7 DuckDB Analytics + Hybrid RAG + AI Extensions |
 | [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md) | Sprint reference: v1.8 RAG prompt assembly + Writer/Plot Board AI |
+| [`docs/SPRINT-V1.9.md`](docs/SPRINT-V1.9.md) | Sprint reference: v1.9 lazy loading, Help/Settings hub, Tauri desktop UX |
 | [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA manifest, service worker, share-target checklist |
 | [`infra/low-end-ci/`](infra/low-end-ci/) | Local CI on low-end hardware (act + Eco-Forgejo) |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow: manual/tag builds, 7-step first-release checklist |

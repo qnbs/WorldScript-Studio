@@ -7,7 +7,7 @@ import type { ProjectData } from '../features/project/projectSlice';
 import type { Character } from '../types';
 import { cosineSimilarity, embedText } from './ai/localEmbeddingService';
 import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
-import { duckdbCrossProjectWrite, queryCrossProjectSearch } from './duckdb/duckdbAnalytics';
+import { loadDuckdbAnalytics } from './duckdb/duckdbListenerLoader';
 
 export interface ProjectSearchIndex {
   projectId: string;
@@ -91,13 +91,17 @@ export async function indexProject(
   });
 
   if (duckDbEnabled) {
-    void duckdbCrossProjectWrite({
-      projectId,
-      title: record.title,
-      logline: record.logline,
-      manuscriptWordCount: record.manuscriptWordCount,
-      characterNames: record.characterNames,
-    }).catch(() => {});
+    void loadDuckdbAnalytics()
+      .then(({ duckdbCrossProjectWrite }) =>
+        duckdbCrossProjectWrite({
+          projectId,
+          title: record.title,
+          logline: record.logline,
+          manuscriptWordCount: record.manuscriptWordCount,
+          characterNames: record.characterNames,
+        }),
+      )
+      .catch(() => {});
   }
 }
 
@@ -178,14 +182,18 @@ export async function enrichProjectIndex(projectId: string, duckDbEnabled = fals
 
   // QNBS-v3: P3 — update DuckDB entry with the now-computed embedding vector.
   if (duckDbEnabled) {
-    void duckdbCrossProjectWrite({
-      projectId,
-      title: enriched.title,
-      logline: enriched.logline,
-      manuscriptWordCount: enriched.manuscriptWordCount,
-      characterNames: enriched.characterNames,
-      embeddingVector: embedding,
-    }).catch(() => {});
+    void loadDuckdbAnalytics()
+      .then(({ duckdbCrossProjectWrite }) =>
+        duckdbCrossProjectWrite({
+          projectId,
+          title: enriched.title,
+          logline: enriched.logline,
+          manuscriptWordCount: enriched.manuscriptWordCount,
+          characterNames: enriched.characterNames,
+          embeddingVector: embedding,
+        }),
+      )
+      .catch(() => {});
   }
 }
 
@@ -209,6 +217,7 @@ export async function semanticSearchProjects(
 
   // DuckDB path: skip IDB load when embedding available; DuckDB does the ranking.
   if (duckDbEnabled && queryEmbedding) {
+    const { queryCrossProjectSearch } = await loadDuckdbAnalytics();
     const rows = await queryCrossProjectSearch(queryEmbedding, topK);
     if (rows.length > 0) {
       return rows.map((r) => ({

@@ -2,6 +2,8 @@
 
 The desktop app ships with [`tauri-plugin-updater`](https://v2.tauri.app/plugin/updater/) registered in [`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs). Configuration lives in [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) under `plugins.updater`.
 
+**v1.9 frontend:** Settings → **About** shows `TauriUpdaterBanner` when running inside Tauri (`hooks/useTauriUpdater.ts`). Users can check for updates and install without leaving the app (calls `@tauri-apps/plugin-updater` + `@tauri-apps/plugin-process` for relaunch).
+
 > **Documentation:** Full `.md` index → [`README.md`](../README.md#-documentation-hub) § Documentation Hub.
 
 ## Enable updates for end users

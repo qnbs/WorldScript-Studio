@@ -31,7 +31,9 @@ alwaysApply: true
 
 **Barrierefreiheit:** `LiveRegionProvider` / `useAnnounce()`; Settings-Presets + Zod (`accessibilitySchema.ts`); [`docs/ACCESSIBILITY.md`](../docs/ACCESSIBILITY.md); E2E [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts).
 
-**Command Center:** `services/commands/` → Palette; `CommandExecutorContext`; Shortcuts `useGlobalKeyboardShortcuts` + `services/keyboard/`; Hilfe `helpDocRetrieval.ts` + `tryActionId`.
+**Command Center:** `services/commands/` → Palette; `CommandExecutorContext`; Shortcuts `useGlobalKeyboardShortcuts` + `services/keyboard/`; Hilfe `helpCatalog.ts` + `helpDocRetrieval.ts` + `tryActionId`; Settings-Guide-Kategorie `experimental` für 12 Feature-Flags.
+
+**v1.9:** Lazy cold-start (`duckdbListenerLoader`, deferred `aiApi`), Help/Settings-Hub, Tauri menu/window-state/updater UI — siehe [`docs/SPRINT-V1.9.md`](../docs/SPRINT-V1.9.md).
 
 **Pfad-Konventionen:** `app/`, `components/`, `features/*`, `hooks/`, `services/`, `packages/*`, `types.ts`, `tests/`.
 

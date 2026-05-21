@@ -4,6 +4,8 @@ This document describes the **current** GitHub Actions pipeline (`/.github/workf
 
 For historical optimization notes (targets may predate the live workflow), see [`.github/ACTIONS-OPTIMIZATIONS.md`](../.github/ACTIONS-OPTIMIZATIONS.md).
 
+**Audit snapshot (inventory, risks, stabilization log):** [`.github/CI-AUDIT.md`](../.github/CI-AUDIT.md).
+
 ---
 
 ## Cloud CI-first vs local development
@@ -81,7 +83,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 | Job | Needs | Purpose |
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
-| `quality` | `security` | Matrix **Node `lts/*`** and **`node` (current)** → Biome lint, **`pnpm run i18n:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
+| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation** (`actions/attest-build-provenance@v2`) |
 | `e2e` | `quality` | Playwright **Chromium** + **mobile emulation** (Pixel 5, same browser install), `CI=true`. Firefox and optional mobile locally — see [`playwright.config.ts`](../playwright.config.ts). |
 | `mutation` | `quality` | **`pnpm run mutation`** if `stryker.conf.json` exists — HTML report in-repo locally; **`continue-on-error: true`** so score does not block merges while targets grow |
@@ -167,7 +169,7 @@ pnpm run ci:act
 Manual slices:
 
 ```bash
-act pull_request --sequential -j security -j quality --matrix node-version:lts/* -W .github/workflows/ci.yml
+act pull_request --sequential -j security -j quality --matrix node-version:22 -W .github/workflows/ci.yml
 act pull_request -j build -W .github/workflows/ci.yml
 ```
 

@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] — 2026-05-21
+
+### Added
+
+- **Lazy loading & cold start:** dynamic DuckDB/RAG in `listenerMiddleware`, deferred `aiApi` provider load, lazy Plot Board sub-components, `react-force-graph-2d`, `CollaborationPanel`; `AnalyticsBootstrap` + `useDuckDb` when flag on.
+- **Help Center overhaul:** `helpCatalog.ts` (50+ articles), full-text search, **Technical Documentation** category, expanded AI help RAG chunks; complete **es/fr/it** article translations.
+- **Settings guide:** dedicated category with links to all 18 areas; **Experimental flags** section with all 12 toggles; overview quick links on General.
+- **Dashboard:** `BackupQuickActionsCard` (export/import JSON, latest snapshot, link to Backup settings).
+- **Plot Board polish:** `PlotMinimap` component, long-press on cards, 44px connection touch targets, `prefers-reduced-motion` pan path.
+- **Tauri desktop:** native File/Help menu → `menu-action` events, `tauri-plugin-window-state`, updater banner in About, open data folder, runtime version display.
+- **Resilience:** `ViewErrorBoundary` with retry + live-region announce; `withTransientRetry` on AI provider attempts.
+- **Docs:** [`docs/SPRINT-V1.9.md`](docs/SPRINT-V1.9.md); updated [`README.md`](README.md), [`AUDIT.md`](AUDIT.md), [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md).
+
+### Changed
+
+- Feature flags UI moved from Advanced AI to **Settings → Experimental flags**.
+- Bundle budget script supports `--max-entry-kb`; Vite `plot-board` manual chunk.
+
 ## [1.8.0] — 2026-05-21
 
 ### Added

@@ -1,7 +1,11 @@
 import type { FC } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LinkObject, NodeObject } from 'react-force-graph-2d';
-import ForceGraph2D from 'react-force-graph-2d';
+
+const ForceGraph2D = lazy(() =>
+  import('react-force-graph-2d').then((m) => ({ default: m.default })),
+);
+
 import { useAppSelector } from '../app/hooks';
 import {
   CharacterGraphViewContext,
@@ -150,25 +154,33 @@ const CharacterForceGraph: FC = () => {
       role="region"
       aria-label={t('characterGraph.graphAriaLabel')}
     >
-      <ForceGraph2D
-        graphData={graphData}
-        width={dimensions.width}
-        height={dimensions.height}
-        backgroundColor="rgba(0,0,0,0)"
-        nodeCanvasObject={nodeCanvasObject}
-        nodeCanvasObjectMode={() => 'replace'}
-        nodeRelSize={18}
-        nodeLabel={(node) => (node as GraphNode).name}
-        linkColor={(link) => `${getRelationshipColor((link as GraphLink).type)}cc`}
-        linkWidth={(link) => Math.max(0.5, ((link as GraphLink).strength ?? 5) / 2.5)}
-        linkDirectionalArrowLength={5}
-        linkDirectionalArrowRelPos={1}
-        linkLabel={(link) => (link as GraphLink).type}
-        warmupTicks={80}
-        cooldownTime={4000}
-        d3AlphaDecay={0.03}
-        d3VelocityDecay={0.3}
-      />
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center" role="status">
+            <span className="text-sm text-[var(--foreground-muted)]">{t('common.loading')}</span>
+          </div>
+        }
+      >
+        <ForceGraph2D
+          graphData={graphData}
+          width={dimensions.width}
+          height={dimensions.height}
+          backgroundColor="rgba(0,0,0,0)"
+          nodeCanvasObject={nodeCanvasObject}
+          nodeCanvasObjectMode={() => 'replace'}
+          nodeRelSize={18}
+          nodeLabel={(node) => (node as GraphNode).name}
+          linkColor={(link) => `${getRelationshipColor((link as GraphLink).type)}cc`}
+          linkWidth={(link) => Math.max(0.5, ((link as GraphLink).strength ?? 5) / 2.5)}
+          linkDirectionalArrowLength={5}
+          linkDirectionalArrowRelPos={1}
+          linkLabel={(link) => (link as GraphLink).type}
+          warmupTicks={80}
+          cooldownTime={4000}
+          d3AlphaDecay={0.03}
+          d3VelocityDecay={0.3}
+        />
+      </Suspense>
     </div>
   );
 };

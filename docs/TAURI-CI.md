@@ -29,6 +29,15 @@ pnpm exec tauri build
 
 Linux dev deps match the Ubuntu job (WebKitGTK 4.1, AppIndicator, librsvg, patchelf).
 
+## Desktop UX (v1.9)
+
+| Feature | Implementation |
+|---------|----------------|
+| **Native menu** | `src-tauri/src/lib.rs` — File (Export, Settings, Quit), Help → emits `menu-action` |
+| **Frontend bridge** | `services/tauriMenuService.ts` + `App.tsx` maps to `nav-export`, `nav-settings`, `nav-help` |
+| **Window state** | `tauri-plugin-window-state` restores size/position between sessions |
+| **Data folder** | Settings → Data → “Open data folder” (`services/tauriRuntime.ts`) |
+
 ## Auto-update & signing
 
 - Updater plugin is wired in Rust + `tauri.conf.json`; full operational steps (keys, `latest.json`, CI secrets) are in [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md).

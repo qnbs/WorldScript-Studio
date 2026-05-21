@@ -5,6 +5,7 @@ import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import packageJson from '../../package.json';
 import { storageService } from '../../services/storageService';
+import { getTauriAppVersion, isTauriRuntime } from '../../services/tauriRuntime';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Select } from '../ui/Select';
@@ -288,6 +289,23 @@ const AppHealthPanel: FC = () => {
   );
 };
 
+const TauriVersionLine: FC = () => {
+  const { t } = useSettingsViewContext();
+  const [tauriVersion, setTauriVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    void getTauriAppVersion().then(setTauriVersion);
+  }, []);
+
+  if (!tauriVersion) return null;
+  return (
+    <p className="text-sm text-[var(--foreground-muted)]">
+      {t('settings.about.tauriVersion')}: {tauriVersion}
+    </p>
+  );
+};
+
 export const AboutSection: FC = React.memo(() => {
   const { t } = useSettingsViewContext();
   const { enableAppHealthPanel } = useFeatureFlags();
@@ -316,6 +334,7 @@ export const AboutSection: FC = React.memo(() => {
           <p>
             {t('settings.about.versionLabel')} {packageJson.version}
           </p>
+          <TauriVersionLine />
           <p>{t('settings.about.description')}</p>
         </CardContent>
       </Card>

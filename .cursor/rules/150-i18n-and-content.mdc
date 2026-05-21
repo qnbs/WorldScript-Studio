@@ -21,7 +21,8 @@ alwaysApply: false
 ## Community & Help
 
 - Templates: kanonisches **Englisch** in `community-templates/index.json` + Spiegel unter `public/community-templates/`; Zod in `fetchCommunityTemplates`.
-- Help-Artikel: **`tryActionId`** für Palette/Navigation; Demo-Feedback über Toasts, nicht `alert`.
+- Help-Struktur: **`services/help/helpCatalog.ts`** (nicht `help.categories` in JSON); Texte in `locales/<lang>/help.json`. Neue Artikel: Katalog + alle 5 Locales (siehe `scripts/help-extra-keys.json`, `scripts/help-locales-es-fr-it.json`).
+- Help-Artikel: **`tryActionId`** für Palette/Navigation; Suche über `helpSearch.ts`; Demo-Feedback über Toasts, nicht `alert`.
 
 ## PR-Checkliste
 

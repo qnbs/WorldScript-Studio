@@ -1,9 +1,27 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** 2026-05-02 → 2026-05-08 → 2026-05-10 → 2026-05-12 → 2026-05-16 → 2026-05-17 → 2026-05-18 → 2026-05-18 (Session 2) → 2026-05-19 (v1.5 + v1.6) → 2026-05-20 (v1.6.1 + v1.6.2) → **2026-05-20 (v1.7.0)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-20 (v1.7.0) → 2026-05-21 (v1.8.0) → **2026-05-21 (v1.9.0)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **1.7.0** — released 2026-05-20  
+**Current version:** **1.9.0** — released 2026-05-21  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-21 (v1.9.0 — Lazy Loading, Help/Settings Hub, Tauri Desktop UX)
+
+### Released: v1.9.0 (2026-05-21)
+
+**Cold start / bundles:** Dynamic DuckDB/RAG/codex in `listenerMiddleware` via `duckdbListenerLoader`; `aiApi` defers `loadAiProvider()`; lazy Plot Board chunks, ForceGraph, CollaborationPanel; Vite `manualChunks` + bundle budget gate.
+
+**Help:** `helpCatalog.ts` (structure), 50+ articles, search UI, Documentation + Settings Guide categories, expanded `helpDocRetrieval` chunks; **es/fr/it** full article translations (`scripts/help-locales-es-fr-it.json`).
+
+**Settings:** `SettingsGuideSection`, `FeatureFlagsSection` (12 flags), `SettingsOverviewCard`, Dashboard `BackupQuickActionsCard`.
+
+**Tauri:** Native menu (File/Help) → `menu-action`; `tauri-plugin-window-state`; `useTauriUpdater` + About banner; `openTauriDataDirectory`.
+
+**Resilience:** `ViewErrorBoundary` + `withTransientRetry` on AI provider calls.
+
+**i18n:** **1923 keys × 5 locales**. Docs: [`docs/SPRINT-V1.9.md`](docs/SPRINT-V1.9.md), CHANGELOG, README, TAURI guides.
 
 ---
 
