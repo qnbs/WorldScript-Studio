@@ -78,6 +78,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableAppHealthPanel: false,
     enablePlotBoardV2: true,
     enableDuckDbAnalytics: false,
+    enableObjectsGroups: false,
   },
 };
 

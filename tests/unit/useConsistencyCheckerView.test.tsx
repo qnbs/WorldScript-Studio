@@ -24,8 +24,10 @@ type MockState = {
       openAiSiteTitle: string;
       hybridFallbackEnabled: boolean;
       hybridFallbackChain: string[];
+      ragMode: 'lexical' | 'hybrid';
     };
   };
+  featureFlags: { enableDuckDbAnalytics: boolean };
   projectData: MockProjectData | undefined;
   characters: { id: string; name: string }[];
   worlds: { id: string; name: string }[];
@@ -56,8 +58,10 @@ const mockState: MockState = {
       openAiSiteTitle: 'StoryCraft Studio',
       hybridFallbackEnabled: false,
       hybridFallbackChain: [],
+      ragMode: 'hybrid' as const,
     },
   },
+  featureFlags: { enableDuckDbAnalytics: false },
   projectData: {
     id: 'proj-1',
     manuscript: [{ id: 's1', content: 'A quick test story.' }],
@@ -81,6 +85,18 @@ vi.mock('../../services/dbService', () => ({
   dbService: {
     getStoryCodex: (...args: Parameters<typeof mockGetStoryCodex>) => mockGetStoryCodex(...args),
   },
+}));
+vi.mock('../../services/codexService', () => ({
+  // QNBS-v3: hook now calls loadStoryCodex from codexService, not dbService directly.
+  loadStoryCodex: (...args: Parameters<typeof mockGetStoryCodex>) => mockGetStoryCodex(...args),
+  extractStoryCodex: vi.fn().mockReturnValue({ entries: [] }),
+  saveStoryCodex: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../../services/localRagService', () => ({
+  retrieveContext: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../../services/ai/localEmbeddingService', () => ({
+  embedText: vi.fn().mockResolvedValue(new Float32Array(384)),
 }));
 vi.mock('../../services/aiProviderService', () => ({
   generateText: (...args: Parameters<typeof mockGenerateText>) => mockGenerateText(...args),
@@ -175,6 +191,10 @@ describe('useConsistencyCheckerView', () => {
     const { result, unmount } = renderHook(() => useConsistencyCheckerView());
     act(() => {
       result.current.runCheck('c1');
+    });
+    // QNBS-v3: flush microtasks from mocked embedText/retrieveContext so runCheck reaches generateText.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
     });
 
     unmount();

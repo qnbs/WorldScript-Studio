@@ -36,6 +36,7 @@ const modules = [
   'export',
   'settings',
   'help',
+  'objects',
 ];
 
 let totalKeys = 0;

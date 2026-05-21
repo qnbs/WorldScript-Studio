@@ -20,7 +20,8 @@ export type View =
   | 'consistencyChecker'
   | 'critic'
   | 'preview'
-  | 'progress';
+  | 'progress'
+  | 'objects';
 
 export interface Character {
   id: string;
@@ -88,6 +89,42 @@ export interface World {
   timeline: WorldTimelineEvent[];
   locations: WorldLocation[];
   relationships?: CharacterRelationship[]; // Character relationships in this world
+}
+
+// --- Story Objects & Groups (Phase 1 — v1.7) ---
+
+export type StoryObjectType =
+  | 'prop'
+  | 'weapon'
+  | 'vehicle'
+  | 'artifact'
+  | 'document'
+  | 'place-item'
+  | 'other';
+
+export interface StoryObject {
+  id: string;
+  name: string;
+  description: string;
+  type: StoryObjectType;
+  groupIds: string[];
+  characterIds?: string[];
+  sceneIds?: string[];
+  significance?: string;
+  notes?: string;
+  imageAssetId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ObjectGroup {
+  id: string;
+  name: string;
+  description?: string;
+  color: string; // #hex
+  objectIds: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Hierarchical research / reference tree (Binder); stored with project data. */

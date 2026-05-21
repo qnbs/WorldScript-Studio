@@ -28,6 +28,7 @@ const MODULES = [
   'export',
   'settings',
   'help',
+  'objects',
 ];
 
 const REF = 'en';

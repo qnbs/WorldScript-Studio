@@ -109,6 +109,13 @@ export const APP_SECTIONS: Record<View, SectionConfig> = {
     textColor: 'text-rose-500 dark:text-rose-400',
     accentColor: '#f43f5e',
   },
+  // QNBS-v3: v1.7 Objects & Groups inventory view.
+  objects: {
+    icon: ICONS.OBJECTS,
+    colorClass: 'text-stone-500 bg-stone-500/10 dark:text-stone-400 dark:bg-stone-500/10',
+    textColor: 'text-stone-500 dark:text-stone-400',
+    accentColor: '#78716c',
+  },
   // QNBS-v3: preview + progress views added in v1.6 — stub icons reuse nearest thematic icon.
   preview: {
     icon: ICONS.WRITER,
