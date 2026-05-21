@@ -4,9 +4,10 @@
 # Dashboard (Builds):
 #   Build command:     pnpm install && pnpm run build:edge
 #   Build output dir:  dist
-#   Deploy command:    (LEER lassen — empfohlen)
-#                      oder: pnpm run deploy:cloudflare
-#   NICHT verwenden:   npx wrangler deploy  ← Workers, schlägt in pnpm-Workspaces fehl
+#   Deploy command:    LEER (empfohlen) — Cloudflare publiziert dist automatisch
+#                      oder: pnpm run deploy:cloudflare (No-Op wenn CF_PAGES=1)
+#   NICHT:             npx wrangler deploy | wrangler pages deploy in CI-Deploy-Step
+#   NICHT nötig:       CLOUDFLARE_API_TOKEN in Pages-Build-Env (nur für manuelles GH-Deploy)
 #
 name = "storycraft-studio"
 compatibility_date = "2024-11-01"

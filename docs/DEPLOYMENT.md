@@ -51,17 +51,19 @@ gh run view <run-id> --log-failed
 
 ## Cloudflare Pages
 
-### Dashboard (recommended first time)
+### Dashboard (recommended — no Wrangler in CI)
 
-1. [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Pages** → Connect Git.
+1. [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Pages** → Connect Git.
 2. **Build command:** `pnpm install && pnpm run build:edge`
 3. **Build output directory:** `dist`
-4. **Deploy command:** **leave empty** (Cloudflare publishes `dist` automatically).
-5. **Do not use** `npx wrangler deploy` — that targets **Workers** and fails in this pnpm workspace with:
-   `run in the root of a workspace instead of targeting a specific project`.
-6. If your project UI requires a deploy command, use: `pnpm run deploy:cloudflare` (`wrangler pages deploy dist`).
-7. **Environment variables:** `NODE_VERSION=22`, `PNPM_VERSION=10` (or Corepack).
-8. **Root:** repository root; **Package manager:** pnpm.
+4. **Deploy command:** **leave completely empty** — Cloudflare uploads `dist` after a successful build.
+5. **Do not use** `npx wrangler deploy` (Workers) nor `wrangler pages deploy` in the deploy step — redundant and often fails on API token scope in the build container.
+6. If the UI forces a deploy command, use: `pnpm run deploy:cloudflare` — it **exits 0** on Cloudflare (`CF_PAGES=1`) without calling Wrangler.
+7. Remove **`CLOUDFLARE_API_TOKEN`** from Pages **build** environment variables unless you have a dedicated manual deploy workflow; it is not needed for Git-based Pages.
+8. **Environment variables (build):** `NODE_VERSION=22`, `PNPM_VERSION=10` (or Corepack).
+9. **Root:** repository root; **Package manager:** pnpm.
+
+> **Status:** Optional GitHub workflow [`.github/workflows/deploy-cloudflare-pages.yml`](../.github/workflows/deploy-cloudflare-pages.yml) is **paused** (`if: false`). Prefer dashboard-only Pages deploy.
 
 Static extras in `public/`:
 

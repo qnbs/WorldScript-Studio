@@ -1,15 +1,9 @@
-# Optional Cloudflare Pages deploy — requires repository secrets (see docs/DEPLOYMENT.md).
+# PAUSED (2026-05-21): Use Cloudflare Dashboard Git → Pages with empty deploy command instead.
+# Re-enable when CLOUDFLARE_API_TOKEN has Pages Edit + secrets are configured.
 name: Deploy Cloudflare Pages
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.cursor/**'
-      - 'docs/**'
-      - 'infra/low-end-ci/**'
 
 concurrency:
   group: cloudflare-pages-${{ github.ref }}
@@ -17,29 +11,12 @@ concurrency:
 
 jobs:
   deploy:
-    name: Cloudflare Pages (edge build)
+    name: Cloudflare Pages (edge build) — disabled
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # QNBS-v3: Skip when secrets not configured — avoids failing main CI for forks.
-    if: >-
-      ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     permissions:
       contents: read
       deployments: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: ./.github/actions/setup
-
-      - name: Build (edge / root base)
-        run: pnpm run build:edge
-        env:
-          NODE_ENV: production
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: storycraft-studio
-          directory: dist
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - run: echo "Workflow paused — deploy via Cloudflare Pages dashboard (no wrangler deploy command)."
