@@ -133,6 +133,18 @@ export const makeSelectMindMapById = () =>
     maps.find((m) => m.id === mapId),
   );
 
+export const selectCharacterInterviewsAll = createSelector(
+  [selectProjectData],
+  (data) => data?.characterInterviews ?? {},
+);
+
+/** Returns all interviews for a given characterId, memoised. */
+export const makeSelectInterviewsByCharacter = () =>
+  createSelector(
+    [selectCharacterInterviewsAll, (_state: RootState, characterId: string) => characterId],
+    (allInterviews, characterId) => allInterviews[characterId] ?? [],
+  );
+
 // --- Parameterised section selectors (factory pattern for per-instance memoisation) ---
 
 /** Factory: creates a memoised selector that finds a section by id. */

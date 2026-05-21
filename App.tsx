@@ -117,6 +117,7 @@ const ObjectsView = lazy(() =>
   import('./components/ObjectsView').then((m) => ({ default: m.ObjectsView })),
 );
 const MindMapView = lazy(() => import('./components/MindMapView'));
+const CharacterInterviewsView = lazy(() => import('./components/CharacterInterviewsView'));
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
@@ -417,6 +418,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         return <ObjectsView />;
       case 'mindmap':
         return <MindMapView />;
+      case 'characterInterviews':
+        return <CharacterInterviewsView />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }

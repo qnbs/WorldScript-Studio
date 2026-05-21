@@ -22,7 +22,8 @@ export type View =
   | 'preview'
   | 'progress'
   | 'objects'
-  | 'mindmap';
+  | 'mindmap'
+  | 'characterInterviews';
 
 export interface Character {
   id: string;
@@ -175,6 +176,39 @@ export interface MindMap {
   createdAt: string;
   updatedAt: string;
 }
+
+// ── Character Interviews ──────────────────────────────────────────────────────
+
+export type CharacterArchetype =
+  | 'hero'
+  | 'mentor'
+  | 'villain'
+  | 'shadow'
+  | 'trickster'
+  | 'shapeshifter'
+  | 'herald'
+  | 'ally'
+  | 'threshold-guardian';
+
+export interface InterviewMessage {
+  id: string;
+  role: 'user' | 'ai';
+  content: string;
+  timestamp: string;
+}
+
+export interface CharacterInterview {
+  id: string;
+  characterId: string;
+  archetype: CharacterArchetype;
+  templateId: string;
+  title?: string;
+  messages: InterviewMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Binder ────────────────────────────────────────────────────────────────────
 
 /** Hierarchical research / reference tree (Binder); stored with project data. */
 export type BinderNodeType = 'folder' | 'text' | 'note' | 'image' | 'pdf' | 'link';

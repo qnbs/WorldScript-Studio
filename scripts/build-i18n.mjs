@@ -2,11 +2,14 @@
 /**
  * Build-time i18n bundler
  *
- * Merges all 17 per-module JSON files for each language into a single
+ * Merges all 18 per-module JSON files for each language into a single
  * `bundle.json` written to `public/locales/<lang>/bundle.json`.
  *
  * This reduces the boot-time fetch count from 70 (5 langs × 14 modules)
  * to at most 2 (active language + EN fallback).
+ *
+ * Modules: common, tour, sidebar, portal, dashboard, manuscript, writer, templates, tags,
+ *          outline, characters, worlds, export, settings, help, objects, mindmap, characterInterviews
  *
  * Run automatically via the `prebuild` npm hook, or manually:
  *   node scripts/build-i18n.mjs
@@ -38,6 +41,7 @@ const modules = [
   'help',
   'objects',
   'mindmap',
+  'characterInterviews',
 ];
 
 let totalKeys = 0;

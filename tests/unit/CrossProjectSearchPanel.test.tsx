@@ -32,6 +32,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableDuckDbAnalytics: false,
   enableObjectsGroups: false,
   enableMindMaps: false,
+  enableCharacterInterviews: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -118,6 +119,7 @@ afterEach(() => {
     enableDuckDbAnalytics: false,
     enableObjectsGroups: false,
     enableMindMaps: false,
+    enableCharacterInterviews: false,
   };
 });
 

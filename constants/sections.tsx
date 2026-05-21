@@ -116,6 +116,13 @@ export const APP_SECTIONS: Record<View, SectionConfig> = {
     textColor: 'text-violet-500 dark:text-violet-400',
     accentColor: '#8b5cf6',
   },
+  // QNBS-v3: v1.7 Character Interviews — archetype-based AI chat sessions.
+  characterInterviews: {
+    icon: ICONS.INTERVIEWS,
+    colorClass: 'text-blue-500 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-500/10',
+    textColor: 'text-blue-500 dark:text-blue-400',
+    accentColor: '#3b82f6',
+  },
   // QNBS-v3: v1.7 Objects & Groups inventory view.
   objects: {
     icon: ICONS.OBJECTS,

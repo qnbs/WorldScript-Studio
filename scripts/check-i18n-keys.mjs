@@ -30,6 +30,7 @@ const MODULES = [
   'help',
   'objects',
   'mindmap',
+  'characterInterviews',
 ];
 
 const REF = 'en';

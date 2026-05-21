@@ -33,8 +33,8 @@ describe('projectSlice — mindMap reducers', () => {
       projectActions.addMindMap(payload),
     );
     expect(next.data.mindMaps).toHaveLength(1);
-    expect(next.data.mindMaps?.[0].name).toBe('My Map');
-    expect(next.data.mindMaps?.[0].id).toBe('new-map');
+    expect(next.data.mindMaps?.[0]?.name).toBe('My Map');
+    expect(next.data.mindMaps?.[0]?.id).toBe('new-map');
   });
 
   it('updateMindMap patches fields by id', () => {
@@ -44,7 +44,7 @@ describe('projectSlice — mindMap reducers', () => {
       state as any,
       projectActions.updateMindMap({ id: 'map-1', changes: { name: 'Renamed' } }),
     );
-    expect(next.data.mindMaps?.[0].name).toBe('Renamed');
+    expect(next.data.mindMaps?.[0]?.name).toBe('Renamed');
   });
 
   it('deleteMindMap removes the map', () => {
@@ -78,8 +78,8 @@ describe('projectSlice — mindMap reducers', () => {
         },
       }),
     );
-    expect(next.data.mindMaps?.[0].nodes).toHaveLength(1);
-    expect(next.data.mindMaps?.[0].nodes[0].label).toBe('Node A');
+    expect(next.data.mindMaps?.[0]?.nodes).toHaveLength(1);
+    expect(next.data.mindMaps?.[0]?.nodes?.[0]?.label).toBe('Node A');
   });
 
   it('deleteMindMapNode cascades to remove edges referencing it', () => {
@@ -130,8 +130,8 @@ describe('projectSlice — mindMap reducers', () => {
       state as any,
       projectActions.deleteMindMapNode({ mapId: 'map-1', nodeId }),
     );
-    expect(next.data.mindMaps?.[0].nodes).toHaveLength(1);
-    expect(next.data.mindMaps?.[0].edges).toHaveLength(0);
+    expect(next.data.mindMaps?.[0]?.nodes).toHaveLength(1);
+    expect(next.data.mindMaps?.[0]?.edges).toHaveLength(0);
   });
 
   it('addMindMapEdge connects two nodes', () => {
@@ -182,6 +182,6 @@ describe('projectSlice — mindMap reducers', () => {
         },
       }),
     );
-    expect(next.data.mindMaps?.[0].edges).toHaveLength(1);
+    expect(next.data.mindMaps?.[0]?.edges).toHaveLength(1);
   });
 });

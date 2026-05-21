@@ -20,6 +20,7 @@ export const VIEW_NAVIGATION_LABEL_KEYS: Partial<Record<View, string>> = {
   critic: 'sidebar.critic',
   objects: 'sidebar.objects',
   mindmap: 'sidebar.mindmap',
+  characterInterviews: 'sidebar.characterInterviews',
 };
 
 export function viewNavigationLabelKey(view: View): string {

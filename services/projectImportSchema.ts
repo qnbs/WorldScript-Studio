@@ -274,6 +274,36 @@ const mindMapSchema = z.object({
   updatedAt: z.string(),
 });
 
+const characterArchetypeSchema = z.enum([
+  'hero',
+  'mentor',
+  'villain',
+  'shadow',
+  'trickster',
+  'shapeshifter',
+  'herald',
+  'ally',
+  'threshold-guardian',
+]);
+
+const interviewMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(['user', 'ai']),
+  content: z.string(),
+  timestamp: z.string(),
+});
+
+const characterInterviewSchema = z.object({
+  id: z.string(),
+  characterId: z.string(),
+  archetype: characterArchetypeSchema,
+  templateId: z.string(),
+  title: z.string().optional(),
+  messages: z.array(interviewMessageSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 /** Full export / backup JSON shape (matches extended ProjectData on disk). */
 export const importedProjectJsonSchema = z.object({
   id: z.string().optional(),
@@ -301,6 +331,7 @@ export const importedProjectJsonSchema = z.object({
   storyObjects: z.array(storyObjectSchema).optional(),
   objectGroups: z.array(objectGroupSchema).optional(),
   mindMaps: z.array(mindMapSchema).optional(),
+  characterInterviews: z.record(z.string(), z.array(characterInterviewSchema)).optional(),
 });
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;

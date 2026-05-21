@@ -17,6 +17,7 @@ describe('featureFlagsSlice', () => {
     enableDuckDbAnalytics: false,
     enableObjectsGroups: false,
     enableMindMaps: false,
+    enableCharacterInterviews: false,
   };
 
   it('should match default feature flag state on init', () => {
@@ -45,6 +46,7 @@ describe('featureFlagsSlice', () => {
       enableDuckDbAnalytics: false,
       enableObjectsGroups: false,
       enableMindMaps: false,
+      enableCharacterInterviews: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

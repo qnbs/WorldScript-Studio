@@ -40,6 +40,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableDuckDbAnalytics: false,
   enableObjectsGroups: false,
   enableMindMaps: false,
+  enableCharacterInterviews: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

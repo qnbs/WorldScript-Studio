@@ -48,13 +48,18 @@ export function MindMapNodeEditor() {
 
   const handleSave = useCallback(() => {
     if (!node) return;
+    const resolvedEntityType =
+      type === 'linked' && linkedEntityType
+        ? (linkedEntityType as MindMapLinkedEntityType)
+        : undefined;
     handleUpdateNode(node.id, {
       label,
       textNotes,
       type,
       shape,
       color,
-      linkedEntityType: type === 'linked' && linkedEntityType ? linkedEntityType : undefined,
+      // QNBS-v3: exactOptionalPropertyTypes — conditional spread avoids assigning undefined to optional prop
+      ...(resolvedEntityType !== undefined ? { linkedEntityType: resolvedEntityType } : {}),
     });
     handleCloseNodeEditor();
   }, [

@@ -132,7 +132,12 @@ export function useMindMapView(): UseMindMapViewReturn {
         dispatch(
           projectActions.updateMindMap({
             id: editingMapId,
-            changes: { name: draft.name, description: draft.description, updatedAt: now },
+            // QNBS-v3: exactOptionalPropertyTypes requires conditional spread for optional fields
+            changes: {
+              name: draft.name,
+              ...(draft.description !== undefined ? { description: draft.description } : {}),
+              updatedAt: now,
+            },
           }),
         );
       } else {
@@ -140,7 +145,7 @@ export function useMindMapView(): UseMindMapViewReturn {
           id: uuidv4(),
           projectId: '',
           name: draft.name,
-          description: draft.description,
+          ...(draft.description !== undefined ? { description: draft.description } : {}),
           nodes: [],
           edges: [],
           createdAt: now,
@@ -176,8 +181,11 @@ export function useMindMapView(): UseMindMapViewReturn {
         color: draft.color,
         shape: draft.shape,
         textNotes: draft.textNotes ?? '',
-        linkedEntityType: draft.linkedEntityType,
-        linkedEntityId: draft.linkedEntityId,
+        // QNBS-v3: exactOptionalPropertyTypes — conditional spread for optional fields
+        ...(draft.linkedEntityType !== undefined
+          ? { linkedEntityType: draft.linkedEntityType }
+          : {}),
+        ...(draft.linkedEntityId !== undefined ? { linkedEntityId: draft.linkedEntityId } : {}),
         createdAt: now,
         updatedAt: now,
       };
@@ -233,7 +241,7 @@ export function useMindMapView(): UseMindMapViewReturn {
         mindMapId: activeMindMapId,
         sourceNodeId: draft.sourceNodeId,
         targetNodeId: draft.targetNodeId,
-        label: draft.label,
+        ...(draft.label !== undefined ? { label: draft.label } : {}),
         color: draft.color ?? '#6b7280',
         style: draft.style ?? 'solid',
         direction: draft.direction ?? 'uni',

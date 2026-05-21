@@ -4,8 +4,10 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   BinderNode,
   Character,
+  CharacterInterview,
   CharacterRelationship,
   CompileProfile,
+  InterviewMessage,
   MindMap,
   MindMapEdge,
   MindMapNode,
@@ -100,6 +102,8 @@ export interface ProjectData {
   objectGroups?: ObjectGroup[];
   // QNBS-v3: Mind Maps stored with project for undo support; viewport state lives in mindMapUiSlice.
   mindMaps?: MindMap[];
+  // QNBS-v3: Character Interview transcripts keyed by characterId for co-location with character data.
+  characterInterviews?: Record<string, CharacterInterview[]>;
 }
 
 // --- Initial State ---
@@ -599,6 +603,59 @@ const projectSlice = createSlice({
       const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.mapId);
       if (map) map.edges = map.edges.filter((e) => e.id !== action.payload.edgeId);
     },
+
+    // ── Character Interviews ───────────────────────────────────────────────
+    addCharacterInterview: (
+      state,
+      action: PayloadAction<{ characterId: string; interview: CharacterInterview }>,
+    ) => {
+      if (!state.data.characterInterviews) state.data.characterInterviews = {};
+      const { characterId, interview } = action.payload;
+      if (!state.data.characterInterviews[characterId]) {
+        state.data.characterInterviews[characterId] = [];
+      }
+      state.data.characterInterviews[characterId].push(interview);
+    },
+    appendInterviewMessage: (
+      state,
+      action: PayloadAction<{
+        characterId: string;
+        interviewId: string;
+        message: InterviewMessage;
+      }>,
+    ) => {
+      const { characterId, interviewId, message } = action.payload;
+      const interviews = state.data.characterInterviews?.[characterId] ?? [];
+      const interview = interviews.find((iv) => iv.id === interviewId);
+      if (interview) {
+        interview.messages.push(message);
+        interview.updatedAt = message.timestamp;
+      }
+    },
+    deleteCharacterInterview: (
+      state,
+      action: PayloadAction<{ characterId: string; interviewId: string }>,
+    ) => {
+      const { characterId, interviewId } = action.payload;
+      if (state.data.characterInterviews?.[characterId]) {
+        state.data.characterInterviews[characterId] = state.data.characterInterviews[
+          characterId
+        ].filter((iv) => iv.id !== interviewId);
+      }
+    },
+    updateCharacterInterview: (
+      state,
+      action: PayloadAction<{
+        characterId: string;
+        interviewId: string;
+        changes: Partial<Omit<CharacterInterview, 'messages'>>;
+      }>,
+    ) => {
+      const { characterId, interviewId, changes } = action.payload;
+      const interviews = state.data.characterInterviews?.[characterId] ?? [];
+      const interview = interviews.find((iv) => iv.id === interviewId);
+      if (interview) Object.assign(interview, changes);
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -631,7 +688,24 @@ const projectSlice = createSlice({
           id: action.payload.worldId,
           changes: { hasAmbianceImage: true },
         });
-      });
+      })
+      // QNBS-v3: streaming interview chunks update the AI message content in-place without N separate actions
+      .addMatcher(
+        (
+          action,
+        ): action is {
+          type: 'project/streamInterviewChunk';
+          payload: { characterId: string; interviewId: string; aiMsgId: string; content: string };
+        } => action.type === 'project/streamInterviewChunk',
+        (state, action) => {
+          const { characterId, interviewId, aiMsgId, content } = action.payload;
+          const interviews = state.data.characterInterviews?.[characterId] ?? [];
+          const interview = interviews.find((iv) => iv.id === interviewId);
+          if (!interview) return;
+          const msg = interview.messages.find((m) => m.id === aiMsgId);
+          if (msg) msg.content = content;
+        },
+      );
   },
 });
 

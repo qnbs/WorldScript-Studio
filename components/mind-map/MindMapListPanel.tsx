@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMindMapViewContext } from '../../contexts/MindMapViewContext';
-import type { MindMapDraft } from '../../hooks/useMindMapView';
+import type { NewMindMapDraft } from '../../hooks/useMindMapView';
 import { useTranslation } from '../../hooks/useTranslation';
 
 function MapForm({
@@ -8,8 +8,8 @@ function MapForm({
   onSave,
   onCancel,
 }: {
-  initial?: MindMapDraft;
-  onSave: (d: MindMapDraft) => void;
+  initial?: NewMindMapDraft;
+  onSave: (d: NewMindMapDraft) => void;
   onCancel: () => void;
 }) {
   const { t } = useTranslation();
@@ -21,7 +21,11 @@ function MapForm({
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        onSave({ name: name.trim(), description: description.trim() || undefined });
+        // QNBS-v3: exactOptionalPropertyTypes — conditional spread avoids string|undefined vs optional string mismatch
+        onSave({
+          name: name.trim(),
+          ...(description.trim() ? { description: description.trim() } : {}),
+        });
       }}
       className="p-3 space-y-3 border-b border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50"
     >
@@ -131,7 +135,15 @@ export function MindMapListPanel() {
       {isMapFormOpen && (
         <MapForm
           initial={
-            editingMap ? { name: editingMap.name, description: editingMap.description } : undefined
+            editingMap
+              ? {
+                  name: editingMap.name,
+                  // QNBS-v3: exactOptionalPropertyTypes — conditional spread avoids undefined assigned to optional string
+                  ...(editingMap.description !== undefined
+                    ? { description: editingMap.description }
+                    : {}),
+                }
+              : undefined
           }
           onSave={handleSaveMap}
           onCancel={handleCloseMapForm}

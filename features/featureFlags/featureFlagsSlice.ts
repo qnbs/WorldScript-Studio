@@ -23,6 +23,8 @@ export interface FeatureFlagsState {
   enableObjectsGroups: boolean;
   /** Enhanced Mind Maps — SVG canvas, 5 node shapes, entity linking (default: false). */
   enableMindMaps: boolean;
+  /** Character Interviews v2 — archetype-based AI interview sessions (default: false). */
+  enableCharacterInterviews: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -44,6 +46,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableObjectsGroups: false,
   // QNBS-v3: v1.7 Mind Maps — off by default; requires Objects to be useful.
   enableMindMaps: false,
+  // QNBS-v3: v1.7 Character Interviews — off by default; requires AI key to be useful.
+  enableCharacterInterviews: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -118,6 +122,9 @@ const featureFlagsSlice = createSlice({
     setEnableMindMaps(state, action: PayloadAction<boolean>) {
       state.enableMindMaps = action.payload;
     },
+    setEnableCharacterInterviews(state, action: PayloadAction<boolean>) {
+      state.enableCharacterInterviews = action.payload;
+    },
   },
 });
 
@@ -146,6 +153,8 @@ export const selectEnableObjectsGroups = (state: { featureFlags: FeatureFlagsSta
   state.featureFlags.enableObjectsGroups;
 export const selectEnableMindMaps = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableMindMaps;
+export const selectEnableCharacterInterviews = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableCharacterInterviews;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

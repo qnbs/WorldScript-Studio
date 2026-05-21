@@ -80,6 +80,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableDuckDbAnalytics: false,
     enableObjectsGroups: false,
     enableMindMaps: false,
+    enableCharacterInterviews: false,
   },
 };
 

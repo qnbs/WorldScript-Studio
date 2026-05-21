@@ -6,9 +6,12 @@ const mockDispatch = vi.fn();
 
 const makeMindMap = (overrides?: Partial<MindMap>): MindMap => ({
   id: 'map-1',
+  projectId: 'proj-1',
   name: 'Story Structure',
   nodes: [],
   edges: [],
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,
 });
 
