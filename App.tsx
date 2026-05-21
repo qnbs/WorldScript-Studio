@@ -116,6 +116,7 @@ const ProgressTrackerView = lazy(() =>
 const ObjectsView = lazy(() =>
   import('./components/ObjectsView').then((m) => ({ default: m.ObjectsView })),
 );
+const MindMapView = lazy(() => import('./components/MindMapView'));
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
@@ -414,6 +415,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         return <ProgressTrackerView />;
       case 'objects':
         return <ObjectsView />;
+      case 'mindmap':
+        return <MindMapView />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }

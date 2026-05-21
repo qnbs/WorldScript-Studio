@@ -56,6 +56,9 @@ const loggerMiddleware: Middleware = (store) => (next) => (action) => {
 };
 
 import analyticsReducer from '../features/analytics/analyticsSlice';
+import mindMapUiReducer, {
+  mindMapUiPersistenceMiddleware,
+} from '../features/mindMap/mindMapUiSlice';
 import versionControlReducer from '../features/versionControl/versionControlSlice';
 
 const combinedReducer = combineReducers({
@@ -75,6 +78,8 @@ const combinedReducer = combineReducers({
   sceneComments: sceneCommentsReducer,
   // QNBS-v3: analytics tracks DuckDB-WASM boot + migration status; ephemeral, not persisted
   analytics: analyticsReducer,
+  // QNBS-v3: mindMapUi is ephemeral viewport/draw state for MindMapCanvas; localStorage-backed.
+  mindMapUi: mindMapUiReducer,
   [aiApi.reducerPath]: aiApi.reducer,
 });
 
@@ -145,6 +150,7 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
           plotBoardPersistenceMiddleware,
           progressTrackerPersistenceMiddleware,
           sceneCommentsPersistenceMiddleware,
+          mindMapUiPersistenceMiddleware,
           loggerMiddleware,
           aiApi.middleware as Middleware,
         ),

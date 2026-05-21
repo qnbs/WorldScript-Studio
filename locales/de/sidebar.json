@@ -18,5 +18,6 @@
   "sidebar.templates": "Vorlagen",
   "sidebar.world": "Weltenbau",
   "sidebar.writer": "KI-Schreibstudio",
-  "sidebar.objects": "Geschichte-Objekte"
+  "sidebar.objects": "Geschichte-Objekte",
+  "sidebar.mindmap": "Mind Maps"
 }

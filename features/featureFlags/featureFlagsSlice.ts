@@ -21,6 +21,8 @@ export interface FeatureFlagsState {
   enableDuckDbAnalytics: boolean;
   /** Story Objects & Groups inventory view — v1.7 Bibisco-depth feature (default: false). */
   enableObjectsGroups: boolean;
+  /** Enhanced Mind Maps — SVG canvas, 5 node shapes, entity linking (default: false). */
+  enableMindMaps: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -40,6 +42,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableDuckDbAnalytics: false,
   // QNBS-v3: v1.7 Objects inventory — off by default; feature-flagged for staged rollout.
   enableObjectsGroups: false,
+  // QNBS-v3: v1.7 Mind Maps — off by default; requires Objects to be useful.
+  enableMindMaps: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -111,6 +115,9 @@ const featureFlagsSlice = createSlice({
     setEnableObjectsGroups(state, action: PayloadAction<boolean>) {
       state.enableObjectsGroups = action.payload;
     },
+    setEnableMindMaps(state, action: PayloadAction<boolean>) {
+      state.enableMindMaps = action.payload;
+    },
   },
 });
 
@@ -137,6 +144,8 @@ export const selectEnableDuckDbAnalytics = (state: { featureFlags: FeatureFlagsS
   state.featureFlags.enableDuckDbAnalytics;
 export const selectEnableObjectsGroups = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableObjectsGroups;
+export const selectEnableMindMaps = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableMindMaps;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

@@ -234,6 +234,46 @@ const objectGroupSchema = z.object({
   updatedAt: z.string(),
 });
 
+const mindMapNodeSchema = z.object({
+  id: z.string(),
+  mindMapId: z.string(),
+  label: z.string(),
+  type: z.enum(['free', 'linked']),
+  linkedEntityType: z.enum(['character', 'world', 'object', 'group', 'scene']).optional(),
+  linkedEntityId: z.string().optional(),
+  position: z.object({ x: z.number(), y: z.number() }),
+  color: z.string(),
+  shape: z.enum(['circle', 'rectangle', 'diamond', 'ellipse', 'hexagon']),
+  profileImageUrl: z.string().optional(),
+  textNotes: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const mindMapEdgeSchema = z.object({
+  id: z.string(),
+  mindMapId: z.string(),
+  sourceNodeId: z.string(),
+  targetNodeId: z.string(),
+  label: z.string().optional(),
+  color: z.string(),
+  style: z.enum(['solid', 'dotted']),
+  direction: z.enum(['uni', 'bi']),
+  createdAt: z.string(),
+});
+
+const mindMapSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  nodes: z.array(mindMapNodeSchema),
+  edges: z.array(mindMapEdgeSchema),
+  viewport: z.object({ x: z.number(), y: z.number(), zoom: z.number() }).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 /** Full export / backup JSON shape (matches extended ProjectData on disk). */
 export const importedProjectJsonSchema = z.object({
   id: z.string().optional(),
@@ -260,6 +300,7 @@ export const importedProjectJsonSchema = z.object({
   persistedVersionControl: versionControlPersistSchema.optional(),
   storyObjects: z.array(storyObjectSchema).optional(),
   objectGroups: z.array(objectGroupSchema).optional(),
+  mindMaps: z.array(mindMapSchema).optional(),
 });
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;

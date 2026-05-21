@@ -6,6 +6,9 @@ import type {
   Character,
   CharacterRelationship,
   CompileProfile,
+  MindMap,
+  MindMapEdge,
+  MindMapNode,
   ObjectGroup,
   OutlineSection,
   PersistedVersionControlState,
@@ -95,6 +98,8 @@ export interface ProjectData {
   // QNBS-v3: Story Objects/Groups inventory — foundational for MindMap linked entities in v1.7.
   storyObjects?: StoryObject[];
   objectGroups?: ObjectGroup[];
+  // QNBS-v3: Mind Maps stored with project for undo support; viewport state lives in mindMapUiSlice.
+  mindMaps?: MindMap[];
 }
 
 // --- Initial State ---
@@ -541,6 +546,58 @@ const projectSlice = createSlice({
       const grp = (state.data.objectGroups ?? []).find((g) => g.id === groupId);
       if (obj) obj.groupIds = obj.groupIds.filter((gid) => gid !== groupId);
       if (grp) grp.objectIds = grp.objectIds.filter((oid) => oid !== objectId);
+    },
+    // --- Mind Maps ---
+    addMindMap: (state, action: PayloadAction<MindMap>) => {
+      if (!state.data.mindMaps) state.data.mindMaps = [];
+      state.data.mindMaps.push(action.payload);
+    },
+    updateMindMap: (
+      state,
+      action: PayloadAction<{ id: string; changes: Partial<Omit<MindMap, 'nodes' | 'edges'>> }>,
+    ) => {
+      const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.id);
+      if (map) Object.assign(map, action.payload.changes);
+    },
+    deleteMindMap: (state, action: PayloadAction<string>) => {
+      state.data.mindMaps = (state.data.mindMaps ?? []).filter((m) => m.id !== action.payload);
+    },
+    addMindMapNode: (state, action: PayloadAction<{ mapId: string; node: MindMapNode }>) => {
+      const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.mapId);
+      if (map) map.nodes.push(action.payload.node);
+    },
+    updateMindMapNode: (
+      state,
+      action: PayloadAction<{ mapId: string; nodeId: string; changes: Partial<MindMapNode> }>,
+    ) => {
+      const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.mapId);
+      const node = map?.nodes.find((n) => n.id === action.payload.nodeId);
+      if (node) Object.assign(node, action.payload.changes);
+    },
+    deleteMindMapNode: (state, action: PayloadAction<{ mapId: string; nodeId: string }>) => {
+      const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.mapId);
+      if (!map) return;
+      map.nodes = map.nodes.filter((n) => n.id !== action.payload.nodeId);
+      // QNBS-v3: cascade delete edges connected to removed node to prevent dangling references.
+      map.edges = map.edges.filter(
+        (e) => e.sourceNodeId !== action.payload.nodeId && e.targetNodeId !== action.payload.nodeId,
+      );
+    },
+    addMindMapEdge: (state, action: PayloadAction<{ mapId: string; edge: MindMapEdge }>) => {
+      const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.mapId);
+      if (map) map.edges.push(action.payload.edge);
+    },
+    updateMindMapEdge: (
+      state,
+      action: PayloadAction<{ mapId: string; edgeId: string; changes: Partial<MindMapEdge> }>,
+    ) => {
+      const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.mapId);
+      const edge = map?.edges.find((e) => e.id === action.payload.edgeId);
+      if (edge) Object.assign(edge, action.payload.changes);
+    },
+    deleteMindMapEdge: (state, action: PayloadAction<{ mapId: string; edgeId: string }>) => {
+      const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.mapId);
+      if (map) map.edges = map.edges.filter((e) => e.id !== action.payload.edgeId);
     },
   },
   extraReducers: (builder) => {
