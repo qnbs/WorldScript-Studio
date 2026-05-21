@@ -124,6 +124,15 @@ export const makeSelectObjectById = () =>
     (objects, objectId) => objects.find((o) => o.id === objectId),
   );
 
+// --- Mind Maps ---
+export const selectMindMaps = createSelector([selectProjectData], (data) => data?.mindMaps ?? []);
+
+/** Factory: memoised selector that finds a MindMap by id. */
+export const makeSelectMindMapById = () =>
+  createSelector([selectMindMaps, (_state: RootState, mapId: string) => mapId], (maps, mapId) =>
+    maps.find((m) => m.id === mapId),
+  );
+
 // --- Parameterised section selectors (factory pattern for per-instance memoisation) ---
 
 /** Factory: creates a memoised selector that finds a section by id. */

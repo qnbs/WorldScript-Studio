@@ -79,6 +79,7 @@ const baseDeps: CommandRuntimeDeps = {
     enablePlotBoardV2: true,
     enableDuckDbAnalytics: false,
     enableObjectsGroups: false,
+    enableMindMaps: false,
   },
 };
 

@@ -18,5 +18,6 @@
   "sidebar.templates": "Modèles",
   "sidebar.world": "Univers",
   "sidebar.writer": "Studio d’écriture IA",
-  "sidebar.objects": "Objets de l’histoire"
+  "sidebar.objects": "Objets de l’histoire",
+  "sidebar.mindmap": "Cartes mentales"
 }

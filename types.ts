@@ -21,7 +21,8 @@ export type View =
   | 'critic'
   | 'preview'
   | 'progress'
-  | 'objects';
+  | 'objects'
+  | 'mindmap';
 
 export interface Character {
   id: string;
@@ -123,6 +124,54 @@ export interface ObjectGroup {
   description?: string;
   color: string; // #hex
   objectIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Mind Maps (Phase 2 — v1.7) ---
+
+export type MindMapNodeType = 'free' | 'linked';
+export type MindMapLinkedEntityType = 'character' | 'world' | 'object' | 'group' | 'scene';
+export type MindMapNodeShape = 'circle' | 'rectangle' | 'diamond' | 'ellipse' | 'hexagon';
+export type MindMapEdgeStyle = 'solid' | 'dotted';
+export type MindMapEdgeDirection = 'uni' | 'bi';
+
+export interface MindMapNode {
+  id: string;
+  mindMapId: string;
+  label: string;
+  type: MindMapNodeType;
+  linkedEntityType?: MindMapLinkedEntityType;
+  linkedEntityId?: string;
+  position: { x: number; y: number };
+  color: string;
+  shape: MindMapNodeShape;
+  profileImageUrl?: string;
+  textNotes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MindMapEdge {
+  id: string;
+  mindMapId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  label?: string;
+  color: string;
+  style: MindMapEdgeStyle;
+  direction: MindMapEdgeDirection;
+  createdAt: string;
+}
+
+export interface MindMap {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  nodes: MindMapNode[];
+  edges: MindMapEdge[];
+  viewport?: { x: number; y: number; zoom: number };
   createdAt: string;
   updatedAt: string;
 }

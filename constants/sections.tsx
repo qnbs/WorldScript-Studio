@@ -109,6 +109,13 @@ export const APP_SECTIONS: Record<View, SectionConfig> = {
     textColor: 'text-rose-500 dark:text-rose-400',
     accentColor: '#f43f5e',
   },
+  // QNBS-v3: v1.7 Mind Maps — SVG canvas with entity linking.
+  mindmap: {
+    icon: ICONS.MINDMAP,
+    colorClass: 'text-violet-500 bg-violet-500/10 dark:text-violet-400 dark:bg-violet-500/10',
+    textColor: 'text-violet-500 dark:text-violet-400',
+    accentColor: '#8b5cf6',
+  },
   // QNBS-v3: v1.7 Objects & Groups inventory view.
   objects: {
     icon: ICONS.OBJECTS,

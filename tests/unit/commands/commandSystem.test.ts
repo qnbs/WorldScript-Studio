@@ -39,6 +39,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enablePlotBoardV2: true,
   enableDuckDbAnalytics: false,
   enableObjectsGroups: false,
+  enableMindMaps: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

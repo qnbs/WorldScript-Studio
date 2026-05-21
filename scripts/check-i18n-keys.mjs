@@ -29,6 +29,7 @@ const MODULES = [
   'settings',
   'help',
   'objects',
+  'mindmap',
 ];
 
 const REF = 'en';

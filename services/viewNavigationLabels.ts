@@ -19,6 +19,7 @@ export const VIEW_NAVIGATION_LABEL_KEYS: Partial<Record<View, string>> = {
   consistencyChecker: 'sidebar.consistencyChecker',
   critic: 'sidebar.critic',
   objects: 'sidebar.objects',
+  mindmap: 'sidebar.mindmap',
 };
 
 export function viewNavigationLabelKey(view: View): string {

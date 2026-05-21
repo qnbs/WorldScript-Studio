@@ -18,5 +18,6 @@
   "sidebar.export": "Export",
   "sidebar.settings": "Settings",
   "sidebar.help": "Help",
-  "sidebar.objects": "Story Objects"
+  "sidebar.objects": "Story Objects",
+  "sidebar.mindmap": "Mind Maps"
 }
