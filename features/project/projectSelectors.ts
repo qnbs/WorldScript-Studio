@@ -106,6 +106,24 @@ export const selectPlotTensionOverrides = createSelector(
 // --- Project AI Preset ---
 export const selectProjectAiPreset = createSelector([selectProjectData], (data) => data?.aiPreset);
 
+// --- Story Objects & Groups ---
+export const selectStoryObjects = createSelector(
+  [selectProjectData],
+  (data) => data?.storyObjects ?? [],
+);
+
+export const selectObjectGroups = createSelector(
+  [selectProjectData],
+  (data) => data?.objectGroups ?? [],
+);
+
+/** Factory: memoised selector that finds a StoryObject by id. */
+export const makeSelectObjectById = () =>
+  createSelector(
+    [selectStoryObjects, (_state: RootState, objectId: string) => objectId],
+    (objects, objectId) => objects.find((o) => o.id === objectId),
+  );
+
 // --- Parameterised section selectors (factory pattern for per-instance memoisation) ---
 
 /** Factory: creates a memoised selector that finds a section by id. */

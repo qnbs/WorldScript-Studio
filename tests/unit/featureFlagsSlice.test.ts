@@ -15,6 +15,7 @@ describe('featureFlagsSlice', () => {
     enableAppHealthPanel: false,
     enablePlotBoardV2: true,
     enableDuckDbAnalytics: false,
+    enableObjectsGroups: false,
   };
 
   it('should match default feature flag state on init', () => {
@@ -41,6 +42,7 @@ describe('featureFlagsSlice', () => {
       enableAppHealthPanel: false,
       enablePlotBoardV2: true,
       enableDuckDbAnalytics: false,
+      enableObjectsGroups: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

@@ -30,6 +30,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableAppHealthPanel: false,
   enablePlotBoardV2: true,
   enableDuckDbAnalytics: false,
+  enableObjectsGroups: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -95,6 +96,7 @@ afterEach(() => {
     enableAppHealthPanel: false,
     enablePlotBoardV2: true,
     enableDuckDbAnalytics: false,
+    enableObjectsGroups: false,
   };
 });
 

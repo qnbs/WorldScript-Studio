@@ -19,6 +19,8 @@ export interface FeatureFlagsState {
   enablePlotBoardV2: boolean;
   /** DuckDB-WASM analytics side-car: OPFS-backed query engine for dashboards (default: false). */
   enableDuckDbAnalytics: boolean;
+  /** Story Objects & Groups inventory view — v1.7 Bibisco-depth feature (default: false). */
+  enableObjectsGroups: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -36,6 +38,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enablePlotBoardV2: true,
   // QNBS-v3: DuckDB-WASM analytics is experimental; off by default until P1 analytics features land
   enableDuckDbAnalytics: false,
+  // QNBS-v3: v1.7 Objects inventory — off by default; feature-flagged for staged rollout.
+  enableObjectsGroups: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -104,6 +108,9 @@ const featureFlagsSlice = createSlice({
     setEnableDuckDbAnalytics(state, action: PayloadAction<boolean>) {
       state.enableDuckDbAnalytics = action.payload;
     },
+    setEnableObjectsGroups(state, action: PayloadAction<boolean>) {
+      state.enableObjectsGroups = action.payload;
+    },
   },
 });
 
@@ -128,6 +135,8 @@ export const selectEnablePlotBoardV2 = (state: { featureFlags: FeatureFlagsState
   state.featureFlags.enablePlotBoardV2;
 export const selectEnableDuckDbAnalytics = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableDuckDbAnalytics;
+export const selectEnableObjectsGroups = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableObjectsGroups;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

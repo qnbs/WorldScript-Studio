@@ -38,6 +38,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableAppHealthPanel: false,
   enablePlotBoardV2: true,
   enableDuckDbAnalytics: false,
+  enableObjectsGroups: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

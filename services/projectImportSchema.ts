@@ -199,6 +199,41 @@ const versionControlPersistSchema = z.object({
   currentBranchId: z.string(),
 });
 
+const storyObjectTypeSchema = z.enum([
+  'prop',
+  'weapon',
+  'vehicle',
+  'artifact',
+  'document',
+  'place-item',
+  'other',
+]);
+
+const storyObjectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  type: storyObjectTypeSchema,
+  groupIds: z.array(z.string()),
+  characterIds: z.array(z.string()).optional(),
+  sceneIds: z.array(z.string()).optional(),
+  significance: z.string().optional(),
+  notes: z.string().optional(),
+  imageAssetId: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const objectGroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  color: z.string(),
+  objectIds: z.array(z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 /** Full export / backup JSON shape (matches extended ProjectData on disk). */
 export const importedProjectJsonSchema = z.object({
   id: z.string().optional(),
@@ -223,6 +258,8 @@ export const importedProjectJsonSchema = z.object({
   binderNodes: z.array(binderNodeSchema).optional(),
   compileProfile: compileProfileSchema.optional(),
   persistedVersionControl: versionControlPersistSchema.optional(),
+  storyObjects: z.array(storyObjectSchema).optional(),
+  objectGroups: z.array(objectGroupSchema).optional(),
 });
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;

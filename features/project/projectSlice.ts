@@ -6,11 +6,13 @@ import type {
   Character,
   CharacterRelationship,
   CompileProfile,
+  ObjectGroup,
   OutlineSection,
   PersistedVersionControlState,
   PlotConnection,
   PlotConnectionType,
   ProjectAiPreset,
+  StoryObject,
   StorySection,
   Subplot,
   World,
@@ -90,6 +92,9 @@ export interface ProjectData {
   plotTensionOverrides?: Record<string, number>;
   // QNBS-v3: Per-project AI preset — overrides global settings when enabled; supports LoRA path for v2.0.
   aiPreset?: ProjectAiPreset;
+  // QNBS-v3: Story Objects/Groups inventory — foundational for MindMap linked entities in v1.7.
+  storyObjects?: StoryObject[];
+  objectGroups?: ObjectGroup[];
 }
 
 // --- Initial State ---
@@ -480,6 +485,62 @@ const projectSlice = createSlice({
     },
     clearProjectAiPreset: (state) => {
       delete state.data.aiPreset;
+    },
+    // --- Story Objects ---
+    addStoryObject: (state, action: PayloadAction<StoryObject>) => {
+      if (!state.data.storyObjects) state.data.storyObjects = [];
+      state.data.storyObjects.push(action.payload);
+    },
+    updateStoryObject: (
+      state,
+      action: PayloadAction<{ id: string; changes: Partial<StoryObject> }>,
+    ) => {
+      const obj = (state.data.storyObjects ?? []).find((o) => o.id === action.payload.id);
+      if (obj) Object.assign(obj, action.payload.changes);
+    },
+    deleteStoryObject: (state, action: PayloadAction<string>) => {
+      const id = action.payload;
+      state.data.storyObjects = (state.data.storyObjects ?? []).filter((o) => o.id !== id);
+      // QNBS-v3: cascade remove from all groups so referential integrity is preserved.
+      for (const g of state.data.objectGroups ?? []) {
+        g.objectIds = g.objectIds.filter((oid) => oid !== id);
+      }
+    },
+    addObjectGroup: (state, action: PayloadAction<ObjectGroup>) => {
+      if (!state.data.objectGroups) state.data.objectGroups = [];
+      state.data.objectGroups.push(action.payload);
+    },
+    updateObjectGroup: (
+      state,
+      action: PayloadAction<{ id: string; changes: Partial<ObjectGroup> }>,
+    ) => {
+      const g = (state.data.objectGroups ?? []).find((g) => g.id === action.payload.id);
+      if (g) Object.assign(g, action.payload.changes);
+    },
+    deleteObjectGroup: (state, action: PayloadAction<string>) => {
+      const id = action.payload;
+      state.data.objectGroups = (state.data.objectGroups ?? []).filter((g) => g.id !== id);
+      // QNBS-v3: cascade clear groupId from affected objects.
+      for (const o of state.data.storyObjects ?? []) {
+        o.groupIds = o.groupIds.filter((gid) => gid !== id);
+      }
+    },
+    assignObjectToGroup: (state, action: PayloadAction<{ objectId: string; groupId: string }>) => {
+      const { objectId, groupId } = action.payload;
+      const obj = (state.data.storyObjects ?? []).find((o) => o.id === objectId);
+      const grp = (state.data.objectGroups ?? []).find((g) => g.id === groupId);
+      if (obj && !obj.groupIds.includes(groupId)) obj.groupIds.push(groupId);
+      if (grp && !grp.objectIds.includes(objectId)) grp.objectIds.push(objectId);
+    },
+    removeObjectFromGroup: (
+      state,
+      action: PayloadAction<{ objectId: string; groupId: string }>,
+    ) => {
+      const { objectId, groupId } = action.payload;
+      const obj = (state.data.storyObjects ?? []).find((o) => o.id === objectId);
+      const grp = (state.data.objectGroups ?? []).find((g) => g.id === groupId);
+      if (obj) obj.groupIds = obj.groupIds.filter((gid) => gid !== groupId);
+      if (grp) grp.objectIds = grp.objectIds.filter((oid) => oid !== objectId);
     },
   },
   extraReducers: (builder) => {

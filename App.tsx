@@ -112,6 +112,10 @@ const BookPreviewView = lazy(() =>
 const ProgressTrackerView = lazy(() =>
   import('./components/ProgressTrackerView').then((m) => ({ default: m.ProgressTrackerView })),
 );
+// QNBS-v3: v1.7 views lazy-loaded for bundle isolation
+const ObjectsView = lazy(() =>
+  import('./components/ObjectsView').then((m) => ({ default: m.ObjectsView })),
+);
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
@@ -408,6 +412,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         return <BookPreviewView />;
       case 'progress':
         return <ProgressTrackerView />;
+      case 'objects':
+        return <ObjectsView />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }
