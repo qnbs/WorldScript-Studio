@@ -15,15 +15,11 @@ import type { Character, StorySection } from '../../types';
 import { ConnectionLayer } from './ConnectionLayer';
 import { ConnectionToolbar } from './ConnectionToolbar';
 import { PlotMinimap } from './PlotMinimap';
+import { snapToGrid } from './plotLayoutUtils';
 
 // Canvas card dimensions (must match autoLayoutScenes constants)
 const CARD_W = 200;
 const CARD_H = 130;
-
-function snapToGrid(value: number, snap: boolean, gridSize = 8): number {
-  if (!snap) return value;
-  return Math.round(value / gridSize) * gridSize;
-}
 
 interface CanvasCardProps {
   section: StorySection;

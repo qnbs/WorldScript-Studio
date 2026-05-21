@@ -9,6 +9,8 @@ export type FlatHelpArticle = {
   tryActionId?: string;
 };
 
+export type HelpSearchIndexEntry = FlatHelpArticle & { haystack: string };
+
 export function flattenHelpArticles(categories: HelpCategory[]): FlatHelpArticle[] {
   const out: FlatHelpArticle[] = [];
   for (const cat of categories) {
@@ -26,21 +28,36 @@ export function flattenHelpArticles(categories: HelpCategory[]): FlatHelpArticle
   return out;
 }
 
+/** Pre-translate article fields once per locale change — avoids re-translating HTML on every keystroke. */
+export function buildHelpSearchIndex(
+  articles: FlatHelpArticle[],
+  translate: (key: string) => string,
+): HelpSearchIndexEntry[] {
+  return articles.map((a) => ({
+    ...a,
+    haystack: normalizeSearch(
+      `${translate(a.titleKey)} ${stripHtml(translate(a.contentKey))} ${translate(a.categoryTitleKey)}`,
+    ),
+  }));
+}
+
+/** Fast search over a pre-built index (see buildHelpSearchIndex). */
+export function searchHelpArticlesIndexed(
+  index: HelpSearchIndexEntry[],
+  query: string,
+): FlatHelpArticle[] {
+  const q = normalizeSearch(query.trim());
+  if (!q) return [];
+  return index.filter((entry) => entry.haystack.includes(q));
+}
+
 /** Search help articles by translated title + stripped HTML body. */
 export function searchHelpArticles(
   articles: FlatHelpArticle[],
   query: string,
   translate: (key: string) => string,
 ): FlatHelpArticle[] {
-  const q = normalizeSearch(query.trim());
-  if (!q) return [];
-
-  return articles.filter((a) => {
-    const title = normalizeSearch(translate(a.titleKey));
-    const body = normalizeSearch(stripHtml(translate(a.contentKey)));
-    const cat = normalizeSearch(translate(a.categoryTitleKey));
-    return title.includes(q) || body.includes(q) || cat.includes(q);
-  });
+  return searchHelpArticlesIndexed(buildHelpSearchIndex(articles, translate), query);
 }
 
 function stripHtml(html: string): string {

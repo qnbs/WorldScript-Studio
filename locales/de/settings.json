@@ -339,6 +339,7 @@
   "settings.restoreModal.title": "Schnappschuss wiederherstellen?",
   "settings.restoreModal.wordCountInfo": "Dieser Schnappschuss hat {{snapshotWordCount}} Wörter. Ihr aktuelles Projekt hat {{currentWordCount}} Wörter.",
   "settings.search.placeholder": "Einstellungen durchsuchen…",
+  "settings.search.noResults": "Keine Einstellungsbereiche passen zur Suche.",
   "settings.shortcuts.conflictWarning": "Diese Tastenkombinationen sind mehrfach belegt:",
   "settings.shortcuts.description": "Tastaturkürzel für häufige Aktionen anpassen. Konflikte werden in Gelb hervorgehoben.",
   "settings.shortcuts.export": "Exportansicht öffnen",

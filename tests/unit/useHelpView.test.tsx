@@ -86,7 +86,7 @@ describe('useHelpView', () => {
 
     await waitFor(() => {
       const lastHistoryItem = result.current.chatHistory[result.current.chatHistory.length - 1];
-      expect(lastHistoryItem?.text).toBe('Sorry, I encountered an error.');
+      expect(lastHistoryItem?.text).toBe('help.ai.error');
     });
     expect(result.current.isAiReplying).toBe(false);
   });

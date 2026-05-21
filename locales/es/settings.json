@@ -339,6 +339,7 @@
   "settings.restoreModal.title": "¿Restaurar instantánea?",
   "settings.restoreModal.wordCountInfo": "Esta instantánea tiene {{snapshotWordCount}} palabras. Tu proyecto actual tiene {{currentWordCount}} palabras.",
   "settings.search.placeholder": "Buscar secciones de configuración…",
+  "settings.search.noResults": "Ninguna sección coincide con la búsqueda.",
   "settings.shortcuts.conflictWarning": "Estas combinaciones de acordes están asignadas más de una vez:",
   "settings.shortcuts.description": "Personaliza los atajos para acciones frecuentes. Los acordes en conflicto se resaltan en ámbar.",
   "settings.shortcuts.export": "Abrir vista de exportación",

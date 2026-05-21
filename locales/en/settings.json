@@ -2,6 +2,7 @@
   "settings.title": "Settings",
   "settings.description": "Customize your workspace, writing preferences, and AI behavior.",
   "settings.search.placeholder": "Search settings sections…",
+  "settings.search.noResults": "No settings sections match your search.",
   "settings.categories.general": "General",
   "settings.categories.appearance": "Appearance",
   "settings.categories.editor": "Editor",

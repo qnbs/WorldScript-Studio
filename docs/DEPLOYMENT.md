@@ -90,6 +90,15 @@ Workflow [`.github/workflows/deploy-cloudflare-pages.yml`](../.github/workflows/
 
 Without secrets the job is **skipped** (fork-safe).
 
+### Tag-triggered deploy (optional)
+
+Workflow [`.github/workflows/deploy-cloudflare-pages.yml`](../.github/workflows/deploy-cloudflare-pages.yml) can run on `v*` tags when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set. Prefer dashboard Git integration for day-to-day deploys; use tags for release snapshots.
+
+```bash
+pnpm run build:edge
+pnpm run deploy:cloudflare   # exits 0 on CF_PAGES=1; otherwise wrangler pages deploy dist
+```
+
 ---
 
 ## Local parity

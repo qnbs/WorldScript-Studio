@@ -594,3 +594,18 @@ select option {
 :root[data-colorblind="tritanopia"] body {
   filter: sepia(0.08) hue-rotate(18deg) saturate(1.1);
 }
+
+/* ── Mobile bottom tab bar clearance (main scroll area) ── */
+:root {
+  --sc-mobile-tab-bar-height: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  :root {
+    --sc-mobile-tab-bar-height: 0px;
+  }
+}
+
+.pb-mobile-nav {
+  padding-bottom: calc(var(--sc-mobile-tab-bar-height) + 1.25rem);
+}

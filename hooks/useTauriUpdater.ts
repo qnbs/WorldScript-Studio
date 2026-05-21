@@ -7,7 +7,8 @@ export type TauriUpdateInfo = {
   available: boolean;
 };
 
-export function useTauriUpdater() {
+export function useTauriUpdater(options?: { autoCheck?: boolean }) {
+  const autoCheck = options?.autoCheck ?? false;
   const [update, setUpdate] = useState<TauriUpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -58,8 +59,8 @@ export function useTauriUpdater() {
   }, []);
 
   useEffect(() => {
-    if (isTauriRuntime()) void checkForUpdate();
-  }, [checkForUpdate]);
+    if (autoCheck && isTauriRuntime()) void checkForUpdate();
+  }, [autoCheck, checkForUpdate]);
 
   return {
     isDesktop: isTauriRuntime(),

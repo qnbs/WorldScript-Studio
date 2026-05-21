@@ -167,12 +167,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const desktopNavItems = allNavItems.filter((i) => i.id !== 'settings' && i.id !== 'help');
   const desktopBottomItems = allNavItems.filter((i) => i.id === 'settings' || i.id === 'help');
 
-  // Mobile bottom tab bar: 4 key views + "More" button
+  // Mobile bottom tab bar: 4 key views + "More" button (desktop sidebar unchanged)
   const mobileTabBarItems = [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: ICONS.DASHBOARD },
     { id: 'manuscript', label: t('sidebar.manuscript'), icon: ICONS.WRITER },
     { id: 'writer', label: t('sidebar.writer'), icon: ICONS.SPARKLES },
-    { id: 'characters', label: t('sidebar.characters'), icon: ICONS.CHARACTERS },
+    { id: 'sceneboard', label: t('sidebar.sceneboard'), icon: ICONS.SCENEBOARD },
   ];
 
   // Check if current view is one of the tab bar views

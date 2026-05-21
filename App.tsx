@@ -500,7 +500,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                 <main
                   id="main-content"
                   aria-label={t('common.mainContent')}
-                  className="flex-1 overflow-y-auto p-4 pb-20 sm:p-6 sm:pb-20 md:p-8 md:pb-8 scroll-smooth overscroll-none"
+                  className="flex-1 overflow-y-auto p-4 pb-mobile-nav sm:p-6 md:p-8 md:pb-8 scroll-smooth overscroll-none"
                 >
                   <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>
                     <ViewErrorBoundary viewLabel={t(viewNavigationLabelKey(currentView))}>

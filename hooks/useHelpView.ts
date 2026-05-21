@@ -3,7 +3,11 @@ import { useAppSelector } from '../app/hooks';
 import { streamAiHelpResponse } from '../services/aiProviderService';
 import { catalogToHelpCategories } from '../services/help/helpCatalog';
 import { retrieveHelpDocContext } from '../services/help/helpDocRetrieval';
-import { flattenHelpArticles, searchHelpArticles } from '../services/help/helpSearch';
+import {
+  buildHelpSearchIndex,
+  flattenHelpArticles,
+  searchHelpArticlesIndexed,
+} from '../services/help/helpSearch';
 import type { AiCreativity, HelpArticle } from '../types';
 import { useTranslation } from './useTranslation';
 
@@ -23,14 +27,15 @@ export const useHelpView = () => {
 
   const helpContent = useMemo(() => catalogToHelpCategories(), []);
   const flatArticles = useMemo(() => flattenHelpArticles(helpContent), [helpContent]);
+  const searchIndex = useMemo(() => buildHelpSearchIndex(flatArticles, t), [flatArticles, t]);
 
   const [activeCategory, setActiveCategory] = useState<string>('getting-started');
   const [selectedArticle, setSelectedArticle] = useState<HelpArticle | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const searchResults = useMemo(
-    () => searchHelpArticles(flatArticles, searchQuery, t),
-    [flatArticles, searchQuery, t],
+    () => searchHelpArticlesIndexed(searchIndex, searchQuery),
+    [searchIndex, searchQuery],
   );
 
   // AI Assistant State
@@ -67,65 +72,68 @@ export const useHelpView = () => {
     setSelectedArticle(null);
   }, []);
 
-  const handleAskAi = useCallback(async () => {
-    if (!userInput.trim() || isAiReplying) return;
+  const handleAskAi = useCallback(
+    async (overrideQuestion?: string) => {
+      const question = (overrideQuestion ?? userInput).trim();
+      if (!question || isAiReplying) return;
 
-    const newUserMessage: ChatMessage = { role: 'user', text: userInput };
-    const aiPlaceholderMessage: ChatMessage = { role: 'model', text: '' };
+      const newUserMessage: ChatMessage = { role: 'user', text: question };
+      const aiPlaceholderMessage: ChatMessage = { role: 'model', text: '' };
 
-    setChatHistory((prev) => [...prev, newUserMessage, aiPlaceholderMessage]);
-    setIsAiReplying(true);
-    const question = userInput;
-    setUserInput('');
+      setChatHistory((prev) => [...prev, newUserMessage, aiPlaceholderMessage]);
+      setIsAiReplying(true);
+      setUserInput('');
 
-    try {
-      const temperature = creativityToTemperature[settings.aiCreativity];
-      const docContext = retrieveHelpDocContext(question);
+      try {
+        const temperature = creativityToTemperature[settings.aiCreativity];
+        const docContext = retrieveHelpDocContext(question);
 
-      await streamAiHelpResponse(
-        question,
-        settings.aiCreativity,
-        {
-          provider: settings.advancedAi.provider,
-          model: settings.advancedAi.model,
-          temperature,
-          maxTokens: settings.advancedAi.maxTokens,
-          ollamaBaseUrl: settings.advancedAi.ollamaBaseUrl,
-        },
-        {
-          onChunk: (chunk) => {
-            setChatHistory((prev) => {
-              const lastMsgIndex = prev.length - 1;
-              const lastMessage = prev[lastMsgIndex];
-              if (lastMessage?.role === 'model') {
-                const newHistory = [...prev];
-                newHistory[lastMsgIndex] = {
-                  ...lastMessage,
-                  text: lastMessage.text + chunk,
-                };
-                return newHistory;
-              }
-              return prev;
-            });
+        await streamAiHelpResponse(
+          question,
+          settings.aiCreativity,
+          {
+            provider: settings.advancedAi.provider,
+            model: settings.advancedAi.model,
+            temperature,
+            maxTokens: settings.advancedAi.maxTokens,
+            ollamaBaseUrl: settings.advancedAi.ollamaBaseUrl,
           },
-        },
-        { docContext },
-      );
-    } catch {
-      setChatHistory((prev) => {
-        const lastMsgIndex = prev.length - 1;
-        const lastMessage = prev[lastMsgIndex];
-        if (lastMessage?.role === 'model') {
-          const newHistory = [...prev];
-          newHistory[lastMsgIndex] = { ...lastMessage, text: 'Sorry, I encountered an error.' };
-          return newHistory;
-        }
-        return prev;
-      });
-    } finally {
-      setIsAiReplying(false);
-    }
-  }, [userInput, isAiReplying, settings.aiCreativity, settings.advancedAi]);
+          {
+            onChunk: (chunk) => {
+              setChatHistory((prev) => {
+                const lastMsgIndex = prev.length - 1;
+                const lastMessage = prev[lastMsgIndex];
+                if (lastMessage?.role === 'model') {
+                  const newHistory = [...prev];
+                  newHistory[lastMsgIndex] = {
+                    ...lastMessage,
+                    text: lastMessage.text + chunk,
+                  };
+                  return newHistory;
+                }
+                return prev;
+              });
+            },
+          },
+          { docContext },
+        );
+      } catch {
+        setChatHistory((prev) => {
+          const lastMsgIndex = prev.length - 1;
+          const lastMessage = prev[lastMsgIndex];
+          if (lastMessage?.role === 'model') {
+            const newHistory = [...prev];
+            newHistory[lastMsgIndex] = { ...lastMessage, text: t('help.ai.error') };
+            return newHistory;
+          }
+          return prev;
+        });
+      } finally {
+        setIsAiReplying(false);
+      }
+    },
+    [userInput, isAiReplying, settings.aiCreativity, settings.advancedAi, t],
+  );
 
   return {
     t,
