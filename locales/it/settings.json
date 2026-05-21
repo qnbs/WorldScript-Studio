@@ -339,6 +339,7 @@
   "settings.restoreModal.title": "Ripristinare l'istantanea?",
   "settings.restoreModal.wordCountInfo": "Questa istantanea ha {{snapshotWordCount}} parole. Il tuo progetto attuale ha {{currentWordCount}} parole.",
   "settings.search.placeholder": "Cerca sezioni delle impostazioni…",
+  "settings.search.noResults": "Nessuna sezione corrisponde alla ricerca.",
   "settings.shortcuts.conflictWarning": "Queste combinazioni di accordi sono assegnate più di una volta:",
   "settings.shortcuts.description": "Personalizza le scorciatoie per le azioni frequenti. Gli accordi in conflitto sono evidenziati in ambra.",
   "settings.shortcuts.export": "Apri la vista esportazione",

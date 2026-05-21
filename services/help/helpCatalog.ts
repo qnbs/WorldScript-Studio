@@ -74,6 +74,16 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
         tryActionId: 'nav-sceneboard',
       },
       {
+        titleKey: 'help.writing.plotBoardV2.title',
+        contentKey: 'help.writing.plotBoardV2.content',
+        tryActionId: 'nav-sceneboard',
+      },
+      {
+        titleKey: 'help.writing.ragHybrid.title',
+        contentKey: 'help.writing.ragHybrid.content',
+        tryActionId: 'nav-writer',
+      },
+      {
         titleKey: 'help.writing.bookPreview.title',
         contentKey: 'help.writing.bookPreview.content',
       },
@@ -252,6 +262,11 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
       { titleKey: 'help.docs.duckdb.title', contentKey: 'help.docs.duckdb.content' },
       { titleKey: 'help.docs.lazyLoading.title', contentKey: 'help.docs.lazyLoading.content' },
       { titleKey: 'help.docs.pwaDesktop.title', contentKey: 'help.docs.pwaDesktop.content' },
+      {
+        titleKey: 'help.docs.tauriDesktop.title',
+        contentKey: 'help.docs.tauriDesktop.content',
+        tryActionId: 'nav-settings',
+      },
       { titleKey: 'help.docs.deployment.title', contentKey: 'help.docs.deployment.content' },
       {
         titleKey: 'help.docs.privacySecurity.title',

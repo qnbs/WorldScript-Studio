@@ -96,4 +96,107 @@ describe('assembleRAGPrompt', () => {
     expect(mockRetrieve).not.toHaveBeenCalled();
     expect(result.prompt).toContain('CURRENT PASSAGE');
   });
+
+  it('uses cursorPosition slice for writer query', async () => {
+    await assembleRAGPrompt(
+      'writerContinuation',
+      {
+        projectId: 'p1',
+        currentText: 'ABCDEFGHIJ',
+        cursorPosition: 3,
+        lang: 'en',
+      },
+      { topK: 3, ragMode: 'lexical', maxTokens: 2000, duckDbEnabled: false, useRag: true },
+    );
+    expect(mockRetrieve).toHaveBeenCalledWith('p1', 'ABC', 3, 'lexical', undefined, false);
+  });
+
+  it('assembles plotSuggestion with German lang line', async () => {
+    const result = await assembleRAGPrompt(
+      'plotSuggestion',
+      {
+        projectId: 'p1',
+        plotSummary: 'Hero confronts villain.',
+        selectedSectionIds: [],
+        lang: 'de',
+      },
+      { topK: 3, ragMode: 'lexical', maxTokens: 3000, duckDbEnabled: false, useRag: true },
+    );
+    expect(result.prompt).toContain('German');
+    expect(mockRetrieve).toHaveBeenCalled();
+  });
+
+  it('assembles consistencyCheck task', async () => {
+    const result = await assembleRAGPrompt(
+      'consistencyCheck',
+      {
+        projectId: 'p1',
+        plotSummary: 'Timeline check.',
+        selectedSectionIds: ['s1'],
+        lang: 'fr',
+      },
+      { topK: 4, ragMode: 'hybrid', maxTokens: 4000, duckDbEnabled: false, useRag: true },
+    );
+    expect(result.prompt).toContain('French');
+    expect(result.estimatedTokens).toBeGreaterThan(0);
+  });
+
+  it('continues when RAG retrieval throws', async () => {
+    mockRetrieve.mockRejectedValueOnce(new Error('index offline'));
+    const result = await assembleRAGPrompt(
+      'writerContinuation',
+      { projectId: 'p1', currentText: 'Scene text.', lang: 'en' },
+      { topK: 5, ragMode: 'hybrid', maxTokens: 4000, duckDbEnabled: false, useRag: true },
+    );
+    expect(result.ragUsed).toBe(false);
+    expect(result.chunks).toHaveLength(0);
+    expect(result.prompt.length).toBeGreaterThan(10);
+  });
+
+  it('uses semantic mode with embedding when hybrid', async () => {
+    const { embedText } = await import('../../services/ai/localEmbeddingService');
+    await assembleRAGPrompt(
+      'writerContinuation',
+      { projectId: 'p1', currentText: 'Long passage for embedding.', lang: 'es' },
+      { topK: 5, ragMode: 'hybrid', maxTokens: 4000, duckDbEnabled: true, useRag: true },
+    );
+    expect(vi.mocked(embedText)).toHaveBeenCalled();
+    expect(mockRetrieve).toHaveBeenCalledWith(
+      'p1',
+      expect.any(String),
+      5,
+      'hybrid',
+      expect.any(Float32Array),
+      true,
+    );
+  });
+});
+
+describe('buildRAGContextBlock token budget', () => {
+  it('stops adding chunks when budget exceeded', () => {
+    const short = 'Brief scene beat.';
+    const longText = `${'word '.repeat(400)}end.`;
+    const block = buildRAGContextBlock(
+      [
+        { score: 0.9, text: short, sectionId: 's1', chunkIndex: 0, indexedAt: 0 },
+        { score: 0.8, text: longText, sectionId: 's2', chunkIndex: 0, indexedAt: 0 },
+      ],
+      [
+        { id: 's1', title: 'A', content: '' },
+        { id: 's2', title: 'B', content: '' },
+      ],
+      80,
+    );
+    expect(block).toContain('Brief scene');
+    expect(block).not.toContain('word word');
+  });
+
+  it('truncateAtSentence keeps text when short', () => {
+    const block = buildRAGContextBlock(
+      [{ score: 1, text: 'Hi.', sectionId: 's1', chunkIndex: 0, indexedAt: 0 }],
+      undefined,
+      500,
+    );
+    expect(block).toContain('Hi.');
+  });
 });

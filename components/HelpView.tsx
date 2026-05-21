@@ -203,17 +203,16 @@ const AiAssistant: FC = () => {
     useHelpViewContext();
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
+  const lastChatText = chatHistory[chatHistory.length - 1]?.text ?? '';
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll chat pane when history or streaming updates
   useEffect(() => {
-    chatContainerRef.current?.scrollTo(0, chatContainerRef.current.scrollHeight);
-  }, []);
+    const el = chatContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chatHistory.length, lastChatText, isAiReplying]);
 
   const handleSuggestionClick = (suggestion: string) => {
     setUserInput(suggestion);
-    // Trigger form submission after state update
-    setTimeout(() => {
-      const form = chatContainerRef.current?.closest('div')?.querySelector('form');
-      form?.requestSubmit();
-    }, 0);
+    void handleAskAi(suggestion);
   };
 
   return (
@@ -400,7 +399,7 @@ const HelpViewUI: FC = () => {
               helpContent.map((cat) => (
                 <NavButton
                   key={cat.id}
-                  icon={iconMap[cat.icon]}
+                  icon={iconMap[cat.icon] ?? ICONS.HELP}
                   label={t(cat.title)}
                   isActive={activeCategory === cat.id}
                   onClick={() => handleSelectCategory(cat.id)}
@@ -431,7 +430,9 @@ const HelpViewUI: FC = () => {
             </Button>
           </div>
         </div>
-        <div className="md:col-span-3 min-h-[50vh] md:min-h-[80vh]">{renderContent()}</div>
+        <div className="md:col-span-3 min-h-0 md:min-h-[60vh]">
+          {!searchQuery.trim() ? renderContent() : null}
+        </div>
       </div>
     </div>
   );

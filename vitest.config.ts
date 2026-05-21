@@ -48,12 +48,11 @@ export default defineConfig({
         '**/*.stories.{ts,tsx}',
         '**/*.d.ts',
       ],
-      // QNBS-v3: v1.6-Schwellen — 174 Testdateien, 1966 Tests; 63.88 % Lines / 48.87 % Branches.
-      // Slight drop from v1.5 reflects 25+ new UI components (canvas, SVG charts) added in v1.6.
+      // v1.10: Branches ≥55 % (RAG assembly, help search index, plot layout, AI streaming).
       thresholds: {
         lines: 63,
         functions: 54,
-        branches: 48,
+        branches: 55,
         statements: 62,
         perFile: false,
       },

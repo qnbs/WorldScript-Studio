@@ -1,8 +1,11 @@
-# PAUSED (2026-05-21): Use Cloudflare Dashboard Git → Pages with empty deploy command instead.
-# Re-enable when CLOUDFLARE_API_TOKEN has Pages Edit + secrets are configured.
+# Optional Cloudflare Pages deploy — enable secrets to run on release tags.
+# Day-to-day: use Cloudflare Dashboard Git → Pages (empty deploy command, build:edge).
 name: Deploy Cloudflare Pages
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 concurrency:
@@ -11,12 +14,33 @@ concurrency:
 
 jobs:
   deploy:
-    name: Cloudflare Pages (edge build) — disabled
-    if: false
+    name: Cloudflare Pages (edge build)
+    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
       contents: read
       deployments: write
     steps:
-      - run: echo "Workflow paused — deploy via Cloudflare Pages dashboard (no wrangler deploy command)."
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build edge bundle
+        run: pnpm run build:edge
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm run deploy:cloudflare

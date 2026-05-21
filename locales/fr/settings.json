@@ -339,6 +339,7 @@
   "settings.restoreModal.title": "Restaurer l'instantané ?",
   "settings.restoreModal.wordCountInfo": "Cet instantané contient {{snapshotWordCount}} mots. Votre projet actuel contient {{currentWordCount}} mots.",
   "settings.search.placeholder": "Rechercher des sections de paramètres…",
+  "settings.search.noResults": "Aucune section ne correspond à votre recherche.",
   "settings.shortcuts.conflictWarning": "Ces combinaisons d'accords sont assignées plusieurs fois :",
   "settings.shortcuts.description": "Personnalisez les raccourcis pour les actions fréquentes. Les accords en conflit sont mis en évidence en ambre.",
   "settings.shortcuts.export": "Ouvrir la vue d'exportation",

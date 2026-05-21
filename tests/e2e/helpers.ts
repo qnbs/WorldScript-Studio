@@ -12,7 +12,7 @@ export async function clickNavItem(page: Page, name: RegExp): Promise<void> {
     await desktopBtn.click();
     return;
   }
-  // 2. Mobile bottom tab bar (writer / dashboard / manuscript / characters are here)
+  // 2. Mobile bottom tab bar (dashboard / manuscript / writer / sceneboard)
   const mobileTabBtn = page.locator('[data-tour="nav-mobile"]').getByRole('button', { name });
   if (await mobileTabBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
     await mobileTabBtn.click();

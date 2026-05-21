@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ICONS } from '../constants';
 import { SettingsViewContext, useSettingsViewContext } from '../contexts/SettingsViewContext';
 import { useSettingsView } from '../hooks/useSettingsView';
@@ -23,6 +23,7 @@ import {
   PerformanceSection,
   PrivacySection,
 } from './settings/SystemSections';
+import { TauriUpdaterBanner } from './settings/TauriUpdaterBanner';
 import { Input } from './ui/Input';
 import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
@@ -185,6 +186,14 @@ const SettingsViewUI: FC = () => {
     });
   }, [navCategories, q]);
 
+  useEffect(() => {
+    if (!q) return;
+    const visible = filteredNavCategories.some((c) => c.id === activeCategory);
+    if (!visible && filteredNavCategories[0]) {
+      setActiveCategory(filteredNavCategories[0].id);
+    }
+  }, [q, filteredNavCategories, activeCategory, setActiveCategory]);
+
   if (!project)
     return (
       <div className="flex h-[80vh] w-full items-center justify-center">
@@ -234,7 +243,12 @@ const SettingsViewUI: FC = () => {
       case 'data':
         return <DataSection />;
       case 'about':
-        return <AboutSection />;
+        return (
+          <div className="space-y-6">
+            <TauriUpdaterBanner />
+            <AboutSection />
+          </div>
+        );
       case 'shortcuts':
         return <ShortcutsSection />;
       default:
@@ -265,18 +279,32 @@ const SettingsViewUI: FC = () => {
         <div className="md:col-span-1">
           {/* Mobile: horizontal scroll strip · Desktop: vertical sticky sidebar */}
           <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--background-primary)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
-            {filteredNavCategories.map((cat) => (
-              <NavButton
-                key={cat.id}
-                icon={cat.icon}
-                label={cat.label}
-                isActive={activeCategory === cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-              />
-            ))}
+            {filteredNavCategories.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-[var(--foreground-muted)]">
+                {t('settings.search.noResults')}
+              </p>
+            ) : (
+              filteredNavCategories.map((cat) => (
+                <NavButton
+                  key={cat.id}
+                  icon={cat.icon}
+                  label={cat.label}
+                  isActive={activeCategory === cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                />
+              ))
+            )}
           </div>
         </div>
-        <div className="md:col-span-3 min-h-[50vh] md:min-h-[80vh]">{renderContent()}</div>
+        <div className="md:col-span-3 min-h-0 md:min-h-[60vh]">
+          {filteredNavCategories.length === 0 && q ? (
+            <p className="text-sm text-[var(--foreground-muted)]">
+              {t('settings.search.noResults')}
+            </p>
+          ) : (
+            renderContent()
+          )}
+        </div>
       </div>
       <SettingsModals />
     </div>

@@ -8,7 +8,7 @@ import { Spinner } from '../ui/Spinner';
 export const TauriUpdaterBanner: FC = () => {
   const { t } = useTranslation();
   const { isDesktop, update, checking, installing, error, checkForUpdate, installUpdate } =
-    useTauriUpdater();
+    useTauriUpdater({ autoCheck: true });
 
   if (!isDesktop) return null;
 

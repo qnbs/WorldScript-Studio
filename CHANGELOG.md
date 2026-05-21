@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] — 2026-05-21
+
+### Added
+
+- **Help articles:** Plot Board v2 canvas deep dive, Hybrid RAG guide, Tauri desktop documentation (all 5 locales).
+- **Tests:** Indexed help search, extended `ragPromptAssembly` branches, `plotLayoutUtils` grid snap, branch coverage gate **≥55 %**.
+- **Mobile:** Bottom tab bar shows **Scene Board** instead of Characters (desktop sidebar unchanged); `pb-mobile-nav` clearance for scroll content.
+
+### Changed
+
+- Help search pre-builds translated index per locale (faster typing, less jank).
+- Settings → About includes `TauriUpdaterBanner`; updater auto-check only on About (not entire Settings).
+- Vitest branch threshold raised from 48 % to **55 %**.
+
+### Fixed
+
+- Mobile main content no longer hidden behind bottom navigation (safe-area + tab bar padding).
+- Help AI chat scrolls on new messages; suggestion chips submit correctly; i18n error message.
+- Settings search syncs active category when filter hides current section; empty-search state.
+
 ## [1.9.0] — 2026-05-21
 
 ### Added
