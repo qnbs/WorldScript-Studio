@@ -54,10 +54,14 @@ gh run view <run-id> --log-failed
 ### Dashboard (recommended first time)
 
 1. [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Pages** → Connect Git.
-2. **Build command:** `pnpm run build:edge`
+2. **Build command:** `pnpm install && pnpm run build:edge`
 3. **Build output directory:** `dist`
-4. **Environment variables:** `NODE_VERSION=22`, `PNPM_VERSION=10` (or use Corepack).
-5. **Root:** repository root; **Package manager:** pnpm.
+4. **Deploy command:** **leave empty** (Cloudflare publishes `dist` automatically).
+5. **Do not use** `npx wrangler deploy` — that targets **Workers** and fails in this pnpm workspace with:
+   `run in the root of a workspace instead of targeting a specific project`.
+6. If your project UI requires a deploy command, use: `pnpm run deploy:cloudflare` (`wrangler pages deploy dist`).
+7. **Environment variables:** `NODE_VERSION=22`, `PNPM_VERSION=10` (or Corepack).
+8. **Root:** repository root; **Package manager:** pnpm.
 
 Static extras in `public/`:
 

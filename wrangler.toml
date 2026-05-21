@@ -1,8 +1,13 @@
 # Cloudflare Pages — StoryCraft Studio (static SPA)
-# Docs: https://developers.cloudflare.com/pages/
+# https://developers.cloudflare.com/pages/
+#
+# Dashboard (Builds):
+#   Build command:     pnpm install && pnpm run build:edge
+#   Build output dir:  dist
+#   Deploy command:    (LEER lassen — empfohlen)
+#                      oder: pnpm run deploy:cloudflare
+#   NICHT verwenden:   npx wrangler deploy  ← Workers, schlägt in pnpm-Workspaces fehl
+#
 name = "storycraft-studio"
 compatibility_date = "2024-11-01"
 pages_build_output_dir = "dist"
-
-[vars]
-# Build-time: Dashboard → Settings → Environment variables → DEPLOY_TARGET=edge (optional; build script sets it)

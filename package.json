@@ -54,7 +54,8 @@
     "ci:quick:unit": "bash infra/low-end-ci/scripts/ci-quick.sh --unit",
     "ci:quick:coverage": "bash infra/low-end-ci/scripts/ci-quick.sh --unit --coverage",
     "ci:act": "bash infra/low-end-ci/scripts/ci-act-sequential.sh pull_request",
-    "ci:act:full": "bash infra/low-end-ci/scripts/ci-act-sequential.sh pull_request --with-storybook --e2e-chromium-only"
+    "ci:act:full": "bash infra/low-end-ci/scripts/ci-act-sequential.sh pull_request --with-storybook --e2e-chromium-only",
+    "deploy:cloudflare": "node scripts/cf-pages-deploy.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.75",
@@ -130,6 +131,7 @@
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.6",
     "wait-on": "^9.0.10",
+    "wrangler": "^4.93.1",
     "y-protocols": "^1.0.7"
   },
   "pnpm": {
