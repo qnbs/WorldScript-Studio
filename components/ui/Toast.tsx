@@ -101,7 +101,7 @@ const ToastItem: FC<{
 
   return (
     <div
-      className={`relative w-full max-w-sm rounded-lg shadow-2xl bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border animate-fade-in-up overflow-hidden ${typeClasses[message.type]}`}
+      className={`relative w-full max-w-sm rounded-sc-md shadow-2xl bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border animate-fade-in-up overflow-hidden ${typeClasses[message.type]}`}
     >
       <div className="p-4">
         <div className="flex items-start">
@@ -126,7 +126,7 @@ const ToastItem: FC<{
             {message.actionLabel && message.commandId ? (
               <button
                 type="button"
-                className="mt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                className="mt-2 text-xs font-semibold text-[var(--sc-accent)] hover:underline"
                 onClick={() => {
                   runCommand(message.commandId as string);
                   onDismiss(message.id);
@@ -141,7 +141,7 @@ const ToastItem: FC<{
               type="button"
               onClick={() => onDismiss(message.id)}
               aria-label={t('common.close')}
-              className="inline-flex rounded-md text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex rounded-sc-sm text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--sc-ring-focus)]"
             >
               <span className="sr-only">Close</span>
               <svg

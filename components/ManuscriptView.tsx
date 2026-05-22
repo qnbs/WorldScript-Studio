@@ -14,6 +14,8 @@ import { InspectorPanel } from './manuscript/InspectorPanel';
 import { ManuscriptEditor } from './manuscript/ManuscriptEditor';
 import { StoryNavigator } from './manuscript/NavigatorPanel';
 import { Resizer } from './manuscript/ResizeHandle';
+import { Button } from './ui/Button';
+import { Card, CardHeader } from './ui/Card';
 import { Drawer } from './ui/Drawer';
 import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';

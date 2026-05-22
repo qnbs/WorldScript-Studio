@@ -26,7 +26,10 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
 
   // Remix state
   const [isRemixMode, setIsRemixMode] = useState(false);
-  const [remixedSections, setRemixedSections] = useState<{ id: number; title: string }[]>([]);
+  // QNBS-v3: description is optional — present for community template sections, absent for built-in templates.
+  const [remixedSections, setRemixedSections] = useState<
+    { id: number; title: string; description?: string }[]
+  >([]);
   const draggedItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 

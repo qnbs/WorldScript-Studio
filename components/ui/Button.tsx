@@ -10,15 +10,17 @@ export const Button = React.memo(
   React.forwardRef<HTMLButtonElement, ButtonProps>(
     ({ children, variant = 'primary', size = 'default', className, ...props }, ref) => {
       const baseClasses =
-        'relative inline-flex items-center justify-center rounded-xl font-medium transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sc-surface-base)] disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] select-none tracking-tight overflow-hidden';
+        // QNBS-v3: rounded-sc-lg (DS-4 radius token) replaces rounded-xl — visual output identical, now token-driven.
+        'relative inline-flex items-center justify-center rounded-sc-lg font-medium transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sc-surface-base)] disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] select-none tracking-tight overflow-hidden';
 
       const variantClasses = {
         primary:
           'bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-white shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] border border-indigo-500/20',
         secondary:
           'bg-[var(--sc-surface-overlay)] hover:bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] border border-[var(--sc-border-subtle)] shadow-sm hover:shadow-md hover:border-[var(--sc-text-muted)]/30',
+        // QNBS-v3: --sc-danger-* tokens replace dark: prefix — color adapts to appearance presets correctly.
         danger:
-          'bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 hover:border-red-500/30 active:bg-red-500/30',
+          'bg-[var(--sc-danger-bg)] hover:bg-red-500/20 text-[var(--sc-danger-fg)] border border-[var(--sc-danger-border)] hover:border-red-500/30 active:bg-red-500/30',
         ghost:
           'text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)] hover:shadow-sm',
         outline:

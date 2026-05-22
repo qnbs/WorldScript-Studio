@@ -7,7 +7,7 @@ export const Select = React.memo(
         <div className="relative w-full group">
           <select
             className={`
-            flex h-11 w-full appearance-none rounded-xl
+            flex h-11 w-full appearance-none rounded-sc-lg
             border border-[var(--sc-border-subtle)] 
             bg-[var(--glass-bg)] backdrop-blur-md
             px-4 py-2.5 pr-10 text-sm 

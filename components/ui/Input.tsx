@@ -34,7 +34,7 @@ export const Input = React.memo(
         <div className="relative w-full group">
           <input
             className={`
-                flex h-11 w-full appearance-none rounded-xl
+                flex h-11 w-full appearance-none rounded-sc-lg
                 border border-[var(--sc-border-subtle)] 
                 bg-[var(--glass-bg)] backdrop-blur-md
                 px-4 py-2 pr-10 text-sm 
@@ -51,7 +51,7 @@ export const Input = React.memo(
           <button
             type="button"
             onClick={toggleListening}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all duration-sc-fast focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)] z-10 ${
+            className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-sc-md transition-all duration-sc-fast focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)] z-10 ${
               isListening
                 ? 'text-red-500 bg-red-500/10 animate-pulse ring-1 ring-red-500/50'
                 : 'text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--glass-bg-hover)]'

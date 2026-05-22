@@ -18,7 +18,7 @@ export const Card: React.FC<CardProps> = ({
     <Component
       type={isInteractive ? 'button' : undefined}
       className={`
-        relative group overflow-hidden rounded-2xl
+        relative group overflow-hidden rounded-sc-xl
         bg-[var(--sc-surface-raised)]/60 backdrop-blur-3xl
         border border-[var(--glass-border)]
         shadow-[0_8px_30px_rgb(0,0,0,0.04)]
@@ -29,8 +29,8 @@ export const Card: React.FC<CardProps> = ({
       {...props}
     >
       {/* Inner Border Gradient - gives a subtle high-end look */}
-      <div className="absolute inset-0 rounded-2xl border border-[var(--glass-border)] pointer-events-none" />
-      <div className="absolute inset-0 rounded-2xl border border-transparent group-hover:border-indigo-500/20 transition-colors duration-500 pointer-events-none" />
+      <div className="absolute inset-0 rounded-sc-xl border border-[var(--glass-border)] pointer-events-none" />
+      <div className="absolute inset-0 rounded-sc-xl border border-transparent group-hover:border-indigo-500/20 transition-colors duration-500 pointer-events-none" />
 
       {/* Specular Highlight - Simulates light hitting the top edge of glass */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--glass-highlight)] to-transparent opacity-50 pointer-events-none" />

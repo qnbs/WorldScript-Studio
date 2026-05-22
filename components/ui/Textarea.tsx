@@ -49,7 +49,7 @@ export const Textarea = React.memo(
         <div className="relative w-full h-full group">
           <textarea
             className={`
-                flex min-h-[120px] w-full rounded-xl
+                flex min-h-[120px] w-full rounded-sc-lg
                 border border-[var(--sc-border-subtle)] 
                 bg-[var(--glass-bg)] backdrop-blur-md
                 px-4 py-3 pb-12 text-sm 

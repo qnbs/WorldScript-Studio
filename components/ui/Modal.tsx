@@ -67,7 +67,7 @@ export const Modal: React.FC<ModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`relative z-10 pointer-events-auto bg-[var(--sc-surface-base)] sm:rounded-lg shadow-[var(--shadow-xl)] border-0 sm:border border-[var(--sc-border-subtle)] w-full ${sizeClasses[size]} h-full sm:h-auto sm:max-h-[90vh] flex flex-col`}
+        className={`relative z-10 pointer-events-auto bg-[var(--sc-surface-base)] sm:rounded-sc-lg shadow-[var(--shadow-xl)] border-0 sm:border border-[var(--sc-border-subtle)] w-full ${sizeClasses[size]} h-full sm:h-auto sm:max-h-[90vh] flex flex-col`}
         style={{ animation: 'scale-in 0.2s ease-out' }}
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--sc-border-subtle)] flex-shrink-0">
@@ -77,7 +77,7 @@ export const Modal: React.FC<ModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 -mr-2 text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+            className="p-2 -mr-2 text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] transition-colors rounded-sc-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
             aria-label={t('common.close')}
           >
             <svg
