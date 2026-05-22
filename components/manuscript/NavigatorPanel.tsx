@@ -1,5 +1,6 @@
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FC } from 'react';
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { useManuscriptViewContext } from '../../contexts/ManuscriptViewContext';
 import { Button } from '../ui/Button';
 
@@ -215,29 +216,64 @@ export const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(
       [handleMoveSection],
     );
 
+    // QNBS-v3: Virtual scrolling via @tanstack/react-virtual — renders only visible items; critical for manuscripts with 100+ sections.
+    const sections = Array.isArray(manuscript) ? manuscript : [];
+    const scrollRef = useRef<HTMLUListElement>(null);
+    const virtualizer = useVirtualizer({
+      count: sections.length,
+      getScrollElement: () => scrollRef.current,
+      estimateSize: () => 40,
+      overscan: 5,
+    });
+
     return (
       <div className="flex flex-col h-full">
-        <ul className="flex-grow space-y-1 overflow-y-auto p-2 no-scrollbar list-none">
-          {(Array.isArray(manuscript) ? manuscript : []).map((section, index) => (
-            <NavigatorItem
-              key={section.id}
-              section={section}
-              index={index}
-              isActive={activeSectionId === section.id}
-              isDragging={draggingIndex === index}
-              isFirst={index === 0}
-              isLast={index === manuscript.length - 1}
-              canDelete={manuscript.length > 1}
-              onSelect={handleSelect}
-              onDragStart={handleDragStart}
-              onDragEnter={handleDragEnter}
-              onDragEnd={handleDragEnd}
-              onMoveUp={handleMoveUp}
-              onMoveDown={handleMoveDown}
-              onDelete={handleDeleteSection}
-              t={t}
-            />
-          ))}
+        <ul
+          ref={scrollRef}
+          className="flex-grow overflow-y-auto p-2 no-scrollbar list-none"
+          style={{ position: 'relative' }}
+        >
+          <li
+            style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
+            aria-hidden="true"
+          />
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const section = sections[virtualRow.index];
+            if (!section) return null;
+            const index = virtualRow.index;
+            return (
+              <li
+                key={section.id}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                data-index={index}
+                ref={virtualizer.measureElement}
+              >
+                <NavigatorItem
+                  section={section}
+                  index={index}
+                  isActive={activeSectionId === section.id}
+                  isDragging={draggingIndex === index}
+                  isFirst={index === 0}
+                  isLast={index === sections.length - 1}
+                  canDelete={sections.length > 1}
+                  onSelect={handleSelect}
+                  onDragStart={handleDragStart}
+                  onDragEnter={handleDragEnter}
+                  onDragEnd={handleDragEnd}
+                  onMoveUp={handleMoveUp}
+                  onMoveDown={handleMoveDown}
+                  onDelete={handleDeleteSection}
+                  t={t}
+                />
+              </li>
+            );
+          })}
         </ul>
         <div className="p-3 border-t border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/50">
           <Button
