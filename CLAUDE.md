@@ -22,6 +22,7 @@ pnpm run test:e2e      # Playwright E2E tests (CI=true required; E2E are CI-only
 pnpm run analyze       # Bundle analysis (ANALYZE=true vite build)
 pnpm run bundle:budget # Check vendor chunk sizes (max 7000 KB; entry max 4500 KB)
 pnpm run storybook     # Storybook on port 6006
+pnpm run test:storybook # Storybook test-runner (CI; needs Storybook running or built)
 pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 ```
 
@@ -55,13 +56,14 @@ StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini 
 
 **Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Two internal workspace packages (`@domain/ai-core`, `@domain/ui` in `packages/`) are consumed as `workspace:*` deps.
 
-**Live:** `https://qnbs.github.io/StoryCraft-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
+**Live:** `https://storycraft-studio-indol.vercel.app/` (Vercel, primary) · GitHub Pages: `https://qnbs.github.io/StoryCraft-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
 
 ### Directory map
 
 ```
 app/              → Redux store, typed hooks, listener middleware, transientUiStore (Zustand)
 components/       → View components; components/ui/ = design-system atoms (Button, Modal, Toast…)
+                     components/manuscript/ = ManuscriptView sub-components (NavigatorPanel, ManuscriptEditor, ResizeHandle)
 contexts/         → React context providers — one per major view + I18nContext + CommandExecutorContext
 features/         → Redux slices: project, settings, status, writer, versionControl, featureFlags,
                      plotBoard, sceneComments, progressTracker, analytics
@@ -112,6 +114,27 @@ React conventions: `React.memo()` for expensive renders; `React.forwardRef()` fo
 Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provides retry + WCAG live-region announce on render errors.
 
 **Props conventions:** Event handler props use `onX` prefix. Boolean props use `is*`/`has*` prefix. Prefer Tailwind classes over inline styles; inline styles only for dynamic values derived from measurement.
+
+### Design System
+
+**Token architecture:** `index.css` defines the `--sc-*` semantic token layer (60+ tokens). Theming is body-class based (`.light-theme` / `.dark-theme` / `.sepia-theme` etc.). **NEVER use the `dark:` Tailwind prefix** — it bypasses body-class theming and breaks appearance presets. Use `bg-[var(--sc-surface-base)]`, not `bg-white dark:bg-slate-900`.
+
+**Special token families** (do not replace or remove):
+- `--glass-*` — glassmorphism effects (standalone design tokens, not bridge vars)
+- `--nav-*` — sidebar/nav active/hover states (standalone design tokens)
+- `--radius-sc-*` — border radius tokens (`--radius-sc-xl`, `--radius-sc-lg`, etc.)
+- `--icon-sc-*` — icon size tokens (`--icon-sc-sm/md/lg/xl`)
+- `--text-sc-*` — fluid type scale via `clamp()` (390px → 1280px interpolation)
+
+**Token migration status (DS-1):** 733 legacy `--background-*` / `--foreground-*` bridge vars still exist in components. They are kept in `index.css` as a bridge. Do NOT delete the bridge block until DS-1 (full migration) is verified in production. Replacement map: `var(--background-primary)` → `var(--sc-surface-base)`, `var(--foreground-primary)` → `var(--sc-text-primary)`, etc.
+
+**Tailwind utilities:** `packages/ui/tailwind-preset.ts` registers `w/h-icon-sc-*`, `text-sc-*`, `rounded-sc-*`, `duration-sc-*`, `ease-sc-*` utilities. Prefer these over one-off `w-4`/`text-sm` for atoms.
+
+**Accessibility hooks:** `useAnnounce()` from `LiveRegionContext` — signature is `announce(message: string, priority?: 'polite' | 'assertive')`. The second argument is a **string enum**, not an object. `useFocusTrap` re-queries focusable elements on every Tab press (live DOM query, not a cached list).
+
+**Container queries:** Resizable panels (Navigator, Inspector, WriterView sidebars) set `containerType: 'inline-size'` via inline style. Use `@container` CSS queries or the Tailwind `@container` variant for responsive panel content.
+
+**Tauri build isolation:** `vite.config.ts` uses `external: [/^@tauri-apps\//]` (regex) to exclude all Tauri packages from the web build. When adding new Tauri plugin imports to `services/tauriRuntime.ts`, the regex already covers them — do not add to the explicit list.
 
 ### AI Services
 
@@ -205,6 +228,8 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 - File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors
 - Never comment out or skip failing tests to green CI — fix the root cause. `it.skip` requires a file-level comment with a reason and a ticket/TODO reference
 - **Modus operandi — tests:** Whenever you modify, add, or delete a code file, always check whether a corresponding test file exists (in `tests/unit/` for components/hooks/services, or `tests/e2e/` for flows). If it does, update or extend it to cover the change. If it doesn't exist yet and the change is non-trivial, create one. Run the relevant test file with `pnpm exec vitest run <path>` to verify before committing. Write tests to be fully deterministic: mock `Date.now()` / use fake timers; never depend on real network or test execution order; reset global state (Redux store, localStorage, IndexedDB) in `beforeEach` using patterns from `tests/setup.ts`. Use `@testing-library/user-event` for user interactions (not `.click()` directly); use `findBy*` / `waitFor` for async assertions.
+- **Vitest concurrency:** `maxWorkers: 1` is set in `vitest.config.ts` — tests run serially. Do not attempt to parallelize Vitest runs on this project (low-end hardware + IDB isolation requirement).
+- **IDB unit tests:** Use `// @vitest-environment node` + instantiate `new IDBFactory()` per test in `beforeEach` + call `_resetDbForTest()` to clear state. See `sceneRevisionService` tests as the canonical pattern.
 
 ## Current Patterns
 
@@ -247,6 +272,10 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 ### Local inference
 
 **localAiFacade / WebLLM:** `services/localAiFacade.ts` wraps WebLLM with the same provider interface as `aiProviderService.ts`. Model download progress surfaced via `onProgress`; mount-guard via `useRef` prevents stale updates after unmount.
+
+### Virtual scrolling
+
+`NavigatorPanel.tsx` uses `useVirtualizer` from `@tanstack/react-virtual`. Pattern: scrollable `<ul>` gets `ref={scrollRef}` + `position: relative`; a sentinel `<li>` sets `height: virtualizer.getTotalSize()`; visible items render as `position: absolute` with `transform: translateY(${virtualRow.start}px)`. Each item `<li>` needs `data-index={index}` + `ref={virtualizer.measureElement}` for dynamic measurement. Use `estimateSize: () => 40, overscan: 5` as defaults. Never lift the virtual container's `overflow-y: auto` into a parent — the virtualizer's scroll element must be the direct scrollable node.
 
 ## Known Technical Debt
 

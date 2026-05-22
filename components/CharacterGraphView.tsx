@@ -15,6 +15,7 @@ import { useAnnounce } from '../contexts/LiveRegionContext';
 import { useCharacterGraphView } from '../hooks/useCharacterGraphView';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';
 
 const RELATIONSHIP_COLORS: Record<string, string> = {
@@ -240,30 +241,56 @@ const CharacterGraphUI: FC = () => {
             <CardContent className="p-0 h-full min-h-[400px] rounded-sc-lg overflow-hidden">
               {viewMode === 'graph' && characters.length === 0 ? (
                 // QNBS-v3: Empty-state gated here so ForceGraph2D lazy import never triggers when there are no characters.
-                <div className="flex flex-col items-center justify-center h-64 text-[var(--sc-text-muted)]">
-                  <svg
-                    className="w-12 h-12 mb-3 opacity-30"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1}
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
-                    />
-                  </svg>
-                  <p>{t('charGraph.noCharacters')}</p>
+                <div className="flex items-center justify-center h-64 p-6">
+                  <EmptyState
+                    compact
+                    icon={
+                      <svg
+                        className="w-10 h-10"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1}
+                        stroke="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
+                        />
+                      </svg>
+                    }
+                    title={t('charGraph.noCharacters')}
+                    description={t('charGraph.noCharactersHint')}
+                  />
                 </div>
               ) : viewMode === 'graph' ? (
                 <CharacterForceGraph />
               ) : (
                 <div className="p-4 overflow-auto max-h-[min(70vh,560px)]">
                   {relationships.length === 0 ? (
-                    <p className="text-sm text-[var(--sc-text-muted)]">
-                      {t('characterGraph.table.empty')}
-                    </p>
+                    <EmptyState
+                      compact
+                      icon={
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          className="w-8 h-8"
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"
+                          />
+                        </svg>
+                      }
+                      title={t('characterGraph.table.empty')}
+                      description={t('characterGraph.table.emptyHint')}
+                    />
                   ) : (
                     <table className="w-full text-sm border-collapse border border-[var(--sc-border-subtle)] rounded-lg overflow-hidden">
                       <caption className="text-left py-2 px-1 font-semibold text-[var(--sc-text-primary)]">

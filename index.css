@@ -626,7 +626,7 @@ select option {
   filter: sepia(0.08) hue-rotate(18deg) saturate(1.1);
 }
 
-/* ── Mobile bottom tab bar clearance (main scroll area) ── */
+/* ── Mobile bottom tab bar clearance ── */
 :root {
   --sc-mobile-tab-bar-height: calc(5.75rem + env(safe-area-inset-bottom, 0px));
 }
@@ -637,6 +637,17 @@ select option {
   }
 }
 
+/* Legacy helper kept for reference — replaced by .app-column-mobile approach. */
 .pb-mobile-nav {
   padding-bottom: calc(var(--sc-mobile-tab-bar-height) + 1.25rem);
+}
+
+/* QNBS-v3: Cap the inner app column on mobile so every h-full view is bounded
+   above the fixed bottom nav. Defensive against Safari/old-Chrome where
+   height:100% on a block child of overflow:auto can resolve to the parent's
+   border-box height (including padding) instead of the content height. */
+@media (max-width: 767px) {
+  .app-column-mobile {
+    max-height: calc(100dvh - var(--sc-mobile-tab-bar-height));
+  }
 }

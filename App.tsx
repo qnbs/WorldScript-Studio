@@ -499,7 +499,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                 isSidebarOpen={appState.isSidebarOpen}
                 setIsSidebarOpen={appState.setIsSidebarOpen}
               />
-              <div className="flex-1 flex flex-col h-full overflow-hidden pt-16 transition-all duration-300 ease-in-out md:ml-64">
+              <div className="app-column-mobile flex-1 flex flex-col h-full overflow-hidden pt-16 transition-all duration-300 ease-in-out md:ml-64">
                 <Header
                   currentView={currentView}
                   setIsSidebarOpen={appState.setIsSidebarOpen}
@@ -511,7 +511,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   id="main-content"
                   tabIndex={-1}
                   aria-label={t('common.mainContent')}
-                  className="flex-1 overflow-y-auto p-4 pb-mobile-nav sm:p-6 md:p-8 md:pb-8 scroll-smooth overscroll-none focus-visible:outline-none"
+                  className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 scroll-smooth overscroll-none focus-visible:outline-none"
                 >
                   <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>
                     <ViewErrorBoundary viewLabel={t(viewNavigationLabelKey(currentView))}>

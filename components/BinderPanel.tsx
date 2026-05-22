@@ -14,6 +14,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { storageService } from '../services/storageService';
 import type { BinderNode } from '../types';
 import { Button } from './ui/Button';
+import { EmptyState } from './ui/EmptyState';
 
 function sortBinderNodes(nodes: BinderNode[]): BinderNode[] {
   return [...nodes].sort((a, b) => {
@@ -353,7 +354,28 @@ export const BinderPanel: FC = () => {
       </div>
       <div className="flex-grow overflow-y-auto p-2 space-y-1">
         {sorted.length === 0 ? (
-          <p className="text-xs text-[var(--sc-text-muted)] px-1">{t('manuscript.binder.empty')}</p>
+          <EmptyState
+            compact
+            icon={
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-7 h-7"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v8.25m19.5 0A2.25 2.25 0 0 1 19.5 16.5h-15a2.25 2.25 0 0 1-2.25-2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 18.409a2.25 2.25 0 0 1-1.07-1.916V14.25"
+                />
+              </svg>
+            }
+            title={t('manuscript.binder.empty')}
+            description={t('manuscript.binder.emptyHint')}
+          />
         ) : (
           sorted.map((n) => {
             const depth = binderDepth(n, byId);
