@@ -94,7 +94,7 @@ export const CollaborationSection: FC = () => {
             />
             <p
               id="settings-webrtc-signaling-help"
-              className="mt-1 text-xs text-[var(--foreground-tertiary)]"
+              className="mt-1 text-xs text-[var(--sc-text-muted)]"
             >
               {t('settings.collaboration.webrtcSignalingUrlsHelp')}
             </p>

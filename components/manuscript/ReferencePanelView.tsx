@@ -50,7 +50,7 @@ const CharactersTab: FC<{ section: StorySection }> = ({ section }) => {
             </div>
           ) : (
             <div
-              className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--background-hover)] text-lg"
+              className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--sc-surface-overlay)] text-lg"
               aria-hidden="true"
             >
               👤

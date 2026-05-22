@@ -106,7 +106,7 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
                 type="button"
                 onClick={handleAddReply}
                 disabled={!replyDraft.trim()}
-                className="px-2 py-1 rounded bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
+                className="px-2 py-1 rounded bg-[var(--sc-accent)] text-[white] text-xs disabled:opacity-50"
               >
                 {t('comments.send')}
               </button>
@@ -196,7 +196,7 @@ export const CommentsPanel: FC<{ sectionId: string }> = ({ sectionId }) => {
           type="button"
           onClick={handleAddComment}
           disabled={!newComment.trim()}
-          className="self-end px-3 py-1 rounded bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
+          className="self-end px-3 py-1 rounded bg-[var(--sc-accent)] text-[white] text-xs disabled:opacity-50"
         >
           {t('comments.add')}
         </button>

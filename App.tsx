@@ -454,7 +454,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       <div
         role="status"
         aria-label={t('common.appLoading')}
-        className="flex h-[100dvh] w-screen items-center justify-center bg-[var(--background-primary)]"
+        className="flex h-[100dvh] w-screen items-center justify-center bg-[var(--sc-surface-base)]"
       >
         <Spinner className="w-16 h-16" label={t('common.appLoading')} />
       </div>
@@ -468,7 +468,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
           <div
             role="status"
             aria-label={t('common.appLoading')}
-            className="flex h-[100dvh] w-screen items-center justify-center bg-[var(--background-primary)]"
+            className="flex h-[100dvh] w-screen items-center justify-center bg-[var(--sc-surface-base)]"
           >
             <Spinner className="w-16 h-16" label={t('common.appLoading')} />
           </div>
@@ -492,7 +492,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
             >
               {t('common.skipToContent')}
             </a>
-            <div className="flex h-[100dvh] bg-[var(--background-primary)] text-[var(--foreground-primary)] overflow-hidden touch-none md:touch-auto">
+            <div className="flex h-[100dvh] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] overflow-hidden touch-none md:touch-auto">
               <Sidebar
                 currentView={currentView}
                 onNavigate={handleNavigate}

@@ -47,7 +47,7 @@ export const AccessibilitySection: FC = () => {
           <p className="text-sm text-[var(--sc-text-muted)] mt-2">
             {t('settings.accessibility.hub.intro')}
           </p>
-          <p className="text-xs text-[var(--foreground-tertiary)] mt-2">
+          <p className="text-xs text-[var(--sc-text-muted)] mt-2">
             {t('settings.accessibility.activePreset')}:{' '}
             <span className="font-medium text-[var(--sc-text-secondary)]">
               {t(`settings.accessibility.preset.${settings.accessibility.presetId ?? 'custom'}`)}

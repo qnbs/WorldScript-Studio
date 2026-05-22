@@ -24,7 +24,7 @@ const TocSidebar: FC = () => {
           type="button"
           onClick={toggleToc}
           aria-label={t('preview.toc.close')}
-          className="p-1 rounded hover:bg-[var(--background-hover)] text-[var(--sc-text-secondary)]"
+          className="p-1 rounded hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
         >
           ✕
         </button>
@@ -37,8 +37,8 @@ const TocSidebar: FC = () => {
               onClick={() => scrollToSection(s.id)}
               className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors truncate ${
                 activeId === s.id
-                  ? 'bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)]'
-                  : 'text-[var(--sc-text-primary)] hover:bg-[var(--background-hover)]'
+                  ? 'bg-[var(--sc-accent)] text-[white]'
+                  : 'text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)]'
               }`}
             >
               {s.title || t('preview.untitledScene')}
@@ -79,7 +79,7 @@ const ControlsBar: FC = () => {
         onClick={toggleToc}
         aria-label={t('preview.toc.toggle')}
         aria-pressed={isTocOpen}
-        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
+        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
       >
         ☰ {t('preview.toc.title')}
       </button>
@@ -90,7 +90,7 @@ const ControlsBar: FC = () => {
           type="button"
           onClick={() => setFontSize(fontSize - 1)}
           aria-label={t('preview.controls.decreaseFontSize')}
-          className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
+          className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
         >
           A-
         </button>
@@ -99,7 +99,7 @@ const ControlsBar: FC = () => {
           type="button"
           onClick={() => setFontSize(fontSize + 1)}
           aria-label={t('preview.controls.increaseFontSize')}
-          className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
+          className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
         >
           A+
         </button>
@@ -123,7 +123,7 @@ const ControlsBar: FC = () => {
         onClick={toggleWordCount}
         aria-pressed={showWordCount}
         aria-label={t('preview.controls.wordCount')}
-        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
+        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
       >
         {t('preview.controls.wordCount')}
       </button>
@@ -135,7 +135,7 @@ const ControlsBar: FC = () => {
         aria-label={
           isFullscreen ? t('preview.controls.exitFullscreen') : t('preview.controls.fullscreen')
         }
-        className="ml-auto px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
+        className="ml-auto px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
       >
         {isFullscreen ? '⊡' : '⊞'}{' '}
         {isFullscreen ? t('preview.controls.exitFullscreen') : t('preview.controls.fullscreen')}

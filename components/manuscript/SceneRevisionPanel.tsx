@@ -90,7 +90,7 @@ const RevisionItem: FC<{
           <button
             type="button"
             onClick={() => setShowDiff((v) => !v)}
-            className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
+            className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
           >
             {showDiff ? t('revisions.hideDiff') : t('revisions.showDiff')}
           </button>
@@ -106,7 +106,7 @@ const RevisionItem: FC<{
               <button
                 type="button"
                 onClick={() => setConfirmRestore(false)}
-                className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
+                className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
               >
                 {t('revisions.cancel')}
               </button>
@@ -115,7 +115,7 @@ const RevisionItem: FC<{
             <button
               type="button"
               onClick={() => setConfirmRestore(true)}
-              className="text-xs px-2 py-1 rounded bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)] hover:opacity-90"
+              className="text-xs px-2 py-1 rounded bg-[var(--sc-accent)] text-[white] hover:opacity-90"
             >
               {t('revisions.restore')}
             </button>
@@ -190,7 +190,7 @@ export const SceneRevisionPanel: FC<{ section: StorySection }> = ({ section }) =
           type="button"
           onClick={() => void handleSaveNamed()}
           disabled={isSaving}
-          className="px-2 py-1 rounded bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
+          className="px-2 py-1 rounded bg-[var(--sc-accent)] text-[white] text-xs disabled:opacity-50"
         >
           {isSaving ? '…' : t('revisions.saveNamed')}
         </button>

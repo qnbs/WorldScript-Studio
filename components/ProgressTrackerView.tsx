@@ -145,7 +145,7 @@ const Heatmap: FC<{ history: { date: string; words: number }[] }> = ({ history }
     }
   }
 
-  const colors = ['var(--background-hover)', '#bbf7d0', '#86efac', '#4ade80', '#16a34a'];
+  const colors = ['var(--sc-surface-overlay)', '#bbf7d0', '#86efac', '#4ade80', '#16a34a'];
 
   return (
     <svg
@@ -323,7 +323,7 @@ const ProgressTrackerInner: FC = () => {
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                 isSessionActive
                   ? 'bg-red-500 hover:bg-red-600 text-white'
-                  : 'bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-[var(--foreground-on-interactive)]'
+                  : 'bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-[white]'
               }`}
               aria-label={
                 isSessionActive ? t('progress.session.stop') : t('progress.session.start')

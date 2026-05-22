@@ -53,7 +53,7 @@ const AssignPopover: FC<AssignPopoverProps> = ({ subplot, sections, onClose, t }
 
   return (
     <div
-      className="absolute left-full top-0 ml-1 z-50 w-56 bg-[var(--background-elevated)] border border-[var(--sc-border-subtle)] rounded-lg shadow-sc-lg p-2"
+      className="absolute left-full top-0 ml-1 z-50 w-56 bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-lg shadow-sc-lg p-2"
       role="dialog"
       aria-label={t('sceneboard.subplot.assignScenes')}
     >
@@ -70,7 +70,7 @@ const AssignPopover: FC<AssignPopoverProps> = ({ subplot, sections, onClose, t }
             const checked = subplot.sectionIds.includes(s.id);
             return (
               <li key={s.id}>
-                <label className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[var(--background-hover)] cursor-pointer text-xs">
+                <label className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[var(--sc-surface-overlay)] cursor-pointer text-xs">
                   <input
                     type="checkbox"
                     checked={checked}
@@ -133,7 +133,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
   return (
     <li className="relative group">
       <div
-        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors ${isFiltered ? 'bg-[var(--background-selected)]' : 'hover:bg-[var(--background-hover)]'}`}
+        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors ${isFiltered ? 'bg-[var(--sc-accent)/10]' : 'hover:bg-[var(--sc-surface-overlay)]'}`}
       >
         {/* Color swatch */}
         <button
@@ -394,7 +394,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="w-full text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--background-hover)] transition-colors"
+            className="w-full text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--sc-surface-overlay)] transition-colors"
             aria-label={t('sceneboard.subplot.addSubplot')}
           >
             <span aria-hidden="true">+</span>

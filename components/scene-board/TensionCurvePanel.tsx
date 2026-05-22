@@ -241,7 +241,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
             <button
               type="button"
               onClick={handleClearOverrides}
-              className="ml-auto text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] px-2 py-0.5 rounded hover:bg-[var(--background-hover)]"
+              className="ml-auto text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] px-2 py-0.5 rounded hover:bg-[var(--sc-surface-overlay)]"
               aria-label={t('sceneboard.tension.clearOverrides')}
             >
               {t('sceneboard.tension.clearOverrides')}

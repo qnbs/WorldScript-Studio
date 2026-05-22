@@ -71,7 +71,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
 
   return (
     <div
-      className="absolute bottom-3 left-3 z-30 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--background-elevated)] border border-[var(--sc-border-subtle)] shadow-sc-lg"
+      className="absolute bottom-3 left-3 z-30 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] shadow-sc-lg"
       role="toolbar"
       aria-label={t('sceneboard.connectionToolbar.label')}
     >
@@ -89,7 +89,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
             className={`w-7 h-7 rounded text-sm transition-colors ${
               selected.type === value
                 ? 'bg-[var(--sc-accent-primary,#6366f1)] text-white'
-                : 'text-[var(--sc-text-muted)] hover:bg-[var(--background-hover)]'
+                : 'text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-overlay)]'
             }`}
             title={t(`sceneboard.connectionType.${value}`)}
             aria-pressed={selected.type === value}
