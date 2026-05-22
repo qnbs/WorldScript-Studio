@@ -32,3 +32,4 @@ export const ViewErrorBoundary: FC<ViewErrorBoundaryProps> = ({ children, viewLa
     </ErrorBoundary>
   );
 };
+ViewErrorBoundary.displayName = 'ViewErrorBoundary';
