@@ -37,6 +37,7 @@ const I18nMockProvider: React.FC<{ children: React.ReactNode }> = ({ children })
       language: 'en',
       setLanguage: () => {},
       t: defaultT,
+      isReady: true,
     }}
   >
     {children}

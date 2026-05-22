@@ -321,7 +321,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     if (repair) {
       if (repair.title !== undefined) dispatch(projectActions.updateTitle(repair.title));
       if (repair.logline !== undefined) dispatch(projectActions.updateLogline(repair.logline));
-      if (repair.manuscript !== undefined) dispatch(projectActions.setManuscript(repair.manuscript));
+      if (repair.manuscript !== undefined)
+        dispatch(projectActions.setManuscript(repair.manuscript));
       return;
     }
 
@@ -334,7 +335,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         }),
       );
     }
-  }, [project, isPortalActive, isI18nReady, language, dispatch, t]);
+  }, [project, isPortalActive, isI18nReady, dispatch, t]);
 
   const wordCountApprox = useMemo(() => approximateManuscriptWordCount(project), [project]);
 

@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) — GitHub language stats and i18n layout.
 
+## [1.11.0] — 2026-05-22
+
+### Fixed
+
+- **Cloudflare deploy (P0):** `scripts/resolve-deploy-base.mjs` used undefined variable `base`; corrected to `deployBase`. `sync-deploy-base.mjs` now propagates errors with `process.exit(1)` and uses `const` correctly.
+- **StorageBackend resilience:** `saveProject()` and `saveSettings()` in `services/dbService.ts` now wrap IDB writes in `retryDb()` (2 retries, 500 ms delay on quota/state errors). Settings auto-save failures surface as an error toast.
+- **Init recovery UI:** `index.tsx` mounts a `StorageErrorScreen` React component on DB init failure (instead of a raw red `div`), offering Reload and Reset Database buttons.
+- **Lint:** `scripts/sync-deploy-base.mjs` `let text` → `const text`; `App.tsx` removed redundant `language` dependency from `useEffect`.
+
+### Added
+
+- **`services/dbInitialization.ts`** — `initializeStorage()` (returns `{ success, migrated, error? }`) and `resetAllDatabases()` (deletes both IDB stores + localStorage markers).
+- **Help Center articles:** All 13 previously stub articles (< 300 chars) fully written to 700–1000 chars of HTML content across all 5 locales (de/en/es/fr/it). 1931 keys × 5 locales verified at parity.
+- **Tests:** `tests/unit/dbInitialization.test.ts` (8 tests) + `tests/unit/dbServiceRetry.test.ts` (7 tests).
+
 ## [1.10.0] — 2026-05-21
 
 ### Added

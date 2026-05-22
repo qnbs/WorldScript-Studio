@@ -1,9 +1,25 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-20 (v1.7.0) → 2026-05-21 (v1.8.0) → **2026-05-21 (v1.9.0)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-21 (v1.10.0) → **2026-05-22 (v1.11.0)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **1.9.0** — released 2026-05-21  
+**Current version:** **1.11.0** — released 2026-05-22  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-22 (v1.11.0 — Stabilization: Deploy Fix, StorageBackend Resilience, Help Center)
+
+### Released: v1.11.0 (2026-05-22)
+
+**Deploy:** `resolve-deploy-base.mjs` Cloudflare P0 variable-name bug fixed; `sync-deploy-base.mjs` error propagation + `const` lint fix.
+
+**StorageBackend:** `services/dbInitialization.ts` extracted (`initializeStorage()`, `resetAllDatabases()`); `retryDb()` applied to `saveProject` + `saveSettings`; `index.tsx` mounts `StorageErrorScreen` on init failure; settings auto-save catch dispatches error toast.
+
+**Help Center:** 13 stub articles (< 300 chars) replaced with full 700–1000 char HTML content across all 5 locales. German typographic closing quotes (11 ASCII→U+201C) fixed. **1931 keys × 5 locales** at parity.
+
+**Tests:** 15 new tests — `dbInitialization.test.ts` (8) + `dbServiceRetry.test.ts` (7). Both use `// @vitest-environment node`, `vi.hoisted()`, bracket notation for index-signature properties.
+
+**Quality gate:** lint ✅ · i18n:check ✅ (1931 keys × 5) · typecheck ✅ · 15/15 new tests ✅
 
 ---
 

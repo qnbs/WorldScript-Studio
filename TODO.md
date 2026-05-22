@@ -8,6 +8,19 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## v1.11 — Stabilization Sprint (RELEASED 2026-05-22)
+
+- ✅ **Cloudflare deploy fix (P0)** — `resolve-deploy-base.mjs` `base` → `deployBase`; `sync-deploy-base.mjs` error propagation
+- ✅ **`services/dbInitialization.ts`** — `initializeStorage()` + `resetAllDatabases()` extracted from inline IIFE
+- ✅ **StorageBackend retries** — `retryDb()` applied to `saveProject` + `saveSettings` in `dbService.ts`
+- ✅ **`StorageErrorScreen` recovery UI** — `index.tsx` shows React component with Reload + Reset on DB init failure
+- ✅ **Settings auto-save toast** — `listenerMiddleware.ts` catch dispatches error notification
+- ✅ **Help Center complete** — 13 stub articles fully written (700–1000 chars HTML) × 5 locales; 1931 keys × 5 at parity
+- ✅ **Tests** — `dbInitialization.test.ts` (8 tests) + `dbServiceRetry.test.ts` (7 tests)
+- ✅ **Quality gate** — lint ✅ · i18n:check ✅ · typecheck ✅ · 15/15 new tests ✅
+
+---
+
 ## v1.7 — DuckDB Analytics + Hybrid RAG + AI Extensions (RELEASED 2026-05-20)
 
 - ✅ **DuckDB-WASM P0–P3** — worker, client, schema (10 tables + 5 views), analytics queries, migration, dual-write, RAG vectors, cross-project, codex, scene timeline
