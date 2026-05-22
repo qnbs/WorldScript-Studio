@@ -126,7 +126,7 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 - `--icon-sc-*` — icon size tokens (`--icon-sc-sm/md/lg/xl`)
 - `--text-sc-*` — fluid type scale via `clamp()` (390px → 1280px interpolation)
 
-**Token migration status (DS-1):** 733 legacy `--background-*` / `--foreground-*` bridge vars still exist in components. They are kept in `index.css` as a bridge. Do NOT delete the bridge block until DS-1 (full migration) is verified in production. Replacement map: `var(--background-primary)` → `var(--sc-surface-base)`, `var(--foreground-primary)` → `var(--sc-text-primary)`, etc.
+**Token migration status (DS-1 + DS-2 — complete):** All `dark:` Tailwind prefix violations are eliminated (DS-2 ✅). All undefined bridge CSS vars (`--background-hover`, `--background-elevated`, `--background-selected`, `--foreground-on-interactive`, `--foreground-tertiary`) have been replaced with `--sc-*` equivalents. The bridge block in `index.css` now contains only intentional tokens — do NOT remove them: `--border-interactive` (alias for `--sc-border-focus`), `--nav-*` (sidebar tokens), `--glass-*` (glassmorphism tokens), `--background-gradient-overlay-start` / `--card-gradient-overlay` (per-theme card image gradients). **DS-5 (delete remaining bridge block)** is deferred until one production verification cycle completes.
 
 **Tailwind utilities:** `packages/ui/tailwind-preset.ts` registers `w/h-icon-sc-*`, `text-sc-*`, `rounded-sc-*`, `duration-sc-*`, `ease-sc-*` utilities. Prefer these over one-off `w-4`/`text-sm` for atoms.
 
@@ -213,7 +213,7 @@ Skip the annotation for pure formatting, lockfile updates, or generated artefact
 
 ## Documentation index
 
-All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**. Sprint notes: `docs/SPRINT-V1.8.md`, `docs/SPRINT-V1.9.md`, `docs/SPRINT-V1.10.md`. Local CI: `infra/low-end-ci/DAILY-DRIVER.md`.
+All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**. Sprint notes: `docs/SPRINT-V1.8.md`, `docs/SPRINT-V1.9.md`, `docs/SPRINT-V1.10.md`, `docs/SPRINT-V1.16.md` (design system completion). Local CI: `infra/low-end-ci/DAILY-DRIVER.md`.
 
 ## Key Constraints
 
@@ -285,6 +285,7 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - `components/AdvancedImportExport.tsx` — keep browser vs Tauri export paths explicit
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
 - `workers/inference.worker.ts:50` — `@ts-expect-error` on `@xenova/transformers` dynamic import (lives in `packages/ai-core`; Vite resolves at build time but `tsc` can't see it from root)
+- **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 token migration verified in production (all intentional vars documented above)
 - **v2.0 open:** Full RTCDataChannel in-flight E2E encryption (y-webrtc patch); RTL language support; LoRA fine-tuning; Cloud-Sync
 
 ## graphify
