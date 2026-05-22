@@ -3,6 +3,10 @@ import { useMindMapViewContext } from '../../contexts/MindMapViewContext';
 import type { NewMindMapDraft } from '../../hooks/useMindMapView';
 import { useTranslation } from '../../hooks/useTranslation';
 
+// QNBS-v3: All dark: stone/violet prefixes replaced with --sc-* tokens — appearance presets now work.
+const inputClass =
+  'w-full text-sm px-2 py-1.5 rounded-sc-sm border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] outline-none';
+
 function MapForm({
   initial,
   onSave,
@@ -27,12 +31,12 @@ function MapForm({
           ...(description.trim() ? { description: description.trim() } : {}),
         });
       }}
-      className="p-3 space-y-3 border-b border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50"
+      className="p-3 space-y-3 border-b border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)]"
     >
       <div>
         <label
           htmlFor="mm-map-name"
-          className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1"
+          className="block text-xs font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('mindmap.mapName')}
         </label>
@@ -42,14 +46,14 @@ function MapForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={t('mindmap.mapNamePlaceholder')}
-          className="w-full text-sm px-2 py-1.5 rounded border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+          className={inputClass}
           required
         />
       </div>
       <div>
         <label
           htmlFor="mm-map-desc"
-          className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1"
+          className="block text-xs font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('mindmap.mapDescription')}
         </label>
@@ -59,20 +63,20 @@ function MapForm({
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t('mindmap.mapDescriptionPlaceholder')}
           rows={2}
-          className="w-full text-sm px-2 py-1.5 rounded border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none resize-none"
+          className={`${inputClass} resize-none`}
         />
       </div>
       <div className="flex gap-2 justify-end">
         <button
           type="button"
           onClick={onCancel}
-          className="text-xs px-3 py-1.5 rounded border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-400"
+          className="text-xs px-3 py-1.5 rounded-sc-sm border border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)]"
         >
           {t('mindmap.cancel')}
         </button>
         <button
           type="submit"
-          className="text-xs px-3 py-1.5 rounded bg-violet-600 hover:bg-violet-700 text-white"
+          className="text-xs px-3 py-1.5 rounded-sc-sm bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-white"
         >
           {t('mindmap.save')}
         </button>
@@ -103,11 +107,11 @@ export function MindMapListPanel() {
 
   return (
     <aside
-      className="w-56 flex-shrink-0 border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 flex flex-col"
+      className="w-56 flex-shrink-0 border-r border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] flex flex-col"
       aria-label={t('mindmap.title')}
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-stone-200 dark:border-stone-700">
-        <span className="text-xs font-semibold text-stone-700 dark:text-stone-300 uppercase tracking-wide">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--sc-border-subtle)]">
+        <span className="text-xs font-semibold text-[var(--sc-text-primary)] uppercase tracking-wide">
           {t('mindmap.title')}
         </span>
         <button
@@ -115,7 +119,7 @@ export function MindMapListPanel() {
           onClick={handleOpenNewMapForm}
           aria-label={t('mindmap.addMap')}
           title={t('mindmap.addMap')}
-          className="p-1 rounded hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-500"
+          className="p-1 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)]"
         >
           <svg
             width="14"
@@ -152,7 +156,7 @@ export function MindMapListPanel() {
       {/* QNBS-v3: div used instead of ul so role="listbox" passes a11y (ul is non-interactive) */}
       <div className="flex-1 overflow-y-auto" role="listbox" aria-label={t('mindmap.title')}>
         {mindMaps.length === 0 && !isMapFormOpen && (
-          <div className="p-4 text-xs text-stone-400 dark:text-stone-500 text-center">
+          <div className="p-4 text-xs text-[var(--sc-text-muted)] text-center">
             {t('mindmap.emptyState')}
           </div>
         )}
@@ -162,7 +166,7 @@ export function MindMapListPanel() {
             <div key={map.id} role="option" aria-selected={isActive} tabIndex={-1}>
               {confirmDeleteId === map.id ? (
                 <div className="px-3 py-2 space-y-1">
-                  <p className="text-xs text-red-600 dark:text-red-400">
+                  <p className="text-xs text-[var(--sc-danger-fg)]">
                     {t('mindmap.deleteMapConfirm')}
                   </p>
                   <div className="flex gap-2">
@@ -172,14 +176,14 @@ export function MindMapListPanel() {
                         handleDeleteMap(map.id);
                         setConfirmDeleteId(null);
                       }}
-                      className="text-xs px-2 py-1 rounded bg-red-600 text-white"
+                      className="text-xs px-2 py-1 rounded-sc-sm bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] hover:opacity-80"
                     >
                       {t('mindmap.deleteMap')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(null)}
-                      className="text-xs px-2 py-1 rounded border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-400"
+                      className="text-xs px-2 py-1 rounded-sc-sm border border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)]"
                     >
                       {t('mindmap.cancel')}
                     </button>
@@ -189,8 +193,8 @@ export function MindMapListPanel() {
                 <div
                   className={`group flex items-center gap-1 px-3 py-2 cursor-pointer ${
                     isActive
-                      ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
-                      : 'hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
+                      ? 'bg-[var(--sc-accent)]/10 text-[var(--sc-accent)]'
+                      : 'hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)]'
                   }`}
                 >
                   <button
@@ -204,7 +208,7 @@ export function MindMapListPanel() {
                     type="button"
                     onClick={() => handleOpenEditMapForm(map.id)}
                     aria-label={t('mindmap.editMap')}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-400"
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)]"
                   >
                     <svg
                       width="11"
@@ -223,7 +227,7 @@ export function MindMapListPanel() {
                     type="button"
                     onClick={() => setConfirmDeleteId(map.id)}
                     aria-label={t('mindmap.deleteMap')}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-stone-400 hover:text-red-500"
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded-sc-sm hover:bg-[var(--sc-danger-bg)] text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)]"
                   >
                     <svg
                       width="11"
@@ -247,7 +251,7 @@ export function MindMapListPanel() {
       </div>
 
       {activeMindMapId && (
-        <div className="p-2 border-t border-stone-200 dark:border-stone-700">
+        <div className="p-2 border-t border-[var(--sc-border-subtle)]">
           <button
             type="button"
             onClick={() =>
@@ -259,7 +263,7 @@ export function MindMapListPanel() {
                 color: '#6366f1',
               })
             }
-            className="w-full text-xs py-1.5 rounded bg-violet-600 hover:bg-violet-700 text-white"
+            className="w-full text-xs py-1.5 rounded-sc-sm bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-white"
           >
             {t('mindmap.addNode')}
           </button>

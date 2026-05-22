@@ -61,12 +61,11 @@ const ToastItem: FC<{
     return () => clearTimeout(timer);
   }, [message.id, onDismiss]);
 
+  // QNBS-v3: Alpha-bg pattern replaces dark: prefixes — semantic colors visible on all appearance presets.
   const typeClasses = {
-    success:
-      'bg-green-500/10 border-green-500/30 text-green-800 dark:bg-green-600/20 dark:border-green-500/50 dark:text-green-200',
-    error:
-      'bg-red-500/10 border-red-500/30 text-red-800 dark:bg-red-600/20 dark:border-red-500/50 dark:text-red-200',
-    info: 'bg-blue-500/10 border-blue-500/30 text-blue-800 dark:bg-blue-600/20 dark:border-blue-500/50 dark:text-blue-200',
+    success: 'bg-green-500/15 border-green-500/30 text-green-700',
+    error: 'bg-red-500/15 border-red-500/30 text-[var(--sc-danger-fg)]',
+    info: 'bg-blue-500/15 border-blue-500/30 text-blue-600',
   };
 
   const progressClasses = {

@@ -123,7 +123,7 @@ export const ShortcutsSection: FC = () => {
           {conflicts.length > 0 ? (
             <div
               role="alert"
-              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100"
+              className="rounded-sc-md border border-amber-500/40 bg-[var(--sc-warning-bg)] px-3 py-2 text-sm text-[var(--sc-warning-fg)]"
             >
               {t('settings.shortcuts.conflictWarning')}
               <ul className="list-disc ml-5 mt-1">

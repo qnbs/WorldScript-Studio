@@ -72,7 +72,7 @@ export function MindMapCanvas() {
 
   if (!activeMindMap) {
     return (
-      <div className="flex-1 flex items-center justify-center text-stone-400 dark:text-stone-500 text-sm">
+      <div className="flex-1 flex items-center justify-center text-[var(--sc-text-muted)] text-sm">
         {t('mindmap.emptyState')}
       </div>
     );
@@ -83,11 +83,11 @@ export function MindMapCanvas() {
   const showWarning = nodes.length > NODE_COUNT_WARNING;
 
   return (
-    <div className="relative flex-1 overflow-hidden bg-stone-50 dark:bg-stone-950">
+    <div className="relative flex-1 overflow-hidden bg-[var(--sc-surface-base)]">
       {showWarning && (
         <div
           role="alert"
-          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 text-xs px-3 py-1.5 rounded shadow"
+          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)] text-xs px-3 py-1.5 rounded-sc-sm shadow"
         >
           {t('mindmap.nodeCountWarning')}
         </div>

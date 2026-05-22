@@ -69,7 +69,7 @@ const NewProjectOption: React.FC<{
           viewBox="0 0 24 24"
           strokeWidth={1.5}
           stroke="currentColor"
-          className="w-8 h-8 text-indigo-500 dark:text-indigo-400"
+          className="w-8 h-8 text-[var(--sc-accent)]"
         >
           {icon}
         </svg>
@@ -209,7 +209,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         viewBox="0 0 24 24"
         strokeWidth={1.5}
         stroke="currentColor"
-        className="w-16 h-16 text-indigo-500 dark:text-indigo-400 mx-auto mb-4"
+        className="w-16 h-16 text-[var(--sc-accent)] mx-auto mb-4"
       >
         {ICONS.WRITER}
       </svg>
@@ -268,7 +268,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       <button
         type="button"
         onClick={() => setView('main')}
-        className="flex items-center space-x-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 mb-6"
+        className="flex items-center space-x-2 text-[var(--sc-accent)] hover:text-[var(--sc-accent-hover)] mb-6"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -320,7 +320,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       <button
         type="button"
         onClick={() => setView('main')}
-        className="flex items-center space-x-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 mb-6"
+        className="flex items-center space-x-2 text-[var(--sc-accent)] hover:text-[var(--sc-accent-hover)] mb-6"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

@@ -5,12 +5,13 @@ export function MindMapToolbar() {
   const { t } = useTranslation();
   const { zoom, handleZoom, handleResetViewport } = useMindMapViewContext();
 
+  // QNBS-v3: All dark: stone prefixes replaced with --sc-* tokens — appearance presets now work.
   return (
-    <div className="flex items-center gap-2 p-2 border-b border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900">
+    <div className="flex items-center gap-2 p-2 border-b border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]">
       <button
         type="button"
         onClick={() => handleZoom(0.1)}
-        className="p-1.5 rounded hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300"
+        className="p-1.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
         aria-label={t('mindmap.zoomIn')}
         title={t('mindmap.zoomIn')}
       >
@@ -30,14 +31,14 @@ export function MindMapToolbar() {
         </svg>
       </button>
 
-      <span className="text-xs text-stone-500 dark:text-stone-400 min-w-[3rem] text-center tabular-nums">
+      <span className="text-xs text-[var(--sc-text-muted)] min-w-[3rem] text-center tabular-nums">
         {Math.round(zoom * 100)}%
       </span>
 
       <button
         type="button"
         onClick={() => handleZoom(-0.1)}
-        className="p-1.5 rounded hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300"
+        className="p-1.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
         aria-label={t('mindmap.zoomOut')}
         title={t('mindmap.zoomOut')}
       >
@@ -59,7 +60,7 @@ export function MindMapToolbar() {
       <button
         type="button"
         onClick={handleResetViewport}
-        className="p-1.5 rounded hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300"
+        className="p-1.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
         aria-label={t('mindmap.resetViewport')}
         title={t('mindmap.resetViewport')}
       >

@@ -208,7 +208,7 @@ const PreviewModal: FC = () => {
                       size="sm"
                       onClick={() => deleteRemixedSection(sec.id)}
                       aria-label={t('outline.result.deleteTooltip')}
-                      className="text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/50"
+                      className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

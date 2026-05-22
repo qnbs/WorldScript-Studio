@@ -8,14 +8,15 @@ import { SectionIcon } from './ui/SectionIcon';
 
 // ── Object Type Badge ─────────────────────────────────────────────────────────
 
+// QNBS-v3: Replaced dark: Tailwind prefixes with alpha-bg pattern — works on all appearance presets.
 const TYPE_COLORS: Record<StoryObjectType, string> = {
-  prop: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  weapon: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  vehicle: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-  artifact: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-  document: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-  'place-item': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  other: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  prop: 'bg-blue-500/15 text-blue-600',
+  weapon: 'bg-red-500/15 text-red-600',
+  vehicle: 'bg-orange-500/15 text-orange-600',
+  artifact: 'bg-purple-500/15 text-purple-600',
+  document: 'bg-yellow-500/15 text-yellow-600',
+  'place-item': 'bg-green-500/15 text-green-600',
+  other: 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)]',
 };
 
 const TypeBadge: FC<{ type: StoryObjectType; label: string }> = ({ type, label }) => (
@@ -283,7 +284,7 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
   };
 
   return (
-    <div className="bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-xl p-4 flex flex-col gap-2 hover:border-stone-400 dark:hover:border-stone-600 transition-colors">
+    <div className="bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-xl p-4 flex flex-col gap-2 hover:border-[var(--sc-border-strong)] transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-[var(--text-primary)] truncate">{obj.name}</h3>
@@ -426,9 +427,7 @@ const ObjectsViewContent: FC = () => {
         <div className="flex items-center gap-3">
           <SectionIcon section="objects" size="sm" />
           <div>
-            <h1 className="text-lg font-bold text-stone-500 dark:text-stone-400">
-              {t('objects.title')}
-            </h1>
+            <h1 className="text-lg font-bold text-[var(--sc-text-muted)]">{t('objects.title')}</h1>
             <p className="text-xs text-[var(--text-secondary)] hidden sm:block">
               {t('objects.subtitle')}
             </p>
@@ -464,9 +463,9 @@ const ObjectsViewContent: FC = () => {
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors focus-visible:ring-2 focus-visible:ring-stone-500 -mb-px ${
+            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] -mb-px ${
               activeTab === tab
-                ? 'border-stone-500 text-stone-600 dark:text-stone-400'
+                ? 'border-[var(--sc-border-strong)] text-[var(--sc-text-secondary)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -506,7 +505,7 @@ const ObjectsViewContent: FC = () => {
 
             {/* Object form (inline) */}
             {isObjectFormOpen && (
-              <div className="mb-4 bg-[var(--sc-surface-raised)] border border-stone-300 dark:border-stone-700 rounded-xl p-4">
+              <div className="mb-4 bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-xl p-4">
                 <ObjectForm />
               </div>
             )}
@@ -554,7 +553,7 @@ const ObjectsViewContent: FC = () => {
           <>
             {/* Group form (inline) */}
             {isGroupFormOpen && (
-              <div className="mb-4 bg-[var(--sc-surface-raised)] border border-stone-300 dark:border-stone-700 rounded-xl p-4">
+              <div className="mb-4 bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-xl p-4">
                 <GroupForm />
               </div>
             )}

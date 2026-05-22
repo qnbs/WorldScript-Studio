@@ -98,7 +98,7 @@ const DetailField: FC<DetailFieldProps> = React.memo(({ label, field, value }) =
               viewBox="0 0 24 24"
               strokeWidth={1.5}
               stroke="currentColor"
-              className="w-4 h-4 text-indigo-500 dark:text-indigo-400"
+              className="w-4 h-4 text-[var(--sc-accent)]"
               aria-hidden="true"
             >
               {ICONS.RECYCLE}
@@ -427,7 +427,7 @@ const WorldAtlas: FC = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => deleteTimelineEvent(event.id)}
-                    className="text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/50 md:col-start-3 justify-self-end"
+                    className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)] md:col-start-3 justify-self-end"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -468,7 +468,7 @@ const WorldAtlas: FC = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => deleteLocation(loc.id)}
-                      className="text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/50"
+                      className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -607,12 +607,10 @@ const WorldCard: FC<{ world: World; animationIndex: number }> = React.memo(
           )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-[var(--card-gradient-overlay)] to-transparent">
-          <h3 className="font-bold text-lg text-[var(--sc-text-on-accent)] dark:text-white truncate">
+          <h3 className="font-bold text-lg text-[var(--sc-text-on-accent)] truncate">
             {world.name}
           </h3>
-          <p className="text-sm text-[var(--sc-text-secondary)] dark:text-gray-300 truncate">
-            {world.description}
-          </p>
+          <p className="text-sm text-[var(--sc-text-secondary)] truncate">{world.description}</p>
         </div>
       </Card>
     );

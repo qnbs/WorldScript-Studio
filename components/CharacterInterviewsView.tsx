@@ -213,13 +213,14 @@ function CharacterInterviewsViewContent() {
 
 export default function CharacterInterviewsView() {
   const value = useCharacterInterviewsView();
+  const { t } = useTranslation();
 
   return (
     <CharacterInterviewsViewContext.Provider value={value}>
       <div className="flex h-full flex-col">
         <header className="border-b border-[var(--sc-border-subtle)] px-6 py-4">
           <h1 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {value.t('characterInterviews.title')}
+            {t('characterInterviews.title')}
           </h1>
         </header>
         <CharacterInterviewsViewContent />

@@ -38,7 +38,7 @@ export const AddNewCard: React.FC<AddNewCardProps> = ({
     default:
       'text-sm text-[var(--sc-text-muted)] group-hover:text-[var(--sc-text-secondary)] transition-colors',
     primary:
-      'text-sm text-[var(--sc-accent)]/80 dark:text-indigo-200/80 group-hover:text-[var(--sc-accent)] dark:group-hover:text-indigo-100 transition-colors',
+      'text-sm text-[var(--sc-accent)]/80 group-hover:text-[var(--sc-accent)] transition-colors',
   };
 
   return (

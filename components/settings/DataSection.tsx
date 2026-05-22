@@ -309,7 +309,7 @@ export const DataSection: FC = () => {
                       }
                       variant="ghost"
                       size="sm"
-                      className="text-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/50"
+                      className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
                       aria-label={`${t('settings.data.delete')} ${snap.name}`}
                     >
                       <svg

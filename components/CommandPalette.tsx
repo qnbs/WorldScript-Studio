@@ -323,10 +323,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       const key = `hl-${hlOffset}-${seg.match ? 'm' : 'n'}`;
       hlOffset += seg.text.length;
       return seg.match ? (
-        <mark
-          key={key}
-          className="bg-amber-400/40 dark:bg-amber-300/25 text-inherit rounded px-0.5"
-        >
+        <mark key={key} className="bg-[var(--sc-warning-bg)] text-inherit rounded-sc-sm px-0.5">
           {seg.text}
         </mark>
       ) : (

@@ -15,6 +15,7 @@ const SHAPE_KEY: Record<MindMapNodeShape, string> = {
   hexagon: 'mindmap.nodeShapeHexagon',
 };
 
+// QNBS-v3: All dark: stone/indigo/red Tailwind prefixes replaced with --sc-* tokens — appearance presets now work.
 export function MindMapNodeEditor() {
   const { t } = useTranslation();
   const {
@@ -82,20 +83,23 @@ export function MindMapNodeEditor() {
 
   if (!isNodeEditorOpen || !node) return null;
 
+  const inputClass =
+    'w-full text-sm px-2 py-1.5 rounded-sc-sm border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] outline-none placeholder:text-[var(--sc-text-muted)]';
+
   return (
     <aside
-      className="w-72 flex-shrink-0 border-l border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 flex flex-col overflow-y-auto"
+      className="w-72 flex-shrink-0 border-l border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] flex flex-col overflow-y-auto"
       aria-label={t('mindmap.editNode')}
     >
-      <div className="flex items-center justify-between p-3 border-b border-stone-200 dark:border-stone-700">
-        <h3 className="text-sm font-semibold text-stone-800 dark:text-stone-100">
+      <div className="flex items-center justify-between p-3 border-b border-[var(--sc-border-subtle)]">
+        <h3 className="text-sm font-semibold text-[var(--sc-text-primary)]">
           {t('mindmap.editNode')}
         </h3>
         <button
           type="button"
           onClick={handleCloseNodeEditor}
           aria-label={t('mindmap.cancel')}
-          className="p-1 rounded hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400"
+          className="p-1 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)]"
         >
           <svg
             width="14"
@@ -116,7 +120,7 @@ export function MindMapNodeEditor() {
         <div>
           <label
             htmlFor="mm-node-label"
-            className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1"
+            className="block text-xs font-medium text-[var(--sc-text-secondary)] mb-1"
           >
             {t('mindmap.nodeLabel')}
           </label>
@@ -126,14 +130,14 @@ export function MindMapNodeEditor() {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder={t('mindmap.nodeLabelPlaceholder')}
-            className="w-full text-sm px-2 py-1.5 rounded border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none"
+            className={inputClass}
           />
         </div>
 
         <div>
           <label
             htmlFor="mm-node-type"
-            className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1"
+            className="block text-xs font-medium text-[var(--sc-text-secondary)] mb-1"
           >
             {t('mindmap.nodeType')}
           </label>
@@ -141,7 +145,7 @@ export function MindMapNodeEditor() {
             id="mm-node-type"
             value={type}
             onChange={(e) => setType(e.target.value as MindMapNodeType)}
-            className="w-full text-sm px-2 py-1.5 rounded border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none"
+            className={inputClass}
           >
             <option value="free">{t('mindmap.nodeTypeFree')}</option>
             <option value="linked">{t('mindmap.nodeTypeLinked')}</option>
@@ -152,7 +156,7 @@ export function MindMapNodeEditor() {
           <div>
             <label
               htmlFor="mm-node-entity-type"
-              className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1"
+              className="block text-xs font-medium text-[var(--sc-text-secondary)] mb-1"
             >
               {t('mindmap.linkedEntityType')}
             </label>
@@ -160,7 +164,7 @@ export function MindMapNodeEditor() {
               id="mm-node-entity-type"
               value={linkedEntityType}
               onChange={(e) => setLinkedEntityType(e.target.value as MindMapLinkedEntityType)}
-              className="w-full text-sm px-2 py-1.5 rounded border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none"
+              className={inputClass}
             >
               <option value="">{t('mindmap.linkedEntityTypePlaceholder')}</option>
               {LINKED_TYPES.map((lt) => (
@@ -173,9 +177,9 @@ export function MindMapNodeEditor() {
         )}
 
         <div>
-          {/* QNBS-v3: no single input for colour group, so use <p> instead of <label> for a11y */}
+          {/* QNBS-v3: no single input for shape group, so use <p> instead of <label> for a11y */}
           <p
-            className="text-xs font-medium text-stone-600 dark:text-stone-400 mb-1"
+            className="text-xs font-medium text-[var(--sc-text-secondary)] mb-1"
             aria-hidden="true"
           >
             {t('mindmap.nodeShape')}
@@ -187,10 +191,10 @@ export function MindMapNodeEditor() {
                 type="button"
                 onClick={() => setShape(s)}
                 aria-pressed={shape === s}
-                className={`px-2 py-1 text-xs rounded border capitalize ${
+                className={`px-2 py-1 text-xs rounded-sc-sm border capitalize ${
                   shape === s
-                    ? 'bg-indigo-100 dark:bg-indigo-900 border-indigo-400 text-indigo-700 dark:text-indigo-300'
-                    : 'border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800'
+                    ? 'bg-[var(--sc-accent)]/15 border-[var(--sc-accent)] text-[var(--sc-accent)]'
+                    : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)]'
                 }`}
               >
                 {t(SHAPE_KEY[s] as Parameters<typeof t>[0])}
@@ -202,7 +206,7 @@ export function MindMapNodeEditor() {
         <div>
           {/* QNBS-v3: colour swatches have no single associated input, use <p> for a11y */}
           <p
-            className="text-xs font-medium text-stone-600 dark:text-stone-400 mb-1"
+            className="text-xs font-medium text-[var(--sc-text-secondary)] mb-1"
             aria-hidden="true"
           >
             {t('mindmap.nodeColor')}
@@ -217,7 +221,7 @@ export function MindMapNodeEditor() {
                 aria-label={c}
                 style={{ background: c }}
                 className={`w-6 h-6 rounded-full border-2 ${
-                  color === c ? 'border-stone-800 dark:border-stone-200' : 'border-transparent'
+                  color === c ? 'border-[var(--sc-text-primary)]' : 'border-transparent'
                 }`}
               />
             ))}
@@ -227,7 +231,7 @@ export function MindMapNodeEditor() {
         <div>
           <label
             htmlFor="mm-node-notes"
-            className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1"
+            className="block text-xs font-medium text-[var(--sc-text-secondary)] mb-1"
           >
             {t('mindmap.nodeNotes')}
           </label>
@@ -237,16 +241,16 @@ export function MindMapNodeEditor() {
             onChange={(e) => setTextNotes(e.target.value)}
             placeholder={t('mindmap.nodeNotesPlaceholder')}
             rows={3}
-            className="w-full text-sm px-2 py-1.5 rounded border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none resize-none"
+            className={`${inputClass} resize-none`}
           />
         </div>
       </div>
 
-      <div className="p-3 border-t border-stone-200 dark:border-stone-700 flex justify-between">
+      <div className="p-3 border-t border-[var(--sc-border-subtle)] flex justify-between">
         <button
           type="button"
           onClick={handleDelete}
-          className="text-xs px-3 py-1.5 rounded bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50"
+          className="text-xs px-3 py-1.5 rounded-sc-sm bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] hover:opacity-80"
         >
           {t('mindmap.deleteNode')}
         </button>
@@ -254,14 +258,14 @@ export function MindMapNodeEditor() {
           <button
             type="button"
             onClick={handleCloseNodeEditor}
-            className="text-xs px-3 py-1.5 rounded border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800"
+            className="text-xs px-3 py-1.5 rounded-sc-sm border border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)]"
           >
             {t('mindmap.cancel')}
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white"
+            className="text-xs px-3 py-1.5 rounded-sc-sm bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-white"
           >
             {t('mindmap.save')}
           </button>

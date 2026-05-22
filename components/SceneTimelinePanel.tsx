@@ -78,7 +78,7 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
                   key={h.id}
                   className={
                     h.severity === 'warn'
-                      ? 'text-amber-600 dark:text-amber-400'
+                      ? 'text-[var(--sc-warning-fg)]'
                       : 'text-[var(--sc-text-secondary)]'
                   }
                 >

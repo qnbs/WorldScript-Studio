@@ -86,7 +86,7 @@ const IdeaForm: FC = () => {
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-indigo-500 dark:text-indigo-400 font-semibold w-full text-left"
+            className="text-[var(--sc-accent)] font-semibold w-full text-left"
             aria-expanded={showAdvanced}
           >
             {t('outline.advanced.title')} {showAdvanced ? '(-)' : '(+)'}
@@ -308,7 +308,7 @@ const OutlineResult: FC = () => {
                       <Input
                         value={section.title}
                         onChange={(e) => updateSection(section.id, { title: e.target.value })}
-                        className="bg-transparent border-0 p-0 text-lg font-semibold text-indigo-500 dark:text-indigo-300 h-auto focus:ring-0 focus:bg-[var(--sc-surface-raised)]/50 rounded-md px-2"
+                        className="bg-transparent border-0 p-0 text-lg font-semibold text-[var(--sc-accent)] h-auto focus:ring-0 focus:bg-[var(--sc-surface-raised)]/50 rounded-md px-2"
                       />
                     </div>
                     <div className="flex items-center space-x-1 flex-shrink-0">
@@ -401,7 +401,7 @@ const OutlineResult: FC = () => {
                         onClick={() => deleteSection(section.id)}
                         title={t('outline.result.deleteTooltip')}
                         aria-label={t('outline.result.deleteTooltip')}
-                        className="text-red-500 hover:bg-red-500/10 dark:hover:bg-red-900/50"
+                        className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
