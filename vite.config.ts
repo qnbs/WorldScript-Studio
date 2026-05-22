@@ -113,11 +113,8 @@ export default defineConfig({
     },
     rollupOptions: {
       external: [
-        '@tauri-apps/api',
-        '@tauri-apps/api/core',
-        '@tauri-apps/api/dialog',
-        '@tauri-apps/api/fs',
-        '@tauri-apps/api/path',
+        // QNBS-v3: Tauri APIs are only available in the desktop shell — externalize all @tauri-apps/* so the web/Vercel build never tries to bundle them.
+        /^@tauri-apps\//,
       ],
       output: {
         // Asset-Hashing für Cache-Busting
