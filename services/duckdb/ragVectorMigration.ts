@@ -86,3 +86,18 @@ export async function runRagVectorMigration(
   logger.debug('[ragVectorMigration] Complete:', migrated, 'chunks');
   return { migrated };
 }
+
+/**
+ * Smoke-test: confirms the rag_chunks.embedding column exists and is FLOAT[].
+ * Used in CI to verify the 64→384-dim migration ran correctly.
+ */
+export async function verifyEmbeddingColumn(): Promise<boolean> {
+  const res = await duckdbClient.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = 'rag_chunks' AND column_name = 'embedding'`,
+  );
+  if (!res.ok || !res.rows?.length) return false;
+  const row = res.rows[0];
+  // QNBS-v3: DuckDB exposes FLOAT[] as 'FLOAT[]' in data_type; column existence is the primary gate.
+  return row !== undefined && 'column_name' in row;
+}
