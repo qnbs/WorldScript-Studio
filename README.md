@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1923_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1923 keys">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1952_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1952 keys">
   <img src="https://img.shields.io/badge/Tests-2024_%2F_178_files-22C55E" alt="2024 tests / 178 files">
   <img src="https://img.shields.io/badge/Coverage-65.91%25_Lines_%7C_50.59%25_Branch-brightgreen" alt="Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">

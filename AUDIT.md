@@ -1,9 +1,27 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-21 (v1.10.0) → **2026-05-22 (v1.11.0)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-21 (v1.10.0) → 2026-05-22 (v1.11.0) → **2026-05-22 (v1.16 — DS-1/DS-2 complete)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **1.11.0** — released 2026-05-22  
+**Current version:** **1.16 sprint** — 2026-05-22  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-22 (v1.16 — Design System Completion: DS-1/DS-2/SB-1/HK-4)
+
+### Sprint: v1.16 Design System Completion (2026-05-22)
+
+**DS-2 complete:** Zero `dark:` Tailwind prefix violations remain in any `className` string across the entire codebase. Eliminated across 18+ files using `--sc-*` semantic tokens and alpha-bg patterns (`bg-X-500/15`) for categorical colors.
+
+**DS-1 sweep:** All undefined bridge CSS variables fixed — `--background-hover`, `--background-elevated`, `--background-selected`, `--foreground-on-interactive`, `--foreground-tertiary` replaced with sc-* equivalents in 12 files. App.tsx root loader and main div updated to sc-* tokens.
+
+**SB-1 complete:** 5 missing Storybook stories added: `DebouncedInput`, `DebouncedTextarea`, `Textarea`, `PWAComponents`, `SectionIcon`. All UI atom components now have Storybook coverage.
+
+**HK-4:** `displayName` added to `ErrorBoundary` and `ViewErrorBoundary`.
+
+**DS-5 readiness:** Bridge block in `index.css` can be removed after one production cycle. Only intentional vars remain (`--border-interactive`, `--nav-*`, `--glass-*`, gradient overlay vars).
+
+**Quality gate:** lint ✅ · i18n:check ✅ (1952 keys × 5 locales) · typecheck ✅
 
 ---
 

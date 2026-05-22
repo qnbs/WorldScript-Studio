@@ -8,6 +8,24 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## v1.16 — Design System Completion Sprint (RELEASED 2026-05-22)
+
+- ✅ **DS-2 (100%)** — Zero `dark:` prefix violations in any className string: MindMapListPanel (full rewrite), MindMapToolbar, MindMapCanvas, MindMapNodeEditor, SceneTimelinePanel, AddNewCard, TemplateView, WorldView, HelpView, ShortcutsSection, DataSection, WelcomePortal, OutlineGeneratorView, ObjectsView, Toast, sections.tsx (43 violations)
+- ✅ **DS-1 sweep** — All undefined bridge vars replaced: `--background-hover` → `--sc-surface-overlay`, `--background-elevated` → `--sc-surface-raised`, `--background-selected` → `--sc-accent/10`, `--foreground-on-interactive` → `white`, `--foreground-tertiary` → `--sc-text-muted`; App.tsx `--background-primary` → `--sc-surface-base`, `--foreground-primary` → `--sc-text-primary`, `--background-interactive` → `--sc-accent`; ObjectsView `--text-primary/secondary/muted` → `--sc-text-*`
+- ✅ **SB-1 (5 stories)** — DebouncedInput, DebouncedTextarea, Textarea, PWAComponents, SectionIcon stories added; all UI atom components now have Storybook coverage
+- ✅ **HK-4** — `displayName` added to ErrorBoundary + ViewErrorBoundary
+- ✅ **Quality gate** — lint ✅ · i18n:check ✅ · typecheck ✅ · 1952 keys × 5 locales ✅
+
+### v2.0 Open Items
+
+- ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
+- ⬜ RTL language support (Arabic, Hebrew, Persian)
+- ⬜ Fine-Tuning / LoRA-Support für personalisierte Schreibstile
+- ⬜ Cloud-Sync (optional, E2E-verschlüsselt)
+- ⬜ DS-5: Delete legacy bridge block from index.css (after DS-1 verified in production)
+
+---
+
 ## v1.11 — Stabilization Sprint (RELEASED 2026-05-22)
 
 - ✅ **Cloudflare deploy fix (P0)** — `resolve-deploy-base.mjs` `base` → `deployBase`; `sync-deploy-base.mjs` error propagation
