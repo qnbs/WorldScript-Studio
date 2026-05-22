@@ -59,7 +59,7 @@ const ObjectForm: FC = () => {
       <div>
         <label
           htmlFor="obj-name"
-          className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+          className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('objects.name')}
         </label>
@@ -70,13 +70,13 @@ const ObjectForm: FC = () => {
           onChange={(e) => setName(e.target.value)}
           placeholder={t('objects.namePlaceholder')}
           required
-          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         />
       </div>
       <div>
         <label
           htmlFor="obj-type"
-          className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+          className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('objects.type')}
         </label>
@@ -84,7 +84,7 @@ const ObjectForm: FC = () => {
           id="obj-type"
           value={type}
           onChange={(e) => setType(e.target.value as StoryObjectType)}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
           {OBJECT_TYPES.map((ot) => (
             <option key={ot} value={ot}>
@@ -96,7 +96,7 @@ const ObjectForm: FC = () => {
       <div>
         <label
           htmlFor="obj-description"
-          className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+          className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('objects.description')}
         </label>
@@ -106,13 +106,13 @@ const ObjectForm: FC = () => {
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t('objects.descriptionPlaceholder')}
           rows={3}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         />
       </div>
       <div>
         <label
           htmlFor="obj-significance"
-          className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+          className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('objects.significance')}
         </label>
@@ -122,13 +122,13 @@ const ObjectForm: FC = () => {
           onChange={(e) => setSignificance(e.target.value)}
           placeholder={t('objects.significancePlaceholder')}
           rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         />
       </div>
       <div>
         <label
           htmlFor="obj-notes"
-          className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+          className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('objects.notes')}
         </label>
@@ -138,21 +138,21 @@ const ObjectForm: FC = () => {
           onChange={(e) => setNotes(e.target.value)}
           placeholder={t('objects.notesPlaceholder')}
           rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         />
       </div>
       <div className="flex gap-2 justify-end pt-2">
         <button
           type="button"
           onClick={handleCancelForm}
-          className="px-4 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--sc-surface-overlay)] focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="px-4 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
           {t('objects.cancel')}
         </button>
         <button
           type="submit"
           disabled={!name.trim()}
-          className="px-4 py-2 text-sm rounded-lg bg-stone-600 text-white hover:bg-stone-700 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="px-4 py-2 text-sm rounded-lg bg-stone-600 text-white hover:bg-stone-700 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
           {t('objects.save')}
         </button>
@@ -192,7 +192,7 @@ const GroupForm: FC = () => {
       <div>
         <label
           htmlFor="grp-name"
-          className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+          className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('objects.groupName')}
         </label>
@@ -203,13 +203,13 @@ const GroupForm: FC = () => {
           onChange={(e) => setName(e.target.value)}
           placeholder={t('objects.groupNamePlaceholder')}
           required
-          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         />
       </div>
       <div>
         <label
           htmlFor="grp-description"
-          className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+          className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-1"
         >
           {t('objects.groupDescription')}
         </label>
@@ -219,13 +219,13 @@ const GroupForm: FC = () => {
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t('objects.groupDescriptionPlaceholder')}
           rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         />
       </div>
       <div>
         {/* QNBS-v3: colour picker has no single associated input — label is purely descriptive */}
         <p
-          className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+          className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-1"
           aria-hidden="true"
         >
           {t('objects.groupColor')}
@@ -251,14 +251,14 @@ const GroupForm: FC = () => {
         <button
           type="button"
           onClick={handleCancelForm}
-          className="px-4 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--sc-surface-overlay)] focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="px-4 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
           {t('objects.cancel')}
         </button>
         <button
           type="submit"
           disabled={!name.trim()}
-          className="px-4 py-2 text-sm rounded-lg bg-stone-600 text-white hover:bg-stone-700 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="px-4 py-2 text-sm rounded-lg bg-stone-600 text-white hover:bg-stone-700 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
           {t('objects.save')}
         </button>
@@ -287,9 +287,9 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
     <div className="bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-xl p-4 flex flex-col gap-2 hover:border-[var(--sc-border-strong)] transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-[var(--text-primary)] truncate">{obj.name}</h3>
+          <h3 className="font-semibold text-[var(--sc-text-primary)] truncate">{obj.name}</h3>
           {obj.description && (
-            <p className="text-sm text-[var(--text-secondary)] line-clamp-2 mt-0.5">
+            <p className="text-sm text-[var(--sc-text-secondary)] line-clamp-2 mt-0.5">
               {obj.description}
             </p>
           )}
@@ -318,7 +318,7 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
         <button
           type="button"
           onClick={() => handleEditObject(obj)}
-          className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-stone-500 rounded"
+          className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
         >
           {t('objects.editObject')}
         </button>
@@ -329,7 +329,7 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
           className={`text-xs focus-visible:ring-2 focus-visible:ring-red-500 rounded ${
             confirmDelete
               ? 'text-red-600 font-medium'
-              : 'text-[var(--text-secondary)] hover:text-red-500'
+              : 'text-[var(--sc-text-secondary)] hover:text-red-500'
           }`}
         >
           {confirmDelete ? t('objects.deleteObjectConfirm') : t('objects.deleteObject')}
@@ -366,21 +366,21 @@ const GroupCard: FC<{ group: ObjectGroup }> = ({ group }) => {
           style={{ backgroundColor: group.color }}
           aria-hidden="true"
         />
-        <h3 className="font-semibold text-[var(--text-primary)]">{group.name}</h3>
-        <span className="ml-auto text-xs text-[var(--text-secondary)]">
+        <h3 className="font-semibold text-[var(--sc-text-primary)]">{group.name}</h3>
+        <span className="ml-auto text-xs text-[var(--sc-text-secondary)]">
           {count === 1
             ? t('objects.objectCount').replace('{count}', '1')
             : t('objects.objectCountPlural').replace('{count}', String(count))}
         </span>
       </div>
       {group.description && (
-        <p className="text-sm text-[var(--text-secondary)]">{group.description}</p>
+        <p className="text-sm text-[var(--sc-text-secondary)]">{group.description}</p>
       )}
       <div className="flex items-center gap-2 mt-1 pt-2 border-t border-[var(--sc-border-subtle)]">
         <button
           type="button"
           onClick={() => handleEditGroup(group)}
-          className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-stone-500 rounded"
+          className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
         >
           {t('objects.editGroup')}
         </button>
@@ -391,7 +391,7 @@ const GroupCard: FC<{ group: ObjectGroup }> = ({ group }) => {
           className={`text-xs focus-visible:ring-2 focus-visible:ring-red-500 rounded ${
             confirmDelete
               ? 'text-red-600 font-medium'
-              : 'text-[var(--text-secondary)] hover:text-red-500'
+              : 'text-[var(--sc-text-secondary)] hover:text-red-500'
           }`}
         >
           {confirmDelete ? t('objects.deleteGroupConfirm') : t('objects.deleteGroup')}
@@ -428,7 +428,7 @@ const ObjectsViewContent: FC = () => {
           <SectionIcon section="objects" size="sm" />
           <div>
             <h1 className="text-lg font-bold text-[var(--sc-text-muted)]">{t('objects.title')}</h1>
-            <p className="text-xs text-[var(--text-secondary)] hidden sm:block">
+            <p className="text-xs text-[var(--sc-text-secondary)] hidden sm:block">
               {t('objects.subtitle')}
             </p>
           </div>
@@ -436,7 +436,7 @@ const ObjectsViewContent: FC = () => {
         <button
           type="button"
           onClick={activeTab === 'objects' ? handleAddObject : handleAddGroup}
-          className="flex items-center gap-1.5 px-3 py-2 bg-stone-600 hover:bg-stone-700 text-white text-sm font-medium rounded-lg focus-visible:ring-2 focus-visible:ring-stone-500 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 bg-stone-600 hover:bg-stone-700 text-white text-sm font-medium rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] transition-colors"
         >
           <svg
             className="w-4 h-4"
@@ -466,7 +466,7 @@ const ObjectsViewContent: FC = () => {
             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] -mb-px ${
               activeTab === tab
                 ? 'border-[var(--sc-border-strong)] text-[var(--sc-text-secondary)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                : 'border-transparent text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'
             }`}
           >
             {tab === 'objects' ? t('objects.tabObjects') : t('objects.tabGroups')}
@@ -485,12 +485,12 @@ const ObjectsViewContent: FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('objects.search')}
-                className="flex-1 min-w-[160px] px-3 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+                className="flex-1 min-w-[160px] px-3 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               />
               <select
                 value={selectedGroupFilter ?? ''}
                 onChange={(e) => setSelectedGroupFilter(e.target.value || null)}
-                className="px-3 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+                className="px-3 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
                 aria-label={t('objects.filterByGroup')}
               >
                 <option value="">{t('objects.allGroups')}</option>
@@ -560,7 +560,7 @@ const ObjectsViewContent: FC = () => {
 
             {/* Group list */}
             {groups.length === 0 ? (
-              <p className="text-center text-[var(--text-secondary)] text-sm mt-12">
+              <p className="text-center text-[var(--sc-text-secondary)] text-sm mt-12">
                 {t('objects.emptyGroupsState')}
               </p>
             ) : (
