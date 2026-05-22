@@ -519,11 +519,13 @@ class IndexedDBService implements StorageBackend {
         this.createSnapshot(projectData).then(() => this.pruneAutoSnapshots());
       }
     }
-    return this.saveSlice('project', data as PersistedProjectState);
+    // QNBS-v3: retryDb guards against transient IDB errors (QuotaExceeded, AbortError, etc.).
+    return retryDb(() => this.saveSlice('project', data as PersistedProjectState));
   }
 
   async saveSettings(data: Settings): Promise<void> {
-    return this.saveSlice('settings', data);
+    // QNBS-v3: retryDb guards against transient IDB errors on the settings save path.
+    return retryDb(() => this.saveSlice('settings', data));
   }
 
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
