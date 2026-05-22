@@ -6,6 +6,7 @@ import type { RootState } from './app/store';
 import { setupStore } from './app/store';
 import type { ProjectData } from './features/project/projectSlice';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
+import { initializeStorage, resetAllDatabases } from './services/dbInitialization';
 import { dbService } from './services/dbService';
 import { logger } from './services/logger';
 import { saveEnvelopeFromProjectData, storageService } from './services/storageService';
@@ -47,10 +48,101 @@ if (!rootElement) {
 }
 const root = ReactDOM.createRoot(rootElement);
 
-// A sophisticated async IIFE to handle pre-loading state from IndexedDB before app mount.
+/** Recovery UI shown when IndexedDB initialisation fails. Intentionally no i18n dependency. */
+function StorageErrorScreen({ message, onReset }: { message: string; onReset: () => void }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        padding: '2rem',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        background: '#0f172a',
+        color: '#f1f5f9',
+        textAlign: 'center',
+        gap: '1rem',
+      }}
+    >
+      <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>StoryCraft Studio</h1>
+      <p style={{ color: '#94a3b8', maxWidth: '32rem' }}>
+        The local database could not be opened. This can happen after a browser update or when
+        storage is full.
+      </p>
+      <p
+        style={{
+          background: '#1e293b',
+          borderRadius: '0.5rem',
+          padding: '0.75rem 1rem',
+          fontSize: '0.875rem',
+          color: '#fca5a5',
+          maxWidth: '32rem',
+          wordBreak: 'break-word',
+        }}
+      >
+        {message}
+      </p>
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          style={{
+            padding: '0.5rem 1.25rem',
+            borderRadius: '0.5rem',
+            border: '1px solid #334155',
+            background: '#1e293b',
+            color: '#f1f5f9',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Reload
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          style={{
+            padding: '0.5rem 1.25rem',
+            borderRadius: '0.5rem',
+            border: 'none',
+            background: '#dc2626',
+            color: '#fff',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Reset Database &amp; Reload
+        </button>
+      </div>
+      <p style={{ fontSize: '0.75rem', color: '#475569' }}>
+        Warning: resetting the database will delete all local projects and settings.
+      </p>
+    </div>
+  );
+}
+
+// Async IIFE: pre-loads state from IndexedDB before mounting React.
 (async () => {
+  const initResult = await initializeStorage();
+  if (!initResult.success) {
+    logger.error('StorageBackend: initializeStorage failed:', initResult.error);
+    root.render(
+      <React.StrictMode>
+        <StorageErrorScreen
+          message={initResult.error ?? 'Unknown storage error.'}
+          onReset={async () => {
+            await resetAllDatabases();
+            window.location.reload();
+          }}
+        />
+      </React.StrictMode>,
+    );
+    return;
+  }
+
   try {
-    await dbService.initDB();
     const loadedState = await dbService.loadState();
     const preloadedState: PersistedRootState | undefined = loadedState as
       | PersistedRootState
@@ -122,11 +214,17 @@ const root = ReactDOM.createRoot(rootElement);
     );
   } catch (error) {
     logger.error('Failed to initialize the application:', error);
+    const msg = error instanceof Error ? error.message : 'Could not load project data.';
     root.render(
-      <div style={{ color: 'red', padding: '20px' }}>
-        <h1>Application Initialization Failed</h1>
-        <p>Could not load project data. Please check the browser console for more details.</p>
-      </div>,
+      <React.StrictMode>
+        <StorageErrorScreen
+          message={msg}
+          onReset={async () => {
+            await resetAllDatabases();
+            window.location.reload();
+          }}
+        />
+      </React.StrictMode>,
     );
   }
 })();

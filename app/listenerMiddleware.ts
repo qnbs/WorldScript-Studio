@@ -160,6 +160,14 @@ listenerMiddleware.startListening({
       await storageService.saveSettings(state.settings);
     } catch (error) {
       logger.error('Auto-save (settings) failed:', error);
+      // QNBS-v3: Mirror the project auto-save toast so the user knows settings weren't persisted.
+      listenerApi.dispatch(
+        statusActions.addNotification({
+          type: 'error',
+          title: 'Auto-Save Failed',
+          description: 'Settings could not be saved to the local database.',
+        }),
+      );
     }
   },
 });
