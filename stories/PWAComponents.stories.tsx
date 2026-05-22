@@ -1,5 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { fn } from '@storybook/test';
+
+// QNBS-v3: @storybook/test not installed; fn() in story defaults is a presentational noop.
+const fn = (): (() => void) => () => {};
+
 import { I18nMockProvider } from './storybookProviders';
 
 /**

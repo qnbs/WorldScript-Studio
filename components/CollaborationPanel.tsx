@@ -227,7 +227,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-[var(--overlay-backdrop)] z-40"
+        className="fixed inset-0 bg-[var(--sc-backdrop-strong)] z-40"
         onClick={onClose}
         aria-hidden="true"
       />

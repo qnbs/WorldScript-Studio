@@ -172,6 +172,47 @@ describe('assembleRAGPrompt', () => {
   });
 });
 
+describe('assembleRAGPrompt — additional branches', () => {
+  it('uses Italian lang label', async () => {
+    const result = await assembleRAGPrompt(
+      'writerContinuation',
+      { projectId: 'p1', currentText: 'La storia inizia.', lang: 'it' },
+      { topK: 3, ragMode: 'lexical', maxTokens: 3000, duckDbEnabled: false, useRag: false },
+    );
+    expect(result.prompt).toContain('Italian');
+  });
+
+  it('falls back to full text slice when cursorPosition is 0', async () => {
+    await assembleRAGPrompt(
+      'writerContinuation',
+      { projectId: 'p1', currentText: 'Start of the story.', cursorPosition: 0, lang: 'en' },
+      { topK: 3, ragMode: 'lexical', maxTokens: 2000, duckDbEnabled: false, useRag: true },
+    );
+    // QNBS-v3: cursorPosition 0 → empty slice → || fallback slices full text up to 500 chars.
+    expect(mockRetrieve).toHaveBeenCalledWith(
+      'p1',
+      'Start of the story.',
+      3,
+      'lexical',
+      undefined,
+      false,
+    );
+  });
+
+  it('uses plotSuggestion fallback template for consistencyCheck when no RAG chunks', async () => {
+    mockRetrieve.mockResolvedValueOnce([]);
+    const result = await assembleRAGPrompt(
+      'consistencyCheck',
+      { projectId: 'p1', plotSummary: 'Timeline check.', selectedSectionIds: [], lang: 'en' },
+      { topK: 2, ragMode: 'lexical', maxTokens: 2000, duckDbEnabled: false, useRag: true },
+    );
+    // QNBS-v3: empty RAG block → fallbackId = 'plotSuggestion' template used instead of base.
+    expect(result.ragUsed).toBe(false);
+    expect(result.chunks).toHaveLength(0);
+    expect(result.prompt.length).toBeGreaterThan(10);
+  });
+});
+
 describe('buildRAGContextBlock token budget', () => {
   it('stops adding chunks when budget exceeded', () => {
     const short = 'Brief scene beat.';

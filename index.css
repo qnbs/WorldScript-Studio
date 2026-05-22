@@ -5,7 +5,7 @@
 /* ── Tailwind v4: dark mode via .dark-theme selector ─── */
 @custom-variant dark (&:where(.dark-theme, .dark-theme *));
 
-/* ── Theme: semantic tokens + legacy bridge (QNBS-v3: DS foundation, FOUC-safe defaults on :root) ── */
+/* ── Theme: semantic tokens (QNBS-v3: DS foundation, FOUC-safe defaults on :root) ── */
 :root {
   /* Motion & stacking — theme-agnostic */
   --sc-duration-fast: 150ms;
@@ -79,37 +79,14 @@
   --sc-fg: var(--sc-text-primary);
   --sc-muted: var(--sc-text-muted);
 
-  /* Legacy bridge → semantic */
-  --background-primary: var(--sc-surface-base);
-  --background-secondary: var(--sc-surface-raised);
-  --background-tertiary: var(--sc-surface-overlay);
-  --background-interactive: var(--sc-accent);
-  --background-interactive-hover: var(--sc-accent-hover);
-  --background-interactive-subtle: var(--sc-accent-subtle);
-  --foreground-primary: var(--sc-text-primary);
-  --foreground-secondary: var(--sc-text-secondary);
-  --foreground-muted: var(--sc-text-muted);
-  --foreground-interactive: var(--sc-text-on-accent);
-  --border-primary: var(--sc-border-subtle);
-  --border-highlight: var(--sc-border-strong);
+  /* QNBS-v3: DS-5 — intentional token aliases (active in components or CSS rules). */
   --border-interactive: var(--sc-border-focus);
   --ring-focus: var(--sc-ring-focus);
-  --glow-primary: var(--sc-accent-glow);
   --nav-background-hover: rgba(255, 255, 255, 0.05);
   --nav-background-active: rgba(99, 102, 241, 0.15);
   --nav-text-active: #a5b4fc;
   --nav-border-active: var(--sc-accent);
-  --shadow-sm: var(--sc-shadow-sm);
-  --shadow-md: var(--sc-shadow-md);
-  --shadow-lg: var(--sc-shadow-lg);
-  --shadow-xl: var(--sc-shadow-xl);
-  --gradient-surface: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.03) 0%,
-    rgba(255, 255, 255, 0) 100%
-  );
   --background-gradient-overlay-start: rgba(2, 6, 23, 0);
-  --overlay-backdrop: var(--sc-backdrop-strong);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-bg-hover: rgba(255, 255, 255, 0.1);
   --glass-border: rgba(255, 255, 255, 0.05);
@@ -151,38 +128,20 @@
   --sc-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.06);
   --sc-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
   --sc-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.08);
-  --sc-backdrop-strong: rgba(0, 0, 0, 0.35);
+  /* QNBS-v3: DS-5 — 0.22 matches original --overlay-backdrop for light-theme (lighter than dark's 0.55). */
+  --sc-backdrop-strong: rgba(0, 0, 0, 0.22);
 
   --sc-bg: var(--sc-surface-base);
   --sc-fg: var(--sc-text-primary);
   --sc-muted: var(--sc-text-muted);
 
-  --background-primary: var(--sc-surface-base);
-  --background-secondary: var(--sc-surface-raised);
-  --background-tertiary: var(--sc-surface-overlay);
-  --background-interactive: var(--sc-accent);
-  --background-interactive-hover: var(--sc-accent-hover);
-  --background-interactive-subtle: var(--sc-accent-subtle);
-  --foreground-primary: var(--sc-text-primary);
-  --foreground-secondary: var(--sc-text-secondary);
-  --foreground-muted: var(--sc-text-muted);
-  --foreground-interactive: var(--sc-text-on-accent);
-  --border-primary: var(--sc-border-subtle);
-  --border-highlight: var(--sc-border-strong);
   --border-interactive: var(--sc-border-focus);
   --ring-focus: var(--sc-ring-focus);
-  --glow-primary: var(--sc-accent-glow);
   --nav-background-hover: rgba(0, 0, 0, 0.03);
   --nav-background-active: rgba(79, 70, 229, 0.08);
   --nav-text-active: #4338ca;
   --nav-border-active: var(--sc-accent);
-  --shadow-sm: var(--sc-shadow-sm);
-  --shadow-md: var(--sc-shadow-md);
-  --shadow-lg: var(--sc-shadow-lg);
-  --shadow-xl: var(--sc-shadow-xl);
-  --gradient-surface: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
   --background-gradient-overlay-start: rgba(255, 255, 255, 0);
-  --overlay-backdrop: rgba(0, 0, 0, 0.22);
   --glass-bg: rgba(0, 0, 0, 0.03);
   --glass-bg-hover: rgba(0, 0, 0, 0.05);
   --glass-border: rgba(0, 0, 0, 0.05);
@@ -213,20 +172,8 @@
   --sc-bg: var(--sc-surface-base);
   --sc-fg: var(--sc-text-primary);
   --sc-muted: var(--sc-text-muted);
-  --background-primary: var(--sc-surface-base);
-  --background-secondary: var(--sc-surface-raised);
-  --background-tertiary: var(--sc-surface-overlay);
-  --background-interactive: var(--sc-accent);
-  --background-interactive-hover: var(--sc-accent-hover);
-  --background-interactive-subtle: var(--sc-accent-subtle);
-  --foreground-primary: var(--sc-text-primary);
-  --foreground-secondary: var(--sc-text-secondary);
-  --foreground-muted: var(--sc-text-muted);
-  --border-primary: var(--sc-border-subtle);
-  --border-highlight: var(--sc-border-strong);
   --border-interactive: var(--sc-border-focus);
   --ring-focus: var(--sc-ring-focus);
-  --glow-primary: var(--sc-accent-glow);
   --nav-border-active: var(--sc-accent);
 }
 
@@ -236,13 +183,9 @@
   --sc-accent-hover: #9333ea;
   --sc-accent-subtle: rgba(168, 85, 247, 0.14);
   --sc-accent-glow: 0 0 48px -12px rgba(168, 85, 247, 0.35);
-  --background-interactive: var(--sc-accent);
-  --background-interactive-hover: var(--sc-accent-hover);
-  --background-interactive-subtle: var(--sc-accent-subtle);
   --border-interactive: var(--sc-accent);
   --nav-border-active: var(--sc-accent);
   --nav-text-active: #d8b4fe;
-  --glow-primary: var(--sc-accent-glow);
 }
 
 .appearance-romance {
@@ -250,19 +193,16 @@
   --sc-accent-hover: #be123c;
   --sc-accent-subtle: rgba(225, 29, 72, 0.12);
   --sc-accent-glow: 0 0 40px -10px rgba(225, 29, 72, 0.28);
-  --background-interactive: var(--sc-accent);
-  --background-interactive-hover: var(--sc-accent-hover);
-  --background-interactive-subtle: var(--sc-accent-subtle);
   --border-interactive: var(--sc-accent);
   --nav-border-active: var(--sc-accent);
   --nav-text-active: #fda4af;
-  --glow-primary: var(--sc-accent-glow);
 }
 
 /* High contrast — user toggle + system preference */
 .accessibility-high-contrast {
-  --sc-border-subtle: color-mix(in srgb, var(--foreground-primary) 28%, transparent);
-  --sc-border-strong: color-mix(in srgb, var(--foreground-primary) 45%, transparent);
+  /* QNBS-v3: DS-5 — use sc-* token directly; --foreground-primary bridge alias removed. */
+  --sc-border-subtle: color-mix(in srgb, var(--sc-text-primary) 28%, transparent);
+  --sc-border-strong: color-mix(in srgb, var(--sc-text-primary) 45%, transparent);
   --ring-focus: color-mix(in srgb, var(--sc-accent) 65%, white);
 }
 
@@ -366,8 +306,8 @@ html {
 }
 
 body {
-  background-color: var(--background-primary);
-  color: var(--foreground-primary);
+  background-color: var(--sc-surface-base);
+  color: var(--sc-text-primary);
   transition:
     background-color var(--sc-duration-normal) var(--sc-ease-emphasized),
     color var(--sc-duration-normal) var(--sc-ease-emphasized);
@@ -463,12 +403,12 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: var(--border-primary);
+  background-color: var(--sc-border-subtle);
   border-radius: 10px;
   transition: background-color 0.2s;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--foreground-muted);
+  background-color: var(--sc-text-muted);
 }
 
 /* ── Animations ────────────────────────────────────────── */
@@ -504,7 +444,7 @@ body {
 /* ── Range Input ───────────────────────────────────────── */
 input[type="range"] {
   -webkit-appearance: none;
-  background: var(--background-tertiary);
+  background: var(--sc-surface-overlay);
   border-radius: 999px;
   height: 4px;
   width: 100%;
@@ -514,7 +454,7 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
-  background: var(--foreground-primary);
+  background: var(--sc-text-primary);
   border-radius: 50%;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   cursor: pointer;
@@ -523,7 +463,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.2);
-  box-shadow: 0 0 0 4px var(--background-interactive-subtle);
+  box-shadow: 0 0 0 4px var(--sc-accent-subtle);
 }
 
 /* ── Utility ───────────────────────────────────────────── */
@@ -583,34 +523,34 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* ── Select Dropdown ───────────────────────────────────── */
 select option {
-  background-color: var(--background-secondary);
-  color: var(--foreground-primary);
+  background-color: var(--sc-surface-raised);
+  color: var(--sc-text-primary);
 }
 
 /* ── driver.js spotlight tour ─────────────────────────── */
 /* QNBS-v3: Two-class selectors beat driver.js `.driver-popover` (one class); no !important. */
 .driver-popover.storycraft-driver-popover {
-  background: var(--background-secondary);
-  color: var(--foreground-primary);
-  border: 1px solid var(--border-primary);
-  box-shadow: var(--shadow-md, 0 12px 40px rgba(0, 0, 0, 0.35));
+  background: var(--sc-surface-raised);
+  color: var(--sc-text-primary);
+  border: 1px solid var(--sc-border-subtle);
+  box-shadow: var(--sc-shadow-md, 0 12px 40px rgba(0, 0, 0, 0.35));
 }
 .driver-popover.storycraft-driver-popover .driver-popover-title {
-  color: var(--foreground-primary);
+  color: var(--sc-text-primary);
 }
 .driver-popover.storycraft-driver-popover .driver-popover-description {
-  color: var(--foreground-secondary);
+  color: var(--sc-text-secondary);
 }
 .driver-popover.storycraft-driver-popover .driver-popover-navigation-btns button {
   text-shadow: none;
 }
 .driver-popover.storycraft-driver-popover button.driver-popover-next-btn {
-  background: var(--background-interactive);
-  color: var(--foreground-interactive);
+  background: var(--sc-accent);
+  color: var(--sc-text-on-accent);
 }
 .driver-popover.storycraft-driver-popover button.driver-popover-prev-btn,
 .driver-popover.storycraft-driver-popover button.driver-popover-close-btn {
-  color: var(--foreground-secondary);
+  color: var(--sc-text-secondary);
 }
 
 /* Approximate color-vision hints — nach base `body`-Regeln (Biome noDescendingSpecificity). */

@@ -68,6 +68,9 @@ function ErrorFallback({ onReset }: { onReset?: () => void }) {
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // QNBS-v3: static displayName inside class body — external assignment fails TS2339 on class types.
+  static displayName = 'ErrorBoundary';
+
   public state: ErrorBoundaryState = {
     hasError: false,
   };
@@ -94,4 +97,3 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return this.props.children;
   }
 }
-ErrorBoundary.displayName = 'ErrorBoundary';

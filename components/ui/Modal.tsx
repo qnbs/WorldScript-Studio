@@ -57,7 +57,7 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <button
         type="button"
-        className="fixed inset-0 bg-[var(--overlay-backdrop)] backdrop-blur-sm pointer-events-auto cursor-default border-0 p-0 m-0"
+        className="fixed inset-0 bg-[var(--sc-backdrop-strong)] backdrop-blur-sm pointer-events-auto cursor-default border-0 p-0 m-0"
         aria-label={t('common.close')}
         onClick={onClose}
       />
@@ -67,7 +67,7 @@ export const Modal: React.FC<ModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`relative z-10 pointer-events-auto bg-[var(--sc-surface-base)] sm:rounded-sc-lg shadow-[var(--shadow-xl)] border-0 sm:border border-[var(--sc-border-subtle)] w-full ${sizeClasses[size]} h-full sm:h-auto sm:max-h-[90vh] flex flex-col`}
+        className={`relative z-10 pointer-events-auto bg-[var(--sc-surface-base)] sm:rounded-sc-lg shadow-[var(--sc-shadow-xl)] border-0 sm:border border-[var(--sc-border-subtle)] w-full ${sizeClasses[size]} h-full sm:h-auto sm:max-h-[90vh] flex flex-col`}
         style={{ animation: 'scale-in 0.2s ease-out' }}
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--sc-border-subtle)] flex-shrink-0">

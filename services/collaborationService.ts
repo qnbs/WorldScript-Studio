@@ -43,6 +43,10 @@ class CollaborationService {
   private readonly listeners = new Set<() => void>();
   // QNBS-v3: AES-256-GCM key derived from password — null when no password was supplied.
   private encryptionKey: CryptoKey | null = null;
+  // QNBS-v3: Cache of decrypted peer users — refreshed async after each awareness change in encrypted mode.
+  private _decryptedUsers: CollaborationUser[] = [];
+  // QNBS-v3: Local copy of current user for state merging when awareness is encrypted (avoids reading __enc blob from awareness).
+  private _localUser: CollaborationUser | null = null;
 
   private stripControlChars(value: string): string {
     let output = '';
@@ -118,6 +122,91 @@ class CollaborationService {
     return `storycraft-${hex}`;
   }
 
+  // QNBS-v3: Serialize CollaborationUser to JSON, encrypt with AES-256-GCM, base64-encode for y-webrtc awareness transport.
+  private async _encryptAwarenessPayload(user: CollaborationUser): Promise<string> {
+    const data = new TextEncoder().encode(JSON.stringify(user)) as Uint8Array<ArrayBuffer>;
+    const encrypted = await this.encryptUpdate(this.encryptionKey as CryptoKey, data);
+    const bytes = new Uint8Array(encrypted);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  // QNBS-v3: Decrypt base64-encoded AES-256-GCM awareness payload; returns null on tampered/wrong-key input.
+  private async _decryptAwarenessPayload(encoded: string): Promise<CollaborationUser | null> {
+    if (!this.encryptionKey) return null;
+    try {
+      const binary = atob(encoded);
+      const bytes = new Uint8Array(binary.length) as Uint8Array<ArrayBuffer>;
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const iv = bytes.slice(0, 12) as Uint8Array<ArrayBuffer>;
+      const ciphertext = bytes.slice(12).buffer as ArrayBuffer;
+      const decrypted = await this.decryptUpdate(this.encryptionKey, iv, ciphertext);
+      const parsed: unknown = JSON.parse(new TextDecoder().decode(decrypted));
+      if (!parsed || typeof parsed !== 'object') return null;
+      return this._validateUser(parsed as Record<string, unknown>);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Validate and sanitize a raw awareness user object; returns null if required fields are missing or invalid. */
+  private _validateUser(u: Record<string, unknown>): CollaborationUser | null {
+    if (
+      typeof u['id'] !== 'string' ||
+      typeof u['name'] !== 'string' ||
+      typeof u['color'] !== 'string' ||
+      u['name'].length > 100
+    ) {
+      return null;
+    }
+    const user: CollaborationUser = {
+      id: u['id'].slice(0, 64),
+      name: u['name'].slice(0, 100),
+      color: u['color'].slice(0, 20),
+    };
+    if (typeof u['cursor'] === 'number') {
+      user.cursor = u['cursor'];
+    }
+    return user;
+  }
+
+  // QNBS-v3: Set local awareness user state — encrypts with AES-256-GCM when encryptionKey is active, plain object otherwise.
+  private async _setAwarenessUser(user: CollaborationUser): Promise<void> {
+    if (!this.provider) return;
+    if (this.encryptionKey) {
+      const payload = await this._encryptAwarenessPayload(user);
+      this.provider.awareness.setLocalStateField('user', { __enc: payload });
+    } else {
+      this.provider.awareness.setLocalStateField('user', user);
+    }
+  }
+
+  // QNBS-v3: Rebuild decrypted-users cache from current awareness states — called async after each awareness change in encrypted mode.
+  private async _refreshDecryptedUsers(): Promise<void> {
+    if (!this.provider) {
+      this._decryptedUsers = [];
+      return;
+    }
+    const entries: Record<string, unknown>[] = [];
+    this.provider.awareness.getStates().forEach((state: Record<string, unknown>) => {
+      const raw = state['user'];
+      if (raw && typeof raw === 'object') entries.push(raw as Record<string, unknown>);
+    });
+
+    const resolved: CollaborationUser[] = [];
+    for (const raw of entries) {
+      let user: CollaborationUser | null;
+      if ('__enc' in raw && typeof raw['__enc'] === 'string') {
+        user = await this._decryptAwarenessPayload(raw['__enc']);
+      } else {
+        user = this._validateUser(raw);
+      }
+      if (user) resolved.push(user);
+    }
+    this._decryptedUsers = resolved;
+  }
+
   /** Connect to a collaboration room for the given project. */
   async connect(
     projectId: string,
@@ -128,6 +217,7 @@ class CollaborationService {
     if (this.provider) this.disconnect();
 
     this._roomId = await this.deriveRoomId(projectId, password);
+    this._localUser = user;
     this.doc = new Y.Doc();
 
     // QNBS-v3: Derive AES-256-GCM key when password supplied — salt is SHA-256 of projectId for determinism.
@@ -151,12 +241,19 @@ class CollaborationService {
       ...(password ? { password: this.sanitizeRoomValue(password) } : {}),
     });
 
-    // Publish our identity to peers
-    this.provider.awareness.setLocalStateField('user', user);
+    // Publish our identity to peers — AES-256-GCM encrypted when password is set.
+    await this._setAwarenessUser(user);
 
     // Notify all listeners when awareness changes (connected users update)
     this.provider.awareness.on('change', () => {
-      this.listeners.forEach((l) => void l());
+      if (this.encryptionKey) {
+        // QNBS-v3: decrypt peer awareness states async before notifying UI — prevents plaintext user data leaking in encrypted rooms.
+        void this._refreshDecryptedUsers().then(() => {
+          this.listeners.forEach((l) => void l());
+        });
+      } else {
+        this.listeners.forEach((l) => void l());
+      }
     });
   }
 
@@ -194,6 +291,8 @@ class CollaborationService {
     this.doc = null;
     this._roomId = null;
     this.encryptionKey = null;
+    this._localUser = null;
+    this._decryptedUsers = [];
     this.listeners.forEach((l) => void l());
   }
 
@@ -224,27 +323,14 @@ class CollaborationService {
   /** Get the list of currently connected users (from awareness). */
   getConnectedUsers(): CollaborationUser[] {
     if (!this.provider) return [];
+    // QNBS-v3: Encrypted mode returns pre-decrypted cache; plaintext mode reads awareness synchronously.
+    if (this.encryptionKey) return this._decryptedUsers;
     const users: CollaborationUser[] = [];
     this.provider.awareness.getStates().forEach((state: Record<string, unknown>) => {
       const raw = state['user'];
       if (raw && typeof raw === 'object') {
-        const u = raw as Record<string, unknown>;
-        if (
-          typeof u['id'] === 'string' &&
-          typeof u['name'] === 'string' &&
-          typeof u['color'] === 'string' &&
-          u['name'].length <= 100
-        ) {
-          const user: CollaborationUser = {
-            id: u['id'].slice(0, 64),
-            name: u['name'].slice(0, 100),
-            color: u['color'].slice(0, 20),
-          };
-          if (typeof u['cursor'] === 'number') {
-            user.cursor = u['cursor'];
-          }
-          users.push(user);
-        }
+        const user = this._validateUser(raw as Record<string, unknown>);
+        if (user) users.push(user);
       }
     });
     return users;
@@ -253,11 +339,11 @@ class CollaborationService {
   /** Update the local user's info (e.g., cursor position). */
   updateUserState(patch: Partial<CollaborationUser>): void {
     if (!this.provider) return;
-    const current = (this.provider.awareness.getLocalState() as AwarenessState | null)?.user ?? {};
-    this.provider.awareness.setLocalStateField('user', {
-      ...current,
-      ...patch,
-    });
+    // QNBS-v3: Use cached _localUser for merging — avoids reading encrypted __enc state from awareness.
+    const base: CollaborationUser = this._localUser ?? { id: '', name: '', color: '' };
+    const merged: CollaborationUser = { ...base, ...patch };
+    this._localUser = merged;
+    void this._setAwarenessUser(merged);
   }
 
   /** Register a listener that fires when connected users change. */
@@ -268,5 +354,3 @@ class CollaborationService {
 }
 
 export const collaborationService = new CollaborationService();
-
-export type { Y };

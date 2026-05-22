@@ -97,7 +97,7 @@ export const Drawer: React.FC<DrawerProps> = ({
     return undefined;
   }, [isOpen, onClose]);
 
-  const backdropClasses = `fixed inset-0 bg-[var(--overlay-backdrop)] z-40 transition-opacity duration-sc-normal ${isOpen ? 'backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`;
+  const backdropClasses = `fixed inset-0 bg-[var(--sc-backdrop-strong)] z-40 transition-opacity duration-sc-normal ${isOpen ? 'backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`;
 
   // QNBS-v3: Logical properties (start-0/end-0) instead of left-0/right-0 for RTL readiness.
   const drawerContainerClasses = `fixed top-0 h-full w-4/5 max-w-sm bg-[var(--sc-surface-base)] z-50 shadow-2xl flex flex-col transition-transform duration-sc-normal ease-sc-standard border-[var(--sc-border-subtle)] ${position === 'left' ? 'start-0 border-e' : 'end-0 border-s'}`;

@@ -469,4 +469,132 @@ describe('collaborationService encryption', () => {
     const lastCall = mockWebrtcConstructorSpy.mock.calls.at(-1);
     expect(lastCall?.[2]).not.toHaveProperty('password');
   });
+
+  // QNBS-v3: Awareness-encryption — local user state is stored as { __enc: base64 } when password is set.
+  it('stores awareness as __enc blob when connecting with password', async () => {
+    type AwarenessMock = { setLocalStateField: ReturnType<typeof vi.fn> };
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }, 'secret');
+    const provider = (collaborationService as unknown as Record<string, unknown>)['provider'] as {
+      awareness: AwarenessMock;
+    };
+    const calls = provider.awareness.setLocalStateField.mock.calls;
+    // The call from _setAwarenessUser in connect() should pass an __enc object, not a plain user
+    const awarenessCall = calls.find((c: unknown[]) => c[0] === 'user');
+    expect(awarenessCall?.[1]).toHaveProperty('__enc');
+    expect(typeof (awarenessCall?.[1] as Record<string, unknown>)['__enc']).toBe('string');
+  });
+
+  // QNBS-v3: Plaintext mode — awareness is stored as plain CollaborationUser object.
+  it('stores awareness as plain user object when connecting without password', async () => {
+    type AwarenessMock = { setLocalStateField: ReturnType<typeof vi.fn> };
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' });
+    const provider = (collaborationService as unknown as Record<string, unknown>)['provider'] as {
+      awareness: AwarenessMock;
+    };
+    const calls = provider.awareness.setLocalStateField.mock.calls;
+    const awarenessCall = calls.find((c: unknown[]) => c[0] === 'user');
+    expect(awarenessCall?.[1]).toMatchObject({ id: 'u', name: 'U', color: '#000' });
+    expect(awarenessCall?.[1]).not.toHaveProperty('__enc');
+  });
+
+  // QNBS-v3: updateUserState in encrypted mode re-encrypts merged user; emits __enc blob.
+  it('updateUserState emits __enc blob in encrypted mode', async () => {
+    type AwarenessMock = { setLocalStateField: ReturnType<typeof vi.fn> };
+    await collaborationService.connect('proj', { id: 'u', name: 'Old', color: '#000' }, 'pw');
+    const provider = (collaborationService as unknown as Record<string, unknown>)['provider'] as {
+      awareness: AwarenessMock;
+    };
+    provider.awareness.setLocalStateField.mockClear();
+
+    collaborationService.updateUserState({ name: 'New' });
+    // updateUserState fires void async — flush microtasks and macrotask (multi-await chain)
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const call = provider.awareness.setLocalStateField.mock.calls.at(-1);
+    expect(call?.[0]).toBe('user');
+    expect(call?.[1]).toHaveProperty('__enc');
+  });
+
+  // QNBS-v3: getConnectedUsers in encrypted mode returns _decryptedUsers cache (empty until awareness fires).
+  it('getConnectedUsers returns empty cache before first awareness change in encrypted mode', async () => {
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }, 'secret');
+    // No awareness change fired yet — cache is empty
+    expect(collaborationService.getConnectedUsers()).toEqual([]);
+  });
+
+  // QNBS-v3: _refreshDecryptedUsers decrypts __enc awareness entries; plaintext entries are validated normally.
+  it('refreshDecryptedUsers decrypts encrypted awareness entries via awareness change', async () => {
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }, 'secret');
+    type AwarenessMock = {
+      setLocalStateField: ReturnType<typeof vi.fn>;
+      getStates: ReturnType<typeof vi.fn>;
+      on: ReturnType<typeof vi.fn>;
+    };
+    const provider = (collaborationService as unknown as Record<string, unknown>)['provider'] as {
+      awareness: AwarenessMock;
+    };
+
+    // Simulate an encrypted peer entry: build a valid __enc payload using encryptUpdate
+    const peerUser = { id: 'peer1', name: 'Peer', color: '#0f0' };
+    const peerJson = JSON.stringify(peerUser);
+    const peerBytes = new TextEncoder().encode(peerJson) as Uint8Array<ArrayBuffer>;
+    // encryptSpy mock returns the input data as ciphertext (identity mock)
+    const peerEncrypted = await collaborationService.encryptUpdate(
+      {} as CryptoKey, // key is mocked — encryptSpy ignores it
+      peerBytes,
+    );
+    const peerBytes2 = new Uint8Array(peerEncrypted);
+    let binary = '';
+    for (const byte of peerBytes2) binary += String.fromCharCode(byte);
+    const peerEncB64 = btoa(binary);
+
+    provider.awareness.getStates.mockReturnValue(new Map([[2, { user: { __enc: peerEncB64 } }]]));
+
+    // Trigger the awareness change handler
+    const onCall = provider.awareness.on.mock.calls.find((c: unknown[]) => c[0] === 'change');
+    const changeHandler = onCall?.[1] as (() => void) | undefined;
+    expect(changeHandler).toBeDefined();
+    changeHandler?.();
+    // Wait for the async _refreshDecryptedUsers + listener chain to complete
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const users = collaborationService.getConnectedUsers();
+    expect(users).toHaveLength(1);
+    expect(users[0]).toMatchObject({ id: 'peer1', name: 'Peer', color: '#0f0' });
+  });
+
+  // QNBS-v3: _decryptAwarenessPayload returns null for tampered base64 data.
+  it('returns empty users list when awareness payload is tampered', async () => {
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }, 'secret');
+    type AwarenessMock = {
+      getStates: ReturnType<typeof vi.fn>;
+      on: ReturnType<typeof vi.fn>;
+    };
+    const provider = (collaborationService as unknown as Record<string, unknown>)['provider'] as {
+      awareness: AwarenessMock;
+    };
+
+    // Invalid base64 / wrong-key ciphertext — decryptSpy will reject
+    decryptSpy.mockRejectedValueOnce(new Error('decryption failed'));
+    provider.awareness.getStates.mockReturnValue(
+      new Map([[2, { user: { __enc: 'AAAAAAAAAAAAAAAA' } }]]),
+    );
+
+    const onCall = provider.awareness.on.mock.calls.find((c: unknown[]) => c[0] === 'change');
+    const changeHandler = onCall?.[1] as (() => void) | undefined;
+    changeHandler?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(collaborationService.getConnectedUsers()).toEqual([]);
+  });
+
+  // QNBS-v3: _decryptedUsers and _localUser cleared on disconnect.
+  it('clears decryptedUsers and localUser on disconnect', async () => {
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }, 'secret');
+    collaborationService.disconnect();
+    expect((collaborationService as unknown as Record<string, unknown>)['_localUser']).toBeNull();
+    expect((collaborationService as unknown as Record<string, unknown>)['_decryptedUsers']).toEqual(
+      [],
+    );
+  });
 });

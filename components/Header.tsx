@@ -94,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             data-tour="command-palette-trigger"
             onClick={onOpenPalette}
-            className="w-full h-10 rounded-xl bg-[var(--sc-surface-overlay)]/50 border border-[var(--sc-border-subtle)] hover:border-[var(--border-interactive)] hover:bg-[var(--sc-surface-overlay)] hover:shadow-[var(--shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--sc-text-muted)] group shadow-sm"
+            className="w-full h-10 rounded-xl bg-[var(--sc-surface-overlay)]/50 border border-[var(--sc-border-subtle)] hover:border-[var(--border-interactive)] hover:bg-[var(--sc-surface-overlay)] hover:shadow-[var(--sc-shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--sc-text-muted)] group shadow-sm"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

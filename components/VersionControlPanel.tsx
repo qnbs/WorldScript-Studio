@@ -354,7 +354,7 @@ export const VersionControlPanel: FC = () => {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-[var(--overlay-backdrop)] z-40"
+        className="fixed inset-0 bg-[var(--sc-backdrop-strong)] z-40"
         onClick={() => dispatch(versionControlActions.closePanel())}
         aria-hidden="true"
       />
