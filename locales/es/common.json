@@ -393,6 +393,8 @@
   "progress.chart.title": "Velocidad de escritura (30 días)",
   "progress.chart.noData": "Sin historial de escritura aún.",
   "progress.chart.ariaLabel": "Gráfico de velocidad de escritura para los últimos {{count}} días",
+  "progress.chart.tableDate": "Fecha",
+  "progress.chart.tableWords": "Palabras escritas",
   "progress.heatmap.title": "Actividad (12 semanas)",
   "progress.heatmap.ariaLabel": "Mapa de calor de actividad de escritura",
   "progress.bestDay.title": "Mejor día",

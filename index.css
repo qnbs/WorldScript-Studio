@@ -22,6 +22,22 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --sc-prose-measure: 65ch;
 
+  /* Icon size tokens — QNBS-v3: semantic names replace w-4/w-5/w-6/w-8 literals; map to 16/20/24/32px. */
+  --icon-sc-sm: 1rem; /* 16px — inline icon */
+  --icon-sc-md: 1.25rem; /* 20px — button icon */
+  --icon-sc-lg: 1.5rem; /* 24px — card icon */
+  --icon-sc-xl: 2rem; /* 32px — hero icon */
+
+  /* Fluid type scale — QNBS-v3: clamp() interpolates linearly between 390px and 1280px viewport widths; prevents both mobile squishing and desktop gigantism. */
+  --text-sc-xs: clamp(0.625rem, 0.59rem + 0.18vw, 0.75rem); /* 10–12px */
+  --text-sc-sm: clamp(0.75rem, 0.71rem + 0.21vw, 0.875rem); /* 12–14px */
+  --text-sc-base: clamp(0.875rem, 0.83rem + 0.24vw, 1rem); /* 14–16px */
+  --text-sc-lg: clamp(1rem, 0.94rem + 0.31vw, 1.125rem); /* 16–18px */
+  --text-sc-xl: clamp(1.125rem, 1.02rem + 0.53vw, 1.375rem); /* 18–22px */
+  --text-sc-2xl: clamp(1.25rem, 1.07rem + 0.91vw, 1.75rem); /* 20–28px */
+  --text-sc-3xl: clamp(1.5rem, 1.21rem + 1.46vw, 2.25rem); /* 24–36px */
+  --text-sc-4xl: clamp(1.875rem, 1.4rem + 2.42vw, 3rem); /* 30–48px */
+
   /* Dark — semantic */
   --sc-surface-base: #020617;
   --sc-surface-raised: #0f172a;
@@ -259,6 +275,18 @@
     --sc-border-subtle: #94a3b8;
     --sc-border-strong: #64748b;
   }
+}
+
+/* QNBS-v3: prefers-reduced-data disables Aurora on metered/low-bandwidth connections — blobs are purely decorative. */
+@media (prefers-reduced-data: reduce) {
+  .aurora-blob {
+    display: none;
+  }
+}
+
+/* QNBS-v3: .aurora-disabled is toggled by inline JS in index.html when hardwareConcurrency ≤ 4 — prevents GPU drain on low-end devices. */
+.aurora-disabled .aurora-blob {
+  display: none;
 }
 
 /* Reduced motion: Aurora + stagger respect */

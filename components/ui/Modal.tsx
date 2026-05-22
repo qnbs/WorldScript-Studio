@@ -98,3 +98,4 @@ export const Modal: React.FC<ModalProps> = ({
     </div>
   );
 };
+Modal.displayName = 'Modal';

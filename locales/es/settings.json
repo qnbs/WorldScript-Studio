@@ -1,5 +1,8 @@
 {
   "settings.about.description": "Tu compañero creativo de escritura con IA.",
+  "settings.about.githubLabel": "Código abierto en GitHub",
+  "settings.about.githubDescription": "Ver el código fuente, reportar errores y contribuir.",
+  "settings.about.liveDemo": "Probar la demo en vivo",
   "settings.about.title": "Acerca de StoryCraft Studio",
   "settings.about.versionLabel": "Versión",
   "settings.accessibility.activePreset": "Preajuste activo",

@@ -227,3 +227,4 @@ export const ToastProvider: FC<{ children: React.ReactNode }> = ({ children }) =
     </ToastContext.Provider>
   );
 };
+ToastProvider.displayName = 'ToastProvider';

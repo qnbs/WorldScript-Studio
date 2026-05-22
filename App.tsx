@@ -260,9 +260,11 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     }
   }, [settings.accessibility.colorBlindMode]);
 
-  // QNBS-v3: HTML lang follows locale — aligns SR pronunciation & prepares RTL metadata later.
+  // QNBS-v3: HTML lang + dir follows locale — aligns SR pronunciation and enables RTL layout for ar/he/fa/ur.
   useEffect(() => {
+    const RTL_LANGS = new Set(['ar', 'he', 'fa', 'ur']);
     document.documentElement.lang = language;
+    document.documentElement.dir = RTL_LANGS.has(language) ? 'rtl' : 'ltr';
   }, [language]);
 
   // QNBS-v3: PWA share_target GET params → toast + stash for Writer paste flows; strip query to avoid leaking shared text in URL bar.

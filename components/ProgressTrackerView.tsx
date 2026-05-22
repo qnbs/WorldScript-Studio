@@ -83,22 +83,42 @@ const VelocityChart: FC<{ history: { date: string; words: number }[] }> = ({ his
 
   const areaD = `${pathD} L ${points.at(-1)!.x},${H} L ${points[0]!.x},${H} Z`;
 
+  // QNBS-v3: aria-hidden SVG + sr-only table gives screen readers actual data without visual clutter.
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      role="img"
-      aria-label={t('progress.chart.ariaLabel', { count: String(last30.length) })}
-      className="w-full h-24"
-    >
-      <defs>
-        <linearGradient id="velGrad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="var(--sc-accent)" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="var(--sc-accent)" stopOpacity="0.05" />
-        </linearGradient>
-      </defs>
-      <path d={areaD} fill="url(#velGrad)" />
-      <path d={pathD} fill="none" stroke="var(--sc-accent)" strokeWidth={1.5} />
-    </svg>
+    <>
+      <svg viewBox={`0 0 ${W} ${H}`} aria-hidden="true" className="w-full h-24">
+        <defs>
+          <linearGradient id="velGrad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="var(--sc-accent)" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="var(--sc-accent)" stopOpacity="0.05" />
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill="url(#velGrad)" />
+        <path d={pathD} fill="none" stroke="var(--sc-accent)" strokeWidth={1.5} />
+      </svg>
+      <table
+        className="sr-only"
+        aria-label={t('progress.chart.ariaLabel', { count: String(last30.length) })}
+      >
+        <caption className="sr-only">
+          {t('progress.chart.ariaLabel', { count: String(last30.length) })}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{t('progress.chart.tableDate')}</th>
+            <th scope="col">{t('progress.chart.tableWords')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {last30.map((d) => (
+            <tr key={d.date}>
+              <td>{d.date}</td>
+              <td>{d.words}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 };
 

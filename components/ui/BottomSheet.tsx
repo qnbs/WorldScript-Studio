@@ -168,3 +168,4 @@ export const BottomSheet: FC<BottomSheetProps> = ({
     </>
   );
 };
+BottomSheet.displayName = 'BottomSheet';

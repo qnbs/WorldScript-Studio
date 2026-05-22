@@ -39,3 +39,4 @@ export const EmptyState: FC<EmptyStateProps> = ({
     </div>
   </div>
 );
+EmptyState.displayName = 'EmptyState';

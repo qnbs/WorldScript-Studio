@@ -30,7 +30,7 @@
 
 ## 🌐 Live Demo
 
-**🚀 [Launch StoryCraft Studio in your Browser!](https://qnbs.github.io/StoryCraft-Studio/) 🚀**
+**🚀 [Launch StoryCraft Studio in your Browser!](https://storycraft-studio-indol.vercel.app/) 🚀**
 
 ✨ _Try it right now — no installation, no account required. All data is saved securely in your browser's IndexedDB._ ✨
 
@@ -616,7 +616,7 @@ StoryCraft Studio ist eine hochmoderne, KI-gestützte Anwendung für Autoren, Dr
 
 ## 🌐 Live-Demo
 
-**🚀 [StoryCraft Studio im Browser starten!](https://qnbs.github.io/StoryCraft-Studio/) 🚀**
+**🚀 [StoryCraft Studio im Browser starten!](https://storycraft-studio-indol.vercel.app/) 🚀**
 
 ✨ _Sofort ausprobieren — keine Installation, kein Konto. Alle Daten werden sicher im IndexedDB des Browsers gespeichert._ ✨
 

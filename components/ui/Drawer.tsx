@@ -146,3 +146,4 @@ export const Drawer: React.FC<DrawerProps> = ({
     </>
   );
 };
+Drawer.displayName = 'Drawer';

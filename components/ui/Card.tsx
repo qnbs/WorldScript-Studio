@@ -66,3 +66,6 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ children, className }) =
     </div>
   );
 };
+Card.displayName = 'Card';
+CardContent.displayName = 'CardContent';
+CardHeader.displayName = 'CardHeader';

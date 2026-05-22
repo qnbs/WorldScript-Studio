@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import type { StorySection } from '../../types';
 
+// QNBS-v3: Exported defaults allow callers to override at the usage site; constants no longer hard-coded inside props.
 export const MINIMAP_W = 120;
 export const MINIMAP_H = 75;
 const CARD_W = 200;
@@ -15,6 +16,10 @@ export interface PlotMinimapProps {
   panY: number;
   zoom: number;
   ariaLabel?: string;
+  /** Override minimap width in px (default: MINIMAP_W = 120). */
+  width?: number;
+  /** Override minimap height in px (default: MINIMAP_H = 75). */
+  height?: number;
 }
 
 /** Fixed-position canvas overview (scene positions + viewport indicator). */
@@ -27,9 +32,11 @@ export const PlotMinimap: FC<PlotMinimapProps> = ({
   panY,
   zoom,
   ariaLabel = 'Canvas mini-map',
+  width = MINIMAP_W,
+  height = MINIMAP_H,
 }) => {
-  const scaleX = MINIMAP_W / Math.max(canvasW, 1);
-  const scaleY = MINIMAP_H / Math.max(canvasH, 1);
+  const scaleX = width / Math.max(canvasW, 1);
+  const scaleY = height / Math.max(canvasH, 1);
   const vpW = (window.innerWidth / zoom) * scaleX;
   const vpH = (window.innerHeight / zoom) * scaleY;
   const vpX = (-panX / zoom) * scaleX;
@@ -37,8 +44,8 @@ export const PlotMinimap: FC<PlotMinimapProps> = ({
 
   return (
     <svg
-      width={MINIMAP_W}
-      height={MINIMAP_H}
+      width={width}
+      height={height}
       role="img"
       aria-label={ariaLabel}
       className="plot-minimap"

@@ -393,6 +393,8 @@
   "progress.chart.title": "Writing Velocity (30 days)",
   "progress.chart.noData": "No writing history yet.",
   "progress.chart.ariaLabel": "Writing velocity chart for the last {{count}} days",
+  "progress.chart.tableDate": "Date",
+  "progress.chart.tableWords": "Words written",
   "progress.heatmap.title": "Activity (12 weeks)",
   "progress.heatmap.ariaLabel": "Writing activity heatmap",
   "progress.bestDay.title": "Best Day",

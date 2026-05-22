@@ -73,6 +73,8 @@
     <title>StoryCraft Studio</title>
 </head>
   <body>
+    <!-- QNBS-v3: Disable Aurora on low-end hardware (≤4 logical CPUs) to prevent GPU/battery drain; prefers-reduced-data handled in CSS. -->
+    <script>if(navigator.hardwareConcurrency<=4)document.documentElement.classList.add('aurora-disabled');</script>
     <div class="noise-overlay"></div>
     <div class="aurora-container">
       <div class="aurora-blob blob-1"></div>

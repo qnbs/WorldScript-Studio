@@ -255,3 +255,6 @@ export const PWAUpdateToast: FC = () => {
     </div>
   );
 };
+OfflineIndicator.displayName = 'OfflineIndicator';
+PWAInstallBanner.displayName = 'PWAInstallBanner';
+PWAUpdateToast.displayName = 'PWAUpdateToast';
