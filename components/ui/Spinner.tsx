@@ -26,3 +26,4 @@ export const Spinner: React.FC<SpinnerProps> = ({ className, label }) => (
     <span className="sr-only">{label ?? 'Loading…'}</span>
   </div>
 );
+Spinner.displayName = 'Spinner';

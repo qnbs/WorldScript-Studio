@@ -23,3 +23,4 @@ export const SaveStatusIndicator: React.FC = () => {
     </div>
   );
 };
+SaveStatusIndicator.displayName = 'SaveStatusIndicator';

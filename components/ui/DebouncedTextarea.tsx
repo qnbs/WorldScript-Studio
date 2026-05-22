@@ -44,3 +44,4 @@ export const DebouncedTextarea: React.FC<DebouncedTextareaProps> = ({
 
   return <Textarea {...props} value={internalValue} onChange={handleChange} />;
 };
+DebouncedTextarea.displayName = 'DebouncedTextarea';

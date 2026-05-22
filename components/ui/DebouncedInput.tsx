@@ -44,3 +44,4 @@ export const DebouncedInput: React.FC<DebouncedInputProps> = ({
 
   return <Input {...props} value={internalValue} onChange={handleChange} />;
 };
+DebouncedInput.displayName = 'DebouncedInput';

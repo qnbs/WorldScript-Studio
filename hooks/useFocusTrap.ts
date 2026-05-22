@@ -31,7 +31,6 @@ export function useFocusTrap(
         ),
       ).filter((element) => !element.hasAttribute('disabled'));
       const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
 
       if (firstElement) {
         firstElement.focus();
@@ -39,21 +38,28 @@ export function useFocusTrap(
         container.focus();
       }
 
+      // QNBS-v3: Re-query focusable elements on each Tab press — modals can add/remove nodes dynamically (e.g. expanding settings sections).
       handleTabKey = (e: KeyboardEvent) => {
         if (e.key !== 'Tab') return;
-        if (focusableElements.length === 0) {
+        const live = Array.from(
+          container.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter((el) => !el.hasAttribute('disabled'));
+        if (live.length === 0) {
           e.preventDefault();
           return;
         }
-
+        const first = live[0]!;
+        const last = live[live.length - 1]!;
         if (e.shiftKey) {
-          if (document.activeElement === firstElement && lastElement) {
-            lastElement.focus();
+          if (document.activeElement === first) {
+            last.focus();
             e.preventDefault();
           }
         } else {
-          if (document.activeElement === lastElement && firstElement) {
-            firstElement.focus();
+          if (document.activeElement === last) {
+            first.focus();
             e.preventDefault();
           }
         }

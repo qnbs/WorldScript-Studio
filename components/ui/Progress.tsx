@@ -19,3 +19,4 @@ export const Progress: React.FC<ProgressProps> = ({ value, className }) => {
     </div>
   );
 };
+Progress.displayName = 'Progress';

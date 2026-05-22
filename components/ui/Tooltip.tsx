@@ -25,3 +25,4 @@ export const Tooltip: FC<TooltipProps> = ({ children, label, shortcut }) => {
     </span>
   );
 };
+Tooltip.displayName = 'Tooltip';

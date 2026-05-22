@@ -65,3 +65,4 @@ export const AddNewCard: React.FC<AddNewCardProps> = ({
     </button>
   );
 };
+AddNewCard.displayName = 'AddNewCard';

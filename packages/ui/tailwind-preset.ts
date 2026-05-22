@@ -39,6 +39,28 @@ export const storycraftTailwindPreset: Partial<Config> = {
         'sc-editor': ['var(--font-editor)'],
         'sc-mono': ['var(--font-mono)'],
       },
+      width: {
+        'icon-sc-sm': 'var(--icon-sc-sm)',
+        'icon-sc-md': 'var(--icon-sc-md)',
+        'icon-sc-lg': 'var(--icon-sc-lg)',
+        'icon-sc-xl': 'var(--icon-sc-xl)',
+      },
+      height: {
+        'icon-sc-sm': 'var(--icon-sc-sm)',
+        'icon-sc-md': 'var(--icon-sc-md)',
+        'icon-sc-lg': 'var(--icon-sc-lg)',
+        'icon-sc-xl': 'var(--icon-sc-xl)',
+      },
+      fontSize: {
+        'sc-xs': ['var(--text-sc-xs)', { lineHeight: '1.5' }],
+        'sc-sm': ['var(--text-sc-sm)', { lineHeight: '1.5' }],
+        'sc-base': ['var(--text-sc-base)', { lineHeight: '1.6' }],
+        'sc-lg': ['var(--text-sc-lg)', { lineHeight: '1.5' }],
+        'sc-xl': ['var(--text-sc-xl)', { lineHeight: '1.4' }],
+        'sc-2xl': ['var(--text-sc-2xl)', { lineHeight: '1.3' }],
+        'sc-3xl': ['var(--text-sc-3xl)', { lineHeight: '1.25' }],
+        'sc-4xl': ['var(--text-sc-4xl)', { lineHeight: '1.1' }],
+      },
       transitionDuration: {
         'sc-fast': 'var(--sc-duration-fast)',
         'sc-normal': 'var(--sc-duration-normal)',

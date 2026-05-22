@@ -40,3 +40,4 @@ export const SectionIcon: FC<SectionIconProps> = ({ section, size = 'md', classN
     </div>
   );
 };
+SectionIcon.displayName = 'SectionIcon';

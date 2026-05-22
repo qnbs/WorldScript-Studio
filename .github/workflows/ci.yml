@@ -317,7 +317,7 @@ jobs:
   storybook:
     name: 📖 Storybook
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     needs: [quality]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -325,6 +325,18 @@ jobs:
 
       - name: Build Storybook
         run: pnpm exec storybook build --output-dir storybook-static
+
+      # QNBS-v3: Serve built Storybook statically and run test-runner (axe + interaction tests) against it in CI.
+      - name: Install Playwright browsers (test-runner)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Storybook test-runner
+        env:
+          CI: true
+        run: |
+          pnpm exec http-server storybook-static -p 6006 -s &
+          pnpm exec wait-on http://localhost:6006 --timeout 30000
+          pnpm run test:storybook --url http://localhost:6006
 
       - name: Upload Storybook artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

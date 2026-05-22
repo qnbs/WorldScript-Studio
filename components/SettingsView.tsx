@@ -277,8 +277,9 @@ const SettingsViewUI: FC = () => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8">
         <div className="md:col-span-1">
-          {/* Mobile: horizontal scroll strip · Desktop: vertical sticky sidebar */}
-          <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--sc-surface-base)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
+          {/* Mobile: horizontal scroll strip · Desktop: vertically sticky + independently scrollable sidebar */}
+          {/* QNBS-v3: md:max-h-[calc(100vh-8rem)] + overflow-y-auto keeps the nav visible while the content panel scrolls — LA-3. */}
+          <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible md:overflow-y-auto no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 md:max-h-[calc(100vh-8rem)] z-10 bg-[var(--sc-surface-base)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
             {filteredNavCategories.length === 0 ? (
               <p className="px-3 py-2 text-sm text-[var(--sc-text-muted)]">
                 {t('settings.search.noResults')}
