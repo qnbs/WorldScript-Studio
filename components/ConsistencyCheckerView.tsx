@@ -92,9 +92,7 @@ const ConsistencyCheckerUI: FC = () => {
                       {storyCodex.consistencyHints.map((h) => (
                         <li
                           key={h.id}
-                          className={
-                            h.severity === 'warn' ? 'text-amber-600 dark:text-amber-400' : ''
-                          }
+                          className={h.severity === 'warn' ? 'text-[var(--sc-warning-fg)]' : ''}
                         >
                           {h.message}
                         </li>

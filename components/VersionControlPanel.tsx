@@ -151,7 +151,7 @@ const SnapshotCard: FC<{
               </span>
             )}
             {snapshot.sectionId ? (
-              <span className="px-1.5 py-0.5 text-xs rounded bg-amber-500/20 text-amber-700 dark:text-amber-300">
+              <span className="px-1.5 py-0.5 text-xs rounded-sc-sm bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]">
                 {t('vc.scopeSection')}
               </span>
             ) : null}
@@ -689,7 +689,7 @@ export const VersionControlPanel: FC = () => {
           {t('vc.compareHint')} {t('vc.compareWordHint')}
         </p>
         {diffViewTruncated ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400 mb-2" role="status">
+          <p className="text-xs text-[var(--sc-warning-fg)] mb-2" role="status">
             {t('vc.compareTruncated', {
               shown: String(MAX_DIFF_VIEW_LINES),
               total: String(diffLinesFull.length),

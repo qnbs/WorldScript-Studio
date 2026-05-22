@@ -19,14 +19,14 @@ function MessageBubble({
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+        className={`max-w-[80%] rounded-sc-xl px-4 py-3 ${
           isUser
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-white'
+            ? 'bg-[var(--sc-accent)] text-white'
+            : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)]'
         }`}
       >
         <p
-          className={`mb-1 text-xs font-medium ${isUser ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}
+          className={`mb-1 text-xs font-medium ${isUser ? 'text-white/70' : 'text-[var(--sc-text-muted)]'}`}
         >
           {label}
         </p>
@@ -54,7 +54,8 @@ export function InterviewPanel() {
 
   if (!hasAiKey) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+      // QNBS-v3: dark: prefix removed — sc-token adapts to all appearance presets.
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-[var(--sc-text-muted)]">
         {t('characterInterviews.noAiKey')}
       </div>
     );
@@ -75,8 +76,8 @@ export function InterviewPanel() {
         ))}
         {isStreaming && (
           <div className="flex justify-start">
-            <div className="rounded-2xl bg-gray-100 px-4 py-3 dark:bg-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">
+            <div className="rounded-sc-xl bg-[var(--sc-surface-overlay)] px-4 py-3">
+              <p className="text-xs text-[var(--sc-text-muted)] animate-pulse">
                 {t('characterInterviews.thinking')}
               </p>
             </div>
@@ -89,7 +90,7 @@ export function InterviewPanel() {
           <button
             type="button"
             onClick={stopStreaming}
-            className="rounded-full bg-red-100 px-4 py-1 text-xs text-red-600 transition-colors hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400"
+            className="rounded-full bg-[var(--sc-danger-bg)] px-4 py-1 text-xs text-[var(--sc-danger-fg)] transition-colors hover:opacity-80"
           >
             {t('characterInterviews.stopGeneration')}
           </button>

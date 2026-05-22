@@ -114,9 +114,7 @@ const AuthorInsightsCard: FC = () => {
               {sceneTimelineHints.slice(0, 8).map((h) => (
                 <li
                   key={h.id}
-                  className={
-                    h.severity === 'warn' ? 'text-amber-600 dark:text-amber-400' : undefined
-                  }
+                  className={h.severity === 'warn' ? 'text-[var(--sc-warning-fg)]' : undefined}
                 >
                   {t(h.messageKey, h.params)}
                 </li>
@@ -124,7 +122,7 @@ const AuthorInsightsCard: FC = () => {
             </ul>
           )}
           {warnCount > 0 ? (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+            <p className="text-xs text-[var(--sc-warning-fg)] mt-2">
               {t('dashboard.authorInsights.timelineWarnBadge', { count: String(warnCount) })}
             </p>
           ) : null}
@@ -233,7 +231,7 @@ const ProjectDetails: FC = () => {
               disabled={isAiLoading}
               size="sm"
               variant="ghost"
-              className="h-7 text-xs px-2 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30"
+              className="h-7 text-xs px-2 text-[var(--sc-accent)] hover:bg-[var(--sc-accent)]/10"
             >
               {isAiLoading ? (
                 <Spinner className="w-3 h-3" />

@@ -30,7 +30,8 @@ function CharacterInterviewsViewContent() {
 
   if (characters.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-center text-gray-500 dark:text-gray-400">
+      // QNBS-v3: Replaced dark: prefix with sc-token — appearance presets now apply correctly.
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-[var(--sc-text-muted)]">
         {t('characterInterviews.noCharacters')}
       </div>
     );
@@ -39,12 +40,12 @@ function CharacterInterviewsViewContent() {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Left sidebar — character + interview list */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-gray-200 dark:border-gray-700">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--sc-border-subtle)]">
         {/* Character selector */}
-        <div className="border-b border-gray-200 p-3 dark:border-gray-700">
+        <div className="border-b border-[var(--sc-border-subtle)] p-3">
           <label
             htmlFor="ci-character-select"
-            className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
+            className="mb-1 block text-xs font-medium text-[var(--sc-text-muted)]"
           >
             {t('characterInterviews.selectCharacter')}
           </label>
@@ -52,7 +53,7 @@ function CharacterInterviewsViewContent() {
             id="ci-character-select"
             value={selectedCharacterId ?? ''}
             onChange={(e) => selectCharacter(e.target.value)}
-            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            className="w-full rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-2 py-1.5 text-sm text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
           >
             <option value="" disabled>
               {t('characterInterviews.selectCharacterPlaceholder')}
@@ -68,8 +69,8 @@ function CharacterInterviewsViewContent() {
         {/* Interview list */}
         {selectedCharacterId && (
           <div className="flex flex-1 flex-col overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-700">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            <div className="flex items-center justify-between border-b border-[var(--sc-border-subtle)] px-3 py-2">
+              <span className="text-xs font-medium text-[var(--sc-text-muted)]">
                 {t('characterInterviews.interviewsForCharacter').replace(
                   '{{name}}',
                   selectedCharacter?.name ?? '',
@@ -78,14 +79,14 @@ function CharacterInterviewsViewContent() {
               <button
                 type="button"
                 onClick={() => setShowNewForm((v) => !v)}
-                className="rounded px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="rounded-sc-sm px-2 py-0.5 text-xs text-[var(--sc-accent)] hover:bg-[var(--sc-accent)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               >
                 {t('characterInterviews.newInterview')}
               </button>
             </div>
 
             {showNewForm && (
-              <div className="border-b border-gray-200 p-3 dark:border-gray-700">
+              <div className="border-b border-[var(--sc-border-subtle)] p-3">
                 <ArchetypeSelector />
                 {selectedArchetype && (
                   <div className="mt-3 flex flex-col gap-2">
@@ -95,7 +96,7 @@ function CharacterInterviewsViewContent() {
                       onChange={(e) => setNewTitle(e.target.value)}
                       placeholder={t('characterInterviews.interviewTitlePlaceholder')}
                       aria-label={t('characterInterviews.interviewTitle')}
-                      className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                      className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-2 py-1 text-sm text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
                     />
                     <div className="flex gap-2">
                       <button
@@ -105,14 +106,14 @@ function CharacterInterviewsViewContent() {
                           setNewTitle('');
                           setShowNewForm(false);
                         }}
-                        className="flex-1 rounded bg-blue-600 py-1 text-sm text-white hover:bg-blue-700"
+                        className="flex-1 rounded-sc-md bg-[var(--sc-accent)] py-1 text-sm text-white hover:bg-[var(--sc-accent-hover)]"
                       >
                         {t('characterInterviews.startInterview')}
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowNewForm(false)}
-                        className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600"
+                        className="rounded-sc-md border border-[var(--sc-border-subtle)] px-2 py-1 text-sm text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)]"
                       >
                         {t('characterInterviews.cancel')}
                       </button>
@@ -128,7 +129,9 @@ function CharacterInterviewsViewContent() {
               className="flex-1 overflow-y-auto"
             >
               {interviews.length === 0 && (
-                <p className="p-3 text-xs text-gray-400">{t('characterInterviews.emptyState')}</p>
+                <p className="p-3 text-xs text-[var(--sc-text-muted)]">
+                  {t('characterInterviews.emptyState')}
+                </p>
               )}
               {interviews.map((iv) => (
                 <div key={iv.id} className="group relative">
@@ -143,14 +146,16 @@ function CharacterInterviewsViewContent() {
                         selectInterview(iv.id);
                       }
                     }}
-                    className={`cursor-pointer px-3 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                    className={`cursor-pointer px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--sc-ring-focus)] ${
                       selectedInterviewId === iv.id
-                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                        ? 'bg-[var(--sc-accent)]/10 text-[var(--sc-accent)]'
+                        : 'hover:bg-[var(--sc-surface-overlay)]'
                     }`}
                   >
                     <p className="truncate font-medium">{iv.title ?? iv.archetype}</p>
-                    <p className="text-xs text-gray-400">{iv.messages.length} messages</p>
+                    <p className="text-xs text-[var(--sc-text-muted)]">
+                      {iv.messages.length} messages
+                    </p>
                   </div>
                   {deleteConfirmId === iv.id ? (
                     <div className="flex gap-1 px-3 pb-2">
@@ -160,14 +165,14 @@ function CharacterInterviewsViewContent() {
                           deleteInterview(iv.id);
                           setDeleteConfirmId(null);
                         }}
-                        className="text-xs text-red-600 hover:underline"
+                        className="text-xs text-[var(--sc-danger-fg)] hover:underline"
                       >
                         {t('characterInterviews.deleteInterview')}
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeleteConfirmId(null)}
-                        className="text-xs text-gray-400 hover:underline"
+                        className="text-xs text-[var(--sc-text-muted)] hover:underline"
                       >
                         {t('characterInterviews.cancel')}
                       </button>
@@ -180,7 +185,7 @@ function CharacterInterviewsViewContent() {
                         e.stopPropagation();
                         setDeleteConfirmId(iv.id);
                       }}
-                      className="absolute right-2 top-2 hidden rounded p-1 text-gray-400 hover:text-red-500 group-hover:block"
+                      className="absolute right-2 top-2 hidden rounded-sc-sm p-1 text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)] group-hover:block"
                     >
                       ×
                     </button>
@@ -197,7 +202,7 @@ function CharacterInterviewsViewContent() {
         {selectedInterview ? (
           <InterviewPanel />
         ) : (
-          <div className="flex flex-1 items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+          <div className="flex flex-1 items-center justify-center text-sm text-[var(--sc-text-muted)]">
             {t('characterInterviews.emptyState')}
           </div>
         )}
@@ -212,9 +217,9 @@ export default function CharacterInterviewsView() {
   return (
     <CharacterInterviewsViewContext.Provider value={value}>
       <div className="flex h-full flex-col">
-        <header className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Character Interviews
+        <header className="border-b border-[var(--sc-border-subtle)] px-6 py-4">
+          <h1 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+            {value.t('characterInterviews.title')}
           </h1>
         </header>
         <CharacterInterviewsViewContent />

@@ -93,7 +93,7 @@ export const ProjectAiPresetSection: FC = () => {
             </p>
           </div>
           {isEnabled && (
-            <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+            <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-600">
               {t('settings.projectAi.activeIndicator')}
             </span>
           )}
@@ -108,7 +108,7 @@ export const ProjectAiPresetSection: FC = () => {
             checked={isEnabled}
             onChange={handleToggle}
           />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs text-[var(--sc-text-muted)]">
             {t('settings.projectAi.enableToggleHint')}
           </p>
         </div>
@@ -259,7 +259,7 @@ export const ProjectAiPresetSection: FC = () => {
                 </label>
                 {/* QNBS-v3: Character counter prevents excessively long prompts that bloat the project snapshot. */}
                 <span
-                  className={`text-xs tabular-nums ${(preset?.customSystemPrompt?.length ?? 0) > MAX_CUSTOM_PROMPT_LENGTH - 100 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}
+                  className={`text-xs tabular-nums ${(preset?.customSystemPrompt?.length ?? 0) > MAX_CUSTOM_PROMPT_LENGTH - 100 ? 'text-[var(--sc-warning-fg)]' : 'text-[var(--sc-text-muted)]'}`}
                 >
                   {preset?.customSystemPrompt?.length ?? 0}&nbsp;/&nbsp;{MAX_CUSTOM_PROMPT_LENGTH}
                 </span>
@@ -273,15 +273,15 @@ export const ProjectAiPresetSection: FC = () => {
                 onChange={(e) => patch({ customSystemPrompt: e.target.value || undefined })}
                 className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] placeholder-[var(--sc-text-muted)] focus:border-[var(--sc-ring-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-[var(--sc-text-muted)]">
                 {t('settings.projectAi.systemPromptHint')}
               </p>
             </div>
 
             {/* LoRA section — preparatory, only for local inference providers */}
             {showLoraFields && (
-              <div className="space-y-4 rounded-lg border border-dashed border-amber-300 bg-amber-50/40 p-4 dark:border-amber-700/50 dark:bg-amber-900/10">
-                <p className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              <div className="space-y-4 rounded-sc-md border border-dashed border-amber-500/40 bg-[var(--sc-warning-bg)] p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-warning-fg)]">
                   {t('settings.projectAi.loraSection')}
                 </p>
                 <div className="space-y-1">
@@ -298,7 +298,7 @@ export const ProjectAiPresetSection: FC = () => {
                     placeholder="e.g. username/my-lora-adapter"
                     onChange={(e) => patch({ loraModelPath: e.target.value || undefined })}
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-[var(--sc-text-muted)]">
                     {t('settings.projectAi.loraModelPathHint')}
                   </p>
                 </div>
@@ -322,7 +322,7 @@ export const ProjectAiPresetSection: FC = () => {
                     onChange={(e) => patch({ loraScale: Number.parseFloat(e.target.value) })}
                     className="w-full accent-amber-500"
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-[var(--sc-text-muted)]">
                     {t('settings.projectAi.loraScaleHint')}
                   </p>
                 </div>

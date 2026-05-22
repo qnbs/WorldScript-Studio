@@ -106,7 +106,7 @@ const DetailField: FC<DetailFieldProps> = React.memo(({ label, field, value }) =
               viewBox="0 0 24 24"
               strokeWidth={1.5}
               stroke="currentColor"
-              className="w-4 h-4 text-indigo-500 dark:text-indigo-400"
+              className="w-4 h-4 text-[var(--sc-accent)]"
               aria-hidden="true"
             >
               {ICONS.RECYCLE}
@@ -575,10 +575,10 @@ const CharacterCard: FC<{ character: Character; animationIndex: number }> = Reac
           )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-[var(--card-gradient-overlay)] to-transparent">
-          <h3 className="font-bold text-lg text-[var(--sc-text-on-accent)] dark:text-white truncate">
+          <h3 className="font-bold text-lg text-[var(--sc-text-on-accent)] truncate">
             {character.name}
           </h3>
-          <p className="text-sm text-[var(--sc-text-secondary)] dark:text-gray-300 truncate">
+          <p className="text-sm text-[var(--sc-text-secondary)] truncate">
             {character.personalityTraits}
           </p>
         </div>
