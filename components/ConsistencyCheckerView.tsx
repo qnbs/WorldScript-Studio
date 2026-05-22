@@ -7,6 +7,7 @@ import {
 import { useConsistencyCheckerView } from '../hooks/useConsistencyCheckerView';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
@@ -139,9 +140,27 @@ const ConsistencyCheckerUI: FC = () => {
                   <pre className="whitespace-pre-wrap text-sm">{checkResult}</pre>
                 </div>
               ) : (
-                <p className="text-[var(--sc-text-secondary)]">
-                  {t('consistencyChecker.noResults')}
-                </p>
+                <EmptyState
+                  compact
+                  icon={
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.5}
+                      stroke="currentColor"
+                      className="w-8 h-8"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                      />
+                    </svg>
+                  }
+                  title={t('consistencyChecker.noResults')}
+                  description={t('consistencyChecker.noResultsHint')}
+                />
               )}
             </CardContent>
           </Card>

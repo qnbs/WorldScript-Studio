@@ -9,18 +9,54 @@
     "arcDescription": "The hero leaves the ordinary world, survives trials, and returns transformed.",
     "stars": 42,
     "sections": [
-      { "title": "The Ordinary World" },
-      { "title": "The Call to Adventure" },
-      { "title": "Refusal of the Call" },
-      { "title": "Meeting the Mentor" },
-      { "title": "Crossing the First Threshold" },
-      { "title": "Tests, Allies and Enemies" },
-      { "title": "The Innermost Cave" },
-      { "title": "The Supreme Ordeal" },
-      { "title": "Reward" },
-      { "title": "The Road Back" },
-      { "title": "Resurrection" },
-      { "title": "Return with the Elixir" }
+      {
+        "title": "The Ordinary World",
+        "description": "Establish the hero's everyday life and its shortcomings before the adventure begins."
+      },
+      {
+        "title": "The Call to Adventure",
+        "description": "A problem or challenge presents itself, disrupting the status quo."
+      },
+      {
+        "title": "Refusal of the Call",
+        "description": "The hero hesitates, showing the stakes and internal resistance."
+      },
+      {
+        "title": "Meeting the Mentor",
+        "description": "A wise figure provides guidance, tools, or motivation to face the journey."
+      },
+      {
+        "title": "Crossing the First Threshold",
+        "description": "The hero commits to the adventure and enters the unknown world."
+      },
+      {
+        "title": "Tests, Allies and Enemies",
+        "description": "The hero faces a series of challenges, forms alliances, and identifies antagonists."
+      },
+      {
+        "title": "The Innermost Cave",
+        "description": "The hero approaches the most dangerous place — physical or psychological."
+      },
+      {
+        "title": "The Supreme Ordeal",
+        "description": "The central crisis. The hero faces death or their greatest fear."
+      },
+      {
+        "title": "Reward",
+        "description": "Having survived, the hero seizes the prize — a treasure, knowledge, or reconciliation."
+      },
+      {
+        "title": "The Road Back",
+        "description": "The hero begins the return, but the antagonistic force may not be finished."
+      },
+      {
+        "title": "Resurrection",
+        "description": "The climactic final test. The hero is transformed by the experience."
+      },
+      {
+        "title": "Return with the Elixir",
+        "description": "The hero returns home changed, carrying something of value to share with the world."
+      }
     ]
   },
   {
@@ -33,14 +69,38 @@
     "arcDescription": "Forbidden love in a world full of secrets — suspense and passion in balance.",
     "stars": 31,
     "sections": [
-      { "title": "First Encounter in the Dark" },
-      { "title": "The Hidden Secret" },
-      { "title": "Attraction Despite Warning" },
-      { "title": "The First Promise" },
-      { "title": "Discovery of True Nature" },
-      { "title": "Betrayal and Separation" },
-      { "title": "The Decision" },
-      { "title": "Sacrifice and Redemption" }
+      {
+        "title": "First Encounter in the Dark",
+        "description": "The two protagonists meet under charged, ambiguous circumstances that feel dangerous and magnetic."
+      },
+      {
+        "title": "The Hidden Secret",
+        "description": "Something about the love interest is concealed — a past, a nature, a bargain."
+      },
+      {
+        "title": "Attraction Despite Warning",
+        "description": "The protagonist is drawn closer despite every rational signal to stay away."
+      },
+      {
+        "title": "The First Promise",
+        "description": "A bond forms — reluctant, conditional, or unspoken — that neither can easily break."
+      },
+      {
+        "title": "Discovery of True Nature",
+        "description": "The secret is revealed, reshaping everything the protagonist believed."
+      },
+      {
+        "title": "Betrayal and Separation",
+        "description": "The revelation shatters trust. Distance — emotional or physical — follows."
+      },
+      {
+        "title": "The Decision",
+        "description": "The protagonist must choose: walk away forever, or accept darkness alongside the love."
+      },
+      {
+        "title": "Sacrifice and Redemption",
+        "description": "Love demands a price. The resolution is earned, not given — and costs something real."
+      }
     ]
   },
   {
@@ -53,15 +113,42 @@
     "arcDescription": "A protagonist with limited time, an antagonist operating in the shadows.",
     "stars": 28,
     "sections": [
-      { "title": "The Bomb Ticks (Setup)" },
-      { "title": "First Lead" },
-      { "title": "False Trail" },
-      { "title": "Escalation — First Casualty" },
-      { "title": "Turning Point: Revelation" },
-      { "title": "Countdown Accelerates" },
-      { "title": "All Lost — Heroine Alone" },
-      { "title": "Final Confrontation" },
-      { "title": "Resolution & Aftermath" }
+      {
+        "title": "The Bomb Ticks (Setup)",
+        "description": "Establish the protagonist, the stakes, and the ticking clock in the opening pages."
+      },
+      {
+        "title": "First Lead",
+        "description": "The protagonist uncovers the first real clue — incomplete, misleading, but enough to act on."
+      },
+      {
+        "title": "False Trail",
+        "description": "The lead points in the wrong direction. Time is lost. The antagonist gains ground."
+      },
+      {
+        "title": "Escalation — First Casualty",
+        "description": "The threat becomes real. Someone pays a price, and the stakes are no longer abstract."
+      },
+      {
+        "title": "Turning Point: Revelation",
+        "description": "A discovery reframes everything. The protagonist now knows what they are actually facing."
+      },
+      {
+        "title": "Countdown Accelerates",
+        "description": "The pace intensifies. Every chapter the clock ticks louder. Options narrow."
+      },
+      {
+        "title": "All Lost — Heroine Alone",
+        "description": "Allies fall, resources are gone, and the protagonist faces the final stretch alone."
+      },
+      {
+        "title": "Final Confrontation",
+        "description": "The climax: protagonist against antagonist with everything on the line and seconds to spare."
+      },
+      {
+        "title": "Resolution & Aftermath",
+        "description": "The dust settles. Show what was saved, what was lost, and where the protagonist lands."
+      }
     ]
   },
   {
@@ -74,14 +161,38 @@
     "arcDescription": "An amateur detective solves village mysteries between baking and gossip.",
     "stars": 19,
     "sections": [
-      { "title": "The Charming Small Town" },
-      { "title": "The Strange Event" },
-      { "title": "Suspicious Villagers" },
-      { "title": "First Investigations" },
-      { "title": "Red Herring" },
-      { "title": "Personal Danger" },
-      { "title": "The Crucial Clue" },
-      { "title": "Resolution at the Village Festival" }
+      {
+        "title": "The Charming Small Town",
+        "description": "Introduce the warm, quirky setting and its lovable cast of regulars. Establish the amateur sleuth's daily life."
+      },
+      {
+        "title": "The Strange Event",
+        "description": "Something disrupts the peace — a death, a theft, a disappearance. The police are baffled or indifferent."
+      },
+      {
+        "title": "Suspicious Villagers",
+        "description": "Every neighbor has a reason, a secret, or an alibi that doesn't quite hold up."
+      },
+      {
+        "title": "First Investigations",
+        "description": "The protagonist starts asking questions — over tea, during book club, at the bakery counter."
+      },
+      {
+        "title": "Red Herring",
+        "description": "A perfectly suspicious suspect is cleared, throwing the investigation off balance."
+      },
+      {
+        "title": "Personal Danger",
+        "description": "The sleuth gets too close. A warning arrives — subtle but unmistakable."
+      },
+      {
+        "title": "The Crucial Clue",
+        "description": "A detail overlooked earlier suddenly makes sense. Everything clicks into place."
+      },
+      {
+        "title": "Resolution at the Village Festival",
+        "description": "The culprit is revealed in a satisfying, public setting. The town breathes again."
+      }
     ]
   },
   {
@@ -94,15 +205,42 @@
     "arcDescription": "What does it mean to be human — when you must explain it to someone utterly unlike you?",
     "stars": 25,
     "sections": [
-      { "title": "The Signal" },
-      { "title": "Global Response" },
-      { "title": "The First Message" },
-      { "title": "Diplomatic Crisis" },
-      { "title": "Misunderstanding and Escalation" },
-      { "title": "The Breakthrough" },
-      { "title": "True Intentions" },
-      { "title": "Decision for Humanity" },
-      { "title": "Aftermath — A Changed World" }
+      {
+        "title": "The Signal",
+        "description": "An anomaly is detected — a pattern too ordered to be natural. The world doesn't know yet."
+      },
+      {
+        "title": "Global Response",
+        "description": "Governments, scientists, and factions react with wonder, fear, and competing agendas."
+      },
+      {
+        "title": "The First Message",
+        "description": "Contact is made. The message is real, but its meaning is uncertain and contested."
+      },
+      {
+        "title": "Diplomatic Crisis",
+        "description": "Factions within humanity disagree on how to respond — and who speaks for Earth."
+      },
+      {
+        "title": "Misunderstanding and Escalation",
+        "description": "A cultural or conceptual gap causes a dangerous misread on one or both sides."
+      },
+      {
+        "title": "The Breakthrough",
+        "description": "A human (or alien) builds a bridge through art, mathematics, or shared vulnerability."
+      },
+      {
+        "title": "True Intentions",
+        "description": "The aliens' real purpose is revealed — more complex, stranger, or sadder than assumed."
+      },
+      {
+        "title": "Decision for Humanity",
+        "description": "Humanity must choose: open the door, close it, or do something unprecedented."
+      },
+      {
+        "title": "Aftermath — A Changed World",
+        "description": "The world is different now. Show what the contact cost, what it gave, and what comes next."
+      }
     ]
   },
   {
@@ -115,16 +253,382 @@
     "arcDescription": "From youthful naivety to adult identity — through failure, love, and loss.",
     "stars": 22,
     "sections": [
-      { "title": "Childhood and Innocence" },
-      { "title": "First Confrontation with the World" },
-      { "title": "Mentor and Guide" },
-      { "title": "First Love / First Defeat" },
-      { "title": "Identity Crisis" },
-      { "title": "Rebellion and Consequences" },
-      { "title": "Rock Bottom" },
-      { "title": "Reconciliation with the Past" },
-      { "title": "Coming-of-Age Trial" },
-      { "title": "Setting Out into the Future" }
+      {
+        "title": "Childhood and Innocence",
+        "description": "Show the protagonist's world as they understand it — small, safe, incomplete."
+      },
+      {
+        "title": "First Confrontation with the World",
+        "description": "Something outside the protected sphere intrudes. The protagonist's understanding cracks."
+      },
+      {
+        "title": "Mentor and Guide",
+        "description": "A figure offers wisdom, but imperfectly — the protagonist must ultimately make their own choices."
+      },
+      {
+        "title": "First Love / First Defeat",
+        "description": "An intense experience of attachment and loss. The emotional core of the bildungsroman."
+      },
+      {
+        "title": "Identity Crisis",
+        "description": "Who am I? The protagonist cannot answer. External certainties are gone."
+      },
+      {
+        "title": "Rebellion and Consequences",
+        "description": "The protagonist acts against the established order — and faces the real cost of freedom."
+      },
+      {
+        "title": "Rock Bottom",
+        "description": "The lowest point. Everything the protagonist tried has failed or proven hollow."
+      },
+      {
+        "title": "Reconciliation with the Past",
+        "description": "The protagonist makes peace — with a parent, a mistake, a lost version of themselves."
+      },
+      {
+        "title": "Coming-of-Age Trial",
+        "description": "One final test that demonstrates how far the protagonist has genuinely grown."
+      },
+      {
+        "title": "Setting Out into the Future",
+        "description": "The story ends not with arrival but with departure — into an uncertain but chosen life."
+      }
+    ]
+  },
+  {
+    "id": "community-five-act",
+    "name": "Shakespearean Five-Act Structure",
+    "description": "The classic dramatic scaffold used by Shakespeare — ideal for stage-like intensity and formal tragic or comedic arcs.",
+    "type": "Structure",
+    "author": "TheatreMajor",
+    "tags": ["Classic", "Drama", "Literary", "Theater"],
+    "arcDescription": "Exposition, rising action, climax, falling action, catastrophe — the eternal rhythm of drama.",
+    "stars": 17,
+    "sections": [
+      {
+        "title": "Act I — Exposition",
+        "description": "Introduce the world, the central characters, and the inciting conflict. Plant the seeds of both tragedy and resolution."
+      },
+      {
+        "title": "Act II — Rising Action",
+        "description": "Complications multiply. The protagonist's situation grows more entangled. Alliances form and fray."
+      },
+      {
+        "title": "Act III — Climax",
+        "description": "The turning point — the highest point of tension, the moment of decision, the pivot on which everything turns."
+      },
+      {
+        "title": "Act IV — Falling Action",
+        "description": "Consequences cascade. Events move toward the inevitable conclusion. Reversals and revelations accelerate."
+      },
+      {
+        "title": "Act V — Catastrophe or Resolution",
+        "description": "The final movement: tragedy claims its toll, or comedy finds its resolution. Order is restored — or forever shattered."
+      }
+    ]
+  },
+  {
+    "id": "community-psychological-horror",
+    "name": "Psychological Horror",
+    "description": "Horror that lives inside the mind — unreliable narrators, creeping dread, and questions about what is real.",
+    "type": "Genre",
+    "author": "NightmareInk",
+    "tags": ["Horror", "Psychological", "Suspense", "Unreliable Narrator"],
+    "arcDescription": "The monster is real — but so is the possibility that the protagonist created it.",
+    "stars": 33,
+    "sections": [
+      {
+        "title": "Everything Seems Normal",
+        "description": "Open on a life that feels ordinary — but the prose should make the reader uneasy without knowing why."
+      },
+      {
+        "title": "The First Wrong Note",
+        "description": "One small detail that doesn't add up. The protagonist explains it away. The reader cannot."
+      },
+      {
+        "title": "Escalation of Strangeness",
+        "description": "Events become harder to rationalize. The protagonist's grip on normality visibly slips."
+      },
+      {
+        "title": "Reality Questioned",
+        "description": "Is the threat external or internal? Plant genuine doubt — the reader should not be sure."
+      },
+      {
+        "title": "Isolation",
+        "description": "The protagonist becomes cut off — from allies, from reason, from their previous self."
+      },
+      {
+        "title": "The Abyss Looks Back",
+        "description": "The horror fully reveals itself. Whether real or imagined, it is now undeniable and intimate."
+      },
+      {
+        "title": "No Safe Escape",
+        "description": "Every option the protagonist had is gone. The climax forces a confrontation they cannot avoid."
+      },
+      {
+        "title": "Aftermath — Broken or Changed",
+        "description": "The resolution does not return to normal. Something fundamental has been altered, lost, or uncovered."
+      }
+    ]
+  },
+  {
+    "id": "community-romantic-comedy",
+    "name": "Romantic Comedy",
+    "description": "Two people who should not fall in love do exactly that — after enough obstacles, misunderstandings, and comic setbacks.",
+    "type": "Genre",
+    "author": "HappyEndings",
+    "tags": ["Romance", "Comedy", "Lighthearted", "Feel-Good"],
+    "arcDescription": "Love finds a way — despite bad timing, wrong assumptions, and the best efforts of both parties.",
+    "stars": 36,
+    "sections": [
+      {
+        "title": "Meet (Badly)",
+        "description": "The two leads meet in circumstances that create immediate friction, misunderstanding, or competition."
+      },
+      {
+        "title": "Forced Together",
+        "description": "Circumstance, a job, a bet, or a shared goal throws them into proximity they cannot escape."
+      },
+      {
+        "title": "Walls Go Up",
+        "description": "Both characters resist the growing attraction — they each have a reason it cannot work."
+      },
+      {
+        "title": "Walls Come Down (Briefly)",
+        "description": "A genuine moment of connection. They glimpse who the other actually is beneath the surface."
+      },
+      {
+        "title": "The Misunderstanding",
+        "description": "A classic romcom beat: a lie, a secret, a mistaken assumption — one that tears them apart right when things were good."
+      },
+      {
+        "title": "All Is Lost (In Love)",
+        "description": "They are apart. The protagonist realizes they are miserable without this person they tried not to want."
+      },
+      {
+        "title": "The Grand Gesture",
+        "description": "One of them does something brave, ridiculous, or heartfelt that cannot be misinterpreted."
+      },
+      {
+        "title": "The Happy Ending",
+        "description": "They come together — honestly, without pretense — and the reader believes it will last."
+      }
+    ]
+  },
+  {
+    "id": "community-seven-point",
+    "name": "Seven-Point Story Structure",
+    "description": "Dan Wells' plotting method — work backwards from the resolution, build forward from the hook.",
+    "type": "Structure",
+    "author": "PlotArchitect",
+    "tags": ["Structure", "Plot-Driven", "Planning"],
+    "arcDescription": "Seven precise moments that guarantee a story moves forward with purpose and payoff.",
+    "stars": 29,
+    "sections": [
+      {
+        "title": "Hook — Starting State",
+        "description": "Show the protagonist's world as it is before the story changes anything. This is the opposite of where they will end."
+      },
+      {
+        "title": "Plot Turn 1 — Call to Action",
+        "description": "Something pushes the protagonist out of their starting state and into the story proper."
+      },
+      {
+        "title": "Pinch Point 1 — Pressure Applied",
+        "description": "The antagonist or the conflict applies real force. The protagonist feels the weight of what they are facing."
+      },
+      {
+        "title": "Midpoint — Reaction to Action",
+        "description": "The protagonist stops reacting and starts acting. A revelation or decision shifts them from passive to active."
+      },
+      {
+        "title": "Pinch Point 2 — Greatest Pressure",
+        "description": "The antagonist exerts maximum force. Things look worst here — for the protagonist and the reader."
+      },
+      {
+        "title": "Plot Turn 2 — Final Clue",
+        "description": "The protagonist gains the final piece they need — knowledge, courage, or a tool — to win."
+      },
+      {
+        "title": "Resolution — End State",
+        "description": "The protagonist reaches the state that is the opposite of where they started. The conflict is resolved."
+      }
+    ]
+  },
+  {
+    "id": "community-historical-epic",
+    "name": "Historical Epic",
+    "description": "Sweeping fiction rooted in a real era — intimate personal story braided with the forces of history.",
+    "type": "Genre",
+    "author": "Archivist",
+    "tags": ["Historical", "Epic", "Literary", "Character-Driven"],
+    "arcDescription": "One life caught in the tide of history — changed by events too large to control, too important to ignore.",
+    "stars": 21,
+    "sections": [
+      {
+        "title": "A World on the Brink",
+        "description": "Establish the historical era with visceral, specific detail. Show the characters before the upheaval."
+      },
+      {
+        "title": "The Turning Event",
+        "description": "History moves. The protagonist is no longer outside events — they are inside them."
+      },
+      {
+        "title": "Caught Between Powers",
+        "description": "The character navigates forces — political, military, social — larger than any individual."
+      },
+      {
+        "title": "The Cost of Survival",
+        "description": "Staying alive or free requires compromise. Show what the character gives up and what they protect."
+      },
+      {
+        "title": "Lost World Mourned",
+        "description": "What existed before is gone — a place, a community, a way of life. Let the character grieve it honestly."
+      },
+      {
+        "title": "Alliance and Betrayal",
+        "description": "In chaos, alliances form across unexpected lines. Some hold; some break at the worst moment."
+      },
+      {
+        "title": "The Climactic Moment of History",
+        "description": "The protagonist stands at the intersection of personal choice and historical event."
+      },
+      {
+        "title": "What Survives",
+        "description": "Not triumph — what remains. Show what was carried through the storm and what it cost to carry it."
+      }
+    ]
+  },
+  {
+    "id": "community-nonlinear-experimental",
+    "name": "Nonlinear / Experimental Narrative",
+    "description": "A fractured timeline, multiple POVs, or genre-bending form — for writers who want structure that feels alive.",
+    "type": "Structure",
+    "author": "AvantGarde",
+    "tags": ["Literary", "Experimental", "Non-Linear", "Advanced"],
+    "arcDescription": "The reader assembles the story from fragments — each piece reveals something the others conceal.",
+    "stars": 14,
+    "sections": [
+      {
+        "title": "Fragment A — Present Tense (Aftermath)",
+        "description": "Open in the aftermath. The reader does not yet know what happened — only that something did."
+      },
+      {
+        "title": "Fragment B — Past (Origin)",
+        "description": "Jump back. Show who these characters were before. Establish what they had to lose."
+      },
+      {
+        "title": "Fragment C — Parallel Thread",
+        "description": "A second voice, time, or perspective begins. Its relationship to the first is unclear — and that tension is the engine."
+      },
+      {
+        "title": "Convergence Point 1",
+        "description": "The threads make contact for the first time. A shared detail, event, or character connects them."
+      },
+      {
+        "title": "Revelation Layer 1",
+        "description": "Something the reader thought they understood is reframed. The fragment structure is not decoration — it hides meaning."
+      },
+      {
+        "title": "Convergence Point 2",
+        "description": "The timelines or voices approach each other. The gap between them narrows with growing tension."
+      },
+      {
+        "title": "Revelation Layer 2 — The Core Truth",
+        "description": "What the structure was protecting is exposed. This is the emotional center the fragments were circling."
+      },
+      {
+        "title": "Resolution — All Threads Land",
+        "description": "The narrative does not need to be linear to be complete. Find the shape that makes all the pieces feel inevitable."
+      }
+    ]
+  },
+  {
+    "id": "community-western",
+    "name": "Western",
+    "description": "Dust, honor, and moral ambiguity — the American frontier as moral landscape.",
+    "type": "Genre",
+    "author": "SaddleScribe",
+    "tags": ["Western", "Adventure", "Moral Ambiguity", "Action"],
+    "arcDescription": "A lone figure against a lawless land — but the real conflict is the code they carry inside.",
+    "stars": 18,
+    "sections": [
+      {
+        "title": "Riding Into Town",
+        "description": "Establish the setting and the protagonist's arrival or reawakening. Something is wrong here — and they are the wrong person to ignore it."
+      },
+      {
+        "title": "The Problem No One Else Will Face",
+        "description": "The community has a threat. Everyone knows. No one is willing to stand against it alone."
+      },
+      {
+        "title": "The Protagonist's Code",
+        "description": "Show the protagonist's internal law: what they will and will not do, and why. This is the story's moral engine."
+      },
+      {
+        "title": "The Antagonist's Power",
+        "description": "The villain is established — real, capable, and in some ways understandable. They are not simply evil."
+      },
+      {
+        "title": "Alliances Formed Under Pressure",
+        "description": "An unlikely partner, a local who believes, a surprising loyalty — and one betrayal."
+      },
+      {
+        "title": "The Confrontation That Isn't",
+        "description": "The first major showdown that doesn't resolve anything — someone is not ready, not willing, or not there yet."
+      },
+      {
+        "title": "The Final Reckoning",
+        "description": "Dust street, high noon, or something more modern — the climax is earned by everything that came before."
+      },
+      {
+        "title": "Riding Out",
+        "description": "The protagonist doesn't get to stay. The world is better — or just different. They move on."
+      }
+    ]
+  },
+  {
+    "id": "community-memoir-arc",
+    "name": "Memoir Arc",
+    "description": "A real life told with a novelist's eye — structured for emotional truth, not chronological completeness.",
+    "type": "Structure",
+    "author": "TrueVoice",
+    "tags": ["Memoir", "Nonfiction", "Personal", "Literary"],
+    "arcDescription": "The narrator you are now looking back at the person you were — and finding the meaning in between.",
+    "stars": 20,
+    "sections": [
+      {
+        "title": "The Narrator's Present Voice",
+        "description": "Establish who you are now — with the perspective that makes this story worth telling."
+      },
+      {
+        "title": "The World Before",
+        "description": "Set the scene of the past. Give the reader the context and stakes before the central experience."
+      },
+      {
+        "title": "The Inciting Experience",
+        "description": "The event, relationship, or realization that made this life into a story that needed to be told."
+      },
+      {
+        "title": "Deepening — What It Cost",
+        "description": "Show the experience from the inside: the confusion, the feeling, the human texture of living through it."
+      },
+      {
+        "title": "The Person I Became (And Resisted)",
+        "description": "Change is rarely welcome. Show the resistance — the habits, the denials, the person you fought to stay."
+      },
+      {
+        "title": "The Turning Realization",
+        "description": "The moment of genuine insight — not resolution yet, but understanding. The fog lifts on something."
+      },
+      {
+        "title": "Reckoning with Others",
+        "description": "The people in a memoir are real. How you portray them, forgive them, or hold them accountable is part of the story."
+      },
+      {
+        "title": "The Meaning Made",
+        "description": "Not a lesson — meaning. What this experience means to you now, without tying it into a bow it does not deserve."
+      }
     ]
   }
 ]

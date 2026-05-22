@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ObjectsViewContext, useObjectsViewContext } from '../contexts/ObjectsViewContext';
 import { useObjectsView } from '../hooks/useObjectsView';
 import type { ObjectGroup, StoryObject, StoryObjectType } from '../types';
+import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';
 
 // ── Object Type Badge ─────────────────────────────────────────────────────────
@@ -512,9 +513,27 @@ const ObjectsViewContent: FC = () => {
 
             {/* Object list */}
             {filteredObjects.length === 0 ? (
-              <p className="text-center text-[var(--text-secondary)] text-sm mt-12">
-                {t('objects.emptyState')}
-              </p>
+              <EmptyState
+                compact
+                icon={
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-8 h-8"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"
+                    />
+                  </svg>
+                }
+                title={t('objects.emptyState')}
+                primaryAction={{ label: t('objects.addObject'), onClick: handleAddObject }}
+              />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredObjects.map((obj) => (
