@@ -150,7 +150,7 @@ const PreviewModal: FC = () => {
                 }}
                 onDragEnd={handleDragSort}
                 onDragOver={(e) => isRemixMode && e.preventDefault()}
-                className={`flex items-center gap-2 p-2 rounded-md ${isRemixMode ? 'bg-[var(--sc-text-primary)]/5 cursor-move' : 'bg-transparent'}`}
+                className={`flex items-start gap-2 p-2 rounded-md ${isRemixMode ? 'bg-[var(--sc-text-primary)]/5 cursor-move' : 'bg-transparent'}`}
               >
                 {isRemixMode && (
                   <svg
@@ -159,17 +159,31 @@ const PreviewModal: FC = () => {
                     viewBox="0 0 24 24"
                     strokeWidth={1.5}
                     stroke="currentColor"
-                    className="w-5 h-5 text-gray-500 flex-shrink-0"
+                    className="w-5 h-5 text-gray-500 flex-shrink-0 mt-1.5"
                   >
                     {ICONS.GRIP_VERTICAL}
                   </svg>
                 )}
-                <Input
-                  value={sec.title}
-                  onChange={(e) => updateRemixedSectionTitle(sec.id, e.target.value)}
-                  disabled={!isRemixMode}
-                  className="bg-transparent border-0 text-[var(--sc-text-secondary)] h-auto focus:ring-1 focus:bg-[var(--sc-surface-overlay)] disabled:cursor-default"
-                />
+                {isRemixMode ? (
+                  <Input
+                    value={sec.title}
+                    onChange={(e) => updateRemixedSectionTitle(sec.id, e.target.value)}
+                    disabled={!isRemixMode}
+                    className="bg-transparent border-0 text-[var(--sc-text-secondary)] h-auto focus:ring-1 focus:bg-[var(--sc-surface-overlay)] disabled:cursor-default"
+                  />
+                ) : (
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-[var(--sc-text-secondary)]">
+                      {sec.title}
+                    </span>
+                    {/* QNBS-v3: Show section guidance from community templates — hidden in remix mode to keep editing clean */}
+                    {sec.description && (
+                      <p className="text-xs text-[var(--sc-text-muted)] mt-0.5 leading-relaxed">
+                        {sec.description}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {isRemixMode && (
                   <>
                     <Button
@@ -325,6 +339,7 @@ const CommunityTemplateCard: FC<{
   animationIndex: number;
 }> = React.memo(({ template, onApply, animationIndex }) => {
   const { t: _t } = useTranslation();
+  const [expanded, setExpanded] = React.useState(false);
   return (
     <Card
       className="flex flex-col group text-left transition-all duration-200 hover:-translate-y-1 animate-in"
@@ -333,11 +348,15 @@ const CommunityTemplateCard: FC<{
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-xl font-bold text-[var(--sc-text-primary)]">{template.name}</h3>
-          <span className="flex items-center gap-1 text-xs text-amber-400 flex-shrink-0">
-            ★ {template.stars ?? 0}
-          </span>
+          {template.stars != null && (
+            <span className="flex items-center gap-1 text-xs text-amber-400 flex-shrink-0">
+              ★ {template.stars}
+            </span>
+          )}
         </div>
-        <p className="text-xs text-[var(--sc-text-muted)] mt-1">von {template.author}</p>
+        <p className="text-xs text-[var(--sc-text-muted)] mt-1">
+          {_t('templates.byAuthor', { author: template.author })}
+        </p>
         <div className="flex flex-wrap gap-1 mt-2">
           {template.tags.map((tag) => (
             <span
@@ -356,9 +375,44 @@ const CommunityTemplateCard: FC<{
             {template.arcDescription}
           </p>
         )}
-        <p className="text-xs text-[var(--sc-text-muted)]">
-          {template.sections.length} {_t('templates.chapters')}
-        </p>
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="flex items-center gap-1 text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-accent)] transition-colors"
+          aria-expanded={expanded}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          >
+            <path
+              fillRule="evenodd"
+              d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+              clipRule="evenodd"
+            />
+          </svg>
+          {expanded ? _t('templates.hideSections') : _t('templates.showSections')} (
+          {template.sections.length})
+        </button>
+        {/* QNBS-v3: Section preview shown inline so users know what they're applying before committing */}
+        {expanded && (
+          <ol className="mt-2 space-y-2 list-none">
+            {template.sections.map((sec, i) => (
+              <li key={sec.title} className="text-xs">
+                <span className="font-medium text-[var(--sc-text-secondary)]">
+                  {i + 1}. {sec.title}
+                </span>
+                {sec.description && (
+                  <p className="mt-0.5 text-[var(--sc-text-muted)] leading-relaxed">
+                    {sec.description}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
       </CardContent>
       <div className="p-4 pt-0 mt-auto">
         <Button className="w-full" onClick={() => onApply(template)}>

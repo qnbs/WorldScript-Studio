@@ -25,6 +25,7 @@ import type { StorySection, VersionBranch, VersionSnapshot } from '../types';
 const MAX_DIFF_VIEW_LINES = 450;
 
 import { Button } from './ui/Button';
+import { EmptyState } from './ui/EmptyState';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 
@@ -450,10 +451,27 @@ export const VersionControlPanel: FC = () => {
               </Button>
             </div>
             {currentSnapshots.length === 0 ? (
-              <div className="text-center py-8 text-[var(--sc-text-muted)] text-sm border-2 border-dashed border-[var(--sc-border-subtle)] rounded-lg">
-                <p>{t('vc.noSnapshots')}</p>
-                <p className="text-xs mt-1">{t('vc.noSnapshotsHint')}</p>
-              </div>
+              <EmptyState
+                compact
+                icon={
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-8 h-8"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                    />
+                  </svg>
+                }
+                title={t('vc.noSnapshots')}
+                description={t('vc.noSnapshotsHint')}
+              />
             ) : (
               <div className="space-y-2">
                 {currentSnapshots.map((snap) => {
