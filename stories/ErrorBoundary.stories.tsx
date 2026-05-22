@@ -29,7 +29,7 @@ const ErrorBoundaryExample: React.FC = () => {
   const [crash, setCrash] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[var(--background-primary)] p-8 text-[var(--foreground-primary)]">
+    <div className="min-h-screen bg-[var(--sc-surface-base)] p-8 text-[var(--sc-text-primary)]">
       <ErrorBoundary onReset={() => setCrash(false)}>
         {crash ? <BuggyChild /> : <Button onClick={() => setCrash(true)}>Trigger error</Button>}
       </ErrorBoundary>

@@ -63,15 +63,13 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
     <div className="flex flex-col gap-6 pb-8">
       <section
         aria-label={t('sceneboard.timeline.regionRules')}
-        className="rounded-xl border border-[var(--border-primary)] bg-[var(--background-secondary)]/40 p-4"
+        className="rounded-xl border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/40 p-4"
       >
-        <h2 className="text-sm font-semibold text-[var(--foreground-primary)] mb-2">
+        <h2 className="text-sm font-semibold text-[var(--sc-text-primary)] mb-2">
           {t('sceneboard.timeline.rulesTitle')}
         </h2>
         {hints.length === 0 ? (
-          <p className="text-xs text-[var(--foreground-muted)]">
-            {t('sceneboard.timeline.noHints')}
-          </p>
+          <p className="text-xs text-[var(--sc-text-muted)]">{t('sceneboard.timeline.noHints')}</p>
         ) : (
           <>
             <ul className="space-y-2 text-xs max-h-52 overflow-y-auto pr-1">
@@ -81,7 +79,7 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
                   className={
                     h.severity === 'warn'
                       ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-[var(--foreground-secondary)]'
+                      : 'text-[var(--sc-text-secondary)]'
                   }
                 >
                   {t(h.messageKey, h.params)}
@@ -89,7 +87,7 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
               ))}
             </ul>
             {rulesTruncated ? (
-              <p className="text-xs text-[var(--foreground-muted)] mt-2">
+              <p className="text-xs text-[var(--sc-text-muted)] mt-2">
                 {t('sceneboard.timeline.rulesTruncated')}
               </p>
             ) : null}
@@ -99,19 +97,19 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
 
       <section
         aria-label={t('sceneboard.timeline.regionChart')}
-        className="rounded-xl border border-[var(--border-primary)] bg-[var(--background-secondary)]/40 p-4"
+        className="rounded-xl border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/40 p-4"
       >
-        <h2 className="text-sm font-semibold text-[var(--foreground-primary)] mb-3">
+        <h2 className="text-sm font-semibold text-[var(--sc-text-primary)] mb-3">
           {timedLanes ? t('sceneboard.timeline.chartTimed') : t('sceneboard.timeline.chartWords')}
         </h2>
         <div className="space-y-2">
           {timedLanes
             ? timedLanes.slice(0, MAX_CHART_ROWS).map(({ section, leftPct, widthPct }) => (
                 <div key={section.id} className="flex items-center gap-2">
-                  <span className="w-36 shrink-0 truncate text-xs text-[var(--foreground-secondary)]">
+                  <span className="w-36 shrink-0 truncate text-xs text-[var(--sc-text-secondary)]">
                     {section.title}
                   </span>
-                  <div className="relative flex-1 h-6 rounded-md bg-[var(--background-tertiary)] overflow-hidden">
+                  <div className="relative flex-1 h-6 rounded-md bg-[var(--sc-surface-overlay)] overflow-hidden">
                     <div
                       className="absolute top-1 bottom-1 rounded bg-indigo-500/55 border border-indigo-400/40"
                       style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
@@ -122,10 +120,10 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
               ))
             : wordShares.map(({ section, pct, words }) => (
                 <div key={section.id} className="flex items-center gap-2">
-                  <span className="w-36 shrink-0 truncate text-xs text-[var(--foreground-secondary)]">
+                  <span className="w-36 shrink-0 truncate text-xs text-[var(--sc-text-secondary)]">
                     {section.title}
                   </span>
-                  <div className="flex-1 h-6 rounded-md bg-[var(--background-tertiary)] overflow-hidden flex">
+                  <div className="flex-1 h-6 rounded-md bg-[var(--sc-surface-overlay)] overflow-hidden flex">
                     <div
                       className="h-full bg-violet-500/45 border-r border-violet-400/30"
                       style={{ width: `${pct}%` }}
@@ -135,9 +133,7 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
                 </div>
               ))}
         </div>
-        <p className="text-xs text-[var(--foreground-muted)] mt-3">
-          {t('sceneboard.timeline.hint')}
-        </p>
+        <p className="text-xs text-[var(--sc-text-muted)] mt-3">{t('sceneboard.timeline.hint')}</p>
       </section>
     </div>
   );

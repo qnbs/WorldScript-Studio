@@ -10,7 +10,7 @@ export const SettingsOverviewCard: FC = () => {
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-lg font-semibold text-[var(--foreground-primary)]">
+        <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">
           {t('settings.overview.title')}
         </h2>
       </CardHeader>

@@ -49,7 +49,7 @@ const ModalExample: React.FC<{ size: 'default' | 'lg' | 'xl' | undefined }> = ({
 
   return (
     <I18nMockProvider>
-      <div className="min-h-screen flex items-center justify-center p-8 bg-[var(--background-primary)]">
+      <div className="min-h-screen flex items-center justify-center p-8 bg-[var(--sc-surface-base)]">
         <Button onClick={() => setIsOpen(true)}>Open Modal</Button>
         <Modal
           isOpen={isOpen}
@@ -58,7 +58,7 @@ const ModalExample: React.FC<{ size: 'default' | 'lg' | 'xl' | undefined }> = ({
           size={size}
         >
           <div className="space-y-4">
-            <p className="text-[var(--foreground-secondary)]">
+            <p className="text-[var(--sc-text-secondary)]">
               This modal demonstrates accessible dialog focus trapping, keyboard escape handling,
               and layout variants.
             </p>

@@ -219,7 +219,7 @@ export const AdvancedImportExport: React.FC = () => {
           <div>
             <label
               htmlFor="import-format"
-              className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+              className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
             >
               {t('export.importFormat')}
             </label>
@@ -255,7 +255,7 @@ export const AdvancedImportExport: React.FC = () => {
           <div>
             <label
               htmlFor="export-adv-format"
-              className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+              className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
             >
               {t('export.exportFormat')}
             </label>

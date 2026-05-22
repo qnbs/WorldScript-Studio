@@ -49,7 +49,7 @@ export const CompileWizardModal: FC = () => {
       <div className="space-y-4">
         {step === 0 && (
           <div className="space-y-2">
-            <p className="text-sm text-[var(--foreground-muted)]">
+            <p className="text-sm text-[var(--sc-text-muted)]">
               {t('export.compileWizard.stepPreset')}
             </p>
             <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
@@ -60,8 +60,8 @@ export const CompileWizardModal: FC = () => {
                   onClick={() => setSelectedId(p.id)}
                   className={`text-left rounded-lg border px-3 py-2 text-sm transition-colors ${
                     selectedId === p.id
-                      ? 'border-[var(--border-interactive)] bg-[var(--background-interactive)]/10'
-                      : 'border-[var(--border-primary)] hover:bg-[var(--background-tertiary)]'
+                      ? 'border-[var(--border-interactive)] bg-[var(--sc-accent)]/10'
+                      : 'border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]'
                   }`}
                 >
                   {t(p.nameKey)}
@@ -82,10 +82,10 @@ export const CompileWizardModal: FC = () => {
         )}
         {step === 1 && preset && (
           <div className="space-y-3">
-            <p className="text-sm text-[var(--foreground-muted)]">
+            <p className="text-sm text-[var(--sc-text-muted)]">
               {t('export.compileWizard.stepReview')}
             </p>
-            <ul className="text-sm space-y-1 list-disc pl-5 text-[var(--foreground-secondary)]">
+            <ul className="text-sm space-y-1 list-disc pl-5 text-[var(--sc-text-secondary)]">
               <li>
                 {t('export.compileWizard.reviewFormat')}: {preset.format.toUpperCase()}
               </li>

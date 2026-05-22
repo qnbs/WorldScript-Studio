@@ -71,7 +71,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
 
   return (
     <div
-      className="absolute bottom-3 left-3 z-30 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--background-elevated)] border border-[var(--border-primary)] shadow-sc-lg"
+      className="absolute bottom-3 left-3 z-30 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--background-elevated)] border border-[var(--sc-border-subtle)] shadow-sc-lg"
       role="toolbar"
       aria-label={t('sceneboard.connectionToolbar.label')}
     >
@@ -89,7 +89,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
             className={`w-7 h-7 rounded text-sm transition-colors ${
               selected.type === value
                 ? 'bg-[var(--sc-accent-primary,#6366f1)] text-white'
-                : 'text-[var(--foreground-muted)] hover:bg-[var(--background-hover)]'
+                : 'text-[var(--sc-text-muted)] hover:bg-[var(--background-hover)]'
             }`}
             title={t(`sceneboard.connectionType.${value}`)}
             aria-pressed={selected.type === value}
@@ -100,7 +100,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
         ))}
       </div>
 
-      <div className="w-px h-5 bg-[var(--border-primary)]" aria-hidden="true" />
+      <div className="w-px h-5 bg-[var(--sc-border-subtle)]" aria-hidden="true" />
 
       {/* Label input */}
       <input
@@ -116,11 +116,11 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
           }
         }}
         placeholder={t('sceneboard.connectionToolbar.labelPlaceholder')}
-        className="w-28 text-xs px-2 py-0.5 bg-[var(--background-primary)] border border-[var(--border-primary)] rounded text-[var(--foreground-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--sc-accent-primary,#6366f1)]"
+        className="w-28 text-xs px-2 py-0.5 bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] rounded text-[var(--sc-text-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--sc-accent-primary,#6366f1)]"
         aria-label={t('sceneboard.connectionToolbar.labelInput')}
       />
 
-      <div className="w-px h-5 bg-[var(--border-primary)]" aria-hidden="true" />
+      <div className="w-px h-5 bg-[var(--sc-border-subtle)]" aria-hidden="true" />
 
       {/* Delete */}
       <button
@@ -137,7 +137,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
       <button
         type="button"
         onClick={handleDeselect}
-        className="text-xs text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] px-1"
+        className="text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] px-1"
         aria-label={t('sceneboard.connectionToolbar.close')}
       >
         ×

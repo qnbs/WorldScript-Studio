@@ -27,7 +27,7 @@ export const EditorSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.editor.title')}
           </h2>
         </CardHeader>
@@ -35,7 +35,7 @@ export const EditorSection: FC = () => {
           <div>
             <label
               htmlFor="font-family-select"
-              className="text-sm font-medium text-[var(--foreground-secondary)]"
+              className="text-sm font-medium text-[var(--sc-text-secondary)]"
             >
               {t('settings.editor.fontFamily')}
             </label>
@@ -51,8 +51,8 @@ export const EditorSection: FC = () => {
             </Select>
           </div>
           {settings.editorFont === 'custom' && (
-            <div className="space-y-4 p-4 border border-[var(--border-primary)] rounded-lg">
-              <h4 className="font-semibold text-[var(--foreground-primary)]">
+            <div className="space-y-4 p-4 border border-[var(--sc-border-subtle)] rounded-lg">
+              <h4 className="font-semibold text-[var(--sc-text-primary)]">
                 {t('settings.editor.customFont')}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -99,7 +99,7 @@ export const EditorSection: FC = () => {
           <div className="space-y-2">
             <label
               htmlFor="font-size-input"
-              className="flex justify-between text-sm font-medium text-[var(--foreground-secondary)]"
+              className="flex justify-between text-sm font-medium text-[var(--sc-text-secondary)]"
             >
               <span>{t('settings.editor.fontSize')}</span>
               <span>{settings.fontSize}px</span>
@@ -117,7 +117,7 @@ export const EditorSection: FC = () => {
           <div className="space-y-2">
             <label
               htmlFor="line-height-input"
-              className="flex justify-between text-sm font-medium text-[var(--foreground-secondary)]"
+              className="flex justify-between text-sm font-medium text-[var(--sc-text-secondary)]"
             >
               <span>{t('settings.editor.lineHeight')}</span>
               <span>{settings.lineSpacing}</span>
@@ -136,7 +136,7 @@ export const EditorSection: FC = () => {
           <div className="space-y-2">
             <label
               htmlFor="p-spacing-input"
-              className="flex justify-between text-sm font-medium text-[var(--foreground-secondary)]"
+              className="flex justify-between text-sm font-medium text-[var(--sc-text-secondary)]"
             >
               <span>{t('settings.editor.paragraphSpacing')}</span>
               <span>{settings.paragraphSpacing.toFixed(1)}</span>
@@ -161,14 +161,14 @@ export const EditorSection: FC = () => {
       </Card>
       <Card>
         <CardHeader>
-          <h3 className="text-lg font-semibold text-[var(--foreground-primary)]">
+          <h3 className="text-lg font-semibold text-[var(--sc-text-primary)]">
             {t('settings.editor.previewTitle')}
           </h3>
         </CardHeader>
         <CardContent>
           <div
             style={previewStyle}
-            className="p-4 bg-[var(--glass-bg)] rounded-md border border-[var(--border-primary)] max-h-48 overflow-y-auto text-[var(--foreground-primary)]"
+            className="p-4 bg-[var(--glass-bg)] rounded-md border border-[var(--sc-border-subtle)] max-h-48 overflow-y-auto text-[var(--sc-text-primary)]"
           >
             <p className="[&&]:my-0 [&&]:mb-[var(--paragraph-spacing)]">
               {t('settings.editor.previewText1')}
@@ -187,7 +187,7 @@ export const AdvancedEditorSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.advancedEditor.title')}
           </h2>
         </CardHeader>
@@ -254,8 +254,8 @@ export const AdvancedEditorSection: FC = () => {
               }
             />
           </div>
-          <div className="border-t border-[var(--border-primary)] pt-4">
-            <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-4">
+          <div className="border-t border-[var(--sc-border-subtle)] pt-4">
+            <h3 className="text-lg font-semibold text-[var(--sc-text-primary)] mb-4">
               {t('settings.advancedEditor.focusModes')}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

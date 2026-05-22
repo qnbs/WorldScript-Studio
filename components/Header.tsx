@@ -47,8 +47,8 @@ export const Header: React.FC<HeaderProps> = ({
       data-tour="app-header"
       className="
         fixed top-0 left-0 right-0 z-30 h-16
-        bg-[var(--background-secondary)]/80 backdrop-blur-2xl
-        border-b border-[var(--border-primary)]
+        bg-[var(--sc-surface-raised)]/80 backdrop-blur-2xl
+        border-b border-[var(--sc-border-subtle)]
         flex items-center justify-between px-4 sm:px-6
         transition-all duration-300
     "
@@ -60,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setIsSidebarOpen(true)}
-          className="md:hidden p-2 -ml-2 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors"
+          className="md:hidden p-2 -ml-2 text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] transition-colors"
           aria-label={t('header.openMenu')}
           aria-controls="sidebar"
           aria-expanded={isSidebarOpen}
@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden xs:flex">
             <SectionIcon section={currentView} size="sm" />
           </span>
-          <h1 className="text-lg font-bold tracking-tight text-[var(--foreground-primary)]">
+          <h1 className="text-lg font-bold tracking-tight text-[var(--sc-text-primary)]">
             {pageTitle}
           </h1>
         </div>
@@ -94,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             data-tour="command-palette-trigger"
             onClick={onOpenPalette}
-            className="w-full h-10 rounded-xl bg-[var(--background-tertiary)]/50 border border-[var(--border-primary)] hover:border-[var(--border-interactive)] hover:bg-[var(--background-tertiary)] hover:shadow-[var(--shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--foreground-muted)] group shadow-sm"
+            className="w-full h-10 rounded-xl bg-[var(--sc-surface-overlay)]/50 border border-[var(--sc-border-subtle)] hover:border-[var(--border-interactive)] hover:bg-[var(--sc-surface-overlay)] hover:shadow-[var(--shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--sc-text-muted)] group shadow-sm"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -102,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
               viewBox="0 0 24 24"
               strokeWidth={1.5}
               stroke="currentColor"
-              className="w-4 h-4 mr-3 group-hover:text-[var(--foreground-primary)] transition-colors"
+              className="w-4 h-4 mr-3 group-hover:text-[var(--sc-text-primary)] transition-colors"
             >
               <path
                 strokeLinecap="round"
@@ -110,11 +110,11 @@ export const Header: React.FC<HeaderProps> = ({
                 d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 001.061 1.061z"
               />
             </svg>
-            <span className="flex-grow text-left group-hover:text-[var(--foreground-secondary)] transition-colors">
+            <span className="flex-grow text-left group-hover:text-[var(--sc-text-secondary)] transition-colors">
               {t('palette.placeholder')}...
             </span>
             <div className="flex gap-1 items-center">
-              <kbd className="hidden md:inline-flex items-center h-5 px-2 text-[10px] font-mono font-bold text-[var(--foreground-muted)] bg-[var(--background-primary)] rounded border border-[var(--border-primary)] shadow-sm group-hover:border-[var(--border-highlight)] transition-colors">
+              <kbd className="hidden md:inline-flex items-center h-5 px-2 text-[10px] font-mono font-bold text-[var(--sc-text-muted)] bg-[var(--sc-surface-base)] rounded border border-[var(--sc-border-subtle)] shadow-sm group-hover:border-[var(--sc-border-strong)] transition-colors">
                 Ctrl K
               </kbd>
             </div>
@@ -126,7 +126,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenPalette}
-          className="sm:hidden p-2 text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]"
+          className="sm:hidden p-2 text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]"
           aria-label={t('palette.placeholder')}
         >
           <svg
@@ -148,14 +148,14 @@ export const Header: React.FC<HeaderProps> = ({
 
         <SaveStatusIndicator />
 
-        <div className="w-px h-6 bg-[var(--border-primary)] mx-1 hidden sm:block"></div>
+        <div className="w-px h-6 bg-[var(--sc-border-subtle)] mx-1 hidden sm:block"></div>
 
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={handleUndo}
             disabled={!canUndo}
-            className="p-2 rounded-lg text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            className="p-2 rounded-lg text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             aria-label={t('common.undo')}
             title={t('common.undo')}
           >
@@ -174,7 +174,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={handleRedo}
             disabled={!canRedo}
-            className="p-2 rounded-lg text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            className="p-2 rounded-lg text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             aria-label={t('common.redo')}
             title={t('common.redo')}
           >

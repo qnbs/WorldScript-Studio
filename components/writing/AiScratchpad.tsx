@@ -43,7 +43,7 @@ const AiScratchpad: FC = React.memo(() => {
     <div className="h-full flex flex-col">
       <Card className="h-full min-h-[400px] flex flex-col border-0 sm:border">
         <CardHeader className="hidden md:block">
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('writer.studio.result.title')}
           </h2>
         </CardHeader>
@@ -56,12 +56,12 @@ const AiScratchpad: FC = React.memo(() => {
               ref={textareaRef}
               value={currentResult}
               onChange={(e) => handleUpdateScratchpad(e.target.value)}
-              className="flex-grow w-full resize-none whitespace-pre-wrap bg-[var(--glass-bg)] border-[var(--border-primary)] p-4 font-mono text-sm"
+              className="flex-grow w-full resize-none whitespace-pre-wrap bg-[var(--glass-bg)] border-[var(--sc-border-subtle)] p-4 font-mono text-sm"
               placeholder={isLoading ? '' : t('writer.studio.result.placeholder')}
               disabled={isLoading}
             />
             {isLoading && currentResult === '' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--foreground-muted)]">
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--sc-text-muted)]">
                 <Spinner className="mb-2" />
                 <p className="text-sm animate-pulse">Writing...</p>
               </div>
@@ -98,7 +98,7 @@ const AiScratchpad: FC = React.memo(() => {
                     />
                   </svg>
                 </Button>
-                <span className="text-xs font-mono text-[var(--foreground-muted)]">
+                <span className="text-xs font-mono text-[var(--sc-text-muted)]">
                   {generationHistory.length > 0 ? activeHistoryIndex + 1 : 0} /{' '}
                   {generationHistory.length}
                 </span>
@@ -206,7 +206,7 @@ const AiScratchpad: FC = React.memo(() => {
               </div>
             </div>
             {currentResult && !isLoading && activeTool !== 'synopsis' && (
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[var(--border-primary)]">
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[var(--sc-border-subtle)]">
                 {(activeTool === 'continue' ||
                   activeTool === 'dialogue' ||
                   activeTool === 'brainstorm') && (

@@ -29,9 +29,7 @@ export const SettingsModals: FC = () => {
       >
         <div className="space-y-4">
           {' '}
-          <p className="text-[var(--foreground-secondary)]">
-            {t('settings.resetModal.description')}
-          </p>{' '}
+          <p className="text-[var(--sc-text-secondary)]">{t('settings.resetModal.description')}</p>{' '}
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
               {t('common.cancel')}
@@ -77,12 +75,12 @@ export const SettingsModals: FC = () => {
         title={t('settings.restoreModal.title')}
       >
         <div className="space-y-4">
-          <p className="text-[var(--foreground-secondary)]">
+          <p className="text-[var(--sc-text-secondary)]">
             {t('settings.restoreModal.description', {
               date: modal.payload.date || 'the past',
             })}
           </p>
-          <p className="text-sm bg-[var(--background-tertiary)] p-3 rounded-md border border-[var(--border-primary)]">
+          <p className="text-sm bg-[var(--sc-surface-overlay)] p-3 rounded-md border border-[var(--sc-border-subtle)]">
             {t('settings.restoreModal.wordCountInfo', {
               snapshotWordCount: String(modal.payload.wordCount || 0),
               currentWordCount: String(currentWordCount),
@@ -108,9 +106,7 @@ export const SettingsModals: FC = () => {
         title={t('settings.deleteModal.title')}
       >
         <div className="space-y-4">
-          <p className="text-[var(--foreground-secondary)]">
-            {t('settings.deleteModal.description')}
-          </p>
+          <p className="text-[var(--sc-text-secondary)]">{t('settings.deleteModal.description')}</p>
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
               {t('common.cancel')}

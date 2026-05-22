@@ -28,7 +28,7 @@ const CharactersTab: FC<{ section: StorySection }> = ({ section }) => {
 
   if (linked.length === 0) {
     return (
-      <p className="text-sm text-[var(--foreground-secondary)] text-center py-4">
+      <p className="text-sm text-[var(--sc-text-secondary)] text-center py-4">
         {t('reference.characters.empty')}
       </p>
     );
@@ -39,11 +39,11 @@ const CharactersTab: FC<{ section: StorySection }> = ({ section }) => {
       {linked.map((c) => (
         <li
           key={c.id}
-          className="flex items-start gap-3 p-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)]"
+          className="flex items-start gap-3 p-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]"
         >
           {c.hasAvatar ? (
             <div
-              className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--color-accent)] text-white text-sm font-bold"
+              className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--sc-accent)] text-white text-sm font-bold"
               aria-hidden="true"
             >
               {c.name.slice(0, 1).toUpperCase()}
@@ -57,11 +57,9 @@ const CharactersTab: FC<{ section: StorySection }> = ({ section }) => {
             </div>
           )}
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-[var(--foreground-primary)] truncate">
-              {c.name}
-            </p>
+            <p className="text-sm font-semibold text-[var(--sc-text-primary)] truncate">{c.name}</p>
             {c.backstory && (
-              <p className="text-xs text-[var(--foreground-secondary)] line-clamp-2">
+              <p className="text-xs text-[var(--sc-text-secondary)] line-clamp-2">
                 {c.backstory.slice(0, 80)}
                 {c.backstory.length > 80 ? '…' : ''}
               </p>
@@ -84,7 +82,7 @@ const WorldTab: FC<{ section: StorySection }> = ({ section }) => {
 
   if (linked.length === 0) {
     return (
-      <p className="text-sm text-[var(--foreground-secondary)] text-center py-4">
+      <p className="text-sm text-[var(--sc-text-secondary)] text-center py-4">
         {t('reference.world.empty')}
       </p>
     );
@@ -95,11 +93,11 @@ const WorldTab: FC<{ section: StorySection }> = ({ section }) => {
       {linked.map((w) => (
         <li
           key={w.id}
-          className="p-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)]"
+          className="p-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]"
         >
-          <p className="text-sm font-semibold text-[var(--foreground-primary)]">{w.name}</p>
+          <p className="text-sm font-semibold text-[var(--sc-text-primary)]">{w.name}</p>
           {w.description && (
-            <p className="text-xs text-[var(--foreground-secondary)] mt-1 line-clamp-3">
+            <p className="text-xs text-[var(--sc-text-secondary)] mt-1 line-clamp-3">
               {w.description.slice(0, 120)}
               {w.description.length > 120 ? '…' : ''}
             </p>
@@ -131,7 +129,7 @@ const NotesTab: FC<{ section: StorySection }> = ({ section }) => {
         placeholder={t('reference.notes.placeholder')}
         aria-label={t('reference.notes.ariaLabel')}
         rows={8}
-        className="w-full px-2 py-1.5 rounded border border-[var(--border-primary)] bg-[var(--background-secondary)] text-sm resize-none"
+        className="w-full px-2 py-1.5 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm resize-none"
       />
     </div>
   );
@@ -146,7 +144,7 @@ const BinderTab: FC<{ section: StorySection }> = ({ section }) => {
 
   if (linked.length === 0) {
     return (
-      <p className="text-sm text-[var(--foreground-secondary)] text-center py-4">
+      <p className="text-sm text-[var(--sc-text-secondary)] text-center py-4">
         {t('reference.binder.empty')}
       </p>
     );
@@ -157,11 +155,11 @@ const BinderTab: FC<{ section: StorySection }> = ({ section }) => {
       {linked.map((node) => (
         <li
           key={node.id}
-          className="p-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)]"
+          className="p-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]"
         >
-          <p className="text-sm font-semibold text-[var(--foreground-primary)]">{node.title}</p>
+          <p className="text-sm font-semibold text-[var(--sc-text-primary)]">{node.title}</p>
           {node.content && (
-            <p className="text-xs text-[var(--foreground-secondary)] mt-1 line-clamp-3">
+            <p className="text-xs text-[var(--sc-text-secondary)] mt-1 line-clamp-3">
               {node.content.slice(0, 160)}
               {node.content.length > 160 ? '…' : ''}
             </p>
@@ -227,15 +225,14 @@ export const ReferencePanelView: FC<{ section: StorySection }> = ({ section }) =
   ];
 
   return (
-    <section
-      role="complementary"
+    <aside
       aria-label={t('reference.ariaLabel')}
-      className="flex flex-col h-full border-l border-[var(--border-primary)]"
+      className="flex flex-col h-full border-l border-[var(--sc-border-subtle)]"
     >
       {/* Tab bar */}
       <div
         role="tablist"
-        className="flex overflow-x-auto border-b border-[var(--border-primary)] flex-shrink-0 items-center"
+        className="flex overflow-x-auto border-b border-[var(--sc-border-subtle)] flex-shrink-0 items-center"
       >
         {TABS.map((tab) => (
           <button
@@ -247,8 +244,8 @@ export const ReferencePanelView: FC<{ section: StorySection }> = ({ section }) =
             onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
               activeTab === tab.id
-                ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                : 'border-transparent text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'
+                ? 'border-[var(--sc-accent)] text-[var(--sc-accent)]'
+                : 'border-transparent text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'
             }`}
           >
             {tab.label}
@@ -272,17 +269,17 @@ export const ReferencePanelView: FC<{ section: StorySection }> = ({ section }) =
       </div>
 
       {/* Re-index for AI — always visible footer action */}
-      <div className="flex-shrink-0 border-t border-[var(--border-primary)] px-3 py-2">
+      <div className="flex-shrink-0 border-t border-[var(--sc-border-subtle)] px-3 py-2">
         <button
           type="button"
           disabled={reindexBusy}
           onClick={() => void handleReindex()}
           aria-busy={reindexBusy}
-          className="text-xs text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {reindexBusy ? t('reference.reindex.busy') : t('reference.reindex.action')}
         </button>
       </div>
-    </section>
+    </aside>
   );
 };

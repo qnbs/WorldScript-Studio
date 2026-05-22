@@ -17,6 +17,7 @@ import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { Progress } from './ui/Progress';
 import { SectionIcon } from './ui/SectionIcon';
+import { Skeleton } from './ui/Skeleton';
 import { Spinner } from './ui/Spinner';
 
 // --- Generic Components ---
@@ -36,7 +37,7 @@ const StatCard: FC<{
     colorClass = 'text-[var(--sc-accent)] bg-[var(--sc-accent-subtle)]',
   }) => (
     <Card
-      className="animate-in flex items-center p-5 h-auto hover:border-[var(--border-highlight)] transition-colors group"
+      className="animate-in flex items-center p-5 h-auto hover:border-[var(--sc-border-strong)] transition-colors group"
       style={{ '--index': animationIndex } as React.CSSProperties}
     >
       <div
@@ -54,10 +55,10 @@ const StatCard: FC<{
         </svg>
       </div>
       <div>
-        <p className="text-xs text-[var(--foreground-muted)] uppercase tracking-wider font-bold mb-1">
+        <p className="text-xs text-[var(--sc-text-muted)] uppercase tracking-wider font-bold mb-1">
           {title}
         </p>
-        <p className="text-3xl font-black text-[var(--foreground-primary)] tracking-tight tabular-nums">
+        <p className="text-3xl font-black text-[var(--sc-text-primary)] tracking-tight tabular-nums">
           {value}
         </p>
       </div>
@@ -74,42 +75,42 @@ const AuthorInsightsCard: FC = () => {
   );
   return (
     <Card
-      className="animate-in p-6 border-[var(--border-primary)]"
+      className="animate-in p-6 border-[var(--sc-border-subtle)]"
       style={{ '--index': 5 } as React.CSSProperties}
     >
-      <CardHeader className="border-b border-[var(--border-primary)] pb-4 px-0 pt-0">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--foreground-muted)]">
+      <CardHeader className="border-b border-[var(--sc-border-subtle)] pb-4 px-0 pt-0">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--sc-text-muted)]">
           {t('dashboard.authorInsights.title')}
         </h2>
       </CardHeader>
       <CardContent className="grid gap-6 md:grid-cols-2 px-0 pb-0 pt-4">
         <div>
-          <h3 className="text-sm font-semibold text-[var(--foreground-primary)] mb-2">
+          <h3 className="text-sm font-semibold text-[var(--sc-text-primary)] mb-2">
             {t('dashboard.authorInsights.readability')}
           </h3>
           {readability.score === null ? (
-            <p className="text-sm text-[var(--foreground-muted)]">
+            <p className="text-sm text-[var(--sc-text-muted)]">
               {t('dashboard.authorInsights.readabilityNeedMore')}
             </p>
           ) : (
-            <p className="text-4xl font-black tabular-nums text-[var(--foreground-primary)]">
+            <p className="text-4xl font-black tabular-nums text-[var(--sc-text-primary)]">
               {readability.score}
             </p>
           )}
-          <p className="text-xs text-[var(--foreground-muted)] mt-2">
+          <p className="text-xs text-[var(--sc-text-muted)] mt-2">
             {t('dashboard.authorInsights.readabilityFootnote')}
           </p>
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-[var(--foreground-primary)] mb-2">
+          <h3 className="text-sm font-semibold text-[var(--sc-text-primary)] mb-2">
             {t('dashboard.authorInsights.timeline')}
           </h3>
           {sceneTimelineHints.length === 0 ? (
-            <p className="text-sm text-[var(--foreground-muted)]">
+            <p className="text-sm text-[var(--sc-text-muted)]">
               {t('dashboard.authorInsights.timelineClear')}
             </p>
           ) : (
-            <ul className="space-y-2 text-xs text-[var(--foreground-secondary)] max-h-40 overflow-y-auto pr-1">
+            <ul className="space-y-2 text-xs text-[var(--sc-text-secondary)] max-h-40 overflow-y-auto pr-1">
               {sceneTimelineHints.slice(0, 8).map((h) => (
                 <li
                   key={h.id}
@@ -155,14 +156,14 @@ const QuickAccessCard: FC<{
           className="group-hover:scale-110 transition-transform duration-300 shadow-sm"
         />
       </div>
-      <h3 className="font-bold text-lg text-[var(--foreground-primary)] mb-2 group-hover:text-[var(--background-interactive)] transition-colors">
+      <h3 className="font-bold text-lg text-[var(--sc-text-primary)] mb-2 group-hover:text-[var(--sc-accent)] transition-colors">
         {title}
       </h3>
-      <p className="text-sm text-[var(--foreground-secondary)] leading-relaxed line-clamp-2">
+      <p className="text-sm text-[var(--sc-text-secondary)] leading-relaxed line-clamp-2">
         {description}
       </p>
     </div>
-    <div className="mt-6 flex items-center text-xs font-bold text-[var(--background-interactive)] opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-[-10px] group-hover:translate-x-0">
+    <div className="mt-6 flex items-center text-xs font-bold text-[var(--sc-accent)] opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-[-10px] group-hover:translate-x-0">
       OPEN{' '}
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -198,7 +199,7 @@ const ProjectDetails: FC = () => {
       style={{ '--index': 0 } as React.CSSProperties}
     >
       <CardHeader className="border-b-0 pb-0 pt-6">
-        <h1 className="text-base font-semibold text-[var(--foreground-primary)] flex items-center gap-2">
+        <h1 className="text-base font-semibold text-[var(--sc-text-primary)] flex items-center gap-2">
           {/* QNBS-v3: dashboard section icon from SSOT */}
           <SectionIcon section="dashboard" size="xs" />
           {t('dashboard.details.title')}
@@ -208,7 +209,7 @@ const ProjectDetails: FC = () => {
         <div className="space-y-2">
           <label
             htmlFor="projectTitle"
-            className="text-sm font-medium text-[var(--foreground-secondary)]"
+            className="text-sm font-medium text-[var(--sc-text-secondary)]"
           >
             {t('dashboard.details.projectTitle')}
           </label>
@@ -223,7 +224,7 @@ const ProjectDetails: FC = () => {
           <div className="flex justify-between items-center">
             <label
               htmlFor="projectLogline"
-              className="text-sm font-medium text-[var(--foreground-secondary)]"
+              className="text-sm font-medium text-[var(--sc-text-secondary)]"
             >
               {t('dashboard.details.logline')}
             </label>
@@ -273,11 +274,11 @@ const GoalTracker: FC = () => {
   const renderDaysLeft = () => {
     if (daysLeft === null)
       return (
-        <p className="text-xl font-bold text-[var(--foreground-muted)]">
+        <p className="text-xl font-bold text-[var(--sc-text-muted)]">
           {t('dashboard.goals.noDeadline')}
         </p>
       );
-    let color = 'text-[var(--foreground-primary)]';
+    let color = 'text-[var(--sc-text-primary)]';
     if (daysLeft < 0) color = 'text-red-500';
     else if (daysLeft < 7) color = 'text-amber-500';
 
@@ -286,7 +287,7 @@ const GoalTracker: FC = () => {
     return (
       <div className="flex items-baseline gap-2">
         <span className={`text-4xl font-black ${color}`}>{count}</span>
-        <span className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide">
+        <span className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide">
           {daysLeft < 0
             ? t('dashboard.goals.overdue')
             : t('dashboard.goals.daysLeft', { count: '' }).replace(/\d+/, '').trim()}
@@ -301,14 +302,14 @@ const GoalTracker: FC = () => {
       style={{ '--index': 1 } as React.CSSProperties}
     >
       <CardHeader className="flex justify-between items-center border-b-0 pb-0 pt-6">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--foreground-muted)]">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--sc-text-muted)]">
           {t('dashboard.goals.title')}
         </h2>
         <Button
           variant="ghost"
           size="sm"
           onClick={openGoalModal}
-          className="rounded-full hover:bg-[var(--background-tertiary)] w-8 h-8 p-0"
+          className="rounded-full hover:bg-[var(--sc-surface-overlay)] w-8 h-8 p-0"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -325,17 +326,17 @@ const GoalTracker: FC = () => {
       <CardContent className="space-y-8 flex-grow flex flex-col justify-center">
         <div>
           <div className="flex justify-between items-end mb-3">
-            <span className="text-4xl font-black text-[var(--foreground-primary)] tracking-tight tabular-nums">
+            <span className="text-4xl font-black text-[var(--sc-text-primary)] tracking-tight tabular-nums">
               {wordCount.toLocaleString()}
             </span>
-            <span className="text-sm font-medium text-[var(--foreground-muted)] mb-1">
+            <span className="text-sm font-medium text-[var(--sc-text-muted)] mb-1">
               / {project.projectGoals?.totalWordCount.toLocaleString()} {t('common.words')}
             </span>
           </div>
           <Progress value={wordCountProgress} className="h-4" />
         </div>
-        <div className="bg-[var(--background-primary)]/40 p-5 rounded-2xl border border-[var(--border-primary)] backdrop-blur-sm">
-          <span className="text-xs uppercase tracking-wider font-bold text-[var(--foreground-muted)] mb-1 block">
+        <div className="bg-[var(--sc-surface-base)]/40 p-5 rounded-2xl border border-[var(--sc-border-subtle)] backdrop-blur-sm">
+          <span className="text-xs uppercase tracking-wider font-bold text-[var(--sc-text-muted)] mb-1 block">
             {t('dashboard.goals.deadline')}
           </span>
           {renderDaysLeft()}
@@ -347,6 +348,23 @@ const GoalTracker: FC = () => {
 
 const StatsGrid: FC = () => {
   const { t, wordCount, characters, worlds, project } = useDashboardContext();
+  // QNBS-v3: one-frame delay shows skeleton cards so hydration flash is prevented
+  const [isReady, setIsReady] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setIsReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  if (!isReady) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6" aria-busy="true">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-24 rounded-2xl" />
+        ))}
+      </div>
+    );
+  }
+
   // QNBS-v3: colorClass from APP_SECTIONS SSOT — no hardcoded color strings here
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
@@ -397,19 +415,17 @@ const ProjectHealthCard: FC = () => {
 
   return (
     <Card
-      className="animate-in border-[var(--border-primary)]"
+      className="animate-in border-[var(--sc-border-subtle)]"
       style={{ '--index': 2 } as React.CSSProperties}
     >
-      <CardHeader className="border-b border-[var(--border-primary)] pb-4">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--foreground-muted)]">
+      <CardHeader className="border-b border-[var(--sc-border-subtle)] pb-4">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--sc-text-muted)]">
           {t('dashboard.healthScore.title')}
         </h2>
       </CardHeader>
       <CardContent className="pt-4 space-y-3">
-        <p className="text-5xl font-black tabular-nums text-[var(--foreground-primary)]">{score}</p>
-        <p className="text-sm text-[var(--foreground-secondary)]">
-          {t('dashboard.healthScore.body')}
-        </p>
+        <p className="text-5xl font-black tabular-nums text-[var(--sc-text-primary)]">{score}</p>
+        <p className="text-sm text-[var(--sc-text-secondary)]">{t('dashboard.healthScore.body')}</p>
         <Progress value={score} className="h-2" />
       </CardContent>
     </Card>
@@ -452,7 +468,7 @@ const QuickActions: FC = () => {
   return (
     <div>
       <h2
-        className="text-xl font-bold mb-6 animate-in px-1 tracking-tight text-[var(--foreground-primary)]"
+        className="text-xl font-bold mb-6 animate-in px-1 tracking-tight text-[var(--sc-text-primary)]"
         style={{ '--index': 5 } as React.CSSProperties}
       >
         {t('dashboard.quickAccess.title')}
@@ -501,7 +517,7 @@ const DashboardModals: FC = () => {
         {isAiLoading && (
           <div className="flex flex-col items-center justify-center min-h-[200px]">
             <Spinner className="w-8 h-8" />
-            <p className="mt-4 text-[var(--foreground-secondary)]">
+            <p className="mt-4 text-[var(--sc-text-secondary)]">
               {t('dashboard.loglineModal.loading')}
             </p>
           </div>
@@ -512,11 +528,11 @@ const DashboardModals: FC = () => {
               <Card
                 as="button"
                 key={line}
-                className="hover:bg-[var(--background-secondary)]/50 transition-colors cursor-pointer w-full text-left border-l-4 border-l-transparent hover:border-l-indigo-500 group"
+                className="hover:bg-[var(--sc-surface-raised)]/50 transition-colors cursor-pointer w-full text-left border-l-4 border-l-transparent hover:border-l-indigo-500 group"
                 onClick={() => selectLogline(line)}
               >
                 <CardContent className="p-4">
-                  <p className="text-[var(--foreground-secondary)] group-hover:text-[var(--foreground-primary)] transition-colors leading-relaxed">
+                  <p className="text-[var(--sc-text-secondary)] group-hover:text-[var(--sc-text-primary)] transition-colors leading-relaxed">
                     {line}
                   </p>
                 </CardContent>
@@ -540,7 +556,7 @@ const DashboardModals: FC = () => {
           <div>
             <label
               htmlFor="goal-word-count"
-              className="block text-sm font-semibold text-[var(--foreground-primary)] mb-2"
+              className="block text-sm font-semibold text-[var(--sc-text-primary)] mb-2"
             >
               {t('dashboard.goals.modal.wordCountLabel')}
             </label>
@@ -557,7 +573,7 @@ const DashboardModals: FC = () => {
           <div>
             <label
               htmlFor="goal-date"
-              className="block text-sm font-semibold text-[var(--foreground-primary)] mb-2"
+              className="block text-sm font-semibold text-[var(--sc-text-primary)] mb-2"
             >
               {t('dashboard.goals.modal.deadlineLabel')}
             </label>
@@ -608,17 +624,16 @@ const OnboardingTipsBanner: FC = () => {
   if (!visible) return null;
 
   return (
-    <div
-      role="region"
+    <section
       aria-label={t('dashboard.onboarding.title')}
-      className="rounded-xl border border-[var(--border-primary)] bg-[var(--background-secondary)]/80 p-5 shadow-sm"
+      className="rounded-xl border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/80 p-5 shadow-sm"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">
             {t('dashboard.onboarding.title')}
           </h2>
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[var(--foreground-secondary)]">
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[var(--sc-text-secondary)]">
             <li>{t('dashboard.onboarding.tip1')}</li>
             <li>{t('dashboard.onboarding.tip2')}</li>
             <li>{t('dashboard.onboarding.tip3')}</li>
@@ -638,7 +653,7 @@ const OnboardingTipsBanner: FC = () => {
           </Button>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
 

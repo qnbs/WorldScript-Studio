@@ -85,10 +85,10 @@ export const SettingsGuideSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.guide.title')}
           </h2>
-          <p className="text-sm text-[var(--foreground-muted)] mt-1">{t('settings.guide.intro')}</p>
+          <p className="text-sm text-[var(--sc-text-muted)] mt-1">{t('settings.guide.intro')}</p>
         </CardHeader>
         <CardContent className="space-y-3">
           {GUIDE_CATEGORIES.map((cat) => {
@@ -96,17 +96,13 @@ export const SettingsGuideSection: FC = () => {
             return (
               <div
                 key={cat.id}
-                className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 p-3 rounded-lg border border-[var(--border-primary)]"
+                className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 p-3 rounded-lg border border-[var(--sc-border-subtle)]"
               >
                 <div className="min-w-0">
-                  <h3 className="font-medium text-[var(--foreground-primary)]">
-                    {t(cat.titleKey)}
-                  </h3>
-                  <p className="text-sm text-[var(--foreground-secondary)] mt-1">
-                    {t(cat.descKey)}
-                  </p>
+                  <h3 className="font-medium text-[var(--sc-text-primary)]">{t(cat.titleKey)}</h3>
+                  <p className="text-sm text-[var(--sc-text-secondary)] mt-1">{t(cat.descKey)}</p>
                   {searchHints && searchHints.length > 0 && (
-                    <p className="text-xs text-[var(--foreground-muted)] mt-2">
+                    <p className="text-xs text-[var(--sc-text-muted)] mt-2">
                       {t('settings.guide.searchHints')}: {searchHints.slice(0, 6).join(', ')}
                     </p>
                   )}

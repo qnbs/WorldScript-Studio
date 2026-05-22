@@ -29,7 +29,8 @@
   --sc-surface-inverse: #f8fafc;
   --sc-text-primary: #f8fafc;
   --sc-text-secondary: #cbd5e1;
-  --sc-text-muted: #64748b;
+  /* QNBS-v3: #94a3b8 = 7.97:1 on #020617 (AAA) / 5.83:1 on #0f172a (AA) — upgraded from #64748b for WCAG 2.2 AAA goal */
+  --sc-text-muted: #94a3b8;
   --sc-text-on-accent: #ffffff;
   --sc-accent: #6366f1;
   --sc-accent-hover: #4f46e5;
@@ -107,8 +108,8 @@
   --sc-surface-inverse: #0f172a;
   --sc-text-primary: #0f172a;
   --sc-text-secondary: #475569;
-  /* QNBS-v3: #94a3b8 failed Lighthouse color-contrast (2.56:1 on white); #64748b = 5.0:1 ✓ */
-  --sc-text-muted: #64748b;
+  /* QNBS-v3: #4b5563 = 7.39:1 on #ffffff (AAA) / 6.77:1 on #f1f5f9 (AA+) — upgraded from #64748b for WCAG 2.2 AAA goal */
+  --sc-text-muted: #4b5563;
   --sc-text-on-accent: #ffffff;
   --sc-accent: #4f46e5;
   --sc-accent-hover: #4338ca;
@@ -317,6 +318,8 @@ body.storycraft-screen-reader {
   --radius-sc-sm: 0.375rem;
   --radius-sc-md: 0.5rem;
   --radius-sc-lg: 0.75rem;
+  /* QNBS-v3: xl radius for feature cards, stat cards — 1rem matches current rounded-2xl usage */
+  --radius-sc-xl: 1rem;
   --spacing-sc-xs: 0.25rem;
   --spacing-sc-sm: 0.5rem;
   --spacing-sc-md: 1rem;

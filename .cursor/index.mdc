@@ -25,7 +25,7 @@ alwaysApply: true
 
 **i18n:** Quelle `locales/<lang>/*.json` (de, en, fr, es, it); Runtime **`public/locales/<lang>/bundle.json`** via `pnpm run i18n:bundle` / `i18n:check` + `content:guard`. Keine hardcodierten UI-Strings.
 
-**Tests:** Vitest 4 (jsdom, `tests/setup.ts`, `maxWorkers: 1`); Coverage-Schwellen ~**63/48/54/62** % (lines/branches/functions/statements). E2E Playwright **CI-first** (`CI=true`). Stryker informativ. Siehe [`docs/CI.md`](../docs/CI.md).
+**Tests:** Vitest 4 (jsdom, `tests/setup.ts`, `maxWorkers: 1`); Coverage-Schwellen **63/55/54/62** % (lines/branches/functions/statements). E2E Playwright **CI-first** (`CI=true`). Stryker informativ. Siehe [`docs/CI.md`](../docs/CI.md).
 
 **Qualität (lokal schnell):** `pnpm run lint`, `typecheck`, `i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage`. Schwere Gates (E2E, LHCI, Coverage) = GitHub Actions.
 
@@ -33,7 +33,7 @@ alwaysApply: true
 
 **Command Center:** `services/commands/` → Palette; `CommandExecutorContext`; Shortcuts `useGlobalKeyboardShortcuts` + `services/keyboard/`; Hilfe `helpCatalog.ts` + `helpDocRetrieval.ts` + `tryActionId`; Settings-Guide-Kategorie `experimental` für 12 Feature-Flags.
 
-**v1.9:** Lazy cold-start (`duckdbListenerLoader`, deferred `aiApi`), Help/Settings-Hub, Tauri menu/window-state/updater UI — siehe [`docs/SPRINT-V1.9.md`](../docs/SPRINT-V1.9.md).
+**v1.10:** Mobile-Nav (Scene Board), Branches ≥55 %, Help-Artikel (Plot Board v2, Hybrid RAG, Tauri). v1.9: Lazy cold-start (`duckdbListenerLoader`, deferred `aiApi`), Help/Settings-Hub, Tauri menu/window-state/updater — [`docs/SPRINT-V1.10.md`](../docs/SPRINT-V1.10.md).
 
 **Pfad-Konventionen:** `app/`, `components/`, `features/*`, `hooks/`, `services/`, `packages/*`, `types.ts`, `tests/`.
 

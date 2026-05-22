@@ -42,7 +42,7 @@ const NavButton: FC<{
   <button
     type="button"
     onClick={onClick}
-    className={`flex items-center flex-shrink-0 md:flex-shrink md:w-full px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap md:whitespace-normal ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
+    className={`flex items-center flex-shrink-0 md:flex-shrink md:w-full px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap md:whitespace-normal ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'}`}
   >
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -89,7 +89,7 @@ const ArticleViewer: FC = () => {
                 />
               </svg>
             </Button>
-            <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
               {t(selectedArticle.title)}
             </h2>
           </div>
@@ -108,7 +108,7 @@ const ArticleViewer: FC = () => {
       <CardContent>
         {/* biome-ignore-start lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
         <div
-          className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--foreground-secondary)] prose-strong:text-[var(--foreground-primary)] prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-ul:list-disc prose-li:text-[var(--foreground-secondary)] prose-ol:text-[var(--foreground-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
+          className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--sc-text-secondary)] prose-strong:text-[var(--sc-text-primary)] prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-ul:list-disc prose-li:text-[var(--sc-text-secondary)] prose-ol:text-[var(--sc-text-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(t(selectedArticle.content)) }}
         />
         {/* biome-ignore-end lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
@@ -122,9 +122,7 @@ const ArticleList: FC<{ category: HelpCategory }> = ({ category }) => {
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
-          {t(category.title)}
-        </h2>
+        <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">{t(category.title)}</h2>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
@@ -134,7 +132,7 @@ const ArticleList: FC<{ category: HelpCategory }> = ({ category }) => {
                 type="button"
                 key={article.title}
                 onClick={() => handleSelectArticle(article)}
-                className="w-full text-left p-3 rounded-md text-base transition-colors text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)] hover:text-[var(--foreground-primary)] font-medium"
+                className="w-full text-left p-3 rounded-md text-base transition-colors text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)] hover:text-[var(--sc-text-primary)] font-medium"
               >
                 {t(article.title)}
               </button>
@@ -155,7 +153,7 @@ const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ 
         <pre
           // biome-ignore lint/suspicious/noArrayIndexKey: deterministic regex split of immutable text
           key={`code-${index}`}
-          className="bg-[var(--background-primary)] p-3 rounded-md text-sm whitespace-pre-wrap"
+          className="bg-[var(--sc-surface-base)] p-3 rounded-md text-sm whitespace-pre-wrap"
         >
           <code>{part}</code>
         </pre>
@@ -189,7 +187,7 @@ const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ 
         </div>
       )}
       <div
-        className={`max-w-xl p-3 rounded-lg prose ${theme === 'dark' ? 'prose-invert' : ''} prose-p:my-0 ${isUser ? 'bg-[var(--background-interactive)] text-white shadow-lg' : 'bg-[var(--glass-bg)] border border-[var(--border-primary)]'}`}
+        className={`max-w-xl p-3 rounded-lg prose ${theme === 'dark' ? 'prose-invert' : ''} prose-p:my-0 ${isUser ? 'bg-[var(--sc-accent)] text-white shadow-lg' : 'bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)]'}`}
       >
         {parsedText}
       </div>
@@ -220,7 +218,7 @@ const AiAssistant: FC = () => {
       <CardHeader>
         <div className="flex items-center gap-3">
           <SectionIcon section="help" size="sm" />
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('help.ai.title')}
           </h2>
         </div>
@@ -248,7 +246,7 @@ const AiAssistant: FC = () => {
                   </svg>
                 </div>
                 <div
-                  className={`max-w-xl p-3 rounded-lg bg-[var(--glass-bg)] border border-[var(--border-primary)] flex space-x-2 items-center`}
+                  className={`max-w-xl p-3 rounded-lg bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] flex space-x-2 items-center`}
                 >
                   <div
                     className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"
@@ -266,7 +264,7 @@ const AiAssistant: FC = () => {
               </div>
             )}
         </div>
-        <div className="p-4 border-t border-[var(--border-primary)] space-y-2">
+        <div className="p-4 border-t border-[var(--sc-border-subtle)] space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="ghost"
@@ -373,8 +371,8 @@ const HelpViewUI: FC = () => {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">{t('help.title')}</h1>
-        <p className="mt-2 text-sm text-[var(--foreground-secondary)] max-w-2xl">
+        <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">{t('help.title')}</h1>
+        <p className="mt-2 text-sm text-[var(--sc-text-secondary)] max-w-2xl">
           {t('help.description')}
         </p>
       </div>
@@ -394,7 +392,7 @@ const HelpViewUI: FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8">
         <div className="md:col-span-1">
           {/* Mobile: horizontal scroll strip · Desktop: vertical sticky sidebar */}
-          <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--background-primary)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
+          <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--sc-surface-base)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
             {Array.isArray(helpContent) &&
               helpContent.map((cat) => (
                 <NavButton

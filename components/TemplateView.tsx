@@ -28,7 +28,7 @@ const TemplateCard: FC<{ template: Template; animationIndex: number }> = React.m
         style={{ '--index': animationIndex } as React.CSSProperties}
       >
         <CardHeader>
-          <h3 className="text-xl font-bold text-[var(--foreground-primary)] transition-colors">
+          <h3 className="text-xl font-bold text-[var(--sc-text-primary)] transition-colors">
             {t(template.name)}
           </h3>
           <span
@@ -38,12 +38,12 @@ const TemplateCard: FC<{ template: Template; animationIndex: number }> = React.m
           </span>
         </CardHeader>
         <CardContent className="flex-grow space-y-4">
-          <p className="text-sm text-[var(--foreground-muted)]">{t(template.description)}</p>
+          <p className="text-sm text-[var(--sc-text-muted)]">{t(template.description)}</p>
           <div className="flex flex-wrap gap-2">
             {template.tags.map((tag) => (
               <span
                 key={tag}
-                className="px-2 py-1 text-xs bg-[var(--background-tertiary)]/80 text-[var(--foreground-secondary)] rounded-md"
+                className="px-2 py-1 text-xs bg-[var(--sc-surface-overlay)]/80 text-[var(--sc-text-secondary)] rounded-md"
               >
                 {t(tag)}
               </span>
@@ -90,11 +90,11 @@ const PreviewModal: FC = () => {
       size="xl"
     >
       <div className="flex flex-col md:grid md:grid-cols-2 gap-8">
-        <div className="order-1 md:order-2 md:border-l border-[var(--border-primary)]/50 md:pl-8">
-          <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-2">
+        <div className="order-1 md:order-2 md:border-l border-[var(--sc-border-subtle)]/50 md:pl-8">
+          <h3 className="text-lg font-semibold text-[var(--sc-text-primary)] mb-2">
             {t('templates.modal.ai.title')}
           </h3>
-          <p className="text-sm text-[var(--foreground-muted)] mb-3">
+          <p className="text-sm text-[var(--sc-text-muted)] mb-3">
             {t('templates.modal.ai.description')}
           </p>
           <Textarea
@@ -130,22 +130,17 @@ const PreviewModal: FC = () => {
             </Button>
           </div>
         </div>
-        <div className="order-2 md:order-1 border-t md:border-t-0 border-[var(--border-primary)]/50 pt-6 md:pt-0">
-          <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-2">
+        <div className="order-2 md:order-1 border-t md:border-t-0 border-[var(--sc-border-subtle)]/50 pt-6 md:pt-0">
+          <h3 className="text-lg font-semibold text-[var(--sc-text-primary)] mb-2">
             {isRemixMode ? t('templates.remix.title') : t('templates.modal.sectionsTitle')}
           </h3>
-          <p className="text-sm text-[var(--foreground-muted)] mb-4">
+          <p className="text-sm text-[var(--sc-text-muted)] mb-4">
             {isRemixMode ? t('templates.remix.description') : t('templates.remix.descriptionHint')}
           </p>
-          {/* QNBS-v3: role="list" required by axe aria-required-parent for child role="listitem" */}
-          <div
-            role="list"
-            className="space-y-2 max-h-64 sm:max-h-96 overflow-y-auto bg-[var(--glass-bg)] p-2 rounded-md border border-[var(--border-primary)]/50"
-          >
+          <ul className="space-y-2 max-h-64 sm:max-h-96 overflow-y-auto bg-[var(--glass-bg)] p-2 rounded-md border border-[var(--sc-border-subtle)]/50 list-none">
             {remixedSections.map((sec, i) => (
-              <div
+              <li
                 key={sec.id}
-                role="listitem"
                 draggable={isRemixMode}
                 onDragStart={() => {
                   if (isRemixMode) draggedItem.current = i;
@@ -155,7 +150,7 @@ const PreviewModal: FC = () => {
                 }}
                 onDragEnd={handleDragSort}
                 onDragOver={(e) => isRemixMode && e.preventDefault()}
-                className={`flex items-center gap-2 p-2 rounded-md ${isRemixMode ? 'bg-[var(--foreground-primary)]/5 cursor-move' : 'bg-transparent'}`}
+                className={`flex items-center gap-2 p-2 rounded-md ${isRemixMode ? 'bg-[var(--sc-text-primary)]/5 cursor-move' : 'bg-transparent'}`}
               >
                 {isRemixMode && (
                   <svg
@@ -173,7 +168,7 @@ const PreviewModal: FC = () => {
                   value={sec.title}
                   onChange={(e) => updateRemixedSectionTitle(sec.id, e.target.value)}
                   disabled={!isRemixMode}
-                  className="bg-transparent border-0 text-[var(--foreground-secondary)] h-auto focus:ring-1 focus:bg-[var(--background-tertiary)] disabled:cursor-default"
+                  className="bg-transparent border-0 text-[var(--sc-text-secondary)] h-auto focus:ring-1 focus:bg-[var(--sc-surface-overlay)] disabled:cursor-default"
                 />
                 {isRemixMode && (
                   <>
@@ -214,9 +209,9 @@ const PreviewModal: FC = () => {
                     </Button>
                   </>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
           {!isRemixMode && (
             <Button
               variant="secondary"
@@ -248,13 +243,11 @@ const CreateCustomModal: FC = () => {
   return (
     <Modal isOpen={true} onClose={closeModal} title={t('templates.custom.modalTitle')} size="lg">
       <div className="space-y-4">
-        <p className="text-[var(--foreground-secondary)]">
-          {t('templates.custom.modalDescription')}
-        </p>
+        <p className="text-[var(--sc-text-secondary)]">{t('templates.custom.modalDescription')}</p>
         <div>
           <label
             htmlFor="custom-concept"
-            className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+            className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
           >
             {t('templates.custom.conceptLabel')}
           </label>
@@ -269,7 +262,7 @@ const CreateCustomModal: FC = () => {
         <div>
           <label
             htmlFor="custom-elements"
-            className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+            className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
           >
             {t('templates.custom.elementsLabel')}
           </label>
@@ -283,7 +276,7 @@ const CreateCustomModal: FC = () => {
         <div>
           <label
             htmlFor="custom-sections"
-            className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+            className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
           >
             {t('templates.custom.sectionsLabel')}
           </label>
@@ -339,17 +332,17 @@ const CommunityTemplateCard: FC<{
     >
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-xl font-bold text-[var(--foreground-primary)]">{template.name}</h3>
+          <h3 className="text-xl font-bold text-[var(--sc-text-primary)]">{template.name}</h3>
           <span className="flex items-center gap-1 text-xs text-amber-400 flex-shrink-0">
             ★ {template.stars ?? 0}
           </span>
         </div>
-        <p className="text-xs text-[var(--foreground-muted)] mt-1">von {template.author}</p>
+        <p className="text-xs text-[var(--sc-text-muted)] mt-1">von {template.author}</p>
         <div className="flex flex-wrap gap-1 mt-2">
           {template.tags.map((tag) => (
             <span
               key={tag}
-              className="px-2 py-0.5 text-xs bg-[var(--background-tertiary)]/80 text-[var(--foreground-secondary)] rounded-md"
+              className="px-2 py-0.5 text-xs bg-[var(--sc-surface-overlay)]/80 text-[var(--sc-text-secondary)] rounded-md"
             >
               {tag}
             </span>
@@ -357,13 +350,13 @@ const CommunityTemplateCard: FC<{
         </div>
       </CardHeader>
       <CardContent className="flex-grow space-y-2">
-        <p className="text-sm text-[var(--foreground-muted)]">{template.description}</p>
+        <p className="text-sm text-[var(--sc-text-muted)]">{template.description}</p>
         {template.arcDescription && (
-          <p className="text-xs text-[var(--foreground-secondary)] italic">
+          <p className="text-xs text-[var(--sc-text-secondary)] italic">
             {template.arcDescription}
           </p>
         )}
-        <p className="text-xs text-[var(--foreground-muted)]">
+        <p className="text-xs text-[var(--sc-text-muted)]">
           {template.sections.length} {_t('templates.chapters')}
         </p>
       </CardContent>
@@ -420,7 +413,7 @@ const CommunityTab: FC = () => {
     );
   if (error)
     return (
-      <div className="flex flex-col items-center gap-4 py-16 text-[var(--foreground-muted)]">
+      <div className="flex flex-col items-center gap-4 py-16 text-[var(--sc-text-muted)]">
         <p className="text-sm">{_t('templates.communityError')}</p>
         <p className="text-xs opacity-60">{error}</p>
       </div>
@@ -459,23 +452,23 @@ const TemplateViewUI: FC = () => {
       {/* QNBS-v3: view-level header with colored SSOT icon */}
       <div className="flex items-center gap-3 mb-6">
         <SectionIcon section="templates" size="lg" />
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+        <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">
           {t('sidebar.templates')}
         </h1>
       </div>
       {/* Tab Switcher */}
-      <div className="flex items-center gap-2 mb-6 border-b border-[var(--border-primary)] pb-4">
+      <div className="flex items-center gap-2 mb-6 border-b border-[var(--sc-border-subtle)] pb-4">
         <button
           type="button"
           onClick={() => setActiveTab('local')}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'local' ? 'text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'}`}
+          className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'local' ? 'text-[var(--sc-text-primary)] border-b-2 border-[var(--sc-accent)] -mb-px' : 'text-[var(--sc-text-muted)] hover:text-[var(--sc-text-secondary)]'}`}
         >
           {t('templates.tabs.myTemplates')}
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('community')}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'community' ? 'text-[var(--foreground-primary)] border-b-2 border-[var(--background-interactive)] -mb-px' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'}`}
+          className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeTab === 'community' ? 'text-[var(--sc-text-primary)] border-b-2 border-[var(--sc-accent)] -mb-px' : 'text-[var(--sc-text-muted)] hover:text-[var(--sc-text-secondary)]'}`}
         >
           🌐 {t('templates.tabs.community')}
         </button>

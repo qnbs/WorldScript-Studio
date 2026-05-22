@@ -20,6 +20,7 @@ export const storycraftTailwindPreset: Partial<Config> = {
         'sc-sm': 'var(--radius-sc-sm)',
         'sc-md': 'var(--radius-sc-md)',
         'sc-lg': 'var(--radius-sc-lg)',
+        'sc-xl': 'var(--radius-sc-xl)',
       },
       spacing: {
         'sc-xs': 'var(--spacing-sc-xs)',

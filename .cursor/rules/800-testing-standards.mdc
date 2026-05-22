@@ -38,7 +38,7 @@ alwaysApply: false
 | Tier | Befehle |
 |------|---------|
 | **Lokal schnell** | `lint`, `typecheck`, `i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage` |
-| **CI schwer** | Vitest **mit** Coverage (Schwellen ~63/48/54/62), `CI=true pnpm run test:e2e`, LHCI, `bundle:budget` |
+| **CI schwer** | Vitest **mit** Coverage (Schwellen 63/55/54/62 — lines/branches/functions/statements), `CI=true pnpm run test:e2e`, LHCI, `bundle:budget` |
 
 - Merge-Bar = **grüner GitHub-Workflow**, nicht voller lokaler E2E auf schwacher Hardware.
 - Mobile E2E lokal nur mit `RUN_MOBILE_E2E=1` (siehe `playwright.config.ts`).

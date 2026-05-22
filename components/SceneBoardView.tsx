@@ -1,4 +1,4 @@
-import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
+import type { Announcements, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   closestCenter,
   DndContext,
@@ -64,6 +64,8 @@ const SceneBoardUI: FC = () => {
   const snapGrid = useAppSelectorShallow(selectSnapToGrid);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  // QNBS-v3: Track hovered act column during drag for drop-zone highlight (IX-2).
+  const [dragOverActId, setDragOverActId] = useState<number | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -85,6 +87,7 @@ const SceneBoardUI: FC = () => {
     (event: DragEndEvent) => {
       const { active, over } = event;
       setActiveId(null);
+      setDragOverActId(null);
 
       if (!over || active.id === over.id) return;
 
@@ -104,10 +107,13 @@ const SceneBoardUI: FC = () => {
       const { over } = event;
       if (over?.id && String(over.id).startsWith('act-')) {
         const act = parseInt(String(over.id).replace('act-', ''), 10) as 1 | 2 | 3;
+        setDragOverActId(act);
         const activeSection = sections.find((s) => s.id === event.active.id);
         if (activeSection && activeSection.act !== act) {
           handleUpdateSection(event.active.id as string, { act });
         }
+      } else {
+        setDragOverActId(null);
       }
     },
     [sections, handleUpdateSection],
@@ -126,6 +132,30 @@ const SceneBoardUI: FC = () => {
   );
 
   const activeSection = activeId ? sections.find((s) => s.id === activeId) : null;
+
+  // QNBS-v3: WCAG 2.1 SC 4.1.3 — screen reader announcements for drag-and-drop via dnd-kit accessibility prop.
+  const dndAnnouncements: Announcements = useMemo(
+    () => ({
+      onDragStart({ active }) {
+        const title = sections.find((s) => s.id === active.id)?.title ?? String(active.id);
+        return t('sceneboard.dnd.start', { title });
+      },
+      onDragOver({ active, over }) {
+        const title = sections.find((s) => s.id === active.id)?.title ?? String(active.id);
+        if (!over) return t('sceneboard.dnd.cancelled');
+        return t('sceneboard.dnd.over', { title, act: String(over.id) });
+      },
+      onDragEnd({ active, over }) {
+        const title = sections.find((s) => s.id === active.id)?.title ?? String(active.id);
+        if (!over) return t('sceneboard.dnd.cancelled');
+        return t('sceneboard.dnd.dropped', { title, act: String(over.id) });
+      },
+      onDragCancel() {
+        return t('sceneboard.dnd.cancelled');
+      },
+    }),
+    [sections, t],
+  );
 
   const plotSummary = sections
     .map((s) => `${s.title}: ${(s.content ?? '').slice(0, 200)}`)
@@ -150,11 +180,11 @@ const SceneBoardUI: FC = () => {
         <div>
           <div className="flex items-center gap-3">
             <SectionIcon section="sceneboard" size="lg" />
-            <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+            <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">
               {t('sceneboard.title')}
             </h1>
           </div>
-          <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
+          <p className="text-xs text-[var(--sc-text-muted)] mt-0.5">
             {sections.length} {t('sceneboard.scenes')} · {totalWords} {t('sceneboard.words')}
           </p>
         </div>
@@ -197,7 +227,7 @@ const SceneBoardUI: FC = () => {
             <button
               type="button"
               onClick={() => dispatch(plotBoardActions.setSnapToGrid(!snapGrid))}
-              className={`text-xs px-2 py-1 rounded border transition-colors ${snapGrid ? 'bg-[var(--background-interactive)]/20 border-[var(--ring-focus)]/40 text-[var(--ring-focus)]' : 'border-[var(--border-primary)] text-[var(--foreground-muted)]'}`}
+              className={`text-xs px-2 py-1 rounded border transition-colors ${snapGrid ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)]'}`}
               aria-pressed={snapGrid}
               title={t('sceneboard.canvas.snapToGrid')}
             >
@@ -237,7 +267,7 @@ const SceneBoardUI: FC = () => {
         <SceneTimelinePanel sections={sections} t={t} />
       ) : activeMode === 'canvas' ? (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-          <div className="flex flex-1 min-h-0 gap-0 overflow-hidden rounded-t-xl border border-b-0 border-[var(--border-primary)]">
+          <div className="flex flex-1 min-h-0 gap-0 overflow-hidden rounded-t-xl border border-b-0 border-[var(--sc-border-subtle)]">
             <Suspense fallback={<SceneBoardChunkFallback />}>
               <SubplotPanel sections={sections} t={t} />
             </Suspense>
@@ -266,6 +296,7 @@ const SceneBoardUI: FC = () => {
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
+          accessibility={{ announcements: dndAnnouncements }}
         >
           {/* Kanban-Board mit 3 Swimlanes */}
           <div className="flex gap-4 overflow-x-auto pb-4 flex-grow">
@@ -281,18 +312,19 @@ const SceneBoardUI: FC = () => {
                 onDelete={setDeleteTargetId}
                 onAddSection={handleAddForAct}
                 onReorderInAct={handleMoveSectionWithinAct}
+                isOver={dragOverActId === act}
               />
             ))}
           </div>
 
           <DragOverlay>
             {activeSection ? (
-              <div className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-lg p-3 shadow-2xl opacity-90 w-72">
-                <h4 className="text-sm font-semibold text-[var(--foreground-primary)]">
+              <div className="bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-lg p-3 shadow-2xl opacity-90 w-72">
+                <h4 className="text-sm font-semibold text-[var(--sc-text-primary)]">
                   {activeSection.title}
                 </h4>
                 {activeSection.summary && (
-                  <p className="text-xs text-[var(--foreground-muted)] mt-1 line-clamp-2">
+                  <p className="text-xs text-[var(--sc-text-muted)] mt-1 line-clamp-2">
                     {activeSection.summary}
                   </p>
                 )}
@@ -308,7 +340,7 @@ const SceneBoardUI: FC = () => {
         title={t('sceneboard.ai.panelTitle')}
       >
         {plotAi.ragChunkCount > 0 && (
-          <p className="text-xs text-[var(--foreground-muted)] mb-2">
+          <p className="text-xs text-[var(--sc-text-muted)] mb-2">
             {t('sceneboard.ai.ragChunks', { count: String(plotAi.ragChunkCount) })}
           </p>
         )}
@@ -321,15 +353,15 @@ const SceneBoardUI: FC = () => {
           {plotAi.beats.map((beat) => (
             <li
               key={`${beat.title}-${beat.suggestedPosition}`}
-              className="p-3 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)]"
+              className="p-3 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]"
             >
-              <p className="font-semibold text-[var(--foreground-primary)]">{beat.title}</p>
-              <p className="text-sm text-[var(--foreground-secondary)] mt-1">{beat.description}</p>
-              <p className="text-xs text-[var(--foreground-muted)] mt-2">{beat.rationale}</p>
+              <p className="font-semibold text-[var(--sc-text-primary)]">{beat.title}</p>
+              <p className="text-sm text-[var(--sc-text-secondary)] mt-1">{beat.description}</p>
+              <p className="text-xs text-[var(--sc-text-muted)] mt-2">{beat.rationale}</p>
             </li>
           ))}
           {!plotAi.isLoading && plotAi.beats.length === 0 && (
-            <p className="text-sm text-[var(--foreground-muted)]">{t('sceneboard.ai.empty')}</p>
+            <p className="text-sm text-[var(--sc-text-muted)]">{t('sceneboard.ai.empty')}</p>
           )}
         </ul>
         <div className="flex justify-end gap-2 mt-4">

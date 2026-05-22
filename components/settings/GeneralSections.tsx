@@ -15,12 +15,12 @@ export const GeneralSection: FC = () => {
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+        <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
           {t('settings.language.title')}
         </h2>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-[var(--foreground-secondary)] mb-2">
+        <p className="text-sm text-[var(--sc-text-secondary)] mb-2">
           {t('settings.language.description')}
         </p>
         <Select id="language-select" value={language} onChange={handleLanguageChange}>
@@ -41,12 +41,12 @@ export const AppearanceSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.appearance.title')}
           </h2>
         </CardHeader>
         <CardContent className="space-y-4">
-          <span className="text-sm font-medium text-[var(--foreground-secondary)]">
+          <span className="text-sm font-medium text-[var(--sc-text-secondary)]">
             {t('settings.appearance.theme')}
           </span>
           <div className="grid grid-cols-3 gap-4">
@@ -73,11 +73,11 @@ export const AppearanceSection: FC = () => {
             </Button>
           </div>
           {/* QNBS-v3: Creative palettes layer on dark/light — semantic tokens in index.css */}
-          <div className="pt-2 border-t border-[var(--border-primary)] space-y-2">
-            <span className="text-sm font-medium text-[var(--foreground-secondary)]">
+          <div className="pt-2 border-t border-[var(--sc-border-subtle)] space-y-2">
+            <span className="text-sm font-medium text-[var(--sc-text-secondary)]">
               {t('settings.appearance.preset')}
             </span>
-            <p className="text-xs text-[var(--foreground-muted)]">
+            <p className="text-xs text-[var(--sc-text-muted)]">
               {t('settings.appearance.presetHint')}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -119,7 +119,7 @@ export const AppearanceSection: FC = () => {
       </Card>
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.appearance.customization')}
           </h2>
         </CardHeader>
@@ -128,7 +128,7 @@ export const AppearanceSection: FC = () => {
             <div>
               <label
                 htmlFor="settings-primary-color"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
               >
                 {t('settings.appearance.primaryColor')}
               </label>
@@ -142,13 +142,13 @@ export const AppearanceSection: FC = () => {
                     primaryColor: e.target.value,
                   })
                 }
-                className="w-full h-10 rounded border border-[var(--border-primary)]"
+                className="w-full h-10 rounded border border-[var(--sc-border-subtle)]"
               />
             </div>
             <div>
               <label
                 htmlFor="settings-secondary-color"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
               >
                 {t('settings.appearance.secondaryColor')}
               </label>
@@ -162,13 +162,13 @@ export const AppearanceSection: FC = () => {
                     secondaryColor: e.target.value,
                   })
                 }
-                className="w-full h-10 rounded border border-[var(--border-primary)]"
+                className="w-full h-10 rounded border border-[var(--sc-border-subtle)]"
               />
             </div>
             <div>
               <label
                 htmlFor="settings-accent-color"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
               >
                 {t('settings.appearance.accentColor')}
               </label>
@@ -182,13 +182,13 @@ export const AppearanceSection: FC = () => {
                     accentColor: e.target.value,
                   })
                 }
-                className="w-full h-10 rounded border border-[var(--border-primary)]"
+                className="w-full h-10 rounded border border-[var(--sc-border-subtle)]"
               />
             </div>
             <div>
               <label
                 htmlFor="settings-bg-color"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
               >
                 {t('settings.appearance.backgroundColor')}
               </label>
@@ -202,14 +202,14 @@ export const AppearanceSection: FC = () => {
                     backgroundColor: e.target.value,
                   })
                 }
-                className="w-full h-10 rounded border border-[var(--border-primary)]"
+                className="w-full h-10 rounded border border-[var(--sc-border-subtle)]"
               />
             </div>
           </div>
           <div>
             <label
               htmlFor="settings-custom-css"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.appearance.customCss')}
             </label>
@@ -223,7 +223,7 @@ export const AppearanceSection: FC = () => {
                 })
               }
               placeholder="/* Custom CSS */"
-              className="w-full h-32 p-3 rounded border border-[var(--border-primary)] bg-[var(--background-primary)] text-[var(--foreground-primary)] font-mono text-sm"
+              className="w-full h-32 p-3 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] font-mono text-sm"
             />
           </div>
         </CardContent>
@@ -257,28 +257,28 @@ const AppHealthPanel: FC = () => {
   return (
     <Card className="mt-6">
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+        <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
           {t('settings.health.title')}
         </h2>
       </CardHeader>
-      <CardContent className="space-y-4 text-sm text-[var(--foreground-secondary)]">
+      <CardContent className="space-y-4 text-sm text-[var(--sc-text-secondary)]">
         <p>{t('settings.health.description')}</p>
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <span className="font-medium text-[var(--foreground-primary)]">
+            <span className="font-medium text-[var(--sc-text-primary)]">
               {t('settings.health.locale')}:
             </span>{' '}
             <span className="uppercase">{language}</span>
           </li>
           <li>{storageLine}</li>
           <li>
-            <span className="font-medium text-[var(--foreground-primary)]">
+            <span className="font-medium text-[var(--sc-text-primary)]">
               {t('settings.health.wordCount')}:
             </span>{' '}
             {currentWordCount}
           </li>
           <li>
-            <span className="font-medium text-[var(--foreground-primary)]">
+            <span className="font-medium text-[var(--sc-text-primary)]">
               {t('settings.health.projectSize')}:
             </span>{' '}
             {projectSize}
@@ -300,7 +300,7 @@ const TauriVersionLine: FC = () => {
 
   if (!tauriVersion) return null;
   return (
-    <p className="text-sm text-[var(--foreground-muted)]">
+    <p className="text-sm text-[var(--sc-text-muted)]">
       {t('settings.about.tauriVersion')}: {tauriVersion}
     </p>
   );
@@ -314,11 +314,11 @@ export const AboutSection: FC = React.memo(() => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.about.title')}
           </h2>
         </CardHeader>
-        <CardContent className="text-center text-[var(--foreground-muted)] space-y-2">
+        <CardContent className="text-center text-[var(--sc-text-muted)] space-y-2">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
@@ -330,7 +330,7 @@ export const AboutSection: FC = React.memo(() => {
           >
             {ICONS.WRITER}
           </svg>
-          <h3 className="text-2xl font-bold text-[var(--foreground-primary)]">StoryCraft Studio</h3>
+          <h3 className="text-2xl font-bold text-[var(--sc-text-primary)]">StoryCraft Studio</h3>
           <p>
             {t('settings.about.versionLabel')} {packageJson.version}
           </p>
@@ -341,7 +341,7 @@ export const AboutSection: FC = React.memo(() => {
       {enableAppHealthPanel ? (
         <AppHealthPanel />
       ) : (
-        <p className="text-xs text-center text-[var(--foreground-muted)] px-2">
+        <p className="text-xs text-center text-[var(--sc-text-muted)] px-2">
           {t('settings.health.buildNote')}
         </p>
       )}

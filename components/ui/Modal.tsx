@@ -67,17 +67,17 @@ export const Modal: React.FC<ModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`relative z-10 pointer-events-auto bg-[var(--background-primary)] sm:rounded-lg shadow-[var(--shadow-xl)] border-0 sm:border border-[var(--border-primary)] w-full ${sizeClasses[size]} h-full sm:h-auto sm:max-h-[90vh] flex flex-col`}
+        className={`relative z-10 pointer-events-auto bg-[var(--sc-surface-base)] sm:rounded-lg shadow-[var(--shadow-xl)] border-0 sm:border border-[var(--sc-border-subtle)] w-full ${sizeClasses[size]} h-full sm:h-auto sm:max-h-[90vh] flex flex-col`}
         style={{ animation: 'scale-in 0.2s ease-out' }}
       >
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border-primary)] flex-shrink-0">
-          <h2 id="modal-title" className="text-xl font-semibold text-[var(--foreground-primary)]">
+        <div className="flex items-center justify-between p-4 border-b border-[var(--sc-border-subtle)] flex-shrink-0">
+          <h2 id="modal-title" className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 -mr-2 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)]"
+            className="p-2 -mr-2 text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
             aria-label={t('common.close')}
           >
             <svg

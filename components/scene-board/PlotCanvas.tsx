@@ -58,7 +58,7 @@ const CanvasCard: FC<CanvasCardProps> = React.memo(
           minHeight: CARD_H,
           cursor: isDrawing ? 'crosshair' : 'grab',
         }}
-        className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-sc-lg p-3 shadow-sc-sm hover:shadow-sc-md transition-[box-shadow] duration-sc-normal ease-sc-standard select-none"
+        className="bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-sc-lg p-3 shadow-sc-sm hover:shadow-sc-md transition-[box-shadow] duration-sc-normal ease-sc-standard select-none"
         onPointerDown={(e) => {
           longPress.onPointerDown(e);
           onPointerDown(e, section.id);
@@ -78,21 +78,19 @@ const CanvasCard: FC<CanvasCardProps> = React.memo(
             className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ backgroundColor: section.color || '#3b82f6' }}
           />
-          <h4 className="text-sm font-semibold text-[var(--foreground-primary)] line-clamp-1">
+          <h4 className="text-sm font-semibold text-[var(--sc-text-primary)] line-clamp-1">
             {section.title}
           </h4>
         </div>
         {section.summary && (
-          <p className="text-xs text-[var(--foreground-muted)] line-clamp-2 mb-2">
-            {section.summary}
-          </p>
+          <p className="text-xs text-[var(--sc-text-muted)] line-clamp-2 mb-2">{section.summary}</p>
         )}
         <div className="flex items-center gap-1">
           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusColor }} />
-          <span className="text-xs text-[var(--foreground-muted)] capitalize">
+          <span className="text-xs text-[var(--sc-text-muted)] capitalize">
             {section.status || 'draft'}
           </span>
-          <span className="ml-auto text-xs text-[var(--foreground-muted)]">
+          <span className="ml-auto text-xs text-[var(--sc-text-muted)]">
             {section.wordCount || 0} W.
           </span>
         </div>
@@ -347,7 +345,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({
     // QNBS-v3: overflow hidden + touch-action:none prevents browser scroll from hijacking canvas pan.
     <div
       ref={wrapperRef}
-      className="relative w-full h-full overflow-hidden bg-[var(--background-primary)] rounded-xl border border-[var(--border-primary)]"
+      className="relative w-full h-full overflow-hidden bg-[var(--sc-surface-base)] rounded-xl border border-[var(--sc-border-subtle)]"
       style={{ touchAction: 'none', cursor: isDrawing ? 'crosshair' : 'default' }}
       role="application"
       aria-label={t('sceneboard.canvas.ariaLabel')}
@@ -378,7 +376,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({
             height="20"
             patternUnits="userSpaceOnUse"
           >
-            <circle cx="1" cy="1" r="1" fill="var(--foreground-muted)" />
+            <circle cx="1" cy="1" r="1" fill="var(--sc-text-muted)" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#dot-grid)" />
@@ -440,7 +438,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({
       {/* Empty state */}
       {sections.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <p className="text-sm text-[var(--foreground-muted)]">{t('sceneboard.canvas.empty')}</p>
+          <p className="text-sm text-[var(--sc-text-muted)]">{t('sceneboard.canvas.empty')}</p>
         </div>
       )}
     </div>

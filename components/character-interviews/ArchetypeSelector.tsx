@@ -23,7 +23,7 @@ export function ArchetypeSelector() {
 
   return (
     <div className="p-4">
-      <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+      <p className="mb-3 text-sm text-[var(--sc-text-muted)]">
         {t('characterInterviews.archetypeDescription')}
       </p>
       <div
@@ -46,16 +46,16 @@ export function ArchetypeSelector() {
                   selectArchetype(tmpl.archetype);
                 }
               }}
-              className={`cursor-pointer rounded-lg border p-3 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`cursor-pointer rounded-lg border p-3 transition-colors focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] ${
                 isSelected
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 hover:border-blue-300 dark:border-gray-700 dark:hover:border-blue-600'
+                  ? 'border-[var(--sc-accent)] bg-[var(--sc-accent-subtle)]'
+                  : 'border-[var(--sc-border-subtle)] hover:border-[var(--sc-accent)]'
               }`}
             >
-              <p className="font-medium text-gray-900 dark:text-white">
+              <p className="font-medium text-[var(--sc-text-primary)]">
                 {t(ARCHETYPE_LABEL_KEYS[tmpl.archetype])}
               </p>
-              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{tmpl.description}</p>
+              <p className="mt-0.5 text-xs text-[var(--sc-text-muted)]">{tmpl.description}</p>
             </div>
           );
         })}

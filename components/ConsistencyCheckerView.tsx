@@ -34,11 +34,11 @@ const ConsistencyCheckerUI: FC = () => {
       <div className="mb-6">
         <div className="flex items-center gap-3">
           <SectionIcon section="consistencyChecker" size="lg" />
-          <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+          <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">
             {t('consistencyChecker.title')}
           </h1>
         </div>
-        <p className="text-[var(--foreground-secondary)] mt-2">
+        <p className="text-[var(--sc-text-secondary)] mt-2">
           {t('consistencyChecker.description')}
         </p>
       </div>
@@ -84,7 +84,7 @@ const ConsistencyCheckerUI: FC = () => {
               <CardContent className="space-y-4">
                 {storyCodex.consistencyHints && storyCodex.consistencyHints.length > 0 ? (
                   <div>
-                    <h4 className="text-sm font-medium text-[var(--foreground-secondary)] mb-2">
+                    <h4 className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2">
                       {t('consistencyChecker.storyBible.hintsTitle')}
                     </h4>
                     <ul className="list-disc pl-5 space-y-1 text-sm">
@@ -103,7 +103,7 @@ const ConsistencyCheckerUI: FC = () => {
                 ) : null}
                 {storyCodex.relationshipEdges && storyCodex.relationshipEdges.length > 0 ? (
                   <div>
-                    <h4 className="text-sm font-medium text-[var(--foreground-secondary)] mb-2">
+                    <h4 className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2">
                       {t('consistencyChecker.storyBible.edgesTitle')}
                     </h4>
                     <ul className="space-y-1 text-sm font-mono">
@@ -121,7 +121,7 @@ const ConsistencyCheckerUI: FC = () => {
                   </div>
                 ) : null}
                 {!storyCodex.consistencyHints?.length && !storyCodex.relationshipEdges?.length ? (
-                  <p className="text-sm text-[var(--foreground-muted)]">
+                  <p className="text-sm text-[var(--sc-text-muted)]">
                     {t('consistencyChecker.storyBible.empty')}
                   </p>
                 ) : null}
@@ -139,7 +139,7 @@ const ConsistencyCheckerUI: FC = () => {
                   <pre className="whitespace-pre-wrap text-sm">{checkResult}</pre>
                 </div>
               ) : (
-                <p className="text-[var(--foreground-secondary)]">
+                <p className="text-[var(--sc-text-secondary)]">
                   {t('consistencyChecker.noResults')}
                 </p>
               )}

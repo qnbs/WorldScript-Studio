@@ -10,7 +10,7 @@ export const Progress: React.FC<ProgressProps> = ({ value, className }) => {
 
   return (
     <div
-      className={`h-2 w-full overflow-hidden rounded-full bg-[var(--background-tertiary)] ${className}`}
+      className={`h-2 w-full overflow-hidden rounded-full bg-[var(--sc-surface-overlay)] ${className}`}
     >
       <div
         className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ease-out"

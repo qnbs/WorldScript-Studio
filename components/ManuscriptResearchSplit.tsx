@@ -40,11 +40,11 @@ export const ManuscriptResearchSplit: FC<{
 
   return (
     <aside
-      className="flex flex-col h-full min-w-0 border-l border-[var(--border-primary)] bg-[var(--background-secondary)] w-[38%] max-w-xl shrink-0"
+      className="flex flex-col h-full min-w-0 border-l border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] w-[38%] max-w-xl shrink-0"
       aria-label={t('manuscript.researchSplit.title')}
     >
-      <div className="flex items-center justify-between gap-2 px-2 py-2 border-b border-[var(--border-primary)] flex-shrink-0">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--foreground-muted)] truncate">
+      <div className="flex items-center justify-between gap-2 px-2 py-2 border-b border-[var(--sc-border-subtle)] flex-shrink-0">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--sc-text-muted)] truncate">
           {node?.title ?? t('manuscript.researchSplit.empty')}
         </h3>
         <Button
@@ -60,7 +60,7 @@ export const ManuscriptResearchSplit: FC<{
       </div>
       <div className="flex-grow min-h-0 overflow-y-auto p-2">
         {!node ? (
-          <p className="text-sm text-[var(--foreground-muted)]">
+          <p className="text-sm text-[var(--sc-text-muted)]">
             {t('manuscript.researchSplit.empty')}
           </p>
         ) : node.type === 'link' && node.linkUrl ? (
@@ -73,12 +73,12 @@ export const ManuscriptResearchSplit: FC<{
             >
               {node.linkUrl}
             </a>
-            <p className="text-xs text-[var(--foreground-muted)]">
+            <p className="text-xs text-[var(--sc-text-muted)]">
               {t('manuscript.researchSplit.linkHint')}
             </p>
           </div>
         ) : node.type === 'note' || node.type === 'text' ? (
-          <pre className="text-sm whitespace-pre-wrap font-sans text-[var(--foreground-secondary)]">
+          <pre className="text-sm whitespace-pre-wrap font-sans text-[var(--sc-text-secondary)]">
             {node.content ?? ''}
           </pre>
         ) : node.binderAssetId && blobUrl ? (
@@ -86,21 +86,21 @@ export const ManuscriptResearchSplit: FC<{
             <img
               src={blobUrl}
               alt={node.title}
-              className="max-w-full h-auto rounded border border-[var(--border-primary)]"
+              className="max-w-full h-auto rounded border border-[var(--sc-border-subtle)]"
             />
           ) : node.type === 'pdf' || node.mimeType === 'application/pdf' ? (
             <iframe
               title={node.title}
               src={blobUrl}
-              className="w-full min-h-[60vh] rounded border border-[var(--border-primary)] bg-[var(--background-primary)]"
+              className="w-full min-h-[60vh] rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)]"
             />
           ) : (
-            <p className="text-xs text-[var(--foreground-muted)]">
+            <p className="text-xs text-[var(--sc-text-muted)]">
               {node.originalFileName ?? node.title}
             </p>
           )
         ) : (
-          <p className="text-sm text-[var(--foreground-muted)]">
+          <p className="text-sm text-[var(--sc-text-muted)]">
             {t('manuscript.researchSplit.empty')}
           </p>
         )}

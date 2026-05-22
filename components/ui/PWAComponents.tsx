@@ -62,88 +62,91 @@ export const PWAInstallBanner: FC = () => {
   if (!isInstallable) return null;
 
   return (
-    <div
-      role="banner"
-      aria-label={t('pwa.installBannerAriaLabel')}
-      className="
+    <>
+      {/* biome-ignore lint/a11y/useSemanticElements: <header role="banner"> conflicts with noInteractiveElementToNoninteractiveRole; the div with explicit banner role is the correct pattern for a floating install prompt that must be a landmark without being nested in the page's top-level header. */}
+      <div
+        role="banner"
+        aria-label={t('pwa.installBannerAriaLabel')}
+        className="
         fixed bottom-4 left-1/2 -translate-x-1/2 z-[9998]
         w-[calc(100%-2rem)] max-w-md
         flex items-center gap-3
         p-3 pl-4
         rounded-2xl
-        bg-[var(--background-secondary)]/90 border border-[var(--border-primary)]
+        bg-[var(--sc-surface-raised)]/90 border border-[var(--sc-border-subtle)]
         shadow-2xl backdrop-blur-md
         animate-fade-in-up
       "
-    >
-      {/* Icon */}
-      <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md">
-        <svg
-          className="w-5 h-5 text-white"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-          />
-        </svg>
-      </div>
-
-      {/* Text */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[var(--foreground-primary)] leading-tight">
-          {t('pwa.installApp')}
-        </p>
-        <p className="text-xs text-[var(--foreground-muted)] leading-tight mt-0.5 truncate">
-          {t('pwa.installDescription')}
-        </p>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={dismissInstall}
-          aria-label={t('pwa.closeBanner')}
-          className="
-            p-1.5 rounded-lg
-            text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]
-            hover:bg-[var(--background-tertiary)]
-            transition-colors
-          "
-        >
+      >
+        {/* Icon */}
+        <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md">
           <svg
-            className="w-4 h-4"
+            className="w-5 h-5 text-white"
             fill="none"
             viewBox="0 0 24 24"
             strokeWidth={2}
             stroke="currentColor"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+            />
           </svg>
-        </button>
-        <button
-          type="button"
-          onClick={installApp}
-          className="
+        </div>
+
+        {/* Text */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-[var(--sc-text-primary)] leading-tight">
+            {t('pwa.installApp')}
+          </p>
+          <p className="text-xs text-[var(--sc-text-muted)] leading-tight mt-0.5 truncate">
+            {t('pwa.installDescription')}
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={dismissInstall}
+            aria-label={t('pwa.closeBanner')}
+            className="
+            p-1.5 rounded-lg
+            text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)]
+            hover:bg-[var(--sc-surface-overlay)]
+            transition-colors
+          "
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={installApp}
+            className="
             px-3 py-1.5
             rounded-xl
-            bg-[var(--background-interactive)] hover:bg-[var(--background-interactive-hover)]
+            bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)]
             text-white text-xs font-semibold
             shadow-[0_4px_14px_0_rgba(99,102,241,0.35)]
             hover:shadow-[0_6px_20px_rgba(99,102,241,0.25)]
             border border-indigo-500/20
             transition-all active:scale-95
           "
-        >
-          {t('pwa.install')}
-        </button>
+          >
+            {t('pwa.install')}
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -166,7 +169,7 @@ export const PWAUpdateToast: FC = () => {
         flex items-start gap-3
         p-4
         rounded-2xl
-        bg-[var(--background-secondary)]/95 border border-indigo-500/30
+        bg-[var(--sc-surface-raised)]/95 border border-indigo-500/30
         shadow-2xl shadow-indigo-500/10 backdrop-blur-md
         animate-fade-in-up
       "
@@ -190,10 +193,10 @@ export const PWAUpdateToast: FC = () => {
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[var(--foreground-primary)] leading-snug">
+        <p className="text-sm font-semibold text-[var(--sc-text-primary)] leading-snug">
           {t('pwa.updateAvailable')}
         </p>
-        <p className="text-xs text-[var(--foreground-muted)] mt-0.5 leading-snug">
+        <p className="text-xs text-[var(--sc-text-muted)] mt-0.5 leading-snug">
           {t('pwa.updateDescription')}
         </p>
         <div className="flex items-center gap-2 mt-3">
@@ -216,8 +219,8 @@ export const PWAUpdateToast: FC = () => {
             className="
               px-3 py-1.5
               rounded-lg
-              text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]
-              hover:bg-[var(--background-tertiary)]
+              text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)]
+              hover:bg-[var(--sc-surface-overlay)]
               text-xs font-medium
               transition-colors
             "
@@ -234,8 +237,8 @@ export const PWAUpdateToast: FC = () => {
         aria-label={t('pwa.closeNotification')}
         className="
           shrink-0 p-1 rounded-lg
-          text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]
-          hover:bg-[var(--background-tertiary)]
+          text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)]
+          hover:bg-[var(--sc-surface-overlay)]
           transition-colors
         "
       >

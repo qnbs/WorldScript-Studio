@@ -18,8 +18,7 @@ export const I18nContext = createContext<I18nContextType>({
   language: 'de',
   setLanguage: () => {},
   isReady: false,
-  t: <T = string>(key: string) =>
-    (bootstrapTranslation('en', key) ?? key) as unknown as T,
+  t: <T = string>(key: string) => (bootstrapTranslation('en', key) ?? key) as unknown as T,
 });
 
 interface I18nProviderProps {

@@ -37,7 +37,7 @@ function ErrorFallback({ onReset }: { onReset?: () => void }) {
           <h1 className="text-xl font-bold text-red-500">{t('error.boundary.title')}</h1>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-[var(--foreground-secondary)]">{t('error.boundary.description')}</p>
+          <p className="text-[var(--sc-text-secondary)]">{t('error.boundary.description')}</p>
           <div className="flex flex-wrap gap-2 justify-center">
             {onReset && (
               <Button onClick={onReset} variant="primary">

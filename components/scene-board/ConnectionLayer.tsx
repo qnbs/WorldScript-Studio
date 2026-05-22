@@ -98,7 +98,7 @@ const ArrowMarkers: FC = () => (
       markerHeight="6"
       orient="auto-start-reverse"
     >
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--foreground-muted,#9ca3af)" />
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--sc-text-muted,#9ca3af)" />
     </marker>
   </defs>
 );
@@ -246,7 +246,7 @@ export const ConnectionLayer: FC<ConnectionLayerProps> = ({
         <path
           d={`M ${drawFromCenter.x},${drawFromCenter.y} L ${cursorCanvasPos.x},${cursorCanvasPos.y}`}
           fill="none"
-          stroke="var(--foreground-muted,#9ca3af)"
+          stroke="var(--sc-text-muted,#9ca3af)"
           strokeWidth={2}
           strokeDasharray="8,4"
           markerEnd="url(#pb-arrow-preview)"

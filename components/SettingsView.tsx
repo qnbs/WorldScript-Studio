@@ -40,7 +40,7 @@ const NavButton: FC<{
     type="button"
     onClick={onClick}
     aria-current={isActive ? 'page' : undefined}
-    className={`flex items-center flex-shrink-0 md:flex-shrink md:w-full px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap md:whitespace-normal ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]'}`}
+    className={`flex items-center flex-shrink-0 md:flex-shrink md:w-full px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap md:whitespace-normal ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'}`}
   >
     <svg
       aria-hidden="true"
@@ -261,7 +261,7 @@ const SettingsViewUI: FC = () => {
       {/* QNBS-v3: view-level header with colored SSOT icon */}
       <div className="flex items-center gap-3 mb-6">
         <SectionIcon section="settings" size="lg" />
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+        <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">
           {t('sidebar.settings')}
         </h1>
       </div>
@@ -278,9 +278,9 @@ const SettingsViewUI: FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8">
         <div className="md:col-span-1">
           {/* Mobile: horizontal scroll strip · Desktop: vertical sticky sidebar */}
-          <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--background-primary)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
+          <div className="flex md:flex-col gap-2 md:space-y-2 md:gap-0 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 sticky top-0 md:top-20 z-10 bg-[var(--sc-surface-base)] md:bg-transparent -mx-4 px-4 md:mx-0 md:px-0 pt-2 md:pt-0">
             {filteredNavCategories.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-[var(--foreground-muted)]">
+              <p className="px-3 py-2 text-sm text-[var(--sc-text-muted)]">
                 {t('settings.search.noResults')}
               </p>
             ) : (
@@ -298,9 +298,7 @@ const SettingsViewUI: FC = () => {
         </div>
         <div className="md:col-span-3 min-h-0 md:min-h-[60vh]">
           {filteredNavCategories.length === 0 && q ? (
-            <p className="text-sm text-[var(--foreground-muted)]">
-              {t('settings.search.noResults')}
-            </p>
+            <p className="text-sm text-[var(--sc-text-muted)]">{t('settings.search.noResults')}</p>
           ) : (
             renderContent()
           )}

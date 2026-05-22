@@ -69,12 +69,9 @@ export const LocalAiDownloadProgress: FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl dark:bg-slate-900"
+        className="relative mx-4 w-full max-w-sm rounded-xl bg-[var(--sc-surface-raised)] p-6 shadow-2xl"
       >
-        <h2
-          id={titleId}
-          className="mb-4 text-base font-semibold text-slate-900 dark:text-slate-100"
-        >
+        <h2 id={titleId} className="mb-4 text-base font-semibold text-[var(--sc-text-primary)]">
           {t<string>('settings.ai.localAi.downloadTitle')}
         </h2>
 
@@ -85,7 +82,7 @@ export const LocalAiDownloadProgress: FC = () => {
             <p
               role="alert"
               aria-live="assertive"
-              className="mb-4 text-sm text-red-600 dark:text-red-400"
+              className="mb-4 text-sm text-[var(--sc-danger-fg)]"
             >
               {progress.text}
             </p>
@@ -95,14 +92,14 @@ export const LocalAiDownloadProgress: FC = () => {
                 type="button"
                 onClick={handleCancel}
                 aria-label={t<string>('settings.ai.localAi.cancelAriaLabel')}
-                className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                className="flex-1 rounded-lg border border-[var(--sc-border-subtle)] px-4 py-2 text-sm font-medium text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:outline-none"
               >
                 {t<string>('settings.ai.localAi.cancelButton')}
               </button>
               <button
                 type="button"
                 onClick={handleRetry}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                className="flex-1 rounded-lg bg-[var(--sc-accent)] px-4 py-2 text-sm font-medium text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:outline-none"
               >
                 {t<string>('settings.ai.localAi.retryButton')}
               </button>
@@ -112,7 +109,7 @@ export const LocalAiDownloadProgress: FC = () => {
           // ─── Loading state ─────────────────────────────────────────────────────
           <>
             {/* QNBS-v3: polite for progress — updated no more than every 2s to avoid screen-reader spam. */}
-            <p aria-live="polite" className="mb-3 text-sm text-slate-600 dark:text-slate-400">
+            <p aria-live="polite" className="mb-3 text-sm text-[var(--sc-text-secondary)]">
               {progress.text}
             </p>
 
@@ -123,16 +120,16 @@ export const LocalAiDownloadProgress: FC = () => {
               aria-valuemax={100}
               aria-valuetext={ariaValueText}
               aria-label={t<string>('settings.ai.localAi.progressAriaLabel')}
-              className="mb-1 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+              className="mb-1 h-2 w-full overflow-hidden rounded-full bg-[var(--sc-surface-overlay)]"
             >
               <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-300 ease-out"
+                className="h-full rounded-full bg-[var(--sc-accent)] transition-all duration-300 ease-out"
                 style={{ width: `${progressPct}%` }}
                 aria-hidden="true"
               />
             </div>
 
-            <div className="mb-4 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="mb-4 flex justify-between text-xs text-[var(--sc-text-muted)]">
               <span>{progressPct}%</span>
               {etaText && <span>{etaText}</span>}
             </div>
@@ -142,7 +139,7 @@ export const LocalAiDownloadProgress: FC = () => {
               type="button"
               onClick={handleCancel}
               aria-label={t<string>('settings.ai.localAi.cancelAriaLabel')}
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              className="w-full rounded-lg border border-[var(--sc-border-subtle)] px-4 py-2 text-sm font-medium text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:outline-none"
             >
               {t<string>('settings.ai.localAi.cancelButton')}
             </button>

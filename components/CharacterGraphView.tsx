@@ -11,6 +11,7 @@ import {
   CharacterGraphViewContext,
   useCharacterGraphViewContext,
 } from '../contexts/CharacterGraphViewContext';
+import { useAnnounce } from '../contexts/LiveRegionContext';
 import { useCharacterGraphView } from '../hooks/useCharacterGraphView';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
@@ -125,39 +126,17 @@ const CharacterForceGraph: FC = () => {
     [paintColors],
   );
 
-  if (characters.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-[var(--foreground-muted)]">
-        <svg
-          className="w-12 h-12 mb-3 opacity-30"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1}
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
-          />
-        </svg>
-        <p>{t('charGraph.noCharacters')}</p>
-      </div>
-    );
-  }
-
   return (
-    <div
+    <section
       ref={containerRef}
       className="w-full h-full"
       style={{ minHeight: 400 }}
-      role="region"
       aria-label={t('characterGraph.graphAriaLabel')}
     >
       <Suspense
         fallback={
           <div className="flex h-full items-center justify-center" role="status">
-            <span className="text-sm text-[var(--foreground-muted)]">{t('common.loading')}</span>
+            <span className="text-sm text-[var(--sc-text-muted)]">{t('common.loading')}</span>
           </div>
         }
       >
@@ -181,26 +160,47 @@ const CharacterForceGraph: FC = () => {
           d3VelocityDecay={0.3}
         />
       </Suspense>
-    </div>
+    </section>
   );
 };
 
 const CharacterGraphUI: FC = () => {
   const { t, characters, relationships, onUpdateRelationship } = useCharacterGraphViewContext();
-  const [viewMode, setViewMode] = useState<'graph' | 'table'>('graph');
+  // QNBS-v3: Default to table when screenReader preset is active — graph canvas is not keyboard-navigable.
+  const screenReaderMode = useAppSelector((s) => s.settings.accessibility.screenReader);
+  const [viewMode, setViewMode] = useState<'graph' | 'table'>(screenReaderMode ? 'table' : 'graph');
+  const announce = useAnnounce();
+
+  // QNBS-v3: G shortcut toggles graph/table without leaving the view; skip when typing in an input.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'g' && e.key !== 'G') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if ((e.target as HTMLElement).isContentEditable) return;
+      e.preventDefault();
+      setViewMode((prev) => {
+        const next = prev === 'graph' ? 'table' : 'graph';
+        announce(t(next === 'graph' ? 'characterGraph.view.graph' : 'characterGraph.view.table'));
+        return next;
+      });
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [announce, t]);
 
   return (
     <div className="h-full flex flex-col">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <SectionIcon section="characterGraph" size="lg" />
-          <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+          <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">
             {t('characterGraph.title')}
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2 justify-between sm:justify-end">
           <div
-            className="flex rounded-lg border border-[var(--border-primary)] p-0.5 bg-[var(--background-tertiary)]/60"
+            className="flex rounded-lg border border-[var(--sc-border-subtle)] p-0.5 bg-[var(--sc-surface-overlay)]/60"
             role="tablist"
             aria-label={t('characterGraph.title')}
           >
@@ -210,6 +210,7 @@ const CharacterGraphUI: FC = () => {
               variant={viewMode === 'graph' ? 'primary' : 'ghost'}
               className="rounded-md"
               aria-pressed={viewMode === 'graph'}
+              aria-description={t('characterGraph.view.graphKeyboardHint')}
               onClick={() => setViewMode('graph')}
             >
               {t('characterGraph.view.graph')}
@@ -225,7 +226,7 @@ const CharacterGraphUI: FC = () => {
               {t('characterGraph.view.table')}
             </Button>
           </div>
-          <span className="text-xs text-[var(--foreground-muted)]">
+          <span className="text-xs text-[var(--sc-text-muted)]">
             {characters.length} {t('charGraph.characters')} · {relationships.length}{' '}
             {t('charGraph.relationships')}
           </span>
@@ -235,44 +236,62 @@ const CharacterGraphUI: FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-grow min-h-0">
         {/* Graph or accessible table alternative */}
         <div className="lg:col-span-3">
-          <Card className="h-full min-h-[400px] shadow-sc-md border-[var(--border-primary)]">
+          <Card className="h-full min-h-[400px] shadow-sc-md border-[var(--sc-border-subtle)]">
             <CardContent className="p-0 h-full min-h-[400px] rounded-sc-lg overflow-hidden">
-              {viewMode === 'graph' ? (
+              {viewMode === 'graph' && characters.length === 0 ? (
+                // QNBS-v3: Empty-state gated here so ForceGraph2D lazy import never triggers when there are no characters.
+                <div className="flex flex-col items-center justify-center h-64 text-[var(--sc-text-muted)]">
+                  <svg
+                    className="w-12 h-12 mb-3 opacity-30"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
+                    />
+                  </svg>
+                  <p>{t('charGraph.noCharacters')}</p>
+                </div>
+              ) : viewMode === 'graph' ? (
                 <CharacterForceGraph />
               ) : (
                 <div className="p-4 overflow-auto max-h-[min(70vh,560px)]">
                   {relationships.length === 0 ? (
-                    <p className="text-sm text-[var(--foreground-muted)]">
+                    <p className="text-sm text-[var(--sc-text-muted)]">
                       {t('characterGraph.table.empty')}
                     </p>
                   ) : (
-                    <table className="w-full text-sm border-collapse border border-[var(--border-primary)] rounded-lg overflow-hidden">
-                      <caption className="text-left py-2 px-1 font-semibold text-[var(--foreground-primary)]">
+                    <table className="w-full text-sm border-collapse border border-[var(--sc-border-subtle)] rounded-lg overflow-hidden">
+                      <caption className="text-left py-2 px-1 font-semibold text-[var(--sc-text-primary)]">
                         {t('characterGraph.table.caption')}
                       </caption>
-                      <thead className="bg-[var(--background-tertiary)]">
+                      <thead className="bg-[var(--sc-surface-overlay)]">
                         <tr>
                           <th
                             scope="col"
-                            className="text-left p-3 border-b border-[var(--border-primary)]"
+                            className="text-left p-3 border-b border-[var(--sc-border-subtle)]"
                           >
                             {t('characterGraph.table.from')}
                           </th>
                           <th
                             scope="col"
-                            className="text-left p-3 border-b border-[var(--border-primary)]"
+                            className="text-left p-3 border-b border-[var(--sc-border-subtle)]"
                           >
                             {t('characterGraph.table.to')}
                           </th>
                           <th
                             scope="col"
-                            className="text-left p-3 border-b border-[var(--border-primary)]"
+                            className="text-left p-3 border-b border-[var(--sc-border-subtle)]"
                           >
                             {t('characterGraph.table.type')}
                           </th>
                           <th
                             scope="col"
-                            className="text-left p-3 border-b border-[var(--border-primary)]"
+                            className="text-left p-3 border-b border-[var(--sc-border-subtle)]"
                           >
                             {t('characterGraph.table.strength')}
                           </th>
@@ -283,17 +302,17 @@ const CharacterGraphUI: FC = () => {
                           const fromChar = characters.find((c) => c.id === rel.fromCharacterId);
                           const toChar = characters.find((c) => c.id === rel.toCharacterId);
                           return (
-                            <tr key={rel.id} className="odd:bg-[var(--background-secondary)]/40">
-                              <td className="p-3 border-b border-[var(--border-primary)]">
+                            <tr key={rel.id} className="odd:bg-[var(--sc-surface-raised)]/40">
+                              <td className="p-3 border-b border-[var(--sc-border-subtle)]">
                                 {fromChar?.name ?? rel.fromCharacterId}
                               </td>
-                              <td className="p-3 border-b border-[var(--border-primary)]">
+                              <td className="p-3 border-b border-[var(--sc-border-subtle)]">
                                 {toChar?.name ?? rel.toCharacterId}
                               </td>
-                              <td className="p-3 border-b border-[var(--border-primary)] capitalize">
+                              <td className="p-3 border-b border-[var(--sc-border-subtle)] capitalize">
                                 {rel.type}
                               </td>
-                              <td className="p-3 border-b border-[var(--border-primary)]">
+                              <td className="p-3 border-b border-[var(--sc-border-subtle)]">
                                 <label className="sr-only" htmlFor={`rel-str-${rel.id}`}>
                                   {t('characterGraph.table.strength')}
                                 </label>
@@ -327,7 +346,7 @@ const CharacterGraphUI: FC = () => {
         <div className="lg:col-span-1 space-y-4 overflow-y-auto">
           <Card>
             <CardHeader>
-              <h3 className="text-sm font-semibold text-[var(--foreground-primary)]">
+              <h3 className="text-sm font-semibold text-[var(--sc-text-primary)]">
                 {t('characterGraph.legend')}
               </h3>
             </CardHeader>
@@ -335,7 +354,7 @@ const CharacterGraphUI: FC = () => {
               {Object.entries(RELATIONSHIP_COLORS).map(([type, color]) => (
                 <div
                   key={type}
-                  className="flex items-center text-xs text-[var(--foreground-secondary)] gap-2"
+                  className="flex items-center text-xs text-[var(--sc-text-secondary)] gap-2"
                 >
                   <div
                     className="w-3 h-3 rounded-full flex-shrink-0"
@@ -350,7 +369,7 @@ const CharacterGraphUI: FC = () => {
           {relationships.length > 0 && (
             <Card>
               <CardHeader>
-                <h3 className="text-sm font-semibold text-[var(--foreground-primary)]">
+                <h3 className="text-sm font-semibold text-[var(--sc-text-primary)]">
                   {t('characterGraph.relationships')}
                 </h3>
               </CardHeader>
@@ -362,25 +381,23 @@ const CharacterGraphUI: FC = () => {
                   return (
                     <div
                       key={rel.id}
-                      className="p-2 rounded-md border border-[var(--border-primary)] text-xs space-y-1"
+                      className="p-2 rounded-md border border-[var(--sc-border-subtle)] text-xs space-y-1"
                     >
                       <div className="flex items-center gap-1">
                         <div
                           className="w-2 h-2 rounded-full flex-shrink-0"
                           style={{ backgroundColor: color }}
                         />
-                        <span className="font-medium text-[var(--foreground-primary)] truncate">
+                        <span className="font-medium text-[var(--sc-text-primary)] truncate">
                           {fromChar?.name}
                         </span>
-                        <span className="text-[var(--foreground-muted)]">&rarr;</span>
-                        <span className="font-medium text-[var(--foreground-primary)] truncate">
+                        <span className="text-[var(--sc-text-muted)]">&rarr;</span>
+                        <span className="font-medium text-[var(--sc-text-primary)] truncate">
                           {toChar?.name}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="capitalize text-[var(--foreground-muted)]">
-                          {rel.type}
-                        </span>
+                        <span className="capitalize text-[var(--sc-text-muted)]">{rel.type}</span>
                         <input
                           type="range"
                           min="1"
@@ -391,7 +408,7 @@ const CharacterGraphUI: FC = () => {
                           }
                           className="flex-1 h-1 accent-indigo-500"
                         />
-                        <span className="text-[var(--foreground-muted)] w-4 text-right">
+                        <span className="text-[var(--sc-text-muted)] w-4 text-right">
                           {rel.strength || 5}
                         </span>
                       </div>

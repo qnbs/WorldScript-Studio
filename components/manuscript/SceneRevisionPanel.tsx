@@ -16,9 +16,9 @@ const DiffView: FC<{ oldText: string; newText: string }> = ({ oldText, newText }
   const ops = diffTokensToOps(aToks, bToks);
 
   return (
-    <div className="text-sm font-mono leading-relaxed break-words p-3 bg-[var(--background-secondary)] rounded border border-[var(--border-primary)] max-h-48 overflow-y-auto">
+    <div className="text-sm font-mono leading-relaxed break-words p-3 bg-[var(--sc-surface-raised)] rounded border border-[var(--sc-border-subtle)] max-h-48 overflow-y-auto">
       {ops.length === 0 && (
-        <span className="text-[var(--foreground-secondary)]">{t('revisions.diff.identical')}</span>
+        <span className="text-[var(--sc-text-secondary)]">{t('revisions.diff.identical')}</span>
       )}
       {ops.map((op, i) => {
         // biome-ignore lint/suspicious/noArrayIndexKey: diff ops are ephemeral render artifacts with no reordering
@@ -71,18 +71,18 @@ const RevisionItem: FC<{
   }, [dispatch, revision, onRestored]);
 
   return (
-    <li className="border border-[var(--border-primary)] rounded-lg p-3 space-y-2">
+    <li className="border border-[var(--sc-border-subtle)] rounded-lg p-3 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-[var(--foreground-primary)]">
+          <p className="text-sm font-semibold text-[var(--sc-text-primary)]">
             {revision.label ?? new Date(revision.createdAt).toLocaleString()}
           </p>
           {revision.label && (
-            <p className="text-xs text-[var(--foreground-secondary)]">
+            <p className="text-xs text-[var(--sc-text-secondary)]">
               {new Date(revision.createdAt).toLocaleString()}
             </p>
           )}
-          <p className="text-xs text-[var(--foreground-secondary)]">
+          <p className="text-xs text-[var(--sc-text-secondary)]">
             {t('revisions.wordCount', { n: String(revision.wordCount) })}
           </p>
         </div>
@@ -90,7 +90,7 @@ const RevisionItem: FC<{
           <button
             type="button"
             onClick={() => setShowDiff((v) => !v)}
-            className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] hover:bg-[var(--background-hover)]"
+            className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
           >
             {showDiff ? t('revisions.hideDiff') : t('revisions.showDiff')}
           </button>
@@ -106,7 +106,7 @@ const RevisionItem: FC<{
               <button
                 type="button"
                 onClick={() => setConfirmRestore(false)}
-                className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] hover:bg-[var(--background-hover)]"
+                className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
               >
                 {t('revisions.cancel')}
               </button>
@@ -115,7 +115,7 @@ const RevisionItem: FC<{
             <button
               type="button"
               onClick={() => setConfirmRestore(true)}
-              className="text-xs px-2 py-1 rounded bg-[var(--background-interactive)] text-[var(--foreground-on-interactive)] hover:opacity-90"
+              className="text-xs px-2 py-1 rounded bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)] hover:opacity-90"
             >
               {t('revisions.restore')}
             </button>
@@ -168,10 +168,10 @@ export const SceneRevisionPanel: FC<{ section: StorySection }> = ({ section }) =
   return (
     <div className="flex flex-col gap-3 p-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-[var(--foreground-primary)]">
+        <span className="text-sm font-semibold text-[var(--sc-text-primary)]">
           {t('revisions.title')}
         </span>
-        <span className="text-xs text-[var(--foreground-secondary)]">
+        <span className="text-xs text-[var(--sc-text-secondary)]">
           {t('revisions.count', { n: String(revisions.length) })}
         </span>
       </div>
@@ -184,13 +184,13 @@ export const SceneRevisionPanel: FC<{ section: StorySection }> = ({ section }) =
           onChange={(e) => setLabelDraft(e.target.value)}
           placeholder={t('revisions.labelPlaceholder')}
           aria-label={t('revisions.labelAriaLabel')}
-          className="flex-1 px-2 py-1 rounded border border-[var(--border-primary)] bg-[var(--background-secondary)] text-sm"
+          className="flex-1 px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm"
         />
         <button
           type="button"
           onClick={() => void handleSaveNamed()}
           disabled={isSaving}
-          className="px-2 py-1 rounded bg-[var(--background-interactive)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
+          className="px-2 py-1 rounded bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
         >
           {isSaving ? '…' : t('revisions.saveNamed')}
         </button>
@@ -198,7 +198,7 @@ export const SceneRevisionPanel: FC<{ section: StorySection }> = ({ section }) =
 
       {/* List */}
       {revisions.length === 0 ? (
-        <p className="text-sm text-[var(--foreground-secondary)] text-center py-4">
+        <p className="text-sm text-[var(--sc-text-secondary)] text-center py-4">
           {t('revisions.empty')}
         </p>
       ) : (

@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAnnounce } from '../contexts/LiveRegionContext';
+import { useTranslation } from './useTranslation';
 
 // ──────────────────────────────────────────────────────────────
 // usePWA — Reactive hook for Progressive Web App state
@@ -28,11 +30,26 @@ interface UsePWAReturn {
 }
 
 export function usePWA(): UsePWAReturn {
+  const { t } = useTranslation();
+  const announce = useAnnounce();
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [applyUpdateFn, setApplyUpdateFn] = useState<(() => void) | null>(null);
+  // QNBS-v3: Track previous offline state so the announcement fires only on genuine transitions, not on initial mount.
+  const prevOfflineRef = useRef(isOffline);
+
+  // QNBS-v3: Announce online/offline transitions via LiveRegion so screen reader users are informed without a visual toast.
+  useEffect(() => {
+    if (prevOfflineRef.current === isOffline) return;
+    prevOfflineRef.current = isOffline;
+    if (isOffline) {
+      announce(t('pwa.wentOffline'), 'assertive');
+    } else {
+      announce(t('pwa.backOnline'));
+    }
+  }, [isOffline, announce, t]);
 
   useEffect(() => {
     // ── Online / offline ───────────────────────────────────────

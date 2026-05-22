@@ -25,7 +25,7 @@ const ToastDemo: React.FC = () => {
   const toast = useToast();
 
   return (
-    <div className="min-h-screen bg-[var(--background-primary)] p-8 text-[var(--foreground-primary)]">
+    <div className="min-h-screen bg-[var(--sc-surface-base)] p-8 text-[var(--sc-text-primary)]">
       <div className="grid gap-3 max-w-xl">
         <Button onClick={() => toast.success('Success', 'Your draft has been saved.')}>
           Success Toast

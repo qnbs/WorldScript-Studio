@@ -53,15 +53,15 @@ const AssignPopover: FC<AssignPopoverProps> = ({ subplot, sections, onClose, t }
 
   return (
     <div
-      className="absolute left-full top-0 ml-1 z-50 w-56 bg-[var(--background-elevated)] border border-[var(--border-primary)] rounded-lg shadow-sc-lg p-2"
+      className="absolute left-full top-0 ml-1 z-50 w-56 bg-[var(--background-elevated)] border border-[var(--sc-border-subtle)] rounded-lg shadow-sc-lg p-2"
       role="dialog"
       aria-label={t('sceneboard.subplot.assignScenes')}
     >
-      <p className="text-xs font-medium text-[var(--foreground-muted)] mb-2 px-1">
+      <p className="text-xs font-medium text-[var(--sc-text-muted)] mb-2 px-1">
         {t('sceneboard.subplot.assignScenes')}
       </p>
       {sections.length === 0 ? (
-        <p className="text-xs text-[var(--foreground-muted)] px-1">
+        <p className="text-xs text-[var(--sc-text-muted)] px-1">
           {t('sceneboard.subplot.noScenes')}
         </p>
       ) : (
@@ -78,7 +78,7 @@ const AssignPopover: FC<AssignPopoverProps> = ({ subplot, sections, onClose, t }
                     className="accent-[var(--sc-accent-primary,#6366f1)]"
                     aria-label={s.title}
                   />
-                  <span className="truncate text-[var(--foreground-primary)]">{s.title}</span>
+                  <span className="truncate text-[var(--sc-text-primary)]">{s.title}</span>
                 </label>
               </li>
             );
@@ -87,7 +87,7 @@ const AssignPopover: FC<AssignPopoverProps> = ({ subplot, sections, onClose, t }
       )}
       <button
         type="button"
-        className="mt-2 w-full text-xs text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] text-right pr-1"
+        className="mt-2 w-full text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] text-right pr-1"
         onClick={onClose}
       >
         {t('common.close')}
@@ -158,13 +158,13 @@ const SubplotRow: FC<SubplotRowProps> = ({
                 setEditing(false);
               }
             }}
-            className="flex-1 min-w-0 text-xs bg-transparent border-b border-[var(--border-primary)] text-[var(--foreground-primary)] outline-none"
+            className="flex-1 min-w-0 text-xs bg-transparent border-b border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] outline-none"
             aria-label={t('sceneboard.subplot.editName')}
           />
         ) : (
           <button
             type="button"
-            className="flex-1 min-w-0 text-xs text-left text-[var(--foreground-primary)] truncate"
+            className="flex-1 min-w-0 text-xs text-left text-[var(--sc-text-primary)] truncate"
             onDoubleClick={() => setEditing(true)}
             onClick={onFilterToggle}
             aria-pressed={isFiltered}
@@ -175,7 +175,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
         )}
 
         {/* Scene count badge */}
-        <span className="text-[10px] text-[var(--foreground-muted)] tabular-nums">
+        <span className="text-[10px] text-[var(--sc-text-muted)] tabular-nums">
           {subplot.sectionIds.length}
         </span>
 
@@ -183,7 +183,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
         <button
           type="button"
           onClick={() => setShowAssign((v) => !v)}
-          className="opacity-0 group-hover:opacity-100 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] text-xs px-0.5"
+          className="opacity-0 group-hover:opacity-100 text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] text-xs px-0.5"
           aria-label={t('sceneboard.subplot.assignScenes')}
           aria-expanded={showAssign}
         >
@@ -194,7 +194,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
         <button
           type="button"
           onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 text-[var(--foreground-muted)] hover:text-red-400 text-xs px-0.5"
+          className="opacity-0 group-hover:opacity-100 text-[var(--sc-text-muted)] hover:text-red-400 text-xs px-0.5"
           aria-label={`${t('sceneboard.subplot.delete')} ${subplot.name}`}
         >
           ×
@@ -262,11 +262,11 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
 
   if (collapsed) {
     return (
-      <div className="flex flex-col items-center py-2 px-1 gap-2 border-r border-[var(--border-primary)] bg-[var(--background-secondary)] rounded-l-lg">
+      <div className="flex flex-col items-center py-2 px-1 gap-2 border-r border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] rounded-l-lg">
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          className="text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] text-sm"
+          className="text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] text-sm"
           aria-label={t('sceneboard.subplot.expandPanel')}
           title={t('sceneboard.subplot.expandPanel')}
         >
@@ -286,18 +286,18 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
 
   return (
     <aside
-      className="flex flex-col w-44 flex-shrink-0 border-r border-[var(--border-primary)] bg-[var(--background-secondary)] rounded-l-lg overflow-hidden"
+      className="flex flex-col w-44 flex-shrink-0 border-r border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] rounded-l-lg overflow-hidden"
       aria-label={t('sceneboard.subplot.panelLabel')}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-2 py-2 border-b border-[var(--border-primary)]">
-        <span className="text-xs font-semibold text-[var(--foreground-primary)] uppercase tracking-wide">
+      <div className="flex items-center justify-between px-2 py-2 border-b border-[var(--sc-border-subtle)]">
+        <span className="text-xs font-semibold text-[var(--sc-text-primary)] uppercase tracking-wide">
           {t('sceneboard.subplot.title')}
         </span>
         <button
           type="button"
           onClick={() => setCollapsed(true)}
-          className="text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] text-xs"
+          className="text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] text-xs"
           aria-label={t('sceneboard.subplot.collapsePanel')}
         >
           ◀
@@ -307,7 +307,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
       {/* Subplot list */}
       <ul className="flex-1 overflow-y-auto py-1 space-y-0.5 px-1">
         {subplots.length === 0 && (
-          <li className="px-2 py-3 text-xs text-[var(--foreground-muted)] text-center">
+          <li className="px-2 py-3 text-xs text-[var(--sc-text-muted)] text-center">
             {t('sceneboard.subplot.empty')}
           </li>
         )}
@@ -325,7 +325,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
       </ul>
 
       {/* Add subplot */}
-      <div className="border-t border-[var(--border-primary)] p-2">
+      <div className="border-t border-[var(--sc-border-subtle)] p-2">
         {adding ? (
           <div className="space-y-1.5">
             <input
@@ -337,7 +337,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
                 if (e.key === 'Enter') handleAddSubplot();
                 if (e.key === 'Escape') setAdding(false);
               }}
-              className="w-full text-xs px-2 py-1 bg-[var(--background-primary)] border border-[var(--border-primary)] rounded text-[var(--foreground-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--sc-accent-primary,#6366f1)]"
+              className="w-full text-xs px-2 py-1 bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] rounded text-[var(--sc-text-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--sc-accent-primary,#6366f1)]"
               aria-label={t('sceneboard.subplot.editName')}
             />
             {/* Preset color swatches */}
@@ -358,7 +358,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
               {/* Custom color picker */}
               <button
                 type="button"
-                className="w-4 h-4 rounded-full border border-dashed border-[var(--border-primary)] flex items-center justify-center text-[8px] text-[var(--foreground-muted)]"
+                className="w-4 h-4 rounded-full border border-dashed border-[var(--sc-border-subtle)] flex items-center justify-center text-[8px] text-[var(--sc-text-muted)]"
                 onClick={() => colorInputRef.current?.click()}
                 aria-label={t('sceneboard.subplot.customColor')}
               >
@@ -384,7 +384,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
               <button
                 type="button"
                 onClick={() => setAdding(false)}
-                className="text-xs px-2 py-0.5 rounded text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]"
+                className="text-xs px-2 py-0.5 rounded text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)]"
               >
                 {t('common.cancel')}
               </button>
@@ -394,7 +394,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="w-full text-xs text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--background-hover)] transition-colors"
+            className="w-full text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--background-hover)] transition-colors"
             aria-label={t('sceneboard.subplot.addSubplot')}
           >
             <span aria-hidden="true">+</span>

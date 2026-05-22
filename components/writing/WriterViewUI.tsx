@@ -48,7 +48,7 @@ const WriterViewUI: FC = () => {
           type="button"
           onClick={() => togglePanel('context')}
           title={collapsedPanels['context'] ? t('writer.context.show') : t('writer.context.hide')}
-          className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
+          className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)] transition-colors"
         >
           {collapsedPanels['context']
             ? `▷ ${t('writer.context.label')}`
@@ -58,7 +58,7 @@ const WriterViewUI: FC = () => {
           type="button"
           onClick={() => togglePanel('tools')}
           title={collapsedPanels['tools'] ? t('writer.tools.show') : t('writer.tools.hide')}
-          className="text-xs px-2 py-1 rounded border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)] transition-colors"
+          className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)] transition-colors"
         >
           {collapsedPanels['tools']
             ? `▷ ${t('writer.tools.label')}`
@@ -68,7 +68,7 @@ const WriterViewUI: FC = () => {
           type="button"
           onClick={() => setFocusMode((f) => !f)}
           title={focusMode ? t('writer.focusMode.exit') : t('writer.focusMode.enter')}
-          className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'bg-[var(--background-interactive)]/20 border-[var(--ring-focus)]/40 text-[var(--ring-focus)]' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
+          className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           {focusMode
             ? `⊠ ${t('writer.focusMode.exitLabel')}`
@@ -82,7 +82,7 @@ const WriterViewUI: FC = () => {
           title={t('writer.versionControl.tooltip')}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
-          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--background-interactive)]/20 border-[var(--ring-focus)]/40 text-[var(--ring-focus)]' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>
@@ -96,7 +96,7 @@ const WriterViewUI: FC = () => {
           onClick={() => dispatch(versionControlActions.togglePanel())}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
-          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--background-interactive)]/20 border-[var(--ring-focus)]/40 text-[var(--ring-focus)]' : 'border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-secondary)]'}`}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>
@@ -106,7 +106,7 @@ const WriterViewUI: FC = () => {
       <div
         role="tablist"
         aria-label={t('writer.studio.title')}
-        className="md:hidden p-1 mx-0 mb-4 bg-[var(--background-tertiary)] rounded-xl flex items-center relative border border-[var(--border-primary)]/50 shadow-inner select-none"
+        className="md:hidden p-1 mx-0 mb-4 bg-[var(--sc-surface-overlay)] rounded-xl flex items-center relative border border-[var(--sc-border-subtle)]/50 shadow-inner select-none"
       >
         {(['context', 'tools', 'result'] as const).map((tab) => (
           <button
@@ -119,8 +119,8 @@ const WriterViewUI: FC = () => {
             onClick={() => setActiveMobileTab(tab)}
             className={`flex-1 min-h-[44px] py-2 text-sm font-semibold rounded-lg transition-all duration-200 z-10 touch-manipulation ${
               activeMobileTab === tab
-                ? 'bg-[var(--background-secondary)] text-[var(--foreground-primary)] shadow-md transform scale-[1.02] ring-2 ring-[var(--ring-focus)] ring-offset-2 ring-offset-[var(--background-primary)]'
-                : 'text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]'
+                ? 'bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] shadow-md transform scale-[1.02] ring-2 ring-[var(--sc-ring-focus)] ring-offset-2 ring-offset-[var(--sc-surface-base)]'
+                : 'text-[var(--sc-text-muted)] hover:text-[var(--sc-text-secondary)]'
             }`}
           >
             {tab === 'context' && t('writer.studio.context.title').split(' ')[0]}

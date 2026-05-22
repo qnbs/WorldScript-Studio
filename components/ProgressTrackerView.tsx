@@ -21,7 +21,7 @@ const ProgressRing: FC<{ pct: number; size?: number; stroke?: number; color?: st
   pct,
   size = 96,
   stroke = 8,
-  color = 'var(--color-accent)',
+  color = 'var(--sc-accent)',
 }) => {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
@@ -33,7 +33,7 @@ const ProgressRing: FC<{ pct: number; size?: number; stroke?: number; color?: st
         cy={size / 2}
         r={r}
         fill="none"
-        stroke="var(--border-primary)"
+        stroke="var(--sc-border-subtle)"
         strokeWidth={stroke}
       />
       <circle
@@ -59,7 +59,7 @@ const VelocityChart: FC<{ history: { date: string; words: number }[] }> = ({ his
   const last30 = [...history].slice(-30);
   if (last30.length === 0) {
     return (
-      <p className="text-sm text-[var(--foreground-secondary)] text-center mt-4">
+      <p className="text-sm text-[var(--sc-text-secondary)] text-center mt-4">
         {t('progress.chart.noData')}
       </p>
     );
@@ -92,12 +92,12 @@ const VelocityChart: FC<{ history: { date: string; words: number }[] }> = ({ his
     >
       <defs>
         <linearGradient id="velGrad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0.05" />
+          <stop offset="0%" stopColor="var(--sc-accent)" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="var(--sc-accent)" stopOpacity="0.05" />
         </linearGradient>
       </defs>
       <path d={areaD} fill="url(#velGrad)" />
-      <path d={pathD} fill="none" stroke="var(--color-accent)" strokeWidth={1.5} />
+      <path d={pathD} fill="none" stroke="var(--sc-accent)" strokeWidth={1.5} />
     </svg>
   );
 };
@@ -163,14 +163,14 @@ const GoalInput: FC<{
   onChange: (n: number) => void;
 }> = ({ label, value, onChange }) => (
   <div className="flex items-center gap-2">
-    <span className="text-sm text-[var(--foreground-secondary)] flex-1">{label}</span>
+    <span className="text-sm text-[var(--sc-text-secondary)] flex-1">{label}</span>
     <input
       type="number"
       min={1}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       aria-label={label}
-      className="w-24 px-2 py-1 rounded border border-[var(--border-primary)] bg-[var(--background-secondary)] text-sm text-right"
+      className="w-24 px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm text-right"
     />
   </div>
 );
@@ -198,11 +198,11 @@ const WeeklyBars: FC<{ history: { date: string; words: number }[]; goalPerDay: n
             className="w-full rounded-t"
             style={{
               height: `${Math.round((d.words / max) * 40)}px`,
-              background: d.words >= goalPerDay ? '#4ade80' : 'var(--color-accent)',
+              background: d.words >= goalPerDay ? '#4ade80' : 'var(--sc-accent)',
               minHeight: d.words > 0 ? 2 : 0,
             }}
           />
-          <span className="text-[10px] text-[var(--foreground-secondary)]">{d.label}</span>
+          <span className="text-[10px] text-[var(--sc-text-secondary)]">{d.label}</span>
         </div>
       ))}
     </div>
@@ -244,17 +244,15 @@ const ProgressTrackerInner: FC = () => {
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <SectionIcon section="progress" size="md" />
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
-          {t('progress.title')}
-        </h1>
+        <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">{t('progress.title')}</h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left column */}
         <div className="space-y-4">
           {/* Today's progress */}
-          <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-            <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-3">
+          <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+            <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-3">
               {t('progress.today.title')}
             </h2>
             <div className="flex items-center gap-4">
@@ -265,14 +263,14 @@ const ProgressTrackerInner: FC = () => {
                 </span>
               </div>
               <div>
-                <p className="text-2xl font-bold text-[var(--foreground-primary)]">
+                <p className="text-2xl font-bold text-[var(--sc-text-primary)]">
                   {wordsToday.toLocaleString()}
                 </p>
-                <p className="text-sm text-[var(--foreground-secondary)]">
+                <p className="text-sm text-[var(--sc-text-secondary)]">
                   {t('progress.today.ofGoal', { goal: String(dailyGoalWords.toLocaleString()) })}
                 </p>
                 {wordsToday < dailyGoalWords && (
-                  <p className="text-xs text-[var(--foreground-secondary)] mt-0.5">
+                  <p className="text-xs text-[var(--sc-text-secondary)] mt-0.5">
                     {t('progress.today.remaining', {
                       n: String((dailyGoalWords - wordsToday).toLocaleString()),
                     })}
@@ -283,19 +281,19 @@ const ProgressTrackerInner: FC = () => {
           </div>
 
           {/* Session timer */}
-          <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-            <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-3">
+          <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+            <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-3">
               {t('progress.session.title')}
             </h2>
             <p
               role="timer"
-              className="text-3xl font-mono font-bold text-[var(--foreground-primary)] mb-2"
+              className="text-3xl font-mono font-bold text-[var(--sc-text-primary)] mb-2"
               aria-label={t('progress.session.elapsed', { time: formatElapsed(sessionElapsed) })}
             >
               {formatElapsed(sessionElapsed)}
             </p>
             {isSessionActive && (
-              <p className="text-sm text-[var(--foreground-secondary)] mb-3">
+              <p className="text-sm text-[var(--sc-text-secondary)] mb-3">
                 {t('progress.session.wordsWritten', { n: String(sessionWordsDelta) })}
               </p>
             )}
@@ -305,7 +303,7 @@ const ProgressTrackerInner: FC = () => {
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                 isSessionActive
                   ? 'bg-red-500 hover:bg-red-600 text-white'
-                  : 'bg-[var(--background-interactive)] hover:bg-[var(--background-interactive-hover)] text-[var(--foreground-on-interactive)]'
+                  : 'bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-[var(--foreground-on-interactive)]'
               }`}
               aria-label={
                 isSessionActive ? t('progress.session.stop') : t('progress.session.start')
@@ -316,8 +314,8 @@ const ProgressTrackerInner: FC = () => {
           </div>
 
           {/* Streak */}
-          <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-            <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-3">
+          <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+            <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-3">
               {t('progress.streak.title')}
             </h2>
             <div className="flex items-center gap-3">
@@ -325,10 +323,10 @@ const ProgressTrackerInner: FC = () => {
                 🔥
               </span>
               <div>
-                <p className="text-2xl font-bold text-[var(--foreground-primary)]">
+                <p className="text-2xl font-bold text-[var(--sc-text-primary)]">
                   {t('progress.streak.days', { n: String(streakDays) })}
                 </p>
-                <p className="text-xs text-[var(--foreground-secondary)]">
+                <p className="text-xs text-[var(--sc-text-secondary)]">
                   {t('progress.streak.longest', { n: String(longestStreak) })}
                 </p>
               </div>
@@ -336,13 +334,13 @@ const ProgressTrackerInner: FC = () => {
           </div>
 
           {/* Weekly goal */}
-          <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-            <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-3">
+          <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+            <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-3">
               {t('progress.weekly.title')}
             </h2>
-            <div className="w-full h-2 rounded-full bg-[var(--border-primary)] mb-2">
+            <div className="w-full h-2 rounded-full bg-[var(--sc-border-subtle)] mb-2">
               <div
-                className="h-full rounded-full bg-[var(--color-accent)] transition-all"
+                className="h-full rounded-full bg-[var(--sc-accent)] transition-all"
                 style={{ width: `${Math.min(weeklyPct, 100)}%` }}
                 role="progressbar"
                 aria-valuenow={Math.round(weeklyPct)}
@@ -351,7 +349,7 @@ const ProgressTrackerInner: FC = () => {
                 aria-label={t('progress.weekly.progress')}
               />
             </div>
-            <p className="text-sm text-[var(--foreground-secondary)] mb-3">
+            <p className="text-sm text-[var(--sc-text-secondary)] mb-3">
               {wordsThisWeek.toLocaleString()} / {weeklyGoalWords.toLocaleString()}
             </p>
             <WeeklyBars history={writingHistory} goalPerDay={Math.round(weeklyGoalWords / 7)} />
@@ -361,16 +359,16 @@ const ProgressTrackerInner: FC = () => {
         {/* Right column */}
         <div className="space-y-4">
           {/* Velocity chart */}
-          <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-            <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-3">
+          <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+            <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-3">
               {t('progress.chart.title')}
             </h2>
             <VelocityChart history={writingHistory} />
           </div>
 
           {/* Heatmap */}
-          <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-            <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-3">
+          <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+            <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-3">
               {t('progress.heatmap.title')}
             </h2>
             <Heatmap history={writingHistory} />
@@ -378,33 +376,31 @@ const ProgressTrackerInner: FC = () => {
 
           {/* Best day */}
           {bestDay.words > 0 && (
-            <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-              <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-2">
+            <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+              <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-2">
                 {t('progress.bestDay.title')}
               </h2>
-              <p className="text-xl font-bold text-[var(--foreground-primary)]">
+              <p className="text-xl font-bold text-[var(--sc-text-primary)]">
                 {bestDay.words.toLocaleString()} {t('progress.bestDay.words')}
               </p>
-              <p className="text-xs text-[var(--foreground-secondary)]">{bestDay.date}</p>
+              <p className="text-xs text-[var(--sc-text-secondary)]">{bestDay.date}</p>
             </div>
           )}
 
           {/* All-time total */}
-          <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-            <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-2">
+          <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+            <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-2">
               {t('progress.allTime.title')}
             </h2>
-            <p className="text-2xl font-bold text-[var(--foreground-primary)]">
+            <p className="text-2xl font-bold text-[var(--sc-text-primary)]">
               {totalWordsAllTime.toLocaleString()}
             </p>
-            <p className="text-xs text-[var(--foreground-secondary)]">
-              {t('progress.allTime.label')}
-            </p>
+            <p className="text-xs text-[var(--sc-text-secondary)]">{t('progress.allTime.label')}</p>
           </div>
 
           {/* Goal Settings */}
-          <div className="bg-[var(--background-secondary)] rounded-xl p-4 border border-[var(--border-primary)]">
-            <h2 className="text-sm font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide mb-3">
+          <div className="bg-[var(--sc-surface-raised)] rounded-xl p-4 border border-[var(--sc-border-subtle)]">
+            <h2 className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide mb-3">
               {t('progress.goals.title')}
             </h2>
             <div className="space-y-2">

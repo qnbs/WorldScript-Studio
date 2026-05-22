@@ -101,16 +101,16 @@ export const DataSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.data.title')}
           </h2>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-[var(--foreground-secondary)] mb-6">
+          <p className="text-sm text-[var(--sc-text-secondary)] mb-6">
             {t('settings.data.description')}
           </p>
-          <div className="p-4 rounded-lg bg-[var(--glass-bg)] border border-[var(--border-primary)] space-y-3">
-            <h3 className="font-semibold text-[var(--foreground-primary)]">
+          <div className="p-4 rounded-lg bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] space-y-3">
+            <h3 className="font-semibold text-[var(--sc-text-primary)]">
               {t('settings.data.actions')}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -132,7 +132,7 @@ export const DataSection: FC = () => {
               </Button>
             </div>
           </div>
-          <div className="text-xs text-center text-[var(--foreground-muted)] pt-2">
+          <div className="text-xs text-center text-[var(--sc-text-muted)] pt-2">
             {t('settings.data.projectSize', { size: projectSize })}
           </div>
           {isTauriRuntime() && (
@@ -144,16 +144,16 @@ export const DataSection: FC = () => {
               >
                 {t('settings.data.openDataFolder')}
               </Button>
-              <p className="text-xs text-[var(--foreground-muted)]">
+              <p className="text-xs text-[var(--sc-text-muted)]">
                 {t('settings.data.openDataFolderHint')}
               </p>
             </div>
           )}
-          <div className="mt-6 pt-6 border-t border-[var(--border-primary)] space-y-3">
-            <h3 className="font-semibold text-[var(--foreground-primary)]">
+          <div className="mt-6 pt-6 border-t border-[var(--sc-border-subtle)] space-y-3">
+            <h3 className="font-semibold text-[var(--sc-text-primary)]">
               {t('settings.data.libraryExport.title')}
             </h3>
-            <p className="text-sm text-[var(--foreground-secondary)]">
+            <p className="text-sm text-[var(--sc-text-secondary)]">
               {t('settings.data.libraryExport.description')}
             </p>
             <Button
@@ -165,11 +165,11 @@ export const DataSection: FC = () => {
               {t('settings.data.libraryExport.button')}
             </Button>
           </div>
-          <div className="mt-6 pt-6 border-t border-[var(--border-primary)] space-y-3">
-            <h3 className="font-semibold text-[var(--foreground-primary)]">
+          <div className="mt-6 pt-6 border-t border-[var(--sc-border-subtle)] space-y-3">
+            <h3 className="font-semibold text-[var(--sc-text-primary)]">
               {t('settings.data.settingsFile.title')}
             </h3>
-            <p className="text-sm text-[var(--foreground-secondary)]">
+            <p className="text-sm text-[var(--sc-text-secondary)]">
               {t('settings.data.settingsFile.description')}
             </p>
             <div className="flex flex-wrap gap-3">
@@ -209,7 +209,7 @@ export const DataSection: FC = () => {
         <div className="space-y-4">
           <label
             htmlFor="library-backup-passphrase"
-            className="text-sm font-medium text-[var(--foreground-secondary)] block"
+            className="text-sm font-medium text-[var(--sc-text-secondary)] block"
           >
             {t('settings.data.libraryExport.passphraseLabel')}
           </label>
@@ -249,7 +249,7 @@ export const DataSection: FC = () => {
 
       <Card>
         <CardHeader className="flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.data.snapshots')}
           </h2>
           <Button
@@ -262,7 +262,7 @@ export const DataSection: FC = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-[var(--foreground-secondary)] mb-4">
+          <p className="text-sm text-[var(--sc-text-secondary)] mb-4">
             {t('settings.data.snapshotsDescription')}
           </p>
           <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -270,15 +270,15 @@ export const DataSection: FC = () => {
               snapshots.map((snap) => (
                 <div
                   key={snap.id}
-                  className="flex items-center justify-between p-3 bg-[var(--glass-bg)] rounded-md border border-[var(--border-primary)] hover:border-[var(--border-interactive)] transition-colors"
+                  className="flex items-center justify-between p-3 bg-[var(--glass-bg)] rounded-md border border-[var(--sc-border-subtle)] hover:border-[var(--border-interactive)] transition-colors"
                 >
                   <div>
-                    <p className="font-semibold text-[var(--foreground-primary)]">
+                    <p className="font-semibold text-[var(--sc-text-primary)]">
                       {snap.name === 'Automatic Snapshot'
                         ? t('settings.data.automaticSnapshot')
                         : snap.name}
                     </p>
-                    <p className="text-xs text-[var(--foreground-muted)]">
+                    <p className="text-xs text-[var(--sc-text-muted)]">
                       {new Date(snap.date).toLocaleString()} - {snap.wordCount}{' '}
                       {t('dashboard.stats.totalWordCount')}
                     </p>
@@ -327,15 +327,15 @@ export const DataSection: FC = () => {
                 </div>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center text-center py-12 border-2 border-dashed border-[var(--border-primary)] rounded-xl bg-[var(--background-secondary)]/30">
-                <div className="p-4 rounded-full bg-[var(--background-tertiary)] mb-3">
+              <div className="flex flex-col items-center justify-center text-center py-12 border-2 border-dashed border-[var(--sc-border-subtle)] rounded-xl bg-[var(--sc-surface-raised)]/30">
+                <div className="p-4 rounded-full bg-[var(--sc-surface-overlay)] mb-3">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
                     strokeWidth={1.5}
                     stroke="currentColor"
-                    className="w-8 h-8 text-[var(--foreground-muted)]"
+                    className="w-8 h-8 text-[var(--sc-text-muted)]"
                   >
                     <path
                       strokeLinecap="round"
@@ -344,7 +344,7 @@ export const DataSection: FC = () => {
                     />
                   </svg>
                 </div>
-                <p className="text-sm font-medium text-[var(--foreground-primary)]">
+                <p className="text-sm font-medium text-[var(--sc-text-primary)]">
                   {t('settings.data.noSnapshots')}
                 </p>
               </div>

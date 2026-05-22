@@ -68,7 +68,7 @@ const ObjectForm: FC = () => {
           onChange={(e) => setName(e.target.value)}
           placeholder={t('objects.namePlaceholder')}
           required
-          className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
         />
       </div>
       <div>
@@ -82,7 +82,7 @@ const ObjectForm: FC = () => {
           id="obj-type"
           value={type}
           onChange={(e) => setType(e.target.value as StoryObjectType)}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
         >
           {OBJECT_TYPES.map((ot) => (
             <option key={ot} value={ot}>
@@ -104,7 +104,7 @@ const ObjectForm: FC = () => {
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t('objects.descriptionPlaceholder')}
           rows={3}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
         />
       </div>
       <div>
@@ -120,7 +120,7 @@ const ObjectForm: FC = () => {
           onChange={(e) => setSignificance(e.target.value)}
           placeholder={t('objects.significancePlaceholder')}
           rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
         />
       </div>
       <div>
@@ -136,14 +136,14 @@ const ObjectForm: FC = () => {
           onChange={(e) => setNotes(e.target.value)}
           placeholder={t('objects.notesPlaceholder')}
           rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
         />
       </div>
       <div className="flex gap-2 justify-end pt-2">
         <button
           type="button"
           onClick={handleCancelForm}
-          className="px-4 py-2 text-sm rounded-lg border border-[var(--border-primary)] text-[var(--text-secondary)] hover:bg-[var(--background-tertiary)] focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="px-4 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--sc-surface-overlay)] focus-visible:ring-2 focus-visible:ring-stone-500"
         >
           {t('objects.cancel')}
         </button>
@@ -201,7 +201,7 @@ const GroupForm: FC = () => {
           onChange={(e) => setName(e.target.value)}
           placeholder={t('objects.groupNamePlaceholder')}
           required
-          className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
         />
       </div>
       <div>
@@ -217,7 +217,7 @@ const GroupForm: FC = () => {
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t('objects.groupDescriptionPlaceholder')}
           rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
         />
       </div>
       <div>
@@ -249,7 +249,7 @@ const GroupForm: FC = () => {
         <button
           type="button"
           onClick={handleCancelForm}
-          className="px-4 py-2 text-sm rounded-lg border border-[var(--border-primary)] text-[var(--text-secondary)] hover:bg-[var(--background-tertiary)] focus-visible:ring-2 focus-visible:ring-stone-500"
+          className="px-4 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--sc-surface-overlay)] focus-visible:ring-2 focus-visible:ring-stone-500"
         >
           {t('objects.cancel')}
         </button>
@@ -282,7 +282,7 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
   };
 
   return (
-    <div className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-xl p-4 flex flex-col gap-2 hover:border-stone-400 dark:hover:border-stone-600 transition-colors">
+    <div className="bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-xl p-4 flex flex-col gap-2 hover:border-stone-400 dark:hover:border-stone-600 transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-[var(--text-primary)] truncate">{obj.name}</h3>
@@ -312,7 +312,7 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
           ))}
         </div>
       )}
-      <div className="flex items-center gap-2 mt-1 pt-2 border-t border-[var(--border-primary)]">
+      <div className="flex items-center gap-2 mt-1 pt-2 border-t border-[var(--sc-border-subtle)]">
         <button
           type="button"
           onClick={() => handleEditObject(obj)}
@@ -355,7 +355,7 @@ const GroupCard: FC<{ group: ObjectGroup }> = ({ group }) => {
 
   return (
     <div
-      className="bg-[var(--background-secondary)] border rounded-xl p-4 flex flex-col gap-2"
+      className="bg-[var(--sc-surface-raised)] border rounded-xl p-4 flex flex-col gap-2"
       style={{ borderColor: `${group.color}66` }}
     >
       <div className="flex items-center gap-2">
@@ -374,7 +374,7 @@ const GroupCard: FC<{ group: ObjectGroup }> = ({ group }) => {
       {group.description && (
         <p className="text-sm text-[var(--text-secondary)]">{group.description}</p>
       )}
-      <div className="flex items-center gap-2 mt-1 pt-2 border-t border-[var(--border-primary)]">
+      <div className="flex items-center gap-2 mt-1 pt-2 border-t border-[var(--sc-border-subtle)]">
         <button
           type="button"
           onClick={() => handleEditGroup(group)}
@@ -421,7 +421,7 @@ const ObjectsViewContent: FC = () => {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-[var(--border-primary)] flex-shrink-0">
+      <div className="flex items-center justify-between p-4 border-b border-[var(--sc-border-subtle)] flex-shrink-0">
         <div className="flex items-center gap-3">
           <SectionIcon section="objects" size="sm" />
           <div>
@@ -457,7 +457,7 @@ const ObjectsViewContent: FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[var(--border-primary)] flex-shrink-0 px-4">
+      <div className="flex border-b border-[var(--sc-border-subtle)] flex-shrink-0 px-4">
         {(['objects', 'groups'] as const).map((tab) => (
           <button
             key={tab}
@@ -485,12 +485,12 @@ const ObjectsViewContent: FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('objects.search')}
-                className="flex-1 min-w-[160px] px-3 py-2 text-sm rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+                className="flex-1 min-w-[160px] px-3 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
               />
               <select
                 value={selectedGroupFilter ?? ''}
                 onChange={(e) => setSelectedGroupFilter(e.target.value || null)}
-                className="px-3 py-2 text-sm rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
+                className="px-3 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500"
                 aria-label={t('objects.filterByGroup')}
               >
                 <option value="">{t('objects.allGroups')}</option>
@@ -505,7 +505,7 @@ const ObjectsViewContent: FC = () => {
 
             {/* Object form (inline) */}
             {isObjectFormOpen && (
-              <div className="mb-4 bg-[var(--background-secondary)] border border-stone-300 dark:border-stone-700 rounded-xl p-4">
+              <div className="mb-4 bg-[var(--sc-surface-raised)] border border-stone-300 dark:border-stone-700 rounded-xl p-4">
                 <ObjectForm />
               </div>
             )}
@@ -518,7 +518,13 @@ const ObjectsViewContent: FC = () => {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredObjects.map((obj) => (
-                  <ObjectCard key={obj.id} obj={obj} />
+                  // QNBS-v3: content-visibility skips off-screen object cards — benefit grows with large prop collections.
+                  <div
+                    key={obj.id}
+                    style={{ contentVisibility: 'auto', containIntrinsicSize: '0 120px' }}
+                  >
+                    <ObjectCard obj={obj} />
+                  </div>
                 ))}
               </div>
             )}
@@ -529,7 +535,7 @@ const ObjectsViewContent: FC = () => {
           <>
             {/* Group form (inline) */}
             {isGroupFormOpen && (
-              <div className="mb-4 bg-[var(--background-secondary)] border border-stone-300 dark:border-stone-700 rounded-xl p-4">
+              <div className="mb-4 bg-[var(--sc-surface-raised)] border border-stone-300 dark:border-stone-700 rounded-xl p-4">
                 <GroupForm />
               </div>
             )}
@@ -542,7 +548,13 @@ const ObjectsViewContent: FC = () => {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {groups.map((g) => (
-                  <GroupCard key={g.id} group={g} />
+                  // QNBS-v3: content-visibility skips off-screen group cards.
+                  <div
+                    key={g.id}
+                    style={{ contentVisibility: 'auto', containIntrinsicSize: '0 120px' }}
+                  >
+                    <GroupCard group={g} />
+                  </div>
                 ))}
               </div>
             )}

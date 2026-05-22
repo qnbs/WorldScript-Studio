@@ -23,6 +23,7 @@
   "characterGraph.legend": "Legend",
   "characterGraph.view.graph": "Graph view",
   "characterGraph.view.table": "Table view",
+  "characterGraph.view.graphKeyboardHint": "Interactive canvas — not keyboard-navigable. Press G to switch to the accessible table view.",
   "characterGraph.graphAriaLabel": "Interactive relationship graph between characters",
   "characterGraph.table.caption": "Relationships as an accessible table",
   "characterGraph.table.from": "From",

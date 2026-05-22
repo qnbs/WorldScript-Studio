@@ -28,7 +28,7 @@ export const ToolInputs: FC<ToolInputsProps> = ({
   switch (activeTool) {
     case 'improve':
       return (
-        <p className="text-sm text-[var(--foreground-muted)]">
+        <p className="text-sm text-[var(--sc-text-muted)]">
           {t('writer.studio.tools.improve.instruction', {
             selection: selection.text
               ? `"${selection.text.substring(0, 50)}..."`
@@ -39,7 +39,7 @@ export const ToolInputs: FC<ToolInputsProps> = ({
     case 'changeTone':
       return (
         <div>
-          <p className="text-sm text-[var(--foreground-muted)] mb-3">
+          <p className="text-sm text-[var(--sc-text-muted)] mb-3">
             {t('writer.studio.tools.improve.instruction', {
               selection: selection.text
                 ? `"${selection.text.substring(0, 50)}..."`
@@ -76,10 +76,10 @@ export const ToolInputs: FC<ToolInputsProps> = ({
       return (
         <div className="space-y-4">
           <div>
-            <span className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block">
+            <span className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block">
               {t('writer.studio.tools.dialogue.charactersLabel')}
             </span>
-            <div className="space-y-2 max-h-32 overflow-y-auto bg-[var(--glass-bg)] p-2 rounded-md border border-[var(--border-primary)]">
+            <div className="space-y-2 max-h-32 overflow-y-auto bg-[var(--glass-bg)] p-2 rounded-md border border-[var(--sc-border-subtle)]">
               {project.characters.map((char) => (
                 <div key={char.id}>
                   <Checkbox
@@ -95,7 +95,7 @@ export const ToolInputs: FC<ToolInputsProps> = ({
           <div>
             <label
               htmlFor="scenario"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('writer.studio.tools.dialogue.scenarioLabel')}
             </label>
@@ -114,7 +114,7 @@ export const ToolInputs: FC<ToolInputsProps> = ({
         <div>
           <label
             htmlFor="brainstorm-context"
-            className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+            className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
           >
             {t('writer.studio.tools.brainstorm.contextLabel')}
           </label>
@@ -130,10 +130,10 @@ export const ToolInputs: FC<ToolInputsProps> = ({
     case 'imagePrompt':
       return (
         <div className="space-y-2">
-          <p className="text-sm text-[var(--foreground-muted)]">
+          <p className="text-sm text-[var(--sc-text-muted)]">
             {t('writer.imagePrompt.description')}
           </p>
-          <div className="text-xs text-[var(--foreground-muted)] bg-[var(--background-tertiary)]/50 border border-[var(--border-primary)] rounded p-2 space-y-1">
+          <div className="text-xs text-[var(--sc-text-muted)] bg-[var(--sc-surface-overlay)]/50 border border-[var(--sc-border-subtle)] rounded p-2 space-y-1">
             <p>
               💡 <strong>{t('writer.imagePrompt.tip')}</strong>
             </p>
@@ -143,37 +143,37 @@ export const ToolInputs: FC<ToolInputsProps> = ({
       );
     case 'synopsis':
       return (
-        <p className="text-sm text-[var(--foreground-muted)]">
+        <p className="text-sm text-[var(--sc-text-muted)]">
           {t('writer.studio.tools.synopsis.instruction')}
         </p>
       );
     case 'critic':
       return (
-        <p className="text-sm text-[var(--foreground-muted)]">
+        <p className="text-sm text-[var(--sc-text-muted)]">
           {t('writer.studio.tools.critic.instruction')}
         </p>
       );
     case 'plotholes':
       return (
-        <p className="text-sm text-[var(--foreground-muted)]">
+        <p className="text-sm text-[var(--sc-text-muted)]">
           {t('writer.studio.tools.plotholes.instruction')}
         </p>
       );
     case 'consistency':
       return (
-        <p className="text-sm text-[var(--foreground-muted)]">
+        <p className="text-sm text-[var(--sc-text-muted)]">
           {t('writer.studio.tools.consistency.instruction')}
         </p>
       );
     case 'grammarCheck':
       return (
-        <p className="text-sm text-[var(--foreground-muted)]">
+        <p className="text-sm text-[var(--sc-text-muted)]">
           {t('writer.studio.tools.grammarCheck.instruction')}
         </p>
       );
     default:
       return (
-        <p className="text-sm text-[var(--foreground-muted)]">
+        <p className="text-sm text-[var(--sc-text-muted)]">
           {t('writer.studio.tools.continue.instruction')}
         </p>
       );

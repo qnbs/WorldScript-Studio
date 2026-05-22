@@ -108,7 +108,7 @@ export const ShortcutsSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.shortcuts.title')}
           </h2>
           <Button type="button" variant="secondary" size="sm" onClick={resetDefaults}>
@@ -116,7 +116,7 @@ export const ShortcutsSection: FC = () => {
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-[var(--foreground-secondary)]">
+          <p className="text-sm text-[var(--sc-text-secondary)]">
             {t('settings.shortcuts.description')}
           </p>
 
@@ -146,14 +146,12 @@ export const ShortcutsSection: FC = () => {
                   className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border px-3 py-3 ${
                     hasConflict
                       ? 'border-amber-500/50 bg-amber-500/5'
-                      : 'border-[var(--border-primary)] bg-[var(--glass-bg)]'
+                      : 'border-[var(--sc-border-subtle)] bg-[var(--glass-bg)]'
                   }`}
                 >
                   <div>
-                    <p className="font-medium text-[var(--foreground-primary)]">
-                      {t(def.labelKey)}
-                    </p>
-                    <p className="text-xs text-[var(--foreground-muted)] font-mono">
+                    <p className="font-medium text-[var(--sc-text-primary)]">{t(def.labelKey)}</p>
+                    <p className="text-xs text-[var(--sc-text-muted)] font-mono">
                       {formatKeysForDisplay(existing.keys)}
                     </p>
                   </div>

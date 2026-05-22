@@ -97,14 +97,14 @@ const BinderAssetPreview: FC<{
 
   if (loading) {
     return (
-      <p className="text-xs text-[var(--foreground-muted)] py-2">
+      <p className="text-xs text-[var(--sc-text-muted)] py-2">
         {t('manuscript.binder.previewLoading')}
       </p>
     );
   }
   if (!url) {
     return (
-      <p className="text-xs text-[var(--foreground-muted)] py-2">
+      <p className="text-xs text-[var(--sc-text-muted)] py-2">
         {t('manuscript.binder.previewUnavailable')}
       </p>
     );
@@ -114,7 +114,7 @@ const BinderAssetPreview: FC<{
       <img
         src={url}
         alt={node.title}
-        className="max-h-48 w-full object-contain rounded border border-[var(--border-primary)] bg-black/10"
+        className="max-h-48 w-full object-contain rounded border border-[var(--sc-border-subtle)] bg-black/10"
       />
     );
   }
@@ -123,12 +123,12 @@ const BinderAssetPreview: FC<{
       <iframe
         title={node.title}
         src={url}
-        className="w-full h-48 rounded border border-[var(--border-primary)] bg-[var(--background-secondary)]"
+        className="w-full h-48 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]"
       />
     );
   }
   return (
-    <p className="text-xs text-[var(--foreground-muted)]">{node.originalFileName ?? node.title}</p>
+    <p className="text-xs text-[var(--sc-text-muted)]">{node.originalFileName ?? node.title}</p>
   );
 };
 
@@ -288,7 +288,7 @@ export const BinderPanel: FC = () => {
         tabIndex={-1}
         onChange={(e) => void onImportFiles(e.target.files)}
       />
-      <div className="flex gap-1 p-2 border-b border-[var(--border-primary)] flex-wrap">
+      <div className="flex gap-1 p-2 border-b border-[var(--sc-border-subtle)] flex-wrap">
         <Button
           type="button"
           size="sm"
@@ -317,8 +317,8 @@ export const BinderPanel: FC = () => {
           {t('manuscript.binder.importFile')}
         </Button>
       </div>
-      <div className="px-2 py-1 border-b border-[var(--border-primary)] space-y-1">
-        <p className="text-[10px] text-[var(--foreground-muted)] leading-snug">
+      <div className="px-2 py-1 border-b border-[var(--sc-border-subtle)] space-y-1">
+        <p className="text-[10px] text-[var(--sc-text-muted)] leading-snug">
           {t('manuscript.binder.assetsLocalHint')}
         </p>
         <label htmlFor="binder-link-url" className="sr-only">
@@ -329,7 +329,7 @@ export const BinderPanel: FC = () => {
           value={linkUrlDraft}
           onChange={(e) => setLinkUrlDraft(e.target.value)}
           placeholder={t('manuscript.binder.linkUrl')}
-          className="w-full px-2 py-1 rounded border border-[var(--border-primary)] bg-[var(--input-background)] text-xs"
+          className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--input-background)] text-xs"
         />
         <label htmlFor="binder-link-title" className="sr-only">
           {t('manuscript.binder.linkTitleOptional')}
@@ -339,7 +339,7 @@ export const BinderPanel: FC = () => {
           value={linkTitleDraft}
           onChange={(e) => setLinkTitleDraft(e.target.value)}
           placeholder={t('manuscript.binder.linkTitleOptional')}
-          className="w-full px-2 py-1 rounded border border-[var(--border-primary)] bg-[var(--input-background)] text-xs"
+          className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--input-background)] text-xs"
         />
         <Button
           type="button"
@@ -353,9 +353,7 @@ export const BinderPanel: FC = () => {
       </div>
       <div className="flex-grow overflow-y-auto p-2 space-y-1">
         {sorted.length === 0 ? (
-          <p className="text-xs text-[var(--foreground-muted)] px-1">
-            {t('manuscript.binder.empty')}
-          </p>
+          <p className="text-xs text-[var(--sc-text-muted)] px-1">{t('manuscript.binder.empty')}</p>
         ) : (
           sorted.map((n) => {
             const depth = binderDepth(n, byId);
@@ -366,8 +364,8 @@ export const BinderPanel: FC = () => {
                 onClick={() => setSelectedId(n.id)}
                 className={`w-full text-left rounded px-2 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--border-interactive)] focus-visible:outline-none ${
                   selectedId === n.id
-                    ? 'bg-[var(--background-interactive)]/20 text-[var(--foreground-primary)]'
-                    : 'hover:bg-[var(--background-tertiary)] text-[var(--foreground-secondary)]'
+                    ? 'bg-[var(--sc-accent)]/20 text-[var(--sc-text-primary)]'
+                    : 'hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
                 }`}
                 style={{ paddingLeft: `${8 + depth * 12}px` }}
               >
@@ -381,7 +379,7 @@ export const BinderPanel: FC = () => {
         )}
       </div>
       {selected && (selected.type === 'note' || selected.type === 'text') ? (
-        <div className="p-2 border-t border-[var(--border-primary)] space-y-2 flex-shrink-0">
+        <div className="p-2 border-t border-[var(--sc-border-subtle)] space-y-2 flex-shrink-0">
           <label htmlFor="binder-note-title" className="sr-only">
             {t('manuscript.binder.noteTitle')}
           </label>
@@ -389,7 +387,7 @@ export const BinderPanel: FC = () => {
             id="binder-note-title"
             value={selected.title}
             onChange={(e) => updateSelectedTitle(e.target.value)}
-            className="w-full px-2 py-1 rounded border border-[var(--border-primary)] bg-[var(--input-background)] text-sm"
+            className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--input-background)] text-sm"
           />
           <label htmlFor="binder-note-body" className="sr-only">
             {t('manuscript.binder.noteBody')}
@@ -399,7 +397,7 @@ export const BinderPanel: FC = () => {
             value={selected.content ?? ''}
             onChange={(e) => updateSelectedContent(e.target.value)}
             rows={6}
-            className="w-full px-2 py-1 rounded border border-[var(--border-primary)] bg-[var(--input-background)] text-sm resize-y"
+            className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--input-background)] text-sm resize-y"
             placeholder={t('manuscript.binder.notePlaceholder')}
           />
           <Button
@@ -423,7 +421,7 @@ export const BinderPanel: FC = () => {
         </div>
       ) : null}
       {selected && selected.type === 'link' && selected.linkUrl ? (
-        <div className="p-2 border-t border-[var(--border-primary)] space-y-2 flex-shrink-0">
+        <div className="p-2 border-t border-[var(--sc-border-subtle)] space-y-2 flex-shrink-0">
           <a
             href={selected.linkUrl}
             target="_blank"
@@ -455,7 +453,7 @@ export const BinderPanel: FC = () => {
       {selected &&
       (selected.type === 'pdf' || selected.type === 'image' || selected.type === 'text') &&
       selected.binderAssetId ? (
-        <div className="p-2 border-t border-[var(--border-primary)] space-y-2 flex-shrink-0">
+        <div className="p-2 border-t border-[var(--sc-border-subtle)] space-y-2 flex-shrink-0">
           <BinderAssetPreview projectId={pid} node={selected} t={t} />
           <Button
             type="button"
@@ -478,7 +476,7 @@ export const BinderPanel: FC = () => {
         </div>
       ) : null}
       {selected && selected.type === 'folder' ? (
-        <div className="p-2 border-t border-[var(--border-primary)] flex-shrink-0">
+        <div className="p-2 border-t border-[var(--sc-border-subtle)] flex-shrink-0">
           <Button
             type="button"
             variant="ghost"

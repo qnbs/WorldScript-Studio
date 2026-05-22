@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test';
 import { clickNavItem, ensureBlankProject, selectEnglish } from './helpers';
 
 async function assertNoSeriousViolations(page: import('@playwright/test').Page, label: string) {
-  const results = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze();
+  const results = await new AxeBuilder({ page }).analyze();
   const serious = results.violations.filter(
     (v) => v.impact === 'serious' || v.impact === 'critical',
   );

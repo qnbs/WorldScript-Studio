@@ -13,6 +13,7 @@ interface ActSwimlaneProps {
   onDelete: (id: string) => void;
   onAddSection: (act: 1 | 2 | 3) => void;
   onReorderInAct: (id: string, direction: 'up' | 'down') => void;
+  isOver?: boolean;
 }
 
 const ACT_GRADIENT_CLASSES: Record<number, string> = {
@@ -31,6 +32,7 @@ export const ActSwimlane: FC<ActSwimlaneProps> = ({
   onDelete,
   onAddSection,
   onReorderInAct,
+  isOver = false,
 }) => {
   const actLabels: Record<number, string> = {
     1: t('sceneboard.act1.label'),
@@ -42,21 +44,19 @@ export const ActSwimlane: FC<ActSwimlaneProps> = ({
 
   return (
     <div
-      className={`flex flex-col min-w-[280px] max-w-[320px] bg-gradient-to-b ${ACT_GRADIENT_CLASSES[act]} to-transparent rounded-xl border border-[var(--border-primary)] p-3`}
+      className={`flex flex-col min-w-[280px] max-w-[320px] bg-gradient-to-b ${ACT_GRADIENT_CLASSES[act]} to-transparent rounded-xl border p-3 transition-colors duration-sc-fast ${isOver ? 'border-[var(--sc-border-focus)] bg-[var(--sc-accent-subtle)]' : 'border-[var(--sc-border-subtle)]'}`}
     >
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="font-semibold text-[var(--foreground-primary)] text-sm">
-            {actLabels[act]}
-          </h3>
-          <p className="text-xs text-[var(--foreground-muted)]">
+          <h3 className="font-semibold text-[var(--sc-text-primary)] text-sm">{actLabels[act]}</h3>
+          <p className="text-xs text-[var(--sc-text-muted)]">
             {sections.length} {t('sceneboard.scenes')} · {wordCount} {t('sceneboard.words')}
           </p>
         </div>
         <button
           type="button"
           onClick={() => onAddSection(act)}
-          className="w-7 h-7 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] hover:bg-[var(--background-tertiary)] flex items-center justify-center text-lg font-light"
+          className="w-7 h-7 rounded-lg bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)] flex items-center justify-center text-lg font-light"
           title={t('sceneboard.addSceneToAct')}
           aria-label={t('sceneboard.addSceneToAct')}
         >
@@ -64,9 +64,8 @@ export const ActSwimlane: FC<ActSwimlaneProps> = ({
         </button>
       </div>
 
-      <div
-        className="flex-grow min-h-[200px] overflow-y-auto pr-1 space-y-0"
-        role="list"
+      <ul
+        className="flex-grow min-h-[200px] overflow-y-auto pr-1 space-y-0 list-none"
         aria-label={t('sceneboard.dragAriaLabel')}
       >
         <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
@@ -85,12 +84,12 @@ export const ActSwimlane: FC<ActSwimlaneProps> = ({
             />
           ))}
           {sections.length === 0 && (
-            <div className="text-center py-8 text-xs text-[var(--foreground-muted)] border-2 border-dashed border-[var(--border-primary)] rounded-lg">
+            <div className="text-center py-8 text-xs text-[var(--sc-text-muted)] border-2 border-dashed border-[var(--sc-border-subtle)] rounded-lg">
               {t('sceneboard.dragEmptyHint')}
             </div>
           )}
         </SortableContext>
-      </div>
+      </ul>
     </div>
   );
 };

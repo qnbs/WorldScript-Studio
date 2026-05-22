@@ -142,10 +142,10 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+        <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
           {t('settings.ai.providerTitle')}
         </h2>
-        <p className="text-sm text-[var(--foreground-muted)] mt-1">
+        <p className="text-sm text-[var(--sc-text-muted)] mt-1">
           {t('settings.ai.providerDescription')}
         </p>
       </CardHeader>
@@ -159,7 +159,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 onProviderChange(p.id);
                 setTestStatus('idle');
               }}
-              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${provider === p.id ? 'bg-[var(--background-interactive)] border-[var(--background-interactive)] text-white' : 'border-[var(--border-primary)] text-[var(--foreground-secondary)] hover:border-[var(--border-interactive)]'}`}
+              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${provider === p.id ? 'bg-[var(--sc-accent)] border-[var(--sc-accent)] text-white' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:border-[var(--border-interactive)]'}`}
             >
               {p.label}
             </button>
@@ -168,7 +168,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-[var(--foreground-secondary)]">
+            <span className="font-medium text-[var(--sc-text-secondary)]">
               {t('settings.ai.providerStatusLabel')}
             </span>
             <span
@@ -191,7 +191,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         </div>
 
         {provider === 'gemini' && (
-          <div className="p-3 rounded-lg bg-[var(--background-secondary)] text-sm text-[var(--foreground-secondary)]">
+          <div className="p-3 rounded-lg bg-[var(--sc-surface-raised)] text-sm text-[var(--sc-text-secondary)]">
             {t('settings.ai.geminiSelected')}
           </div>
         )}
@@ -200,7 +200,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
           <div className="space-y-3">
             <label
               htmlFor="openai-api-key"
-              className="text-sm font-medium text-[var(--foreground-secondary)] block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
             >
               {t('settings.ai.openaiKey')}
             </label>
@@ -217,13 +217,11 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 {isSavingKey ? <Spinner className="w-4 h-4" /> : t('settings.ai.save')}
               </Button>
             </div>
-            <p className="text-xs text-[var(--foreground-muted)]">
-              {t('settings.ai.keysEncrypted')}
-            </p>
+            <p className="text-xs text-[var(--sc-text-muted)]">{t('settings.ai.keysEncrypted')}</p>
             {/* QNBS-v3: OpenRouter/Groq nutzen denselben Key-Slot + Root-URL — vermeidet Provider-Enum-Explosion. */}
             <label
               htmlFor="openai-compat-base-url"
-              className="text-sm font-medium text-[var(--foreground-secondary)] block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
             >
               {t('settings.ai.openAiCompatUrl')}
             </label>
@@ -234,12 +232,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               onChange={(e) => onAdvancedAiPatch({ openAiCompatibleBaseUrl: e.target.value })}
               className="font-mono text-sm"
             />
-            <p className="text-xs text-[var(--foreground-muted)]">
+            <p className="text-xs text-[var(--sc-text-muted)]">
               {t('settings.ai.openAiCompatHint')}
             </p>
             <label
               htmlFor="openai-site-url"
-              className="text-sm font-medium text-[var(--foreground-secondary)] block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
             >
               {t('settings.ai.openAiSiteUrl')}
             </label>
@@ -252,7 +250,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             />
             <label
               htmlFor="openai-site-title"
-              className="text-sm font-medium text-[var(--foreground-secondary)] block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
             >
               {t('settings.ai.openAiSiteTitle')}
             </label>
@@ -280,13 +278,13 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             <div className="space-y-1">
               <label
                 htmlFor="local-backend-preset"
-                className="text-sm font-medium text-[var(--foreground-secondary)] block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] block"
               >
                 {t('settings.ai.localBackendPreset')}
               </label>
               <select
                 id="local-backend-preset"
-                className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                 value={advancedAi.localBackendPreset}
                 onChange={(e) => {
                   const preset = e.target.value as LocalBackendPreset;
@@ -306,7 +304,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             </div>
             <label
               htmlFor="ollama-server-url"
-              className="text-sm font-medium text-[var(--foreground-secondary)] block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
             >
               {t('settings.ai.ollamaServerUrl')}
             </label>
@@ -343,7 +341,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                   {scanBusy ? <Spinner className="w-4 h-4" /> : t('settings.ai.scanLocalPorts')}
                 </Button>
                 {scanRows.length > 0 && (
-                  <ul className="text-xs text-[var(--foreground-muted)] space-y-1 list-disc pl-4">
+                  <ul className="text-xs text-[var(--sc-text-muted)] space-y-1 list-disc pl-4">
                     {scanRows.map((row) => (
                       <li key={row.baseUrl}>
                         {t(row.labelKey)} — {row.baseUrl}{' '}
@@ -358,7 +356,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             )}
             {ollamaModels.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs text-[var(--foreground-muted)]">
+                <p className="text-xs text-[var(--sc-text-muted)]">
                   {t('settings.ai.ollamaModelHint')}
                 </p>
                 <div className="flex flex-wrap gap-1">
@@ -367,7 +365,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                       type="button"
                       key={m}
                       onClick={() => onModelSelect?.(`ollama/${m}`)}
-                      className="px-2 py-1 text-xs rounded-full bg-[var(--background-tertiary)] text-[var(--foreground-secondary)] hover:bg-[var(--background-interactive)] hover:text-white transition-colors"
+                      className="px-2 py-1 text-xs rounded-full bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-accent)] hover:text-white transition-colors"
                     >
                       {m}
                     </button>
@@ -375,12 +373,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 </div>
               </div>
             )}
-            <p className="text-xs text-[var(--foreground-muted)]">{t('settings.ai.ollamaHint')}</p>
+            <p className="text-xs text-[var(--sc-text-muted)]">{t('settings.ai.ollamaHint')}</p>
           </div>
         )}
 
         {provider === 'webllm' && (
-          <div className="p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-sm text-[var(--foreground-secondary)] space-y-3">
+          <div className="p-3 rounded-lg bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] text-sm text-[var(--sc-text-secondary)] space-y-3">
             <p>{t('settings.ai.webllmHint')}</p>
 
             {/* GPU status badge */}
@@ -409,7 +407,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
             {/* Adapter info when available */}
             {gpuInfo?.adapterDescription && (
-              <p className="text-xs text-[var(--foreground-muted)]">
+              <p className="text-xs text-[var(--sc-text-muted)]">
                 {t('settings.ai.webllm.adapterLabel')}: {gpuInfo.adapterDescription}
                 {gpuInfo.vramTier && (
                   <>
@@ -424,14 +422,14 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             <div className="space-y-1">
               <label
                 htmlFor="webllm-model-select"
-                className="text-xs font-medium text-[var(--foreground-muted)] block"
+                className="text-xs font-medium text-[var(--sc-text-muted)] block"
               >
                 {t('settings.ai.webllm.modelSelect')}
               </label>
               <select
                 id="webllm-model-select"
                 aria-label={t('settings.ai.webllm.modelSelectAriaLabel')}
-                className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-tertiary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                 onChange={(e) => onModelSelect?.(e.target.value)}
                 defaultValue=""
               >
@@ -446,10 +444,10 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               </select>
             </div>
 
-            <p className="text-xs text-[var(--foreground-muted)]">
+            <p className="text-xs text-[var(--sc-text-muted)]">
               {t('settings.ai.webllm.fallbackChain')}
             </p>
-            <p className="text-xs text-[var(--foreground-muted)]">
+            <p className="text-xs text-[var(--sc-text-muted)]">
               {t('settings.ai.webllm.tabLeaderNote')}
             </p>
           </div>
@@ -457,19 +455,19 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
         {provider === 'onnx' && (
           // QNBS-v3: ONNX is now a selectable primary provider — WASM path, no API key needed.
-          <div className="p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-sm text-[var(--foreground-secondary)] space-y-3">
+          <div className="p-3 rounded-lg bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] text-sm text-[var(--sc-text-secondary)] space-y-3">
             <p>{t('settings.ai.onnx.wasmNote')}</p>
             <div className="space-y-1">
               <label
                 htmlFor="onnx-model-select"
-                className="text-xs font-medium text-[var(--foreground-muted)] block"
+                className="text-xs font-medium text-[var(--sc-text-muted)] block"
               >
                 {t('settings.ai.onnx.modelSelect')}
               </label>
               <select
                 id="onnx-model-select"
                 aria-label={t('settings.ai.onnx.modelSelect')}
-                className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-tertiary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                 value={advancedAi.model}
                 onChange={(e) => onModelSelect?.(e.target.value)}
               >
@@ -485,24 +483,24 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
         {provider === 'transformers' && (
           // QNBS-v3: Transformers.js runs any Xenova-compatible HuggingFace model via WASM/WebGPU.
-          <div className="p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)] text-sm text-[var(--foreground-secondary)] space-y-3">
+          <div className="p-3 rounded-lg bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] text-sm text-[var(--sc-text-secondary)] space-y-3">
             <p>{t('settings.ai.transformers.hint')}</p>
             <div className="space-y-1">
               <label
                 htmlFor="transformers-model-id"
-                className="text-xs font-medium text-[var(--foreground-muted)] block"
+                className="text-xs font-medium text-[var(--sc-text-muted)] block"
               >
                 {t('settings.ai.transformers.modelId')}
               </label>
               <input
                 id="transformers-model-id"
                 type="text"
-                className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-tertiary)] px-3 py-2 text-sm text-[var(--foreground-primary)] font-mono focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] px-3 py-2 text-sm text-[var(--sc-text-primary)] font-mono focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                 placeholder="Xenova/distilgpt2"
                 value={advancedAi.model}
                 onChange={(e) => onModelSelect?.(e.target.value)}
               />
-              <p className="text-xs text-[var(--foreground-muted)]">
+              <p className="text-xs text-[var(--sc-text-muted)]">
                 {t('settings.ai.transformers.wasmNote')}
               </p>
             </div>

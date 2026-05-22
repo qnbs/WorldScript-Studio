@@ -89,7 +89,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
       <div
         ref={setNodeRef}
         style={style}
-        className="bg-[var(--background-secondary)] border border-[var(--border-primary)] rounded-sc-lg p-3 mb-2 shadow-sc-sm cursor-grab active:cursor-grabbing hover:shadow-sc-md transition-[box-shadow] duration-sc-normal ease-sc-standard"
+        className="bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-sc-lg p-3 mb-2 shadow-sc-sm cursor-grab active:cursor-grabbing hover:shadow-sc-md transition-[box-shadow] duration-sc-normal ease-sc-standard"
         {...attributes}
         {...listeners}
       >
@@ -154,8 +154,8 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                 className="w-7 h-7 rounded border cursor-pointer"
               />
             </div>
-            <div className="grid grid-cols-1 gap-2 border-t border-[var(--border-primary)] pt-2 mt-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--foreground-muted)]">
+            <div className="grid grid-cols-1 gap-2 border-t border-[var(--sc-border-subtle)] pt-2 mt-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sc-text-muted)]">
                 {t('sceneboard.timeline.metaHeading')}
               </p>
               <Input
@@ -221,7 +221,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                   className="w-2 h-2 rounded-full flex-shrink-0"
                   style={{ backgroundColor: section.color || '#3b82f6' }}
                 />
-                <h4 className="text-sm font-semibold text-[var(--foreground-primary)] line-clamp-1">
+                <h4 className="text-sm font-semibold text-[var(--sc-text-primary)] line-clamp-1">
                   {section.title}
                 </h4>
               </div>
@@ -243,7 +243,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                   });
                   setIsEditing(true);
                 }}
-                className="text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] p-0.5 rounded"
+                className="text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] p-0.5 rounded"
                 aria-label={t('sceneboard.editScene', { title: section.title })}
               >
                 <svg
@@ -262,7 +262,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
               </button>
             </div>
             {section.summary && (
-              <p className="text-xs text-[var(--foreground-muted)] line-clamp-2 mb-2">
+              <p className="text-xs text-[var(--sc-text-muted)] line-clamp-2 mb-2">
                 {section.summary}
               </p>
             )}
@@ -272,11 +272,11 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                   className="w-1.5 h-1.5 rounded-full"
                   style={{ backgroundColor: statusColor }}
                 />
-                <span className="text-xs text-[var(--foreground-muted)] capitalize">
+                <span className="text-xs text-[var(--sc-text-muted)] capitalize">
                   {section.status || 'draft'}
                 </span>
               </div>
-              <span className="text-xs text-[var(--foreground-muted)]">
+              <span className="text-xs text-[var(--sc-text-muted)]">
                 {section.wordCount || 0} W.
               </span>
             </div>
@@ -291,7 +291,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                   </span>
                 ))}
                 {linkedChars.length > 3 && (
-                  <span className="text-xs text-[var(--foreground-muted)]">
+                  <span className="text-xs text-[var(--sc-text-muted)]">
                     +{linkedChars.length - 3}
                   </span>
                 )}
@@ -299,7 +299,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
             )}
             {/* QNBS-v3: Keyboard-accessible reorder alternative to drag (WCAG 2.2 AA). */}
             <div
-              className="flex justify-end gap-1 mt-2 pt-2 border-t border-[var(--border-primary)]/60"
+              className="flex justify-end gap-1 mt-2 pt-2 border-t border-[var(--sc-border-subtle)]/60"
               onPointerDown={(e) => e.stopPropagation()}
             >
               <Button

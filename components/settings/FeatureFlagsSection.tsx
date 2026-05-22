@@ -28,10 +28,10 @@ export const FeatureFlagsSection: FC = () => {
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+        <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
           {t('settings.featureFlags.title')}
         </h2>
-        <p className="text-sm text-[var(--foreground-muted)] mt-1">
+        <p className="text-sm text-[var(--sc-text-muted)] mt-1">
           {t('settings.featureFlags.description')}
         </p>
       </CardHeader>

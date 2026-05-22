@@ -46,15 +46,15 @@ export const AccessibilitySection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.accessibility.title')}
           </h2>
-          <p className="text-sm text-[var(--foreground-muted)] mt-2">
+          <p className="text-sm text-[var(--sc-text-muted)] mt-2">
             {t('settings.accessibility.hub.intro')}
           </p>
           <p className="text-xs text-[var(--foreground-tertiary)] mt-2">
             {t('settings.accessibility.activePreset')}:{' '}
-            <span className="font-medium text-[var(--foreground-secondary)]">
+            <span className="font-medium text-[var(--sc-text-secondary)]">
               {t(`settings.accessibility.preset.${settings.accessibility.presetId ?? 'custom'}`)}
             </span>
           </p>
@@ -64,7 +64,7 @@ export const AccessibilitySection: FC = () => {
           <section aria-labelledby="a11y-presets-heading">
             <h3
               id="a11y-presets-heading"
-              className="text-sm font-semibold text-[var(--foreground-secondary)] mb-3"
+              className="text-sm font-semibold text-[var(--sc-text-secondary)] mb-3"
             >
               {t('settings.accessibility.hub.presetsTitle')}
             </h3>
@@ -72,7 +72,7 @@ export const AccessibilitySection: FC = () => {
               {PRESET_IDS.map((id) => (
                 <div
                   key={id}
-                  className="rounded-xl border border-[var(--border-primary)] bg-[var(--background-tertiary)]/40 p-4 flex flex-col gap-2"
+                  className="rounded-xl border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)]/40 p-4 flex flex-col gap-2"
                 >
                   <Button
                     type="button"
@@ -85,7 +85,7 @@ export const AccessibilitySection: FC = () => {
                   >
                     {t(presetTitleKey(id))}
                   </Button>
-                  <p className="text-xs text-[var(--foreground-muted)] leading-snug">
+                  <p className="text-xs text-[var(--sc-text-muted)] leading-snug">
                     {t(`${presetTitleKey(id)}Hint`)}
                   </p>
                 </div>
@@ -96,21 +96,21 @@ export const AccessibilitySection: FC = () => {
           <section aria-labelledby="a11y-preview-heading">
             <h3
               id="a11y-preview-heading"
-              className="text-sm font-semibold text-[var(--foreground-secondary)] mb-3"
+              className="text-sm font-semibold text-[var(--sc-text-secondary)] mb-3"
             >
               {t('settings.accessibility.hub.previewTitle')}
             </h3>
-            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--background-primary)] p-4 flex flex-wrap items-center gap-3">
+            <div className="rounded-xl border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] p-4 flex flex-wrap items-center gap-3">
               <Button type="button" variant="primary" size="sm">
                 {t('settings.accessibility.hub.preview.sampleButton')}
               </Button>
               <button
                 type="button"
-                className="text-sm text-[var(--background-interactive)] underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded"
+                className="text-sm text-[var(--sc-accent)] underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
               >
                 {t('settings.accessibility.hub.preview.sampleLink')}
               </button>
-              <span className="text-xs px-2 py-1 rounded-md bg-[var(--background-tertiary)] border border-[var(--border-primary)]">
+              <span className="text-xs px-2 py-1 rounded-md bg-[var(--sc-surface-overlay)] border border-[var(--sc-border-subtle)]">
                 {t('settings.accessibility.hub.preview.badge')}
               </span>
             </div>
@@ -126,7 +126,7 @@ export const AccessibilitySection: FC = () => {
             >
               {t('settings.accessibility.hub.helpButton')}
             </Button>
-            <span className="text-xs text-[var(--foreground-muted)]">
+            <span className="text-xs text-[var(--sc-text-muted)]">
               {t('settings.accessibility.hub.helpHint')}
             </span>
           </div>
@@ -134,7 +134,7 @@ export const AccessibilitySection: FC = () => {
           <div>
             <label
               htmlFor="settings-live-region-verbosity"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.accessibility.liveRegionVerbosity')}
             </label>
@@ -184,7 +184,7 @@ export const AccessibilitySection: FC = () => {
           <div>
             <label
               htmlFor="settings-colorblind-mode"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.accessibility.colorBlindMode')}
             </label>
@@ -221,7 +221,7 @@ export const PrivacySection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.privacy.title')}
           </h2>
         </CardHeader>
@@ -275,7 +275,7 @@ export const PerformanceSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.performance.title')}
           </h2>
         </CardHeader>
@@ -283,7 +283,7 @@ export const PerformanceSection: FC = () => {
           <div>
             <label
               htmlFor="settings-autosave-interval"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.performance.autoSaveInterval')} ({settings.performance.autoSaveInterval}
               s)
@@ -307,7 +307,7 @@ export const PerformanceSection: FC = () => {
           <div>
             <label
               htmlFor="settings-cache-size"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.performance.cacheSize')} ({settings.performance.cacheSize} MB)
             </label>
@@ -362,7 +362,7 @@ export const NotificationsSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.notifications.title')}
           </h2>
         </CardHeader>
@@ -412,7 +412,7 @@ export const NotificationsSection: FC = () => {
           <div>
             <label
               htmlFor="settings-writing-reminders"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.notifications.writingReminders')}
             </label>
@@ -444,7 +444,7 @@ export const CollaborationSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.collaboration.title')}
           </h2>
         </CardHeader>
@@ -503,7 +503,7 @@ export const CollaborationSection: FC = () => {
           <div>
             <label
               htmlFor="settings-webrtc-signaling-urls"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.collaboration.webrtcSignalingUrls')}
             </label>
@@ -571,7 +571,7 @@ export const IntegrationsSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.integrations.title')}
           </h2>
         </CardHeader>
@@ -579,7 +579,7 @@ export const IntegrationsSection: FC = () => {
           <div>
             <label
               htmlFor="settings-sync-provider"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.integrations.syncProvider')}
             </label>
@@ -643,10 +643,10 @@ export const IntegrationsSection: FC = () => {
 
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.integrations.languageToolTitle')}
           </h2>
-          <p className="text-sm text-[var(--foreground-muted)] mt-1">
+          <p className="text-sm text-[var(--sc-text-muted)] mt-1">
             {t('settings.integrations.languageToolPrivacy')}
           </p>
         </CardHeader>
@@ -664,7 +664,7 @@ export const IntegrationsSection: FC = () => {
           <div>
             <label
               htmlFor="settings-languagetool-url"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-1 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-1 block"
             >
               {t('settings.integrations.languageToolUrl')}
             </label>
@@ -696,7 +696,7 @@ export const IntegrationsSection: FC = () => {
               )}
             </Button>
             {ltMsg ? (
-              <span className="text-xs text-[var(--foreground-secondary)] max-w-md">{ltMsg}</span>
+              <span className="text-xs text-[var(--sc-text-secondary)] max-w-md">{ltMsg}</span>
             ) : null}
           </div>
         </CardContent>
@@ -711,7 +711,7 @@ export const BackupSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.backup.title')}
           </h2>
         </CardHeader>
@@ -733,7 +733,7 @@ export const BackupSection: FC = () => {
           <div>
             <label
               htmlFor="settings-backup-frequency"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.backup.backupFrequency')}
             </label>
@@ -756,7 +756,7 @@ export const BackupSection: FC = () => {
           <div>
             <label
               htmlFor="settings-backup-max"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.backup.maxBackups')} ({settings.backup.maxBackups})
             </label>
@@ -779,7 +779,7 @@ export const BackupSection: FC = () => {
           <div>
             <label
               htmlFor="settings-backup-location"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
             >
               {t('settings.backup.backupLocation')}
             </label>

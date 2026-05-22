@@ -74,7 +74,7 @@ type Story = StoryObj<typeof ManuscriptView>;
 export const Default: Story = {
   render: () => (
     <Wrapper>
-      <div className="min-h-screen bg-[var(--background-primary)] text-[var(--foreground-primary)]">
+      <div className="min-h-screen bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)]">
         <ManuscriptView />
       </div>
     </Wrapper>

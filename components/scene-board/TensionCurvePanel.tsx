@@ -140,8 +140,8 @@ const TensionDot: FC<TensionDotProps> = ({
       cx={cx}
       cy={cy}
       r={5}
-      fill={isOverridden ? 'var(--sc-accent-primary,#6366f1)' : 'var(--foreground-muted,#9ca3af)'}
-      stroke="var(--background-secondary)"
+      fill={isOverridden ? 'var(--sc-accent-primary,#6366f1)' : 'var(--sc-text-muted,#9ca3af)'}
+      stroke="var(--sc-surface-raised)"
       strokeWidth={2}
       style={{ cursor: 'ns-resize', touchAction: 'none' }}
       role="slider"
@@ -198,11 +198,11 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
   const beats = activeBeatSheet !== 'none' ? (BEAT_SHEETS[activeBeatSheet] ?? []) : [];
 
   return (
-    <div className="flex-shrink-0 border-t border-[var(--border-primary)] bg-[var(--background-secondary)]">
+    <div className="flex-shrink-0 border-t border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]">
       {/* Collapse toggle bar */}
       <button
         type="button"
-        className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] transition-colors"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed}
         aria-controls="tension-curve-panel"
@@ -216,7 +216,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
           {/* Toolbar */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Beat sheet selector */}
-            <label className="flex items-center gap-1 text-xs text-[var(--foreground-muted)]">
+            <label className="flex items-center gap-1 text-xs text-[var(--sc-text-muted)]">
               <input
                 type="checkbox"
                 checked={showBeats}
@@ -229,7 +229,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
               <select
                 value={activeBeatSheet}
                 onChange={(e) => setActiveBeatSheet(e.target.value as BeatSheetKey)}
-                className="text-xs px-1 py-0.5 rounded bg-[var(--background-primary)] border border-[var(--border-primary)] text-[var(--foreground-primary)] outline-none"
+                className="text-xs px-1 py-0.5 rounded bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] outline-none"
                 aria-label={t('sceneboard.tension.beatSheetSelect')}
               >
                 <option value="none">{t('sceneboard.tension.beatSheetNone')}</option>
@@ -241,7 +241,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
             <button
               type="button"
               onClick={handleClearOverrides}
-              className="ml-auto text-xs text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] px-2 py-0.5 rounded hover:bg-[var(--background-hover)]"
+              className="ml-auto text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] px-2 py-0.5 rounded hover:bg-[var(--background-hover)]"
               aria-label={t('sceneboard.tension.clearOverrides')}
             >
               {t('sceneboard.tension.clearOverrides')}
@@ -249,7 +249,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
           </div>
 
           {sections.length === 0 ? (
-            <p className="text-xs text-[var(--foreground-muted)] text-center py-4">
+            <p className="text-xs text-[var(--sc-text-muted)] text-center py-4">
               {t('sceneboard.tension.noScenes')}
             </p>
           ) : (
@@ -269,7 +269,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
                   y={yForScore(v) + 4}
                   textAnchor="end"
                   fontSize={9}
-                  fill="var(--foreground-muted,#9ca3af)"
+                  fill="var(--sc-text-muted,#9ca3af)"
                 >
                   {v}
                 </text>
@@ -282,7 +282,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
                   y1={yForScore(v)}
                   x2={PADDING_L + CHART_W}
                   y2={yForScore(v)}
-                  stroke="var(--border-primary)"
+                  stroke="var(--sc-border-subtle)"
                   strokeWidth={0.5}
                 />
               ))}
@@ -320,7 +320,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
               <polyline
                 points={pointsToPolyline(autoPoints)}
                 fill="none"
-                stroke="var(--foreground-muted,#9ca3af)"
+                stroke="var(--sc-text-muted,#9ca3af)"
                 strokeWidth={1.5}
                 strokeDasharray="4,3"
                 opacity={0.5}
@@ -357,7 +357,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
                       y={cy - 8}
                       textAnchor="middle"
                       fontSize={8}
-                      fill="var(--foreground-muted,#9ca3af)"
+                      fill="var(--sc-text-muted,#9ca3af)"
                       pointerEvents="none"
                     >
                       {p.score.toFixed(0)}
@@ -368,7 +368,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
                       y={PADDING_T + CHART_H + 18}
                       textAnchor="middle"
                       fontSize={8}
-                      fill="var(--foreground-muted,#9ca3af)"
+                      fill="var(--sc-text-muted,#9ca3af)"
                       pointerEvents="none"
                     >
                       {label}

@@ -44,7 +44,7 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
 
   return (
     <li
-      className={`border rounded-lg p-3 ${comment.resolved ? 'opacity-60' : ''} border-[var(--border-primary)]`}
+      className={`border rounded-lg p-3 ${comment.resolved ? 'opacity-60' : ''} border-[var(--sc-border-subtle)]`}
     >
       <div className="flex items-start gap-2">
         <span
@@ -54,10 +54,10 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-semibold text-[var(--foreground-primary)]">
+            <span className="text-xs font-semibold text-[var(--sc-text-primary)]">
               {comment.authorName}
             </span>
-            <span className="text-xs text-[var(--foreground-secondary)]">
+            <span className="text-xs text-[var(--sc-text-secondary)]">
               {new Date(comment.createdAt).toLocaleDateString()}
             </span>
             {comment.resolved && (
@@ -66,20 +66,20 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
               </span>
             )}
           </div>
-          <p className="text-sm text-[var(--foreground-primary)] break-words">{comment.body}</p>
+          <p className="text-sm text-[var(--sc-text-primary)] break-words">{comment.body}</p>
 
           {/* Reply list */}
           {comment.replies.length > 0 && (
-            <div className="mt-2 ml-2 space-y-2 border-l-2 border-[var(--border-primary)] pl-3">
+            <div className="mt-2 ml-2 space-y-2 border-l-2 border-[var(--sc-border-subtle)] pl-3">
               {comment.replies.map((r) => (
                 <div key={r.id} className="text-sm">
                   <span className="font-semibold" style={{ color: r.authorColor }}>
                     {r.authorName}
                   </span>
-                  <span className="text-[var(--foreground-secondary)] text-xs ml-1">
+                  <span className="text-[var(--sc-text-secondary)] text-xs ml-1">
                     {new Date(r.createdAt).toLocaleDateString()}
                   </span>
-                  <p className="text-[var(--foreground-primary)]">{r.body}</p>
+                  <p className="text-[var(--sc-text-primary)]">{r.body}</p>
                 </div>
               ))}
             </div>
@@ -100,13 +100,13 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
                 }}
                 placeholder={t('comments.replyPlaceholder')}
                 aria-label={t('comments.replyAriaLabel', { author: comment.authorName })}
-                className="flex-1 px-2 py-1 rounded border border-[var(--border-primary)] bg-[var(--background-secondary)] text-sm"
+                className="flex-1 px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm"
               />
               <button
                 type="button"
                 onClick={handleAddReply}
                 disabled={!replyDraft.trim()}
-                className="px-2 py-1 rounded bg-[var(--background-interactive)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
+                className="px-2 py-1 rounded bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
               >
                 {t('comments.send')}
               </button>
@@ -120,14 +120,14 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="text-xs text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]"
+          className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]"
         >
           {expanded ? t('comments.collapseReply') : t('comments.reply')}
         </button>
         <button
           type="button"
           onClick={handleResolve}
-          className="text-xs text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)]"
+          className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]"
         >
           {comment.resolved ? t('comments.unresolve') : t('comments.resolve')}
         </button>
@@ -172,7 +172,7 @@ export const CommentsPanel: FC<{ sectionId: string }> = ({ sectionId }) => {
   return (
     <div className="flex flex-col gap-3 p-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-[var(--foreground-primary)]">
+        <span className="text-sm font-semibold text-[var(--sc-text-primary)]">
           {t('comments.title')}
         </span>
         {unresolvedCount > 0 && (
@@ -190,13 +190,13 @@ export const CommentsPanel: FC<{ sectionId: string }> = ({ sectionId }) => {
           placeholder={t('comments.newPlaceholder')}
           aria-label={t('comments.newAriaLabel')}
           rows={2}
-          className="w-full px-2 py-1.5 rounded border border-[var(--border-primary)] bg-[var(--background-secondary)] text-sm resize-none"
+          className="w-full px-2 py-1.5 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm resize-none"
         />
         <button
           type="button"
           onClick={handleAddComment}
           disabled={!newComment.trim()}
-          className="self-end px-3 py-1 rounded bg-[var(--background-interactive)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
+          className="self-end px-3 py-1 rounded bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)] text-xs disabled:opacity-50"
         >
           {t('comments.add')}
         </button>
@@ -204,7 +204,7 @@ export const CommentsPanel: FC<{ sectionId: string }> = ({ sectionId }) => {
 
       {/* Comment list */}
       {comments.length === 0 ? (
-        <p className="text-sm text-[var(--foreground-secondary)] text-center py-4">
+        <p className="text-sm text-[var(--sc-text-secondary)] text-center py-4">
           {t('comments.empty')}
         </p>
       ) : (

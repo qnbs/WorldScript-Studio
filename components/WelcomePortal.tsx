@@ -28,22 +28,25 @@ const WELCOME_LANGS: { code: Language; label: string }[] = [
 const LanguageSelector = () => {
   const { language, setLanguage, t } = useTranslation();
   return (
-    <div
-      className="absolute top-4 right-4 flex flex-wrap justify-end gap-1 max-w-[min(100%,14rem)]"
-      role="group"
-      aria-label={t('portal.language.groupLabel')}
-    >
-      {WELCOME_LANGS.map(({ code, label }) => (
-        <button
-          key={code}
-          type="button"
-          onClick={() => setLanguage(code)}
-          className={`px-2.5 py-1 text-xs sm:text-sm rounded-md transition-colors ${language === code ? 'bg-indigo-600 text-white' : 'bg-[var(--background-tertiary)]/50 text-[var(--foreground-secondary)] hover:bg-[var(--background-tertiary)]'}`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <>
+      {/* biome-ignore lint/a11y/useSemanticElements: role="group" on a div is appropriate for a toolbar of language-switch buttons; fieldset requires a legend child and adds default border/padding that breaks this absolutely-positioned layout. */}
+      <div
+        className="absolute top-4 right-4 flex flex-wrap justify-end gap-1 max-w-[min(100%,14rem)]"
+        role="group"
+        aria-label={t('portal.language.groupLabel')}
+      >
+        {WELCOME_LANGS.map(({ code, label }) => (
+          <button
+            key={code}
+            type="button"
+            onClick={() => setLanguage(code)}
+            className={`px-2.5 py-1 text-xs sm:text-sm rounded-md transition-colors ${language === code ? 'bg-indigo-600 text-white' : 'bg-[var(--sc-surface-overlay)]/50 text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)]'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </>
   );
 };
 
@@ -54,19 +57,12 @@ const NewProjectOption: React.FC<{
   onClick: () => void;
 }> = ({ icon, title, description, onClick }) => {
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      className="bg-[var(--background-secondary)]/80 p-6 rounded-lg border border-[var(--border-primary)] hover:border-indigo-500 hover:bg-[var(--background-secondary)] transition-all cursor-pointer flex items-start space-x-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+      className="bg-[var(--sc-surface-raised)]/80 p-6 rounded-lg border border-[var(--sc-border-subtle)] hover:border-indigo-500 hover:bg-[var(--sc-surface-raised)] transition-all cursor-pointer flex items-start space-x-4 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
     >
-      <div className="flex-shrink-0 bg-[var(--background-tertiary)] p-3 rounded-lg">
+      <div className="flex-shrink-0 bg-[var(--sc-surface-overlay)] p-3 rounded-lg">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
@@ -79,10 +75,10 @@ const NewProjectOption: React.FC<{
         </svg>
       </div>
       <div>
-        <h3 className="text-lg font-bold text-[var(--foreground-primary)]">{title}</h3>
-        <p className="text-[var(--foreground-muted)] mt-1">{description}</p>
+        <h3 className="text-lg font-bold text-[var(--sc-text-primary)]">{title}</h3>
+        <p className="text-[var(--sc-text-muted)] mt-1">{description}</p>
       </div>
-    </div>
+    </button>
   );
 };
 
@@ -217,16 +213,15 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       >
         {ICONS.WRITER}
       </svg>
-      <h1 className="text-4xl md:text-5xl font-bold text-[var(--foreground-primary)]">
+      <h1 className="text-4xl md:text-5xl font-bold text-[var(--sc-text-primary)]">
         {t('portal.welcome.title')}
       </h1>
-      <p className="text-lg text-[var(--foreground-muted)] mt-2 mb-6">
+      <p className="text-lg text-[var(--sc-text-muted)] mt-2 mb-6">
         {t('portal.welcome.subtitle')}
       </p>
       {!hasExistingSession && (
-        <div
-          className="mb-8 rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)]/60 px-4 py-3 text-left text-sm text-[var(--foreground-secondary)]"
-          role="region"
+        <section
+          className="mb-8 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/60 px-4 py-3 text-left text-sm text-[var(--sc-text-secondary)]"
           aria-label={t('portal.welcome.demoHint')}
         >
           <p className="mb-3">{t('portal.welcome.demoHint')}</p>
@@ -238,7 +233,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
           >
             {t('portal.welcome.tryDemo')}
           </Button>
-        </div>
+        </section>
       )}
       <div className="flex flex-col sm:flex-row gap-4 justify-center">
         {hasExistingSession && (
@@ -287,10 +282,10 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         </svg>
         <span>{t('portal.back')}</span>
       </button>
-      <h2 className="text-3xl font-bold text-[var(--foreground-primary)] mb-2">
+      <h2 className="text-3xl font-bold text-[var(--sc-text-primary)] mb-2">
         {t('portal.new.title')}
       </h2>
-      <p className="text-[var(--foreground-muted)] mb-8">{t('portal.new.description')}</p>
+      <p className="text-[var(--sc-text-muted)] mb-8">{t('portal.new.description')}</p>
       <div className="space-y-4">
         <NewProjectOption
           icon={ICONS.OUTLINE}
@@ -339,10 +334,10 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         </svg>
         <span>{t('portal.back')}</span>
       </button>
-      <h2 className="text-3xl font-bold text-[var(--foreground-primary)] mb-2">
+      <h2 className="text-3xl font-bold text-[var(--sc-text-primary)] mb-2">
         {t('portal.open.title')}
       </h2>
-      <p className="text-[var(--foreground-muted)] mb-8">{t('portal.open.description')}</p>
+      <p className="text-[var(--sc-text-muted)] mb-8">{t('portal.open.description')}</p>
       <Button
         onClick={() => importFileRef.current?.click()}
         className="w-full sm:w-auto px-8 py-4 text-lg"
@@ -371,7 +366,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-[var(--background-primary)] z-50 flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 bg-[var(--sc-surface-base)] z-50 flex items-center justify-center p-4 animate-fade-in">
       <LanguageSelector />
       <div className="w-full max-w-3xl">{renderView()}</div>
       <style>{`

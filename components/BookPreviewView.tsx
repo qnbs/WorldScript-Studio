@@ -13,17 +13,17 @@ const TocSidebar: FC = () => {
   return (
     <nav
       aria-label={t('preview.toc.ariaLabel')}
-      className="fixed top-14 left-0 z-30 w-56 h-[calc(100%-3.5rem)] overflow-y-auto bg-[var(--background-secondary)] border-r border-[var(--border-primary)] p-3"
+      className="fixed top-14 left-0 z-30 w-56 h-[calc(100%-3.5rem)] overflow-y-auto bg-[var(--sc-surface-raised)] border-r border-[var(--sc-border-subtle)] p-3"
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-[var(--foreground-secondary)] uppercase tracking-wide">
+        <span className="text-xs font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide">
           {t('preview.toc.title')}
         </span>
         <button
           type="button"
           onClick={toggleToc}
           aria-label={t('preview.toc.close')}
-          className="p-1 rounded hover:bg-[var(--background-hover)] text-[var(--foreground-secondary)]"
+          className="p-1 rounded hover:bg-[var(--background-hover)] text-[var(--sc-text-secondary)]"
         >
           ✕
         </button>
@@ -36,8 +36,8 @@ const TocSidebar: FC = () => {
               onClick={() => scrollToSection(s.id)}
               className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors truncate ${
                 activeId === s.id
-                  ? 'bg-[var(--background-interactive)] text-[var(--foreground-on-interactive)]'
-                  : 'text-[var(--foreground-primary)] hover:bg-[var(--background-hover)]'
+                  ? 'bg-[var(--sc-accent)] text-[var(--foreground-on-interactive)]'
+                  : 'text-[var(--sc-text-primary)] hover:bg-[var(--background-hover)]'
               }`}
             >
               {s.title || t('preview.untitledScene')}
@@ -70,7 +70,7 @@ const ControlsBar: FC = () => {
     <div
       role="toolbar"
       aria-label={t('preview.controls.ariaLabel')}
-      className="flex items-center gap-3 flex-wrap p-3 border-b border-[var(--border-primary)] bg-[var(--background-secondary)]"
+      className="flex items-center gap-3 flex-wrap p-3 border-b border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]"
     >
       {/* TOC toggle */}
       <button
@@ -78,7 +78,7 @@ const ControlsBar: FC = () => {
         onClick={toggleToc}
         aria-label={t('preview.toc.toggle')}
         aria-pressed={isTocOpen}
-        className="px-2 py-1 rounded text-sm border border-[var(--border-primary)] hover:bg-[var(--background-hover)]"
+        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
       >
         ☰ {t('preview.toc.title')}
       </button>
@@ -89,18 +89,16 @@ const ControlsBar: FC = () => {
           type="button"
           onClick={() => setFontSize(fontSize - 1)}
           aria-label={t('preview.controls.decreaseFontSize')}
-          className="px-2 py-1 rounded text-sm border border-[var(--border-primary)] hover:bg-[var(--background-hover)]"
+          className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
         >
           A-
         </button>
-        <span className="text-xs text-[var(--foreground-secondary)] w-8 text-center">
-          {fontSize}
-        </span>
+        <span className="text-xs text-[var(--sc-text-secondary)] w-8 text-center">{fontSize}</span>
         <button
           type="button"
           onClick={() => setFontSize(fontSize + 1)}
           aria-label={t('preview.controls.increaseFontSize')}
-          className="px-2 py-1 rounded text-sm border border-[var(--border-primary)] hover:bg-[var(--background-hover)]"
+          className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
         >
           A+
         </button>
@@ -111,7 +109,7 @@ const ControlsBar: FC = () => {
         value={fontFamily}
         onChange={(e) => setFontFamily(e.target.value)}
         aria-label={t('preview.controls.fontFamily')}
-        className="px-2 py-1 rounded text-sm border border-[var(--border-primary)] bg-[var(--background-secondary)] text-[var(--foreground-primary)]"
+        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]"
       >
         <option value="system-ui">{t('preview.controls.fontSystemUi')}</option>
         <option value="serif">{t('preview.controls.fontSerif')}</option>
@@ -124,7 +122,7 @@ const ControlsBar: FC = () => {
         onClick={toggleWordCount}
         aria-pressed={showWordCount}
         aria-label={t('preview.controls.wordCount')}
-        className="px-2 py-1 rounded text-sm border border-[var(--border-primary)] hover:bg-[var(--background-hover)]"
+        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
       >
         {t('preview.controls.wordCount')}
       </button>
@@ -136,7 +134,7 @@ const ControlsBar: FC = () => {
         aria-label={
           isFullscreen ? t('preview.controls.exitFullscreen') : t('preview.controls.fullscreen')
         }
-        className="ml-auto px-2 py-1 rounded text-sm border border-[var(--border-primary)] hover:bg-[var(--background-hover)]"
+        className="ml-auto px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--background-hover)]"
       >
         {isFullscreen ? '⊡' : '⊞'}{' '}
         {isFullscreen ? t('preview.controls.exitFullscreen') : t('preview.controls.fullscreen')}
@@ -163,22 +161,22 @@ const SectionArticle: FC<{
       style={{ fontFamily, fontSize }}
     >
       <h2
-        className="text-2xl font-bold mb-4 text-[var(--foreground-primary)] border-b border-[var(--border-primary)] pb-2"
+        className="text-2xl font-bold mb-4 text-[var(--sc-text-primary)] border-b border-[var(--sc-border-subtle)] pb-2"
         style={{ fontFamily }}
       >
         {section.title || t('preview.untitledScene')}
       </h2>
       {showWordCount && (
-        <p className="text-xs text-[var(--foreground-secondary)] mb-2 text-right">
+        <p className="text-xs text-[var(--sc-text-secondary)] mb-2 text-right">
           {t('preview.wordCount', { count: String(wordCount) })}
         </p>
       )}
       <div
-        className="whitespace-pre-wrap leading-relaxed text-[var(--foreground-primary)]"
+        className="whitespace-pre-wrap leading-relaxed text-[var(--sc-text-primary)]"
         style={{ maxWidth: '70ch', lineHeight: 1.8 }}
       >
         {section.content || (
-          <em className="text-[var(--foreground-secondary)]">{t('preview.emptyScene')}</em>
+          <em className="text-[var(--sc-text-secondary)]">{t('preview.emptyScene')}</em>
         )}
       </div>
     </article>
@@ -199,11 +197,11 @@ const BookPreviewInner: FC = () => {
 
   return (
     <div
-      className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-[var(--background-primary)]' : 'h-full'}`}
+      className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-[var(--sc-surface-base)]' : 'h-full'}`}
     >
-      <div className="flex items-center gap-2 p-4 border-b border-[var(--border-primary)]">
+      <div className="flex items-center gap-2 p-4 border-b border-[var(--sc-border-subtle)]">
         <SectionIcon section="preview" size="sm" />
-        <h1 className="text-lg font-semibold text-[var(--foreground-primary)]">
+        <h1 className="text-lg font-semibold text-[var(--sc-text-primary)]">
           {t('preview.title')}
         </h1>
       </div>
@@ -215,7 +213,7 @@ const BookPreviewInner: FC = () => {
           className={`flex-1 overflow-y-auto p-6 sm:p-10 ${isTocOpen ? 'ml-56' : ''}`}
         >
           {sections.length === 0 ? (
-            <p className="text-[var(--foreground-secondary)] text-center mt-16">
+            <p className="text-[var(--sc-text-secondary)] text-center mt-16">
               {t('preview.noScenes')}
             </p>
           ) : (

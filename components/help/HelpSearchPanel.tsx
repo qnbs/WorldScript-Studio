@@ -26,7 +26,7 @@ export const HelpSearchPanel: FC<HelpSearchPanelProps> = ({
   return (
     <Card className="mb-6">
       <CardHeader className="flex flex-row items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-[var(--foreground-primary)]">
+        <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">
           {translate('help.searchResultsTitle')}
         </h2>
         <Button type="button" variant="ghost" size="sm" onClick={onClear}>
@@ -35,7 +35,7 @@ export const HelpSearchPanel: FC<HelpSearchPanelProps> = ({
       </CardHeader>
       <CardContent>
         {results.length === 0 ? (
-          <p className="text-sm text-[var(--foreground-muted)]">
+          <p className="text-sm text-[var(--sc-text-muted)]">
             {translate('help.noResults', { query })}
           </p>
         ) : (
@@ -44,13 +44,13 @@ export const HelpSearchPanel: FC<HelpSearchPanelProps> = ({
               <li key={`${hit.categoryId}-${hit.titleKey}`}>
                 <button
                   type="button"
-                  className="w-full text-left p-3 rounded-md hover:bg-[var(--background-tertiary)] transition-colors"
+                  className="w-full text-left p-3 rounded-md hover:bg-[var(--sc-surface-overlay)] transition-colors"
                   onClick={() => onSelect(hit)}
                 >
-                  <span className="block text-xs text-[var(--foreground-muted)] uppercase tracking-wide">
+                  <span className="block text-xs text-[var(--sc-text-muted)] uppercase tracking-wide">
                     {translate(hit.categoryTitleKey)}
                   </span>
-                  <span className="block text-base font-medium text-[var(--foreground-primary)]">
+                  <span className="block text-base font-medium text-[var(--sc-text-primary)]">
                     {translate(hit.titleKey)}
                   </span>
                 </button>

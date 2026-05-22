@@ -47,7 +47,7 @@ const IdeaForm: FC = () => {
       <CardHeader>
         <div className="flex items-center gap-3">
           <SectionIcon section="outline" size="sm" />
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('outline.idea.title')}
           </h2>
         </div>
@@ -56,7 +56,7 @@ const IdeaForm: FC = () => {
         <div>
           <label
             htmlFor="genre"
-            className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+            className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
           >
             {t('outline.idea.genreLabel')}
           </label>
@@ -70,7 +70,7 @@ const IdeaForm: FC = () => {
         <div>
           <label
             htmlFor="idea"
-            className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+            className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
           >
             {t('outline.idea.promptLabel')}
           </label>
@@ -82,7 +82,7 @@ const IdeaForm: FC = () => {
             className="min-h-[150px]"
           />
         </div>
-        <div className="border-t border-[var(--border-primary)] pt-4">
+        <div className="border-t border-[var(--sc-border-subtle)] pt-4">
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
@@ -96,7 +96,7 @@ const IdeaForm: FC = () => {
               <div>
                 <label
                   htmlFor="characters"
-                  className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+                  className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
                 >
                   {t('outline.advanced.charactersLabel')}
                 </label>
@@ -110,7 +110,7 @@ const IdeaForm: FC = () => {
               <div>
                 <label
                   htmlFor="setting"
-                  className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+                  className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
                 >
                   {t('outline.advanced.settingLabel')}
                 </label>
@@ -125,7 +125,7 @@ const IdeaForm: FC = () => {
                 <div>
                   <label
                     htmlFor="pacing"
-                    className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+                    className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
                   >
                     {t('outline.advanced.pacingLabel')}
                   </label>
@@ -139,7 +139,7 @@ const IdeaForm: FC = () => {
                 <div>
                   <label
                     htmlFor="numChapters"
-                    className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+                    className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
                   >
                     {t('outline.advanced.chaptersLabel')}
                   </label>
@@ -211,7 +211,7 @@ const OutlineResult: FC = () => {
         <CardHeader>
           <div className="flex items-center gap-3">
             <SectionIcon section="outline" size="sm" />
-            <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
               {t('outline.result.title')}
             </h2>
           </div>
@@ -231,7 +231,7 @@ const OutlineResult: FC = () => {
         <CardHeader>
           <div className="flex items-center gap-3">
             <SectionIcon section="outline" size="sm" />
-            <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
               {t('outline.result.title')}
             </h2>
           </div>
@@ -247,18 +247,16 @@ const OutlineResult: FC = () => {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+        <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
           {t('outline.result.title')}
         </h2>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col">
         {outline.length > 0 ? (
-          // QNBS-v3: role="list" required by axe aria-required-parent for child role="listitem"
-          <div role="list" className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 flex-grow">
+          <ul className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 flex-grow list-none">
             {outline.map((section, index) => (
-              <div
+              <li
                 key={section.id}
-                role="listitem"
                 draggable
                 onDragStart={() => {
                   draggedItem.current = index;
@@ -272,13 +270,13 @@ const OutlineResult: FC = () => {
                 onDragOver={(e) => e.preventDefault()}
               >
                 <div
-                  className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${section.isTwist ? 'bg-[var(--accent-1-background)]/20 border-[var(--accent-1-border)]' : 'bg-transparent border-[var(--border-primary)] hover:bg-[var(--background-secondary)]/30'} ${draggingIndex === index ? 'opacity-60 scale-[1.02] shadow-2xl shadow-indigo-500/50' : ''}`}
+                  className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${section.isTwist ? 'bg-[var(--accent-1-background)]/20 border-[var(--accent-1-border)]' : 'bg-transparent border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-raised)]/30'} ${draggingIndex === index ? 'opacity-60 scale-[1.02] shadow-2xl shadow-indigo-500/50' : ''}`}
                 >
-                  <div className="p-4 border-b border-[var(--border-primary)]/50 flex justify-between items-start gap-2 bg-white/[0.01]">
+                  <div className="p-4 border-b border-[var(--sc-border-subtle)]/50 flex justify-between items-start gap-2 bg-white/[0.01]">
                     <div className="flex-grow flex items-center gap-2">
                       <button
                         type="button"
-                        className="cursor-move text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]"
+                        className="cursor-move text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)]"
                         title={t('outline.result.dragHandleTooltip')}
                         aria-label={t('outline.result.dragHandleTooltip')}
                       >
@@ -310,7 +308,7 @@ const OutlineResult: FC = () => {
                       <Input
                         value={section.title}
                         onChange={(e) => updateSection(section.id, { title: e.target.value })}
-                        className="bg-transparent border-0 p-0 text-lg font-semibold text-indigo-500 dark:text-indigo-300 h-auto focus:ring-0 focus:bg-[var(--background-secondary)]/50 rounded-md px-2"
+                        className="bg-transparent border-0 p-0 text-lg font-semibold text-indigo-500 dark:text-indigo-300 h-auto focus:ring-0 focus:bg-[var(--sc-surface-raised)]/50 rounded-md px-2"
                       />
                     </div>
                     <div className="flex items-center space-x-1 flex-shrink-0">
@@ -318,7 +316,7 @@ const OutlineResult: FC = () => {
                         type="button"
                         onClick={() => handleMove(index, 'up')}
                         disabled={index === 0}
-                        className="p-1 rounded-md hover:bg-[var(--background-secondary)] disabled:opacity-20"
+                        className="p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20"
                         title={t('common.moveUp')}
                         aria-label={t('common.moveUp')}
                       >
@@ -339,7 +337,7 @@ const OutlineResult: FC = () => {
                         type="button"
                         onClick={() => handleMove(index, 'down')}
                         disabled={index === outline.length - 1}
-                        className="p-1 rounded-md hover:bg-[var(--background-secondary)] disabled:opacity-20"
+                        className="p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20"
                         title={t('common.moveDown')}
                         aria-label={t('common.moveDown')}
                       >
@@ -426,33 +424,31 @@ const OutlineResult: FC = () => {
                           description: e.target.value,
                         })
                       }
-                      className="bg-transparent border-[var(--border-primary)] p-2 min-h-[100px]"
+                      className="bg-transparent border-[var(--sc-border-subtle)] p-2 min-h-[100px]"
                     />
                   </div>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         ) : (
-          <div className="flex flex-col justify-center items-center h-full min-h-[400px] text-center p-8 opacity-70 border-2 border-dashed border-[var(--border-primary)] rounded-xl bg-[var(--background-secondary)]/30">
-            <div className="p-4 rounded-full bg-[var(--background-tertiary)] mb-4">
+          <div className="flex flex-col justify-center items-center h-full min-h-[400px] text-center p-8 opacity-70 border-2 border-dashed border-[var(--sc-border-subtle)] rounded-xl bg-[var(--sc-surface-raised)]/30">
+            <div className="p-4 rounded-full bg-[var(--sc-surface-overlay)] mb-4">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
                 strokeWidth={1}
                 stroke="currentColor"
-                className="w-16 h-16 text-[var(--foreground-muted)]"
+                className="w-16 h-16 text-[var(--sc-text-muted)]"
               >
                 {ICONS.OUTLINE}
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-[var(--foreground-primary)] mb-2">
+            <h3 className="text-lg font-semibold text-[var(--sc-text-primary)] mb-2">
               {t('outline.result.placeholder')}
             </h3>
-            <p className="text-[var(--foreground-secondary)] max-w-sm">
-              {t('outline.result.body')}
-            </p>
+            <p className="text-[var(--sc-text-secondary)] max-w-sm">{t('outline.result.body')}</p>
           </div>
         )}
         {outline.length > 0 && (
@@ -472,7 +468,7 @@ const ConfirmationModal: FC = () => {
   return (
     <Modal isOpen={true} onClose={() => setConfirmModal(null)} title={confirmModal.title}>
       <div className="space-y-4">
-        <p className="text-[var(--foreground-secondary)]">{confirmModal.description}</p>
+        <p className="text-[var(--sc-text-secondary)]">{confirmModal.description}</p>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setConfirmModal(null)}>
             {t('common.cancel')}

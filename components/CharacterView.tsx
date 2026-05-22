@@ -55,7 +55,7 @@ const TabButton: FC<{
     aria-selected={active}
     aria-controls={controls}
     onClick={onClick}
-    className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${active ? 'border-indigo-500 text-[var(--foreground-primary)]' : 'border-transparent text-[var(--foreground-muted)] hover:border-[var(--border-primary)] hover:text-[var(--foreground-secondary)]'}`}
+    className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${active ? 'border-indigo-500 text-[var(--sc-text-primary)]' : 'border-transparent text-[var(--sc-text-muted)] hover:border-[var(--sc-border-subtle)] hover:text-[var(--sc-text-secondary)]'}`}
   >
     {children}
   </button>
@@ -85,7 +85,7 @@ const DetailField: FC<DetailFieldProps> = React.memo(({ label, field, value }) =
       <div className="flex justify-between items-center">
         <label
           htmlFor={`character-${field}`}
-          className="text-sm font-medium text-[var(--foreground-secondary)]"
+          className="text-sm font-medium text-[var(--sc-text-secondary)]"
         >
           {label}
         </label>
@@ -185,7 +185,7 @@ const CharacterDossier: FC = () => {
       )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 space-y-4">
-          <div className="relative aspect-square w-full rounded-lg bg-[var(--background-tertiary)]/50 flex items-center justify-center overflow-hidden border border-[var(--border-primary)] group">
+          <div className="relative aspect-square w-full rounded-lg bg-[var(--sc-surface-overlay)]/50 flex items-center justify-center overflow-hidden border border-[var(--sc-border-subtle)] group">
             {selectedCharacter.hasAvatar && imageUrl ? (
               <img
                 src={imageUrl}
@@ -199,13 +199,13 @@ const CharacterDossier: FC = () => {
                 viewBox="0 0 24 24"
                 strokeWidth={1.5}
                 stroke="currentColor"
-                className="w-24 h-24 text-[var(--foreground-muted)]"
+                className="w-24 h-24 text-[var(--sc-text-muted)]"
               >
                 {ICONS.CHARACTERS}
               </svg>
             )}
             {(isGeneratingPortrait || isRefiningPortrait) && (
-              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-[var(--foreground-primary)]">
+              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-[var(--sc-text-primary)]">
                 <Spinner className="w-8 h-8" />{' '}
                 <p className="mt-2 text-sm">{t('characters.edit.portrait.generating')}</p>
               </div>
@@ -223,7 +223,7 @@ const CharacterDossier: FC = () => {
             <div className="col-span-5 mb-2">
               <label
                 htmlFor="portrait-style-select"
-                className="text-sm font-medium text-[var(--foreground-secondary)]"
+                className="text-sm font-medium text-[var(--sc-text-secondary)]"
               >
                 {t('characters.edit.portrait.styleLabel')}
               </label>
@@ -298,7 +298,7 @@ const CharacterDossier: FC = () => {
             <div className="space-y-2">
               <label
                 htmlFor="refine-prompt"
-                className="text-sm font-medium text-[var(--foreground-secondary)]"
+                className="text-sm font-medium text-[var(--sc-text-secondary)]"
               >
                 {t('characters.dossier.refineLabel')}
               </label>
@@ -339,7 +339,7 @@ const CharacterDossier: FC = () => {
               aria-label={t('characters.edit.name')}
               value={selectedCharacter.name}
               onDebouncedChange={(value) => handleFieldChange('name', value)}
-              className="bg-transparent border-0 p-0 text-2xl font-semibold text-[var(--foreground-primary)] h-auto focus:ring-0 focus:bg-[var(--foreground-primary)]/10 rounded-md px-2 w-full mr-2"
+              className="bg-transparent border-0 p-0 text-2xl font-semibold text-[var(--sc-text-primary)] h-auto focus:ring-0 focus:bg-[var(--sc-text-primary)]/10 rounded-md px-2 w-full mr-2"
             />
             <Button
               variant="danger"
@@ -364,7 +364,7 @@ const CharacterDossier: FC = () => {
               </svg>
             </Button>
           </div>
-          <div className="border-b border-[var(--border-primary)] overflow-x-auto">
+          <div className="border-b border-[var(--sc-border-subtle)] overflow-x-auto">
             <div
               role="tablist"
               aria-label={t('characters.editorTabsAriaLabel')}
@@ -402,7 +402,7 @@ const CharacterDossier: FC = () => {
           </div>
           <div className="p-0 pt-4 max-h-[55vh] overflow-y-auto">
             {isGeneratingProfile && (
-              <div className="flex items-center justify-center space-x-2 text-[var(--foreground-secondary)] p-8">
+              <div className="flex items-center justify-center space-x-2 text-[var(--sc-text-secondary)] p-8">
                 <Spinner />
                 <p>{t('characters.loading.profile')}</p>
               </div>
@@ -471,7 +471,7 @@ const CharacterDossier: FC = () => {
             >
               <label
                 htmlFor="character-notes"
-                className="text-sm font-medium text-[var(--foreground-secondary)]"
+                className="text-sm font-medium text-[var(--sc-text-secondary)]"
               >
                 {t('characters.edit.notes')}
               </label>
@@ -500,7 +500,7 @@ const AIProfileModal: FC = () => {
       title={t('characters.aiModal.title')}
     >
       <div className="space-y-4">
-        <p className="text-[var(--foreground-secondary)]">{t('characters.aiModal.description')}</p>
+        <p className="text-[var(--sc-text-secondary)]">{t('characters.aiModal.description')}</p>
         <DebouncedTextarea
           placeholder={t('characters.aiModal.placeholder')}
           value={aiConcept}
@@ -528,7 +528,7 @@ const DeleteConfirmationModal: FC = () => {
       title={t('characters.deleteLabel', { name: characterToDelete.name })}
     >
       <div className="space-y-4">
-        <p className="text-[var(--foreground-secondary)]">{t('characters.deleteConfirm')}</p>
+        <p className="text-[var(--sc-text-secondary)]">{t('characters.deleteConfirm')}</p>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setCharacterToDelete(null)}>
             {t('common.cancel')}
@@ -554,7 +554,7 @@ const CharacterCard: FC<{ character: Character; animationIndex: number }> = Reac
         className="group text-left relative overflow-hidden transition-all duration-300 hover:-translate-y-1 animate-in"
         style={{ '--index': animationIndex } as React.CSSProperties}
       >
-        <div className="aspect-square w-full bg-[var(--background-tertiary)]/50 flex items-center justify-center overflow-hidden">
+        <div className="aspect-square w-full bg-[var(--sc-surface-overlay)]/50 flex items-center justify-center overflow-hidden">
           {character.hasAvatar && imageUrl ? (
             <img
               src={imageUrl}
@@ -568,17 +568,17 @@ const CharacterCard: FC<{ character: Character; animationIndex: number }> = Reac
               viewBox="0 0 24 24"
               strokeWidth={1.5}
               stroke="currentColor"
-              className="w-16 h-16 text-[var(--foreground-muted)]"
+              className="w-16 h-16 text-[var(--sc-text-muted)]"
             >
               {ICONS.CHARACTERS}
             </svg>
           )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[var(--background-gradient-overlay-start)] via-[var(--card-gradient-overlay)] to-transparent">
-          <h3 className="font-bold text-lg text-[var(--foreground-interactive)] dark:text-white truncate">
+          <h3 className="font-bold text-lg text-[var(--sc-text-on-accent)] dark:text-white truncate">
             {character.name}
           </h3>
-          <p className="text-sm text-[var(--foreground-secondary)] dark:text-gray-300 truncate">
+          <p className="text-sm text-[var(--sc-text-secondary)] dark:text-gray-300 truncate">
             {character.personalityTraits}
           </p>
         </div>
@@ -596,7 +596,7 @@ const CharacterViewUI: FC = () => {
       {/* QNBS-v3: view-level section header with colored SSOT icon */}
       <div className="flex items-center gap-3 mb-6">
         <SectionIcon section="characters" size="lg" />
-        <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
+        <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">
           {t('sidebar.characters')}
         </h1>
       </div>
@@ -620,7 +620,10 @@ const CharacterViewUI: FC = () => {
           />
         </div>
         {characters.map((char, index) => (
-          <CharacterCard key={char.id} character={char} animationIndex={index + 2} />
+          // QNBS-v3: content-visibility skips rendering off-screen cards — no-op for short lists, measurable win for 50+ characters.
+          <div key={char.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 160px' }}>
+            <CharacterCard character={char} animationIndex={index + 2} />
+          </div>
         ))}
       </div>
       {isDossierOpen && <CharacterDossier />}

@@ -18,7 +18,7 @@ export const Tooltip: FC<TooltipProps> = ({ children, label, shortcut }) => {
       <span
         id={tooltipId}
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-primary)] bg-[var(--background-tertiary)] px-2 py-1 text-xs text-[var(--foreground-primary)] opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] px-2 py-1 text-xs text-[var(--sc-text-primary)] opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
       >
         {hint}
       </span>

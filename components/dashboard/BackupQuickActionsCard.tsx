@@ -86,14 +86,14 @@ export const BackupQuickActionsCard: FC<BackupQuickActionsCardProps> = ({ onNavi
   return (
     <Card className="animate-in" style={{ '--index': 6 } as React.CSSProperties}>
       <CardHeader>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--foreground-muted)]">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--sc-text-muted)]">
           {t('dashboard.backup.title')}
         </h2>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm text-[var(--foreground-secondary)]">{t('dashboard.backup.hint')}</p>
+        <p className="text-sm text-[var(--sc-text-secondary)]">{t('dashboard.backup.hint')}</p>
         {latestSnapshot && (
-          <p className="text-xs text-[var(--foreground-muted)]">
+          <p className="text-xs text-[var(--sc-text-muted)]">
             {t('dashboard.backup.latestSnapshot', {
               name: latestSnapshot.name || t('dashboard.backup.unnamedSnapshot'),
               date: new Date(latestSnapshot.date).toLocaleString(),

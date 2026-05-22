@@ -18,12 +18,12 @@ export const EmptyState: FC<EmptyStateProps> = ({
 }) => (
   <div
     role="status"
-    className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-primary)] bg-[var(--glass-bg)] px-6 py-12 text-center"
+    className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--sc-border-subtle)] bg-[var(--glass-bg)] px-6 py-12 text-center"
   >
-    {icon ? <div className="mb-4 text-[var(--foreground-muted)]">{icon}</div> : null}
-    <h3 className="text-lg font-semibold text-[var(--foreground-primary)]">{title}</h3>
+    {icon ? <div className="mb-4 text-[var(--sc-text-muted)]">{icon}</div> : null}
+    <h3 className="text-lg font-semibold text-[var(--sc-text-primary)]">{title}</h3>
     {description ? (
-      <p className="mt-2 max-w-md text-sm text-[var(--foreground-secondary)]">{description}</p>
+      <p className="mt-2 max-w-md text-sm text-[var(--sc-text-secondary)]">{description}</p>
     ) : null}
     <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
       {primaryAction ? (

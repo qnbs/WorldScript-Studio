@@ -37,17 +37,17 @@ const ResultItem: React.FC<{
   <button
     type="button"
     onClick={onClose}
-    className="w-full text-left px-4 py-3 rounded-lg hover:bg-[var(--background-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] transition-colors group"
+    className="w-full text-left px-4 py-3 rounded-lg hover:bg-[var(--sc-surface-raised)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] transition-colors group"
   >
     <div className="flex items-center gap-2 mb-1">
-      <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--background-tertiary)] text-[var(--foreground-secondary)]">
+      <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]">
         {matchTypeLabel[result.matchType]}
       </span>
-      <span className="text-xs text-[var(--foreground-secondary)] truncate">
+      <span className="text-xs text-[var(--sc-text-secondary)] truncate">
         {result.projectTitle}
       </span>
     </div>
-    <p className="text-sm text-[var(--foreground-primary)] line-clamp-2">{result.excerpt}</p>
+    <p className="text-sm text-[var(--sc-text-primary)] line-clamp-2">{result.excerpt}</p>
   </button>
 ));
 ResultItem.displayName = 'ResultItem';
@@ -143,13 +143,13 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
           role="dialog"
           aria-modal="true"
           aria-label={t('crossSearch.panelLabel')}
-          className="w-full max-w-xl bg-[var(--background-primary)] border border-[var(--border-primary)] rounded-xl shadow-2xl overflow-hidden"
+          className="w-full max-w-xl bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] rounded-xl shadow-2xl overflow-hidden"
         >
           {/* Search input */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-primary)]">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--sc-border-subtle)]">
             <svg
               aria-hidden="true"
-              className="w-4 h-4 flex-shrink-0 text-[var(--foreground-secondary)]"
+              className="w-4 h-4 flex-shrink-0 text-[var(--sc-text-secondary)]"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -168,44 +168,43 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
               placeholder={t('crossSearch.placeholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 bg-transparent text-sm text-[var(--foreground-primary)] placeholder-[var(--foreground-secondary)] outline-none"
+              className="flex-1 bg-transparent text-sm text-[var(--sc-text-primary)] placeholder-[var(--sc-text-secondary)] outline-none"
             />
             <button
               type="button"
               onClick={close}
               aria-label={t('common.close')}
-              className="text-xs text-[var(--foreground-secondary)] hover:text-[var(--foreground-primary)] px-2 py-1 rounded border border-[var(--border-primary)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)]"
+              className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] px-2 py-1 rounded border border-[var(--sc-border-subtle)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
             >
               Esc
             </button>
           </div>
 
           {/* Results */}
-          <div
-            role="list"
+          <ul
             aria-label={t('crossSearch.resultsLabel')}
-            className="max-h-80 overflow-y-auto py-2 px-2"
+            className="max-h-80 overflow-y-auto py-2 px-2 list-none"
           >
             {debouncedQuery.trim() === '' && (
-              <p className="px-4 py-6 text-sm text-center text-[var(--foreground-secondary)]">
+              <p className="px-4 py-6 text-sm text-center text-[var(--sc-text-secondary)]">
                 {t('crossSearch.hint')}
               </p>
             )}
             {debouncedQuery.trim() !== '' && results.length === 0 && (
-              <p className="px-4 py-6 text-sm text-center text-[var(--foreground-secondary)]">
+              <p className="px-4 py-6 text-sm text-center text-[var(--sc-text-secondary)]">
                 {t('crossSearch.noResults')}
               </p>
             )}
             {results.map((r) => (
               // QNBS-v3: key uses all stable discriminators so same project can have multiple match types
-              <div role="listitem" key={`${r.projectId}:${r.matchType}:${r.score}:${r.excerpt}`}>
+              <li key={`${r.projectId}:${r.matchType}:${r.score}:${r.excerpt}`}>
                 <ResultItem result={r} onClose={close} />
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
 
           {/* Footer: multi-project index scope */}
-          <div className="px-4 py-2 border-t border-[var(--border-primary)] text-xs text-[var(--foreground-secondary)] text-center">
+          <div className="px-4 py-2 border-t border-[var(--sc-border-subtle)] text-xs text-[var(--sc-text-secondary)] text-center">
             {indexLoading
               ? t('crossSearch.loadingIndex')
               : indexes.length === 0

@@ -1,5 +1,6 @@
 import type { FC, ReactNode } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface BottomSheetProps {
   open: boolean;
@@ -26,8 +27,12 @@ export const BottomSheet: FC<BottomSheetProps> = ({
   children,
   height = 'half',
 }) => {
+  const { t } = useTranslation();
   const titleId = useId();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // QNBS-v3: Persist scroll position across open/close so the "More" menu returns to where the user was.
+  const savedScrollRef = useRef(0);
   const lastFocusRef = useRef<HTMLElement | null>(null);
 
   // Drag-to-dismiss state
@@ -38,6 +43,7 @@ export const BottomSheet: FC<BottomSheetProps> = ({
   // Restore focus and handle Escape on close
   useEffect(() => {
     if (!open) {
+      savedScrollRef.current = scrollRef.current?.scrollTop ?? 0;
       setDragY(0);
       lastFocusRef.current?.focus();
       return;
@@ -47,6 +53,7 @@ export const BottomSheet: FC<BottomSheetProps> = ({
     // Move focus into the sheet
     const first = sheetRef.current && getFocusable(sheetRef.current)[0];
     (first ?? sheetRef.current)?.focus();
+    if (scrollRef.current) scrollRef.current.scrollTop = savedScrollRef.current;
 
     function onKeyDown(e: KeyboardEvent) {
       if (!sheetRef.current) return;
@@ -122,7 +129,7 @@ export const BottomSheet: FC<BottomSheetProps> = ({
           transform: `translateY(${translateY}px)`,
           transition: translateY === 0 ? 'transform 300ms ease-out' : 'none',
         }}
-        className={`fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white dark:bg-slate-900 shadow-2xl flex flex-col ${heightClass} focus-visible:outline-none`}
+        className={`fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-[var(--sc-surface-raised)] shadow-2xl flex flex-col ${heightClass} focus-visible:outline-none`}
       >
         {/* Drag handle */}
         <div
@@ -133,19 +140,30 @@ export const BottomSheet: FC<BottomSheetProps> = ({
           style={{ touchAction: 'none' }}
           aria-hidden="true"
         >
-          <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+          <div className="w-10 h-1 rounded-full bg-[var(--sc-border-strong)]" />
         </div>
+
+        {/* QNBS-v3: SR-only dismiss button — screen reader users cannot drag; this provides a keyboard-accessible close action. */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:right-3 focus:z-10 focus:rounded focus:px-2 focus:py-1 focus:text-xs focus:bg-[var(--sc-surface-overlay)] focus:text-[var(--sc-text-primary)] focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
+        >
+          {t('common.close')}
+        </button>
 
         {/* Title */}
         <h2
           id={titleId}
-          className="flex-shrink-0 px-5 pb-3 text-base font-semibold text-slate-900 dark:text-slate-100"
+          className="flex-shrink-0 px-5 pb-3 text-base font-semibold text-[var(--sc-text-primary)]"
         >
           {title}
         </h2>
 
         {/* Content — scrollable */}
-        <div className="flex-1 overflow-y-auto px-5 pb-6">{children}</div>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 pb-6">
+          {children}
+        </div>
       </div>
     </>
   );

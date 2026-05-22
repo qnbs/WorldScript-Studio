@@ -28,12 +28,12 @@ const AccordionSection: FC<{
   const panelId = `accordion-panel-${idSuffix}`;
   const headerId = `accordion-header-${idSuffix}`;
   return (
-    <div className="border-b border-[var(--border-primary)] last:border-b-0">
-      <h3 id={headerId} className="font-semibold text-[var(--foreground-primary)]">
+    <div className="border-b border-[var(--sc-border-subtle)] last:border-b-0">
+      <h3 id={headerId} className="font-semibold text-[var(--sc-text-primary)]">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex justify-between items-center p-3 text-left hover:bg-[var(--background-tertiary)]/50 transition-colors"
+          className="w-full flex justify-between items-center p-3 text-left hover:bg-[var(--sc-surface-overlay)]/50 transition-colors"
           aria-expanded={isOpen}
           aria-controls={panelId}
         >
@@ -50,15 +50,14 @@ const AccordionSection: FC<{
           </svg>
         </button>
       </h3>
-      <div
+      <section
         id={panelId}
-        role="region"
         aria-labelledby={headerId}
         hidden={!isOpen}
         className="p-4 pt-0 animate-in"
       >
         {children}
-      </div>
+      </section>
     </div>
   );
 });
@@ -119,7 +118,7 @@ const ExportControls: FC = () => {
       <CardHeader>
         <div className="flex items-center gap-3">
           <SectionIcon section="export" size="sm" />
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('export.options.title')}
           </h2>
         </div>
@@ -218,7 +217,7 @@ const ExportControls: FC = () => {
             <div>
               <label
                 htmlFor="export-format"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-2 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
               >
                 {t('export.format.format')}
               </label>
@@ -238,15 +237,15 @@ const ExportControls: FC = () => {
               </Select>
             </div>
             {format === 'pdf' && (
-              <div className="space-y-4 border-t border-[var(--border-primary)] pt-4 animate-in">
-                <h4 className="font-semibold text-[var(--foreground-secondary)]">
+              <div className="space-y-4 border-t border-[var(--sc-border-subtle)] pt-4 animate-in">
+                <h4 className="font-semibold text-[var(--sc-text-secondary)]">
                   {t('export.format.pdfOptions')}
                 </h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label
                       htmlFor="export-pdf-font"
-                      className="text-xs text-[var(--foreground-muted)] mb-1 block"
+                      className="text-xs text-[var(--sc-text-muted)] mb-1 block"
                     >
                       {t('export.format.font')}
                     </label>
@@ -268,7 +267,7 @@ const ExportControls: FC = () => {
                   <div>
                     <label
                       htmlFor="export-pdf-font-size"
-                      className="text-xs text-[var(--foreground-muted)] mb-1 block"
+                      className="text-xs text-[var(--sc-text-muted)] mb-1 block"
                     >
                       {t('export.format.fontSize')}
                     </label>
@@ -290,7 +289,7 @@ const ExportControls: FC = () => {
                 <div>
                   <label
                     htmlFor="export-pdf-line-spacing"
-                    className="text-xs text-[var(--foreground-muted)] mb-1 block"
+                    className="text-xs text-[var(--sc-text-muted)] mb-1 block"
                   >
                     {t('export.format.lineSpacing')}
                   </label>
@@ -324,7 +323,7 @@ const ExportControls: FC = () => {
           </div>
         </AccordionSection>
         <AccordionSection title={t('export.compileProfile.title')} idSuffix="compile-profile">
-          <p className="text-xs text-[var(--foreground-muted)] pb-2">
+          <p className="text-xs text-[var(--sc-text-muted)] pb-2">
             {t('export.compileProfile.hint')}
           </p>
           <div className="space-y-3 pt-2">
@@ -462,7 +461,7 @@ const ExportPreview: FC = () => {
       <CardHeader>
         <div className="flex items-center gap-3">
           <SectionIcon section="export" size="sm" />
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('export.preview.title')}
           </h2>
         </div>
@@ -472,21 +471,21 @@ const ExportPreview: FC = () => {
         {formattedOutput ? (
           <pre
             data-testid="export-preview"
-            className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--border-primary)] p-6 rounded-xl text-[var(--foreground-secondary)] h-full overflow-y-auto whitespace-pre-wrap shadow-inner"
+            className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--sc-border-subtle)] p-6 rounded-xl text-[var(--sc-text-secondary)] h-full overflow-y-auto whitespace-pre-wrap shadow-inner"
             style={editorStyles}
           >
             {formattedOutput}
           </pre>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-[var(--foreground-muted)] border-2 border-dashed border-[var(--border-primary)] rounded-xl bg-[var(--background-secondary)]/30 p-8">
-            <div className="p-4 rounded-full bg-[var(--background-tertiary)] mb-4">
+          <div className="flex flex-col items-center justify-center h-full text-[var(--sc-text-muted)] border-2 border-dashed border-[var(--sc-border-subtle)] rounded-xl bg-[var(--sc-surface-raised)]/30 p-8">
+            <div className="p-4 rounded-full bg-[var(--sc-surface-overlay)] mb-4">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
                 strokeWidth={1.5}
                 stroke="currentColor"
-                className="w-12 h-12 text-[var(--foreground-muted)]"
+                className="w-12 h-12 text-[var(--sc-text-muted)]"
               >
                 <path
                   strokeLinecap="round"

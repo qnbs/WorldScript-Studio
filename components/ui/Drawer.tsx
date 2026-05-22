@@ -97,9 +97,10 @@ export const Drawer: React.FC<DrawerProps> = ({
     return undefined;
   }, [isOpen, onClose]);
 
-  const backdropClasses = `fixed inset-0 bg-[var(--overlay-backdrop)] z-40 transition-opacity duration-300 ${isOpen ? 'backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`;
+  const backdropClasses = `fixed inset-0 bg-[var(--overlay-backdrop)] z-40 transition-opacity duration-sc-normal ${isOpen ? 'backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`;
 
-  const drawerContainerClasses = `fixed top-0 h-full w-4/5 max-w-sm bg-[var(--background-primary)] z-50 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out border-[var(--border-primary)] ${position === 'left' ? 'left-0 border-r' : 'right-0 border-l'}`;
+  // QNBS-v3: Logical properties (start-0/end-0) instead of left-0/right-0 for RTL readiness.
+  const drawerContainerClasses = `fixed top-0 h-full w-4/5 max-w-sm bg-[var(--sc-surface-base)] z-50 shadow-2xl flex flex-col transition-transform duration-sc-normal ease-sc-standard border-[var(--sc-border-subtle)] ${position === 'left' ? 'start-0 border-e' : 'end-0 border-s'}`;
 
   const transformClass = {
     left: isOpen ? 'translate-x-0' : '-translate-x-full',
@@ -117,14 +118,14 @@ export const Drawer: React.FC<DrawerProps> = ({
         aria-modal="true"
         aria-labelledby="drawer-title"
       >
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border-primary)] flex-shrink-0">
-          <h2 id="drawer-title" className="text-xl font-semibold text-[var(--foreground-primary)]">
+        <div className="flex items-center justify-between p-4 border-b border-[var(--sc-border-subtle)] flex-shrink-0">
+          <h2 id="drawer-title" className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] transition-colors"
+            className="text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] transition-colors"
             aria-label={t('common.close')}
           >
             <svg

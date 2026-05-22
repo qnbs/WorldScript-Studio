@@ -238,10 +238,10 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
         role="dialog"
         aria-modal="true"
         aria-labelledby="collab-panel-title"
-        className="fixed right-0 top-0 h-full w-full max-w-sm bg-[var(--background-primary)] border-l border-[var(--border-primary)] shadow-2xl z-50 flex flex-col overflow-hidden focus:outline-none"
+        className="fixed right-0 top-0 h-full w-full max-w-sm bg-[var(--sc-surface-base)] border-l border-[var(--sc-border-subtle)] shadow-2xl z-50 flex flex-col overflow-hidden focus:outline-none"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--sc-border-subtle)]">
           <div className="flex items-center gap-3">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -249,7 +249,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               viewBox="0 0 24 24"
               strokeWidth={1.5}
               stroke="currentColor"
-              className="w-5 h-5 text-[var(--foreground-secondary)]"
+              className="w-5 h-5 text-[var(--sc-text-secondary)]"
             >
               <path
                 strokeLinecap="round"
@@ -257,10 +257,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                 d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
               />
             </svg>
-            <h2
-              id="collab-panel-title"
-              className="text-lg font-bold text-[var(--foreground-primary)]"
-            >
+            <h2 id="collab-panel-title" className="text-lg font-bold text-[var(--sc-text-primary)]">
               {t('collab.title')}
             </h2>
           </div>
@@ -274,7 +271,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-md hover:bg-[var(--background-secondary)] text-[var(--foreground-secondary)] transition-colors"
+              className="p-2 rounded-md hover:bg-[var(--sc-surface-raised)] text-[var(--sc-text-secondary)] transition-colors"
               aria-label={t('collab.close')}
             >
               <span aria-hidden="true">✕</span>
@@ -285,8 +282,8 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {/* How it works */}
-          <div className="p-3 rounded-lg bg-[var(--background-interactive)]/10 border border-[var(--border-interactive)]/30 text-sm text-[var(--foreground-secondary)]">
-            <p className="font-semibold text-[var(--foreground-primary)] mb-1">
+          <div className="p-3 rounded-lg bg-[var(--sc-accent)]/10 border border-[var(--border-interactive)]/30 text-sm text-[var(--sc-text-secondary)]">
+            <p className="font-semibold text-[var(--sc-text-primary)] mb-1">
               🌐 {t('collab.p2pTitle')}
             </p>
             <p>{t('collab.p2pDescription')}</p>
@@ -294,7 +291,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
 
           {/* User identity */}
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] mb-3">
               {t('collab.identity')}
             </h3>
             <div className="flex items-center gap-3">
@@ -308,7 +305,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                 />
               </div>
               <div
-                className="w-8 h-8 rounded-full cursor-pointer border-2 border-[var(--border-primary)] flex-shrink-0"
+                className="w-8 h-8 rounded-full cursor-pointer border-2 border-[var(--sc-border-subtle)] flex-shrink-0"
                 style={{ backgroundColor: localUser.color }}
                 title={t('collab.colorTitle')}
               />
@@ -317,7 +314,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
 
           {/* Room ID */}
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] mb-3">
               {t('collab.roomId')}
             </h3>
             <div className="flex gap-2">
@@ -334,7 +331,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                   onClick={() => {
                     navigator.clipboard.writeText(currentRoomId).catch(() => {});
                   }}
-                  className="px-3 py-2 text-xs rounded-md bg-[var(--background-secondary)] hover:bg-[var(--background-tertiary)] text-[var(--foreground-secondary)] border border-[var(--border-primary)] transition-colors"
+                  className="px-3 py-2 text-xs rounded-md bg-[var(--sc-surface-raised)] hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] border border-[var(--sc-border-subtle)] transition-colors"
                   title={t('collab.copyToClipboard')}
                 >
                   {t('collab.copy')}
@@ -342,7 +339,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               )}
             </div>
             {isConnected && (
-              <p className="text-xs text-[var(--foreground-muted)] mt-1">
+              <p className="text-xs text-[var(--sc-text-muted)] mt-1">
                 {t('collab.room')} <code className="font-mono">{currentRoomId}</code>
               </p>
             )}
@@ -350,7 +347,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
 
           {/* Room Password (PSK) */}
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] mb-3">
               {t('collab.roomPassword')}
             </h3>
             <Input
@@ -362,9 +359,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               className="font-mono text-sm"
               autoComplete="off"
             />
-            <p className="text-xs text-[var(--foreground-muted)] mt-1">
-              {t('collab.passwordHint')}
-            </p>
+            <p className="text-xs text-[var(--sc-text-muted)] mt-1">{t('collab.passwordHint')}</p>
             {/* QNBS-v3: Encryption badge visible after connect — shows AES-GCM key status vs PSK-only isolation. */}
             {isConnected && (
               <span
@@ -427,24 +422,22 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           {/* Connected users */}
           {isConnected && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] mb-3">
                 {t('collab.connectedUsers')} ({connectedUsers.length})
               </h3>
               {connectedUsers.length === 0 ? (
-                <p className="text-sm text-[var(--foreground-muted)]">
-                  {t('collab.waitingForUsers')}
-                </p>
+                <p className="text-sm text-[var(--sc-text-muted)]">{t('collab.waitingForUsers')}</p>
               ) : (
                 <div className="space-y-2">
                   {connectedUsers.map((user) => (
                     <div
                       key={user.id}
-                      className="flex items-center gap-3 p-2 rounded-lg bg-[var(--background-secondary)]"
+                      className="flex items-center gap-3 p-2 rounded-lg bg-[var(--sc-surface-raised)]"
                     >
                       <UserAvatar user={user} size="sm" />
-                      <span className="text-sm text-[var(--foreground-primary)]">{user.name}</span>
+                      <span className="text-sm text-[var(--sc-text-primary)]">{user.name}</span>
                       {user.id === localUser.id && (
-                        <span className="ml-auto text-xs text-[var(--foreground-muted)]">
+                        <span className="ml-auto text-xs text-[var(--sc-text-muted)]">
                           ({t('collab.you')})
                         </span>
                       )}
@@ -456,7 +449,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           )}
 
           {/* Technical note */}
-          <div className="p-3 rounded-lg bg-[var(--background-secondary)] text-xs text-[var(--foreground-muted)]">
+          <div className="p-3 rounded-lg bg-[var(--sc-surface-raised)] text-xs text-[var(--sc-text-muted)]">
             <p className="font-semibold mb-1">ℹ️ {t('collab.technicalNote')}</p>
             <p>{t('collab.technicalDescription')}</p>
           </div>

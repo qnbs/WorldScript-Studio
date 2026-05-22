@@ -139,7 +139,7 @@ export const ApiKeySection: FC = () => {
   return (
     <section className="space-y-4" aria-labelledby="api-key-heading">
       <div className="flex items-center justify-between">
-        <h3 id="api-key-heading" className="text-lg font-semibold text-[var(--foreground-primary)]">
+        <h3 id="api-key-heading" className="text-lg font-semibold text-[var(--sc-text-primary)]">
           {t('settings.apiKey.title')}
         </h3>
         <span
@@ -207,7 +207,7 @@ export const ApiKeySection: FC = () => {
 
       {/* Key Status / Input */}
       {hasKey ? (
-        <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--background-tertiary)] border border-[var(--border-primary)]">
+        <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--sc-surface-overlay)] border border-[var(--sc-border-subtle)]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
               <svg
@@ -226,10 +226,10 @@ export const ApiKeySection: FC = () => {
               </svg>
             </div>
             <div>
-              <p className="font-medium text-[var(--foreground-primary)]">
+              <p className="font-medium text-[var(--sc-text-primary)]">
                 {t('settings.apiKey.configured')}
               </p>
-              <p className="text-sm text-[var(--foreground-secondary)]">
+              <p className="text-sm text-[var(--sc-text-secondary)]">
                 {t('settings.apiKey.encryptedNote')}
               </p>
             </div>
@@ -276,7 +276,7 @@ export const ApiKeySection: FC = () => {
           <div>
             <label
               htmlFor="gemini-api-key"
-              className="block text-sm font-medium text-[var(--foreground-secondary)] mb-2"
+              className="block text-sm font-medium text-[var(--sc-text-secondary)] mb-2"
             >
               {t('settings.apiKey.inputLabel')}
             </label>
@@ -295,7 +295,7 @@ export const ApiKeySection: FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)]"
                   aria-label={showKey ? t('settings.apiKey.hide') : t('settings.apiKey.show')}
                 >
                   {showKey ? (
@@ -342,7 +342,7 @@ export const ApiKeySection: FC = () => {
             </div>
           </div>
 
-          <p className="text-sm text-[var(--foreground-muted)]">
+          <p className="text-sm text-[var(--sc-text-muted)]">
             {t('settings.apiKey.getKeyHint')}{' '}
             <a
               href="https://aistudio.google.com/app/apikey"

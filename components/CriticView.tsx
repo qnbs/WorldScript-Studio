@@ -27,11 +27,9 @@ const CriticUI: FC = () => {
       <div className="mb-6">
         <div className="flex items-center gap-3">
           <SectionIcon section="critic" size="lg" />
-          <h1 className="text-2xl font-bold text-[var(--foreground-primary)]">
-            {t('critic.title')}
-          </h1>
+          <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">{t('critic.title')}</h1>
         </div>
-        <p className="text-[var(--foreground-secondary)] mt-2">{t('critic.description')}</p>
+        <p className="text-[var(--sc-text-secondary)] mt-2">{t('critic.description')}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -87,7 +85,7 @@ const CriticUI: FC = () => {
                   <pre className="whitespace-pre-wrap text-sm">{analysisResult}</pre>
                 </div>
               ) : (
-                <p className="text-[var(--foreground-secondary)]">{t('critic.noResults')}</p>
+                <p className="text-[var(--sc-text-secondary)]">{t('critic.noResults')}</p>
               )}
             </CardContent>
           </Card>

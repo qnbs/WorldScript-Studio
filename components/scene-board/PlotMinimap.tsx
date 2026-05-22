@@ -46,8 +46,8 @@ export const PlotMinimap: FC<PlotMinimapProps> = ({
         position: 'absolute',
         bottom: 12,
         right: 12,
-        background: 'var(--background-secondary)',
-        border: '1px solid var(--border-primary)',
+        background: 'var(--sc-surface-raised)',
+        border: '1px solid var(--sc-border-subtle)',
         borderRadius: 6,
         opacity: 0.85,
         zIndex: 20,
@@ -76,7 +76,7 @@ export const PlotMinimap: FC<PlotMinimapProps> = ({
         width={Math.max(vpW, 4)}
         height={Math.max(vpH, 4)}
         fill="none"
-        stroke="var(--ring-focus, #6366f1)"
+        stroke="var(--sc-ring-focus, #6366f1)"
         strokeWidth={1}
         opacity={0.8}
       />

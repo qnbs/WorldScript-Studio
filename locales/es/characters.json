@@ -2,6 +2,7 @@
   "characterGraph.legend": "Leyenda",
   "characterGraph.view.graph": "Vista de grafo",
   "characterGraph.view.table": "Vista de tabla",
+  "characterGraph.view.graphKeyboardHint": "Lienzo interactivo — no navegable con teclado. Pulsa G para cambiar a la vista de tabla accesible.",
   "characterGraph.graphAriaLabel": "Grafo interactivo de relaciones entre personajes",
   "characterGraph.table.caption": "Relaciones como tabla accesible",
   "characterGraph.table.from": "Desde",

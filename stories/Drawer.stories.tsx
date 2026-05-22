@@ -49,7 +49,7 @@ const DrawerExample: React.FC<{ position?: 'left' | 'right' }> = ({ position = '
 
   return (
     <I18nMockProvider>
-      <div className="min-h-screen flex items-center justify-center p-8 bg-[var(--background-primary)]">
+      <div className="min-h-screen flex items-center justify-center p-8 bg-[var(--sc-surface-base)]">
         <Button onClick={() => setOpen(true)}>Open Drawer</Button>
         <Drawer
           isOpen={open}
@@ -57,7 +57,7 @@ const DrawerExample: React.FC<{ position?: 'left' | 'right' }> = ({ position = '
           title="StoryCraft Drawer"
           position={position}
         >
-          <div className="p-4 space-y-4 text-[var(--foreground-secondary)]">
+          <div className="p-4 space-y-4 text-[var(--sc-text-secondary)]">
             <p>
               This drawer renders accessible focus-trap behavior and supports left / right
               placement.

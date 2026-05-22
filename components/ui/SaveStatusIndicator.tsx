@@ -12,7 +12,7 @@ export const SaveStatusIndicator: React.FC = () => {
   }
 
   return (
-    <div className="flex items-center text-sm text-[var(--foreground-muted)] transition-opacity duration-300">
+    <div className="flex items-center text-sm text-[var(--sc-text-muted)] transition-opacity duration-sc-normal">
       {savingStatus === 'saving' && (
         <>
           <Spinner className="w-4 h-4 mr-2 border-current" />

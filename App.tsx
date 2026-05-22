@@ -158,6 +158,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const worlds = useAppSelector(selectAllWorlds);
 
   const prevViewRef = useRef<View | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
   const shareTargetHandledRef = useRef(false);
 
   const isPaletteOpen = useTransientUiStore((s) => s.isCommandPaletteOpen);
@@ -302,6 +303,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   }, [dispatch, isPortalActive, t]);
 
   // QNBS-v3: Übersetzte View-Ansage statt Rohtext (WCAG 4.1.3 Statusmeldungen).
+  //          requestAnimationFrame focus ensures the new view is mounted before focus moves (WCAG 2.4.3).
   useEffect(() => {
     if (isInitialLoad || isPortalActive) return;
     if (prevViewRef.current === currentView) return;
@@ -312,6 +314,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         view: t(labelKey),
       }),
     );
+    requestAnimationFrame(() => mainRef.current?.focus());
   }, [currentView, announce, t, isInitialLoad, isPortalActive]);
 
   useEffect(() => {
@@ -502,9 +505,11 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   onOpenPalette={() => setCommandPaletteOpen(true)}
                 />
                 <main
+                  ref={mainRef}
                   id="main-content"
+                  tabIndex={-1}
                   aria-label={t('common.mainContent')}
-                  className="flex-1 overflow-y-auto p-4 pb-mobile-nav sm:p-6 md:p-8 md:pb-8 scroll-smooth overscroll-none"
+                  className="flex-1 overflow-y-auto p-4 pb-mobile-nav sm:p-6 md:p-8 md:pb-8 scroll-smooth overscroll-none focus-visible:outline-none"
                 >
                   <ErrorBoundary key={currentView} onReset={() => handleNavigate('dashboard')}>
                     <ViewErrorBoundary viewLabel={t(viewNavigationLabelKey(currentView))}>

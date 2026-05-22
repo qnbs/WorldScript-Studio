@@ -19,11 +19,11 @@ export const Card: React.FC<CardProps> = ({
       type={isInteractive ? 'button' : undefined}
       className={`
         relative group overflow-hidden rounded-2xl
-        bg-[var(--background-secondary)]/60 backdrop-blur-3xl
+        bg-[var(--sc-surface-raised)]/60 backdrop-blur-3xl
         border border-[var(--glass-border)]
         shadow-[0_8px_30px_rgb(0,0,0,0.04)]
-        transition-all duration-300 ease-out
-        ${isInteractive ? 'hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(0,0,0,0.1)] hover:bg-[var(--background-secondary)]/80 cursor-pointer active:scale-[0.99]' : ''} 
+        transition-all duration-sc-normal ease-out
+        ${isInteractive ? 'hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(0,0,0,0.1)] hover:bg-[var(--sc-surface-raised)]/80 cursor-pointer active:scale-[0.99]' : ''} 
         ${className ?? ''}
       `}
       {...props}
@@ -49,9 +49,7 @@ interface CardContentProps {
 }
 
 export const CardContent: React.FC<CardContentProps> = ({ children, className }) => {
-  return (
-    <div className={`p-6 text-[var(--foreground-secondary)] ${className ?? ''}`}>{children}</div>
-  );
+  return <div className={`p-6 text-[var(--sc-text-secondary)] ${className ?? ''}`}>{children}</div>;
 };
 
 interface CardHeaderProps {
@@ -62,7 +60,7 @@ interface CardHeaderProps {
 export const CardHeader: React.FC<CardHeaderProps> = ({ children, className }) => {
   return (
     <div
-      className={`p-6 border-b border-[var(--border-primary)]/50 bg-white/[0.02] ${className ?? ''}`}
+      className={`p-6 border-b border-[var(--sc-border-subtle)]/50 bg-white/[0.02] ${className ?? ''}`}
     >
       {children}
     </div>

@@ -93,10 +93,10 @@ export const AiSection: FC = () => {
       {/* QNBS-v3: Hybrid-Fallback nur für Legacy-/Thunk-Pfad — Writer-Orchestrierung bleibt Primär-Provider (siehe README). */}
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">
             {t('settings.ai.hybridFallbackTitle')}
           </h2>
-          <p className="text-sm text-[var(--foreground-muted)] mt-1">
+          <p className="text-sm text-[var(--sc-text-muted)] mt-1">
             {t('settings.ai.hybridFallbackHint')}
           </p>
         </CardHeader>
@@ -116,13 +116,13 @@ export const AiSection: FC = () => {
               <div className="space-y-1">
                 <label
                   htmlFor="fb-step-1"
-                  className="text-sm font-medium text-[var(--foreground-secondary)]"
+                  className="text-sm font-medium text-[var(--sc-text-secondary)]"
                 >
                   {t('settings.ai.fallbackStep1')}
                 </label>
                 <select
                   id="fb-step-1"
-                  className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                  className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                   value={settings.advancedAi.hybridFallbackChain[0] ?? ''}
                   onChange={(e) => {
                     const primary = settings.advancedAi.provider;
@@ -150,13 +150,13 @@ export const AiSection: FC = () => {
               <div className="space-y-1">
                 <label
                   htmlFor="fb-step-2"
-                  className="text-sm font-medium text-[var(--foreground-secondary)]"
+                  className="text-sm font-medium text-[var(--sc-text-secondary)]"
                 >
                   {t('settings.ai.fallbackStep2')}
                 </label>
                 <select
                   id="fb-step-2"
-                  className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--background-secondary)] px-3 py-2 text-sm text-[var(--foreground-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                  className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                   value={settings.advancedAi.hybridFallbackChain[1] ?? ''}
                   onChange={(e) => {
                     const primary = settings.advancedAi.provider;
@@ -187,7 +187,7 @@ export const AiSection: FC = () => {
       </Card>
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.ai.title')}
           </h2>
         </CardHeader>
@@ -195,14 +195,14 @@ export const AiSection: FC = () => {
           <div className="space-y-2">
             <label
               htmlFor="ai-creativity-select"
-              className="flex justify-between text-sm font-medium text-[var(--foreground-secondary)]"
+              className="flex justify-between text-sm font-medium text-[var(--sc-text-secondary)]"
             >
               <span>{t('settings.ai.creativity')}</span>
-              <span className="font-bold text-[var(--foreground-primary)]">
+              <span className="font-bold text-[var(--sc-text-primary)]">
                 {settings.aiCreativity}
               </span>
             </label>
-            <p className="text-xs text-[var(--foreground-muted)] mb-2">
+            <p className="text-xs text-[var(--sc-text-muted)] mb-2">
               {t('settings.ai.creativityDescription')}
             </p>
             <input
@@ -217,7 +217,7 @@ export const AiSection: FC = () => {
               }
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-[var(--foreground-muted)]">
+            <div className="flex justify-between text-xs text-[var(--sc-text-muted)]">
               <span>{t('settings.creativity.focused')}</span>
               <span>{t('settings.creativity.balanced')}</span>
               <span>{t('settings.creativity.imaginative')}</span>
@@ -316,7 +316,7 @@ export const AdvancedAiSection: FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--foreground-primary)]">
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
             {t('settings.advancedAi.title')}
           </h2>
         </CardHeader>
@@ -325,15 +325,15 @@ export const AdvancedAiSection: FC = () => {
           <div>
             <label
               htmlFor="settings-ai-model"
-              className="text-sm font-medium text-[var(--foreground-secondary)] mb-1 block"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-1 block"
             >
               {t('settings.advancedAi.model')}
             </label>
-            <p className="text-xs text-[var(--foreground-muted)] mb-2">
+            <p className="text-xs text-[var(--sc-text-muted)] mb-2">
               {t('settings.advancedAi.modelDescription')}
             </p>
             {settings.advancedAi.provider === 'ollama' && (
-              <p className="text-xs text-[var(--foreground-muted)] mb-3">
+              <p className="text-xs text-[var(--sc-text-muted)] mb-3">
                 {t('settings.advancedAi.modelRecommendationsIntro')}{' '}
                 {RECOMMENDED_OLLAMA_MODEL_IDS.join(', ')}
               </p>
@@ -455,7 +455,7 @@ export const AdvancedAiSection: FC = () => {
                 <button
                   type="button"
                   onClick={applyCustomModel}
-                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--background-interactive)] text-white hover:opacity-90 transition-opacity"
+                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--sc-accent)] text-white hover:opacity-90 transition-opacity"
                 >
                   {t('settings.ai.save')}
                 </button>
@@ -469,7 +469,7 @@ export const AdvancedAiSection: FC = () => {
                   type="button"
                   onClick={() => void handleWebllmDownload()}
                   disabled={webllmProgress !== null}
-                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--background-interactive)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--sc-accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
                   aria-label={t('settings.ai.webllm.downloading')}
                 >
                   {webllmProgress !== null
@@ -483,10 +483,10 @@ export const AdvancedAiSection: FC = () => {
                     aria-valuenow={Math.round(webllmProgress * 100)}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    className="w-full h-2 rounded-full bg-[var(--background-secondary)] overflow-hidden"
+                    className="w-full h-2 rounded-full bg-[var(--sc-surface-raised)] overflow-hidden"
                   >
                     <div
-                      className="h-full bg-[var(--background-interactive)] transition-all duration-300"
+                      className="h-full bg-[var(--sc-accent)] transition-all duration-300"
                       style={{ width: `${Math.round(webllmProgress * 100)}%` }}
                     />
                   </div>
@@ -500,11 +500,11 @@ export const AdvancedAiSection: FC = () => {
             <div>
               <label
                 htmlFor="settings-ai-temperature"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-1 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-1 block"
               >
                 {t('settings.advancedAi.temperature')} ({settings.advancedAi.temperature})
               </label>
-              <p className="text-xs text-[var(--foreground-muted)] mb-2">
+              <p className="text-xs text-[var(--sc-text-muted)] mb-2">
                 {t('settings.advancedAi.temperatureDescription')}
               </p>
               <input
@@ -522,7 +522,7 @@ export const AdvancedAiSection: FC = () => {
                 }
                 className="w-full"
               />
-              <div className="flex justify-between text-xs text-[var(--foreground-muted)] mt-1">
+              <div className="flex justify-between text-xs text-[var(--sc-text-muted)] mt-1">
                 <span>{t('settings.ai.temperature.precise')}</span>
                 <span>{t('settings.ai.temperature.balanced')}</span>
                 <span>{t('settings.ai.temperature.creative')}</span>
@@ -531,11 +531,11 @@ export const AdvancedAiSection: FC = () => {
             <div>
               <label
                 htmlFor="settings-ai-max-tokens"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-1 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-1 block"
               >
                 {t('settings.advancedAi.maxTokens')} ({settings.advancedAi.maxTokens})
               </label>
-              <p className="text-xs text-[var(--foreground-muted)] mb-2">
+              <p className="text-xs text-[var(--sc-text-muted)] mb-2">
                 {t('settings.advancedAi.maxTokensDescription')}
               </p>
               <input
@@ -553,7 +553,7 @@ export const AdvancedAiSection: FC = () => {
                 }
                 className="w-full"
               />
-              <div className="flex justify-between text-xs text-[var(--foreground-muted)] mt-1">
+              <div className="flex justify-between text-xs text-[var(--sc-text-muted)] mt-1">
                 <span>256</span>
                 <span>8 192</span>
                 <span>16 384</span>
@@ -562,11 +562,11 @@ export const AdvancedAiSection: FC = () => {
             <div>
               <label
                 htmlFor="settings-ai-top-p"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-1 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-1 block"
               >
                 {t('settings.advancedAi.topP')} ({settings.advancedAi.topP})
               </label>
-              <p className="text-xs text-[var(--foreground-muted)] mb-2">
+              <p className="text-xs text-[var(--sc-text-muted)] mb-2">
                 {t('settings.advancedAi.topPDescription')}
               </p>
               <input
@@ -588,11 +588,11 @@ export const AdvancedAiSection: FC = () => {
             <div>
               <label
                 htmlFor="settings-ai-rate-limit"
-                className="text-sm font-medium text-[var(--foreground-secondary)] mb-1 block"
+                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-1 block"
               >
                 {t('settings.advancedAi.rateLimit')} ({settings.advancedAi.rateLimit}/min)
               </label>
-              <p className="text-xs text-[var(--foreground-muted)] mb-2">
+              <p className="text-xs text-[var(--sc-text-muted)] mb-2">
                 {t('settings.advancedAi.rateLimitDescription')}
               </p>
               <input
@@ -610,7 +610,7 @@ export const AdvancedAiSection: FC = () => {
                 }
                 className="w-full"
               />
-              <div className="flex justify-between text-xs text-[var(--foreground-muted)] mt-1">
+              <div className="flex justify-between text-xs text-[var(--sc-text-muted)] mt-1">
                 <span>10</span>
                 <span>60</span>
                 <span>120</span>
@@ -618,17 +618,17 @@ export const AdvancedAiSection: FC = () => {
             </div>
           </div>
 
-          <div className="border-t border-[var(--border-primary)] pt-4 space-y-3">
-            <h3 className="text-lg font-semibold text-[var(--foreground-primary)]">
+          <div className="border-t border-[var(--sc-border-subtle)] pt-4 space-y-3">
+            <h3 className="text-lg font-semibold text-[var(--sc-text-primary)]">
               {t('settings.advancedAi.localRagTitle')}
             </h3>
-            <p className="text-sm text-[var(--foreground-muted)]">
+            <p className="text-sm text-[var(--sc-text-muted)]">
               {t('settings.advancedAi.localRagDescription')}
             </p>
             <div>
               <label
                 htmlFor="rag-mode-select"
-                className="block text-sm font-medium text-[var(--foreground-primary)] mb-1"
+                className="block text-sm font-medium text-[var(--sc-text-primary)] mb-1"
               >
                 {t('settings.advancedAi.ragModeLabel')}
               </label>
@@ -645,7 +645,7 @@ export const AdvancedAiSection: FC = () => {
                 <option value="hybrid">{t('settings.advancedAi.ragModeHybrid')}</option>
                 <option value="lexical">{t('settings.advancedAi.ragModeLexical')}</option>
               </Select>
-              <p className="mt-2 text-xs text-[var(--foreground-muted)]">
+              <p className="mt-2 text-xs text-[var(--sc-text-muted)]">
                 {t('settings.advancedAi.ragModeHint')}
               </p>
             </div>

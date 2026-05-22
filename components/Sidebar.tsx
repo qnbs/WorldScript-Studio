@@ -25,23 +25,23 @@ const NavItem: React.FC<{
   const sectionConfig = sectionId ? APP_SECTIONS[sectionId as keyof typeof APP_SECTIONS] : null;
   const iconColorClass = sectionConfig
     ? sectionConfig.colorClass
-    : 'text-[var(--foreground-muted)] bg-transparent';
+    : 'text-[var(--sc-text-muted)] bg-transparent';
 
   return (
     <button
       type="button"
       onClick={onClick}
       data-tour={dataTour}
-      className={`relative flex items-center w-full px-3 py-2.5 text-left rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] overflow-hidden ${
+      className={`relative flex items-center w-full px-3 py-2.5 text-left rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] overflow-hidden ${
         isActive
           ? 'bg-gradient-to-r from-[var(--nav-background-active)] to-transparent text-[var(--nav-text-active)] shadow-sm font-semibold'
-          : 'text-[var(--foreground-secondary)] hover:bg-[var(--nav-background-hover)] hover:text-[var(--foreground-primary)] font-medium'
+          : 'text-[var(--sc-text-secondary)] hover:bg-[var(--nav-background-hover)] hover:text-[var(--sc-text-primary)] font-medium'
       }`}
       aria-current={isActive ? 'page' : undefined}
     >
       {isActive && (
         <>
-          <span className="absolute left-0 h-full top-0 w-1 bg-[var(--nav-border-active)] shadow-[0_0_15px_2px_var(--nav-border-active)]"></span>
+          <span className="absolute start-0 h-full top-0 w-1 bg-[var(--nav-border-active)] shadow-[0_0_15px_2px_var(--nav-border-active)]"></span>
           <span className="absolute inset-0 bg-gradient-to-r from-[var(--nav-border-active)]/10 to-transparent pointer-events-none"></span>
         </>
       )}
@@ -89,8 +89,8 @@ const BottomTabItem: React.FC<{
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex flex-col items-center justify-center flex-1 min-h-[44px] py-2 transition-colors duration-200 touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)] rounded-lg ${
-        isActive ? 'text-[var(--nav-text-active)]' : 'text-[var(--foreground-muted)]'
+      className={`relative flex flex-col items-center justify-center flex-1 min-h-[44px] py-2 transition-colors duration-200 touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded-lg ${
+        isActive ? 'text-[var(--nav-text-active)]' : 'text-[var(--sc-text-muted)]'
       }`}
       aria-current={isActive ? 'page' : undefined}
     >
@@ -183,7 +183,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* ── Mobile bottom navbar ── */}
       <nav
         data-tour="nav-mobile"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--background-secondary)]/95 backdrop-blur-xl border-t border-[var(--border-primary)] flex items-center safe-bottom"
+        className="md:hidden fixed bottom-0 start-0 end-0 z-40 bg-[var(--sc-surface-raised)]/95 backdrop-blur-xl border-t border-[var(--sc-border-subtle)] flex items-center safe-bottom"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-label={t('sidebar.mobileNavigation')}
       >
@@ -220,8 +220,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         aria-hidden={!isSidebarOpen ? true : undefined}
         inert={!isSidebarOpen ? true : undefined}
         className={`
-          md:hidden fixed left-0 right-0 bottom-0 z-50
-          bg-[var(--background-secondary)] backdrop-blur-3xl
+          md:hidden fixed start-0 end-0 bottom-0 z-50
+          bg-[var(--sc-surface-raised)] backdrop-blur-3xl
           rounded-t-2xl shadow-2xl
           max-h-[75dvh] overflow-hidden
           flex flex-col
@@ -237,7 +237,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => setIsSidebarOpen(false)}
           aria-label={t('common.cancel')}
         >
-          <div className="w-10 h-1 rounded-full bg-[var(--foreground-muted)]/40" />
+          <div className="w-10 h-1 rounded-full bg-[var(--sc-text-muted)]/40" />
         </button>
         <div className="overflow-y-auto overscroll-contain px-3 pb-4 space-y-1.5">
           {allNavItems.map((item) => (
@@ -262,9 +262,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         className={`
         hidden md:flex
         bg-transparent
-        w-64 fixed top-16 left-0 h-[calc(100vh-4rem)] z-40 
-        flex-col justify-between 
-        border-r border-[var(--border-primary)]
+        w-64 fixed top-16 start-0 h-[calc(100vh-4rem)] z-40
+        flex-col justify-between
+        border-e border-[var(--sc-border-subtle)]
         py-4 px-3
       `}
       >
@@ -283,7 +283,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
         </div>
         <nav
-          className="flex flex-col space-y-1.5 mt-4 border-t border-[var(--border-primary)] pt-4"
+          className="flex flex-col space-y-1.5 mt-4 border-t border-[var(--sc-border-subtle)] pt-4"
           aria-label={t('sidebar.secondaryNavAria')}
         >
           {desktopBottomItems.map((item) => (

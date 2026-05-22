@@ -88,7 +88,7 @@ function renderCompareLineWordCells(
       leftParts.push(
         <span
           key={`ins-l-${tokSeq}`}
-          className="text-[var(--foreground-muted)] select-none"
+          className="text-[var(--sc-text-muted)] select-none"
           aria-hidden="true"
         >
           ·
@@ -108,8 +108,8 @@ const BranchBadge: FC<{ branch: VersionBranch; isActive?: boolean }> = ({ branch
   <span
     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${
       isActive
-        ? 'bg-[var(--background-interactive)] text-white'
-        : 'bg-[var(--background-tertiary)] text-[var(--foreground-secondary)]'
+        ? 'bg-[var(--sc-accent)] text-white'
+        : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
     }`}
   >
     <span
@@ -134,18 +134,18 @@ const SnapshotCard: FC<{
     <div
       className={`p-3 rounded-lg border transition-colors ${
         isHead
-          ? 'border-[var(--border-interactive)] bg-[var(--background-interactive)]/5'
-          : 'border-[var(--border-primary)] bg-[var(--background-secondary)]/50'
+          ? 'border-[var(--border-interactive)] bg-[var(--sc-accent)]/5'
+          : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/50'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-sm text-[var(--foreground-primary)] truncate">
+            <span className="font-semibold text-sm text-[var(--sc-text-primary)] truncate">
               {snapshot.label}
             </span>
             {isHead && (
-              <span className="px-1.5 py-0.5 text-xs bg-[var(--background-interactive)] text-white rounded">
+              <span className="px-1.5 py-0.5 text-xs bg-[var(--sc-accent)] text-white rounded">
                 HEAD
               </span>
             )}
@@ -156,7 +156,7 @@ const SnapshotCard: FC<{
             ) : null}
             {branch && <BranchBadge branch={branch} />}
           </div>
-          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--foreground-muted)]">
+          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--sc-text-muted)]">
             <time>{new Date(snapshot.timestamp).toLocaleString()}</time>
             <span>
               {snapshot.wordCount.toLocaleString()} {t('vc.words')}
@@ -360,13 +360,13 @@ export const VersionControlPanel: FC = () => {
 
       {/* Drawer */}
       <aside
-        className="fixed right-0 top-0 h-full w-full max-w-md bg-[var(--background-primary)] border-l border-[var(--border-primary)] shadow-2xl z-50 flex flex-col overflow-hidden"
+        className="fixed right-0 top-0 h-full w-full max-w-md bg-[var(--sc-surface-base)] border-l border-[var(--sc-border-subtle)] shadow-2xl z-50 flex flex-col overflow-hidden"
         role="dialog"
         aria-modal="true"
         aria-labelledby="version-control-heading"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--sc-border-subtle)]">
           <div className="flex items-center gap-3">
             <svg
               aria-hidden="true"
@@ -375,7 +375,7 @@ export const VersionControlPanel: FC = () => {
               viewBox="0 0 24 24"
               strokeWidth={1.5}
               stroke="currentColor"
-              className="w-5 h-5 text-[var(--foreground-secondary)]"
+              className="w-5 h-5 text-[var(--sc-text-secondary)]"
             >
               <path
                 strokeLinecap="round"
@@ -385,7 +385,7 @@ export const VersionControlPanel: FC = () => {
             </svg>
             <h2
               id="version-control-heading"
-              className="text-lg font-bold text-[var(--foreground-primary)]"
+              className="text-lg font-bold text-[var(--sc-text-primary)]"
             >
               {t('vc.title')}
             </h2>
@@ -393,7 +393,7 @@ export const VersionControlPanel: FC = () => {
           <button
             type="button"
             onClick={() => dispatch(versionControlActions.closePanel())}
-            className="p-2 rounded-md hover:bg-[var(--background-secondary)] text-[var(--foreground-secondary)] transition-colors"
+            className="p-2 rounded-md hover:bg-[var(--sc-surface-raised)] text-[var(--sc-text-secondary)] transition-colors"
             aria-label={t('vc.close')}
           >
             <span aria-hidden="true">✕</span>
@@ -404,11 +404,11 @@ export const VersionControlPanel: FC = () => {
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {/* Current branch */}
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] mb-3">
               {t('vc.currentBranch')}
             </h3>
             {currentBranch && (
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)]">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)]">
                 <BranchBadge branch={currentBranch} isActive />
                 <div className="flex gap-2">
                   <Button
@@ -438,7 +438,7 @@ export const VersionControlPanel: FC = () => {
           {/* Snapshots */}
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)]">
                 {t('vc.snapshots')} ({currentSnapshots.length})
               </h3>
               <Button
@@ -450,7 +450,7 @@ export const VersionControlPanel: FC = () => {
               </Button>
             </div>
             {currentSnapshots.length === 0 ? (
-              <div className="text-center py-8 text-[var(--foreground-muted)] text-sm border-2 border-dashed border-[var(--border-primary)] rounded-lg">
+              <div className="text-center py-8 text-[var(--sc-text-muted)] text-sm border-2 border-dashed border-[var(--sc-border-subtle)] rounded-lg">
                 <p>{t('vc.noSnapshots')}</p>
                 <p className="text-xs mt-1">{t('vc.noSnapshotsHint')}</p>
               </div>
@@ -477,23 +477,23 @@ export const VersionControlPanel: FC = () => {
 
           {/* All branches */}
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] mb-3">
               {t('vc.allBranches')} ({allBranches.length})
             </h3>
             <div className="space-y-2">
               {allBranches.map((branch) => (
                 <div
                   key={branch.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-[var(--background-secondary)] border border-[var(--border-primary)]"
+                  className="flex items-center justify-between p-3 rounded-lg bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)]"
                 >
                   <div>
                     <BranchBadge branch={branch} isActive={branch.id === currentBranch?.id} />
                     {branch.description && (
-                      <p className="text-xs text-[var(--foreground-muted)] mt-1">
+                      <p className="text-xs text-[var(--sc-text-muted)] mt-1">
                         {branch.description}
                       </p>
                     )}
-                    <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
+                    <p className="text-xs text-[var(--sc-text-muted)] mt-0.5">
                       {t('vc.created')}: {new Date(branch.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -533,7 +533,7 @@ export const VersionControlPanel: FC = () => {
         title={t('vc.createSnapshotTitle')}
       >
         <div className="space-y-4">
-          <p className="text-sm text-[var(--foreground-secondary)]">
+          <p className="text-sm text-[var(--sc-text-secondary)]">
             {t('vc.createSnapshotDescription')}
           </p>
           {/* QNBS-v3: data-testid lets Playwright target this input without relying on translatable placeholder text */}
@@ -563,7 +563,7 @@ export const VersionControlPanel: FC = () => {
         title={t('vc.createBranchTitle')}
       >
         <div className="space-y-4">
-          <p className="text-sm text-[var(--foreground-secondary)]">
+          <p className="text-sm text-[var(--sc-text-secondary)]">
             {t('vc.createBranchDescription')}
           </p>
           <Input
@@ -598,10 +598,10 @@ export const VersionControlPanel: FC = () => {
         title={t('vc.restoreTitle')}
       >
         <div className="space-y-4">
-          <p className="text-sm text-[var(--foreground-secondary)]">
+          <p className="text-sm text-[var(--sc-text-secondary)]">
             {t('vc.restoreDescription')}{' '}
-            <strong className="text-[var(--foreground-primary)]">„{pendingRestore?.label}“</strong>{' '}
-            ({pendingRestore && new Date(pendingRestore.timestamp).toLocaleString()})
+            <strong className="text-[var(--sc-text-primary)]">„{pendingRestore?.label}“</strong> (
+            {pendingRestore && new Date(pendingRestore.timestamp).toLocaleString()})
           </p>
           <p className="text-sm text-amber-400">⚠️ {t('vc.restoreWarning')}</p>
           <div className="flex gap-3 justify-end">
@@ -638,8 +638,8 @@ export const VersionControlPanel: FC = () => {
               }}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
                 branch.id === currentBranch?.id
-                  ? 'border-[var(--border-interactive)] bg-[var(--background-interactive)]/5'
-                  : 'border-[var(--border-primary)] hover:border-[var(--border-highlight)]'
+                  ? 'border-[var(--border-interactive)] bg-[var(--sc-accent)]/5'
+                  : 'border-[var(--sc-border-subtle)] hover:border-[var(--sc-border-strong)]'
               }`}
             >
               <span
@@ -647,15 +647,13 @@ export const VersionControlPanel: FC = () => {
                 style={{ backgroundColor: branch.color }}
               />
               <div>
-                <p className="font-semibold text-sm text-[var(--foreground-primary)]">
-                  {branch.name}
-                </p>
+                <p className="font-semibold text-sm text-[var(--sc-text-primary)]">{branch.name}</p>
                 {branch.description && (
-                  <p className="text-xs text-[var(--foreground-muted)]">{branch.description}</p>
+                  <p className="text-xs text-[var(--sc-text-muted)]">{branch.description}</p>
                 )}
               </div>
               {branch.id === currentBranch?.id && (
-                <span className="ml-auto text-xs text-[var(--foreground-muted)]">
+                <span className="ml-auto text-xs text-[var(--sc-text-muted)]">
                   {t('vc.active')}
                 </span>
               )}
@@ -669,7 +667,7 @@ export const VersionControlPanel: FC = () => {
         onClose={() => setCompareTarget(null)}
         title={t('vc.compareTitle')}
       >
-        <p className="text-xs text-[var(--foreground-muted)] mb-2">
+        <p className="text-xs text-[var(--sc-text-muted)] mb-2">
           {t('vc.compareHint')} {t('vc.compareWordHint')}
         </p>
         {diffViewTruncated ? (
@@ -680,9 +678,9 @@ export const VersionControlPanel: FC = () => {
             })}
           </p>
         ) : null}
-        <div className="grid grid-cols-2 gap-2 max-h-[min(70vh,520px)] overflow-auto rounded border border-[var(--border-primary)] p-2 contain-content">
+        <div className="grid grid-cols-2 gap-2 max-h-[min(70vh,520px)] overflow-auto rounded border border-[var(--sc-border-subtle)] p-2 contain-content">
           <div>
-            <div className="font-semibold text-xs mb-1 text-[var(--foreground-secondary)]">
+            <div className="font-semibold text-xs mb-1 text-[var(--sc-text-secondary)]">
               {t('vc.compareSnapshotColumn')}
             </div>
             <div className="font-mono text-xs whitespace-pre-wrap break-words space-y-px">
@@ -697,7 +695,7 @@ export const VersionControlPanel: FC = () => {
             </div>
           </div>
           <div>
-            <div className="font-semibold text-xs mb-1 text-[var(--foreground-secondary)]">
+            <div className="font-semibold text-xs mb-1 text-[var(--sc-text-secondary)]">
               {t('vc.compareCurrentColumn')}
             </div>
             <div className="font-mono text-xs whitespace-pre-wrap break-words space-y-px">

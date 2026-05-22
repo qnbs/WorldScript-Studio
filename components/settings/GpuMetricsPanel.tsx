@@ -23,13 +23,13 @@ interface GpuState {
 function deviceClassColor(cls: DeviceClass): string {
   switch (cls) {
     case 'high-end':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+      return 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]';
     case 'mid-range':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+      return 'bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]';
     case 'low-end':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+      return 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]';
     default:
-      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+      return 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]';
   }
 }
 
@@ -79,10 +79,10 @@ export const GpuMetricsPanel: FC = () => {
   return (
     <section
       aria-label={t<string>('settings.ai.gpu.panelAriaLabel')}
-      className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50"
+      className="rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] p-4"
     >
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+        <h3 className="text-sm font-semibold text-[var(--sc-text-primary)]">
           {t<string>('settings.ai.gpu.panelTitle')}
         </h3>
         {/* Device class badge */}
@@ -94,7 +94,7 @@ export const GpuMetricsPanel: FC = () => {
       </div>
 
       {/* GPU queue */}
-      <div className="mb-3 space-y-1 text-xs text-slate-600 dark:text-slate-400">
+      <div className="mb-3 space-y-1 text-xs text-[var(--sc-text-secondary)]">
         <div className="flex justify-between">
           <span>{t<string>('settings.ai.gpu.currentConsumer')}</span>
           <span className="font-mono">{current ?? '–'}</span>
@@ -109,7 +109,7 @@ export const GpuMetricsPanel: FC = () => {
       <div className="flex items-center justify-between">
         <label
           htmlFor="eco-mode-toggle"
-          className="text-xs font-medium text-slate-700 dark:text-slate-300"
+          className="text-xs font-medium text-[var(--sc-text-secondary)]"
         >
           {t<string>('settings.ai.gpu.ecoModeLabel')}
         </label>
@@ -120,7 +120,7 @@ export const GpuMetricsPanel: FC = () => {
           aria-checked={state.isEco}
           onClick={handleEcoToggle}
           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
-            state.isEco ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+            state.isEco ? 'bg-[var(--sc-accent)]' : 'bg-[var(--sc-border-strong)]'
           }`}
         >
           <span className="sr-only">
@@ -130,7 +130,7 @@ export const GpuMetricsPanel: FC = () => {
           </span>
           <span
             aria-hidden="true"
-            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[var(--sc-surface-base)] shadow transition-transform ${
               state.isEco ? 'translate-x-4' : 'translate-x-0.5'
             }`}
           />

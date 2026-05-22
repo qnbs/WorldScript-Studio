@@ -8,16 +8,16 @@ export const Select = React.memo(
           <select
             className={`
             flex h-11 w-full appearance-none rounded-xl
-            border border-[var(--border-primary)] 
+            border border-[var(--sc-border-subtle)] 
             bg-[var(--glass-bg)] backdrop-blur-md
             px-4 py-2.5 pr-10 text-sm 
-            text-[var(--foreground-primary)] 
-            shadow-sm transition-all duration-200
-            focus:outline-none focus:border-[var(--border-interactive)] focus:ring-4 focus:ring-[var(--ring-focus)] focus:bg-[var(--background-secondary)]/50
-            hover:border-[var(--border-highlight)] hover:bg-[var(--glass-bg-hover)]
+            text-[var(--sc-text-primary)] 
+            shadow-sm transition-all duration-sc-fast
+            focus:outline-none focus:border-[var(--border-interactive)] focus:ring-4 focus:ring-[var(--sc-ring-focus)] focus:bg-[var(--sc-surface-raised)]/50
+            hover:border-[var(--sc-border-strong)] hover:bg-[var(--glass-bg-hover)]
             disabled:opacity-50 disabled:cursor-not-allowed
             cursor-pointer
-            [&>option]:bg-[var(--background-secondary)] [&>option]:text-[var(--foreground-primary)]
+            [&>option]:bg-[var(--sc-surface-raised)] [&>option]:text-[var(--sc-text-primary)]
             ${className}
           `}
             ref={ref}
@@ -25,7 +25,7 @@ export const Select = React.memo(
           >
             {children}
           </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[var(--foreground-muted)] group-hover:text-[var(--foreground-primary)] transition-colors">
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[var(--sc-text-muted)] group-hover:text-[var(--sc-text-primary)] transition-colors">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"

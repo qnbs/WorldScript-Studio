@@ -101,7 +101,7 @@ const ToastItem: FC<{
 
   return (
     <div
-      className={`relative w-full max-w-sm rounded-lg shadow-2xl bg-[var(--background-secondary)]/80 backdrop-blur-md border animate-fade-in-up overflow-hidden ${typeClasses[message.type]}`}
+      className={`relative w-full max-w-sm rounded-lg shadow-2xl bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border animate-fade-in-up overflow-hidden ${typeClasses[message.type]}`}
     >
       <div className="p-4">
         <div className="flex items-start">
@@ -119,11 +119,9 @@ const ToastItem: FC<{
             </svg>
           </div>
           <div className="ml-3 w-0 flex-1 pt-0.5">
-            <p className="text-sm font-bold text-[var(--foreground-primary)]">{message.title}</p>
+            <p className="text-sm font-bold text-[var(--sc-text-primary)]">{message.title}</p>
             {message.description && (
-              <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
-                {message.description}
-              </p>
+              <p className="mt-1 text-sm text-[var(--sc-text-secondary)]">{message.description}</p>
             )}
             {message.actionLabel && message.commandId ? (
               <button
@@ -143,7 +141,7 @@ const ToastItem: FC<{
               type="button"
               onClick={() => onDismiss(message.id)}
               aria-label={t('common.close')}
-              className="inline-flex rounded-md text-[var(--foreground-muted)] hover:text-[var(--foreground-primary)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex rounded-md text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <span className="sr-only">Close</span>
               <svg
@@ -164,7 +162,7 @@ const ToastItem: FC<{
         </div>
       </div>
       <div
-        className={`absolute bottom-0 left-0 h-1 ${progressClasses[message.type]}`}
+        className={`absolute bottom-0 start-0 h-1 ${progressClasses[message.type]}`}
         style={{ animation: 'shrink-width 5s linear forwards' }}
       ></div>
       <style>{`
