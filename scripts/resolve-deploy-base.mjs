@@ -18,5 +18,5 @@ function resolveDeployBase() {
 export const deployBase = resolveDeployBase();
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  process.stdout.write(base);
+  process.stdout.write(deployBase);
 }

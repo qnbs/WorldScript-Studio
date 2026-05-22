@@ -21,8 +21,17 @@ const files = ['public/manifest.json', 'public/offline.html', 'public/404.html']
 
 for (const rel of files) {
   const file = path.join(root, rel);
-  let text = fs.readFileSync(file, 'utf8');
-  text = text.split(GITHUB_PAGES_BASE).join(deployBase);
-  fs.writeFileSync(file, text);
-  console.log(`[sync-deploy-base] ${rel} → base ${deployBase}`);
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    const patched = text.split(GITHUB_PAGES_BASE).join(deployBase);
+    if (patched === text) {
+      console.warn(`[sync-deploy-base] WARNING: ${rel} — pattern not found, skipping`);
+      continue;
+    }
+    fs.writeFileSync(file, patched);
+    console.log(`[sync-deploy-base] ${rel} → base ${deployBase}`);
+  } catch (err) {
+    console.error(`[sync-deploy-base] FATAL: failed to patch ${rel}:`, err.message);
+    process.exit(1);
+  }
 }
