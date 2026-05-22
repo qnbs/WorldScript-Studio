@@ -531,9 +531,10 @@ const ManuscriptViewUI: FC = () => {
       {/* Main Content Area */}
       <main className="flex-grow min-h-0 hidden md:flex md:flex-row relative">
         {/* Desktop Navigator */}
+        {/* QNBS-v3: container-type enables @container queries inside NavigatorPanel for width-aware layout — LA-2. */}
         <div
           className={`h-full flex flex-col transition-all duration-500 ease-in-out overflow-hidden ${isFocusMode ? 'opacity-0 w-0 border-0 pointer-events-none' : 'opacity-100 border-r border-[var(--sc-border-subtle)]'}`}
-          style={{ width: isFocusMode ? 0 : `${leftPanelWidth}%` }}
+          style={{ width: isFocusMode ? 0 : `${leftPanelWidth}%`, containerType: 'inline-size' }}
         >
           <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
             <CardHeader className="py-3 min-h-[50px]">
@@ -629,9 +630,10 @@ const ManuscriptViewUI: FC = () => {
         )}
 
         {/* Desktop Inspector */}
+        {/* QNBS-v3: container-type enables @container queries inside InspectorPanel for width-aware layout — LA-2. */}
         <div
           className={`h-full flex flex-col transition-all duration-500 ease-in-out overflow-hidden ${isFocusMode ? 'opacity-0 w-0 border-0 pointer-events-none' : 'opacity-100 border-l border-[var(--sc-border-subtle)]'}`}
-          style={{ width: isFocusMode ? 0 : `${rightPanelWidth}%` }}
+          style={{ width: isFocusMode ? 0 : `${rightPanelWidth}%`, containerType: 'inline-size' }}
         >
           <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
             <CardHeader className="py-3 min-h-[50px]">
