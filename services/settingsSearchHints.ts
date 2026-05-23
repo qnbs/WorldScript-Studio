@@ -50,4 +50,5 @@ export const SETTINGS_CATEGORY_SEARCH_HINTS: Record<string, string[]> = {
     'codex',
     'cross project',
   ],
+  'lora-adapters': ['lora', 'adapter', 'safetensors', 'fine-tune', 'fine tune', 'local model'],
 };

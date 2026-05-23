@@ -471,5 +471,16 @@
   "dashboard.backup.unnamedSnapshot": "Unnamed snapshot",
   "sceneboard.minimap.ariaLabel": "Plot board mini-map",
   "error.boundary.retryAnnouncement": "{{view}} reloaded after an error.",
-  "error.boundary.retryAnnouncementGeneric": "View reloaded after an error."
+  "error.boundary.retryAnnouncementGeneric": "View reloaded after an error.",
+  "settings.categories.loraAdapters": "Adaptateurs LoRA",
+  "settings.featureFlags.enableLoraAdapters": "Inférence adaptateur LoRA (expérimental)",
+  "settings.loraAdapters.title": "Adaptateurs LoRA",
+  "settings.loraAdapters.description": "Chargez des adaptateurs LoRA pour les modèles WebLLM locaux. Les adaptateurs sont stockés dans votre navigateur et ne sont jamais envoyés dans le cloud.",
+  "settings.loraAdapters.flagGate": "Activez « Inférence adaptateur LoRA » dans les options expérimentales pour utiliser cette section.",
+  "settings.loraAdapters.uploadBtn": "Charger un adaptateur (.safetensors / .bin)",
+  "settings.loraAdapters.emptyState": "Aucun adaptateur chargé. Importez un fichier .safetensors compatible.",
+  "settings.loraAdapters.deleteBtn": "Supprimer",
+  "settings.loraAdapters.uploadError": "Impossible de charger l'adaptateur. Le fichier est peut-être invalide ou trop volumineux.",
+  "settings.loraAdapters.scale": "Échelle α :",
+  "settings.loraAdapters.notice": "L'inférence LoRA dans le navigateur nécessite WebLLM avec un modèle de base compatible. L'entraînement n'est pas pris en charge — chargez uniquement des adaptateurs pré-entraînés."
 }

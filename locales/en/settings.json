@@ -471,5 +471,16 @@
   "dashboard.backup.unnamedSnapshot": "Unnamed snapshot",
   "sceneboard.minimap.ariaLabel": "Plot board mini-map",
   "error.boundary.retryAnnouncement": "{{view}} reloaded after an error.",
-  "error.boundary.retryAnnouncementGeneric": "View reloaded after an error."
+  "error.boundary.retryAnnouncementGeneric": "View reloaded after an error.",
+  "settings.categories.loraAdapters": "LoRA Adapters",
+  "settings.featureFlags.enableLoraAdapters": "LoRA adapter inference (experimental)",
+  "settings.loraAdapters.title": "LoRA Adapters",
+  "settings.loraAdapters.description": "Load LoRA fine-tuning adapters for local WebLLM models. Adapters are stored in your browser and never sent to the cloud.",
+  "settings.loraAdapters.flagGate": "Enable \"LoRA adapter inference\" in Experimental Flags to use this section.",
+  "settings.loraAdapters.uploadBtn": "Upload adapter (.safetensors / .bin)",
+  "settings.loraAdapters.emptyState": "No adapters loaded. Upload a compatible .safetensors file.",
+  "settings.loraAdapters.deleteBtn": "Delete",
+  "settings.loraAdapters.uploadError": "Failed to load adapter. The file may be invalid or too large.",
+  "settings.loraAdapters.scale": "Scale α:",
+  "settings.loraAdapters.notice": "Browser-based LoRA inference requires WebLLM with a compatible base model. Training is not supported — load pre-trained adapters only."
 }

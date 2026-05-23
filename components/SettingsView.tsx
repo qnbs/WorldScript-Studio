@@ -9,6 +9,7 @@ import { DataSection } from './settings/DataSection';
 import { AdvancedEditorSection, EditorSection } from './settings/EditorSections';
 import { FeatureFlagsSection } from './settings/FeatureFlagsSection';
 import { AboutSection, AppearanceSection, GeneralSection } from './settings/GeneralSections';
+import { LoraAdapterSection } from './settings/LoraAdapterSection';
 import { ProjectAiPresetSection } from './settings/ProjectAiPresetSection';
 import { SettingsGuideSection } from './settings/SettingsGuideSection';
 import { SettingsModals } from './settings/SettingsModals';
@@ -86,6 +87,13 @@ const SettingsViewUI: FC = () => {
         label: t('settings.categories.advancedAi'),
         icon: (
           <path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        ),
+      },
+      {
+        id: 'lora-adapters',
+        label: t('settings.categories.loraAdapters'),
+        icon: (
+          <path d="M9 3.75H6.912a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H15M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859M12 3v8.25m0 0l-3-3m3 3l3-3" />
         ),
       },
       {
@@ -224,6 +232,8 @@ const SettingsViewUI: FC = () => {
         return <AiSection />;
       case 'advanced-ai':
         return <AdvancedAiSection />;
+      case 'lora-adapters':
+        return <LoraAdapterSection />;
       case 'project-ai':
         return <ProjectAiPresetSection />;
       case 'accessibility':

@@ -471,5 +471,16 @@
   "dashboard.backup.unnamedSnapshot": "Unbenannter Snapshot",
   "sceneboard.minimap.ariaLabel": "Plot-Board-Minikarte",
   "error.boundary.retryAnnouncement": "{{view}} nach einem Fehler neu geladen.",
-  "error.boundary.retryAnnouncementGeneric": "Ansicht nach einem Fehler neu geladen."
+  "error.boundary.retryAnnouncementGeneric": "Ansicht nach einem Fehler neu geladen.",
+  "settings.categories.loraAdapters": "LoRA-Adapter",
+  "settings.featureFlags.enableLoraAdapters": "LoRA-Adapter-Inferenz (experimentell)",
+  "settings.loraAdapters.title": "LoRA-Adapter",
+  "settings.loraAdapters.description": "Lade LoRA-Fine-Tuning-Adapter für lokale WebLLM-Modelle. Adapter werden im Browser gespeichert und nie in die Cloud übertragen.",
+  "settings.loraAdapters.flagGate": "Aktiviere 'LoRA-Adapter-Inferenz' unter Experimentelle Flags, um diesen Bereich zu nutzen.",
+  "settings.loraAdapters.uploadBtn": "Adapter hochladen (.safetensors / .bin)",
+  "settings.loraAdapters.emptyState": "Keine Adapter geladen. Lade eine kompatible .safetensors-Datei hoch.",
+  "settings.loraAdapters.deleteBtn": "Löschen",
+  "settings.loraAdapters.uploadError": "Adapter konnte nicht geladen werden. Die Datei ist möglicherweise ungültig oder zu groß.",
+  "settings.loraAdapters.scale": "Skalierung α:",
+  "settings.loraAdapters.notice": "Browser-seitige LoRA-Inferenz erfordert WebLLM mit einem kompatiblen Basismodell. Training wird nicht unterstützt — nur vortrainierte Adapter laden."
 }

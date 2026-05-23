@@ -471,5 +471,16 @@
   "dashboard.backup.unnamedSnapshot": "Unnamed snapshot",
   "sceneboard.minimap.ariaLabel": "Plot board mini-map",
   "error.boundary.retryAnnouncement": "{{view}} reloaded after an error.",
-  "error.boundary.retryAnnouncementGeneric": "View reloaded after an error."
+  "error.boundary.retryAnnouncementGeneric": "View reloaded after an error.",
+  "settings.categories.loraAdapters": "Adattatori LoRA",
+  "settings.featureFlags.enableLoraAdapters": "Inferenza adattatore LoRA (sperimentale)",
+  "settings.loraAdapters.title": "Adattatori LoRA",
+  "settings.loraAdapters.description": "Carica adattatori LoRA per modelli WebLLM locali. Gli adattatori sono memorizzati nel browser e non vengono mai inviati al cloud.",
+  "settings.loraAdapters.flagGate": "Attiva «Inferenza adattatore LoRA» nei flag sperimentali per utilizzare questa sezione.",
+  "settings.loraAdapters.uploadBtn": "Carica adattatore (.safetensors / .bin)",
+  "settings.loraAdapters.emptyState": "Nessun adattatore caricato. Carica un file .safetensors compatibile.",
+  "settings.loraAdapters.deleteBtn": "Elimina",
+  "settings.loraAdapters.uploadError": "Impossibile caricare l'adattatore. Il file potrebbe essere non valido o troppo grande.",
+  "settings.loraAdapters.scale": "Scala α:",
+  "settings.loraAdapters.notice": "L'inferenza LoRA nel browser richiede WebLLM con un modello base compatibile. Il training non è supportato — carica solo adattatori pre-addestrati."
 }

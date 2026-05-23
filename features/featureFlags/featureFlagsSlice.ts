@@ -29,6 +29,8 @@ export interface FeatureFlagsState {
   enableRtlLayout: boolean;
   /** E2E-encrypted Cloud-Sync opt-in — Cloudflare R2 adapter (Stub; default: false). */
   enableCloudSync: boolean;
+  /** LoRA adapter inference — load .safetensors adapters for local WebLLM models (default: false). */
+  enableLoraAdapters: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -56,6 +58,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableRtlLayout: false,
   // QNBS-v3: Cloud-Sync stub — off by default; exposes R2 adapter interface before backend is wired.
   enableCloudSync: false,
+  // QNBS-v3: LoRA adapter inference — off by default; browser LoRA is experimental (no training, inference only).
+  enableLoraAdapters: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -139,6 +143,9 @@ const featureFlagsSlice = createSlice({
     setEnableCloudSync(state, action: PayloadAction<boolean>) {
       state.enableCloudSync = action.payload;
     },
+    setEnableLoraAdapters(state, action: PayloadAction<boolean>) {
+      state.enableLoraAdapters = action.payload;
+    },
   },
 });
 
@@ -173,6 +180,8 @@ export const selectEnableRtlLayout = (state: { featureFlags: FeatureFlagsState }
   state.featureFlags.enableRtlLayout;
 export const selectEnableCloudSync = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableCloudSync;
+export const selectEnableLoraAdapters = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableLoraAdapters;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

@@ -20,6 +20,7 @@ describe('featureFlagsSlice', () => {
     enableCharacterInterviews: false,
     enableRtlLayout: false,
     enableCloudSync: false,
+    enableLoraAdapters: false,
   };
 
   it('should match default feature flag state on init', () => {
@@ -51,6 +52,7 @@ describe('featureFlagsSlice', () => {
       enableCharacterInterviews: false,
       enableRtlLayout: false,
       enableCloudSync: false,
+      enableLoraAdapters: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

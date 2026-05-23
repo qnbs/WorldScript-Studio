@@ -25,6 +25,7 @@ export const FeatureFlagsSection: FC = () => {
     },
     { key: 'enableRtlLayout', labelKey: 'settings.featureFlags.enableRtlLayout' },
     { key: 'enableCloudSync', labelKey: 'settings.featureFlags.enableCloudSync' },
+    { key: 'enableLoraAdapters', labelKey: 'settings.featureFlags.enableLoraAdapters' },
   ];
 
   return (

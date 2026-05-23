@@ -43,6 +43,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableCharacterInterviews: false,
   enableRtlLayout: false,
   enableCloudSync: false,
+  enableLoraAdapters: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

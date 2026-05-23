@@ -12,6 +12,7 @@ export async function generateLocalText(
   prompt: string,
   modelId?: string,
   onProgress?: (report: WebLlmProgressReport) => void,
+  loraAdapterId?: string,
 ): Promise<LocalAiResponse> {
   const taskId =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -22,7 +23,8 @@ export async function generateLocalText(
   const enqueued = localWorkerBus.enqueue({
     id: taskId,
     type: 'local.text.generate',
-    payload: { prompt, modelId },
+    // QNBS-v3: loraAdapterId is wired through the task payload for future worker-side LoRA loading.
+    payload: { prompt, modelId, loraAdapterId },
     priority: 'normal',
     createdAt: Date.now(),
   });
