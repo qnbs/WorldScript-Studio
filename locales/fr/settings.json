@@ -490,5 +490,22 @@
   "settings.plugins.flagGate": "Activez «Système de plugins» dans les options expérimentales pour utiliser cette section.",
   "settings.plugins.sandboxNotice": "Tous les plugins passent par une API de capacités sandboxée. Aucun plugin n'a accès direct au store Redux, au réseau ou au système de fichiers au-delà des permissions déclarées.",
   "settings.plugins.emptyState": "Aucun plugin enregistré. Installez un plugin via pluginRegistry.register() depuis la console du navigateur.",
-  "settings.plugins.uninstallBtn": "Désinstaller"
+  "settings.plugins.uninstallBtn": "Désinstaller",
+  "settings.categories.community": "Communauté",
+  "settings.community.title": "Communauté",
+  "settings.community.description": "Connectez-vous avec d'autres utilisateurs de StoryCraft Studio, partagez des modèles d'histoires et parcourez la liste de modèles IA locaux.",
+  "settings.community.discussionsLink": "GitHub Discussions",
+  "settings.community.discussionsHint": "Partagez des modèles, posez des questions, montrez vos projets.",
+  "settings.community.issuesLink": "Signaler un problème",
+  "settings.community.issuesHint": "Les rapports de bugs et demandes de fonctionnalités sont bienvenus.",
+  "settings.community.modelListTitle": "Modèles IA locaux recommandés",
+  "settings.community.modelListDescription": "Modèles recommandés pour l'écriture hors ligne. Activez un fournisseur IA local dans la configuration IA.",
+  "settings.community.webllmModels": "WebLLM — nécessite WebGPU",
+  "settings.community.onnxModels": "ONNX Runtime — fonctionne dans tous les navigateurs",
+  "settings.community.useCase.eco": "Le plus rapide, mémoire minimale — idéal pour des suggestions rapides",
+  "settings.community.useCase.fast": "Inférence rapide — idéal pour l'autocomplétion",
+  "settings.community.useCase.balanced": "Qualité et vitesse équilibrées — recommandé",
+  "settings.community.useCase.reasoning": "Raisonnement puissant — idéal pour l'analyse de trame",
+  "settings.community.useCase.highEnd": "Meilleure qualité — nécessite 32 Go+ de VRAM",
+  "settings.community.useCase.wasm": "Pas de GPU requis — fonctionne dans tout navigateur"
 }

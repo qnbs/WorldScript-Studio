@@ -490,5 +490,22 @@
   "settings.plugins.flagGate": "Aktiviere 'Plugin-System' unter Experimentelle Flags, um diesen Bereich zu nutzen.",
   "settings.plugins.sandboxNotice": "Alle Plugins laufen über eine sandboxed Capability-API. Kein Plugin hat direkten Zugriff auf den Redux-Store, das Netzwerk oder das Dateisystem über die deklarierten Berechtigungen hinaus.",
   "settings.plugins.emptyState": "Keine Plugins registriert. Installiere ein Plugin via pluginRegistry.register() aus der Browser-Konsole oder einem zukünftigen Plugin-Loader.",
-  "settings.plugins.uninstallBtn": "Deinstallieren"
+  "settings.plugins.uninstallBtn": "Deinstallieren",
+  "settings.categories.community": "Community",
+  "settings.community.title": "Community",
+  "settings.community.description": "Verbinde dich mit anderen StoryCraft-Studio-Nutzern, teile Story-Templates und durchstöbere die kuratierte lokale KI-Modellliste.",
+  "settings.community.discussionsLink": "GitHub Discussions",
+  "settings.community.discussionsHint": "Templates teilen, Fragen stellen, Projekte vorstellen.",
+  "settings.community.issuesLink": "Problem melden",
+  "settings.community.issuesHint": "Fehlerberichte und Feature-Wünsche sind willkommen.",
+  "settings.community.modelListTitle": "Kuratierte lokale KI-Modelle",
+  "settings.community.modelListDescription": "Empfohlene Modelle für Offline-Schreiben. Aktiviere einen lokalen KI-Anbieter in der KI-Konfiguration, um sie zu nutzen.",
+  "settings.community.webllmModels": "WebLLM — erfordert WebGPU",
+  "settings.community.onnxModels": "ONNX Runtime — funktioniert in allen Browsern",
+  "settings.community.useCase.eco": "Schnellster, geringster Speicher — gut für schnelle Vorschläge",
+  "settings.community.useCase.fast": "Schnelle Inferenz — gut für Autovervollständigung",
+  "settings.community.useCase.balanced": "Ausgewogene Qualität und Geschwindigkeit — empfohlen",
+  "settings.community.useCase.reasoning": "Starkes Reasoning — gut für Plotanalyse",
+  "settings.community.useCase.highEnd": "Höchste Qualität — erfordert 32 GB+ VRAM",
+  "settings.community.useCase.wasm": "Kein GPU erforderlich — funktioniert in jedem Browser"
 }

@@ -52,4 +52,14 @@ export const SETTINGS_CATEGORY_SEARCH_HINTS: Record<string, string[]> = {
   ],
   'lora-adapters': ['lora', 'adapter', 'safetensors', 'fine-tune', 'fine tune', 'local model'],
   plugins: ['plugin', 'extension', 'esm', 'sandboxed', 'capability', 'permissions'],
+  community: [
+    'community',
+    'template',
+    'sharing',
+    'model list',
+    'webllm',
+    'onnx',
+    'github',
+    'discussions',
+  ],
 };
