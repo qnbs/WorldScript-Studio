@@ -197,11 +197,11 @@ const WorldAtlas: FC = () => {
               className="hidden"
             />
           </div>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="flex gap-2">
             <Button
               onClick={handleGenerateImage}
               disabled={isGeneratingImage || !selectedWorld.description}
-              className="col-span-4"
+              className="flex-1"
               title={t('worlds.edit.generateImageButton')}
             >
               {isGeneratingImage ? (
@@ -223,7 +223,7 @@ const WorldAtlas: FC = () => {
             <Button
               onClick={handleUploadClick}
               variant="secondary"
-              className="col-span-1 px-0 flex items-center justify-center"
+              className="px-3 shrink-0 flex items-center justify-center"
               title={t('worlds.uploadImage')}
             >
               <svg
