@@ -162,7 +162,7 @@ export const AdvancedImportExport: React.FC = () => {
       <Card className="mt-4">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[var(--foreground)]">
+            <h3 className="text-sm font-semibold text-[var(--sc-text-primary)]">
               {t('export.pasteSection.heading')}
             </h3>
             <Button
@@ -184,14 +184,14 @@ export const AdvancedImportExport: React.FC = () => {
                 placeholder={t('export.pasteSection.titlePlaceholder')}
                 value={pasteTitle}
                 onChange={(e) => setPasteTitle(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--input-background)] text-[var(--foreground)] text-sm"
+                className="w-full px-3 py-2 rounded-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm min-h-[44px]"
               />
               <textarea
                 placeholder={t('export.pasteSection.textPlaceholder')}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
                 rows={6}
-                className="w-full px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--input-background)] text-[var(--foreground)] text-sm resize-y font-mono"
+                className="w-full px-3 py-2 rounded-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm resize-y font-mono max-h-[50vh] sm:max-h-none"
               />
               <Button onClick={handlePasteImport} disabled={!pasteText.trim()} className="w-full">
                 {t('export.pasteSection.importAsChapter')}

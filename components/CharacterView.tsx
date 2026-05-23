@@ -219,8 +219,9 @@ const CharacterDossier: FC = () => {
               className="hidden"
             />
           </div>
-          <div className="grid grid-cols-5 gap-2">
-            <div className="col-span-5 mb-2">
+          {/* QNBS-v3: flex layout replaces fixed 5-col grid — portrait+upload always full-accessible on mobile. */}
+          <div className="flex flex-col gap-2">
+            <div className="mb-1">
               <label
                 htmlFor="portrait-style-select"
                 className="text-sm font-medium text-[var(--sc-text-secondary)]"
@@ -250,49 +251,51 @@ const CharacterDossier: FC = () => {
                 <option value="comic book">{t('characters.edit.portrait.styles.comicBook')}</option>
               </Select>
             </div>
-            <Button
-              onClick={handleGeneratePortrait}
-              disabled={isGeneratingPortrait || !selectedCharacter.appearance}
-              className="col-span-4"
-              title={t('characters.edit.portrait.generateButton')}
-            >
-              {isGeneratingPortrait ? (
-                <Spinner />
-              ) : (
+            <div className="flex gap-2">
+              <Button
+                onClick={handleGeneratePortrait}
+                disabled={isGeneratingPortrait || !selectedCharacter.appearance}
+                className="flex-1"
+                title={t('characters.edit.portrait.generateButton')}
+              >
+                {isGeneratingPortrait ? (
+                  <Spinner />
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-5 h-5 mr-2"
+                  >
+                    {ICONS.CAMERA}
+                  </svg>
+                )}
+                {t('common.generate')}
+              </Button>
+              <Button
+                onClick={handleUploadClick}
+                variant="secondary"
+                className="px-3 flex items-center justify-center shrink-0"
+                title={t('characters.uploadImage')}
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
                   strokeWidth={1.5}
                   stroke="currentColor"
-                  className="w-5 h-5 mr-2"
+                  className="w-5 h-5"
                 >
-                  {ICONS.CAMERA}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+                  />
                 </svg>
-              )}
-              {t('common.generate')}
-            </Button>
-            <Button
-              onClick={handleUploadClick}
-              variant="secondary"
-              className="col-span-1 px-0 flex items-center justify-center"
-              title={t('characters.uploadImage')}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-5 h-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
-                />
-              </svg>
-            </Button>
+              </Button>
+            </div>
           </div>
           {selectedCharacter.hasAvatar && (
             <div className="space-y-2">

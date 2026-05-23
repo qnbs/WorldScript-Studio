@@ -136,7 +136,7 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
       // QNBS-v3: fixed overlay + role="dialog" satisfies WCAG 2.2 modal pattern; aria-modal signals SR to ignore background
       <div
         role="presentation"
-        className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-16 px-2 sm:px-4 bg-black/40 backdrop-blur-sm"
       >
         <div
           ref={panelRef}
@@ -174,7 +174,7 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
               type="button"
               onClick={close}
               aria-label={t('common.close')}
-              className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] px-2 py-1 rounded border border-[var(--sc-border-subtle)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+              className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] px-3 py-2 min-h-[44px] sm:min-h-0 sm:px-2 sm:py-1 rounded border border-[var(--sc-border-subtle)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] flex items-center"
             >
               Esc
             </button>
@@ -183,7 +183,7 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
           {/* Results */}
           <ul
             aria-label={t('crossSearch.resultsLabel')}
-            className="max-h-80 overflow-y-auto py-2 px-2 list-none"
+            className="max-h-[50vh] sm:max-h-80 overflow-y-auto py-2 px-2 list-none"
           >
             {debouncedQuery.trim() === '' && (
               <p className="px-4 py-6 text-sm text-center text-[var(--sc-text-secondary)]">

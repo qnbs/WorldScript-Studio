@@ -241,7 +241,7 @@ const ExportControls: FC = () => {
                 <h4 className="font-semibold text-[var(--sc-text-secondary)]">
                   {t('export.format.pdfOptions')}
                 </h4>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label
                       htmlFor="export-pdf-font"
@@ -517,7 +517,7 @@ const ExportViewUI: FC = () => {
     <div className="h-full">
       <CompileWizardModal />
       {/* Advanced Import/Export */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <AdvancedImportExport />
       </div>
       {enableCompileWizard ? (
@@ -525,7 +525,7 @@ const ExportViewUI: FC = () => {
           <Button
             type="button"
             variant="secondary"
-            className="w-full md:w-auto"
+            className="w-full"
             onClick={() => setCompileWizardOpen(true)}
           >
             {t('export.compileWizard.openButton')}
@@ -533,11 +533,12 @@ const ExportViewUI: FC = () => {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8 h-full">
         <div className="lg:col-span-1 h-full overflow-y-auto">
           <ExportControls />
         </div>
-        <div className="lg:col-span-2 h-full min-h-[500px]">
+        {/* QNBS-v3: Preview hidden on mobile (0 min-height) — users export via download button; preview is desktop-only live feedback. */}
+        <div className="lg:col-span-2 h-full min-h-0 sm:min-h-[400px] lg:min-h-[500px] hidden sm:block">
           <ExportPreview />
         </div>
       </div>

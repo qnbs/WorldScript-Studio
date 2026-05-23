@@ -295,8 +295,16 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] mb-3">
               {t('collab.identity')}
             </h3>
-            <div className="flex items-center gap-3">
-              <UserAvatar user={{ ...localUser, name: displayName || 'A' }} />
+            {/* QNBS-v3: flex-col on mobile so avatar+input don't get squished on narrow screens. */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-3">
+                <UserAvatar user={{ ...localUser, name: displayName || 'A' }} />
+                <div
+                  className="w-8 h-8 rounded-full cursor-pointer border-2 border-[var(--sc-border-subtle)] flex-shrink-0"
+                  style={{ backgroundColor: localUser.color }}
+                  title={t('collab.colorTitle')}
+                />
+              </div>
               <div className="flex-1">
                 <Input
                   placeholder={t('collab.displayName')}
@@ -305,11 +313,6 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                   disabled={isConnected}
                 />
               </div>
-              <div
-                className="w-8 h-8 rounded-full cursor-pointer border-2 border-[var(--sc-border-subtle)] flex-shrink-0"
-                style={{ backgroundColor: localUser.color }}
-                title={t('collab.colorTitle')}
-              />
             </div>
           </section>
 
@@ -318,7 +321,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] mb-3">
               {t('collab.roomId')}
             </h3>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 placeholder={`${projectId} (${t('collab.projectId')})`}
                 value={customRoomId}
@@ -332,7 +335,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                   onClick={() => {
                     navigator.clipboard.writeText(currentRoomId).catch(() => {});
                   }}
-                  className="px-3 py-2 text-xs rounded-md bg-[var(--sc-surface-raised)] hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] border border-[var(--sc-border-subtle)] transition-colors"
+                  className="px-3 py-2 min-h-[44px] text-xs rounded-md bg-[var(--sc-surface-raised)] hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] border border-[var(--sc-border-subtle)] transition-colors"
                   title={t('collab.copyToClipboard')}
                 >
                   {t('collab.copy')}

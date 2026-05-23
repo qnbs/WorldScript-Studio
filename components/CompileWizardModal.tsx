@@ -52,13 +52,14 @@ export const CompileWizardModal: FC = () => {
             <p className="text-sm text-[var(--sc-text-muted)]">
               {t('export.compileWizard.stepPreset')}
             </p>
-            <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
+            {/* QNBS-v3: max-h viewport-relative on mobile avoids overflow when soft keyboard is open. */}
+            <div className="flex flex-col gap-2 max-h-[40vh] sm:max-h-56 overflow-y-auto">
               {COMPILE_PRESETS.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => setSelectedId(p.id)}
-                  className={`text-left rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  className={`text-left rounded-lg border px-4 py-3 text-sm transition-colors min-h-[44px] ${
                     selectedId === p.id
                       ? 'border-[var(--border-interactive)] bg-[var(--sc-accent)]/10'
                       : 'border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]'
@@ -108,7 +109,7 @@ export const CompileWizardModal: FC = () => {
                   : t('export.compileWizard.flagOff')}
               </li>
             </ul>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button
                 type="button"
                 variant="secondary"

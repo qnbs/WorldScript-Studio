@@ -51,10 +51,11 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
         <button
           type="button"
           onClick={() => onSelect(section.id)}
-          className={`group rounded-md cursor-pointer p-2 flex items-center justify-between text-left transition-all duration-200 w-full ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'} ${isDragging ? 'opacity-60 scale-[1.02] shadow-2xl shadow-indigo-500/50' : ''}`}
+          className={`group rounded-md cursor-pointer p-2 min-h-[44px] md:min-h-0 flex items-center justify-between text-left transition-all duration-200 w-full ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'} ${isDragging ? 'opacity-60 scale-[1.02] shadow-2xl shadow-indigo-500/50' : ''}`}
         >
           <span className="font-medium text-sm flex-grow truncate mr-2">{section.title}</span>
-          <div className="flex-shrink-0 flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          {/* QNBS-v3: Always visible on touch devices (no hover); hidden until hover on pointer devices. */}
+          <div className="flex-shrink-0 flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
             <button
               type="button"
               onClick={(e) => {
@@ -62,7 +63,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
                 onMoveUp(index);
               }}
               disabled={isFirst}
-              className="p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="p-2 md:p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-indigo-500"
               title={t('common.moveUp')}
               aria-label={t('outline.moveUp', { title: section.title })}
             >
@@ -86,7 +87,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
                 onMoveDown(index);
               }}
               disabled={isLast}
-              className="p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="p-2 md:p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-indigo-500"
               title={t('common.moveDown')}
               aria-label={t('outline.moveDown', { title: section.title })}
             >
@@ -110,7 +111,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
                   e.stopPropagation();
                   onDelete(section.id);
                 }}
-                className="p-1 rounded-md hover:bg-red-500/20 text-red-400 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500"
+                className="p-2 md:p-1 rounded-md hover:bg-red-500/20 text-red-400 focus-visible:ring-2 focus-visible:ring-red-500"
                 title={t('manuscript.deleteSection')}
                 aria-label={t('manuscript.deleteSection')}
               >
@@ -276,12 +277,7 @@ export const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(
           })}
         </ul>
         <div className="p-3 border-t border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/50">
-          <Button
-            onClick={handleAddSection}
-            variant="secondary"
-            size="sm"
-            className="w-full justify-center"
-          >
+          <Button onClick={handleAddSection} variant="secondary" className="w-full justify-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"

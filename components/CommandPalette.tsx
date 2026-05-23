@@ -334,8 +334,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   if (!isOpen) return null;
 
+  // QNBS-v3: pt-2 on mobile so the palette is visible with soft keyboard; pt-[12vh] on larger screens.
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-2 sm:pt-[12vh] px-2 sm:px-4">
       <div
         className="fixed inset-0 bg-[var(--sc-backdrop-strong)] backdrop-blur-sm transition-opacity duration-200"
         onClick={onClose}
@@ -348,7 +349,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         aria-modal="true"
         aria-label={t('palette.ariaLabel')}
         tabIndex={-1}
-        className="relative w-full max-w-2xl bg-[var(--sc-surface-raised)]/90 backdrop-blur-xl border border-[var(--sc-border-subtle)] shadow-2xl rounded-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 ring-1 ring-[var(--glass-border)] max-h-[85vh]"
+        className="relative w-full max-w-2xl bg-[var(--sc-surface-raised)]/90 backdrop-blur-xl border border-[var(--sc-border-subtle)] shadow-2xl rounded-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 ring-1 ring-[var(--glass-border)] max-h-[95vh] sm:max-h-[85vh]"
       >
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {paletteLiveStatus}
