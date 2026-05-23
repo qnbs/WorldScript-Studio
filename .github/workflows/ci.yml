@@ -345,3 +345,43 @@ jobs:
           path: storybook-static/
           # QNBS-v3: align with other report artifacts (7 days); 14 was inconsistent
           retention-days: 7
+
+  # ----------------------------------------------------------
+  # 8. VRT: Visual regression (Playwright screenshots, chromium only)
+  # ----------------------------------------------------------
+  vrt:
+    name: 🖼 Visual Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: ./.github/actions/setup
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Serve dist + run VRT
+        env:
+          CI: true
+        run: |
+          pnpm exec http-server dist -p 3000 -s &
+          pnpm exec wait-on http://127.0.0.1:3000 --timeout 30000
+          pnpm run test:vrt
+
+      - name: Upload VRT screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vrt-screenshots
+          # QNBS-v3: upload both baselines and diff outputs so PR reviewers can compare visually.
+          path: |
+            tests/e2e/visual-regression.spec.ts-snapshots/
+            tests/e2e/test-results/
+          retention-days: 7

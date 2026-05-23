@@ -65,7 +65,7 @@ describe('cloudSyncEncryption', () => {
 
     it('throws on tampered ciphertext', async () => {
       const enc = await encryptCloudPayload(key, { secret: true });
-      const tampered = enc.slice(0, -4) + 'XXXX';
+      const tampered = `${enc.slice(0, -4)}XXXX`;
       await expect(decryptCloudPayload(key, tampered)).rejects.toThrow();
     });
   });
