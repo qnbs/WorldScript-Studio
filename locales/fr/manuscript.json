@@ -63,5 +63,7 @@
   "manuscript.zenMode.exit": "Quitter le mode Zen",
   "manuscript.zenMode.label": "Mode Zen",
   "manuscript.resizer.left": "Ajuster le panneau gauche",
-  "manuscript.resizer.right": "Ajuster le panneau droit"
+  "manuscript.resizer.right": "Ajuster le panneau droit",
+  "manuscript.navigator.largeManuscript": "Grand manuscrit ({{count}} scènes) — défilement virtuel actif.",
+  "manuscript.navigator.largeManuscriptDismiss": "Fermer"
 }

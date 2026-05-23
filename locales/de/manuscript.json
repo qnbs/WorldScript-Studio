@@ -63,5 +63,7 @@
   "manuscript.zenMode.exit": "Zen-Modus verlassen",
   "manuscript.zenMode.label": "Zen-Modus",
   "manuscript.resizer.left": "Linkes Panel anpassen",
-  "manuscript.resizer.right": "Rechtes Panel anpassen"
+  "manuscript.resizer.right": "Rechtes Panel anpassen",
+  "manuscript.navigator.largeManuscript": "Großes Manuskript ({{count}} Szenen) — virtuelles Scrollen aktiv.",
+  "manuscript.navigator.largeManuscriptDismiss": "Schließen"
 }

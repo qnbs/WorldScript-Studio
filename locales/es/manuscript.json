@@ -63,5 +63,7 @@
   "manuscript.zenMode.exit": "Salir del modo Zen",
   "manuscript.zenMode.label": "Modo Zen",
   "manuscript.resizer.left": "Ajustar panel izquierdo",
-  "manuscript.resizer.right": "Ajustar panel derecho"
+  "manuscript.resizer.right": "Ajustar panel derecho",
+  "manuscript.navigator.largeManuscript": "Manuscrito extenso ({{count}} escenas) — desplazamiento virtual activo.",
+  "manuscript.navigator.largeManuscriptDismiss": "Descartar"
 }
