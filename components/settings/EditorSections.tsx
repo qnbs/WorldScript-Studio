@@ -111,7 +111,7 @@ export const EditorSection: FC = () => {
               max="24"
               value={settings.fontSize}
               onChange={(e) => handleSettingChange('fontSize', e.target.value)}
-              className="w-full"
+              className="w-full min-h-[44px] cursor-pointer"
             />
           </div>
           <div className="space-y-2">
@@ -130,7 +130,7 @@ export const EditorSection: FC = () => {
               step="0.1"
               value={settings.lineSpacing}
               onChange={(e) => handleSettingChange('lineSpacing', e.target.value)}
-              className="w-full"
+              className="w-full min-h-[44px] cursor-pointer"
             />
           </div>
           <div className="space-y-2">
@@ -149,7 +149,7 @@ export const EditorSection: FC = () => {
               step="0.1"
               value={settings.paragraphSpacing}
               onChange={(e) => handleSettingChange('paragraphSpacing', e.target.value)}
-              className="w-full"
+              className="w-full min-h-[44px] cursor-pointer"
             />
           </div>
           <ToggleSwitch

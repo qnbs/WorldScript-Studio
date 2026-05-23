@@ -339,7 +339,11 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
         <div
           role="dialog"
           className="absolute z-50 bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] shadow-xl rounded-md p-2 animate-in fade-in zoom-in-95"
-          style={{ top: spellCheckPopover.y + 10, left: spellCheckPopover.x - 20 }}
+          style={{
+            // QNBS-v3: clamp left so popover stays on-screen on narrow mobile viewports.
+            top: Math.min(spellCheckPopover.y + 10, window.innerHeight - 100),
+            left: Math.max(8, Math.min(spellCheckPopover.x - 20, window.innerWidth - 180)),
+          }}
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
@@ -349,7 +353,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           <button
             type="button"
             onClick={applyCorrection}
-            className="block w-full text-left px-3 py-1.5 rounded hover:bg-[var(--sc-accent)] hover:text-white text-[var(--sc-text-primary)] font-medium"
+            className="block w-full text-left px-3 py-2 min-h-[44px] rounded hover:bg-[var(--sc-accent)] hover:text-white text-[var(--sc-text-primary)] font-medium flex items-center"
           >
             {spellCheckPopover.suggestion}
           </button>
