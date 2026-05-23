@@ -1,9 +1,25 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-21 (v1.10.0) → 2026-05-22 (v1.11.0) → **2026-05-22 (v1.16 — DS-1/DS-2 complete)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **1.16 sprint** — 2026-05-22  
+**Current version:** **v2.0 sprint** — 2026-05-23  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-23 (v2.0 — Phase 2: LORA-1/PLUGIN-1/PERF-1/COM-1)
+
+### Sprint: v2.0 Phase 2 Completion (2026-05-23)
+
+**LORA-1 complete:** LoRA adapter inference foundation — `services/loraAdapterService.ts` (IDB: `storycraft-lora-db`, stores `lora-meta` + `lora-blobs`); `components/settings/LoraAdapterSection.tsx` (file upload, adapter list, delete); `services/localAiFacade.ts` extended with `loraAdapterId` parameter; `enableLoraAdapters` feature flag. Full QNBS-v3 comment coverage.
+
+**PLUGIN-1 complete:** Plugin system v0.1 — `PluginSandboxedApi` interface + `PluginPermission` typed union (`storage.read/write`, `ai.invoke`, `project.read/write`, `scene.read/write`); `pluginRegistry.execute()` builds permission-checking proxy before calling plugin callback; `components/settings/PluginsSection.tsx` (type badges, permission chips, uninstall); `enablePluginSystem` feature flag. Tests: `tests/unit/pluginRegistry.test.ts` extended with 8 `execute()` tests (deny/allow, error, log).
+
+**PERF-1 complete:** Large manuscript performance — `useDeferredValue(activeSection?.content)` in `ManuscriptEditor.tsx` defers expensive highlight-overlay computation; `isHighlightPending` dims overlay during render lag. `NavigatorPanel.tsx`: overscan reduced 5→3; dismissible notice at ≥500 scenes informing users virtual scrolling is active. i18n: 2 new `manuscript.*` keys × 5 locales.
+
+**COM-1 complete:** Community section — `components/settings/CommunitySection.tsx` with GitHub Discussions/Issues quick-links (accessible cards with hero icons); curated model list showing all WebLLM models (WebGPU badge + `WEBLLM_USE_CASES` i18n labels) and ONNX models (WASM badge). `settingsSearchHints.ts` extended. i18n: 17 new `settings.community.*` keys × 5 locales.
+
+**Quality gate:** lint ✅ · i18n:check ✅ (1992 keys × 5 locales) · typecheck ✅
 
 ---
 
