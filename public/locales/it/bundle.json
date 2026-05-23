@@ -1662,6 +1662,8 @@
   "settings.featureFlags.enableObjectsGroups": "Inventario oggetti e gruppi",
   "settings.featureFlags.enableMindMaps": "Mappe mentali avanzate",
   "settings.featureFlags.enableCharacterInterviews": "Interviste personaggi v2",
+  "settings.featureFlags.enableRtlLayout": "Layout RTL (sperimentale)",
+  "settings.featureFlags.enableCloudSync": "Sincronizzazione cloud E2E cifrata (bozza)",
   "settings.tauri.updaterTitle": "Aggiornamenti app desktop",
   "settings.tauri.updateAvailable": "Aggiornamento disponibile: {{current}} → {{next}}",
   "settings.tauri.upToDate": "Hai l’ultima versione.",

@@ -27,6 +27,8 @@ export interface FeatureFlagsState {
   enableCharacterInterviews: boolean;
   /** RTL layout foundation — sets html[dir]=rtl for manual testing; gated until RTL locales land (default: false). */
   enableRtlLayout: boolean;
+  /** E2E-encrypted Cloud-Sync opt-in — Cloudflare R2 adapter (Stub; default: false). */
+  enableCloudSync: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -52,6 +54,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableCharacterInterviews: false,
   // QNBS-v3: RTL foundation — off by default; flip to test mirrored layout before RTL locales ship.
   enableRtlLayout: false,
+  // QNBS-v3: Cloud-Sync stub — off by default; exposes R2 adapter interface before backend is wired.
+  enableCloudSync: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -132,6 +136,9 @@ const featureFlagsSlice = createSlice({
     setEnableRtlLayout(state, action: PayloadAction<boolean>) {
       state.enableRtlLayout = action.payload;
     },
+    setEnableCloudSync(state, action: PayloadAction<boolean>) {
+      state.enableCloudSync = action.payload;
+    },
   },
 });
 
@@ -164,6 +171,8 @@ export const selectEnableCharacterInterviews = (state: { featureFlags: FeatureFl
   state.featureFlags.enableCharacterInterviews;
 export const selectEnableRtlLayout = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableRtlLayout;
+export const selectEnableCloudSync = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableCloudSync;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

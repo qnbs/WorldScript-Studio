@@ -452,6 +452,7 @@
   "settings.featureFlags.enableMindMaps": "Cartes mentales avancées",
   "settings.featureFlags.enableCharacterInterviews": "Interviews de personnages v2",
   "settings.featureFlags.enableRtlLayout": "Mise en page RTL (expérimental)",
+  "settings.featureFlags.enableCloudSync": "Sync cloud E2E chiffré (ébauche)",
   "settings.tauri.updaterTitle": "Mises à jour de l’app bureau",
   "settings.tauri.updateAvailable": "Mise à jour disponible : {{current}} → {{next}}",
   "settings.tauri.upToDate": "Vous avez la dernière version.",

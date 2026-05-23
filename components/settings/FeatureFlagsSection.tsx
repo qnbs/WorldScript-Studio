@@ -24,6 +24,7 @@ export const FeatureFlagsSection: FC = () => {
       labelKey: 'settings.featureFlags.enableCharacterInterviews',
     },
     { key: 'enableRtlLayout', labelKey: 'settings.featureFlags.enableRtlLayout' },
+    { key: 'enableCloudSync', labelKey: 'settings.featureFlags.enableCloudSync' },
   ];
 
   return (

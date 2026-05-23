@@ -82,6 +82,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableMindMaps: false,
     enableCharacterInterviews: false,
     enableRtlLayout: false,
+    enableCloudSync: false,
   },
 };
 

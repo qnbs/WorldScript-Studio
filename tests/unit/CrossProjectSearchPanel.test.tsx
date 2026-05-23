@@ -34,6 +34,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableMindMaps: false,
   enableCharacterInterviews: false,
   enableRtlLayout: false,
+  enableCloudSync: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -122,6 +123,7 @@ afterEach(() => {
     enableMindMaps: false,
     enableCharacterInterviews: false,
     enableRtlLayout: false,
+    enableCloudSync: false,
   };
 });
 

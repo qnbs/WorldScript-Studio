@@ -42,6 +42,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableMindMaps: false,
   enableCharacterInterviews: false,
   enableRtlLayout: false,
+  enableCloudSync: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {
