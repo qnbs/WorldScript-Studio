@@ -143,7 +143,7 @@ const QuickAccessCard: FC<{
   <Card
     as="button"
     onClick={onClick}
-    className="text-left p-6 h-full min-w-[260px] max-w-[260px] md:max-w-none md:min-w-0 group animate-in snap-center flex flex-col justify-between hover:border-[var(--border-interactive)] transition-all duration-300"
+    className="text-left p-5 sm:p-6 h-full w-full sm:min-w-[260px] sm:max-w-[260px] md:max-w-none md:min-w-0 group animate-in snap-center flex flex-col justify-between hover:border-[var(--border-interactive)] transition-all duration-300"
     style={{ '--index': animationIndex } as React.CSSProperties}
   >
     <div>

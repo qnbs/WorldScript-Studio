@@ -82,7 +82,8 @@ const ManuscriptViewUI: FC = () => {
   return (
     <div className="h-full flex flex-col">
       {/* Mobile Header */}
-      <header className="md:hidden flex-shrink-0 flex justify-between items-center p-2 mb-2 bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border-b border-[var(--sc-border-subtle)] sticky top-0 z-20">
+      {/* QNBS-v3: min-h-[52px] ensures header always meets 44px touch-target zone even on compact devices. */}
+      <header className="md:hidden flex-shrink-0 flex justify-between items-center p-2 min-h-[52px] mb-2 bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border-b border-[var(--sc-border-subtle)] sticky top-0 z-20">
         <div className="flex items-center gap-1 flex-shrink-0">
           {enableBinder ? (
             <>
@@ -114,7 +115,7 @@ const ManuscriptViewUI: FC = () => {
             variant="ghost"
             onClick={() => setIsNavDrawerOpen(true)}
             size="sm"
-            className="-ml-1"
+            className="min-h-[44px] min-w-[44px]"
             aria-label={t('manuscript.leftPanel.openDrawer')}
           >
             <svg
@@ -140,7 +141,7 @@ const ManuscriptViewUI: FC = () => {
           variant="ghost"
           onClick={() => setIsInspectorDrawerOpen(true)}
           size="sm"
-          className="-mr-1"
+          className="min-h-[44px] min-w-[44px]"
           aria-label={t('manuscript.inspector.title')}
         >
           <svg

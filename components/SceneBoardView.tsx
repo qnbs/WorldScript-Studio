@@ -227,7 +227,7 @@ const SceneBoardUI: FC = () => {
             <button
               type="button"
               onClick={() => dispatch(plotBoardActions.setSnapToGrid(!snapGrid))}
-              className={`text-xs px-2 py-1 rounded border transition-colors ${snapGrid ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)]'}`}
+              className={`text-xs px-3 py-2 min-h-[44px] rounded border transition-colors ${snapGrid ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)]'}`}
               aria-pressed={snapGrid}
               title={t('sceneboard.canvas.snapToGrid')}
             >
