@@ -6,12 +6,17 @@ import { logger } from '../services/logger';
 
 export type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
 
+/** Languages whose natural writing direction is right-to-left. Extend when RTL locales ship. */
+export const RTL_LOCALES: ReadonlySet<Language> = new Set([]);
+
 interface I18nContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   /** True once the active language bundle has been fetched. */
   isReady: boolean;
   t: <T = string>(key: string, replacements?: Record<string, string>) => T;
+  /** Layout direction derived from the active locale. */
+  dir: 'ltr' | 'rtl';
 }
 
 export const I18nContext = createContext<I18nContextType>({
@@ -19,6 +24,7 @@ export const I18nContext = createContext<I18nContextType>({
   setLanguage: () => {},
   isReady: false,
   t: <T = string>(key: string) => (bootstrapTranslation('en', key) ?? key) as unknown as T,
+  dir: 'ltr',
 });
 
 interface I18nProviderProps {
@@ -53,6 +59,9 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
       /* localStorage may be unavailable */
     }
   }, []);
+
+  // QNBS-v3: dir is derived here but DOM application is App.tsx's responsibility (it also handles the enableRtlLayout flag).
+  const dir: 'ltr' | 'rtl' = RTL_LOCALES.has(language) ? 'rtl' : 'ltr';
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -126,7 +135,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   );
 
   return (
-    <I18nContext.Provider value={{ language, setLanguage, isReady, t }}>
+    <I18nContext.Provider value={{ language, setLanguage, isReady, t, dir }}>
       {children}
     </I18nContext.Provider>
   );

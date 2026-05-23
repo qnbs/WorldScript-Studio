@@ -81,6 +81,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableObjectsGroups: false,
     enableMindMaps: false,
     enableCharacterInterviews: false,
+    enableRtlLayout: false,
   },
 };
 

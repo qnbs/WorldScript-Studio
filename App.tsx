@@ -29,7 +29,7 @@ import { VersionControlPanel } from './components/VersionControlPanel';
 import { AppContext } from './contexts/AppContext';
 import { CommandExecutorProvider } from './contexts/CommandExecutorContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
-import { I18nProvider } from './contexts/I18nContext';
+import { I18nProvider, RTL_LOCALES } from './contexts/I18nContext';
 import { LiveRegionProvider, useAnnounce } from './contexts/LiveRegionContext';
 import { selectFeatureFlags } from './features/featureFlags/featureFlagsSlice';
 import {
@@ -260,12 +260,12 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     }
   }, [settings.accessibility.colorBlindMode]);
 
-  // QNBS-v3: HTML lang + dir follows locale — aligns SR pronunciation and enables RTL layout for ar/he/fa/ur.
+  // QNBS-v3: HTML lang + dir — locale drives direction; enableRtlLayout flag overrides for manual RTL testing.
   useEffect(() => {
-    const RTL_LANGS = new Set(['ar', 'he', 'fa', 'ur']);
     document.documentElement.lang = language;
-    document.documentElement.dir = RTL_LANGS.has(language) ? 'rtl' : 'ltr';
-  }, [language]);
+    const localeDir = RTL_LOCALES.has(language) ? 'rtl' : 'ltr';
+    document.documentElement.dir = featureFlags.enableRtlLayout ? 'rtl' : localeDir;
+  }, [language, featureFlags.enableRtlLayout]);
 
   // QNBS-v3: PWA share_target GET params → toast + stash for Writer paste flows; strip query to avoid leaking shared text in URL bar.
   useEffect(() => {

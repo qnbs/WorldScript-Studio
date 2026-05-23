@@ -25,6 +25,8 @@ export interface FeatureFlagsState {
   enableMindMaps: boolean;
   /** Character Interviews v2 — archetype-based AI interview sessions (default: false). */
   enableCharacterInterviews: boolean;
+  /** RTL layout foundation — sets html[dir]=rtl for manual testing; gated until RTL locales land (default: false). */
+  enableRtlLayout: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -48,6 +50,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableMindMaps: false,
   // QNBS-v3: v1.7 Character Interviews — off by default; requires AI key to be useful.
   enableCharacterInterviews: false,
+  // QNBS-v3: RTL foundation — off by default; flip to test mirrored layout before RTL locales ship.
+  enableRtlLayout: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -125,6 +129,9 @@ const featureFlagsSlice = createSlice({
     setEnableCharacterInterviews(state, action: PayloadAction<boolean>) {
       state.enableCharacterInterviews = action.payload;
     },
+    setEnableRtlLayout(state, action: PayloadAction<boolean>) {
+      state.enableRtlLayout = action.payload;
+    },
   },
 });
 
@@ -155,6 +162,8 @@ export const selectEnableMindMaps = (state: { featureFlags: FeatureFlagsState })
   state.featureFlags.enableMindMaps;
 export const selectEnableCharacterInterviews = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableCharacterInterviews;
+export const selectEnableRtlLayout = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableRtlLayout;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

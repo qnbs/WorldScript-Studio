@@ -33,6 +33,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableObjectsGroups: false,
   enableMindMaps: false,
   enableCharacterInterviews: false,
+  enableRtlLayout: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -120,6 +121,7 @@ afterEach(() => {
     enableObjectsGroups: false,
     enableMindMaps: false,
     enableCharacterInterviews: false,
+    enableRtlLayout: false,
   };
 });
 
