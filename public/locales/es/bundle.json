@@ -665,6 +665,8 @@
   "manuscript.zenMode.label": "Modo Zen",
   "manuscript.resizer.left": "Ajustar panel izquierdo",
   "manuscript.resizer.right": "Ajustar panel derecho",
+  "manuscript.navigator.largeManuscript": "Manuscrito extenso ({{count}} escenas) — desplazamiento virtual activo.",
+  "manuscript.navigator.largeManuscriptDismiss": "Descartar",
   "writer.chapter.label": "Capítulo: {{title}}",
   "writer.context.hide": "Ocultar contexto",
   "writer.context.label": "Contexto",

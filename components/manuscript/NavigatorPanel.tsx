@@ -1,6 +1,9 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FC } from 'react';
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+
+const LARGE_MANUSCRIPT_THRESHOLD = 500;
+
 import { useManuscriptViewContext } from '../../contexts/ManuscriptViewContext';
 import { Button } from '../ui/Button';
 
@@ -220,15 +223,32 @@ export const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(
     // QNBS-v3: Virtual scrolling via @tanstack/react-virtual — renders only visible items; critical for manuscripts with 100+ sections.
     const sections = Array.isArray(manuscript) ? manuscript : [];
     const scrollRef = useRef<HTMLUListElement>(null);
+    const [isLargeNoticeVisible, setIsLargeNoticeVisible] = useState(true);
+    const isLargeManuscript = sections.length >= LARGE_MANUSCRIPT_THRESHOLD;
     const virtualizer = useVirtualizer({
       count: sections.length,
       getScrollElement: () => scrollRef.current,
       estimateSize: () => 40,
-      overscan: 5,
+      overscan: 3,
     });
 
     return (
       <div className="flex flex-col h-full">
+        {isLargeManuscript && isLargeNoticeVisible && (
+          <div className="flex items-center gap-2 px-2 py-1.5 bg-[var(--sc-surface-raised)] border-b border-[var(--sc-border-subtle)] text-xs text-[var(--sc-text-muted)]">
+            <span className="flex-1">
+              {t('manuscript.navigator.largeManuscript', { count: String(sections.length) })}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsLargeNoticeVisible(false)}
+              aria-label={t('manuscript.navigator.largeManuscriptDismiss')}
+              className="shrink-0 hover:text-[var(--sc-text-primary)] transition-colors"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <ul
           ref={scrollRef}
           className="flex-grow overflow-y-auto p-2 no-scrollbar list-none"

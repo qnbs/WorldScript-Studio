@@ -665,6 +665,8 @@
   "manuscript.zenMode.label": "Zen Mode",
   "manuscript.resizer.left": "Adjust left panel",
   "manuscript.resizer.right": "Adjust right panel",
+  "manuscript.navigator.largeManuscript": "Large manuscript ({{count}} scenes) — virtual scrolling active.",
+  "manuscript.navigator.largeManuscriptDismiss": "Dismiss",
   "writer.studio.title": "AI Writing Studio",
   "writer.studio.description": "Your AI co-author. Generate, improve, and brainstorm with full project context.",
   "writer.studio.context.title": "Manuscript Context",

@@ -63,5 +63,7 @@
   "manuscript.zenMode.exit": "Exit Zen Mode",
   "manuscript.zenMode.label": "Zen Mode",
   "manuscript.resizer.left": "Adjust left panel",
-  "manuscript.resizer.right": "Adjust right panel"
+  "manuscript.resizer.right": "Adjust right panel",
+  "manuscript.navigator.largeManuscript": "Large manuscript ({{count}} scenes) — virtual scrolling active.",
+  "manuscript.navigator.largeManuscriptDismiss": "Dismiss"
 }

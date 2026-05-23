@@ -665,6 +665,8 @@
   "manuscript.zenMode.label": "Modalità Zen",
   "manuscript.resizer.left": "Regola pannello sinistro",
   "manuscript.resizer.right": "Regola pannello destro",
+  "manuscript.navigator.largeManuscript": "Manoscritto grande ({{count}} scene) — scorrimento virtuale attivo.",
+  "manuscript.navigator.largeManuscriptDismiss": "Chiudi",
   "writer.chapter.label": "Capitolo: {{title}}",
   "writer.context.hide": "Nascondi contesto",
   "writer.context.label": "Contesto",
