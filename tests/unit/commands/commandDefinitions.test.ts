@@ -84,6 +84,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableRtlLayout: false,
     enableCloudSync: false,
     enableLoraAdapters: false,
+    enablePluginSystem: false,
   },
 };
 

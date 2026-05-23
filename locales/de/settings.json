@@ -482,5 +482,13 @@
   "settings.loraAdapters.deleteBtn": "Löschen",
   "settings.loraAdapters.uploadError": "Adapter konnte nicht geladen werden. Die Datei ist möglicherweise ungültig oder zu groß.",
   "settings.loraAdapters.scale": "Skalierung α:",
-  "settings.loraAdapters.notice": "Browser-seitige LoRA-Inferenz erfordert WebLLM mit einem kompatiblen Basismodell. Training wird nicht unterstützt — nur vortrainierte Adapter laden."
+  "settings.loraAdapters.notice": "Browser-seitige LoRA-Inferenz erfordert WebLLM mit einem kompatiblen Basismodell. Training wird nicht unterstützt — nur vortrainierte Adapter laden.",
+  "settings.categories.plugins": "Plugins",
+  "settings.featureFlags.enablePluginSystem": "Plugin-System v0.1 (experimentell)",
+  "settings.plugins.title": "Plugins",
+  "settings.plugins.description": "StoryCraft-Studio-Erweiterungs-Plugins verwalten. Plugins laufen in einer sandboxed API-Schicht und können nur auf die deklarierten Berechtigungen zugreifen.",
+  "settings.plugins.flagGate": "Aktiviere 'Plugin-System' unter Experimentelle Flags, um diesen Bereich zu nutzen.",
+  "settings.plugins.sandboxNotice": "Alle Plugins laufen über eine sandboxed Capability-API. Kein Plugin hat direkten Zugriff auf den Redux-Store, das Netzwerk oder das Dateisystem über die deklarierten Berechtigungen hinaus.",
+  "settings.plugins.emptyState": "Keine Plugins registriert. Installiere ein Plugin via pluginRegistry.register() aus der Browser-Konsole oder einem zukünftigen Plugin-Loader.",
+  "settings.plugins.uninstallBtn": "Deinstallieren"
 }

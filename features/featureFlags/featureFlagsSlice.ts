@@ -31,6 +31,8 @@ export interface FeatureFlagsState {
   enableCloudSync: boolean;
   /** LoRA adapter inference — load .safetensors adapters for local WebLLM models (default: false). */
   enableLoraAdapters: boolean;
+  /** Plugin system v0.1 — ESM-based extensions with sandboxed capability API (default: false). */
+  enablePluginSystem: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -60,6 +62,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableCloudSync: false,
   // QNBS-v3: LoRA adapter inference — off by default; browser LoRA is experimental (no training, inference only).
   enableLoraAdapters: false,
+  // QNBS-v3: Plugin system v0.1 — off by default; sandboxed API contract is stable, loader is not yet wired.
+  enablePluginSystem: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -146,6 +150,9 @@ const featureFlagsSlice = createSlice({
     setEnableLoraAdapters(state, action: PayloadAction<boolean>) {
       state.enableLoraAdapters = action.payload;
     },
+    setEnablePluginSystem(state, action: PayloadAction<boolean>) {
+      state.enablePluginSystem = action.payload;
+    },
   },
 });
 
@@ -182,6 +189,8 @@ export const selectEnableCloudSync = (state: { featureFlags: FeatureFlagsState }
   state.featureFlags.enableCloudSync;
 export const selectEnableLoraAdapters = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableLoraAdapters;
+export const selectEnablePluginSystem = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enablePluginSystem;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

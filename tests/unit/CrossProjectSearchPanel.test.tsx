@@ -36,6 +36,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableRtlLayout: false,
   enableCloudSync: false,
   enableLoraAdapters: false,
+  enablePluginSystem: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -126,6 +127,7 @@ afterEach(() => {
     enableRtlLayout: false,
     enableCloudSync: false,
     enableLoraAdapters: false,
+    enablePluginSystem: false,
   };
 });
 

@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { type PluginDescriptor, PluginRegistry } from '../../services/pluginRegistry';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  type PluginDescriptor,
+  PluginRegistry,
+  type PluginSandboxedApi,
+} from '../../services/pluginRegistry';
 
 function makePlugin(overrides: Partial<PluginDescriptor> = {}): PluginDescriptor {
   return {
@@ -9,6 +13,16 @@ function makePlugin(overrides: Partial<PluginDescriptor> = {}): PluginDescriptor
     type: 'command',
     entrypoint: './plugins/test.ts',
     permissions: ['storage.read'],
+    ...overrides,
+  };
+}
+
+function makeApi(overrides: Partial<PluginSandboxedApi> = {}): PluginSandboxedApi {
+  return {
+    getProjectTitle: vi.fn(() => 'Test Project'),
+    getSceneTitles: vi.fn(() => ['Scene 1', 'Scene 2']),
+    appendToCurrentScene: vi.fn(),
+    log: vi.fn(),
     ...overrides,
   };
 }
@@ -85,5 +99,77 @@ describe('PluginRegistry', () => {
     registry.register(makePlugin({ id: 'ai', type: 'ai-tool' }));
     registry.register(makePlugin({ id: 'local', type: 'local-ai-service' }));
     expect(registry.size).toBe(3);
+  });
+});
+
+describe('PluginRegistry.execute()', () => {
+  let registry: PluginRegistry;
+
+  beforeEach(() => {
+    registry = new PluginRegistry();
+  });
+
+  it('returns error for unregistered plugin', () => {
+    const result = registry.execute('ghost', () => {}, makeApi());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/not registered/);
+  });
+
+  it('calls fn and returns ok:true for registered plugin', () => {
+    registry.register(makePlugin({ permissions: ['project.read'] }));
+    const fn = vi.fn();
+    const result = registry.execute('test-plugin', fn, makeApi());
+    expect(result.ok).toBe(true);
+    expect(fn).toHaveBeenCalledOnce();
+  });
+
+  it('allows log() without any permission', () => {
+    registry.register(makePlugin({ permissions: [] }));
+    const api = makeApi();
+    registry.execute('test-plugin', (sandboxed) => sandboxed.log('hello'), api);
+    expect(api.log).toHaveBeenCalledWith('hello');
+  });
+
+  it('denies getProjectTitle when project.read is not declared', () => {
+    registry.register(makePlugin({ permissions: [] }));
+    const result = registry.execute(
+      'test-plugin',
+      (sandboxed) => sandboxed.getProjectTitle(),
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/project\.read/);
+  });
+
+  it('allows getProjectTitle when project.read is declared', () => {
+    registry.register(makePlugin({ permissions: ['project.read'] }));
+    const api = makeApi();
+    const result = registry.execute('test-plugin', (sandboxed) => sandboxed.getProjectTitle(), api);
+    expect(result.ok).toBe(true);
+    expect(api.getProjectTitle).toHaveBeenCalledOnce();
+  });
+
+  it('denies appendToCurrentScene without scene.write', () => {
+    registry.register(makePlugin({ permissions: ['scene.read'] }));
+    const result = registry.execute(
+      'test-plugin',
+      (sandboxed) => sandboxed.appendToCurrentScene('text'),
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/scene\.write/);
+  });
+
+  it('returns ok:false and error message when fn throws', () => {
+    registry.register(makePlugin({ permissions: [] }));
+    const result = registry.execute(
+      'test-plugin',
+      () => {
+        throw new Error('plugin crash');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('plugin crash');
   });
 });
