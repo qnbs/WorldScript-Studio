@@ -316,7 +316,7 @@ const OutlineResult: FC = () => {
                         type="button"
                         onClick={() => handleMove(index, 'up')}
                         disabled={index === 0}
-                        className="p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20"
+                        className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20"
                         title={t('common.moveUp')}
                         aria-label={t('common.moveUp')}
                       >
@@ -337,7 +337,7 @@ const OutlineResult: FC = () => {
                         type="button"
                         onClick={() => handleMove(index, 'down')}
                         disabled={index === outline.length - 1}
-                        className="p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20"
+                        className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20"
                         title={t('common.moveDown')}
                         aria-label={t('common.moveDown')}
                       >

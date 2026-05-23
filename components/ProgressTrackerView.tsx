@@ -190,7 +190,7 @@ const GoalInput: FC<{
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       aria-label={label}
-      className="w-24 px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm text-right"
+      className="w-24 px-2 py-2 min-h-[44px] rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm text-right"
     />
   </div>
 );
@@ -320,7 +320,7 @@ const ProgressTrackerInner: FC = () => {
             <button
               type="button"
               onClick={isSessionActive ? handleEndSession : handleStartSession}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              className={`px-4 py-3 min-h-[44px] rounded-lg text-sm font-semibold transition-colors ${
                 isSessionActive
                   ? 'bg-red-500 hover:bg-red-600 text-white'
                   : 'bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-[white]'

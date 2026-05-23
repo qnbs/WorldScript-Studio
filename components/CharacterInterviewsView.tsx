@@ -37,10 +37,11 @@ function CharacterInterviewsViewContent() {
     );
   }
 
+  // QNBS-v3: flex-col on mobile so sidebar stacks above content; w-64 sidebar would eat half a phone screen.
   return (
-    <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
       {/* Left sidebar — character + interview list */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--sc-border-subtle)]">
+      <aside className="flex w-full md:w-64 md:shrink-0 flex-col border-b md:border-b-0 md:border-r border-[var(--sc-border-subtle)] max-h-[40vh] md:max-h-none">
         {/* Character selector */}
         <div className="border-b border-[var(--sc-border-subtle)] p-3">
           <label
@@ -178,6 +179,7 @@ function CharacterInterviewsViewContent() {
                       </button>
                     </div>
                   ) : (
+                    // QNBS-v3: always visible on touch (group-hover never fires on mobile); md:opacity-0 restores hover-reveal on desktop.
                     <button
                       type="button"
                       aria-label={t('characterInterviews.deleteInterview')}
@@ -185,7 +187,7 @@ function CharacterInterviewsViewContent() {
                         e.stopPropagation();
                         setDeleteConfirmId(iv.id);
                       }}
-                      className="absolute right-2 top-2 hidden rounded-sc-sm p-1 text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)] group-hover:block"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sc-sm p-2 text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)] md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                     >
                       ×
                     </button>

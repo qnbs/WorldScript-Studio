@@ -11,7 +11,7 @@ export function MindMapToolbar() {
       <button
         type="button"
         onClick={() => handleZoom(0.1)}
-        className="p-1.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
+        className="p-2.5 md:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
         aria-label={t('mindmap.zoomIn')}
         title={t('mindmap.zoomIn')}
       >
@@ -38,7 +38,7 @@ export function MindMapToolbar() {
       <button
         type="button"
         onClick={() => handleZoom(-0.1)}
-        className="p-1.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
+        className="p-2.5 md:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
         aria-label={t('mindmap.zoomOut')}
         title={t('mindmap.zoomOut')}
       >
@@ -60,7 +60,7 @@ export function MindMapToolbar() {
       <button
         type="button"
         onClick={handleResetViewport}
-        className="p-1.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
+        className="p-2.5 md:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]"
         aria-label={t('mindmap.resetViewport')}
         title={t('mindmap.resetViewport')}
       >

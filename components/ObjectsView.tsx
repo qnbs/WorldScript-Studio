@@ -318,7 +318,7 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
         <button
           type="button"
           onClick={() => handleEditObject(obj)}
-          className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
+          className="text-xs px-2 py-2 min-h-[44px] flex items-center text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
         >
           {t('objects.editObject')}
         </button>
@@ -326,7 +326,7 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
           type="button"
           onClick={onDelete}
           onBlur={() => setConfirmDelete(false)}
-          className={`text-xs focus-visible:ring-2 focus-visible:ring-red-500 rounded ${
+          className={`text-xs px-2 py-2 min-h-[44px] flex items-center focus-visible:ring-2 focus-visible:ring-red-500 rounded ${
             confirmDelete
               ? 'text-red-600 font-medium'
               : 'text-[var(--sc-text-secondary)] hover:text-red-500'
@@ -380,7 +380,7 @@ const GroupCard: FC<{ group: ObjectGroup }> = ({ group }) => {
         <button
           type="button"
           onClick={() => handleEditGroup(group)}
-          className="text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
+          className="text-xs px-2 py-2 min-h-[44px] flex items-center text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
         >
           {t('objects.editGroup')}
         </button>
@@ -388,7 +388,7 @@ const GroupCard: FC<{ group: ObjectGroup }> = ({ group }) => {
           type="button"
           onClick={onDelete}
           onBlur={() => setConfirmDelete(false)}
-          className={`text-xs focus-visible:ring-2 focus-visible:ring-red-500 rounded ${
+          className={`text-xs px-2 py-2 min-h-[44px] flex items-center focus-visible:ring-2 focus-visible:ring-red-500 rounded ${
             confirmDelete
               ? 'text-red-600 font-medium'
               : 'text-[var(--sc-text-secondary)] hover:text-red-500'

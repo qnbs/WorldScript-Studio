@@ -330,7 +330,7 @@ export const BinderPanel: FC = () => {
           value={linkUrlDraft}
           onChange={(e) => setLinkUrlDraft(e.target.value)}
           placeholder={t('manuscript.binder.linkUrl')}
-          className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--input-background)] text-xs"
+          className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-xs"
         />
         <label htmlFor="binder-link-title" className="sr-only">
           {t('manuscript.binder.linkTitleOptional')}
@@ -340,7 +340,7 @@ export const BinderPanel: FC = () => {
           value={linkTitleDraft}
           onChange={(e) => setLinkTitleDraft(e.target.value)}
           placeholder={t('manuscript.binder.linkTitleOptional')}
-          className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--input-background)] text-xs"
+          className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-xs"
         />
         <Button
           type="button"
@@ -384,7 +384,7 @@ export const BinderPanel: FC = () => {
                 key={n.id}
                 type="button"
                 onClick={() => setSelectedId(n.id)}
-                className={`w-full text-left rounded px-2 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--border-interactive)] focus-visible:outline-none ${
+                className={`w-full text-left rounded px-2 py-2 min-h-[44px] flex items-center text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--border-interactive)] focus-visible:outline-none ${
                   selectedId === n.id
                     ? 'bg-[var(--sc-accent)]/20 text-[var(--sc-text-primary)]'
                     : 'hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
@@ -409,7 +409,7 @@ export const BinderPanel: FC = () => {
             id="binder-note-title"
             value={selected.title}
             onChange={(e) => updateSelectedTitle(e.target.value)}
-            className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--input-background)] text-sm"
+            className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm"
           />
           <label htmlFor="binder-note-body" className="sr-only">
             {t('manuscript.binder.noteBody')}
@@ -419,7 +419,7 @@ export const BinderPanel: FC = () => {
             value={selected.content ?? ''}
             onChange={(e) => updateSelectedContent(e.target.value)}
             rows={6}
-            className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--input-background)] text-sm resize-y"
+            className="w-full px-2 py-1 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-sm resize-y"
             placeholder={t('manuscript.binder.notePlaceholder')}
           />
           <Button

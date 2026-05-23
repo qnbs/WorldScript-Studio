@@ -106,8 +106,9 @@ export function MindMapListPanel() {
   const editingMap = mindMaps.find((m) => m.id === editingMapId);
 
   return (
+    // QNBS-v3: w-full on mobile (stacks below toolbar); md:w-56 on desktop — sidebar must not eat the canvas.
     <aside
-      className="w-56 flex-shrink-0 border-r border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] flex flex-col"
+      className="w-full md:w-56 md:flex-shrink-0 max-h-[35vh] md:max-h-none border-b md:border-b-0 md:border-r border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] flex flex-col"
       aria-label={t('mindmap.title')}
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--sc-border-subtle)]">
@@ -208,7 +209,7 @@ export function MindMapListPanel() {
                     type="button"
                     onClick={() => handleOpenEditMapForm(map.id)}
                     aria-label={t('mindmap.editMap')}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)]"
+                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1.5 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)] transition-opacity"
                   >
                     <svg
                       width="11"
@@ -227,7 +228,7 @@ export function MindMapListPanel() {
                     type="button"
                     onClick={() => setConfirmDeleteId(map.id)}
                     aria-label={t('mindmap.deleteMap')}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded-sc-sm hover:bg-[var(--sc-danger-bg)] text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)]"
+                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1.5 rounded-sc-sm hover:bg-[var(--sc-danger-bg)] text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)] transition-opacity"
                   >
                     <svg
                       width="11"

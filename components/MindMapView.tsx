@@ -9,7 +9,8 @@ function MindMapViewContent() {
   return (
     <div className="flex flex-col h-full">
       <MindMapToolbar />
-      <div className="flex flex-1 overflow-hidden">
+      {/* QNBS-v3: flex-col on mobile — w-56 sidebar would eat too much of a narrow viewport. */}
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         <MindMapListPanel />
         <MindMapCanvas />
         <MindMapNodeEditor />
