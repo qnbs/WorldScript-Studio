@@ -41,6 +41,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableObjectsGroups: false,
   enableMindMaps: false,
   enableCharacterInterviews: false,
+  enableRtlLayout: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

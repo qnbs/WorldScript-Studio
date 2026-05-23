@@ -451,6 +451,7 @@
   "settings.featureFlags.enableObjectsGroups": "Objekte & Gruppen",
   "settings.featureFlags.enableMindMaps": "Erweiterte Mindmaps",
   "settings.featureFlags.enableCharacterInterviews": "Charakter-Interviews v2",
+  "settings.featureFlags.enableRtlLayout": "RTL-Layout (experimentell)",
   "settings.tauri.updaterTitle": "Desktop-Updates",
   "settings.tauri.updateAvailable": "Update verfügbar: {{current}} → {{next}}",
   "settings.tauri.upToDate": "Neueste Version installiert.",

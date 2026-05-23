@@ -23,6 +23,7 @@ export const FeatureFlagsSection: FC = () => {
       key: 'enableCharacterInterviews',
       labelKey: 'settings.featureFlags.enableCharacterInterviews',
     },
+    { key: 'enableRtlLayout', labelKey: 'settings.featureFlags.enableRtlLayout' },
   ];
 
   return (

@@ -24,6 +24,7 @@ export const StorybookWrapper: React.FC<{ children: ReactNode }> = ({ children }
         setLanguage: () => {},
         t: (key: string) => defaultT(key),
         isReady: true,
+        dir: 'ltr',
       }}
     >
       <ToastProvider>{children}</ToastProvider>
@@ -38,6 +39,7 @@ export const I18nMockProvider: React.FC<{ children: ReactNode }> = ({ children }
       setLanguage: () => {},
       t: (key: string) => defaultT(key),
       isReady: true,
+      dir: 'ltr',
     }}
   >
     {children}
