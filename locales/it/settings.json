@@ -490,5 +490,22 @@
   "settings.plugins.flagGate": "Attiva «Sistema plugin» nei flag sperimentali per utilizzare questa sezione.",
   "settings.plugins.sandboxNotice": "Tutti i plugin transitano per un'API di capacità sandbox. Nessun plugin ha accesso diretto allo store Redux, alla rete o al filesystem oltre le autorizzazioni dichiarate.",
   "settings.plugins.emptyState": "Nessun plugin registrato. Installa un plugin tramite pluginRegistry.register() dalla console del browser.",
-  "settings.plugins.uninstallBtn": "Disinstalla"
+  "settings.plugins.uninstallBtn": "Disinstalla",
+  "settings.categories.community": "Comunità",
+  "settings.community.title": "Comunità",
+  "settings.community.description": "Connettiti con altri utenti di StoryCraft Studio, condividi modelli di storie e sfoglia l'elenco di modelli IA locali consigliati.",
+  "settings.community.discussionsLink": "GitHub Discussions",
+  "settings.community.discussionsHint": "Condividi modelli, fai domande, mostra i tuoi progetti.",
+  "settings.community.issuesLink": "Segnala un problema",
+  "settings.community.issuesHint": "Segnalazioni di bug e richieste di funzionalità sono benvenute.",
+  "settings.community.modelListTitle": "Modelli IA locali consigliati",
+  "settings.community.modelListDescription": "Modelli raccomandati per la scrittura offline. Attiva un provider IA locale nella configurazione IA.",
+  "settings.community.webllmModels": "WebLLM — richiede WebGPU",
+  "settings.community.onnxModels": "ONNX Runtime — funziona in tutti i browser",
+  "settings.community.useCase.eco": "Più veloce, memoria minima — ideale per suggerimenti rapidi",
+  "settings.community.useCase.fast": "Inferenza rapida — ideale per il completamento automatico",
+  "settings.community.useCase.balanced": "Qualità e velocità equilibrate — consigliato",
+  "settings.community.useCase.reasoning": "Ragionamento forte — ideale per l'analisi della trama",
+  "settings.community.useCase.highEnd": "Massima qualità — richiede 32 GB+ di VRAM",
+  "settings.community.useCase.wasm": "Nessuna GPU richiesta — funziona in qualsiasi browser"
 }
