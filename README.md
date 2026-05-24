@@ -599,7 +599,9 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`infra/low-end-ci/`](infra/low-end-ci/) | Local CI on low-end hardware (act + Eco-Forgejo) |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow: manual/tag builds, 7-step first-release checklist |
 | [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Tauri plugin-updater: secrets table, `latest.json` auto-generation, signing |
-| [`docs/graphify.md`](docs/graphify.md) | Optional Graphify knowledge graph (`pnpm run graphify:update`) |
+| [`docs/graphify.md`](docs/graphify.md) | Graphify knowledge graph — multi-modal AST graph (`pnpm run graphify:update`) |
+| [`docs/codegraph.md`](docs/codegraph.md) | CodeGraph semantic code intelligence — MCP-powered symbol graph (`pnpm run codegraph:update`) |
+| [`docs/dual-graph-setup.md`](docs/dual-graph-setup.md) | Master guide for using Graphify + CodeGraph together |
 | [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md) | Archived release notes (v1.1.x) |
 | [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) | Playwright helpers (no `networkidle` under Vite, portal bootstrap, sidebar scope) |
 | [`.cursorrules`](.cursorrules) | **QNBS v3** — Cursor AI behavior for qnbs repos |

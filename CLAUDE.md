@@ -314,3 +314,19 @@ Rules:
 - If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
 - For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
 - After modifying code files in this session, run `pnpm run graphify:update` (or `graphify update .` if the CLI is on `PATH`) to keep the graph current (AST-only, no API cost). First-time Python setup: `pnpm run graphify:bootstrap` (PyPI package **`graphifyy`**).
+
+## codegraph
+
+This project uses CodeGraph (`.codegraph/`) for semantic code intelligence via MCP.
+
+Rules:
+- Before answering code-structure, caller/callee, or impact questions, use CodeGraph MCP tools (`codegraph_context`, `codegraph_impact`, `codegraph_trace`)
+- If `.codegraph/` exists, answer directly with CodeGraph — don't delegate exploration to a file-reading sub-agent
+- For "how does X reach Y", use `codegraph_trace` instead of manual Grep + Read chains
+- After modifying code, the graph auto-syncs (2s debounce). For large refactors, run `pnpm run codegraph:update`
+- To find affected tests: `pnpm run codegraph:affected`
+
+### Dual-Graph workflow
+1. Architecture / high-level questions: Read `graphify-out/GRAPH_REPORT.md` first
+2. Code navigation / symbols / impact: Use CodeGraph MCP tools
+3. Cross-module relationships: Use Graphify `query`/`path` or CodeGraph `context`
