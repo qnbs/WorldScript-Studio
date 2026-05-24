@@ -185,6 +185,7 @@
   "lint-staged": {
     "*.{ts,tsx,js,mjs,css,md,json}": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true",
     "public/locales/**/bundle.json": "node -e \"process.exit(0)\"",
-    "graphify-out/**": "node -e \"process.exit(0)\""
+    "graphify-out/**": "node -e \"process.exit(0)\"",
+    ".codegraph/**": "node -e \"process.exit(0)\""
   }
 }

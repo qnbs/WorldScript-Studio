@@ -3,7 +3,7 @@
 StoryCraft Studio has a fully configured [graphify](https://github.com/safishamsi/graphify) knowledge graph.  
 Graph output lives at `graphify-out/`. **Solo-repo policy (this project):** only `graphify-out/GRAPH_REPORT.md` is committed; `graph.json`, `graph.html`, and `cache/` stay local and are regenerated with `pnpm run graphify:update`.
 
-**Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*; inventory of all 15 maintainer `.md` files → [`AUDIT.md`](../AUDIT.md).
+**Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*; inventory of all maintainer `.md` files → [`AUDIT.md`](../AUDIT.md). **Dual-Graph master guide:** [`docs/dual-graph-setup.md`](dual-graph-setup.md) — how Graphify and CodeGraph work together.
 
 **Official PyPI name:** `graphifyy` (double **y**). The CLI is still `graphify`. `pip install graphify` can pull an **unrelated** package — always use `graphifyy`.
 
