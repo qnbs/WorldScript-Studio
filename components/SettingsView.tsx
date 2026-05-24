@@ -27,6 +27,7 @@ import {
   PrivacySection,
 } from './settings/SystemSections';
 import { TauriUpdaterBanner } from './settings/TauriUpdaterBanner';
+import { VoiceSettingsSection } from './settings/VoiceSettingsSection';
 import { Input } from './ui/Input';
 import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
@@ -281,6 +282,8 @@ const SettingsViewUI: FC = () => {
         );
       case 'shortcuts':
         return <ShortcutsSection />;
+      case 'voice':
+        return <VoiceSettingsSection />;
       default:
         return null;
     }

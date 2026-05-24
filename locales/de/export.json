@@ -82,6 +82,7 @@
   "export.pasteSection.copyAsMarkdown": "Als Markdown für Notion / Google Docs kopieren",
   "export.pasteSection.defaultTitle": "Eingefügter Inhalt",
   "export.pasteSection.expand": "Text einfügen",
+  "export.pasteSection.heading": "Google Docs / Notion",
   "export.pasteSection.importAsChapter": "Als Kapitel importieren",
   "export.pasteSection.textPlaceholder": "Text aus Google Docs oder Notion hier einfügen (Strg+V)…",
   "export.pasteSection.titlePlaceholder": "Kapiteltitel (optional)",
@@ -89,6 +90,5 @@
   "export.preview.title": "Live-Vorschau",
   "export.title": "Publishing-Suite",
   "export.toggleSection": "Sichtbarkeit für {{title}} umschalten",
-  "export.worldsLabel": "Welten",
-  "export.pasteSection.heading": "Google Docs / Notion"
+  "export.worldsLabel": "Welten"
 }

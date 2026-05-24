@@ -31,6 +31,7 @@
   "worlds.edit.magicSystem": "Magie- / Technologiesystem",
   "worlds.edit.name": "Name",
   "worlds.edit.notes": "Notizen",
+  "worlds.editorTabsAriaLabel": "Welteditor-Reiter",
   "worlds.error.imageFailed": "Generierung des Stimmungsbildes fehlgeschlagen. Bitte fügen Sie der Weltbeschreibung mehr Details hinzu oder überprüfen Sie Ihre Verbindung.",
   "worlds.loading.profile": "Detailliertes Weltprofil wird generiert...",
   "worlds.newWorldName": "Neue Welt",
@@ -42,7 +43,6 @@
   "worlds.tabs.overview": "Übersicht",
   "worlds.tabs.timeline": "Geschichte & Zeitachse",
   "worlds.title": "Welt-Atlas",
-  "worlds.yourWorlds": "Ihre Welten",
   "worlds.uploadImage": "Bild hochladen",
-  "worlds.editorTabsAriaLabel": "Welteditor-Reiter"
+  "worlds.yourWorlds": "Ihre Welten"
 }

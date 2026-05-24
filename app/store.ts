@@ -60,6 +60,7 @@ import mindMapUiReducer, {
   mindMapUiPersistenceMiddleware,
 } from '../features/mindMap/mindMapUiSlice';
 import versionControlReducer from '../features/versionControl/versionControlSlice';
+import voiceReducer from '../features/voice/voiceSlice';
 
 const combinedReducer = combineReducers({
   project: undoable(projectReducer, {
@@ -80,6 +81,8 @@ const combinedReducer = combineReducers({
   analytics: analyticsReducer,
   // QNBS-v3: mindMapUi is ephemeral viewport/draw state for MindMapCanvas; localStorage-backed.
   mindMapUi: mindMapUiReducer,
+  // Voice mode state for voice command and control
+  voice: voiceReducer,
   [aiApi.reducerPath]: aiApi.reducer,
 });
 
@@ -168,3 +171,8 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
 const _tempStore = configureStore({ reducer: rootReducer });
 export type RootState = ReturnType<typeof _tempStore.getState>;
 export type AppDispatch = typeof _tempStore.dispatch;
+
+// Global store reference for non-React consumers (e.g., voice service)
+export const appStoreRef = {
+  current: null as { getState(): RootState; dispatch: AppDispatch } | null,
+};

@@ -269,6 +269,22 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 **libraryBackupService:** `services/libraryBackupService.ts` — one-click encrypted ZIP export (AES-GCM, `META.json` + `vault.bin`). Entry point: Settings → Data. No new IDB keys; reads from existing `dbService` stores.
 
+### Voice Full Support
+
+**Abstract engine pattern:** `services/voice/voiceTypes.ts` defines `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine` interfaces. All implementations follow the same contract: `isAvailable()` → `initialize()` → use → `dispose()`.
+
+**Web Speech API fallbacks:** `WebSpeechSttEngine` (auto-restart on unexpected end), `WebSpeechTtsEngine` (voice selection, rate/volume/pitch), `WebRtcVadEngine` (energy-based, pure JS), `EnergyThresholdWakeWordEngine` (configurable phrase, rolling history). These require zero downloads and work immediately in all modern browsers.
+
+**Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact template match (O(1) via Map) → fuzzy Jaccard scoring + keyword bonus → slot extraction for navigation commands. View-context filtering via `requiredViews` array. Character/section/world names injected from Redux state for slot matching.
+
+**Orchestrator:** `VoiceCommandService` singleton manages engine lifecycle and state machine (idle → listening → processing → speaking → idle + dictating). Dispatches matched commands via `runCommandById`. `appStoreRef` object pattern allows singleton access to Redux state outside React lifecycle.
+
+**Hooks:** `useVoice` (primary bridge), `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation` (editor transcript insertion), `useVoiceAccessibility` (ARIA live regions).
+
+**Opt-in gating:** Voice UI only renders when `settings.voice.enabled === true` AND `featureFlags.enableVoiceSupport === true`. Onboarding notice shown in Settings → Voice on first access.
+
+**currentView fallback:** Intent engine uses `document.body.dataset['view']` as best-effort current view detection. This is React-state-independent but may lag behind rapid view switches.
+
 ### Local inference
 
 **localAiFacade / WebLLM:** `services/localAiFacade.ts` wraps WebLLM with the same provider interface as `aiProviderService.ts`. Model download progress surfaced via `onProgress`; mount-guard via `useRef` prevents stale updates after unmount.
@@ -286,6 +302,7 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
 - `workers/inference.worker.ts:50` — `@ts-expect-error` on `@xenova/transformers` dynamic import (lives in `packages/ai-core`; Vite resolves at build time but `tsc` can't see it from root)
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 token migration verified in production (all intentional vars documented above)
+- **Voice v1.2 planned:** WASM engines (Whisper.cpp STT, Kokoro/Piper TTS, Silero VAD, Sherpa-ONNX wake-word); semantic intent matching (MiniLM embeddings); local LLM fallback for complex commands; E2E voice tests (Playwright)
 - **v2.0 open:** Full RTCDataChannel in-flight E2E encryption (y-webrtc patch); RTL language support; LoRA fine-tuning; Cloud-Sync
 
 ## graphify

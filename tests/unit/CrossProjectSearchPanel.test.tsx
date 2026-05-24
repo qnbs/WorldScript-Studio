@@ -37,6 +37,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableCloudSync: false,
   enableLoraAdapters: false,
   enablePluginSystem: false,
+  enableVoiceSupport: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -128,6 +129,7 @@ afterEach(() => {
     enableCloudSync: false,
     enableLoraAdapters: false,
     enablePluginSystem: false,
+    enableVoiceSupport: false,
   };
 });
 

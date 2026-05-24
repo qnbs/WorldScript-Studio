@@ -177,6 +177,8 @@
   "templates.spaceOpera.sections.7": "Das Imperium schlägt zurück",
   "templates.spaceOpera.sections.8": "Asteroidenfeld / Raumkampf",
   "templates.spaceOpera.sections.9": "Die Superwaffe",
+  "templates.tabs.community": "Community",
+  "templates.tabs.myTemplates": "Meine Templates",
   "templates.threeAct.arc": "Klare Struktur mit Anfang, Mitte und Ende. Stetiger Spannungsaufbau.",
   "templates.threeAct.description": "Das klassische Modell: Aufbau, Konfrontation und Auflösung.",
   "templates.threeAct.name": "Drei-Akte-Struktur",
@@ -202,7 +204,5 @@
   "templates.thriller.sections.7": "Nachspiel",
   "templates.title": "Vorlagen-Bibliothek",
   "templates.types.Genre": "Genre",
-  "templates.types.Structure": "Struktur",
-  "templates.tabs.myTemplates": "Meine Templates",
-  "templates.tabs.community": "Community"
+  "templates.types.Structure": "Struktur"
 }

@@ -22,6 +22,7 @@ describe('featureFlagsSlice', () => {
     enableCloudSync: false,
     enableLoraAdapters: false,
     enablePluginSystem: false,
+    enableVoiceSupport: false,
   };
 
   it('should match default feature flag state on init', () => {
@@ -55,6 +56,7 @@ describe('featureFlagsSlice', () => {
       enableCloudSync: false,
       enableLoraAdapters: false,
       enablePluginSystem: false,
+      enableVoiceSupport: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

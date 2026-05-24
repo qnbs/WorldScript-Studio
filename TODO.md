@@ -8,13 +8,21 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
-## v1.16 — Design System Completion Sprint (RELEASED 2026-05-22)
+## v1.17 — Voice Full Support Foundation (RELEASED 2026-05-24)
 
-- ✅ **DS-2 (100%)** — Zero `dark:` prefix violations in any className string: MindMapListPanel (full rewrite), MindMapToolbar, MindMapCanvas, MindMapNodeEditor, SceneTimelinePanel, AddNewCard, TemplateView, WorldView, HelpView, ShortcutsSection, DataSection, WelcomePortal, OutlineGeneratorView, ObjectsView, Toast, sections.tsx (43 violations)
-- ✅ **DS-1 sweep** — All undefined bridge vars replaced: `--background-hover` → `--sc-surface-overlay`, `--background-elevated` → `--sc-surface-raised`, `--background-selected` → `--sc-accent/10`, `--foreground-on-interactive` → `white`, `--foreground-tertiary` → `--sc-text-muted`; App.tsx `--background-primary` → `--sc-surface-base`, `--foreground-primary` → `--sc-text-primary`, `--background-interactive` → `--sc-accent`; ObjectsView `--text-primary/secondary/muted` → `--sc-text-*`
-- ✅ **SB-1 (5 stories)** — DebouncedInput, DebouncedTextarea, Textarea, PWAComponents, SectionIcon stories added; all UI atom components now have Storybook coverage
-- ✅ **HK-4** — `displayName` added to ErrorBoundary + ViewErrorBoundary
-- ✅ **Quality gate** — lint ✅ · i18n:check ✅ · typecheck ✅ · 1952 keys × 5 locales ✅
+- ✅ **Abstract Engine Interfaces** — `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine` in `services/voice/voiceTypes.ts`
+- ✅ **Web Speech API Fallbacks** — `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` (sofort verfügbar, 0 Downloads)
+- ✅ **Hybrid Intent Engine** — Template-Matching (exakt) → Jaccard fuzzy scoring → Slot-Extraction (Navigation); View-Context-Filtering; 25 statische Voice Commands
+- ✅ **VoiceCommandService** — Singleton-Orchestrator mit State Machine (idle → listening → processing → speaking → idle)
+- ✅ **Redux State** — `voiceSlice` (mode, transcript, processing, dictation, engine status, microphone permission, onboarding); `VoiceSettings` in `settingsSlice`; `enableVoiceSupport` in `featureFlagsSlice`
+- ✅ **React Hooks** — `useVoice` (Service-Bridge), `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation` (Editor-Einfügung), `useVoiceAccessibility` (ARIA + Focus)
+- ✅ **UI Components** — `VoiceIndicator` (Status-Overlay), `VoiceControlPanel` (Command-Panel), `VoiceSettingsSection` (Settings-Tab mit Onboarding)
+- ✅ **App Integration** — `App.tsx` (conditional Rendering, `document.body.dataset['view']` für Intent-Engine), `Header.tsx` (Voice-Status), `ManuscriptEditor.tsx` (Dictation-Support)
+- ✅ **Audio Navigator** — `audioNavigator` Singleton: ARIA-Landmark-Scanning, Focus-Management, `aria-live` Regionen
+- ✅ **Feedback Service** — 3 Verbosity-Level (minimal/standard/verbose); TTS-Queue; Event-Listener für visuelles Feedback
+- ✅ **i18n** — 2025 keys × 5 locales (voice.* settings hinzugefügt)
+- ✅ **Tests** — 83 Unit Tests / 9 Test-Dateien (voiceSlice, intentEngine, feedbackService, sttEngine, ttsEngine, vadEngine, wakeWordEngine, audioNavigator, commandVoiceMappings)
+- ✅ **Quality gate** — lint ✅ · i18n:check ✅ · typecheck ✅ · 83/83 voice tests ✅
 
 ### v2.0 Open Items
 

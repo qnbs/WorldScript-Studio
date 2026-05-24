@@ -107,6 +107,21 @@ const baseSettings = (): Settings => ({
     textColor: '#f8fafc',
     customCss: '',
   },
+  voice: {
+    enabled: false,
+    activationMode: 'manual',
+    sttEngine: 'auto',
+    ttsEngine: 'auto',
+    feedbackLevel: 'standard',
+    speechRate: 1.0,
+    speechVolume: 1.0,
+    allowCloudSttFallback: false,
+    listeningTimeoutSeconds: 8,
+    wakeWordPhrase: 'Hey StoryCraft',
+    pttShortcutId: 'voice-push-to-talk',
+    ttsMuted: false,
+    dictationAutoPunctuation: true,
+  },
 });
 
 describe('languageToolClient', () => {

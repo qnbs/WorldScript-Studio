@@ -45,6 +45,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableCloudSync: false,
   enableLoraAdapters: false,
   enablePluginSystem: false,
+  enableVoiceSupport: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

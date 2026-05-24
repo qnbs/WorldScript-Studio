@@ -26,6 +26,8 @@ import { Spinner } from './components/ui/Spinner';
 import { ToastProvider } from './components/ui/Toast';
 import { ViewErrorBoundary } from './components/ui/ViewErrorBoundary';
 import { VersionControlPanel } from './components/VersionControlPanel';
+import { VoiceControlPanel } from './components/voice/VoiceControlPanel';
+import { VoiceIndicator } from './components/voice/VoiceIndicator';
 import { AppContext } from './contexts/AppContext';
 import { CommandExecutorProvider } from './contexts/CommandExecutorContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
@@ -41,6 +43,7 @@ import { projectActions } from './features/project/projectSlice';
 import { statusActions } from './features/status/statusSlice';
 import { useApp } from './hooks/useApp';
 import { useGlobalKeyboardShortcuts } from './hooks/useGlobalKeyboardShortcuts';
+import { usePushToTalk } from './hooks/usePushToTalk';
 import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
@@ -310,6 +313,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     if (isInitialLoad || isPortalActive) return;
     if (prevViewRef.current === currentView) return;
     prevViewRef.current = currentView;
+    document.body.dataset['view'] = currentView;
     const labelKey = viewNavigationLabelKey(currentView);
     announce(
       t('common.viewOpenedAnnouncement', {
@@ -365,6 +369,9 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     api: shortcutApi,
   });
 
+  // QNBS-v3: Push-to-Talk voice activation when configured
+  usePushToTalk();
+
   const executeCommand = useCallback(
     (id: string) =>
       runCommandById(id, {
@@ -394,6 +401,22 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       featureFlags,
     ],
   );
+
+  // QNBS-v3: Voice command event listener — decouples voice service from React context
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        commandId: string;
+        slots?: Array<{ name: string; value: string }>;
+        transcript?: string;
+      };
+      if (detail?.commandId) {
+        executeCommand(detail.commandId);
+      }
+    };
+    window.addEventListener('voice-command', handler);
+    return () => window.removeEventListener('voice-command', handler);
+  }, [executeCommand]);
 
   useEffect(() => {
     void registerTauriMenuHandler((action) => {
@@ -540,6 +563,12 @@ const App: FC<AppProps> = ({ isNewUser }) => {
               <PWAUpdateToast />
               <PWAInstallBanner />
               <OfflineIndicator />
+              {featureFlags.enableVoiceSupport && (
+                <>
+                  <VoiceIndicator />
+                  <VoiceControlPanel />
+                </>
+              )}
             </div>
           </AppContext.Provider>
         </ToastProvider>

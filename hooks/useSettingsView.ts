@@ -33,6 +33,7 @@ import type {
   StoryProject,
   Theme,
   ThemeCustomization,
+  VoiceSettings,
   WritingGoal,
 } from '../types';
 
@@ -172,6 +173,12 @@ export const useSettingsView = () => {
             settingsActions.setThemeCustomization(value as unknown as Partial<ThemeCustomization>),
           );
           break;
+        case 'voice':
+          dispatch(settingsActions.setVoiceSettings(value as unknown as Partial<VoiceSettings>));
+          break;
+        case 'enableVoiceSupport':
+          dispatch(featureFlagsActions.setEnableVoiceSupport(Boolean(value)));
+          break;
         case 'enableCodexAutoTracking':
           dispatch(featureFlagsActions.setEnableCodexAutoTracking(Boolean(value)));
           break;
@@ -207,6 +214,18 @@ export const useSettingsView = () => {
           break;
         case 'enableCharacterInterviews':
           dispatch(featureFlagsActions.setEnableCharacterInterviews(Boolean(value)));
+          break;
+        case 'enableRtlLayout':
+          dispatch(featureFlagsActions.setEnableRtlLayout(Boolean(value)));
+          break;
+        case 'enableCloudSync':
+          dispatch(featureFlagsActions.setEnableCloudSync(Boolean(value)));
+          break;
+        case 'enableLoraAdapters':
+          dispatch(featureFlagsActions.setEnableLoraAdapters(Boolean(value)));
+          break;
+        case 'enablePluginSystem':
+          dispatch(featureFlagsActions.setEnablePluginSystem(Boolean(value)));
           break;
         default:
           logger.warn(`Unknown setting key: ${key}`);

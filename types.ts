@@ -593,6 +593,42 @@ export interface ThemeCustomization {
   customCss: string;
 }
 
+// ── Voice Full Support (opt-in) ──────────────────────────────────────────────
+
+export type VoiceSttEngine = 'whisper' | 'webSpeech' | 'auto';
+export type VoiceTtsEngine = 'kokoro' | 'piper' | 'webSpeech' | 'auto';
+export type VoiceFeedbackLevel = 'minimal' | 'standard' | 'verbose';
+export type VoiceActivationMode = 'pushToTalk' | 'wakeWord' | 'manual';
+
+export interface VoiceSettings {
+  /** Master toggle — Voice Full Support opt-in */
+  enabled: boolean;
+  /** How voice is activated: PTT key, wake-word, or manual button */
+  activationMode: VoiceActivationMode;
+  /** Primary speech-to-text engine preference */
+  sttEngine: VoiceSttEngine;
+  /** Primary text-to-speech engine preference */
+  ttsEngine: VoiceTtsEngine;
+  /** Audio feedback verbosity */
+  feedbackLevel: VoiceFeedbackLevel;
+  /** TTS speech rate (0.5 - 2.0) */
+  speechRate: number;
+  /** TTS speech volume (0.0 - 1.0) */
+  speechVolume: number;
+  /** Allow cloud STT fallback when local engines unavailable */
+  allowCloudSttFallback: boolean;
+  /** Continuous listening timeout in seconds (5-30) */
+  listeningTimeoutSeconds: number;
+  /** Wake-word phrase (default: "Hey StoryCraft") */
+  wakeWordPhrase: string;
+  /** Push-to-talk keyboard shortcut (stored as action id) */
+  pttShortcutId: string;
+  /** Mute all TTS output */
+  ttsMuted: boolean;
+  /** Dictation auto-punctuation */
+  dictationAutoPunctuation: boolean;
+}
+
 export interface Settings {
   // Basic Settings
   theme: Theme;
@@ -618,6 +654,7 @@ export interface Settings {
   advancedEditor: AdvancedEditorSettings;
   backup: BackupSettings;
   themeCustomization: ThemeCustomization;
+  voice: VoiceSettings;
 
   // Legacy support
   language?: string;

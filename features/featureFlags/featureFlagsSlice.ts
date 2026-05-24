@@ -33,6 +33,8 @@ export interface FeatureFlagsState {
   enableLoraAdapters: boolean;
   /** Plugin system v0.1 — ESM-based extensions with sandboxed capability API (default: false). */
   enablePluginSystem: boolean;
+  /** Voice Full Support — opt-in voice command, dictation and audio navigation (default: false). */
+  enableVoiceSupport: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -64,6 +66,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableLoraAdapters: false,
   // QNBS-v3: Plugin system v0.1 — off by default; sandboxed API contract is stable, loader is not yet wired.
   enablePluginSystem: false,
+  // QNBS-v3: Voice Full Support — off by default; requires download of WASM voice models and microphone permission.
+  enableVoiceSupport: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -153,6 +157,9 @@ const featureFlagsSlice = createSlice({
     setEnablePluginSystem(state, action: PayloadAction<boolean>) {
       state.enablePluginSystem = action.payload;
     },
+    setEnableVoiceSupport(state, action: PayloadAction<boolean>) {
+      state.enableVoiceSupport = action.payload;
+    },
   },
 });
 
@@ -191,6 +198,8 @@ export const selectEnableLoraAdapters = (state: { featureFlags: FeatureFlagsStat
   state.featureFlags.enableLoraAdapters;
 export const selectEnablePluginSystem = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enablePluginSystem;
+export const selectEnableVoiceSupport = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableVoiceSupport;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {
