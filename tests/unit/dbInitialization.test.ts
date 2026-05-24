@@ -138,3 +138,59 @@ describe('dbInitialization', () => {
     });
   });
 });
+
+// ─── Storage Health Check ─────────────────────────────────────────────────────
+describe('checkStorageHealth', () => {
+  const originalNavigator = globalThis.navigator;
+
+  beforeEach(() => {
+    vi.stubGlobal('navigator', {
+      ...originalNavigator,
+      storage: { estimate: vi.fn() },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns ok when storage.estimate is unavailable', async () => {
+    vi.stubGlobal('navigator', { ...originalNavigator, storage: undefined });
+    const { checkStorageHealth } = await import('../../services/dbInitialization');
+    const result = await checkStorageHealth();
+    expect(result.ok).toBe(true);
+    expect(result.usagePercent).toBeNull();
+  });
+
+  it('returns ok when usage is below 85%', async () => {
+    (navigator.storage.estimate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      usage: 50 * 1_048_576,
+      quota: 100 * 1_048_576,
+    });
+    const { checkStorageHealth } = await import('../../services/dbInitialization');
+    const result = await checkStorageHealth();
+    expect(result.ok).toBe(true);
+    expect(result.usagePercent).toBe(50);
+    expect(result.usageMb).toBe(50);
+    expect(result.quotaMb).toBe(100);
+  });
+
+  it('returns warning when usage is at or above 85%', async () => {
+    (navigator.storage.estimate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      usage: 90 * 1_048_576,
+      quota: 100 * 1_048_576,
+    });
+    const { checkStorageHealth } = await import('../../services/dbInitialization');
+    const result = await checkStorageHealth();
+    expect(result.ok).toBe(false);
+    expect(result.usagePercent).toBe(90);
+    expect(result.warning).toMatch(/90% full/);
+  });
+
+  it('gracefully handles exceptions from storage.estimate', async () => {
+    (navigator.storage.estimate as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('denied'));
+    const { checkStorageHealth } = await import('../../services/dbInitialization');
+    const result = await checkStorageHealth();
+    expect(result.ok).toBe(true);
+  });
+});

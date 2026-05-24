@@ -59,6 +59,45 @@ export async function initializeStorage(): Promise<InitStorageResult> {
 }
 
 /**
+ * Checks available browser storage quota and returns a health status.
+ * Warns when usage exceeds 85 % of quota — gives users time to act before
+ * QuotaExceededError aborts saves.
+ */
+export interface StorageHealth {
+  ok: boolean;
+  usagePercent: number | null;
+  usageMb: number | null;
+  quotaMb: number | null;
+  warning?: string;
+}
+
+export async function checkStorageHealth(): Promise<StorageHealth> {
+  try {
+    const estimate = await navigator.storage?.estimate?.();
+    if (!estimate || estimate.quota == null) {
+      return { ok: true, usagePercent: null, usageMb: null, quotaMb: null };
+    }
+    const quotaMb = Math.round(estimate.quota / 1_048_576);
+    const usageMb = estimate.usage != null ? Math.round(estimate.usage / 1_048_576) : null;
+    const usagePercent =
+      usageMb != null && quotaMb > 0 ? Math.round((usageMb / quotaMb) * 100) : null;
+
+    if (usagePercent != null && usagePercent >= 85) {
+      return {
+        ok: false,
+        usagePercent,
+        usageMb,
+        quotaMb,
+        warning: `Storage ${usagePercent}% full (${usageMb}/${quotaMb} MB). Delete old projects or snapshots to avoid data loss.`,
+      };
+    }
+    return { ok: true, usagePercent, usageMb, quotaMb };
+  } catch {
+    return { ok: true, usagePercent: null, usageMb: null, quotaMb: null };
+  }
+}
+
+/**
  * Deletes both IndexedDB databases and relevant localStorage markers.
  * Use as a last-resort recovery option (user-confirmed).
  */
