@@ -1,58 +1,250 @@
+// ─── StoryCraft Studio — Dev Container Configuration ──────────────────────────
+// QNBS-v3: Comprehensive dev environment matching all project requirements.
+// See .devcontainer/README.md for design decisions and maintenance guide.
+// ──────────────────────────────────────────────────────────────────────────────
 {
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.base.schema.json",
   "name": "StoryCraft Studio",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-
-  "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+  // ─── Build ────────────────────────────────────────────────────────────────
+  // QNBS-v3: Custom Dockerfile ensures Node 22 LTS (not 24), pnpm 10, Rust,
+  // Playwright Chromium, Python/graphify — all pre-installed and cached.
+  "build": {
+    "dockerfile": "Dockerfile"
   },
-
-  "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
+  // ─── Workspace ─────────────────────────────────────────────────────────────
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+  // ─── User ──────────────────────────────────────────────────────────────────
+  // QNBS-v3: Run as non-root "vscode" user (created by base image) for security.
+  "remoteUser": "vscode",
+  "containerUser": "vscode",
+  // ─── Features ──────────────────────────────────────────────────────────────
+  // QNBS-v3: Minimal features — most tooling is in the Dockerfile for caching.
+  // GitHub CLI for PR/issue workflows; SSH for remote access.
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  },
+  // ─── Lifecycle commands ────────────────────────────────────────────────────
+  // QNBS-v3: Three-stage lifecycle for optimal rebuild speed:
+  //   onCreateCommand  — runs once when container is built (system-level setup)
+  //   postCreateCommand — runs once after container create (project-level setup)
+  //   postStartCommand  — runs every time container starts (runtime readiness)
+  "onCreateCommand": {
+    // QNBS-v3: Ensure pnpm is activated for the vscode user (not just root).
+    "enable-pnpm": "corepack enable && corepack prepare pnpm@10.33.0 --activate"
+  },
+  "postCreateCommand": {
+    // QNBS-v3: Install dependencies — frozen lockfile ensures reproducibility.
+    // pnpm store is cached across rebuilds via the pnpm-store volume.
+    "install-deps": "pnpm install --frozen-lockfile",
+    // QNBS-v3: Build i18n bundles so the UI never shows raw keys on first load.
+    "build-i18n": "pnpm run i18n:bundle",
+    // QNBS-v3: Install Playwright browsers for the vscode user (not root).
+    "install-playwright": "npx playwright install chromium",
+    // QNBS-v3: Set up git hooks (simple-git-hooks + lint-staged).
+    "setup-hooks": "pnpm run prepare"
+  },
+  "postStartCommand": {
+    // QNBS-v3: Verify toolchain versions on every start — catches image drift.
+    "verify-toolchain": "node --version && pnpm --version && rustc --version 2>/dev/null || true"
+  },
   "postAttachCommand": "echo '✅ StoryCraft Studio ready — run: pnpm run dev'",
-
-  "forwardPorts": [3000, 6006],
+  // ─── Ports ─────────────────────────────────────────────────────────────────
+  // QNBS-v3: Vite dev server (3000), Storybook (6006), Vite preview (4173),
+  // and Playwright report (9323) for CI debugging.
+  "forwardPorts": [3000, 4173, 6006, 9323],
   "portsAttributes": {
     "3000": {
       "label": "Vite Dev Server",
       "onAutoForward": "openBrowserOnce"
     },
+    "4173": {
+      "label": "Vite Preview",
+      "onAutoForward": "notify"
+    },
     "6006": {
       "label": "Storybook",
       "onAutoForward": "notify"
+    },
+    "9323": {
+      "label": "Playwright Report",
+      "onAutoForward": "notify"
     }
   },
-
+  // ─── Environment ───────────────────────────────────────────────────────────
+  // QNBS-v3: NODE_OPTIONS for Vite + TypeScript memory; CI=true for Playwright;
+  // PLAYWRIGHT_BROWSERS_PATH matches Dockerfile pre-install location.
   "containerEnv": {
-    "NODE_OPTIONS": "--max-old-space-size=4096"
+    "NODE_OPTIONS": "--max-old-space-size=6144",
+    "CI": "true",
+    "PLAYWRIGHT_BROWSERS_PATH": "/usr/local/playwright",
+    "VITE_BASE": "/"
   },
-
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/usr/local/cargo/bin"
+  },
+  // ─── Host requirements ─────────────────────────────────────────────────────
+  // QNBS-v3: 8GB RAM for Vitest + Vite HMR + TypeScript server simultaneously.
+  // 4 CPUs for parallel builds (turbo). 32GB storage for node_modules + Rust.
   "hostRequirements": {
-    "cpus": 2,
-    "memory": "4gb",
-    "storage": "16gb"
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
   },
-
+  // ─── Volumes ───────────────────────────────────────────────────────────────
+  // QNBS-v3: Persist pnpm store and Cargo cache across container rebuilds.
+  // This avoids re-downloading all dependencies on every rebuild.
+  "mounts": [
+    "source=storycraft-pnpm-store,target=/home/vscode/.local/share/pnpm/store,type=volume",
+    "source=storycraft-cargo-cache,target=/usr/local/cargo/registry,type=volume",
+    "source=storycraft-rustup-cache,target=/usr/local/rustup,type=volume"
+  ],
+  // ─── VS Code customizations ────────────────────────────────────────────────
   "customizations": {
     "vscode": {
       "settings": {
+        // ── Terminal ────────────────────────────────────────────────────────
         "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "/bin/bash",
+            "icon": "terminal-bash",
+            "env": {
+              "STARSHIP_CONFIG": "/workspaces/${localWorkspaceFolderBasename}/.devcontainer/starship.toml"
+            }
+          }
+        },
+        "terminal.integrated.env.linux": {
+          "STARSHIP_CONFIG": "/workspaces/${localWorkspaceFolderBasename}/.devcontainer/starship.toml"
+        },
+        // ── Editor ─────────────────────────────────────────────────────────
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "biomejs.biome",
+        "editor.formatOnPaste": true,
         "editor.codeActionsOnSave": {
           "source.organizeImports.biome": "explicit",
           "quickfix.biome": "explicit"
         },
-        "typescript.tsdk": "node_modules/typescript/lib"
+        "editor.rulers": [100],
+        "editor.wordWrap": "off",
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "editor.trimAutoWhitespace": true,
+        "editor.bracketPairColorization.enabled": true,
+        "editor.guides.bracketPairs": "active",
+        "editor.stickyScroll.enabled": true,
+        "editor.minimap.enabled": false,
+        "editor.linkedEditing": true,
+        "editor.inlineSuggest.enabled": true,
+        // ── Files ──────────────────────────────────────────────────────────
+        "files.encoding": "utf8",
+        "files.eol": "\n",
+        "files.insertFinalNewline": true,
+        "files.trimTrailingWhitespace": true,
+        "files.associations": {
+          "*.css": "tailwindcss",
+          "devcontainer.json": "jsonc",
+          "*.jsonc": "jsonc"
+        },
+        "files.exclude": {
+          "**/.git": true,
+          "**/.svn": true,
+          "**/.hg": true,
+          "**/CVS": true,
+          "**/.DS_Store": true,
+          "**/node_modules": true,
+          "**/dist": true,
+          "**/coverage": true,
+          "**/storybook-static": true,
+          "**/playwright-report": true,
+          "**/test-results": true
+        },
+        // ── Search ─────────────────────────────────────────────────────────
+        "search.exclude": {
+          "**/node_modules": true,
+          "**/dist": true,
+          "**/coverage": true,
+          "**/.git": true,
+          "**/pnpm-lock.yaml": true,
+          "**/storybook-static": true,
+          "**/playwright-report": true,
+          "**/test-results": true,
+          "**/graphify-out": true,
+          "**/src-tauri/target": true,
+          "pnpm-lock.yaml": true
+        },
+        // ── TypeScript ─────────────────────────────────────────────────────
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "typescript.enablePromptUseWorkspaceTsdk": true,
+        "typescript.preferences.importModuleSpecifier": "non-relative",
+        "typescript.preferences.importModuleSpecifierEnding": "js",
+        "typescript.suggest.autoImports": true,
+        "typescript.updateImportsOnFileMove.enabled": "always",
+        "typescript.inlayHints.parameterNames.enabled": "all",
+        "typescript.inlayHints.functionLikeReturnTypes.enabled": true,
+        "typescript.inlayHints.variableTypes.enabled": true,
+        // ── Tailwind CSS ───────────────────────────────────────────────────
+        "tailwindCSS.includeLanguages": {
+          "typescript": "javascript",
+          "typescriptreact": "javascript"
+        },
+        "tailwindCSS.experimental.classRegex": [
+          ["class:\\s*?[\"']([^\"']*)[\"']", "([^\"'{}\\s]*)"]
+        ],
+        // ── Emmet ──────────────────────────────────────────────────────────
+        "emmet.includeLanguages": {
+          "typescriptreact": "html",
+          "javascriptreact": "html"
+        },
+        // ── Git ────────────────────────────────────────────────────────────
+        "git.autofetch": true,
+        "git.confirmSync": false,
+        "git.enableSmartCommit": true,
+        "git.postCommitCommand": "push",
+        "scm.defaultViewMode": "tree",
+        // ── Testing ────────────────────────────────────────────────────────
+        "vitest.enable": true,
+        "vitest.commandLine": "pnpm exec vitest",
+        // ── Accessibility ──────────────────────────────────────────────────
+        "accessibility.signals.soundsVolume": 0,
+        // ── Performance ────────────────────────────────────────────────────
+        "extensions.autoUpdate": "onlyEnabledExtensions",
+        "extensions.ignoreRecommendations": true,
+        "telemetry.telemetryLevel": "off",
+        "workbench.enableExperiments": false,
+        // ── PWA / Service Worker ───────────────────────────────────────────
+        "workbench.trustedDomains.management": {
+          "enabled": true
+        }
       },
+      // ── Extensions ───────────────────────────────────────────────────────
+      // QNBS-v3: Curated extensions matching the project tech stack.
+      // Grouped by category: core, linting, testing, UI, git, accessibility.
       "extensions": [
         "biomejs.biome",
         "bradlc.vscode-tailwindcss",
-        "vitest.explorer",
-        "ms-playwright.playwright",
         "GitHub.copilot",
         "GitHub.vscode-pull-request-github",
+        "vitest.explorer",
+        "ms-playwright.playwright",
         "eamodio.gitlens",
-        "streetsidesoftware.code-spell-checker"
+        "streetsidesoftware.code-spell-checker",
+        "usernamehw.errorlens",
+        "sonarsource.sonarlint-vscode",
+        "antfu.iconify",
+        "firefox-devtools.react-devtools",
+        "lokalise.i18n-ally",
+        "rust-lang.rust-analyzer",
+        "tauri-apps.tauri-vscode",
+        "serayuzgur.crates",
+        "ms-azuretools.vscode-docker",
+        "pkief.material-icon-theme",
+        "moonshot-ai.kimi-code"
       ]
     },
     "codespaces": {

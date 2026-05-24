@@ -1,6 +1,9 @@
-// This file redirects to .devcontainer/devcontainer.json
-// Both local Dev Containers and GitHub Codespaces use .devcontainer/devcontainer.json
-// This root file is kept only for editor awareness — the actual config lives in .devcontainer/
+// ─── StoryCraft Studio — Root Dev Container Redirect ──────────────────────────
+// QNBS-v3: Both local Dev Containers and GitHub Codespaces use
+// .devcontainer/devcontainer.json. This root file is kept only for editor
+// awareness — the actual config lives in .devcontainer/.
+// See .devcontainer/README.md for full documentation.
+// ──────────────────────────────────────────────────────────────────────────────
 {
   "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.base.schema.json"
 }
