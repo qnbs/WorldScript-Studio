@@ -4,6 +4,7 @@ import { analyticsActions } from '../features/analytics/analyticsSlice';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
+import { checkStorageHealth } from '../services/dbInitialization';
 import {
   loadDuckdbAnalytics,
   loadDuckdbMigration,
@@ -49,6 +50,22 @@ listenerMiddleware.startListening({
     if (unchangedProject && unchangedVc) return;
 
     listenerApi.dispatch(statusActions.setSavingStatus('saving'));
+
+    // QNBS-v3: Proactive storage health check before every save — warn early if quota is tight.
+    try {
+      const health = await checkStorageHealth();
+      if (!health.ok && health.warning) {
+        listenerApi.dispatch(
+          statusActions.addNotification({
+            type: 'error',
+            title: 'Storage Nearly Full',
+            description: health.warning,
+          }),
+        );
+      }
+    } catch {
+      /* non-critical — don't block save if health check itself fails */
+    }
 
     try {
       const projectState = state.project as ProjectStateWithHistory;
