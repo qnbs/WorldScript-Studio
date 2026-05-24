@@ -2,12 +2,14 @@
 import type { FC } from 'react';
 import { useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { proForgeActions } from '../../features/proForge/proForgeSlice';
 import {
   selectIsPanelOpen,
   versionControlActions,
 } from '../../features/versionControl/versionControlSlice';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ProForgeDashboard } from '../proForge/ProForgeDashboard';
 import { AiScratchpad } from './AiScratchpad';
 import { ContextPanel } from './ContextPanel';
 import { ToolsPanel } from './ToolsPanel';
@@ -16,6 +18,8 @@ const WriterViewUI: FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const isVCPanelOpen = useAppSelector(selectIsPanelOpen);
+  const isProForgeEnabled = useAppSelector((s) => s.featureFlags.enableProForge);
+  const isProForgeActive = useAppSelector((s) => s.proForge.isActive);
   const [activeMobileTab, setActiveMobileTab] = useState<'context' | 'tools' | 'result'>('tools');
   const [collapsedPanels, setCollapsedPanels] = useState<Record<string, boolean>>({});
   const [focusMode, setFocusMode] = useState(false);
@@ -44,6 +48,21 @@ const WriterViewUI: FC = () => {
     <div className="h-full flex flex-col">
       {/* Focus Mode Toggle + Panel Controls (Desktop) */}
       <div className="hidden md:flex items-center justify-end mb-2 gap-2">
+        {/* QNBS-v3: ProForge pipeline mode toggle — only visible when feature flag is enabled */}
+        {isProForgeEnabled && (
+          <button
+            type="button"
+            onClick={() => dispatch(proForgeActions.setProForgeActive(!isProForgeActive))}
+            className={`text-xs px-2 py-1 rounded border transition-colors ${
+              isProForgeActive
+                ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]'
+                : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'
+            }`}
+            aria-pressed={isProForgeActive}
+          >
+            {isProForgeActive ? '🔥 ProForge' : 'ProForge'}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => togglePanel('context')}
@@ -124,7 +143,8 @@ const WriterViewUI: FC = () => {
             }`}
           >
             {tab === 'context' && t('writer.studio.context.title').split(' ')[0]}
-            {tab === 'tools' && t('writer.studio.tools.title').split(' ')[0]}
+            {tab === 'tools' &&
+              (isProForgeActive ? 'ProForge' : t('writer.studio.tools.title').split(' ')[0])}
             {tab === 'result' && 'Result'}
           </button>
         ))}
@@ -149,7 +169,7 @@ const WriterViewUI: FC = () => {
             aria-labelledby="writer-tab-tools"
             className="h-full"
           >
-            <ToolsPanel />
+            {isProForgeActive ? <ProForgeDashboard /> : <ToolsPanel />}
           </div>
         )}
         {activeMobileTab === 'result' && (
@@ -194,7 +214,7 @@ const WriterViewUI: FC = () => {
           <div
             className={`h-full overflow-hidden transition-all duration-300 ${collapsedPanels['tools'] ? 'w-0 opacity-0 overflow-hidden' : 'opacity-100'}`}
           >
-            <ToolsPanel />
+            {isProForgeActive ? <ProForgeDashboard /> : <ToolsPanel />}
           </div>
           <div className="h-full overflow-hidden">
             <AiScratchpad />
