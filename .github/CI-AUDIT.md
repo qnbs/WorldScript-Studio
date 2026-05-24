@@ -92,6 +92,6 @@ CI=true pnpm run test:e2e
 
 ## Nächste Schritte (Maintainer)
 
-1. Nach größeren Features: `pnpm run graphify:update` (Repo-Policy, nicht in CI).
+1. Nach größeren Features: `pnpm run graphs:update` (Repo-Policy, nicht in CI). Aktualisiert Graphify + CodeGraph.
 2. Nach grünem CI-Lauf: README-Badges und `AUDIT.md` Metriken aus Codecov/Logs aktualisieren.
 3. Bei Bundle-Regression: `pnpm run analyze` → Artifact `bundle-analysis.html` in der CI-Run-Ansicht.

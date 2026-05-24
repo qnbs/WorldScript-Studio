@@ -19,7 +19,8 @@
       "!!**/test-results",
       "!!**/reports",
       "!!**/storybook-static",
-      "!!**/graphify-out"
+      "!!**/graphify-out",
+      "!!**/.codegraph"
     ]
   },
   "formatter": {

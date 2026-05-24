@@ -32,6 +32,38 @@
       "problemMatcher": [],
       "presentation": { "reveal": "always", "panel": "shared" },
       "group": "none"
+    },
+    {
+      "label": "CodeGraph: status",
+      "type": "npm",
+      "script": "codegraph:status",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "group": "none"
+    },
+    {
+      "label": "CodeGraph: update index",
+      "type": "npm",
+      "script": "codegraph:update",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "group": { "kind": "build", "isDefault": false }
+    },
+    {
+      "label": "CodeGraph: generate report",
+      "type": "npm",
+      "script": "codegraph:report",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "group": "none"
+    },
+    {
+      "label": "Dual-Graph: update both",
+      "type": "npm",
+      "script": "graphs:update",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "group": { "kind": "build", "isDefault": false }
     }
   ]
 }

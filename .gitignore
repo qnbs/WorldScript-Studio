@@ -56,3 +56,9 @@ public/locales/*/*.json
 # Claude Code local config and Lighthouse CI results
 .claude/
 .lighthouseci/
+
+# CodeGraph — solo policy: only CODEGRAPH_REPORT.md committed; DB stays local
+.codegraph/*
+!.codegraph/CODEGRAPH_REPORT.md
+.codegraph/codegraph.db-shm
+.codegraph/codegraph.db-wal
