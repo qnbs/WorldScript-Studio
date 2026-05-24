@@ -7,6 +7,7 @@ import featureFlagsReducer, {
 import plotBoardReducer, {
   plotBoardPersistenceMiddleware,
 } from '../features/plotBoard/plotBoardSlice';
+import proForgeReducer from '../features/proForge/proForgeSlice';
 import progressTrackerReducer, {
   progressTrackerPersistenceMiddleware,
 } from '../features/progressTracker/progressTrackerSlice';
@@ -70,6 +71,7 @@ const combinedReducer = combineReducers({
   settings: settingsReducer,
   status: statusReducer,
   writer: writerReducer,
+  proForge: proForgeReducer,
   versionControl: versionControlReducer,
   featureFlags: featureFlagsReducer,
   // QNBS-v3: plotBoard is viewport/connection state only — not undo-able, persisted to localStorage

@@ -35,6 +35,8 @@ export interface FeatureFlagsState {
   enablePluginSystem: boolean;
   /** Voice Full Support — opt-in voice command, dictation and audio navigation (default: false). */
   enableVoiceSupport: boolean;
+  /** ProForge Ultimate Author Pipeline — agentic 8-stage manuscript pipeline (default: false). */
+  enableProForge: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -68,6 +70,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enablePluginSystem: false,
   // QNBS-v3: Voice Full Support — off by default; requires download of WASM voice models and microphone permission.
   enableVoiceSupport: false,
+  // QNBS-v3: ProForge Pipeline — off by default; major feature requiring agentic AI setup.
+  enableProForge: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -160,6 +164,9 @@ const featureFlagsSlice = createSlice({
     setEnableVoiceSupport(state, action: PayloadAction<boolean>) {
       state.enableVoiceSupport = action.payload;
     },
+    setEnableProForge(state, action: PayloadAction<boolean>) {
+      state.enableProForge = action.payload;
+    },
   },
 });
 
@@ -200,6 +207,8 @@ export const selectEnablePluginSystem = (state: { featureFlags: FeatureFlagsStat
   state.featureFlags.enablePluginSystem;
 export const selectEnableVoiceSupport = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableVoiceSupport;
+export const selectEnableProForge = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableProForge;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {
