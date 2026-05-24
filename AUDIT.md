@@ -72,6 +72,67 @@
 
 ---
 
+## Follow-up Audit — 2026-05-24 (DevEx — Dual-Graph Integration: Graphify + CodeGraph)
+
+### DevEx Sprint: Dual-Graph Codebase Intelligence (2026-05-24)
+
+**DUALGRAPH-1 complete:** CodeGraph semantic code intelligence integrated alongside the existing Graphify knowledge graph. Both tools now run side-by-side with complementary roles — Graphify for multi-modal architecture breadth, CodeGraph for symbol-level agent navigation via MCP.
+
+**CodeGraph Setup:**
+- Global install: `@colbymchenry/codegraph@0.9.3` (bundled Node runtime, self-contained)
+- Project init: `codegraph init -i` in repo root → `.codegraph/codegraph.db` (SQLite + FTS5, WAL mode)
+- Index stats: **260 files** · **2.754 nodes** · **2.443 edges** · **4.81 MB**
+- Auto-sync: native OS file watcher (FSEvents/inotify/ReadDirectoryChangesW), 2s debounce
+- Respects `.gitignore` — no extra config needed
+
+**Solo-repo policy (mirrors Graphify):**
+- `.codegraph/*` gitignored; only `.codegraph/CODEGRAPH_REPORT.md` committed
+- `graphify-out/*` gitignored; only `graphify-out/GRAPH_REPORT.md` committed
+
+**pnpm scripts added:**
+- `codegraph:status` — index statistics
+- `codegraph:update` — force full re-index
+- `codegraph:sync` — incremental sync
+- `codegraph:report` — regenerate `CODEGRAPH_REPORT.md`
+- `codegraph:affected` — smart test selection from uncommitted changes
+- `graphs:update` — unified Graphify + CodeGraph update
+
+**Automation scripts:**
+- `scripts/codegraph-report.mjs` — generates `CODEGRAPH_REPORT.md` from `codegraph status` + `codegraph files --json`
+- `scripts/dual-graph-update.mjs` — sequential Graphify AST update + CodeGraph force index + report generation
+- `scripts/pre-commit-codegraph.mjs` — optional informational hook showing affected tests (exit 0, non-blocking)
+
+**VS Code: Tasks (`.vscode/tasks.json`):**
+- CodeGraph: status / update index / generate report
+- Dual-Graph: update both
+
+**Agent Instructions updated:**
+- `CLAUDE.md` — CodeGraph MCP rules + dual-graph workflow
+- `.github/copilot-instructions.md` — CodeGraph context + tool selection guidance
+- `docs/codegraph.md` — full setup guide, MCP config (Kimi Code CLI + Cursor), troubleshooting
+- `docs/dual-graph-setup.md` — master guide: philosophy, quick start, daily workflow, prompt templates, monorepo structure
+
+**Documentation Hub updated (`README.md`):**
+- `docs/codegraph.md` and `docs/dual-graph-setup.md` linked in Documentation Hub table
+- `CONTRIBUTING.md` — CodeGraph install section added under Development Setup
+- `CHANGELOG.md` `[Unreleased]` — CodeGraph entry
+- `TODO.md` — Dual-Graph Integration marked complete
+- `.github/CI-AUDIT.md` — post-feature policy updated from `graphify:update` to `graphs:update`
+
+**Configuration:**
+- `biome.json` — `!!**/.codegraph` added to `files.includes` (excluded from lint/format)
+- `package.json` `lint-staged` — `.codegraph/**` bypass added (mirrors `graphify-out/**`)
+
+**Privacy & Security:**
+- 100% offline — no data leaves the machine
+- No API keys required
+- SQLite-only storage
+- Safe for proprietary code
+
+**Quality gate:** lint ✅ · Biome ignores `.codegraph/` ✅ · `codegraph status` reports healthy index ✅
+
+---
+
 ## Follow-up Audit — 2026-05-23 (v2.0 — Phase 2: LORA-1/PLUGIN-1/PERF-1/COM-1)
 
 ### Sprint: v2.0 Phase 2 Completion (2026-05-23)

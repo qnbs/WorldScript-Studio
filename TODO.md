@@ -24,6 +24,17 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ✅ **Tests** — 83 Unit Tests / 9 Test-Dateien (voiceSlice, intentEngine, feedbackService, sttEngine, ttsEngine, vadEngine, wakeWordEngine, audioNavigator, commandVoiceMappings)
 - ✅ **Quality gate** — lint ✅ · i18n:check ✅ · typecheck ✅ · 83/83 voice tests ✅
 
+### DevEx — Dual-Graph Integration (2026-05-24)
+
+- ✅ **CodeGraph Setup** — global install, `codegraph init -i`, `.codegraph/` solo-repo policy
+- ✅ **pnpm Scripts** — `codegraph:*` + `graphs:update` + `codegraph:affected`
+- ✅ **VS Code: Tasks** — CodeGraph status/update/report + Dual-Graph update
+- ✅ **Documentation** — `docs/codegraph.md`, `docs/dual-graph-setup.md`, README Hub, CONTRIBUTING
+- ✅ **Agent Instructions** — `CLAUDE.md` + `.github/copilot-instructions.md` CodeGraph rules
+- ✅ **Automation** — `scripts/codegraph-report.mjs`, `scripts/dual-graph-update.mjs`, `scripts/pre-commit-codegraph.mjs`
+- ✅ **CI-AUDIT.md** — `graphs:update` as post-feature repo policy
+- ✅ **Quality gate** — lint ✅ · Biome ignores `.codegraph/` ✅
+
 ### v2.0 Open Items
 
 - ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)

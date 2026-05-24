@@ -51,6 +51,28 @@ If `graphify` is not on your `PATH` (common on Windows after plain `pip`), use *
 
 **Alternatives:** `pipx install graphifyy` or `uv tool install graphifyy` (often put `graphify` on `PATH` automatically). On Windows, pip user scripts often live under `%APPDATA%\Python\Python3xx\Scripts` — add that directory to your user `PATH` if you want the bare `graphify` command everywhere.
 
+### CodeGraph (optional, Node/npm)
+
+CodeGraph provides **semantic code intelligence** via MCP — symbol-level caller/callee/impact analysis with auto-sync. See [`docs/codegraph.md`](docs/codegraph.md) and [`docs/dual-graph-setup.md`](docs/dual-graph-setup.md).
+
+**Install:**
+
+```bash
+npm install -g @colbymchenry/codegraph   # or pnpm add -g
+codegraph init -i                        # in repo root
+```
+
+**Agent setup (Kimi Code CLI):** add the MCP server to `~/.kimi/settings.json` (see `docs/codegraph.md` § MCP Integration).
+
+**Daily commands:**
+
+```bash
+pnpm run codegraph:status     # index stats
+pnpm run codegraph:update     # full re-index
+pnpm run codegraph:affected   # tests affected by uncommitted changes
+pnpm run graphs:update        # update both Graphify + CodeGraph
+```
+
 ### Installation
 
 ```bash

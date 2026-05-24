@@ -1,56 +1,66 @@
 # CodeGraph Report
 
-**Generated:** 2026-05-24T13:34:00+02:00
-**Project:** StoryCraft Studio
-**Version:** 0.9.3
+**Generated:** 2026-05-24T11:52:59.313Z
 
 ## Status
 
 ```
+[1m
 CodeGraph Status
-Project: /home/pc/StoryCraft-Studio
+[0m
+[36mProject:[0m /home/pc/StoryCraft-Studio
 
-Index Statistics:
-  Files:     260
-  Nodes:     2.754
-  Edges:     2.443
-  DB Size:   4.81 MB
-  Backend:   node:sqlite — built-in (full WAL)
-  Journal:   wal
+[1mIndex Statistics:[0m
+  Files:     632
+  Nodes:     6.129
+  Edges:     13.826
+  DB Size:   10.98 MB
+  Backend:   [32mnode:sqlite — built-in (full WAL)[0m
+  Journal:   [32mwal[0m
 
-Nodes by Kind:
-  import          1.381
-  function        514
-  constant        409
-  file            247
-  interface       111
-  type_alias      51
-  method          32
-  variable        6
-  class           3
+[1mNodes by Kind:[0m
+  import          2.455
+  function        1.072
+  constant        991
+  file            618
+  method          441
+  interface       275
+  type_alias      188
+  variable        55
+  class           31
+  enum            1
+  enum_member     1
+  struct          1
 
-Files by Language:
-  tsx             125
-  typescript      107
-  javascript      14
+[1mFiles by Language:[0m
+  typescript      383
+  tsx             213
+  javascript      17
   yaml            14
+  rust            5
 
-✓ Index is up to date
+[32m✓[0m Index is up to date
+
+
 ```
 
-## Files by Language
+## Files by Extension
 
-- **TypeScript (.ts)**: 107 files
-- **TSX (.tsx)**: 125 files
-- **JavaScript (.js)**: 14 files
-- **YAML (.yml/.yaml)**: 14 files
+- **.ts**: 383
+- **.tsx**: 213
+- **.mjs**: 15
+- **.yml**: 12
+- **.rs**: 5
+- **.yaml**: 2
+- **.cjs**: 1
+- **.js**: 1
 
-## Notes
+## Symbols by Language
 
-- Index respects `.gitignore` — `node_modules/`, `dist/`, `src-tauri/target/`, `graphify-out/` excluded
-- WAL mode enabled — concurrent reads never block writes
-- Auto-sync active via MCP server file watcher (2s debounce)
+Unavailable: Error: Command failed: codegraph query --limit 0 --json
+error: missing required argument 'search'
+
 
 ---
 
-*Regenerate with: `pnpm run codegraph:report` or `codegraph status > .codegraph/CODEGRAPH_REPORT.md`*
+*Regenerate with: `pnpm run codegraph:report`*

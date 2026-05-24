@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CodeGraph semantic code intelligence** — dual-graph setup alongside Graphify: symbol-level MCP server (caller/callee/impact/trace), auto-sync file watcher, `codegraph affected` for smart test selection. Indexed: 260 files, 2754 nodes, 2443 edges. See [`docs/codegraph.md`](docs/codegraph.md) and [`docs/dual-graph-setup.md`](docs/dual-graph-setup.md).
+- `pnpm` scripts: `codegraph:status`, `codegraph:update`, `codegraph:sync`, `codegraph:report`, `codegraph:affected`, `graphs:update`.
+- VS Code: tasks for CodeGraph and dual-graph updates.
 - [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) — GitHub language stats and i18n layout.
 
 ## [1.11.0] — 2026-05-22
