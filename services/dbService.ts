@@ -69,23 +69,26 @@ interface PersistedState {
   settings?: Settings;
 }
 
-// Hilfsfunktion für Retry bei IndexedDB
-async function retryDb<T>(fn: () => Promise<T>, retries = 2, delayMs = 500): Promise<T> {
+// QNBS-v3: Exponential backoff with jitter for transient IDB errors.
+// Base delay doubles each attempt (500ms → 1000ms → 2000ms) plus up to 200ms random jitter
+// to prevent thundering-herd when multiple tabs retry simultaneously.
+async function retryDb<T>(fn: () => Promise<T>, retries = 2, baseDelayMs = 500): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (err: unknown) {
       lastError = err;
-      // Nur bei temporären Fehlern erneut versuchen
       const name = err instanceof DOMException ? err.name : undefined;
-      if (
+      const isTransient =
         name === 'QuotaExceededError' ||
         name === 'InvalidStateError' ||
         name === 'AbortError' ||
-        name === 'TransactionInactiveError'
-      ) {
-        if (attempt < retries) await new Promise((res) => setTimeout(res, delayMs));
+        name === 'TransactionInactiveError';
+      if (isTransient && attempt < retries) {
+        const jitter = Math.floor(Math.random() * 200);
+        const delay = baseDelayMs * 2 ** attempt + jitter;
+        await new Promise((res) => setTimeout(res, delay));
       } else {
         break;
       }
@@ -733,33 +736,35 @@ class IndexedDBService implements StorageBackend {
   }
 
   async loadState(): Promise<PersistedState | undefined> {
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
-    const projectRequest = store.get('project');
-    const settingsRequest = store.get('settings');
+    return retryDb(async () => {
+      const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
+      const projectRequest = store.get('project');
+      const settingsRequest = store.get('settings');
 
-    return new Promise((resolve, reject) => {
-      let project: unknown;
-      let settings: unknown;
-      let completed = 0;
+      return new Promise<PersistedState | undefined>((resolve, reject) => {
+        let project: unknown;
+        let settings: unknown;
+        let completed = 0;
 
-      const onComplete = () => {
-        if (++completed === 2) {
-          const validated = this.validateAndFixState(project, settings);
-          resolve(validated);
-        }
-      };
+        const onComplete = () => {
+          if (++completed === 2) {
+            const validated = this.validateAndFixState(project, settings);
+            resolve(validated);
+          }
+        };
 
-      projectRequest.onsuccess = () => {
-        project = decompressData(projectRequest.result);
-        onComplete();
-      };
-      settingsRequest.onsuccess = () => {
-        settings = decompressData(settingsRequest.result);
-        onComplete();
-      };
+        projectRequest.onsuccess = () => {
+          project = decompressData(projectRequest.result);
+          onComplete();
+        };
+        settingsRequest.onsuccess = () => {
+          settings = decompressData(settingsRequest.result);
+          onComplete();
+        };
 
-      projectRequest.onerror = () => reject(projectRequest.error);
-      settingsRequest.onerror = () => reject(settingsRequest.error);
+        projectRequest.onerror = () => reject(projectRequest.error);
+        settingsRequest.onerror = () => reject(settingsRequest.error);
+      });
     });
   }
 
@@ -899,11 +904,13 @@ class IndexedDBService implements StorageBackend {
       data: compressData(data),
     };
 
-    const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const request = store.add(snapshotData);
-      request.onsuccess = () => resolve(request.result as number);
-      request.onerror = () => reject(request.error);
+    return retryDb(async () => {
+      const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
+      return new Promise<number>((resolve, reject) => {
+        const request = store.add(snapshotData);
+        request.onsuccess = () => resolve(request.result as number);
+        request.onerror = () => reject(getUserFriendlyDbError(request.error));
+      });
     });
   }
 
@@ -912,44 +919,50 @@ class IndexedDBService implements StorageBackend {
   }
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {
-    const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
-    // IDBKeyRange: iterate in reverse (newest first) using cursor direction 'prev'
-    const request = store.openCursor(null, 'prev');
-    const snapshots: ProjectSnapshot[] = [];
+    return retryDb(async () => {
+      const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
+      // IDBKeyRange: iterate in reverse (newest first) using cursor direction 'prev'
+      const request = store.openCursor(null, 'prev');
+      const snapshots: ProjectSnapshot[] = [];
 
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (cursor) {
-          const { data: _data, ...metadata } = cursor.value;
-          snapshots.push({ id: cursor.key as number, ...metadata });
-          cursor.continue();
-        } else {
-          resolve(snapshots);
-        }
-      };
-      request.onerror = () => reject(request.error);
+      return new Promise<ProjectSnapshot[]>((resolve, reject) => {
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor) {
+            const { data: _data, ...metadata } = cursor.value;
+            snapshots.push({ id: cursor.key as number, ...metadata });
+            cursor.continue();
+          } else {
+            resolve(snapshots);
+          }
+        };
+        request.onerror = () => reject(getUserFriendlyDbError(request.error));
+      });
     });
   }
 
   async getSnapshotData(id: number): Promise<ProjectData> {
-    const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
-    return new Promise((resolve, reject) => {
-      const request = store.get(id);
-      request.onsuccess = () => {
-        const raw = request.result?.data;
-        resolve(decompressData<ProjectData>(raw));
-      };
-      request.onerror = () => reject(request.error);
+    return retryDb(async () => {
+      const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
+      return new Promise<ProjectData>((resolve, reject) => {
+        const request = store.get(id);
+        request.onsuccess = () => {
+          const raw = request.result?.data;
+          resolve(decompressData<ProjectData>(raw));
+        };
+        request.onerror = () => reject(getUserFriendlyDbError(request.error));
+      });
     });
   }
 
   async deleteSnapshot(id: number): Promise<void> {
-    const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const request = store.delete(id);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+    return retryDb(async () => {
+      const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
+      return new Promise<void>((resolve, reject) => {
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(getUserFriendlyDbError(request.error));
+      });
     });
   }
 
@@ -981,11 +994,13 @@ class IndexedDBService implements StorageBackend {
 
   async deleteProject(projectId: string): Promise<void> {
     await this.deleteAllBinderAssetsForProject(projectId);
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const req = store.delete('project');
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+    return retryDb(async () => {
+      const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+      return new Promise<void>((resolve, reject) => {
+        const req = store.delete('project');
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(getUserFriendlyDbError(req.error));
+      });
     });
   }
 

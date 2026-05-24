@@ -143,5 +143,26 @@ describe('dbService – retryDb wraps saveProject / saveSettings', () => {
       expect(saveSliceMock).toHaveBeenCalledTimes(3);
       vi.useRealTimers();
     });
+
+    // QNBS-v3: Exponential backoff — delay increases between attempts (500ms → 1000ms → 2000ms).
+    it('waits longer between successive retries (exponential backoff)', async () => {
+      vi.useFakeTimers();
+      let calls = 0;
+      saveSliceMock.mockImplementation(() => {
+        if (++calls < 3) throw new DOMException('quota', 'QuotaExceededError');
+        return Promise.resolve(undefined);
+      });
+      const svc = await getService();
+
+      const promise = svc.saveProject({ title: 'Test' } as never);
+      // After first failure: at least 500ms base delay
+      await vi.advanceTimersByTimeAsync(700);
+      expect(saveSliceMock).toHaveBeenCalledTimes(2);
+      // After second failure: at least 1000ms base delay
+      await vi.advanceTimersByTimeAsync(1200);
+      expect(saveSliceMock).toHaveBeenCalledTimes(3);
+      await expect(promise).resolves.toBeUndefined();
+      vi.useRealTimers();
+    });
   });
 });

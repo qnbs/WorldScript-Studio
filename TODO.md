@@ -41,7 +41,7 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ⬜ RTL language support (Arabic, Hebrew, Persian)
 - ⬜ Fine-Tuning / LoRA-Support für personalisierte Schreibstile
 - ⬜ Cloud-Sync (optional, E2E-verschlüsselt)
-- ⬜ DS-5: Delete legacy bridge block from index.css (after DS-1 verified in production)
+- ✅ DS-5: Delete legacy bridge block from index.css (after DS-1 verified in production) — DONE: bridge block already removed in prior sprints; remaining aliases (`--nav-*`, `--glass-*`, `--border-interactive`, `--ring-focus`) are intentional semantic tokens, not legacy bridges.
 
 ---
 
