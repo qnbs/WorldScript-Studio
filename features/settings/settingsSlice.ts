@@ -18,6 +18,7 @@ import type {
   Settings,
   Theme,
   ThemeCustomization,
+  VoiceSettings,
   WritingGoal,
 } from '../../types';
 import { normalizeAccessibilitySettings } from './accessibilitySchema';
@@ -141,6 +142,21 @@ const defaultSettings: Settings = {
     textColor: '#f8fafc',
     customCss: '',
   },
+  voice: {
+    enabled: false,
+    activationMode: 'manual',
+    sttEngine: 'auto',
+    ttsEngine: 'auto',
+    feedbackLevel: 'standard',
+    speechRate: 1.0,
+    speechVolume: 1.0,
+    allowCloudSttFallback: false,
+    listeningTimeoutSeconds: 8,
+    wakeWordPhrase: 'Hey StoryCraft',
+    pttShortcutId: 'voice-push-to-talk',
+    ttsMuted: false,
+    dictationAutoPunctuation: true,
+  },
 };
 
 const initialState: Settings = { ...defaultSettings };
@@ -246,6 +262,26 @@ const settingsSlice = createSlice({
         ...action.payload,
       };
     },
+    setVoiceSettings(state, action: PayloadAction<Partial<VoiceSettings>>) {
+      state.voice = { ...state.voice, ...action.payload };
+    },
+    resetVoiceSettings(state) {
+      state.voice = {
+        enabled: false,
+        activationMode: 'manual',
+        sttEngine: 'auto',
+        ttsEngine: 'auto',
+        feedbackLevel: 'standard',
+        speechRate: 1.0,
+        speechVolume: 1.0,
+        allowCloudSttFallback: false,
+        listeningTimeoutSeconds: 8,
+        wakeWordPhrase: 'Hey StoryCraft',
+        pttShortcutId: 'voice-push-to-talk',
+        ttsMuted: false,
+        dictationAutoPunctuation: true,
+      };
+    },
   },
 });
 
@@ -283,6 +319,8 @@ export const applyInitialTheme = () => {
 };
 
 applyInitialTheme();
+
+export const selectVoiceSettings = (state: { settings: Settings }) => state.settings.voice;
 
 export const settingsActions = settingsSlice.actions;
 export default settingsSlice.reducer;

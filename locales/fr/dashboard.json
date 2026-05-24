@@ -6,6 +6,13 @@
   "dashboard.authorInsights.timelineClear": "Aucun avertissement à partir des métadonnées.",
   "dashboard.authorInsights.timelineWarnBadge": "{{count}} avertissements — vérifiez dates/durées sur le tableau des scènes.",
   "dashboard.authorInsights.title": "Infos pipeline auteur",
+  "dashboard.backup.exportJson": "Export JSON",
+  "dashboard.backup.hint": "Export your project, import a backup, or open full backup settings.",
+  "dashboard.backup.importJson": "Import JSON",
+  "dashboard.backup.latestSnapshot": "Latest snapshot: {{name}} ({{date}})",
+  "dashboard.backup.openSettings": "Backup settings",
+  "dashboard.backup.title": "Backup & restore",
+  "dashboard.backup.unnamedSnapshot": "Unnamed snapshot",
   "dashboard.continueWriting.button": "Reprendre",
   "dashboard.continueWriting.empty": "Commencez votre histoire dans la vue Manuscrit.",
   "dashboard.continueWriting.title": "Continuer à écrire",
@@ -60,12 +67,5 @@
   "dashboard.stats.worlds": "Mondes",
   "initialProject.chapter1": "Chapitre 1",
   "initialProject.logline": "Un voyage de mille lieues commence par un seul pas...",
-  "initialProject.title": "Mon histoire sans titre",
-  "dashboard.backup.title": "Backup & restore",
-  "dashboard.backup.hint": "Export your project, import a backup, or open full backup settings.",
-  "dashboard.backup.exportJson": "Export JSON",
-  "dashboard.backup.importJson": "Import JSON",
-  "dashboard.backup.openSettings": "Backup settings",
-  "dashboard.backup.latestSnapshot": "Latest snapshot: {{name}} ({{date}})",
-  "dashboard.backup.unnamedSnapshot": "Unnamed snapshot"
+  "initialProject.title": "Mon histoire sans titre"
 }

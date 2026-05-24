@@ -4,6 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { ICONS } from '../../constants';
 import { useManuscriptViewContext } from '../../contexts/ManuscriptViewContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useVoiceDictation } from '../../hooks/useVoiceDictation';
 import { DebouncedInput } from '../ui/DebouncedInput';
 import { Textarea } from '../ui/Textarea';
 
@@ -72,6 +73,16 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
     suggestion: string;
   } | null>(null);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+
+  // QNBS-v3: Voice dictation — append transcript to active section content when dictation mode is on.
+  useVoiceDictation(
+    () => activeSection?.content ?? '',
+    (text) => {
+      if (activeSection) {
+        handleContentChange(activeSection.id, text);
+      }
+    },
+  );
 
   // QNBS-v3: Defer highlight computation so keystroke → textarea updates stay synchronous even for long scenes.
   const deferredContent = useDeferredValue(activeSection?.content ?? '');

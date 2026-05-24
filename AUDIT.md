@@ -1,9 +1,74 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v2.0 sprint** — 2026-05-23  
+**Current version:** **v1.17** — 2026-05-24  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-24 (v1.17 — Voice Full Support Foundation)
+
+### Sprint: v1.17 Voice Full Support Foundation (2026-05-24)
+
+**VOICE-1 complete:** Voice Full Support Foundation — opt-in voice control system with abstract engine interfaces, Web Speech API fallbacks, hybrid intent engine, and full app integration.
+
+**Architecture:**
+- `services/voice/voiceTypes.ts` — Core interfaces: `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`, `FeedbackService`, `AudioNavigator`
+- `services/voice/voiceCommandService.ts` — Singleton orchestrator bridging all engines with Redux; state machine (idle → listening → processing → speaking → idle + dictating)
+- `services/voice/intentEngine.ts` — `HybridIntentEngine`: exact template matching → Jaccard fuzzy scoring → slot extraction; view-context filtering
+- `services/voice/commandVoiceMappings.ts` — 25 static `VoiceCommandDefinition`s covering navigation, editor actions, AI features, voice-specific commands, settings shortcuts
+- `services/voice/sttEngine.ts` — `WebSpeechSttEngine` with auto-restart on unexpected end; `createSttEngine()` factory
+- `services/voice/ttsEngine.ts` — `WebSpeechTtsEngine` with voice selection, rate/volume/pitch control; `createTtsEngine()` factory
+- `services/voice/vadEngine.ts` — `WebRtcVadEngine` (energy-based, pure JS, always available)
+- `services/voice/wakeWordEngine.ts` — `EnergyThresholdWakeWordEngine` with configurable phrase, rolling transcript history
+- `services/voice/feedbackService.ts` — 3 verbosity levels (minimal/standard/verbose), TTS queue, event listeners for visual feedback
+- `services/voice/audioNavigator.ts` — `audioNavigator` singleton: ARIA landmark scanning, focus management, `aria-live` region creation/updates
+
+**Redux State:**
+- `features/voice/voiceSlice.ts` — `VoiceState` with mode, transcript, processing, dictationActive, sttStatus, ttsStatus, microphonePermission, onboardingCompleted, lastConfidence, lastActivityAt, activeSttEngine, activeTtsEngine
+- `features/settings/settingsSlice.ts` — `VoiceSettings` added (enabled, activationMode, feedbackLevel, ttsMuted, speechRate, speechVolume, autoPunctuation, cloudFallback, listeningTimeout, sttEngine, ttsEngine)
+- `features/featureFlags/featureFlagsSlice.ts` — `enableVoiceSupport: boolean` (default: false)
+
+**React Integration:**
+- `hooks/useVoice.ts` — Primary hook: bridges Redux state with `VoiceCommandService`; syncs settings to service; injects dispatch/getState
+- `hooks/usePushToTalk.ts` — Global `Ctrl+Shift+V` keyboard shortcut when voice enabled
+- `hooks/useVoiceDictation.ts` — Editor dictation: inserts transcripts at cursor position
+- `hooks/useVoiceAccessibility.ts` — ARIA live region management, focus restoration
+- `components/voice/VoiceIndicator.tsx` — Floating status indicator (listening/processing/error)
+- `components/voice/VoiceControlPanel.tsx` — Expandable control panel with transcript display and quick actions
+- `components/voice/VoiceSettingsSection.tsx` — Settings tab with onboarding notice, engine selection, feedback level, PTT configuration
+- `App.tsx` — Conditional rendering of VoiceIndicator/VoiceControlPanel; `document.body.dataset['view']` for intent engine context; PTT hook mount
+- `Header.tsx` — `useVoice` integration for voice status display
+- `ManuscriptEditor.tsx` — Dictation support via `useVoiceDictation`
+
+**i18n:** 2025 keys × 5 locales (en/de/es/fr/it); voice settings keys added to all locales.
+
+**Tests:** 83 unit tests / 9 test files:
+- `voiceSlice.test.ts` — 10 tests (state transitions, transcript, dictation, error, reset)
+- `intentEngine.test.ts` — 7 tests (exact match, fuzzy match, slot extraction, view filtering)
+- `feedbackService.test.ts` — 4 tests (muted events, TTS queue, level filtering, cancel)
+- `sttEngine.test.ts` — 9 tests (availability, start/stop, result routing, error ignore, auto-restart)
+- `ttsEngine.test.ts` — 10 tests (availability, speak, error, cancel, pause/resume, dispose)
+- `vadEngine.test.ts` — 7 tests (availability, speech detection, silence detection, ongoing speech)
+- `wakeWordEngine.test.ts` — 11 tests (default phrase, custom phrase, fuzzy match, history, processChunk)
+- `audioNavigator.test.ts` — 13 tests (landmark scan, cycle, focus, label, announce, live region)
+- `commandVoiceMappings.test.ts` — 12 tests (command coverage, uniqueness, dictation views, map building)
+
+**Bug fixes during implementation:**
+- `ttsEngine.ts`: Fixed `window.speechSynthesis` undefined check in `speak()`, `cancel()`, `pause()`, `resume()` — was using `'speechSynthesis' in window` which returns true even when undefined
+- `appStoreRef`: Object pattern `{ current: null }` avoids import reassignment issues for singleton service access outside React
+- `SpeechRecognition` global type: Removed custom `Window` interface extensions; uses direct `window.SpeechRecognition` access with type assertions
+
+**Known limitations / v1.2 planned:**
+- WASM engines (Whisper.cpp, Kokoro, Piper, Silero VAD, Sherpa-ONNX) are prepared via abstract interfaces but not yet bundled
+- `currentView` uses `document.body.dataset['view']` as best-effort fallback (not in Redux)
+- No integration tests for `VoiceCommandService` or `useVoice` hook yet
+- No E2E tests for voice flows yet
+- No semantic intent matching (MiniLM embeddings) yet
+- No local LLM fallback for complex commands yet
+
+**Quality gate:** lint ✅ · i18n:check ✅ (2025 keys × 5 locales) · typecheck ✅ · 83/83 voice tests ✅
 
 ---
 

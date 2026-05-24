@@ -31,6 +31,7 @@
   "worlds.edit.magicSystem": "Magie / Système technologique",
   "worlds.edit.name": "Nom",
   "worlds.edit.notes": "Notes",
+  "worlds.editorTabsAriaLabel": "Onglets de l'éditeur de monde",
   "worlds.error.imageFailed": "Échec de la génération de l'image d'ambiance. Essayez d'ajouter plus de détails à la description du monde.",
   "worlds.loading.profile": "Génération du profil de monde détaillé...",
   "worlds.newWorldName": "Nouveau monde",
@@ -42,7 +43,6 @@
   "worlds.tabs.overview": "Vue d'ensemble",
   "worlds.tabs.timeline": "Histoire & Chronologie",
   "worlds.title": "Atlas des mondes",
-  "worlds.yourWorlds": "Vos mondes",
   "worlds.uploadImage": "Télécharger une image",
-  "worlds.editorTabsAriaLabel": "Onglets de l'éditeur de monde"
+  "worlds.yourWorlds": "Vos mondes"
 }

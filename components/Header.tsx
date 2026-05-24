@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { selectCanRedo, selectCanUndo } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
+import { useVoice } from '../hooks/useVoice';
 import { viewNavigationLabelKey } from '../services/viewNavigationLabels';
 import type { View } from '../types';
 import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
@@ -27,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   const dispatch = useAppDispatch();
   const canUndo = useAppSelector(selectCanUndo);
   const canRedo = useAppSelector(selectCanRedo);
+  const { startListening, stopListening, isListening } = useVoice();
 
   const handleUndo = () => {
     if (canUndo) {
@@ -142,6 +144,38 @@ export const Header: React.FC<HeaderProps> = ({
               strokeLinecap="round"
               strokeLinejoin="round"
               d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 001.061 1.061z"
+            />
+          </svg>
+        </button>
+
+        {/* Voice Control Button */}
+        <button
+          type="button"
+          id="voice-control-button"
+          className={`sm:hidden p-2 ${isListening ? 'text-[var(--sc-text-danger)]' : 'text-[var(--sc-text-secondary)]'} hover:text-[var(--sc-text-primary)]`}
+          aria-label={t('voice.control')}
+          aria-pressed={isListening}
+          onClick={() => {
+            if (isListening) {
+              stopListening();
+            } else {
+              startListening();
+            }
+          }}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            className="w-6 h-6"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 15v3m3 0l-3-3-3 3h3V5a2.002 2.002 0 00-2-2H5a2.002 2.002 0 00-2 2v10a2.002 2.002 0 002 2h5a2.002 2.002 0 002-2 2.002 2.002 0 012 2v6a2.002 2.002 0 01-2 2H5a2.002 2.002 0 01-2-2v-5a2.002 2.002 0 002-2h2.5"
             />
           </svg>
         </button>

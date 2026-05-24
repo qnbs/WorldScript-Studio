@@ -66,7 +66,6 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@tanstack/react-virtual": "^3.13.2",
     "@domain/ai-core": "workspace:*",
     "@domain/ui": "workspace:*",
     "@duckdb/duckdb-wasm": "^1.32.0",
@@ -75,6 +74,7 @@
     "@fontsource/merriweather": "^5.2.11",
     "@google/genai": "^2.4.0",
     "@reduxjs/toolkit": "^2.12.0",
+    "@tanstack/react-virtual": "^3.13.2",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
@@ -112,7 +112,6 @@
     "@storybook/react": "^10.4.0",
     "@storybook/react-vite": "^10.4.0",
     "@storybook/test-runner": "^0.21.0",
-    "http-server": "^14.1.1",
     "@stryker-mutator/core": "^9.2.0",
     "@stryker-mutator/vitest-runner": "^9.2.0",
     "@tailwindcss/vite": "^4.3.0",
@@ -127,6 +126,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.6",
     "fake-indexeddb": "^6.2.5",
+    "http-server": "^14.1.1",
     "jsdom": "^29.1.1",
     "lint-staged": "^17.0.5",
     "rollup-plugin-visualizer": "^7.0.1",
@@ -165,10 +165,12 @@
     },
     "onlyBuiltDependencies": [
       "@google/genai",
+      "@swc/core",
       "core-js",
       "esbuild",
       "protobufjs",
-      "sharp"
+      "sharp",
+      "workerd"
     ]
   },
   "simple-git-hooks": {

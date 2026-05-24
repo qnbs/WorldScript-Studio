@@ -2,8 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Provider } from 'react-redux';
 import App from './App';
-import type { RootState } from './app/store';
-import { setupStore } from './app/store';
+import { type AppDispatch, appStoreRef, type RootState, setupStore } from './app/store';
 import type { ProjectData } from './features/project/projectSlice';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
 import { initializeStorage, resetAllDatabases } from './services/dbInitialization';
@@ -177,6 +176,7 @@ function StorageErrorScreen({ message, onReset }: { message: string; onReset: ()
     // --------------------------------
 
     const store = setupStore(preloadedState);
+    appStoreRef.current = store as unknown as { getState(): RootState; dispatch: AppDispatch };
 
     // QNBS-v3: RootState cast — configureStore mit PersistedRootState ergibt sonst zu breites getState().
     const pdata = (store.getState() as RootState).project.present?.data;
