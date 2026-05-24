@@ -7,17 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-05-24
+
+### Added
+
+- **Voice Full Support Foundation** — Abstract Engine Interfaces (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`), Web Speech API Fallbacks, Hybrid Intent Engine (exact → Jaccard → slot extraction), VoiceCommandService with State Machine (idle → listening → processing → speaking), Redux `voiceSlice`, React Hooks (`useVoice`, `usePushToTalk`, `useVoiceDictation`, `useVoiceAccessibility`), UI Components (`VoiceIndicator`, `VoiceControlPanel`, `VoiceSettingsSection`), Audio Navigator (ARIA landmark scanning), Feedback Service (3 verbosity levels). 83 unit tests across 9 test files.
+- **CodeGraph semantic code intelligence** — dual-graph setup alongside Graphify: symbol-level MCP server (caller/callee/impact/trace), auto-sync file watcher, `codegraph affected` for smart test selection. Indexed: 260 files, 2754 nodes, 2443 edges. See [`docs/codegraph.md`](docs/codegraph.md) and [`docs/dual-graph-setup.md`](docs/dual-graph-setup.md).
+- `pnpm` scripts: `codegraph:status`, `codegraph:update`, `codegraph:sync`, `codegraph:report`, `codegraph:affected`, `graphs:update`.
+- VS Code: tasks for CodeGraph and dual-graph updates.
+- **Design System Audit Completion** — DS-1 (legacy CSS bridge variable removal), DS-2 (elimination of all `dark:` Tailwind prefix violations across components), DS-4 (radius tokens). All P0+P1 Design-System items completed.
+- **Mobile UX Comprehensive Pass** — Touch targets ≥44px, bottom tab bar, foldable layout (`useFoldableLayout`), sidebar layouts, hover-only actions removed, safe-area padding, bottom navigation clearance (`pb-mobile-nav`).
+- **DevContainer** — Full `.devcontainer/` configuration with Dockerfile, Starship prompt, VS Code extensions, and tooling documentation.
+- **LoRA Adapter Inference Foundation** — Feature flag `enableLoraSupport`, IDB service (`loraAdapterService`), Settings-UI for personalized writing styles.
+- **Plugin System v0.1** — Sandboxed Capability API, plugin registry (`pluginRegistryService`), Settings-UI.
+- **Visual Regression Testing (VRT)** — Playwright screenshot suite, CI job `vrt.yml`, baseline snapshots.
+- **RTL Layout Foundation** — Feature flag `enableRtl`, BiDi context provider, `html[dir]` control for Arabic/Hebrew/Persian support.
+- **Cloud Sync Stub (SYNC-1)** — E2E-encrypted cloud sync foundation (AES-256-GCM, Cloudflare R2 stub).
+- **Performance (PERF-1)** — `useDeferredValue` for large manuscripts, 500-scene notice, virtual scrolling foundation.
+- **Community Section (COM-1)** — Curated model list, GitHub links in Settings.
+- [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) — GitHub language stats and i18n layout.
+
 ### Fixed
 
 - **i18n cold start:** Project title/logline no longer persist as raw keys (`initialProject.title`); sync bootstrap + repair on load.
 - **Repo languages:** `.gitattributes` + solo Graphify policy (`graphify-out/*` gitignored except `GRAPH_REPORT.md`); removed stale `public/locales/*` module copies (runtime uses `bundle.json` only).
-
-### Added
-
-- **CodeGraph semantic code intelligence** — dual-graph setup alongside Graphify: symbol-level MCP server (caller/callee/impact/trace), auto-sync file watcher, `codegraph affected` for smart test selection. Indexed: 260 files, 2754 nodes, 2443 edges. See [`docs/codegraph.md`](docs/codegraph.md) and [`docs/dual-graph-setup.md`](docs/dual-graph-setup.md).
-- `pnpm` scripts: `codegraph:status`, `codegraph:update`, `codegraph:sync`, `codegraph:report`, `codegraph:affected`, `graphs:update`.
-- VS Code: tasks for CodeGraph and dual-graph updates.
-- [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) — GitHub language stats and i18n layout.
+- **Voice state migration:** `selectVoiceSettings` guarded against missing `voice` key in old persisted state.
+- **Security:** pnpm override for CVE `qs>=6.15.2`.
 
 ## [1.11.0] — 2026-05-22
 
@@ -743,5 +758,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTPS-only external API communication
 - Device-scoped encryption key derivation
 
-[Unreleased]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.10.0...v1.17.0
+[1.11.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.10.0...v1.11.0
+[1.10.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.4.0...v1.6.0
+[1.4.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.0.0...v1.2.0
 [1.0.0]: https://github.com/qnbs/StoryCraft-Studio/releases/tag/v1.0.0

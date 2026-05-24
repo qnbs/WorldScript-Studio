@@ -1,0 +1,74 @@
+--- a/src/y-webrtc.js
++++ b/src/y-webrtc.js
+@@ -145,9 +145,19 @@
+  */
+ const sendWebrtcConn = (webrtcConn, encoder) => {
+   log('send message to ', logging.BOLD, webrtcConn.remotePeerId, logging.UNBOLD, logging.GREY, ' (', webrtcConn.room.name, ')', logging.UNCOLOR)
+-  try {
+-    webrtcConn.peer.send(encoding.toUint8Array(encoder))
+-  } catch (e) {}
++  const room = webrtcConn.room
++  const data = encoding.toUint8Array(encoder)
++  if (room.key) {
++    cryptoutils.encrypt(data, room.key).then(encrypted => {
++      try {
++        webrtcConn.peer.send(encrypted)
++      } catch (e) {}
++    }).catch(() => {})
++  } else {
++    try {
++      webrtcConn.peer.send(data)
++    } catch (e) {}
++  }
+ }
+ 
+ /**
+@@ -156,11 +166,21 @@
+  */
+ const broadcastWebrtcConn = (room, m) => {
+   log('broadcast message in ', logging.BOLD, room.name, logging.UNBOLD)
+-  room.webrtcConns.forEach(conn => {
+-    try {
+-      conn.peer.send(m)
+-    } catch (e) {}
+-  })
++  if (room.key) {
++    cryptoutils.encrypt(m, room.key).then(encrypted => {
++      room.webrtcConns.forEach(conn => {
++        try {
++          conn.peer.send(encrypted)
++        } catch (e) {}
++      })
++    }).catch(() => {})
++  } else {
++    room.webrtcConns.forEach(conn => {
++      try {
++        conn.peer.send(m)
++      } catch (e) {}
++    })
++  }
+ }
+ 
+ export class WebrtcConn {
+@@ -230,9 +250,18 @@
+       announceSignalingInfo(room)
+     })
+     this.peer.on('data', data => {
+-      const answer = readPeerMessage(this, data)
+-      if (answer !== null) {
+-        sendWebrtcConn(this, answer)
++      if (room.key) {
++        cryptoutils.decrypt(data, room.key).then(plaintext => {
++          const answer = readPeerMessage(this, plaintext)
++          if (answer !== null) {
++            sendWebrtcConn(this, answer)
++          }
++        }).catch(() => {})
++      } else {
++        const answer = readPeerMessage(this, data)
++        if (answer !== null) {
++          sendWebrtcConn(this, answer)
++        }
+       }
+     })
+   }
