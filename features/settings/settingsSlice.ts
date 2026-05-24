@@ -159,6 +159,8 @@ const defaultSettings: Settings = {
   },
 };
 
+export const defaultVoiceSettings = defaultSettings.voice;
+
 const initialState: Settings = { ...defaultSettings };
 
 const settingsSlice = createSlice({
@@ -320,7 +322,8 @@ export const applyInitialTheme = () => {
 
 applyInitialTheme();
 
-export const selectVoiceSettings = (state: { settings: Settings }) => state.settings.voice;
+export const selectVoiceSettings = (state: { settings: Settings }) =>
+  state.settings.voice ?? defaultVoiceSettings;
 
 export const settingsActions = settingsSlice.actions;
 export default settingsSlice.reducer;
