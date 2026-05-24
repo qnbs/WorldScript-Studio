@@ -42,25 +42,6 @@ try {
   report += `## Files by Extension\n\nUnavailable: ${String(e)}\n\n`;
 }
 
-try {
-  const query = execSync('codegraph query --limit 0 --json', { encoding: 'utf-8' });
-  const data = JSON.parse(query);
-  const byLang = data.nodes.reduce((acc, node) => {
-    const lang = node.language || 'unknown';
-    acc[lang] = (acc[lang] || 0) + 1;
-    return acc;
-  }, {});
-  report += '## Symbols by Language\n\n';
-  Object.entries(byLang)
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([lang, count]) => {
-      report += `- **${lang}**: ${count} symbols\n`;
-    });
-  report += '\n';
-} catch (e) {
-  report += `## Symbols by Language\n\nUnavailable: ${String(e)}\n\n`;
-}
-
 report += '---\n\n';
 report += '*Regenerate with: `pnpm run codegraph:report`*\n';
 

@@ -1,6 +1,6 @@
 # CodeGraph Report
 
-**Generated:** 2026-05-24T11:52:59.313Z
+**Generated:** 2026-05-24T12:06:50.378Z
 
 ## Status
 
@@ -39,7 +39,9 @@ CodeGraph Status
   yaml            14
   rust            5
 
-[32m✓[0m Index is up to date
+[1mPending Changes:[0m
+  Modified:  1 files
+[34mℹ[0m Run "codegraph sync" to update the index
 
 
 ```
@@ -54,12 +56,6 @@ CodeGraph Status
 - **.yaml**: 2
 - **.cjs**: 1
 - **.js**: 1
-
-## Symbols by Language
-
-Unavailable: Error: Command failed: codegraph query --limit 0 --json
-error: missing required argument 'search'
-
 
 ---
 
