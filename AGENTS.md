@@ -1,6 +1,6 @@
-# StoryCraft Studio — Agent Guide
+<!-- This file is written for AI coding agents. It assumes you know nothing about the project. Every claim below is derived from the actual codebase — do not generalize beyond what is documented here. -->
 
-> This file is written for AI coding agents. It assumes you know nothing about the project. Every claim below is derived from the actual codebase — do not generalize beyond what is documented here.
+# StoryCraft Studio — Agent Guide
 
 ---
 
@@ -10,7 +10,7 @@
 
 - **Primary deploy target:** Static SPA on GitHub Pages (`/StoryCraft-Studio/` base path)
 - **Secondary targets:** Vercel (root base) and Cloudflare Pages via edge builds
-- **Desktop:** Tauri 2 bundles for Linux, macOS, and Windows; auto-updater enabled
+- **Desktop:** Tauri 2 bundles for Linux (AppImage), macOS (DMG), and Windows (MSI); auto-updater enabled
 - **License:** MIT
 
 ---
@@ -19,19 +19,19 @@
 
 | Layer | Technology |
 |-------|------------|
-| Runtime | Node.js ≥ 22 (`.nvmrc`), pnpm ≥ 10 (`packageManager` field) |
-| Framework | React 19, TypeScript ~6.0 (strict) |
-| Build tool | Vite 8 (`vite.config.ts`) |
-| Styling | Tailwind CSS 4 via `@tailwindcss/vite` + semantic CSS custom properties (`index.css`) |
-| State | Redux Toolkit 2.x + `redux-undo` (project slice only); Zustand for transient UI (`app/transientUiStore.ts`) |
-| Testing | Vitest 4 (jsdom, `maxWorkers: 1`), Playwright 1.60 (E2E, CI-only), Stryker 9 (mutation) |
-| Lint/Format | Biome 2.4.15 (`biome.json`) — single toolchain for JS/TS/CSS |
+| Runtime | Node.js `>=22.0.0` (`.nvmrc`), pnpm `>=10.0.0` (`packageManager: pnpm@10.33.0`) |
+| Framework | React `^19.2.6`, TypeScript `~6.0.3` (strict) |
+| Build tool | Vite `^8.0.13` (`vite.config.ts`) |
+| Styling | Tailwind CSS `^4.3.0` via `@tailwindcss/vite` + semantic CSS custom properties (`index.css`) |
+| State | Redux Toolkit `^2.12.0` + `redux-undo` (project slice only); Zustand `^5.0.8` for transient UI (`app/transientUiStore.ts`) |
+| Testing | Vitest `^4.1.6` (jsdom, `maxWorkers: 1`), Playwright `^1.60.0` (E2E, CI-only), Stryker `^9.2.0` (mutation) |
+| Lint/Format | Biome `^2.4.15` (`biome.json`) — single toolchain for JS/TS/CSS |
 | AI | Multi-provider: Google Gemini (`@google/genai`), OpenAI, Ollama, WebLLM, ONNX Runtime Web, Transformers.js |
 | Voice | Web Speech API (fallback); WASM engines prepared (Whisper.cpp, Kokoro, Piper, Silero VAD, Sherpa-ONNX) |
 | Storage | IndexedDB (`dbService.ts`) / Tauri filesystem (`fileSystemService.ts`); LZ-String compression; AES-256-GCM encryption for API keys |
 | PWA | `vite-plugin-pwa` with `injectManifest` strategy (`public/sw.js`) |
 | Desktop | Tauri 2 (`src-tauri/`) — Rust toolchain required |
-| Storybook | Storybook 10 with `@storybook/react-vite` |
+| Storybook | Storybook `^10.4.0` with `@storybook/react-vite` |
 | Orchestration | Turborepo (`turbo.json`) for parallel task caching; pnpm workspaces (`packages/*`) |
 
 ---
@@ -61,7 +61,7 @@ StoryCraft-Studio/
 │   ├── progressTracker/    # Writing sessions, streaks, goals
 │   ├── sceneComments/      # Per-scene comments (EntityAdapter)
 │   ├── analytics/          # DuckDB boot/migration status
-│   ├── mindMap/            # Mind-map viewport state
+│   ├── mindMapUi/          # Mind-map viewport state
 │   └── voice/              # Voice command state
 ├── hooks/                  # View business logic hooks (use*View.ts naming)
 ├── services/               # External adapters and business logic
@@ -70,10 +70,11 @@ StoryCraft-Studio/
 │   ├── duckdb/             # DuckDB-WASM client, schema, analytics, migration
 │   ├── help/               # Help catalog, search, doc retrieval
 │   ├── keyboard/           # Shortcut normalization and conflict detection
+│   ├── voice/              # Voice engines and orchestration
 │   └── … (aiProviderService, geminiService, dbService, storageService, collaborationService, etc.)
 ├── packages/               # Internal pnpm workspace packages
-│   ├── ai-core/            # WebLLM + inference worker + tab-leader election
-│   └── ui/                 # Tailwind preset + design tokens
+│   ├── ai-core/            # WebLLM + inference worker + tab-leader election (published as `@domain/ai-core`)
+│   └── ui/                 # Tailwind preset + design tokens (published as `@domain/ui`)
 ├── locales/                # i18n source JSON modules (de, en, fr, es, it)
 ├── public/                 # Static assets; runtime i18n bundles `public/locales/<lang>/bundle.json`
 ├── tests/
@@ -86,7 +87,7 @@ StoryCraft-Studio/
 ├── src-tauri/              # Tauri 2 desktop app (Rust)
 ├── docs/                   # Deep-dive docs: CI.md, DEPLOYMENT.md, ACCESSIBILITY.md, BEST-PRACTICES.md, etc.
 ├── types.ts                # Core shared TypeScript interfaces
-└── types/                  # Supplemental type declarations (duckdb-wasm-worker.d.ts, tauri-plugins.d.ts)
+└── types/                  # Supplemental type declarations
 ```
 
 ### Key Files
@@ -110,25 +111,28 @@ StoryCraft-Studio/
 ```bash
 # Development
 pnpm run dev                # Vite dev server on http://localhost:3000
+pnpm run dev:turbo          # Turbo parallel dev
 pnpm run dev:tauri          # Tauri desktop app (requires Rust)
 
 # Build
 pnpm run build              # Production build → dist/ (GitHub Pages base)
 pnpm run build:edge         # Edge build (root base) for Vercel / Cloudflare Pages
+pnpm run build:pages        # Alias for vite build
 pnpm run preview            # Preview production build locally (port 4173)
 
 # Code quality
 pnpm run lint               # Biome lint (--error-on-warnings)
 pnpm run lint:fix           # Biome check --write (lint + format)
-pnpm run format             # Biome format only
+pnpm run format             # Biome format --write
 pnpm run typecheck          # tsc --noEmit
-pnpm run i18n:check         # Locale key parity vs English + rebuild bundles
+pnpm run i18n:check         # Locale key parity vs English + rebuild bundles + content guard
 
 # Testing
 pnpm run test               # Vitest watch mode
 pnpm run test:run           # Vitest single run
 pnpm run test:coverage      # Vitest with V8 coverage (enforces thresholds)
 pnpm run test:e2e           # Playwright E2E (CI=true required; CI-only by policy)
+pnpm run test:e2e:ui        # Playwright E2E UI mode (CI=true required)
 pnpm run test:vrt           # Visual regression (Chromium only)
 pnpm run mutation           # Stryker mutation testing
 
@@ -137,14 +141,21 @@ pnpm run analyze            # Rollup visualizer → dist/bundle-analysis.html
 pnpm run bundle:budget      # Chunk size guard (max 7000 KB total, 4500 KB entry)
 pnpm run storybook          # Storybook dev server on :6006
 pnpm run build-storybook    # Static Storybook build
+pnpm run test:storybook     # Test-runner against served Storybook
 
 # Tauri
 pnpm run tauri:dev          # Tauri dev
 pnpm run tauri:build        # Tauri production build
 
+# Knowledge graphs
+pnpm run graphify:update    # AST-based knowledge graph update
+pnpm run codegraph:update   # Semantic code intelligence update
+pnpm run graphs:update      # Update both graphs
+
 # Quick local CI (low-end hardware)
 pnpm run ci:quick           # lint + typecheck + i18n + unit tests (no coverage)
 pnpm run ci:quick:unit      # lint + typecheck + i18n only
+pnpm run ci:quick:coverage  # lint + typecheck + i18n + unit tests with coverage
 ```
 
 ---
@@ -157,6 +168,7 @@ pnpm run ci:quick:unit      # lint + typecheck + i18n only
 - Avoid `any`. Use proper types or `unknown`. Biome flags `noExplicitAny` as error.
 - `noUnusedLocals`, `noUnusedParameters`, `noUnusedImports`, `noImplicitReturns`, and `noUncheckedIndexedAccess` are all enabled.
 - Event handler props use `onX` prefix. Boolean props use `is*` / `has*` prefix.
+- `useImportType` is enforced (Biome error).
 
 ### Styling
 
@@ -164,16 +176,19 @@ pnpm run ci:quick:unit      # lint + typecheck + i18n only
 - Design tokens in `index.css` use `--sc-*` naming. Special families: `--glass-*`, `--nav-*`, `--radius-sc-*`, `--icon-sc-*`, `--text-sc-*`.
 - `packages/ui/tailwind-preset.ts` registers `w/h-icon-sc-*`, `text-sc-*`, `rounded-sc-*`, etc. Prefer these for atoms.
 - Container queries are used for resizable panels; set `containerType: 'inline-size'` inline and use `@container` queries.
+- Focus rings: `focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]`.
+- Logical properties: Use `ps-`/`pe-` instead of `pl-`/`pr-` in UI atoms for RTL prep.
 
 ### Component Patterns
 
 - Every major view follows a **three-file pattern**:
-  - `components/Xyz.tsx` — pure rendering only
+  - `components/XyzView.tsx` — pure rendering only
   - `hooks/useXyzView.ts` — business logic, selectors, thunks
   - `contexts/XyzContext.ts` — React context passing hook return to children
 - Use `React.memo()` for expensive renders; `React.forwardRef()` for `components/ui/` primitives.
 - Wrap view roots with `components/ui/ViewErrorBoundary.tsx`.
 - File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors.
+- All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`.
 
 ### Comments
 
@@ -206,7 +221,7 @@ Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks
 - Config: `vitest.config.ts`
 - Environment: `jsdom` (default); Node environment for IDB-heavy tests (`// @vitest-environment node`)
 - Setup: `tests/setup.ts` — mocks `localStorage`, `matchMedia`, `speechSynthesis`, `indexedDB`, silences `console.log`
-- **Concurrency:** `maxWorkers: 1` is mandatory. Tests run serially. Do not parallelize.
+- **Concurrency:** `pool: threads`, `maxWorkers: 1` is mandatory. Tests run serially. Do not parallelize.
 - **Coverage thresholds:** lines ≥ 63, branches ≥ 55, functions ≥ 54, statements ≥ 62
 - **Determinism:** Mock `Date.now()`, use fake timers, reset global state in `beforeEach`. Never depend on real network or test execution order.
 - **User interactions:** Use `@testing-library/user-event`, not `.click()` directly. Use `findBy*` / `waitFor` for async assertions.
@@ -215,7 +230,7 @@ Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks
 
 ### E2E Tests (Playwright)
 
-- **CI-only by policy:** `CI=true` is required (`pnpm run test:e2e`). CI runs Chromium desktop + Pixel 5 mobile. Locally, Firefox is included; mobile only with `RUN_MOBILE_E2E=1`.
+- **CI-only by policy:** `CI=true` is required (`pnpm run test:e2e`). CI runs Chromium desktop + Pixel 5 mobile emulation. Locally, Firefox is included; mobile only with `RUN_MOBILE_E2E=1`.
 - **Base URL:** `http://127.0.0.1:3000/StoryCraft-Studio`
 - **Do NOT use `networkidle`** against the Vite dev server (HMR keeps WebSocket open). Use `waitForSpaReady()` from `tests/e2e/helpers.ts`.
 - **Helpers:** `ensureBlankProject()`, `selectEnglish()`, `sidebar(page)` (scopes to `#sidebar`).
@@ -226,12 +241,14 @@ Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks
 
 - Config: `stryker.conf.json`
 - Targets: 13 files across `services/`, `features/`, `app/`
-- `break: null` — informational only. CI job uses `continue-on-error: true`.
+- `ignoreStatic: true` drops runtime from ~90 min to ~10 min.
+- `break: null` — informational only. CI job uses `continue-on-error: true` (standalone `mutation.yml` runs weekly).
 
 ### Storybook
 
 - Stories live in `stories/`. All `components/ui/` primitives should have a story.
 - `storybookProviders.tsx` wraps stories with required contexts.
+- `@storybook/addon-a11y` runs axe-core per story.
 
 ---
 
@@ -253,19 +270,21 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 | Job | Purpose |
 |-----|---------|
-| `security` | `pnpm audit`, OSV scanner (npm + Rust lockfiles), gitleaks secrets scan, dependency review on PRs |
-| `quality` | Node 22 + 24 matrix → Biome lint, `i18n:check`, `tsc`, Vitest + coverage, Codecov upload |
-| `build` | Production build, bundle budget, analyze artifact, SLSA build provenance attestation on `main` |
-| `e2e` | Playwright Chromium desktop + mobile emulation (`CI=true`) |
-| `mutation` | Stryker run (`continue-on-error: true`) |
+| `security` | `pnpm audit --audit-level=high`, OSV scanner (npm + Rust lockfiles), gitleaks secrets scan, dependency review on PRs |
+| `quality` | Node 22 + 24 matrix → Biome lint, `i18n:check`, `tsc --noEmit`, Vitest + coverage, Codecov upload |
+| `build` | Production build, bundle budget, analyze artifact; on `main`: SLSA build provenance attestation + Pages artifact |
+| `e2e` | Playwright Chromium desktop + mobile emulation (`CI=true`); JUnit artifact for PR annotations |
+| `mutation` | Stryker run (`continue-on-error: true`, 20 min timeout) |
 | `lighthouse` | LHCI against built `dist` (hard-fail on accessibility and CLS) |
-| `storybook` | Static Storybook build → artifact |
+| `storybook` | Static Storybook build + test-runner; artifact upload |
+| `vrt` | Visual regression (Chromium only); uploads baselines + diffs |
 | `deploy` | Only `main` push: GitHub Pages deploy |
 
 ### Desktop Releases
 
-- `tauri-build.yml` runs on-demand / tag push. `v*` tags publish installers on a GitHub Release.
+- `tauri-build.yml` runs on `workflow_dispatch` or `v*` tags. `v*` tags publish installers on a GitHub Release.
 - Artifacts: `.appimage`, `.msi`, `.dmg` + `latest.json` updater manifest.
+- Signing: Optional `TAURI_SIGNING_PRIVATE_KEY` and password for updater signatures.
 
 ### Deployment Targets
 
@@ -281,14 +300,15 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 ## Security Considerations
 
-- **No build-time secrets.** API keys are entered via Settings UI and stored encrypted in IndexedDB (AES-256-GCM). Do not put AI keys in `.env` or host environment variables for inference.
+- **No build-time secrets.** API keys are entered via Settings UI and stored encrypted in IndexedDB (AES-256-GCM via Web Crypto API). Do not put AI keys in `.env` or host environment variables for inference.
 - **CSP:** Defined in `index.html` (web) and `src-tauri/tauri.conf.json` (desktop). Extend `connect-src` only when adding new AI hosts.
 - **No `dangerouslySetInnerHTML` without DOMPurify.** Biome flags `noDangerouslySetInnerHtml` as error.
 - **Never log API keys, IVs, or plaintext payloads.** Use `services/logger.ts` (ring-buffer + sink). `console.log` is warned by Biome in production paths.
 - **Service Worker:** AI hosts are network-only (`public/sw.js`). WASM/ONNX chunks are excluded from precache.
 - **Supply-chain:** SHA-pinned GitHub Actions, Dependabot weekly updates, OpenSSF Scorecard, CodeQL SAST, SLSA build provenance on `main`.
-- **Collaboration:** Yjs + y-webrtc with AES-256-GCM E2E encryption (PBKDF2, 310k iterations). Signaling URLs are user-configurable.
+- **Collaboration:** Yjs + y-webrtc with AES-256-GCM E2E encryption foundation (PBKDF2, 310k iterations). Signaling URLs are user-configurable.
 - **Tauri isolation:** `vite.config.ts` externalizes `/^@tauri-apps\//` so web builds never bundle Tauri APIs. Abstract Tauri calls through `services/tauriRuntime.ts`.
+- **Vulnerability reporting:** GitHub Private Vulnerability Reporting preferred. 90-day coordinated disclosure embargo.
 
 ---
 
@@ -394,11 +414,16 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 - Target: **WCAG 2.2 AA** where practical.
 - Biome `a11y` rules are strict and fail CI: `useKeyWithClickEvents`, `useButtonType`, `noLabelWithoutControl`, `useSemanticElements`, `useAriaPropsForRole`, `useAriaPropsSupportedByRole`.
-- **Live regions:** `useAnnounce(message, priority?: 'polite' | 'assertive')` from `LiveRegionContext`.
+- **Live regions:** `useAnnounce(message, priority?: 'polite' | 'assertive')` from `LiveRegionContext`. Respect `settings.accessibility.liveRegionVerbosity`.
 - **Focus traps:** `hooks/useFocusTrap.ts` re-queries focusable elements on every Tab press.
 - Modals must trap focus and restore on close. Decorative icons need `aria-hidden="true"`.
 - Keyboard focus styles: `focus-visible:ring-2`.
 - Command palette uses ARIA combobox/listbox patterns.
+- Lighthouse CI gate: Accessibility `error` ≥ 0.95, CLS `error` ≤ 0.1.
+- Automated checks:
+  - Playwright `a11y.spec.ts` with `@axe-core/playwright` (serious/critical violations must be zero; color-contrast disabled in CI for theme-variable variance).
+  - Storybook `@storybook/addon-a11y` for per-story checks.
+- i18n for a11y: All ARIA labels and live-region text use `t('key')` — no hardcoded strings.
 
 ---
 

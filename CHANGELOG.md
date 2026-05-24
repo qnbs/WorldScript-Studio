@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance (PERF-1)** — `useDeferredValue` for large manuscripts, 500-scene notice, virtual scrolling foundation.
 - **Community Section (COM-1)** — Curated model list, GitHub links in Settings.
 - [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) — GitHub language stats and i18n layout.
+- **Full RTCDataChannel in-flight E2E encryption** — `pnpm patch` for `y-webrtc@10.3.0` encrypts all Yjs sync updates and awareness protocol messages over peer-to-peer WebRTC data channels via AES-256-GCM using `room.key`. Previously only signaling and BroadcastChannel were encrypted; data channel traffic was plaintext.
 
 ### Fixed
 
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Repo languages:** `.gitattributes` + solo Graphify policy (`graphify-out/*` gitignored except `GRAPH_REPORT.md`); removed stale `public/locales/*` module copies (runtime uses `bundle.json` only).
 - **Voice state migration:** `selectVoiceSettings` guarded against missing `voice` key in old persisted state.
 - **Security:** pnpm override for CVE `qs>=6.15.2`.
+- **Vercel deploy:** `pnpm-lock.yaml` updated to include `patchedDependencies` for `y-webrtc@10.3.0`, resolving `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` on frozen install.
 
 ## [1.11.0] — 2026-05-22
 

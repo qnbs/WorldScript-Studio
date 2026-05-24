@@ -1,6 +1,6 @@
 # CodeGraph Report
 
-**Generated:** 2026-05-24T12:06:50.378Z
+**Generated:** 2026-05-24T12:11:50.958Z
 
 ## Status
 
@@ -12,16 +12,16 @@ CodeGraph Status
 
 [1mIndex Statistics:[0m
   Files:     632
-  Nodes:     6.129
-  Edges:     13.826
-  DB Size:   10.98 MB
+  Nodes:     6.126
+  Edges:     13.822
+  DB Size:   11.07 MB
   Backend:   [32mnode:sqlite — built-in (full WAL)[0m
   Journal:   [32mwal[0m
 
 [1mNodes by Kind:[0m
   import          2.455
   function        1.072
-  constant        991
+  constant        988
   file            618
   method          441
   interface       275
@@ -39,9 +39,7 @@ CodeGraph Status
   yaml            14
   rust            5
 
-[1mPending Changes:[0m
-  Modified:  1 files
-[34mℹ[0m Run "codegraph sync" to update the index
+[32m✓[0m Index is up to date
 
 
 ```
