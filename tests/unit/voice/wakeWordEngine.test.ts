@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { AudioChunk } from '../../../services/voice/voiceTypes';
 import {
   createWakeWordEngine,
@@ -78,7 +78,7 @@ describe('createWakeWordEngine', () => {
   });
 
   it('creates engine with custom phrase', async () => {
-    const engine = await createWakeWordEngine('ok storycraft');
+    const engine = (await createWakeWordEngine('ok storycraft')) as EnergyThresholdWakeWordEngine;
     expect(engine.checkTranscript('ok storycraft')).toBe(true);
     expect(engine.checkTranscript('hey storycraft')).toBe(false);
   });

@@ -23,6 +23,7 @@ describe('featureFlagsSlice', () => {
     enableLoraAdapters: false,
     enablePluginSystem: false,
     enableVoiceSupport: false,
+    enableProForge: false,
   };
 
   it('should match default feature flag state on init', () => {
@@ -57,6 +58,7 @@ describe('featureFlagsSlice', () => {
       enableLoraAdapters: false,
       enablePluginSystem: false,
       enableVoiceSupport: false,
+      enableProForge: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

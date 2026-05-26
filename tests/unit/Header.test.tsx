@@ -24,12 +24,25 @@ vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 
+// QNBS-v3: Header uses useVoice; mock it to avoid voiceSlice selector reading undefined state.
+vi.mock('../../hooks/useVoice', () => ({
+  useVoice: () => ({
+    startListening: vi.fn(),
+    stopListening: vi.fn(),
+    isListening: false,
+    mode: 'idle',
+    isAvailable: false,
+  }),
+}));
+
 vi.mock('../../features/project/projectSelectors', () => ({
   selectCanUndo: () => true,
   selectCanRedo: () => false,
 }));
 
 vi.mock('redux-undo', () => ({
+  // QNBS-v3: undoable is the default export; app/store.ts calls it. Passthrough keeps module load clean.
+  default: (reducer: unknown) => reducer,
   ActionCreators: {
     undo: () => ({ type: '@@redux-undo/UNDO' }),
     redo: () => ({ type: '@@redux-undo/REDO' }),

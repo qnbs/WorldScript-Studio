@@ -184,13 +184,13 @@ export class DiagnosticAgent {
     project: { title: string; logline: string },
     wordCount: number,
     sectionCount: number,
-    _avgSectionLength: number,
+    avgSectionLength: number,
   ): DiagnosticReport {
     return {
       profile: {
         wordCount,
         sectionCount,
-        averageSectionLength,
+        averageSectionLength: avgSectionLength,
         detectedGenre: 'unknown',
         pacingEstimate: 'moderate',
       },

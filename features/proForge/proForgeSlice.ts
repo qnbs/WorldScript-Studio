@@ -412,4 +412,22 @@ const proForgeSlice = createSlice({
 });
 
 export const proForgeActions = proForgeSlice.actions;
+
+// QNBS-v3: Named exports used by proForgeOrchestrator for direct dispatch calls.
+export const {
+  startPipeline,
+  stageStarted,
+  stageCompleted,
+  stageFailed,
+  submitStageReview,
+  skipStage,
+  rollbackToStage,
+  setProForgeActive,
+  setActiveView,
+} = proForgeSlice.actions;
+
+// Aliases matching orchestrator's import convention (action-event naming)
+export const pipelineAborted = proForgeSlice.actions.abortPipeline;
+export const pipelineCompleted = proForgeSlice.actions.completePipeline;
+
 export default proForgeSlice.reducer;

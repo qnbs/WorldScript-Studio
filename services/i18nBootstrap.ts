@@ -9,8 +9,7 @@ export const I18N_BOOTSTRAP: Record<Language, Record<string, string>> = {
   },
   de: {
     'initialProject.title': 'Meine unbenannte Geschichte',
-    'initialProject.logline':
-      'Eine Reise von tausend Meilen beginnt mit einem einzigen Schritt...',
+    'initialProject.logline': 'Eine Reise von tausend Meilen beginnt mit einem einzigen Schritt...',
     'initialProject.chapter1': 'Kapitel 1',
   },
   fr: {

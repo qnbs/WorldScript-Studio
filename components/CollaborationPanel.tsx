@@ -90,7 +90,9 @@ const sanitizeRoomInput = (value: string): string =>
 
 export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClose, projectId }) => {
   const { t } = useTranslation();
-  const webrtcSignalingUrls = useAppSelector((s) => s.settings.collaboration.webrtcSignalingUrls);
+  const webrtcSignalingUrls = useAppSelector(
+    (s) => s.settings?.collaboration?.webrtcSignalingUrls ?? [],
+  );
   const panelRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [localUser, setLocalUser] = useState<CollaborationUser>(getLocalUser);

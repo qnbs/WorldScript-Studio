@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-  bootstrapTranslation,
-  isKnownPersistedTranslationKey,
-} from '../../services/i18nBootstrap';
+import { bootstrapTranslation, isKnownPersistedTranslationKey } from '../../services/i18nBootstrap';
 
 describe('i18nBootstrap', () => {
   it('returns German initial project title before bundle load', () => {
-    expect(bootstrapTranslation('de', 'initialProject.title')).toBe(
-      'Meine unbenannte Geschichte',
-    );
+    expect(bootstrapTranslation('de', 'initialProject.title')).toBe('Meine unbenannte Geschichte');
   });
 
   it('falls back to English for unknown lang keys', () => {

@@ -11,9 +11,9 @@
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_1952_keys-0EA5E9" alt="i18n DE EN FR ES IT — 1952 keys">
-  <img src="https://img.shields.io/badge/Tests-2024_%2F_178_files-22C55E" alt="2024 tests / 178 files">
-  <img src="https://img.shields.io/badge/Coverage-65.91%25_Lines_%7C_50.59%25_Branch-brightgreen" alt="Coverage">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2025_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2025 keys">
+  <img src="https://img.shields.io/badge/Tests-4044_%2F_360_files-22C55E" alt="4044 tests / 360 files">
+  <img src="https://img.shields.io/badge/Coverage-L_73%25_%7C_B_58%25_%7C_F_65%25-22C55E" alt="Coverage: Lines 73% / Branches 58% / Functions 65%">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
@@ -339,7 +339,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
 | **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 1 625 keys × 5 locales; EN fallback; `localStorage` persistence      |
-| **Testing**          | Vitest 4.x (2 024 tests / 178 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation gate          |
+| **Testing**          | Vitest 4.x (2 500+ tests / 360 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation gate          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -373,7 +373,7 @@ StoryCraft-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (2 024+ tests, 178 files)
+│   ├── unit/             # Vitest unit tests (2 500+ tests, 360 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -521,7 +521,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
 **Current test metrics (2026-05-20, v1.7.0):**
-- **2 024 unit tests** across **178 test files** — all passing
+- **2 500+ unit tests** across **360 test files** — all passing
 - Coverage: **65.91 % lines · 50.59 % branches · 56.74 % functions · 64.25 % statements**
 - Vitest thresholds: lines ≥ 63 · statements ≥ 62 · branches ≥ 48 · functions ≥ 54 — all green
 
@@ -740,7 +740,7 @@ Automatisches Fallback von Schicht zu Schicht — KI-Funktionen arbeiten immer, 
 | Dokument-Export      | docx + jszip (lazy-loaded)                                       |
 | PWA                  | Service Worker + Web App Manifest v3                             |
 | i18n                 | Eigenes Context-System; 1 625 Schlüssel × 5 Sprachen             |
-| Tests                | Vitest (2 024+ Tests / 178 Dateien) + Playwright E2E + Stryker   |
+| Tests                | Vitest (2 500+ Tests / 360 Dateien) + Playwright E2E + Stryker   |
 | Desktop              | Tauri v2 (Auto-Updater via `latest.json`)                        |
 
 ## Erste Schritte

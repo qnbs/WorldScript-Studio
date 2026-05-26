@@ -1,9 +1,59 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.17** — 2026-05-24  
+**Current version:** **v1.17** — 2026-05-26 (Coverage Sprint)  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-26 (Coverage Sprint)
+
+### Sprint: Test Coverage Expansion (2026-05-26)
+
+**Goal:** Maximize Vitest unit-test coverage toward targets Lines ≥85% / Branches ≥75% / Functions ≥80% / Statements ≥85% / Stryker ≥80%.
+
+**New test files added (122+ new test files, ~600+ new tests):**
+
+| Area | Files | Tests |
+|------|-------|-------|
+| `settings/` components | 17 | ~140 |
+| `writing/` components | 3 | ~45 |
+| `manuscript/` components | 2 | ~31 |
+| `mind-map/` components | 4 | ~45 |
+| `ui/` atoms | 2 | ~20 |
+| `services/` (ai, voice, misc) | 24 | ~180 |
+| `hooks/` | 17 | ~150 |
+| `features/` slices & types | 3 | ~33 |
+| Root-level components | 34 | ~330 |
+| `proForge/` pipeline | 10 | ~120 |
+
+**Key modules newly covered:**
+- `components/writing/AiScratchpad.tsx` — 15 tests (TTS, history nav, accept)
+- `components/writing/ContextPanel.tsx` — 8 tests (section display, notes)
+- `components/writing/ToolInputs.tsx` — 17 tests (all tool input cases)
+- `components/manuscript/InspectorPanel.tsx` — 18 tests (word count, metadata)
+- `components/manuscript/NavigatorPanel.tsx` — 13 tests (virtual scroll, drag)
+- `components/mind-map/MindMapNodeEditor.tsx` — 16 tests (shape, color, save)
+- `components/mind-map/MindMapNodeShape.tsx` — 10 tests (SVG rendering, truncation)
+- `components/mind-map/MindMapNodeEditor.tsx` — 16 tests
+- `services/ai/ecoModeService.ts` — 15 tests (battery, listeners, adaptive)
+- `services/ai/creativityTemperature.ts` — 4 tests (pure map)
+- `hooks/useCharacterInterviewsView.ts` — 13 tests
+- `components/settings/GpuMetricsPanel.tsx` — 14 tests
+- `components/settings/FeatureFlagsSection.tsx` — 7 tests
+- `components/settings/PrivacySection.tsx` — 8 tests
+- `components/settings/SettingsOverviewCard.tsx` — 10 tests
+- `components/settings/SettingsModals.tsx` — 14 tests
+- + 70 more components and services fully covered for the first time
+
+**Maintenance pass (2026-05-26 — v1.17.1):**
+- 30+ TypeScript errors fixed in ProForge pipeline test suite (15 files)
+- 5 test failures fixed in Coverage Sprint tests (NotificationsSection, Progress, ManuscriptEditor, AnalyticsBootstrap, ragPromptAssembly)
+- 16 dependencies updated: patch (ai-sdk, dompurify, tanstack/virtual, vite 8.0.14, vitest 4.1.7, storybook 10.4.1, @types/*) + minor (@google/genai 2.6.0, docx 9.7.0, vite-plugin-pwa 1.3.0, wrangler 4.94.0)
+- `pnpm audit`: 0 known vulnerabilities
+
+**Quality gate (2026-05-26):** lint ✅ (Biome — 0 errors, 895 files) · typecheck ✅ · i18n:check ✅ (2025 keys × 5 locales) · build ✅ · tests ✅ (4 044 / 360 files) · coverage ✅ Stmts 71.29% / Branches 58.79% / Funcs 65.18% / Lines 73.06% (thresholds: S≥67/B≥55/F≥60/L≥68)
 
 ---
 

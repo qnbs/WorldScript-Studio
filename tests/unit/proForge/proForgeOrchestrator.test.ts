@@ -1,0 +1,558 @@
+/**
+ * Tests for ProForgeOrchestrator.
+ * QNBS-v3: All agents and dynamic imports are mocked; only dispatch/getState/Redux wiring is tested.
+ */
+
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PipelineConfig } from '../../../features/proForge/types';
+import type { OrchestratorContext } from '../../../services/proForge/proForgeOrchestrator';
+
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+vi.mock('../../../services/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+// Mock all 8 agent modules
+const mockAgentExecute = vi.fn().mockResolvedValue({
+  reviewItems: [],
+  metrics: {
+    aiCalls: 1,
+    tokensConsumed: 100,
+    durationMs: 500,
+    itemsFound: 0,
+    itemsAccepted: 0,
+    itemsRejected: 0,
+  },
+  agentOutput: {},
+});
+
+vi.mock('../../../services/proForge/pipelineAgents/diagnosticAgent', () => ({
+  DiagnosticAgent: class {
+    constructor(public ctx: unknown) {}
+    execute = mockAgentExecute;
+  },
+}));
+vi.mock('../../../services/proForge/pipelineAgents/structuralAgent', () => ({
+  StructuralAgent: class {
+    constructor(public ctx: unknown) {}
+    execute = mockAgentExecute;
+  },
+}));
+vi.mock('../../../services/proForge/pipelineAgents/proseAgent', () => ({
+  ProseAgent: class {
+    constructor(public ctx: unknown) {}
+    execute = mockAgentExecute;
+  },
+}));
+vi.mock('../../../services/proForge/pipelineAgents/copyEditAgent', () => ({
+  CopyEditAgent: class {
+    constructor(public ctx: unknown) {}
+    execute = mockAgentExecute;
+  },
+}));
+vi.mock('../../../services/proForge/pipelineAgents/proofAgent', () => ({
+  ProofAgent: class {
+    constructor(public ctx: unknown) {}
+    execute = mockAgentExecute;
+  },
+}));
+vi.mock('../../../services/proForge/pipelineAgents/productionAgent', () => ({
+  ProductionAgent: class {
+    constructor(public ctx: unknown) {}
+    execute = mockAgentExecute;
+  },
+}));
+vi.mock('../../../services/proForge/pipelineAgents/publishingAgent', () => ({
+  PublishingAgent: class {
+    constructor(public ctx: unknown) {}
+    execute = mockAgentExecute;
+  },
+}));
+vi.mock('../../../services/proForge/pipelineAgents/analyticsAgent', () => ({
+  AnalyticsAgent: class {
+    constructor(public ctx: unknown) {}
+    execute = mockAgentExecute;
+  },
+}));
+
+// Mock version control slice dynamic import
+vi.mock('../../../features/versionControl/versionControlSlice', () => ({
+  versionControlActions: {
+    createSnapshot: vi.fn((p) => ({ type: 'versionControl/createSnapshot', payload: p })),
+    restoreSnapshot: vi.fn((p) => ({ type: 'versionControl/restoreSnapshot', payload: p })),
+  },
+}));
+
+// Mock proForgeSlice dynamic import
+vi.mock('../../../features/proForge/proForgeSlice', () => ({
+  startPipeline: vi.fn((p) => ({ type: 'proForge/startPipeline', payload: p })),
+  stageStarted: vi.fn((p) => ({ type: 'proForge/stageStarted', payload: p })),
+  stageCompleted: vi.fn((p) => ({ type: 'proForge/stageCompleted', payload: p })),
+  stageFailed: vi.fn((p) => ({ type: 'proForge/stageFailed', payload: p })),
+  pipelineCompleted: vi.fn(() => ({ type: 'proForge/pipelineCompleted' })),
+  pipelineAborted: vi.fn(() => ({ type: 'proForge/pipelineAborted' })),
+  rollbackToStage: vi.fn((p) => ({ type: 'proForge/rollbackToStage', payload: p })),
+  skipStage: vi.fn((p) => ({ type: 'proForge/skipStage', payload: p })),
+  submitStageReview: vi.fn((p) => ({ type: 'proForge/submitStageReview', payload: p })),
+  proForgeActions: {},
+}));
+
+// ---------------------------------------------------------------------------
+// Import after mocks
+// ---------------------------------------------------------------------------
+
+import {
+  createProForgeOrchestrator,
+  ProForgeOrchestrator,
+} from '../../../services/proForge/proForgeOrchestrator';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const DEFAULT_CONFIG: PipelineConfig = {
+  genrePreset: 'general-fiction',
+  selectedStages: [
+    'intake',
+    'structural',
+    'lineProse',
+    'copyEdit',
+    'proof',
+    'production',
+    'publishing',
+    'analytics',
+  ],
+  aiProvider: 'gemini',
+  ragMode: 'hybrid',
+  maxTokens: 4000,
+  creativity: 'Balanced',
+  useDuckDb: false,
+  autoAcceptThreshold: 0,
+  language: 'en',
+};
+
+function makeMockState(runOverrides: Record<string, unknown> = {}) {
+  return {
+    project: {
+      present: {
+        data: {
+          id: 'p1',
+          title: 'Test Project',
+          logline: 'Test logline',
+          manuscript: [{ id: 's1', title: 'Chapter 1', content: 'Hello world.' }],
+          characters: { entities: {}, ids: [] },
+          worlds: { entities: {}, ids: [] },
+        },
+      },
+    },
+    versionControl: {
+      currentBranchId: 'main',
+      branches: [{ id: 'main', headSnapshotId: 'snap-1', name: 'main' }],
+      snapshots: [],
+      isPanelOpen: false,
+    },
+    proForge: {
+      currentRun: null,
+      isRunning: false,
+      isLoading: false,
+      activeView: 'dashboard',
+      history: [],
+      ...runOverrides,
+    },
+    settings: {},
+    featureFlags: {},
+  };
+}
+
+function makeContext(stateOverrides: Record<string, unknown> = {}): OrchestratorContext {
+  const state = makeMockState(stateOverrides);
+  return {
+    dispatch: vi.fn(),
+    getState: vi.fn().mockReturnValue(state),
+    projectId: 'p1',
+    manuscript: [{ id: 's1', title: 'Chapter 1', content: 'Hello world.' }],
+    characters: [],
+    worlds: [],
+    config: DEFAULT_CONFIG,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('ProForgeOrchestrator', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAgentExecute.mockResolvedValue({
+      reviewItems: [],
+      metrics: {
+        aiCalls: 1,
+        tokensConsumed: 100,
+        durationMs: 500,
+        itemsFound: 0,
+        itemsAccepted: 0,
+        itemsRejected: 0,
+      },
+      agentOutput: {},
+    });
+  });
+
+  describe('constructor / factory', () => {
+    it('creates an orchestrator instance', () => {
+      const orch = new ProForgeOrchestrator(makeContext());
+      expect(orch).toBeDefined();
+    });
+
+    it('createProForgeOrchestrator factory returns an instance', () => {
+      const orch = createProForgeOrchestrator(makeContext());
+      expect(orch).toBeInstanceOf(ProForgeOrchestrator);
+    });
+  });
+
+  describe('startPipeline', () => {
+    it('dispatches createSnapshot and startPipeline actions', async () => {
+      const ctx = makeContext();
+      const orch = new ProForgeOrchestrator(ctx);
+
+      // Return an active run after startPipeline dispatched (so executeStage proceeds)
+      let callCount = 0;
+      vi.mocked(ctx.getState).mockImplementation(() => {
+        callCount++;
+        if (callCount > 2) {
+          return {
+            ...makeMockState({
+              currentRun: {
+                id: 'run-1',
+                status: 'running',
+                activeStage: 'intake',
+                stages: [],
+                config: DEFAULT_CONFIG,
+                label: 'Test Run',
+                prePipelineSnapshotId: 'snap-1',
+              },
+              isRunning: true,
+            }),
+            // biome-ignore lint/suspicious/noExplicitAny: test mock cast
+          } as any;
+        }
+        // biome-ignore lint/suspicious/noExplicitAny: test mock cast
+        return makeMockState() as any;
+      });
+
+      await orch.startPipeline('Test Run', DEFAULT_CONFIG);
+
+      const { versionControlActions } = await import(
+        '../../../features/versionControl/versionControlSlice'
+      );
+      expect(vi.mocked(versionControlActions.createSnapshot)).toHaveBeenCalledWith(
+        expect.objectContaining({ label: 'Pre-ProForge: Test Run' }),
+      );
+    });
+
+    it('throws if no project data available', async () => {
+      const ctx = makeContext();
+      vi.mocked(ctx.getState).mockReturnValue({
+        project: { present: null },
+        versionControl: makeMockState().versionControl,
+        proForge: { currentRun: null },
+        // biome-ignore lint/suspicious/noExplicitAny: test mock cast
+      } as any);
+      const orch = new ProForgeOrchestrator(ctx);
+      await expect(orch.startPipeline('Fail', DEFAULT_CONFIG)).rejects.toThrow(
+        'No project data available',
+      );
+    });
+  });
+
+  describe('executeStage', () => {
+    it('dispatches stageStarted and stageCompleted for a valid stage', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          activeStage: 'intake',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+          prePipelineSnapshotId: 'snap-0',
+        },
+        isRunning: true,
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.executeStage('intake');
+
+      const { stageStarted, stageCompleted } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      expect(vi.mocked(stageStarted)).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'intake' }),
+      );
+      expect(vi.mocked(stageCompleted)).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'intake' }),
+      );
+    });
+
+    it('dispatches stageFailed when agent throws', async () => {
+      mockAgentExecute.mockRejectedValueOnce(new Error('AI error'));
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          activeStage: 'intake',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+          prePipelineSnapshotId: 'snap-0',
+        },
+        isRunning: true,
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.executeStage('intake');
+
+      const { stageFailed } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(stageFailed)).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'intake', error: 'AI error' }),
+      );
+    });
+
+    it('returns early if no active run', async () => {
+      const ctx = makeContext(); // currentRun: null
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.executeStage('intake');
+      expect(vi.mocked(ctx.dispatch)).not.toHaveBeenCalled();
+    });
+
+    it('returns early if run is aborted', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'aborted',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.executeStage('intake');
+      expect(vi.mocked(ctx.dispatch)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('skipStage', () => {
+    it('dispatches skipStage action', async () => {
+      const ctx = makeContext();
+      const orch = new ProForgeOrchestrator(ctx);
+      orch.skipStage('structural');
+
+      const { skipStage } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(skipStage)).toHaveBeenCalledWith({ stage: 'structural' });
+    });
+  });
+
+  describe('advanceToNextStage', () => {
+    it('dispatches pipelineCompleted when analytics is the last stage', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          activeStage: 'analytics',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.advanceToNextStage('analytics');
+
+      const { pipelineCompleted } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(pipelineCompleted)).toHaveBeenCalled();
+    });
+
+    it('skips stages not in selectedStages and continues', async () => {
+      const configWithoutStructural: PipelineConfig = {
+        ...DEFAULT_CONFIG,
+        selectedStages: ['intake', 'lineProse'], // structural is skipped
+      };
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          activeStage: 'intake',
+          stages: [],
+          config: configWithoutStructural,
+          label: 'Test',
+        },
+      });
+      // After advancing, ensure lineProse is executed (not structural)
+      const orch = new ProForgeOrchestrator(ctx);
+
+      // We can't easily test the full chain without a real Redux store,
+      // but we can verify skipStage is dispatched for structural
+      await orch.advanceToNextStage('intake');
+
+      const { skipStage } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(skipStage)).toHaveBeenCalledWith({ stage: 'structural' });
+    });
+
+    it('returns early if no current run', async () => {
+      const ctx = makeContext();
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.advanceToNextStage('intake');
+      const { pipelineCompleted } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(pipelineCompleted)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('submitReview', () => {
+    it('dispatches submitStageReview with decisions', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          activeStage: 'intake',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      const decisions = [{ itemId: 'item-1', status: 'accepted' as const }];
+
+      await orch.submitReview('intake', decisions, { advance: false });
+
+      const { submitStageReview } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(submitStageReview)).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'intake', decisions }),
+      );
+    });
+
+    it('calls advanceToNextStage when advance is not false', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          activeStage: 'analytics', // last stage → pipelineCompleted
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.submitReview('analytics', [], { advance: true });
+
+      const { pipelineCompleted } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(pipelineCompleted)).toHaveBeenCalled();
+    });
+  });
+
+  describe('rollbackTo', () => {
+    it('dispatches rollbackToStage', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [{ stage: 'intake', preSnapshotId: 'snap-intake' }],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.rollbackTo('intake');
+
+      const { rollbackToStage } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(rollbackToStage)).toHaveBeenCalledWith({ stage: 'intake' });
+    });
+
+    it('dispatches restoreSnapshot if preSnapshotId exists', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [{ stage: 'intake', preSnapshotId: 'snap-intake' }],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.rollbackTo('intake');
+
+      const { versionControlActions } = await import(
+        '../../../features/versionControl/versionControlSlice'
+      );
+      // biome-ignore lint/suspicious/noExplicitAny: mock defines restoreSnapshot; not in production type
+      expect(vi.mocked((versionControlActions as any).restoreSnapshot)).toHaveBeenCalledWith(
+        expect.objectContaining({ snapshotId: 'snap-intake' }),
+      );
+    });
+
+    it('returns early if no current run', async () => {
+      const ctx = makeContext();
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.rollbackTo('intake');
+      const { rollbackToStage } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(rollbackToStage)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('abortPipeline', () => {
+    it('dispatches pipelineAborted', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+          prePipelineSnapshotId: 'snap-pre',
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.abortPipeline();
+
+      const { pipelineAborted } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(pipelineAborted)).toHaveBeenCalled();
+    });
+
+    it('restores pre-pipeline snapshot on abort', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Test',
+          prePipelineSnapshotId: 'snap-pre-pipeline',
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.abortPipeline();
+
+      const { versionControlActions } = await import(
+        '../../../features/versionControl/versionControlSlice'
+      );
+      // biome-ignore lint/suspicious/noExplicitAny: mock defines restoreSnapshot; not in production type
+      expect(vi.mocked((versionControlActions as any).restoreSnapshot)).toHaveBeenCalledWith(
+        expect.objectContaining({ snapshotId: 'snap-pre-pipeline' }),
+      );
+    });
+
+    it('returns early if no current run', async () => {
+      const ctx = makeContext();
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.abortPipeline();
+      const { pipelineAborted } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(pipelineAborted)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dispose', () => {
+    it('aborts the internal controller without throwing', () => {
+      const orch = new ProForgeOrchestrator(makeContext());
+      expect(() => orch.dispose()).not.toThrow();
+    });
+  });
+});

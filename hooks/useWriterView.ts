@@ -20,9 +20,11 @@ export const useWriterView = () => {
   const project = useAppSelector(selectProjectData);
   const characters = useAppSelector(selectAllCharacters);
   const manuscript = useAppSelector(selectManuscript);
-  const aiProvider = useAppSelector((state) => state.settings.advancedAi.provider);
-  const ragMode = useAppSelector((state) => state.settings.advancedAi.ragMode ?? 'hybrid');
-  const duckDbEnabled = useAppSelector((state) => state.featureFlags.enableDuckDbAnalytics);
+  const aiProvider = useAppSelector((state) => state.settings?.advancedAi?.provider ?? undefined);
+  const ragMode = useAppSelector((state) => state.settings?.advancedAi?.ragMode ?? 'hybrid');
+  const duckDbEnabled = useAppSelector(
+    (state) => state.featureFlags?.enableDuckDbAnalytics ?? false,
+  );
   const writerState = useAppSelectorShallow((state) => state.writer);
 
   const {
@@ -38,7 +40,6 @@ export const useWriterView = () => {
     activeHistoryIndex,
   } = writerState;
 
-  // Ref to hold the abort controller for the current generation request
   const abortControllerRef = useRef<AbortController | null>(null);
   const fullStreamRef = useRef('');
 
@@ -54,21 +55,18 @@ export const useWriterView = () => {
   });
 
   const selectedSectionId = useMemo(() => {
-    // If there's a valid selection in state, use it. Otherwise, default to the first section.
     return writerState.selectedSectionId &&
       manuscript.some((s) => s.id === writerState.selectedSectionId)
       ? writerState.selectedSectionId
       : manuscript[0]?.id || null;
   }, [writerState.selectedSectionId, manuscript]);
 
-  // Effect to dispatch the default selection if it's not set
   useEffect(() => {
     if (selectedSectionId && !writerState.selectedSectionId) {
       dispatch(writerActions.setSelectedSectionId(selectedSectionId));
     }
   }, [selectedSectionId, writerState.selectedSectionId, dispatch]);
 
-  // Cleanup function to abort any pending requests when unmounting or changing view
   useEffect(() => {
     return () => {
       stopOrchestrationStreaming();
@@ -108,7 +106,6 @@ export const useWriterView = () => {
       case 'improve':
         return `Improve the following text to be more ${style || 'engaging'}:\n\n"${selection.text}"`;
       case 'changeTone': {
-        // The tone value is now directly used (either preset or custom)
         const selectedTone = tone || 'different';
         return `Rewrite the following text in a ${selectedTone} tone:\n\n"${selection.text}"`;
       }
@@ -123,9 +120,7 @@ export const useWriterView = () => {
       case 'synopsis':
         return `Write a concise, one-paragraph synopsis of the following text from a story. Capture the key events, character actions, and tone of the passage.\n\nText:\n"""\n${content}\n"""\n`;
       case 'grammarCheck':
-        // Deutsch/Englisch automatisch, Prompt für Korrektur und Stilverbesserung
         return `Correct grammar, style, and repetitions in the following text. Keep the original language (German/English). Provide only the improved text without further explanations.\n\nText:\n"""\n${selection.text || content}\n"""\n`;
-
       case 'critic':
         return `Act as a professional literary critic and editor. Analyze the following text for writing quality, character development, pacing, dialogue, and overall effectiveness. Give specific feedback.
 
@@ -134,7 +129,6 @@ Text to analyze:
 ${content}
 """
 `;
-
       case 'plotholes':
         return `Act as a detail-oriented story editor. Carefully analyze the following text for any logical inconsistencies, plot holes, continuity errors, or unresolved narrative threads. Be specific.
 
@@ -143,9 +137,7 @@ Text to analyze:
 ${content}
 """
 `;
-
       case 'consistency': {
-        // RAG context building
         const dChars = JSON.stringify(project.characters || []).substring(0, 50000);
         const dWorlds = JSON.stringify(project.worlds || []).substring(0, 50000);
         return `Check for contradictions against the established lore. Here is the universe lore:
@@ -162,7 +154,6 @@ ${content}
 """
 `;
       }
-
       case 'imagePrompt': {
         const sceneText = selection.text || content.substring(0, 2000);
         return `You are an expert AI image prompt engineer for Midjourney and DALL·E 3.
@@ -185,7 +176,6 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 - Key visual details of characters and environment
 - Camera perspective if relevant`;
       }
-
       default:
         return '';
     }
@@ -203,7 +193,6 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
   ]);
 
   const handleGenerate = useCallback(async () => {
-    // If already loading, checking explicitly to act as a "Stop" toggle
     if (isLoading) {
       stopOrchestrationStreaming();
       if (abortControllerRef.current) {
@@ -258,10 +247,9 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     }
 
     dispatch(writerActions.startLoading());
-    dispatch(writerActions.clearResultStream()); // Live-Preview reset
+    dispatch(writerActions.clearResultStream());
     fullStreamRef.current = '';
-
-    dispatch(writerActions.addHistory('')); // Add empty item to start
+    dispatch(writerActions.addHistory(''));
 
     const handleFailure = (err: unknown) => {
       const isAbort =
@@ -279,7 +267,8 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       }
     };
 
-    if (isOrchestrationReadyProvider(aiProvider)) {
+    const orchestrationReady = isOrchestrationReadyProvider(aiProvider);
+    if (orchestrationReady) {
       void runCompletion(fullPrompt)
         .catch(handleFailure)
         .finally(() => {
@@ -297,13 +286,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       dispatch(writerActions.appendResultStream(chunk));
     };
 
-    dispatch(
-      streamGenerationThunk({
-        prompt: fullPrompt,
-        lang: language,
-        onChunk,
-      }),
-    )
+    dispatch(streamGenerationThunk({ prompt: fullPrompt, lang: language, onChunk }))
       .unwrap()
       .catch(handleFailure)
       .finally(() => {

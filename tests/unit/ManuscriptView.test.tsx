@@ -6,6 +6,24 @@ import { ManuscriptView } from '../../components/ManuscriptView';
 // Mocks
 // ---------------------------------------------------------------------------
 
+// QNBS-v3: jsdom has 0-height containers so useVirtualizer renders no items.
+// Return all items so section titles appear in the DOM.
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, i) => ({
+        index: i,
+        start: i * 40,
+        size: 40,
+        key: i,
+        lane: 0,
+      })),
+    getTotalSize: () => count * 40,
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    measureElement: vi.fn((_el: any) => {}),
+  }),
+}));
+
 const mockProjectData = {
   title: 'Test Story',
   logline: 'A test logline',
@@ -67,8 +85,25 @@ vi.mock('../../app/hooks', () => ({
   useAppSelector: vi.fn((selector: (s: unknown) => unknown) =>
     selector({
       settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 },
-      featureFlags: { enableCompileWizard: false, enableManuscriptResearchSplit: false },
+      featureFlags: {
+        enableCompileWizard: false,
+        enableManuscriptResearchSplit: false,
+        enableBinderResearch: false,
+        enableVoiceSupport: false,
+      },
       versionControl: { snapshots: [], currentBranchId: 'main', branches: [], isPanelOpen: false },
+      voice: {
+        dictationActive: false,
+        transcript: '',
+        mode: 'inactive',
+        error: null,
+        processing: false,
+        sttStatus: 'idle',
+        ttsStatus: 'idle',
+        vadStatus: 'idle',
+        wakeWordStatus: 'idle',
+        microphonePermission: 'unknown',
+      },
     }),
   ),
   useAppSelectorShallow: vi.fn(),

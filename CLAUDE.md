@@ -66,7 +66,7 @@ components/       → View components; components/ui/ = design-system atoms (But
                      components/manuscript/ = ManuscriptView sub-components (NavigatorPanel, ManuscriptEditor, ResizeHandle)
 contexts/         → React context providers — one per major view + I18nContext + CommandExecutorContext
 features/         → Redux slices: project, settings, status, writer, versionControl, featureFlags,
-                     plotBoard, sceneComments, progressTracker, analytics
+                     plotBoard, sceneComments, progressTracker, analytics, proForge
 hooks/            → View business logic (use*View.ts naming); useGlobalKeyboardShortcuts here too
 services/         → External adapters; notable sub-dirs:
                      ai/          Vercel AI SDK orchestration layer (Strangler pattern over aiProviderService):
@@ -83,6 +83,10 @@ services/         → External adapters; notable sub-dirs:
                                    duckdbListenerLoader, ragVectorMigration)
                      help/        (helpCatalog.ts — 50+ articles, helpSearch.ts, helpDocRetrieval.ts)
                      keyboard/    (shortcut normalization, conflict detection)
+                     proForge/    (proForgeOrchestrator.ts, proForgeMemoryBank.ts,
+                                   pipelineAgents/ — 8 agents: diagnosticAgent, structuralAgent,
+                                   proseAgent, copyEditAgent, proofAgent, productionAgent,
+                                   publishingAgent, analyticsAgent; pipelineOutput/, pipelinePrompts/, pipelineTools/)
                      settingsExchange/
 packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui
 locales/          → i18n source JSON (de/en/es/fr/it × 15 modules); runtime: public/locales/<lang>/bundle.json
@@ -96,7 +100,7 @@ scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, g
 
 ### State Management
 
-Redux Toolkit with feature-sliced slices: `features/project/`, `features/settings/`, `features/status/`, `features/writer/`, `features/versionControl/`, `features/featureFlags/`. The `project` slice is wrapped with `redux-undo` (100-step history). Side effects (auto-save, Codex extraction, DuckDB dual-write) run in `app/listenerMiddleware.ts`, not in components or hooks.
+Redux Toolkit with feature-sliced slices: `features/project/`, `features/settings/`, `features/status/`, `features/writer/`, `features/versionControl/`, `features/featureFlags/`, `features/proForge/`. The `project` slice is wrapped with `redux-undo` (100-step history). Side effects (auto-save, Codex extraction, DuckDB dual-write) run in `app/listenerMiddleware.ts`, not in components or hooks.
 
 Use typed hooks everywhere: `useAppDispatch()`, `useAppSelector()`, `useAppSelectorShallow()`.
 
@@ -182,7 +186,9 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 ### Feature Flags
 
-Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (12 flags, all off by default). UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
+Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (13 flags, all off by default). UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
+
+Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProForge pipeline — off by default; gates the entire pipeline view in WriterView).
 
 ### Command Center & shortcuts
 
@@ -244,6 +250,26 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 **Plot Board AI:** `features/project/thunks/plotBoardAiThunks.ts` — `suggestNextBeatThunk` calls `assembleRAGPrompt` then dispatches to AI. Hook: `hooks/usePlotBoardAi.ts`. Modal shows suggested beat with accept/reject.
 
 **PlotMinimap:** `components/scene-board/PlotMinimap.tsx` — viewport overview overlay. `plotLayoutUtils.ts` provides grid-snap helpers.
+
+### ProForge Pipeline
+
+**Overview:** 8-stage agentic manuscript editing pipeline with Human-in-the-Loop gates. Gated behind `featureFlags.enableProForge` (off by default). Full docs: `docs/PROFORGE-PIPELINE.md`.
+
+**Stage sequence:** `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Each stage supports proceed / retry / skip / abort / rollback. Stages pause at `awaitingReview` — the manuscript is **never auto-modified** without explicit user approval.
+
+**Redux slice:** `features/proForge/proForgeSlice.ts` — root key `proForge`. NOT wrapped with `redux-undo`. Actions: `stageStarted`, `stageCompleted`, `stageAwaitingReview`, `submitStageReview`, `skipStage`, `rollbackToStage`, `pipelineAborted`, `pipelineCompleted`.
+
+**Types:** `features/proForge/types.ts` — `PipelineStage`, `PipelineConfig`, `PipelineRun`, `StageResult`, `ReviewItem`, `ReviewItemStatus`, and all per-stage output interfaces (`DiagnosticReport`, `StructuralEditPlan`, `ProseEditBatch`, `CopyEditPlan`, `QualityGateReport`, `ProductionManifest`, `PublishingPackage`, `PipelineAnalyticsReport`).
+
+**Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — `createProForgeOrchestrator({dispatch, getState, projectId, manuscript, characters, worlds, config})`. Agents are lazy-loaded per stage to avoid circular deps. Call via `hooks/useProForgeOrchestrator.ts` (never instantiate directly in components).
+
+**Agents** (`services/proForge/pipelineAgents/`): one file per stage — `diagnosticAgent.ts`, `structuralAgent.ts`, `proseAgent.ts`, `copyEditAgent.ts`, `proofAgent.ts`, `productionAgent.ts`, `publishingAgent.ts`, `analyticsAgent.ts`. Each exports a class with a `run(ctx)` method returning its stage-specific output type.
+
+**Memory Bank:** `services/proForge/proForgeMemoryBank.ts` — IDB store `proforge-memory-bank` for cross-agent persistent context (lore, style, feedback). Accessed by agents, not by UI components directly.
+
+**View pattern:** `contexts/ProForgeViewContext.ts` + `hooks/useProForgeOrchestrator.ts` + `components/proForge/` (ProForgeDashboard, PipelineProgressPanel, PipelineReviewPanel). The context passes the full `useProForgeOrchestrator` return to sub-components; use `useProForgeViewContext()` to consume.
+
+**`PipelineConfig` key fields:** `genrePreset`, `selectedStages`, `aiProvider`, `ragMode`, `maxTokens`, `creativity`, `useDuckDb`, `autoAcceptThreshold` (0 = never auto-accept), `language`.
 
 ### Scene-level services
 
