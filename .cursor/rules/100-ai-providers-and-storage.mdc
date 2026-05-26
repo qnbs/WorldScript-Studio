@@ -28,7 +28,8 @@ alwaysApply: false
 
 - Zugriff über `dbService.ts`, `storageService.ts`, **`storageBackend.ts`** (`saveEnvelopeFromProjectData` — kein roher Cast im Listener).
 - Record-Keys/Migrationen nicht willkürlich umbenennen; Scene-Revisions → `sceneRevisionService.ts` (eigener Store).
-- Kollaboration: nur **eine** CRDT-Schicht (`collaborationService.ts` + Yjs).
+- `checkStorageHealth()` in `services/dbInitialization.ts` — liefert `StorageHealth`; wird beim App-Start ausgeführt (Low-Storage-Toast).
+- Kollaboration: nur **eine** CRDT-Schicht (`collaborationService.ts` + Yjs). RTCDataChannel-Verschlüsselung läuft über den y-webrtc-Patch (`patches/y-webrtc@10.3.0.patch`) — nicht erneut implementieren.
 
 ## Privacy
 

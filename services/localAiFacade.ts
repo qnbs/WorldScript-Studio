@@ -1,9 +1,12 @@
 import {
+  detectWebGpuSupport,
   type LocalAiResponse,
   runLocalTextGeneration,
+  surrenderLeadership,
   type WebLlmProgressReport,
   WorkerBus,
 } from '@domain/ai-core';
+import { gpuResourceManager } from './ai/gpuResourceManager';
 import { logger } from './logger';
 
 const localWorkerBus = new WorkerBus();
@@ -38,6 +41,11 @@ export async function generateLocalText(
     return { layer: 'heuristic', text: 'No local task available.' };
   }
 
+  // QNBS-v3: Acquire GPU mutex before WebLLM/ONNX-WebGPU init to prevent VRAM races across
+  //          concurrent callers (e.g. ProForge agents running multiple pipeline stages).
+  const needsGpu = detectWebGpuSupport();
+  if (needsGpu) await gpuResourceManager.acquireGpu('webllm', 'high');
+
   const startedAt = performance.now();
   try {
     const result = await runLocalTextGeneration(prompt, modelId, onProgress);
@@ -46,6 +54,11 @@ export async function generateLocalText(
   } catch {
     localWorkerBus.recordResult(performance.now() - startedAt, false);
     return { layer: 'heuristic', text: 'Heuristic fallback response' };
+  } finally {
+    // QNBS-v3: Always release — gpuResourceManager has a 30s auto-release safety net too.
+    if (needsGpu) gpuResourceManager.releaseGpu('webllm');
+    // QNBS-v3: Surrender tab leader heartbeat so next inference cycle elects fairly.
+    surrenderLeadership();
   }
 }
 

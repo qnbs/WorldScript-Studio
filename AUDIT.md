@@ -1,9 +1,42 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.17** — 2026-05-26 (Coverage Sprint)  
+**Current version:** **v1.17.2** — 2026-05-26 (Local Inference Robustness Sprint)  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)
+
+### Sprint: Local Inference Robustness (2026-05-26)
+
+**Goal:** Harden the local AI stack (WebLLM / Transformers.js / RAG) against multi-tab GPU contention, stale workers, redundant re-embedding, and missing cloud-AI policy enforcement.
+
+**Changes shipped:**
+
+| Area | File | What changed |
+|------|------|--------------|
+| Tab leader | `packages/ai-core/src/tabLeaderElection.ts` | localStorage heartbeat (5s refresh, 12s stale) for fast-path leader detection across reloads; `surrenderLeadership()` export; default election timeout 280→800ms |
+| Tab leader | `packages/ai-core/src/index.ts` | Re-exports `surrenderLeadership` |
+| Embedding cache | `services/ai/localEmbeddingService.ts` | LRU in-memory cache (1 000 entries, ~400ms hit savings per RAG query); worker health-check ping/pong (30s interval, 5s timeout → auto-restart) |
+| GPU mutex | `services/localAiFacade.ts` | Acquires `gpuResourceManager` GPU slot before WebLLM/ONNX-WebGPU init; always releases + calls `surrenderLeadership()` in `finally` |
+| Worker | `workers/inference.worker.ts` | `WORKER_PING` → `WORKER_PONG` handler for health-check protocol |
+| AI policy | `features/project/aiThunkUtils.ts` | `assertCloudAiAllowedSync` called at thunk entry — one enforcement point instead of per-caller |
+| RAG stability | `services/localRagService.ts` | `indexedAt` changed from `now - offset` to stable `(i+1)*1000` — consistent across re-indexing runs |
+| Turbo | `turbo.json` | Added `mutation` pipeline task (no cache) |
+| Docs | `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/` | Updated architecture docs to reflect ProForge, Voice, Feature Flags, RTCDataChannel patch, checkStorageHealth, Tauri CSP |
+
+**Tests added (32 new tests across 4 files):**
+
+| File | New tests |
+|------|-----------|
+| `tests/unit/tabLeaderElection.test.ts` | +6 (heartbeat fast-path, stale detection, `surrenderLeadership` cleanup) |
+| `tests/unit/inferenceWorker.test.ts` | +1 (WORKER_PING → WORKER_PONG) |
+| `tests/unit/localAiFacade.test.ts` | +3 (GPU acquire/release, no-GPU skip, error path) |
+| `tests/unit/aiThunkUtils.test.ts` | +3 (policy call args, policy rejection, payload creator not called on block) |
+
+**Quality gate (2026-05-26 — v1.17.2):** lint ✅ (Biome — 0 errors, 895 files) · typecheck ✅ · tests ✅ (32 new, all suites green)
 
 ---
 

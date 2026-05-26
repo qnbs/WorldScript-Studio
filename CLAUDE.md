@@ -15,7 +15,8 @@ pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # TypeScript type check (tsc --noEmit)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
-pnpm run test:coverage # Vitest with V8 coverage (see thresholds in vitest.config.ts)
+pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 63%, branches 55%, functions 54%, statements 62%)
+pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
 pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
 pnpm run test:e2e      # Playwright E2E tests (CI=true required; E2E are CI-only)
@@ -134,11 +135,17 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 **Tailwind utilities:** `packages/ui/tailwind-preset.ts` registers `w/h-icon-sc-*`, `text-sc-*`, `rounded-sc-*`, `duration-sc-*`, `ease-sc-*` utilities. Prefer these over one-off `w-4`/`text-sm` for atoms.
 
+**Storybook:** New `components/ui/` primitives require a `.stories.tsx` file with `addon-a11y` checks passing (`pnpm run storybook`). Storybook test-runner (`pnpm run test:storybook`) runs against the built Storybook in CI.
+
+**Keyboard on non-button elements:** Use `useKeyWithClickEvents` rather than adding raw `onKeyDown` alongside `onClick`. Use `useButtonType` on custom button-like components to set the correct `type` attribute.
+
 **Accessibility hooks:** `useAnnounce()` from `LiveRegionContext` — signature is `announce(message: string, priority?: 'polite' | 'assertive')`. The second argument is a **string enum**, not an object. `useFocusTrap` re-queries focusable elements on every Tab press (live DOM query, not a cached list).
 
 **Container queries:** Resizable panels (Navigator, Inspector, WriterView sidebars) set `containerType: 'inline-size'` via inline style. Use `@container` CSS queries or the Tailwind `@container` variant for responsive panel content.
 
 **Tauri build isolation:** `vite.config.ts` uses `external: [/^@tauri-apps\//]` (regex) to exclude all Tauri packages from the web build. When adding new Tauri plugin imports to `services/tauriRuntime.ts`, the regex already covers them — do not add to the explicit list.
+
+**Tauri CSP:** When adding a new external endpoint (AI provider, LanguageTool, WebRTC signaling, etc.), extend `connect-src` in `src-tauri/tauri.conf.json`. Web `fetch` alone is not enough — the Tauri CSP is the gate for desktop.
 
 ### AI Services
 
@@ -176,9 +183,11 @@ Client-side env vars must use the `VITE_*` prefix (from `.env` / `.env.local`, w
 
 `dbService.ts` wraps **dual** IndexedDB databases (`storycraft-state-db` for Redux state, `storycraft-data-db` for assets/blobs) with LZ-String compression (payloads > 10 KB), AES-256-GCM encryption (API keys), and legacy migration via `services/dbMigration.ts`. `storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Data access must go through `dbService` or thunks — never raw IndexedDB calls. Never use `localStorage` for sensitive data.
 
+`services/dbInitialization.ts` exports `checkStorageHealth()` — proactive low-storage warning that runs on app init. Returns a `StorageHealth` object; a low-storage event is surfaced via a toast rather than blocking writes.
+
 ### Collaboration
 
-Real-time P2P editing via Yjs + y-webrtc (`services/collaborationService.ts`). E2E encryption: AES-256-GCM with PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`. Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
+Real-time P2P editing via Yjs + y-webrtc (`services/collaborationService.ts`). Signaling-channel E2E encryption: AES-256-GCM with PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`. **RTCDataChannel in-flight E2E encryption** is shipped via a patched y-webrtc (`patches/y-webrtc@10.3.0.patch` applied via `pnpm.patchedDependencies`). Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
 
 ### Code Splitting
 
@@ -186,9 +195,9 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 ### Feature Flags
 
-Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (13 flags, all off by default). UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
+Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (19 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
 
-Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProForge pipeline — off by default; gates the entire pipeline view in WriterView).
+Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProForge pipeline — off by default; gates the entire pipeline view in WriterView). Stub/future flags (off by default): `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableRtlLayout`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
 
 ### Command Center & shortcuts
 
@@ -203,6 +212,10 @@ Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProF
 Custom React Context in `I18nContext.tsx` — not i18next. Locale files exist for de, en, es, fr, it (15 modules merged into one **`public/locales/<lang>/bundle.json`** per language — rebuilt by **`pnpm run i18n:bundle`** or automatically via **`pnpm run i18n:check`** / **`prebuild`** / **`predev`**). The in-app selector exposes **de**, **en**, **fr**, **es**, and **it**. All user-facing strings must use `t('key.path')` from `useTranslation()` — no hardcoded text. New keys: add to **all five** locale trees (`node scripts/check-i18n-keys.mjs --fix` for parity), then run **`pnpm run i18n:bundle`**.
 
 **Cold-start repair:** `services/i18nBootstrap.ts` runs a synchronous locale bootstrap on app init; `services/projectI18nRepair.ts` repairs any project with raw i18n keys stored as data (e.g. `initialProject.title`). Both run automatically via `App.tsx` — do not bypass.
+
+**Terminology glossary** (use these terms consistently in UI copy and keys): *Manuscript* (the document), *Outline*, *Template*, *Snapshot* (auto-save point) vs. *Scene Revision* (user-saved via `sceneRevisionService`), *Writing Session*, *Subplot*, *Connection* (plot board edge). AI is always framed as a **Co-Pilot**, not a ghostwriter. See `docs/BEST-PRACTICES.md` for the full glossary.
+
+**Community templates:** canonical English source in `community-templates/index.json`, mirrored to `public/community-templates/`. Validation via Zod in `fetchCommunityTemplates`. Run `pnpm run content:guard` before committing any template changes (rejects embedded secrets and `eval`-like payloads).
 
 ### Code comment convention (QNBS-v3)
 
@@ -220,6 +233,8 @@ Skip the annotation for pure formatting, lockfile updates, or generated artefact
 ## Documentation index
 
 All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**. Sprint notes: `docs/SPRINT-V1.8.md`, `docs/SPRINT-V1.9.md`, `docs/SPRINT-V1.10.md`, `docs/SPRINT-V1.16.md` (design system completion). Local CI: `infra/low-end-ci/DAILY-DRIVER.md`.
+
+**Before large or cross-cutting changes:** read [`ROADMAP.md`](ROADMAP.md) (planned features + priorities), [`AUDIT.md`](AUDIT.md) (follow-ups, metrics), and [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (architecture decisions, content/CI guidance). After merging, update README.md badges and the AUDIT.md quality-gate line with CI-reported numbers if the maintainer requests it.
 
 ## Key Constraints
 
@@ -329,7 +344,7 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - `workers/inference.worker.ts:50` — `@ts-expect-error` on `@xenova/transformers` dynamic import (lives in `packages/ai-core`; Vite resolves at build time but `tsc` can't see it from root)
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 token migration verified in production (all intentional vars documented above)
 - **Voice v1.2 planned:** WASM engines (Whisper.cpp STT, Kokoro/Piper TTS, Silero VAD, Sherpa-ONNX wake-word); semantic intent matching (MiniLM embeddings); local LLM fallback for complex commands; E2E voice tests (Playwright)
-- **v2.0 open:** Full RTCDataChannel in-flight E2E encryption (y-webrtc patch); RTL language support; LoRA fine-tuning; Cloud-Sync
+- **v2.0 open (stubs behind feature flags):** RTL language support (`enableRtlLayout`); LoRA adapter inference (`enableLoraAdapters`); Cloud-Sync Cloudflare R2 adapter (`enableCloudSync`); Plugin system loader (`enablePluginSystem`). RTCDataChannel in-flight E2E encryption is **shipped** (y-webrtc patch, v1.17.0).
 
 ## graphify
 

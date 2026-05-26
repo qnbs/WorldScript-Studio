@@ -20,6 +20,11 @@
     "test": {
       "dependsOn": ["^test"],
       "outputs": ["coverage/**"]
+    },
+    "mutation": {
+      "dependsOn": ["^build"],
+      "outputs": ["reports/mutation/**"],
+      "cache": false
     }
   }
 }

@@ -57,7 +57,13 @@ types.ts          → Core shared interfaces and types
 
 6. **Code Splitting:** All views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy dependencies (Konva, Leaflet, react-force-graph) are in separate Vite manual chunks. The export stack also uses dynamic imports for `docx` and `jszip` so large document libraries are only loaded when export actions are executed.
 
-7. **Command Center:** Palette commands live in **`services/commands/`** (i18n keys, fuzzy search, recent/pinned). **`CommandExecutorProvider`** exposes execution for Help „Try it“ (`tryActionId`) and toasts with **`commandId`**. **`useGlobalKeyboardShortcuts`** reads Redux shortcut bindings; **`app/transientUiStore`** toggles palette visibility.
+7. **Command Center:** Palette commands live in **`services/commands/`** (i18n keys, fuzzy search, recent/pinned). **`CommandExecutorProvider`** exposes execution for Help „Try it” (`tryActionId`) and toasts with **`commandId`**. **`useGlobalKeyboardShortcuts`** reads Redux shortcut bindings; **`app/transientUiStore`** toggles palette visibility.
+
+8. **ProForge Pipeline:** 8-stage agentic manuscript editing pipeline gated behind `featureFlags.enableProForge` (off by default). Stage sequence: `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Manuscripts are **never auto-modified** — each stage pauses at `awaitingReview`. Orchestrator: `services/proForge/proForgeOrchestrator.ts`; Redux slice: `features/proForge/proForgeSlice.ts`; UI: `components/proForge/` (ProForgeDashboard, PipelineProgressPanel, PipelineReviewPanel); docs: `docs/PROFORGE-PIPELINE.md`.
+
+9. **Voice Full Support:** Gated behind `featureFlags.enableVoiceSupport` + `settings.voice.enabled`. Abstract engine pattern in `services/voice/voiceTypes.ts` (SttEngine, TtsEngine, VadEngine, WakeWordEngine, IntentEngine). `VoiceCommandService` singleton manages state machine (idle → listening → processing → speaking). Web Speech API fallbacks require zero downloads. Hooks: `useVoice`, `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation`.
+
+10. **Feature Flags:** 19 flags in `features/featureFlags/featureFlagsSlice.ts`. Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default off. Do not use scattered `if (true)` hacks — all experimental features must go through a flag.
 
 ## Coding Standards
 
@@ -134,8 +140,10 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - **`StorageBackend` parity** — tighten typings across `dbService` / `fileSystemService` / `storageService`
 - `components/AdvancedImportExport.tsx` — some export paths remain Tauri-centric; keep browser fallbacks explicit
 - `app/listenerMiddleware.ts` — occasional TypeScript friction with redux-undo `StateWithHistory`
-- Several hooks still use `as any` casts that should be replaced with proper generics
-- `hooks/useExportView.ts` / `components/ExportView.tsx` — keep `docx` / `jszip` lazy for bundle size
+- `workers/inference.worker.ts:50` — `@ts-expect-error` on `@xenova/transformers` dynamic import (Vite resolves at build, `tsc` cannot)
+- **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 token migration verified in production
+- **v2.0 stubs behind feature flags:** RTL layout (`enableRtlLayout`), Cloud-Sync R2 adapter (`enableCloudSync`), LoRA adapter inference (`enableLoraAdapters`), Plugin system loader (`enablePluginSystem`)
+- RTCDataChannel in-flight E2E encryption is **shipped** (y-webrtc patch v1.17.0) — no longer open
 
 ## Commands
 
@@ -153,6 +161,14 @@ pnpm run test:coverage # Vitest with V8 coverage
 pnpm run test:e2e     # Playwright E2E (requires CI=true per package.json scripts)
 pnpm run storybook    # Storybook on port 6006
 ```
+
+## Storage Health
+
+`services/dbInitialization.ts` exports `checkStorageHealth()` — proactive low-storage warning that runs on app init and surfaces a toast. Returns `StorageHealth`; does not block writes.
+
+## Collaboration
+
+Real-time P2P via Yjs + y-webrtc (`services/collaborationService.ts`). **RTCDataChannel in-flight E2E encryption** is shipped via `patches/y-webrtc@10.3.0.patch` (v1.17.0). Signaling-channel encryption: AES-256-GCM / PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`.
 
 ## graphify
 
