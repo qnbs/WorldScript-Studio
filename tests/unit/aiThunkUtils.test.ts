@@ -1,6 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import featureFlagsReducer from '../../features/featureFlags/featureFlagsSlice';
 import { createDeduplicatedThunk } from '../../features/project/aiThunkUtils';
 import projectReducer from '../../features/project/projectSlice';
@@ -8,6 +8,13 @@ import settingsReducer from '../../features/settings/settingsSlice';
 import statusReducer from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer from '../../features/writer/writerSlice';
+
+// QNBS-v3: vi.hoisted() ensures the mock fn is initialized before vi.mock() factory runs,
+//          since vi.mock() is hoisted to the top of the file by Vitest's transformer.
+const mockAssertCloudAiAllowedSync = vi.hoisted(() => vi.fn());
+vi.mock('../../services/ai/aiPolicy', () => ({
+  assertCloudAiAllowedSync: mockAssertCloudAiAllowedSync,
+}));
 
 function makeStore() {
   return configureStore({
@@ -23,6 +30,10 @@ function makeStore() {
 }
 
 describe('createDeduplicatedThunk', () => {
+  beforeEach(() => {
+    mockAssertCloudAiAllowedSync.mockReset();
+  });
+
   it('executes the payload creator and returns its result', async () => {
     const thunk = createDeduplicatedThunk<string>('test/simple', async (_arg, api) => {
       api.registerDuplicateRequest('prompt', 'view');
@@ -78,5 +89,57 @@ describe('createDeduplicatedThunk', () => {
     const result = await store.dispatch(thunk());
 
     expect(result.type).toBe('test/error/rejected');
+  });
+
+  describe('cloud AI policy enforcement', () => {
+    it('calls assertCloudAiAllowedSync with the current provider and privacy settings', async () => {
+      const thunk = createDeduplicatedThunk<string>('test/policy-call', async (_arg, api) => {
+        api.registerDuplicateRequest('prompt', 'view');
+        return 'result';
+      });
+
+      const store = makeStore();
+      await store.dispatch(thunk());
+
+      // Default settings: advancedAi.provider='gemini', privacy.localStorageOnly=true
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
+        'gemini',
+        expect.objectContaining({ localStorageOnly: true }),
+      );
+    });
+
+    it('rejects when cloud AI policy blocks the provider', async () => {
+      mockAssertCloudAiAllowedSync.mockImplementation(() => {
+        throw new Error('Cloud provider blocked: local-only mode is active.');
+      });
+
+      const thunk = createDeduplicatedThunk<string>('test/policy-block', async (_arg, api) => {
+        api.registerDuplicateRequest('prompt', 'view');
+        return 'should not reach';
+      });
+
+      const store = makeStore();
+      const result = await store.dispatch(thunk());
+
+      expect(result.type).toBe('test/policy-block/rejected');
+      const rejected = result as { error: { message: string } };
+      expect(rejected.error.message).toBe('Cloud provider blocked: local-only mode is active.');
+    });
+
+    it('does not call the payload creator when policy check throws', async () => {
+      mockAssertCloudAiAllowedSync.mockImplementation(() => {
+        throw new Error('blocked');
+      });
+      const payloadCreator = vi.fn().mockResolvedValue('result');
+
+      const thunk = createDeduplicatedThunk<string>('test/policy-no-payload', async (arg, api) =>
+        payloadCreator(arg, api),
+      );
+
+      const store = makeStore();
+      await store.dispatch(thunk());
+
+      expect(payloadCreator).not.toHaveBeenCalled();
+    });
   });
 });

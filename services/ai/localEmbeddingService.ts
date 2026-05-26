@@ -6,16 +6,80 @@ const EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 const MAX_INPUT_CHARS = 512;
 const MICRO_BATCH_SIZE = 8;
 
+// QNBS-v3: LRU cache — eliminates ~400ms re-embedding per RAG query on unchanged sections.
+//          Map preserves insertion order; we evict the first (oldest) entry at capacity.
+const EMBEDDING_CACHE_MAX = 1_000;
+const embeddingCache = new Map<string, EmbeddingVector>();
+
+/** Build a stable cache key from the model and truncated text. */
+function makeCacheKey(text: string): string {
+  // \x00 separator prevents model name from bleeding into text content
+  return `${EMBEDDING_MODEL}\x00${text}`;
+}
+
 export type EmbeddingVector = Float32Array;
 
 // QNBS-v3: The inference worker is loaded lazily to avoid a 2 MB bundle on app start.
 let workerInstance: Worker | null = null;
+// QNBS-v3: Health check — 30s ping interval; worker restarts if no pong within PONG_TIMEOUT_MS.
+const PING_INTERVAL_MS = 30_000;
+const PONG_TIMEOUT_MS = 5_000;
+let pingTimer: ReturnType<typeof setInterval> | null = null;
+let pongTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearWorkerHealthTimers(): void {
+  if (pingTimer) {
+    clearInterval(pingTimer);
+    pingTimer = null;
+  }
+  if (pongTimeoutTimer) {
+    clearTimeout(pongTimeoutTimer);
+    pongTimeoutTimer = null;
+  }
+}
+
+function restartWorker(): void {
+  clearWorkerHealthTimers();
+  if (workerInstance) {
+    workerInstance.terminate();
+    workerInstance = null;
+  }
+  if (import.meta.env?.DEV) {
+    console.warn('[localEmbeddingService] Inference worker restarted (missed health check pong)');
+  }
+  startWorkerHealthCheck();
+}
+
+function startWorkerHealthCheck(): void {
+  if (typeof Worker === 'undefined') return;
+  pingTimer = setInterval(() => {
+    const w = workerInstance;
+    if (!w) return;
+    w.postMessage({ type: 'WORKER_PING' });
+    pongTimeoutTimer = setTimeout(() => {
+      // QNBS-v3: No pong received — worker is dead or hung; restart.
+      restartWorker();
+    }, PONG_TIMEOUT_MS);
+
+    const pongHandler = (ev: MessageEvent<{ type?: string }>) => {
+      if (ev.data?.type === 'WORKER_PONG') {
+        if (pongTimeoutTimer) {
+          clearTimeout(pongTimeoutTimer);
+          pongTimeoutTimer = null;
+        }
+        w.removeEventListener('message', pongHandler);
+      }
+    };
+    w.addEventListener('message', pongHandler);
+  }, PING_INTERVAL_MS);
+}
 
 function getWorker(): Worker {
   if (!workerInstance) {
     workerInstance = new Worker(new URL('../../workers/inference.worker.ts', import.meta.url), {
       type: 'module',
     });
+    startWorkerHealthCheck();
   }
   return workerInstance;
 }
@@ -66,11 +130,35 @@ function postToWorker(
 
 export async function embedText(text: string): Promise<EmbeddingVector> {
   const truncated = truncate(text);
+  const cacheKey = makeCacheKey(truncated);
+
+  // QNBS-v3: LRU hit — delete then re-insert to move to the end (most-recently-used).
+  const cached = embeddingCache.get(cacheKey);
+  if (cached) {
+    embeddingCache.delete(cacheKey);
+    embeddingCache.set(cacheKey, cached);
+    return cached;
+  }
+
   const response = await postToWorker('feature-extraction', EMBEDDING_MODEL, truncated);
   if (!response.ok || !response.result) {
     throw new Error(response.error ?? 'embedding failed');
   }
-  return l2Normalize(response.result);
+  const vector = l2Normalize(response.result);
+
+  // QNBS-v3: Evict the oldest (first) entry when at capacity before inserting.
+  if (embeddingCache.size >= EMBEDDING_CACHE_MAX) {
+    const firstKey = embeddingCache.keys().next().value;
+    if (firstKey !== undefined) embeddingCache.delete(firstKey);
+  }
+  embeddingCache.set(cacheKey, vector);
+
+  return vector;
+}
+
+/** Clear the in-memory embedding cache (e.g. when model version changes). */
+export function clearEmbeddingCache(): void {
+  embeddingCache.clear();
 }
 
 // QNBS-v3: Micro-batch to avoid overwhelming the worker queue; batch size = MICRO_BATCH_SIZE.
@@ -94,6 +182,7 @@ export function cosineSimilarity(a: EmbeddingVector, b: EmbeddingVector): number
 
 // QNBS-v3: Used in testing to reset the worker instance without affecting production code.
 export function _resetWorkerForTest(): void {
+  clearWorkerHealthTimers();
   if (workerInstance) {
     workerInstance.terminate();
     workerInstance = null;

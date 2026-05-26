@@ -92,7 +92,6 @@ export async function rebuildHybridRagIndex(
   duckDbEnabled = false,
 ): Promise<number> {
   const records: HybridRagRecord[] = [];
-  const now = Date.now();
 
   for (let i = 0; i < manuscript.length; i++) {
     const sec = manuscript[i];
@@ -115,7 +114,10 @@ export async function rebuildHybridRagIndex(
         chunkIndex: ci,
         text,
         vector: hashEmbedText(text),
-        indexedAt: now - (manuscript.length - i) * 1000,
+        // QNBS-v3: StorySection has no real updatedAt; use 1-based position monotonic pseudo-timestamp
+        //          so later sections always rank higher in recency scoring, and the value is always > 0.
+        //          Stable across re-indexing runs (unlike the previous now-relative approach).
+        indexedAt: (i + 1) * 1_000,
         semanticVec,
       });
     }

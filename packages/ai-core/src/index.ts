@@ -1,4 +1,4 @@
-import { electSingleHeavyInferenceTab } from './tabLeaderElection';
+import { electSingleHeavyInferenceTab, surrenderLeadership } from './tabLeaderElection';
 
 export type WorkerPriority = 'critical' | 'high' | 'normal' | 'low';
 
@@ -153,7 +153,7 @@ export class WorkerBus {
   }
 }
 
-export { electSingleHeavyInferenceTab };
+export { electSingleHeavyInferenceTab, surrenderLeadership };
 
 // QNBS-v3: curated list of ONNX models for WASM backend; no GPU required, ~50-500 MB WASM footprint.
 //          Updated 2025: SmolLM2-135M is the best tiny ONNX text-gen model for inference.

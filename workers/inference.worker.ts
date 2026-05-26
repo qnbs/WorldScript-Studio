@@ -167,6 +167,12 @@ self.addEventListener('message', (event: MessageEvent) => {
 
   const data = event.data as { type?: string; messageId?: string } & InferenceRequest;
 
+  // QNBS-v3: Health check ping — reply with pong so the host can detect worker liveness.
+  if (data.type === 'WORKER_PING') {
+    self.postMessage({ type: 'WORKER_PONG', ts: Date.now() });
+    return;
+  }
+
   if (data.type === 'WORKER_CANCEL' && data.messageId) {
     abortMap.get(data.messageId)?.abort();
     abortMap.delete(data.messageId);

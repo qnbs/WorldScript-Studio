@@ -138,4 +138,11 @@ describe('inference.worker', () => {
     await new Promise((r) => setTimeout(r, 100));
     expect(posted).toHaveLength(0);
   });
+
+  it('responds with WORKER_PONG when receiving WORKER_PING', async () => {
+    sendMessage({ type: 'WORKER_PING' });
+    const response = (await waitForResponse()) as { type: string; ts: number };
+    expect(response.type).toBe('WORKER_PONG');
+    expect(typeof response.ts).toBe('number');
+  });
 });

@@ -16,7 +16,9 @@ alwaysApply: false
 - **Component + Hook + Context:** Rendering in `components/*View.tsx`, Logik in `hooks/use*View.ts`, Kontext für Kindbaum.
 - **Redux** für persistierten App-State; **Zustand** nur transient (`app/transientUiStore.ts`).
 - **Undo:** `redux-undo` am Projekt-Slice; Plot-Board-**Viewport** lokal — Verbindungen/Subplots im `projectSlice` wenn undo-relevant.
-- Schwere Views: `React.lazy` in `App.tsx`; Plot-Board-Subchunks, ForceGraph, Collaboration lazy (v1.9); `listenerMiddleware` + `aiApi` dynamic import für DuckDB/RAG/Provider.
+- Schwere Views: `React.lazy` in `App.tsx`; Plot-Board-Subchunks, ForceGraph, Collaboration lazy; `listenerMiddleware` + `aiApi` dynamic import für DuckDB/RAG/Provider.
+- **ProForge Pipeline** (`services/proForge/`, `features/proForge/`, `components/proForge/`): 8-stage Agentic-Pipeline hinter `enableProForge`-Flag. Orchestrator nie direkt in Komponenten instantiieren — über `hooks/useProForgeOrchestrator.ts`.
+- **Voice** (`services/voice/`): Abstract-Engine-Pattern; `VoiceCommandService` als Singleton hinter `enableVoiceSupport`-Flag.
 
 ## Dateigrößen
 
@@ -30,7 +32,9 @@ alwaysApply: false
 
 ## Feature Flags
 
-- Experimentelles über `features/featureFlags/featureFlagsSlice.ts` — nicht verstreute `if (true)`-Hacks.
+- Experimentelles über `features/featureFlags/featureFlagsSlice.ts` (19 Flags) — nicht verstreute `if (true)`-Hacks.
+- Standard **ein**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. Alle anderen: aus.
+- Major-Features (Voice, ProForge, DuckDB, LoRA, CloudSync, PluginSystem) müssen per Flag ein-/ausgeschaltet werden.
 
 <example>
 Manuskript >700 Zeilen: `ManuscriptInspector.tsx` + `hooks/useManuscript.ts`; Plot-Board-Canvas eigene Datei unter `components/plotBoard/`.
