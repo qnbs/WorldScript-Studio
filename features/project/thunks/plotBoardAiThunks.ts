@@ -25,8 +25,8 @@ export const suggestNextBeatThunk = createDeduplicatedThunk(
     if (!project) throw new Error('No project loaded');
 
     const projectId = project.id || 'default';
-    const ragMode = state.settings.advancedAi.ragMode ?? 'hybrid';
-    const duckDbEnabled = state.featureFlags.enableDuckDbAnalytics;
+    const ragMode = state.settings?.advancedAi?.ragMode ?? 'hybrid';
+    const duckDbEnabled = state.featureFlags?.enableDuckDbAnalytics ?? false;
 
     const assembled = await assembleRAGPrompt(
       'plotSuggestion',

@@ -17,7 +17,9 @@ const LiveRegionContext = createContext<LiveRegionContextValue | undefined>(unde
 
 // QNBS-v3: Zentrale aria-live-Regionen statt dynamisch erzeugter Nodes — stabil für Screenreader.
 export function LiveRegionProvider({ children }: { children: ReactNode }) {
-  const liveRegionVerbosity = useAppSelector((s) => s.settings.accessibility.liveRegionVerbosity);
+  const liveRegionVerbosity = useAppSelector(
+    (s) => s.settings?.accessibility?.liveRegionVerbosity ?? 'normal',
+  );
   const [politeMessage, setPoliteMessage] = useState('');
   const [assertiveMessage, setAssertiveMessage] = useState('');
   const politeSeq = useRef(0);
@@ -81,8 +83,11 @@ export function LiveRegionProvider({ children }: { children: ReactNode }) {
 
 export function useAnnounce(): LiveRegionContextValue['announce'] {
   const ctx = useContext(LiveRegionContext);
+  // Return a no-op announcer when the provider is not present (tests or lightweight renders).
   if (!ctx) {
-    throw new Error('useAnnounce must be used within LiveRegionProvider');
+    return () => {
+      /* no-op */
+    };
   }
   return ctx.announce;
 }

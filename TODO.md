@@ -8,6 +8,19 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## Coverage Sprint — Test Expansion + Maintenance (2026-05-26)
+
+- ✅ **89 new test files** — settings, writing, manuscript, mind-map, ui, services, hooks, root components
+- ✅ **~400 new unit tests** — AiScratchpad, ContextPanel, ToolInputs, InspectorPanel, NavigatorPanel, MindMapNodeEditor, MindMapNodeShape, ecoModeService, creativityTemperature, useCharacterInterviewsView, GpuMetricsPanel, FeatureFlagsSection, PrivacySection, SettingsOverviewCard, SettingsModals, + 70 more modules
+- ✅ **Biome lint clean** — 895 files, 0 errors
+- ✅ **Total test files:** 360 (was 178 files before this sprint)
+- ✅ **ProForge test suite TypeScript errors fixed** — 15 test files, 30+ TS errors resolved (EntityState, ProForgeState shape, PipelineStage/ReviewItemType/ReviewItemSeverity casts, i18n generic mock, biome-ignore placement)
+- ✅ **Coverage Sprint test failures fixed** — NotificationsSection (role=switch), Progress (CSS selector), ManuscriptEditor (word count regex), AnalyticsBootstrap (mock reset), ragPromptAssembly (token budget)
+- ✅ **Dependencies updated** — 16 packages (patch + minor); `pnpm audit`: 0 vulnerabilities
+- ✅ **Coverage (2026-05-26):** Stmts 71.29% / Branches 58.79% / Funcs 65.18% / Lines 73.06% — all CI thresholds passed (S≥67/B≥55/F≥60/L≥68); 4 044 tests / 360 files, 0 failures
+
+---
+
 ## v1.17 — Voice Full Support Foundation (RELEASED 2026-05-24)
 
 - ✅ **Abstract Engine Interfaces** — `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine` in `services/voice/voiceTypes.ts`

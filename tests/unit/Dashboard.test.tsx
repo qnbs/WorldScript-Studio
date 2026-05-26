@@ -88,6 +88,18 @@ vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
 }));
 
+// QNBS-v3: BackupQuickActionsCard calls storageService.listSnapshots() on mount.
+// Without a mock, jsdom's undefined indexedDB stub throws an unhandled rejection.
+vi.mock('../../services/storageService', () => ({
+  storageService: {
+    listSnapshots: vi.fn().mockResolvedValue([]),
+    saveProject: vi.fn().mockResolvedValue(undefined),
+    loadProject: vi.fn().mockResolvedValue(null),
+    exportProject: vi.fn().mockResolvedValue(undefined),
+    importProject: vi.fn().mockResolvedValue(null),
+  },
+}));
+
 import type React from 'react';
 
 // ---------------------------------------------------------------------------

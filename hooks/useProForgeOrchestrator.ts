@@ -39,15 +39,15 @@ export function useProForgeOrchestrator() {
         'publishing',
         'analytics',
       ],
-      aiProvider: settings.advancedAi.provider,
-      ragMode: settings.advancedAi.ragMode ?? 'hybrid',
-      maxTokens: settings.advancedAi.maxTokens ?? 8000,
-      creativity: settings.advancedAi.creativity ?? 'Balanced',
-      useDuckDb: featureFlags.enableDuckDbAnalytics,
+      aiProvider: settings?.advancedAi?.provider,
+      ragMode: settings?.advancedAi?.ragMode ?? 'hybrid',
+      maxTokens: settings?.advancedAi?.maxTokens ?? 8000,
+      creativity: settings?.advancedAi?.creativity ?? 'Balanced',
+      useDuckDb: featureFlags?.enableDuckDbAnalytics ?? false,
       autoAcceptThreshold: 0,
       language,
     }),
-    [settings.advancedAi, featureFlags.enableDuckDbAnalytics, language],
+    [settings, featureFlags, language],
   );
 
   const getOrchestrator = useCallback(() => {

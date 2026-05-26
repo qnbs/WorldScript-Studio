@@ -21,13 +21,7 @@ const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const outDir = join(root, 'graphify-out');
 
 /** Ephemeral graphify outputs — never commit (solo policy). */
-const EPHEMERAL = [
-  'manifest.json',
-  'cost.json',
-  'transcripts',
-  'wiki',
-  'obsidian',
-];
+const EPHEMERAL = ['manifest.json', 'cost.json', 'transcripts', 'wiki', 'obsidian'];
 
 for (const name of EPHEMERAL) {
   const p = join(outDir, name);

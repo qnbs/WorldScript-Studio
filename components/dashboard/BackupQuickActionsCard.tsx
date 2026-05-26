@@ -19,7 +19,7 @@ export interface BackupQuickActionsCardProps {
 export const BackupQuickActionsCard: FC<BackupQuickActionsCardProps> = ({ onNavigate }) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
-  const project = useAppSelector((s) => s.project.present.data);
+  const project = useAppSelector((s) => s.project?.present?.data ?? null);
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
   const importRef = useRef<HTMLInputElement>(null);

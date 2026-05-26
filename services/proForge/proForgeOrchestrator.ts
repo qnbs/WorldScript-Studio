@@ -64,7 +64,8 @@ export interface OrchestratorContext {
 }
 
 export class ProForgeOrchestrator {
-  private context: OrchestratorContext;
+  // QNBS-v3: readonly (not private) — hook reads context.getState() to build a live state snapshot.
+  readonly context: OrchestratorContext;
   private abortController = new AbortController();
 
   constructor(context: OrchestratorContext) {

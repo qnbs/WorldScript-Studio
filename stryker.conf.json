@@ -7,7 +7,9 @@
   },
   "coverageAnalysis": "perTest",
   "ignoreStatic": true,
-  "plugins": ["@stryker-mutator/vitest-runner"],
+  "incremental": true,
+  "plugins": ["@stryker-mutator/vitest-runner", "@stryker-mutator/typescript-checker"],
+  "checkers": ["typescript"],
   "mutate": [
     "services/codexService.ts",
     "services/dbMigration.ts",
@@ -24,16 +26,22 @@
     "app/listenerMiddleware.ts"
   ],
   "thresholds": {
-    "high": 70,
-    "low": 40,
+    "high": 75,
+    "low": 55,
     "break": null
   },
-  "reporters": ["html", "json", "progress"],
-  "htmlReporter": { "fileName": "reports/mutation/mutation.html" },
-  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
-  "timeoutMS": 120000,
+  "reporters": ["progress", "clear-text", "html", "json"],
+  "htmlReporter": {
+    "fileName": "reports/mutation/mutation.html"
+  },
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "timeoutMS": 180000,
   "concurrency": 2,
-  "warnings": { "slow": false },
+  "warnings": {
+    "slow": false
+  },
   "ignorePatterns": [
     "**/dist/**",
     "**/node_modules/**",

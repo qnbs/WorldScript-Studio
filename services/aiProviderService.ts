@@ -586,3 +586,16 @@ export async function testAIConnection(
     };
   }
 }
+
+// QNBS-v3: Namespace object for ProForge agents — bundles standalone exports so agents can use
+//           aiProviderService.generateText(...) without importing each function individually.
+export const aiProviderService = {
+  generateText,
+  generateJson,
+  generateImage,
+  streamText,
+  streamAiHelpResponse,
+  listOllamaModels,
+  scanLocalOpenAiCompatibleEndpoints,
+  testAIConnection,
+};

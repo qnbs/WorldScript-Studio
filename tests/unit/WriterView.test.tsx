@@ -70,8 +70,28 @@ vi.mock('../../app/hooks', () => ({
         lineSpacing: 1.5,
         aiCreativity: 'Balanced',
         advancedAi: {},
+        voice: { enabled: false },
       },
       versionControl: { isPanelOpen: false },
+      featureFlags: {
+        enableProForge: false,
+        enableVoiceSupport: false,
+        enableCompileWizard: false,
+        enableManuscriptResearchSplit: false,
+      },
+      proForge: { isActive: false },
+      voice: {
+        dictationActive: false,
+        transcript: '',
+        mode: 'inactive',
+        error: null,
+        processing: false,
+        sttStatus: 'idle',
+        ttsStatus: 'idle',
+        vadStatus: 'idle',
+        wakeWordStatus: 'idle',
+        microphonePermission: 'unknown',
+      },
     }),
   ),
   useAppSelectorShallow: vi.fn(),
@@ -88,6 +108,36 @@ vi.mock('../../hooks/useSpeechRecognition', () => ({
 
 vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
+}));
+
+vi.mock('../../hooks/useProForgeOrchestrator', () => ({
+  useProForgeOrchestrator: vi.fn(() => ({
+    t: (k: string) => k,
+    proForgeState: {
+      isActive: false,
+      activeView: 'dashboard' as const,
+      currentRun: null,
+      runHistory: [],
+      defaultConfig: {},
+      isRunning: false,
+      isLoading: false,
+      error: null,
+    },
+    currentRun: null,
+    isRunning: false,
+    isLoading: false,
+    activeView: 'dashboard' as const,
+    activeStageResult: null,
+    currentStageReviewItems: [],
+    defaultConfig: {},
+    startPipeline: vi.fn(),
+    abortPipeline: vi.fn(),
+    submitReview: vi.fn(),
+    skipStage: vi.fn(),
+    rollbackToStage: vi.fn(),
+    setActiveView: vi.fn(),
+    dispatch: vi.fn(),
+  })),
 }));
 
 vi.mock('../../features/versionControl/versionControlSlice', async (importOriginal) => {

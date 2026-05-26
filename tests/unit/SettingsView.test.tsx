@@ -89,9 +89,10 @@ describe('SettingsView', () => {
 
   it('shows category nav items', () => {
     render(<SettingsView />);
-    expect(screen.getByText('settings.categories.general')).toBeTruthy();
-    expect(screen.getByText('settings.categories.appearance')).toBeTruthy();
-    expect(screen.getByText('settings.categories.ai')).toBeTruthy();
+    // getAllByText because Button wraps children in a span, so the text appears in multiple nodes
+    expect(screen.getAllByText('settings.categories.general').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('settings.categories.appearance').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('settings.categories.ai').length).toBeGreaterThan(0);
   });
 
   it('shows general category panel by default', () => {

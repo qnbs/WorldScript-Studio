@@ -201,12 +201,16 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// useEffect: refreshSnapshots on mount (activeCategory starts as 'data')
+// useEffect: refreshSnapshots when activeCategory === 'data'
+// (hook initializes with 'general'; snapshots load on switch to 'data')
 // ---------------------------------------------------------------------------
 describe('initial snapshot load', () => {
-  it('calls listSnapshots on mount', async () => {
+  it('calls listSnapshots when data category is activated', async () => {
     mockListSnapshots.mockResolvedValue([makeSnapshot(1, 'Draft 1')]);
     const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setActiveCategory('data');
+    });
     await waitFor(() => {
       expect(result.current.snapshots).toHaveLength(1);
     });
@@ -495,12 +499,18 @@ describe('handleDeleteSnapshot', () => {
 // activeCategory switching triggers snapshot refresh
 // ---------------------------------------------------------------------------
 describe('activeCategory', () => {
-  it('refreshes snapshots when switching to data category', async () => {
+  it('refreshes snapshots each time data category is entered', async () => {
     mockListSnapshots.mockResolvedValue([makeSnapshot(1, 'Draft')]);
     const { result } = renderHook(() => useSettingsView());
+    // First switch to 'data' — triggers call 1
+    act(() => {
+      result.current.setActiveCategory('data');
+    });
+    // Switch away — no snapshot call
     act(() => {
       result.current.setActiveCategory('appearance');
     });
+    // Switch back to 'data' — triggers call 2
     act(() => {
       result.current.setActiveCategory('data');
     });

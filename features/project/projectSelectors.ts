@@ -3,18 +3,19 @@ import type { RootState } from '../../app/store';
 import { charactersAdapter, worldsAdapter } from './projectSlice';
 
 // --- Base Selectors ---
-const selectProjectWithHistory = (state: RootState) => state.project;
-export const selectProjectData = (state: RootState) => state.project.present?.data;
+const selectProjectWithHistory = (state: RootState) =>
+  state.project ?? { past: [], present: { data: null }, future: [] };
+export const selectProjectData = (state: RootState) => state.project?.present?.data ?? null;
 
 // --- Undo/Redo Selectors ---
 export const selectCanUndo = createSelector(
   [selectProjectWithHistory],
-  (project) => project.past.length > 0,
+  (project) => (project?.past?.length ?? 0) > 0,
 );
 
 export const selectCanRedo = createSelector(
   [selectProjectWithHistory],
-  (project) => project.future.length > 0,
+  (project) => (project?.future?.length ?? 0) > 0,
 );
 
 // --- Character Selectors (from adapter) ---

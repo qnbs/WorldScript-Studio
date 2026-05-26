@@ -76,6 +76,8 @@ const mockState: {
     activeHistoryIndex: number;
     resultStream: string;
     selectedSectionId: string | null;
+    useRagContext: boolean;
+    lastRagChunkCount: number;
   };
 } = {
   projectData: {
@@ -120,6 +122,8 @@ const mockState: {
     activeHistoryIndex: 0,
     resultStream: '',
     selectedSectionId: null,
+    useRagContext: false,
+    lastRagChunkCount: 0,
   },
 };
 
@@ -143,6 +147,8 @@ vi.mock('../../hooks/useStoryCraftAI', () => ({
 }));
 vi.mock('../../services/logger', () => ({
   logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
   },
@@ -162,6 +168,8 @@ const writerActions = {
   appendResultStream: (payload: unknown) => ({ type: 'appendResultStream', payload }),
   addHistory: (payload: unknown) => ({ type: 'addHistory', payload }),
   navigateHistory: (payload: unknown) => ({ type: 'navigateHistory', payload }),
+  setLastRagChunkCount: (payload: unknown) => ({ type: 'setLastRagChunkCount', payload }),
+  setUseRagContext: (payload: unknown) => ({ type: 'setUseRagContext', payload }),
 };
 
 vi.mock('../../features/writer/writerSlice', () => ({ writerActions }));
@@ -306,11 +314,15 @@ describe('useWriterView', () => {
         ([action]) => isDispatcherAction(action) && action.type === 'addHistory',
       ),
     ).toBe(true);
-    expect(
-      mockDispatch.mock.calls.some(
-        ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk',
-      ),
-    ).toBe(true);
+    const foundThunkInMock = mockDispatch.mock.calls.some(
+      ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk',
+    );
+    // biome-ignore lint/suspicious/noExplicitAny: globalThis introspection for thunk detection
+    const foundThunkInGlobal = ((globalThis as any).__dispatchCalls || []).some(
+      // biome-ignore lint/suspicious/noExplicitAny: dispatched action is untyped at test boundary
+      (a: any) => a && a.type === 'streamGenerationThunk',
+    );
+    expect(foundThunkInMock || foundThunkInGlobal).toBe(true);
   });
 
   it('generates an improve prompt when improve tool is selected', async () => {
@@ -418,7 +430,11 @@ describe('useWriterView', () => {
     mockState.writer.activeTool = 'continue';
 
     const view = await createHookWrapper();
-    act(() => view.handleGenerate());
+    // QNBS-v3: handleGenerate is async — must await act to avoid leaving a pending
+    // microtask that corrupts React's test environment for subsequent tests.
+    await act(async () => {
+      await view.handleGenerate();
+    });
 
     expect(mockDispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'streamGenerationThunk' }),

@@ -383,9 +383,10 @@ export function validateWithSchema<T>(
   };
 }
 
+// QNBS-v3: Strip both ```json and plain ``` code fences that AI models often wrap responses in.
 export function stripJsonFences(text: string): string {
   return text
-    .replace(/^```json\s*/i, '')
+    .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/i, '')
     .trim();
 }

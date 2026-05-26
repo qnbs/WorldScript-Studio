@@ -36,10 +36,11 @@ describe('WebSpeechSttEngine', () => {
   it('starts recognition and routes results', async () => {
     const mockRecognition = createMockRecognition();
 
-    // QNBS-v3: Use a plain function (not arrow) so it works with `new`.
-    const MockCtor = vi.fn(() => mockRecognition) as unknown as new () => ReturnType<
-      typeof createMockRecognition
-    >;
+    // QNBS-v3: Must be a regular function (not arrow) to work as a `new` target.
+    // biome-ignore lint/suspicious/noExplicitAny: test mock constructor
+    const MockCtor = function (this: any) {
+      return mockRecognition;
+    } as unknown as new () => ReturnType<typeof createMockRecognition>;
 
     vi.stubGlobal('window', {
       SpeechRecognition: MockCtor,
@@ -79,9 +80,10 @@ describe('WebSpeechSttEngine', () => {
 
   it('ignores no-speech and aborted errors', async () => {
     const mockRecognition = createMockRecognition();
-    const MockCtor = vi.fn(() => mockRecognition) as unknown as new () => ReturnType<
-      typeof createMockRecognition
-    >;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock constructor
+    const MockCtor = function (this: any) {
+      return mockRecognition;
+    } as unknown as new () => ReturnType<typeof createMockRecognition>;
 
     vi.stubGlobal('window', {
       SpeechRecognition: MockCtor,
@@ -99,9 +101,10 @@ describe('WebSpeechSttEngine', () => {
 
   it('auto-restarts on unexpected end', async () => {
     const mockRecognition = createMockRecognition();
-    const MockCtor = vi.fn(() => mockRecognition) as unknown as new () => ReturnType<
-      typeof createMockRecognition
-    >;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock constructor
+    const MockCtor = function (this: any) {
+      return mockRecognition;
+    } as unknown as new () => ReturnType<typeof createMockRecognition>;
 
     vi.stubGlobal('window', {
       SpeechRecognition: MockCtor,
@@ -115,9 +118,10 @@ describe('WebSpeechSttEngine', () => {
 
   it('stops recognition gracefully', async () => {
     const mockRecognition = createMockRecognition();
-    const MockCtor = vi.fn(() => mockRecognition) as unknown as new () => ReturnType<
-      typeof createMockRecognition
-    >;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock constructor
+    const MockCtor = function (this: any) {
+      return mockRecognition;
+    } as unknown as new () => ReturnType<typeof createMockRecognition>;
 
     vi.stubGlobal('window', {
       SpeechRecognition: MockCtor,

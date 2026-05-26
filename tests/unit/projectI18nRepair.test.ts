@@ -26,10 +26,7 @@ describe('repairProjectI18nFields', () => {
   });
 
   it('seeds manuscript when empty', () => {
-    const repair = repairProjectI18nFields(
-      { title: '', logline: '', manuscript: [] },
-      t,
-    );
+    const repair = repairProjectI18nFields({ title: '', logline: '', manuscript: [] }, t);
     expect(repair?.title).toBe('My Untitled Story');
     expect(repair?.manuscript).toHaveLength(1);
   });

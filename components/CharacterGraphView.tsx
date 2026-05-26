@@ -39,8 +39,8 @@ type GraphLink = LinkObject & { type: string; strength: number };
 // ForceGraph2D-basierte Darstellung mit Physics-Layout
 const CharacterForceGraph: FC = () => {
   const { t, characters, relationships } = useCharacterGraphViewContext();
-  const theme = useAppSelector((s) => s.settings.theme);
-  const appearancePreset = useAppSelector((s) => s.settings.appearancePreset);
+  const theme = useAppSelector((s) => s.settings?.theme ?? 'light');
+  const appearancePreset = useAppSelector((s) => s.settings?.appearancePreset ?? 'default');
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
   const [paintColors, setPaintColors] = useState({
@@ -168,7 +168,7 @@ const CharacterForceGraph: FC = () => {
 const CharacterGraphUI: FC = () => {
   const { t, characters, relationships, onUpdateRelationship } = useCharacterGraphViewContext();
   // QNBS-v3: Default to table when screenReader preset is active — graph canvas is not keyboard-navigable.
-  const screenReaderMode = useAppSelector((s) => s.settings.accessibility.screenReader);
+  const screenReaderMode = useAppSelector((s) => s.settings?.accessibility?.screenReader ?? false);
   const [viewMode, setViewMode] = useState<'graph' | 'table'>(screenReaderMode ? 'table' : 'graph');
   const announce = useAnnounce();
 

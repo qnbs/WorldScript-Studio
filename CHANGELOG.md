@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.1] — 2026-05-26
+
+### Fixed
+
+- **TypeScript errors in ProForge test suite** — Fixed 30+ type errors across 15 ProForge test files: `EntityState` mock completeness (`ids: []`), full `ProForgeState` shape (`isActive`, `activeView`, `defaultConfig`, `isLoading`, `error`), `PipelineStage` / `ReviewItemType` / `ReviewItemSeverity` union casts in test helpers, `activeStageResult.stage as PipelineStage`, `creativity as const` / `ragMode as const` for union literal narrowing, generic `t<T>(k) => k as unknown as T` translation mock, `versionControlActions.restoreSnapshot` biome-ignore cast.
+- **Test failures in Coverage Sprint test files** — `NotificationsSection.test.tsx`: `getAllByRole('checkbox')` → `getAllByRole('switch')` (`ToggleSwitch` uses ARIA `role="switch"`); `Progress.test.tsx`: `querySelector('div > div')` returned outer div (no inline style) → `querySelector('[style]')` targets the inner bar div; `ManuscriptEditor.test.tsx`: word count badge renders `"7 common.words"` not `"7"` — fixed to regex `\b7\b`; `AnalyticsBootstrap.test.tsx`: missing `beforeEach(vi.clearAllMocks)` caused stale call count; `ragPromptAssembly.test.ts`: token budget `50` too small for 500-char body (≈173 tokens) — corrected to `200`.
+
+### Changed
+
+- **Dependencies (patch)** — `@ai-sdk/google` 3.0.75→3.0.79, `@ai-sdk/openai` 3.0.64→3.0.65, `@ai-sdk/react` 3.0.187→3.0.193, `ai` 6.0.185→6.0.191, `dompurify` 3.4.5→3.4.6, `@tanstack/react-virtual` 3.13.25→3.13.26, `vite` 8.0.13→8.0.14, `vitest` + `@vitest/coverage-v8` 4.1.6→4.1.7, `storybook` suite 10.4.0→10.4.1, `@types/node` 25.9.0→25.9.1, `@types/react` 19.2.14→19.2.15.
+- **Dependencies (minor)** — `@google/genai` 2.4.0→2.6.0, `docx` 9.6.1→9.7.0, `vite-plugin-pwa` 1.2.0→1.3.0, `wrangler` 4.93.1→4.94.0.
+
 ## [1.17.0] — 2026-05-24
 
 ### Added

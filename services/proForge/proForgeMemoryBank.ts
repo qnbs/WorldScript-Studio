@@ -232,3 +232,9 @@ export function getMemoryBank(projectId: string): ProForgeMemoryBank {
 export function clearMemoryBankCache(): void {
   bankCache.clear();
 }
+
+/** Reset DB connection and singleton cache — test-only. Allows fresh IDBFactory per test. */
+export function _resetDbForTest(): void {
+  dbPromise = null;
+  bankCache.clear();
+}

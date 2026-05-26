@@ -92,10 +92,13 @@ describe('LiveRegionProvider', () => {
   });
 });
 
-describe('useAnnounce throws outside provider', () => {
-  it('throws when used without LiveRegionProvider', () => {
-    expect(() => renderHook(() => useAnnounce())).toThrow(
-      'useAnnounce must be used within LiveRegionProvider',
-    );
+describe('useAnnounce outside provider', () => {
+  it('returns a callable no-op when used without LiveRegionProvider', () => {
+    // QNBS-v3: useAnnounce gracefully degrades to a no-op rather than throwing,
+    // so components render safely in tests and lightweight contexts.
+    const { result } = renderHook(() => useAnnounce());
+    expect(typeof result.current).toBe('function');
+    // calling it must not throw
+    expect(() => result.current('test message')).not.toThrow();
   });
 });

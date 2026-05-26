@@ -93,13 +93,14 @@ describe('ObjectsView', () => {
 
   it('shows the object form when Add Object is clicked', () => {
     render(<ObjectsView />);
-    fireEvent.click(screen.getByText('objects.addObject'));
+    // getAllByText because multiple "Add Object" buttons may exist (header + empty state)
+    fireEvent.click(screen.getAllByText('objects.addObject')[0] as HTMLElement);
     expect(screen.getByPlaceholderText('objects.namePlaceholder')).toBeInTheDocument();
   });
 
   it('dispatches addStoryObject when form is submitted', () => {
     render(<ObjectsView />);
-    fireEvent.click(screen.getByText('objects.addObject'));
+    fireEvent.click(screen.getAllByText('objects.addObject')[0] as HTMLElement);
     const input = screen.getByPlaceholderText('objects.namePlaceholder');
     fireEvent.change(input, { target: { value: 'Ring of Power' } });
     fireEvent.click(screen.getByText('objects.save'));
@@ -147,7 +148,7 @@ describe('ObjectsView', () => {
 
   it('cancel button hides the form', () => {
     render(<ObjectsView />);
-    fireEvent.click(screen.getByText('objects.addObject'));
+    fireEvent.click(screen.getAllByText('objects.addObject')[0] as HTMLElement);
     expect(screen.getByPlaceholderText('objects.namePlaceholder')).toBeInTheDocument();
     fireEvent.click(screen.getByText('objects.cancel'));
     expect(screen.queryByPlaceholderText('objects.namePlaceholder')).not.toBeInTheDocument();

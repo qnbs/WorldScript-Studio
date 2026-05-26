@@ -117,6 +117,7 @@ describe('Drawer', () => {
       </Drawer>,
     );
     const dialog = screen.getByRole('dialog');
-    expect(dialog.className).toContain('right-0');
+    // QNBS-v3: Drawer uses CSS logical property `end-0` (RTL-safe) instead of `right-0`.
+    expect(dialog.className).toContain('end-0');
   });
 });

@@ -102,17 +102,18 @@ listenerMiddleware.startListening({
       await storageService.saveProject(projectDataToSave);
 
       if (
-        (listenerApi.getState() as RootState).featureFlags.enableCrossProjectSearch &&
+        (listenerApi.getState() as RootState).featureFlags?.enableCrossProjectSearch &&
         presentData.id
       ) {
-        const duckDbOn = (listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics;
+        const duckDbOn =
+          (listenerApi.getState() as RootState).featureFlags?.enableDuckDbAnalytics ?? false;
         const { indexProject } = await import('../services/crossProjectIndexService');
         indexProject(presentData.id, enriched, duckDbOn).catch((err: unknown) =>
           logger.warn('Cross-project index update failed (non-critical):', err),
         );
       }
 
-      if ((listenerApi.getState() as RootState).featureFlags.enableDuckDbAnalytics) {
+      if ((listenerApi.getState() as RootState).featureFlags?.enableDuckDbAnalytics) {
         const projectId = presentData.id ?? 'default';
         const sections = presentData.manuscript.map((s, idx) => ({
           id: s.id,
@@ -201,7 +202,7 @@ listenerMiddleware.startListening({
     await listenerApi.delay(1200);
 
     const state = listenerApi.getState() as RootState;
-    if (!state.featureFlags.enableCodexAutoTracking) return;
+    if (!state.featureFlags?.enableCodexAutoTracking) return;
 
     const project = state.project.present?.data;
     if (!project) return;
@@ -229,12 +230,12 @@ listenerMiddleware.startListening({
         project.manuscript,
         characters,
         worlds,
-        { advanced: state.featureFlags.enableStoryBibleAdvanced },
+        { advanced: state.featureFlags?.enableStoryBibleAdvanced ?? false },
         binderResearchSections,
       );
       await saveStoryCodex(codex);
 
-      if (state.featureFlags.enableDuckDbAnalytics) {
+      if (state.featureFlags?.enableDuckDbAnalytics) {
         const entities = codex.entities.map((e) => ({
           id: e.id,
           name: e.name,
@@ -321,7 +322,7 @@ listenerMiddleware.startListening({
     if (!project) return;
 
     const projectId = project.id || 'default';
-    const duckDbOn = state.featureFlags.enableDuckDbAnalytics;
+    const duckDbOn = state.featureFlags?.enableDuckDbAnalytics ?? false;
     try {
       const { rebuildHybridRagIndex } = await loadLocalRagService();
       await rebuildHybridRagIndex(projectId, project.manuscript, duckDbOn);

@@ -21,16 +21,18 @@ export const useConsistencyCheckerView = () => {
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
   const projectData = useAppSelector(selectProjectData);
-  const aiSettings = useAppSelector((state) => state.settings.advancedAi);
-  const ragMode = useAppSelector((state) => state.settings.advancedAi.ragMode ?? 'hybrid');
-  const duckDbEnabled = useAppSelector((state) => state.featureFlags.enableDuckDbAnalytics);
+  const aiSettings = useAppSelector((state) => state.settings?.advancedAi);
+  const ragMode = useAppSelector((state) => state.settings?.advancedAi?.ragMode ?? 'hybrid');
+  const duckDbEnabled = useAppSelector(
+    (state) => state.featureFlags?.enableDuckDbAnalytics ?? false,
+  );
   const aiOptions = useMemo(
     () => ({
-      provider: aiSettings.provider,
-      model: aiSettings.model,
-      temperature: aiSettings.temperature,
-      maxTokens: aiSettings.maxTokens,
-      ollamaBaseUrl: aiSettings.ollamaBaseUrl,
+      provider: aiSettings?.provider,
+      model: aiSettings?.model,
+      temperature: aiSettings?.temperature,
+      maxTokens: aiSettings?.maxTokens,
+      ollamaBaseUrl: aiSettings?.ollamaBaseUrl,
     }),
     [aiSettings],
   );

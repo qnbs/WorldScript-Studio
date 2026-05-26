@@ -48,12 +48,12 @@ export default defineConfig({
         '**/*.stories.{ts,tsx}',
         '**/*.d.ts',
       ],
-      // v1.10: Branches ≥55 % (RAG assembly, help search index, plot layout, AI streaming).
+      // QNBS-v3: Phase 1 (ProForge pipeline agents) — raised after 109 new agent tests.
       thresholds: {
-        lines: 63,
-        functions: 54,
+        lines: 68,
+        functions: 60,
         branches: 55,
-        statements: 62,
+        statements: 67,
         perFile: false,
       },
     },

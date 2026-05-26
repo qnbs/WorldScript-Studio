@@ -1,0 +1,362 @@
+/**
+ * Tests for ProseAgent — ProForge Pipeline Stage 3 (lineProse).
+ * QNBS-v3: Tests section-loop, filter-word detection, deduplication, fallback, metrics.
+ */
+
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// Hoisted mock objects
+// ---------------------------------------------------------------------------
+
+const mockMemoryBank = vi.hoisted(() => ({
+  buildContextString: vi.fn().mockResolvedValue(''),
+  remember: vi.fn().mockResolvedValue({}),
+  recall: vi.fn().mockResolvedValue([]),
+  search: vi.fn().mockResolvedValue([]),
+}));
+
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+vi.mock('../../../../services/aiProviderService', () => ({
+  aiProviderService: { generateText: vi.fn() },
+}));
+
+vi.mock('../../../../services/proForge/proForgeMemoryBank', () => ({
+  getMemoryBank: vi.fn(() => mockMemoryBank),
+}));
+
+vi.mock('../../../../services/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock('../../../../services/promptLibrary', () => ({
+  getPrompt: vi.fn(() => 'mocked prose prompt'),
+}));
+
+// ---------------------------------------------------------------------------
+// Imports after mocks
+// ---------------------------------------------------------------------------
+
+import type { PipelineConfig } from '../../../../features/proForge/types';
+import { aiProviderService } from '../../../../services/aiProviderService';
+import { logger } from '../../../../services/logger';
+import { ProseAgent } from '../../../../services/proForge/pipelineAgents/proseAgent';
+import type { OrchestratorContext } from '../../../../services/proForge/proForgeOrchestrator';
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const DEFAULT_CONFIG: PipelineConfig = {
+  genrePreset: 'literary-fiction',
+  selectedStages: ['lineProse'],
+  aiProvider: 'gemini',
+  ragMode: 'hybrid',
+  maxTokens: 4000,
+  creativity: 'Balanced',
+  useDuckDb: false,
+  autoAcceptThreshold: 0,
+  language: 'en',
+};
+
+/** Generates content ≥ 50 words so the agent processes the section. */
+function longContent(prefix = '') {
+  // QNBS-v3: 9 words × 6 = 54 words, which is above the 50-word skip threshold in ProseAgent.
+  return `${prefix}${'The quick brown fox jumps over the lazy dog. '.repeat(6)}`;
+}
+
+function makeBatchResponse(sectionId: string) {
+  return JSON.stringify({
+    edits: [
+      {
+        id: `pe-${sectionId}-1`,
+        sectionId,
+        startOffset: 0,
+        endOffset: 10,
+        category: 'showDontTell',
+        original: 'He felt sad',
+        proposed: 'His shoulders slumped',
+        rationale: 'Show emotion through action',
+        confidence: 0.88,
+      },
+    ],
+    beforeMetrics: {
+      adverbDensity: 2,
+      filterWordDensity: 1,
+      dialogueRatio: 20,
+      sensoryScore: 55,
+      showDontTellScore: 60,
+      povConsistencyScore: 75,
+    },
+    summary: 'Prose edits for section.',
+  });
+}
+
+function makeContext(
+  sections = [{ id: 's1', title: 'Ch 1', content: longContent() }],
+): OrchestratorContext {
+  return {
+    projectId: 'proj-prose',
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    dispatch: vi.fn() as any,
+    getState: vi.fn().mockReturnValue({
+      project: {
+        present: {
+          data: {
+            title: 'Prose Test',
+            logline: '',
+            manuscript: sections,
+            characters: { ids: [], entities: {} },
+            worlds: { ids: [], entities: {} },
+            outline: [],
+          },
+        },
+      },
+      proForge: {
+        currentRun: null,
+        isActive: false,
+        activeView: 'dashboard',
+        runHistory: [],
+        isRunning: false,
+        isLoading: false,
+        error: null,
+        defaultConfig: DEFAULT_CONFIG,
+      },
+      // biome-ignore lint/suspicious/noExplicitAny: partial test state
+    } as any),
+    manuscript: [],
+    characters: [],
+    worlds: [],
+    config: DEFAULT_CONFIG,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('ProseAgent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(aiProviderService.generateText).mockResolvedValue(makeBatchResponse('s1'));
+  });
+
+  describe('section loop', () => {
+    it('calls generateText once per qualifying section', async () => {
+      const ctx = makeContext([
+        { id: 's1', title: 'Ch 1', content: longContent() },
+        { id: 's2', title: 'Ch 2', content: longContent() },
+      ]);
+      vi.mocked(aiProviderService.generateText)
+        .mockResolvedValueOnce(makeBatchResponse('s1'))
+        .mockResolvedValueOnce(makeBatchResponse('s2'));
+
+      const agent = new ProseAgent(ctx);
+      await agent.execute(new AbortController().signal);
+
+      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips sections with fewer than 50 words', async () => {
+      const ctx = makeContext([{ id: 's1', title: 'Short', content: 'Only a few words here.' }]);
+
+      const agent = new ProseAgent(ctx);
+      await agent.execute(new AbortController().signal);
+
+      expect(vi.mocked(aiProviderService.generateText)).not.toHaveBeenCalled();
+    });
+
+    it('processes at most 5 sections', async () => {
+      const sections = Array.from({ length: 8 }, (_, i) => ({
+        id: `s${i}`,
+        title: `Ch ${i}`,
+        content: longContent(`Section ${i} `),
+      }));
+      vi.mocked(aiProviderService.generateText).mockResolvedValue(makeBatchResponse('s0'));
+
+      const ctx = makeContext(sections);
+      const agent = new ProseAgent(ctx);
+      await agent.execute(new AbortController().signal);
+
+      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledTimes(5);
+    });
+
+    it('continues processing other sections when one AI call fails', async () => {
+      const ctx = makeContext([
+        { id: 's1', title: 'Ch 1', content: longContent() },
+        { id: 's2', title: 'Ch 2', content: longContent() },
+      ]);
+      vi.mocked(aiProviderService.generateText)
+        .mockRejectedValueOnce(new Error('API error'))
+        .mockResolvedValueOnce(makeBatchResponse('s2'));
+
+      const agent = new ProseAgent(ctx);
+      const result = await agent.execute(new AbortController().signal);
+
+      expect(vi.mocked(logger.warn)).toHaveBeenCalled();
+      // s2 edits should still be in the result
+      expect(result.metrics.aiCalls).toBe(1);
+    });
+
+    it('stops processing further sections when signal is aborted', async () => {
+      const ac = new AbortController();
+      const sections = Array.from({ length: 3 }, (_, i) => ({
+        id: `s${i}`,
+        title: `Ch ${i}`,
+        content: longContent(),
+      }));
+      // Abort after first call
+      vi.mocked(aiProviderService.generateText).mockImplementation(async () => {
+        ac.abort();
+        return makeBatchResponse('s0');
+      });
+
+      const ctx = makeContext(sections);
+      const agent = new ProseAgent(ctx);
+      await agent.execute(ac.signal);
+
+      // Only 1 section processed before abort check kicked in
+      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('filter word detection', () => {
+    it('detects filter words in manuscript content', async () => {
+      const ctx = makeContext([
+        {
+          id: 's1',
+          title: 'Ch 1',
+          content:
+            'She just walked very slowly down the road. It was quite a sight. ' +
+            'The quick brown fox jumps over the lazy dog. '.repeat(5),
+        },
+      ]);
+
+      const agent = new ProseAgent(ctx);
+      const { reviewItems } = await agent.execute(new AbortController().signal);
+
+      const filterItems = reviewItems.filter((r) => r.description?.includes('[filterWord]'));
+      expect(filterItems.length).toBeGreaterThan(0);
+    });
+
+    it('does not add filter word edits when content has no filter words', async () => {
+      const ctx = makeContext([
+        { id: 's1', title: 'Ch 1', content: longContent('The fox ran fast down the road. ') },
+      ]);
+
+      const agent = new ProseAgent(ctx);
+      const { reviewItems } = await agent.execute(new AbortController().signal);
+
+      const filterItems = reviewItems.filter((r) => r.description?.includes('[filterWord]'));
+      expect(filterItems.length).toBe(0);
+    });
+  });
+
+  describe('deduplication', () => {
+    it('deduplicates edits with the same sectionId + offset range', async () => {
+      // Return two edits with the same offset from AI
+      const responseWithDup = JSON.stringify({
+        edits: [
+          {
+            id: 'dup-1',
+            sectionId: 's1',
+            startOffset: 0,
+            endOffset: 10,
+            category: 'adverb',
+            original: 'quickly',
+            proposed: '',
+            rationale: 'Adverb',
+            confidence: 0.8,
+          },
+          {
+            id: 'dup-2',
+            sectionId: 's1',
+            startOffset: 0,
+            endOffset: 10,
+            category: 'adverb',
+            original: 'quickly',
+            proposed: '',
+            rationale: 'Duplicate',
+            confidence: 0.7,
+          },
+        ],
+        beforeMetrics: {
+          adverbDensity: 3,
+          filterWordDensity: 0,
+          dialogueRatio: 0,
+          sensoryScore: 50,
+          showDontTellScore: 50,
+          povConsistencyScore: 70,
+        },
+        summary: 'Dup test',
+      });
+      vi.mocked(aiProviderService.generateText).mockResolvedValue(responseWithDup);
+
+      const agent = new ProseAgent(makeContext());
+      const { agentOutput } = await agent.execute(new AbortController().signal);
+
+      const output = agentOutput as { edits: unknown[] };
+      // Two identical offsets should be deduped to 1
+      const offsetZeroEdits = output.edits.filter(
+        // biome-ignore lint/suspicious/noExplicitAny: test cast
+        (e: any) => e.startOffset === 0 && e.endOffset === 10 && e.sectionId === 's1',
+      );
+      expect(offsetZeroEdits).toHaveLength(1);
+    });
+  });
+
+  describe('metrics', () => {
+    it('aiCalls equals the number of sections that were processed', async () => {
+      const agent = new ProseAgent(makeContext());
+      const { metrics } = await agent.execute(new AbortController().signal);
+
+      expect(metrics.aiCalls).toBe(1);
+    });
+
+    it('agentOutput.beforeMetrics.filterWordDensity is non-negative', async () => {
+      const agent = new ProseAgent(makeContext());
+      const { agentOutput } = await agent.execute(new AbortController().signal);
+
+      const bm = (agentOutput as { beforeMetrics: { filterWordDensity: number } }).beforeMetrics;
+      expect(bm.filterWordDensity).toBeGreaterThanOrEqual(0);
+    });
+
+    it('saves proseEdits to memoryBank under "edit" category', async () => {
+      const agent = new ProseAgent(makeContext());
+      await agent.execute(new AbortController().signal);
+
+      expect(mockMemoryBank.remember).toHaveBeenCalledWith(
+        'edit',
+        'proseEdits',
+        expect.any(String),
+        'lineProse',
+      );
+    });
+  });
+
+  describe('error handling', () => {
+    it('throws when project data is unavailable', async () => {
+      const ctx = makeContext();
+      vi.mocked(ctx.getState).mockReturnValue({
+        project: { present: null },
+        proForge: { currentRun: null },
+        // biome-ignore lint/suspicious/noExplicitAny: test mock
+      } as any);
+
+      const agent = new ProseAgent(ctx);
+      await expect(agent.execute(new AbortController().signal)).rejects.toThrow('No project data');
+    });
+
+    it('returns empty edits when all sections are short (< 50 words) and no filter words', async () => {
+      const ctx = makeContext([{ id: 's1', title: 'Tiny', content: 'Short text.' }]);
+
+      const agent = new ProseAgent(ctx);
+      const { agentOutput } = await agent.execute(new AbortController().signal);
+
+      expect((agentOutput as { edits: unknown[] }).edits).toHaveLength(0);
+    });
+  });
+});
