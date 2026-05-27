@@ -1,6 +1,8 @@
+diff --git a/src/y-webrtc.js b/src/y-webrtc.js
+index 609328a25583f5000571bdec8b3e5ff53b322315..360dc3203175b894942a9e0925c3cdcdf6107e45 100644
 --- a/src/y-webrtc.js
 +++ b/src/y-webrtc.js
-@@ -145,9 +145,19 @@
+@@ -145,9 +145,19 @@ const readPeerMessage = (peerConn, buf) => {
   */
  const sendWebrtcConn = (webrtcConn, encoder) => {
    log('send message to ', logging.BOLD, webrtcConn.remotePeerId, logging.UNBOLD, logging.GREY, ' (', webrtcConn.room.name, ')', logging.UNCOLOR)
@@ -14,10 +16,7 @@
 +      try {
 +        webrtcConn.peer.send(encrypted)
 +      } catch (e) {}
-+    }).catch(err => {
-+      room._collabEncryptFailures = (room._collabEncryptFailures || 0) + 1
-+      console.warn('[y-webrtc] encrypt failure in sendWebrtcConn:', err)
-+    })
++    }).catch(() => {})
 +  } else {
 +    try {
 +      webrtcConn.peer.send(data)
@@ -26,7 +25,7 @@
  }
  
  /**
-@@ -156,11 +166,21 @@
+@@ -156,11 +166,21 @@ const sendWebrtcConn = (webrtcConn, encoder) => {
   */
  const broadcastWebrtcConn = (room, m) => {
    log('broadcast message in ', logging.BOLD, room.name, logging.UNBOLD)
@@ -42,10 +41,7 @@
 +          conn.peer.send(encrypted)
 +        } catch (e) {}
 +      })
-+    }).catch(err => {
-+      room._collabEncryptFailures = (room._collabEncryptFailures || 0) + 1
-+      console.warn('[y-webrtc] encrypt failure in broadcastWebrtcConn:', err)
-+    })
++    }).catch(() => {})
 +  } else {
 +    room.webrtcConns.forEach(conn => {
 +      try {
@@ -56,7 +52,7 @@
  }
  
  export class WebrtcConn {
-@@ -230,9 +250,18 @@
+@@ -230,9 +250,18 @@ export class WebrtcConn {
        announceSignalingInfo(room)
      })
      this.peer.on('data', data => {
@@ -69,10 +65,7 @@
 +          if (answer !== null) {
 +            sendWebrtcConn(this, answer)
 +          }
-+        }).catch(err => {
-+          room._collabDecryptionFailures = (room._collabDecryptionFailures || 0) + 1
-+          console.warn('[y-webrtc] decrypt failure in peer.on(data):', err)
-+        })
++        }).catch(() => {})
 +      } else {
 +        const answer = readPeerMessage(this, data)
 +        if (answer !== null) {
