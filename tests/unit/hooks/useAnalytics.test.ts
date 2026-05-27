@@ -128,10 +128,9 @@ describe('useAnalytics', () => {
       mockQueryStreak.mockResolvedValue({ current: 3, longest: 7 });
       mockQuerySceneOverlaps.mockResolvedValue([]);
 
-      let _result: ReturnType<typeof useAnalytics>;
       await act(async () => {
         const r = renderHook(() => useAnalytics());
-        _result = r.result.current;
+        void r.result.current;
         // Wait a tick for async effects
         await Promise.resolve();
       });

@@ -21,7 +21,10 @@ describe('useTranslation', () => {
           language: 'en',
           setLanguage: () => {},
           isReady: true,
-          t: (k: string) => k,
+          t: ((k: string) => k) as unknown as <T = string>(
+            key: string,
+            replacements?: Record<string, string>,
+          ) => T,
           dir: 'ltr',
         }}
       >
@@ -42,7 +45,10 @@ describe('useTranslation', () => {
           language: 'de',
           setLanguage: () => {},
           isReady: true,
-          t: (k: string) => `translated:${k}`,
+          t: ((k: string) => `translated:${k}`) as unknown as <T = string>(
+            key: string,
+            replacements?: Record<string, string>,
+          ) => T,
           dir: 'ltr',
         }}
       >
@@ -61,7 +67,10 @@ describe('useTranslation', () => {
           language: 'fr',
           setLanguage: () => {},
           isReady: true,
-          t: (k: string) => k,
+          t: ((k: string) => k) as unknown as <T = string>(
+            key: string,
+            replacements?: Record<string, string>,
+          ) => T,
           dir: 'ltr',
         }}
       >

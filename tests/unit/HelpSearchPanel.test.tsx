@@ -42,8 +42,7 @@ const ARTICLE: FlatHelpArticle = {
   categoryId: 'general',
   categoryTitleKey: 'help.categories.general',
   titleKey: 'help.articles.gettingStarted',
-  bodyKey: 'help.articles.gettingStartedBody',
-  tags: ['basics'],
+  contentKey: 'help.articles.gettingStartedBody',
 };
 
 // ---------------------------------------------------------------------------

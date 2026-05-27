@@ -23,8 +23,8 @@ export interface ToolDefinition {
 
 export interface ToolContext {
   projectId: string;
-  dispatch: import('../../app/store').AppDispatch;
-  getState: () => import('../../app/store').RootState;
+  dispatch: import('../../../app/store').AppDispatch;
+  getState: () => import('../../../app/store').RootState;
   memoryBank: import('../proForgeMemoryBank').ProForgeMemoryBank;
   signal: AbortSignal;
 }
@@ -247,7 +247,7 @@ toolRegistry.register({
   isWrite: true,
   handler: async (args, context) => {
     const { category, key, content } = args as {
-      category: import('../../features/proForge/types').MemoryBankEntry['category'];
+      category: import('../../../features/proForge/types').MemoryBankEntry['category'];
       key: string;
       content: string;
     };

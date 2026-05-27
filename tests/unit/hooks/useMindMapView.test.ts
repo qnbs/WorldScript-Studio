@@ -180,7 +180,7 @@ describe('useMindMapView', () => {
       act(() => {
         result.current.handleAddNode({
           label: 'Hero',
-          type: 'concept',
+          type: 'free',
           position: { x: 100, y: 200 },
           color: '#ff0000',
           shape: 'circle',
@@ -200,7 +200,7 @@ describe('useMindMapView', () => {
       act(() => {
         result.current.handleAddNode({
           label: 'Hero',
-          type: 'concept',
+          type: 'free',
           position: { x: 0, y: 0 },
           color: '#000',
           shape: 'circle',
@@ -285,7 +285,7 @@ describe('useMindMapView', () => {
       mockZoom = 0.2;
       const { result } = renderHook(() => useMindMapView());
       act(() => result.current.handleZoom(-10)); // try to go below min
-      const call = vi.mocked(mindMapUiActions.setZoom).mock.calls[0][0];
+      const call = vi.mocked(mindMapUiActions.setZoom).mock.calls[0]?.[0];
       expect(call).toBeGreaterThanOrEqual(0.2);
     });
 

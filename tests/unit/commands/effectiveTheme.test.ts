@@ -38,9 +38,9 @@ describe('getEffectiveTheme', () => {
       expect(getEffectiveTheme('auto')).toBe('light');
     });
 
-    it('returns "dark" as fallback for sepia theme without matchMedia', () => {
+    it('returns "dark" as fallback for auto theme without matchMedia', () => {
       Object.defineProperty(window, 'matchMedia', { writable: true, value: undefined });
-      expect(getEffectiveTheme('sepia')).toBe('dark');
+      expect(getEffectiveTheme('auto')).toBe('dark');
     });
   });
 });

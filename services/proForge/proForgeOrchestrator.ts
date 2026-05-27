@@ -151,7 +151,7 @@ export class ProForgeOrchestrator {
     const currentBranch = vcState.branches.find((b) => b.id === vcState.currentBranchId);
     const snapshotId = currentBranch?.headSnapshotId;
 
-    dispatch(stageStarted({ stage, snapshotId }));
+    dispatch(stageStarted({ stage, ...(snapshotId !== undefined && { snapshotId }) }));
 
     const maxRetries = run.config.maxRetries ?? 1;
     await this.executeStageWithSupervision(stage, maxRetries);
@@ -206,7 +206,7 @@ export class ProForgeOrchestrator {
               reviewItems: result.reviewItems,
               metrics: result.metrics,
               agentOutput: result.agentOutput,
-              supervisorDecision,
+              ...(supervisorDecision !== undefined && { supervisorDecision }),
             },
           }),
         );
@@ -273,7 +273,13 @@ export class ProForgeOrchestrator {
     const currentBranch = vcState.branches.find((b) => b.id === vcState.currentBranchId);
     const postSnapshotId = currentBranch?.headSnapshotId;
 
-    dispatch(submitStageReview({ stage, decisions, postSnapshotId }));
+    dispatch(
+      submitStageReview({
+        stage,
+        decisions,
+        ...(postSnapshotId !== undefined && { postSnapshotId }),
+      }),
+    );
 
     if (options?.advance !== false) {
       await this.advanceToNextStage(stage);

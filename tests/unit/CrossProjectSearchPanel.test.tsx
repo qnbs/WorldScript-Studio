@@ -38,6 +38,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableLoraAdapters: false,
   enablePluginSystem: false,
   enableVoiceSupport: false,
+  enableProForge: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -130,6 +131,7 @@ afterEach(() => {
     enableLoraAdapters: false,
     enablePluginSystem: false,
     enableVoiceSupport: false,
+    enableProForge: false,
   };
 });
 

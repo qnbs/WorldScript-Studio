@@ -63,9 +63,11 @@ export class StructuralAgent extends BaseAgent {
     );
 
     try {
-      const response = await aiProviderService.generateText(prompt, config.creativity, {
-        maxOutputTokens: config.maxTokens,
-      });
+      const response = await aiProviderService.generateText(
+        prompt,
+        config.creativity,
+        this.buildAiOpts({ maxTokens: config.maxTokens }),
+      );
       aiCalls += 1;
       tokensConsumed += response.length;
 
@@ -82,9 +84,11 @@ export class StructuralAgent extends BaseAgent {
         if (!reflection.coherent && !signal.aborted) {
           logger.warn('StructuralAgent: Self-eval flagged INCOHERENT — retrying primary call');
           try {
-            const retryRaw = await aiProviderService.generateText(prompt, config.creativity, {
-              maxOutputTokens: config.maxTokens,
-            });
+            const retryRaw = await aiProviderService.generateText(
+              prompt,
+              config.creativity,
+              this.buildAiOpts({ maxTokens: config.maxTokens }),
+            );
             aiCalls += 1;
             tokensConsumed += retryRaw.length;
             const retried = this.parseStructuralResponse(retryRaw);
@@ -109,13 +113,13 @@ export class StructuralAgent extends BaseAgent {
       id: `struct-${edit.id}`,
       stage: 'structural' as PipelineStage,
       type: 'structuralEdit' as ReviewItem['type'],
-      severity: edit.confidence > 0.85 ? 'warning' : 'info',
+      severity: edit.confidence > 0.85 ? 'warning' : ('info' as ReviewItem['severity']),
       sectionId: edit.sectionId,
-      sectionTitle: edit.sectionTitle,
-      range: edit.range,
+      ...(edit.sectionTitle !== undefined && { sectionTitle: edit.sectionTitle }),
+      ...(edit.range !== undefined && { range: edit.range }),
       description: `[${edit.category.toUpperCase()}] ${edit.rationale}`,
-      original: edit.original,
-      proposed: edit.proposed,
+      ...(edit.original !== undefined && { original: edit.original }),
+      ...(edit.proposed !== undefined && { proposed: edit.proposed }),
       rationale: edit.rationale,
       confidence: edit.confidence,
       status: 'pending' as ReviewItem['status'],
@@ -172,7 +176,7 @@ export class StructuralAgent extends BaseAgent {
       logger.warn('StructuralAgent: Schema validation failed:', validated.error);
       return null;
     }
-    return validated.data;
+    return validated.data as StructuralEditPlan;
   }
 
   private createFallbackPlan(sections: Array<{ id: string; title: string }>): StructuralEditPlan {

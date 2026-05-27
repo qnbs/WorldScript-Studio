@@ -30,9 +30,9 @@ function createTraceEntry(
     id: uuid(),
     timestamp: new Date().toISOString(),
     action,
-    stage,
+    ...(stage !== undefined && { stage }),
     message,
-    payload,
+    ...(payload !== undefined && { payload }),
   };
 }
 
@@ -186,7 +186,7 @@ const proForgeSlice = createSlice({
       if (stageResult) {
         stageResult.status = 'running';
         stageResult.startedAt = new Date().toISOString();
-        stageResult.preSnapshotId = snapshotId;
+        if (snapshotId !== undefined) stageResult.preSnapshotId = snapshotId;
       }
       state.currentRun.activeStage = stage;
       state.currentRun.traceLog.push(
@@ -281,7 +281,7 @@ const proForgeSlice = createSlice({
       stageResult.metrics.itemsRejected = stageResult.reviewItems.filter(
         (i) => i.status === 'rejected',
       ).length;
-      stageResult.postSnapshotId = postSnapshotId;
+      if (postSnapshotId !== undefined) stageResult.postSnapshotId = postSnapshotId;
       stageResult.status = 'accepted';
 
       state.currentRun.traceLog.push(

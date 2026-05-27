@@ -126,14 +126,14 @@ describe('useObjectsView', () => {
       const { result } = renderHook(() => useObjectsView());
       act(() => result.current.setSearchQuery('sword'));
       expect(result.current.filteredObjects).toHaveLength(1);
-      expect(result.current.filteredObjects[0].name).toBe('Sword of Dawn');
+      expect(result.current.filteredObjects[0]?.name).toBe('Sword of Dawn');
     });
 
     it('filters by description', () => {
       const { result } = renderHook(() => useObjectsView());
       act(() => result.current.setSearchQuery('treasure'));
       expect(result.current.filteredObjects).toHaveLength(1);
-      expect(result.current.filteredObjects[0].id).toBe('obj-2');
+      expect(result.current.filteredObjects[0]?.id).toBe('obj-2');
     });
 
     it('filters by type', () => {
@@ -146,14 +146,14 @@ describe('useObjectsView', () => {
       const { result } = renderHook(() => useObjectsView());
       act(() => result.current.setSelectedGroupFilter('grp-1'));
       expect(result.current.filteredObjects).toHaveLength(1);
-      expect(result.current.filteredObjects[0].id).toBe('obj-1');
+      expect(result.current.filteredObjects[0]?.id).toBe('obj-1');
     });
 
     it('filters for ungrouped objects', () => {
       const { result } = renderHook(() => useObjectsView());
       act(() => result.current.setSelectedGroupFilter('ungrouped'));
       expect(result.current.filteredObjects).toHaveLength(1);
-      expect(result.current.filteredObjects[0].id).toBe('obj-2');
+      expect(result.current.filteredObjects[0]?.id).toBe('obj-2');
     });
   });
 
@@ -179,7 +179,7 @@ describe('useObjectsView', () => {
         result.current.handleSaveObject({
           name: 'New Item',
           description: 'desc',
-          type: 'misc',
+          type: 'other',
           significance: 'low',
           notes: '',
         });

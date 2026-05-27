@@ -46,6 +46,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableLoraAdapters: false,
   enablePluginSystem: false,
   enableVoiceSupport: false,
+  enableProForge: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

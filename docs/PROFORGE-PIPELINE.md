@@ -130,6 +130,9 @@ export abstract class BaseAgent {
   protected getMemoryBank(): ProForgeMemoryBank { ... }
   protected elapsed(startTime: number): number { ... }
 
+  // AI options builder — derives valid AIRequestOptions from context.config (model + provider defaults)
+  protected buildAiOpts(overrides?: { maxTokens?: number; signal?: AbortSignal }): AIRequestOptions { ... }
+
   // Self-evaluation — checks AI output for coherence before returning to orchestrator
   protected async selfReflect(
     manuscriptExcerpt: string,
@@ -139,7 +142,7 @@ export abstract class BaseAgent {
 }
 ```
 
-Benefits: constructor boilerplate, `requireProject`, `getMemoryBank`, `elapsed` helpers, and `selfReflect` are shared — agents implement only `execute()`.
+Benefits: constructor boilerplate, `requireProject`, `getMemoryBank`, `elapsed`, `buildAiOpts`, and `selfReflect` helpers are shared — agents implement only `execute()`. Always call `this.buildAiOpts({ maxTokens: N })` for `generateText` calls — never pass bare `{ maxTokens: N }` (AIRequestOptions requires `model` + `provider`).
 
 ---
 

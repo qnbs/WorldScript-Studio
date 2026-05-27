@@ -82,9 +82,11 @@ export class ProseAgent extends BaseAgent {
       });
 
       try {
-        const response = await aiProviderService.generateText(prompt, config.creativity, {
-          maxOutputTokens: Math.min(config.maxTokens, 4000),
-        });
+        const response = await aiProviderService.generateText(
+          prompt,
+          config.creativity,
+          this.buildAiOpts({ maxTokens: Math.min(config.maxTokens, 4000) }),
+        );
         aiCalls += 1;
         tokensConsumed += response.length;
 
@@ -103,7 +105,22 @@ export class ProseAgent extends BaseAgent {
           const validEdits = validated.data.edits.filter(
             (e) => e.sectionId === section.id || e.sectionId === section.title,
           );
-          allEdits.push(...validEdits.map((e) => ({ ...e, sectionId: section.id })));
+          allEdits.push(
+            ...validEdits.map(
+              (e): ProseEdit => ({
+                id: e.id,
+                sectionId: section.id,
+                startOffset: e.startOffset,
+                endOffset: e.endOffset,
+                category: e.category,
+                original: e.original,
+                proposed: e.proposed,
+                rationale: e.rationale,
+                confidence: e.confidence,
+                ...(e.sectionTitle !== undefined && { sectionTitle: e.sectionTitle }),
+              }),
+            ),
+          );
         }
       } catch (err) {
         logger.warn(`ProseAgent: Failed to analyze section ${section.id}:`, err);
@@ -134,22 +151,25 @@ export class ProseAgent extends BaseAgent {
       povConsistencyScore: 70,
     };
 
-    const reviewItems: ReviewItem[] = deduped.map((edit) => ({
-      id: `prose-${edit.id}`,
-      stage: 'lineProse' as PipelineStage,
-      type: 'proseEdit' as ReviewItem['type'],
-      severity: edit.confidence > 0.85 ? 'warning' : 'info',
-      sectionId: edit.sectionId,
-      sectionTitle: sections.find((s) => s.id === edit.sectionId)?.title,
-      range: { start: edit.startOffset, end: edit.endOffset },
-      description: `[${edit.category}] ${edit.rationale}`,
-      original: edit.original,
-      proposed: edit.proposed,
-      rationale: edit.rationale,
-      confidence: edit.confidence,
-      status: 'pending' as ReviewItem['status'],
-      createdAt: new Date().toISOString(),
-    }));
+    const reviewItems: ReviewItem[] = deduped.map((edit) => {
+      const sectionTitle = sections.find((s) => s.id === edit.sectionId)?.title;
+      return {
+        id: `prose-${edit.id}`,
+        stage: 'lineProse' as PipelineStage,
+        type: 'proseEdit' as ReviewItem['type'],
+        severity: (edit.confidence > 0.85 ? 'warning' : 'info') as ReviewItem['severity'],
+        sectionId: edit.sectionId,
+        ...(sectionTitle !== undefined && { sectionTitle }),
+        range: { start: edit.startOffset, end: edit.endOffset },
+        description: `[${edit.category}] ${edit.rationale}`,
+        original: edit.original,
+        proposed: edit.proposed,
+        rationale: edit.rationale,
+        confidence: edit.confidence,
+        status: 'pending' as ReviewItem['status'],
+        createdAt: new Date().toISOString(),
+      };
+    });
 
     const durationMs = this.elapsed(startTime);
 
@@ -194,7 +214,7 @@ export class ProseAgent extends BaseAgent {
             confidence: 0.8,
           });
         }
-        offset += word.length;
+        offset += word?.length ?? 0;
       }
     }
     // Limit to top 30 most critical

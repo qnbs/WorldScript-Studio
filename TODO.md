@@ -8,6 +8,17 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## v1.18.1 — TypeScript strict-mode compliance sweep (2026-05-27)
+
+- ✅ **All pre-existing TypeScript errors fixed** — zero `tsc --noEmit` errors across 47 changed files
+- ✅ **`BaseAgent.buildAiOpts()`** — new protected helper derives valid `AIRequestOptions` (model + provider) from `PipelineConfig`; applied to all 7 pipeline agents + `selfReflect()`
+- ✅ **Voice components** — `VoicePrivacyConsentModal` + `VoicePrivacyStatus` import paths, action names, and selector names corrected
+- ✅ **`versionControlSlice`** — added stub `restoreSnapshot` reducer (typed cross-slice signal)
+- ✅ **35+ test fixture corrections** — StorySection shape, AiModel/Theme/MindMapNodeType/StoryObjectType literals, PrivacySettings required fields, DeviceHealthReport shape, FlatHelpArticle.contentKey
+- ✅ **Quality gate** — lint ✅ · typecheck ✅ · i18n:check ✅ · tests ✅
+
+---
+
 ## v1.18.0 — ProForge Humanization & Refinement Sprint (RELEASED 2026-05-27)
 
 - ✅ **Phase H** — Author-facing vocabulary: stage labels, loading messages, RAG "passages" rename, flag descriptions, behavioral tests

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.1] — 2026-05-27
+
+### Fixed
+
+- **TypeScript strict-mode compliance sweep** — Zero `tsc --noEmit` errors across all 47 changed files:
+  - **ProForge pipeline agents:** `AIRequestOptions` requires `model` + `provider`; added `buildAiOpts()` protected helper to `BaseAgent` that derives provider/model from `PipelineConfig.aiProvider` with sensible defaults. Applied to all 7 pipeline agents + `selfReflect()` in `BaseAgent`.
+  - **`productionAgent.ts`:** `EpubExportOptions.author` (required field) — added `author: project.author ?? 'Unknown'`.
+  - **`services/proForge/pipelineTools/toolRegistry.ts`:** Wrong module paths (`'../../app/store'`) → `'../../../app/store'`; same for `features/proForge/types`.
+  - **`features/proForge/proForgeSlice.ts`:** `exactOptionalPropertyTypes` — optional properties assigned via conditional spread instead of explicit `undefined`.
+  - **`features/proForge/types.ts`:** Array index access (`PIPELINE_STAGES[idx]`) returns `T | undefined` with `noUncheckedIndexedAccess` — coalesced to `?? null`.
+  - **`features/versionControl/versionControlSlice.ts`:** Added stub `restoreSnapshot` reducer (cross-slice signal, no self-state mutation).
+  - **`hooks/useProForgeOrchestrator.ts`:** `aiCreativity` is on root `Settings`, not `AdvancedAiSettings`.
+  - **Voice components (`VoicePrivacyConsentModal`, `VoicePrivacyStatus`):** Wrong `useTranslation` import path; `Modal` named export; `setVoiceSettings` action (not `updateSettings`); `selectVoiceSettings` selector.
+  - **Test fixtures (35+ test files):** Corrected for `noUncheckedIndexedAccess` (`[i]!`), removed non-existent `StorySection.type`/`order` fields, `act: 1 as const` for literal union, `AiModel`/`Theme`/`MindMapNodeType`/`StoryObjectType` valid enum values, `PrivacySettings` with all 6 required fields, `DeviceHealthReport` correct shape, `FlatHelpArticle.contentKey` (not `bodyKey`), `FeatureFlagsState.enableProForge` in mock objects.
+
 ## [1.18.0] — 2026-05-27
 
 ### Added

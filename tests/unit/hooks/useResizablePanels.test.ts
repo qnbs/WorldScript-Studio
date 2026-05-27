@@ -93,7 +93,6 @@ describe('useResizablePanels', () => {
       act(() => result.current.startLeftResize(e));
 
       // Simulate pointermove at x=300 → 300/1000 * 100 = 30%
-      const _moveEvent = makePointerEvent(300);
       act(() => {
         window.dispatchEvent(new PointerEvent('pointermove', { clientX: 300 }));
       });

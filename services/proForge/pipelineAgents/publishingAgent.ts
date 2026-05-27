@@ -48,9 +48,11 @@ export class PublishingAgent extends BaseAgent {
     let tokensConsumed = 0;
 
     try {
-      const response = await aiProviderService.generateText(prompt, config.creativity, {
-        maxOutputTokens: Math.min(config.maxTokens, 4000),
-      });
+      const response = await aiProviderService.generateText(
+        prompt,
+        config.creativity,
+        this.buildAiOpts({ maxTokens: Math.min(config.maxTokens, 4000) }),
+      );
       aiCalls += 1;
       tokensConsumed += response.length;
 
@@ -70,7 +72,7 @@ export class PublishingAgent extends BaseAgent {
         logger.warn('PublishingAgent: Schema validation failed:', validated.error);
         pkg = this.createFallbackPackage(project, totalWords);
       } else {
-        pkg = validated.data;
+        pkg = validated.data as PublishingPackage;
       }
     } catch (err) {
       logger.error('PublishingAgent: AI call failed:', err);

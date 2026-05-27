@@ -40,8 +40,6 @@ const SECTION: StorySection = {
   content: '',
   act: 1,
   wordCount: 500,
-  type: 'scene',
-  order: 0,
 };
 
 const BASE_PROPS = {

@@ -46,12 +46,12 @@ export function isEditingStage(stage: PipelineStage): boolean {
 
 export function nextStage(stage: PipelineStage): PipelineStage | null {
   const idx = PIPELINE_STAGES.indexOf(stage);
-  return idx >= 0 && idx < PIPELINE_STAGES.length - 1 ? PIPELINE_STAGES[idx + 1] : null;
+  return idx >= 0 && idx < PIPELINE_STAGES.length - 1 ? (PIPELINE_STAGES[idx + 1] ?? null) : null;
 }
 
 export function prevStage(stage: PipelineStage): PipelineStage | null {
   const idx = PIPELINE_STAGES.indexOf(stage);
-  return idx > 0 ? PIPELINE_STAGES[idx - 1] : null;
+  return idx > 0 ? (PIPELINE_STAGES[idx - 1] ?? null) : null;
 }
 
 // ---------------------------------------------------------------------------

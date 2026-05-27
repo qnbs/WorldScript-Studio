@@ -164,7 +164,7 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 **Local RAG:** `services/localRagIndex.ts` + `services/localRagService.ts` — hybrid retrieval (60% semantic MiniLM-L6-v2 + 30% lexical + 10% recency) over project content via `@xenova/transformers`. Lazy-loaded; never sends data to the cloud. `ragMode: 'hybrid' | 'lexical'` in `settings.advancedAi` (default `'hybrid'`).
 
-**Prompt assembly:** `services/ragPromptAssembly.ts` — `assembleRAGPrompt(opts)` builds token-budgeted context blocks from retrieved RAG chunks for Writer continuation/brainstorm/critic and Plot Board beat suggestions. Use this rather than building context strings inline. Templates come from `services/promptLibrary.ts`.
+**Prompt assembly:** `services/ragPromptAssembly.ts` — `assembleRAGPrompt(opts)` builds token-budgeted context blocks from RAG chunks. Use this rather than building context strings inline. Templates come from `services/promptLibrary.ts`.
 
 ### DuckDB Analytics
 
@@ -210,7 +210,7 @@ Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProF
 - **`contexts/CommandExecutorContext.tsx`** + **`CommandExecutorProvider` in `App.tsx`** — expose `executeCommand` / `runCommandById` to deep UI (Help „Try it" via `tryActionId`, toasts with `commandId`).
 - **`app/transientUiStore.ts`** — Zustand store includes **`isCommandPaletteOpen`** (palette wired here; avoid duplicate local-only state).
 - **`hooks/useGlobalKeyboardShortcuts.ts`** + **`services/keyboard/`** — normalize OS modifiers, match bindings from settings, optional conflict listing for the Shortcuts UI.
-- **Help system:** `services/help/helpCatalog.ts` (50+ articles, 6 categories), `services/help/helpSearch.ts` (full-text indexed per locale), `services/help/helpDocRetrieval.ts` builds static retrieval context for `streamAiHelpResponse`.
+- **Help system:** `services/help/` — `helpCatalog.ts` (50+ articles), `helpSearch.ts` (full-text search), `helpDocRetrieval.ts` (AI help context).
 
 ### i18n
 
@@ -233,11 +233,11 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 | CSS | `/* QNBS-v3: … */` |
 | Pure config (JSON, YAML) | No inline comment — explain in the commit message |
 
-Skip the annotation for pure formatting, lockfile updates, or generated artefacts. Cursor IDE agents follow the extended rules in `.cursorrules` and `.cursor/rules/*.mdc`.
+Skip the annotation for pure formatting, lockfile updates, or generated artefacts.
 
 ## Documentation index
 
-All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**. Sprint notes: `docs/SPRINT-V1.8.md`, `docs/SPRINT-V1.9.md`, `docs/SPRINT-V1.10.md`, `docs/SPRINT-V1.16.md` (design system completion). Local CI: `infra/low-end-ci/DAILY-DRIVER.md`.
+All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**. Sprint notes: `docs/SPRINT-V1.16.md` (design system completion). Local CI: `infra/low-end-ci/DAILY-DRIVER.md`.
 
 **Before large or cross-cutting changes:** read [`ROADMAP.md`](ROADMAP.md) (planned features + priorities), [`AUDIT.md`](AUDIT.md) (follow-ups, metrics), and [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (architecture decisions, content/CI guidance). ProForge architecture: [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md). Latest sprint handoff: [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md). After merging, update README.md badges and the AUDIT.md quality-gate line with CI-reported numbers if the maintainer requests it.
 
@@ -283,7 +283,7 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 **Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — `createProForgeOrchestrator({dispatch, getState, projectId, manuscript, characters, worlds, config})`. Agents are lazy-loaded per stage to avoid circular deps. Call via `hooks/useProForgeOrchestrator.ts` (never instantiate directly in components).
 
-**Agents** (`services/proForge/pipelineAgents/`): all 8 stage agents extend `BaseAgent` (abstract base in `baseAgent.ts`). `BaseAgent` provides `requireProject()`, `getMemoryBank()`, `elapsed(startTime)`, and `selfReflect(excerpt, summary, signal)` — agents implement only `execute(signal): Promise<Pick<StageResult, ...>>`. Do not duplicate these helpers in new agents.
+**Agents** (`services/proForge/pipelineAgents/`): all 8 stage agents extend `BaseAgent` (abstract base in `baseAgent.ts`). `BaseAgent` provides `requireProject()`, `getMemoryBank()`, `elapsed(startTime)`, `selfReflect(excerpt, summary, signal)`, and `buildAiOpts(overrides?)` — agents implement only `execute(signal): Promise<Pick<StageResult, ...>>`. Do not duplicate these helpers in new agents. Always call `this.buildAiOpts({ maxTokens: N })` instead of passing bare `{ maxTokens: N }` to `generateText` — `AIRequestOptions` requires `model` and `provider`.
 
 **SupervisorAgent** (`supervisorAgent.ts`): heuristic quality gate — no AI calls. `evaluate(stage, result)` returns `SupervisionDecision { verdict: 'pass'|'retry'|'fail', reason, retryHint? }`. Detects `isFallback: true`, uniform-score sentinels, implausible edit/issue ratios. Called by the orchestrator's `executeStageWithSupervision` loop (up to `maxRetries` retries). Hard gate: intake `qualityScore < 30` → `fail`.
 
@@ -295,11 +295,9 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 **`PipelineConfig` key fields:** `genrePreset`, `selectedStages`, `aiProvider`, `ragMode`, `maxTokens`, `creativity`, `useDuckDb`, `autoAcceptThreshold` (0 = never auto-accept), `language`, `maxRetries` (0 | 1, default 1 — controls supervisor retry budget).
 
-**Key type additions (v1.18):** `isFallback?: boolean` on `DiagnosticReport`, `StructuralEditPlan`, `QualityGateReport`; `reflectionNotes?: string` on diagnostic/structural outputs (trace log only, not shown in UI); `supervisorDecision?: SupervisionDecision` on `StageResult`.
-
 ### Scene-level services
 
-**sceneRevisionService:** `services/sceneRevisionService.ts` — IDB `scene-revisions` store; `saveRevision(sectionId, snapshot, label?)`, `listRevisions(sectionId)`, `deleteRevision(id)`. Tests: use `@vitest-environment node` + `new IDBFactory()` per test in `beforeEach` + `_resetDbForTest()`.
+**sceneRevisionService:** `services/sceneRevisionService.ts` — IDB `scene-revisions` store; `saveRevision(sectionId, snapshot, label?)`, `listRevisions(sectionId)`, `deleteRevision(id)`.
 
 **sceneCommentsSlice:** `features/sceneComments/sceneCommentsSlice.ts` — EntityAdapter; selectors `selectCommentsBySection(sectionId)`, `selectUnresolvedCount`, `selectUnresolvedCountBySection(sectionId)`. Root state key: `sceneComments`.
 
@@ -315,7 +313,7 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 **DuckDB in tests:** Mock `services/duckdb/duckdbClient` with `{ execAsync: vi.fn(), queryAsync: vi.fn() }`. Never initialize a real DuckDB-WASM instance in unit tests.
 
-**AI thunk tests (localStorageOnly default):** `settingsReducer` initializes with `privacy.localStorageOnly: true`. Any test file that dispatches AI thunks through a real Redux store will have `createDeduplicatedThunk` call `assertCloudAiAllowedSync(provider, privacy)` and throw "Cloud provider blocked" before the payload creator runs. Fix: add this mock **before all imports** in the test file:
+**AI thunk tests:** `settingsReducer` defaults to `privacy.localStorageOnly: true`, so AI thunks throw "Cloud provider blocked". Fix: add this mock **before all imports**:
 ```ts
 vi.mock('../../../services/ai/aiPolicy', () => ({
   assertCloudAiAllowedSync: vi.fn(),
@@ -345,7 +343,7 @@ Apply this pattern for any `use*ViewContext` hook — `useProForgeViewContext`, 
 
 **Abstract engine pattern:** `services/voice/voiceTypes.ts` defines `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine` interfaces. All implementations follow the same contract: `isAvailable()` → `initialize()` → use → `dispose()`.
 
-**Web Speech API fallbacks:** `WebSpeechSttEngine` (auto-restart on unexpected end), `WebSpeechTtsEngine` (voice selection, rate/volume/pitch), `WebRtcVadEngine` (energy-based, pure JS), `EnergyThresholdWakeWordEngine` (configurable phrase, rolling history). These require zero downloads and work immediately in all modern browsers.
+**Web Speech API fallbacks:** `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` — zero downloads, work immediately in all modern browsers.
 
 **Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact template match (O(1) via Map) → fuzzy Jaccard scoring + keyword bonus → slot extraction for navigation commands. View-context filtering via `requiredViews` array. Character/section/world names injected from Redux state for slot matching.
 
@@ -353,9 +351,7 @@ Apply this pattern for any `use*ViewContext` hook — `useProForgeViewContext`, 
 
 **Hooks:** `useVoice` (primary bridge), `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation` (editor transcript insertion), `useVoiceAccessibility` (ARIA live regions).
 
-**Opt-in gating:** Voice UI only renders when `settings.voice.enabled === true` AND `featureFlags.enableVoiceSupport === true`. Onboarding notice shown in Settings → Voice on first access.
-
-**currentView fallback:** Intent engine uses `document.body.dataset['view']` as best-effort current view detection. This is React-state-independent but may lag behind rapid view switches.
+**Opt-in gating:** Requires `settings.voice.enabled && featureFlags.enableVoiceSupport`. Onboarding notice shown in Settings → Voice on first access.
 
 ### Local inference
 
@@ -374,8 +370,8 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
 - `workers/inference.worker.ts:50` — `@ts-expect-error` on `@xenova/transformers` dynamic import (lives in `packages/ai-core`; Vite resolves at build time but `tsc` can't see it from root)
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 token migration verified in production (all intentional vars documented above)
-- **Voice v1.2 planned:** WASM engines (Whisper.cpp STT, Kokoro/Piper TTS, Silero VAD, Sherpa-ONNX wake-word); semantic intent matching (MiniLM embeddings); local LLM fallback for complex commands; E2E voice tests (Playwright)
-- **v2.0 open (stubs behind feature flags):** RTL language support (`enableRtlLayout`); LoRA adapter inference (`enableLoraAdapters`); Cloud-Sync Cloudflare R2 adapter (`enableCloudSync`); Plugin system loader (`enablePluginSystem`). RTCDataChannel in-flight E2E encryption is **shipped** (y-webrtc patch, v1.17.0).
+- **Voice v1.2 planned:** WASM STT/TTS/VAD engines, semantic intent (MiniLM), local LLM fallback, E2E voice tests (Playwright)
+- **v2.0 open (stubs behind feature flags):** RTL language support (`enableRtlLayout`); LoRA adapter inference (`enableLoraAdapters`); Cloud-Sync Cloudflare R2 adapter (`enableCloudSync`); Plugin system loader (`enablePluginSystem`).
 
 ## graphify
 
@@ -399,6 +395,6 @@ Rules:
 - To find affected tests: `pnpm run codegraph:affected`
 
 ### Dual-Graph workflow
-1. Architecture / high-level questions: Read `graphify-out/GRAPH_REPORT.md` first
-2. Code navigation / symbols / impact: Use CodeGraph MCP tools
-3. Cross-module relationships: Use Graphify `query`/`path` or CodeGraph `context`
+- Architecture questions → `graphify-out/GRAPH_REPORT.md`
+- Symbol/impact → CodeGraph MCP tools
+- Cross-module → Graphify `query`/`path` or CodeGraph `context`

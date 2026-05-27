@@ -6,6 +6,7 @@
 import type {
   CopyEditPlan,
   PipelineStage,
+  RepetitionHit,
   ReviewItem,
   StageResult,
 } from '../../../features/proForge/types';
@@ -56,9 +57,11 @@ export class CopyEditAgent extends BaseAgent {
       });
 
       try {
-        const response = await aiProviderService.generateText(prompt, config.creativity, {
-          maxOutputTokens: Math.min(config.maxTokens, 4000),
-        });
+        const response = await aiProviderService.generateText(
+          prompt,
+          config.creativity,
+          this.buildAiOpts({ maxTokens: Math.min(config.maxTokens, 4000) }),
+        );
         aiCalls += 1;
         tokensConsumed += response.length;
 
@@ -82,7 +85,17 @@ export class CopyEditAgent extends BaseAgent {
           allFormatIssues.push(
             ...validated.data.formatIssues.map((e) => ({ ...e, sectionId: section.id })),
           );
-          allRepetitionHits.push(...validated.data.repetitionHits);
+          allRepetitionHits.push(
+            ...validated.data.repetitionHits.map(
+              (h): RepetitionHit => ({
+                id: h.id,
+                wordOrPhrase: h.wordOrPhrase,
+                occurrences: h.occurrences,
+                count: h.count,
+                ...(h.suggestion !== undefined && { suggestion: h.suggestion }),
+              }),
+            ),
+          );
         }
       } catch (err) {
         logger.warn(`CopyEditAgent: Failed section ${section.id}:`, err);
@@ -144,7 +157,7 @@ export class CopyEditAgent extends BaseAgent {
         type: 'repetitionHit' as ReviewItem['type'],
         severity: 'info' as ReviewItem['severity'],
         description: `Repetition: "${hit.wordOrPhrase}" appears ${hit.count} times. ${hit.suggestion ?? ''}`,
-        suggestion: hit.suggestion,
+        ...(hit.suggestion !== undefined && { suggestion: hit.suggestion }),
         rationale: 'Repeated word or phrase detected',
         confidence: 0.75,
         status: 'pending' as ReviewItem['status'],

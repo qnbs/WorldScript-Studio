@@ -69,8 +69,6 @@ const SECTION: StorySection = {
   content: '',
   act: 1,
   wordCount: 150,
-  type: 'scene',
-  order: 0,
   color: '#3b82f6',
   status: 'draft',
   summary: 'Character arrives in town',

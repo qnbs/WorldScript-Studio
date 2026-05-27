@@ -12,11 +12,10 @@ vi.mock('../../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => vi.fn()),
 }));
 
-// Mock I18n context
-vi.mock('../../../contexts/I18nContext', () => ({
-  useTranslation: vi.fn(() => ({
+vi.mock('../../../hooks/useTranslation', () => ({
+  useTranslation: () => ({
     t: (key: string) => key.split('.').pop() ?? key,
-  })),
+  }),
 }));
 
 import { useAppSelector } from '../../../app/hooks';
@@ -24,13 +23,14 @@ import VoicePrivacyStatus from '../../../components/voice/VoicePrivacyStatus';
 
 describe('VoicePrivacyStatus', () => {
   it('shows External badge when Web Speech API is the active STT engine', () => {
-    vi.mocked(useAppSelector).mockReturnValue({ voice: { sttEngine: 'webSpeech' } });
+    // QNBS-v3: selectVoiceSettings returns VoiceSettings directly, not wrapped in { voice }
+    vi.mocked(useAppSelector).mockReturnValue({ sttEngine: 'webSpeech' });
     render(<VoicePrivacyStatus />);
     expect(screen.getByText('statusExternal')).toBeInTheDocument();
   });
 
   it('shows Local badge when a local STT engine is active', () => {
-    vi.mocked(useAppSelector).mockReturnValue({ voice: { sttEngine: 'auto' } });
+    vi.mocked(useAppSelector).mockReturnValue({ sttEngine: 'auto' });
     render(<VoicePrivacyStatus />);
     expect(screen.getByText('statusLocal')).toBeInTheDocument();
   });

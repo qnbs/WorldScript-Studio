@@ -135,12 +135,12 @@ describe('BackupQuickActionsCard', () => {
     const { importProjectThunk: mockThunk } = await import(
       '../../features/project/thunks/projectManagementThunks'
     );
-    vi.mocked(mockThunk).mockReturnValue({ type: 'import/thunk' } as ReturnType<
+    vi.mocked(mockThunk).mockReturnValue({ type: 'import/thunk' } as unknown as ReturnType<
       typeof importProjectThunk
     >);
-    vi.mocked(importProjectThunk).fulfilled = {
-      match: () => true,
-    } as unknown as typeof importProjectThunk.fulfilled;
+    Object.assign(vi.mocked(importProjectThunk), {
+      fulfilled: { match: () => true },
+    });
     mockDispatch.mockReturnValueOnce({ type: 'import/fulfilled', unwrap: () => Promise.resolve() });
 
     const file = new File(['{}'], 'backup.json', { type: 'application/json' });

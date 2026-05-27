@@ -4,7 +4,8 @@
  */
 
 import type { StageResult } from '../../../features/proForge/types';
-import { aiProviderService } from '../../aiProviderService';
+import type { AIProvider, AiModel } from '../../../types';
+import { type AIRequestOptions, aiProviderService } from '../../aiProviderService';
 import { logger } from '../../logger';
 import { getMemoryBank, type ProForgeMemoryBank } from '../proForgeMemoryBank';
 import type { OrchestratorContext } from '../proForgeOrchestrator';
@@ -34,6 +35,28 @@ export abstract class BaseAgent {
     return Math.round(performance.now() - startTime);
   }
 
+  // QNBS-v3: Builds AIRequestOptions from context.config — provider/model defaulting for pipeline agents.
+  protected buildAiOpts(overrides?: {
+    maxTokens?: number;
+    signal?: AbortSignal;
+  }): AIRequestOptions {
+    const cfg = this.context.config;
+    const provider = (cfg.aiProvider || 'gemini') as AIProvider;
+    const modelMap: Partial<Record<AIProvider, AiModel>> = {
+      gemini: 'gemini-2.5-flash',
+      openai: 'gpt-4o-mini',
+      anthropic: 'claude-haiku-4-5',
+      grok: 'grok-3-mini',
+    };
+    const model: AiModel = modelMap[provider] ?? 'gemini-2.5-flash';
+    return {
+      model,
+      provider,
+      maxTokens: overrides?.maxTokens ?? cfg.maxTokens ?? 8192,
+      ...(overrides?.signal !== undefined && { signal: overrides.signal }),
+    };
+  }
+
   // QNBS-v3: Lightweight coherence check — one focused AI call, max 100 tokens.
   // Returns coherent=true on any error so reflection never blocks the pipeline.
   protected async selfReflect(
@@ -55,9 +78,11 @@ ANALYSIS SUMMARY:
 ${analysisSummary.substring(0, 400)}`;
 
     try {
-      const response = await aiProviderService.generateText(prompt, 'Focused', {
-        maxOutputTokens: 100,
-      });
+      const response = await aiProviderService.generateText(
+        prompt,
+        'Focused',
+        this.buildAiOpts({ maxTokens: 100 }),
+      );
       const coherent = response.trim().toUpperCase().startsWith('COHERENT');
       return { coherent, note: response.trim(), tokensUsed: response.length };
     } catch (err) {

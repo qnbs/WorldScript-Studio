@@ -29,43 +29,73 @@ import {
 } from '../../services/ai/modelNormalization';
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const basePrivacy = (overrides: { localStorageOnly: boolean; euDataResidency: boolean }) => ({
+  analyticsEnabled: false,
+  crashReporting: false,
+  dataEncryption: false,
+  shareUsageData: false,
+  ...overrides,
+});
+
+// ---------------------------------------------------------------------------
 // aiPolicy — assertCloudAiAllowedSync
 // ---------------------------------------------------------------------------
 
 describe('assertCloudAiAllowedSync', () => {
   it('allows ollama regardless of privacy settings', () => {
     expect(() =>
-      assertCloudAiAllowedSync('ollama', { localStorageOnly: true, euDataResidency: false }),
+      assertCloudAiAllowedSync(
+        'ollama',
+        basePrivacy({ localStorageOnly: true, euDataResidency: false }),
+      ),
     ).not.toThrow();
   });
 
   it('allows webllm regardless of privacy settings', () => {
     expect(() =>
-      assertCloudAiAllowedSync('webllm', { localStorageOnly: true, euDataResidency: false }),
+      assertCloudAiAllowedSync(
+        'webllm',
+        basePrivacy({ localStorageOnly: true, euDataResidency: false }),
+      ),
     ).not.toThrow();
   });
 
   it('throws when localStorageOnly=true and provider is gemini', () => {
     expect(() =>
-      assertCloudAiAllowedSync('gemini', { localStorageOnly: true, euDataResidency: false }),
+      assertCloudAiAllowedSync(
+        'gemini',
+        basePrivacy({ localStorageOnly: true, euDataResidency: false }),
+      ),
     ).toThrow('Cloud provider blocked: local-only mode is active.');
   });
 
   it('throws when euDataResidency=true and provider is openai', () => {
     expect(() =>
-      assertCloudAiAllowedSync('openai', { localStorageOnly: false, euDataResidency: true }),
+      assertCloudAiAllowedSync(
+        'openai',
+        basePrivacy({ localStorageOnly: false, euDataResidency: true }),
+      ),
     ).toThrow('EU residency policy');
   });
 
   it('throws when euDataResidency=true and provider is grok', () => {
     expect(() =>
-      assertCloudAiAllowedSync('grok', { localStorageOnly: false, euDataResidency: true }),
+      assertCloudAiAllowedSync(
+        'grok',
+        basePrivacy({ localStorageOnly: false, euDataResidency: true }),
+      ),
     ).toThrow('EU residency policy');
   });
 
   it('allows gemini when euDataResidency=true (only openai/grok are blocked)', () => {
     expect(() =>
-      assertCloudAiAllowedSync('gemini', { localStorageOnly: false, euDataResidency: true }),
+      assertCloudAiAllowedSync(
+        'gemini',
+        basePrivacy({ localStorageOnly: false, euDataResidency: true }),
+      ),
     ).not.toThrow();
   });
 
@@ -88,14 +118,14 @@ describe('assertCloudAiAllowed (async)', () => {
 
   it('throws when settings have localStorageOnly=true', async () => {
     mockLoadSettings.mockResolvedValueOnce({
-      privacy: { localStorageOnly: true, euDataResidency: false },
+      privacy: basePrivacy({ localStorageOnly: true, euDataResidency: false }),
     });
     await expect(assertCloudAiAllowed('gemini')).rejects.toThrow('local-only mode');
   });
 
   it('resolves without error when settings allow cloud', async () => {
     mockLoadSettings.mockResolvedValueOnce({
-      privacy: { localStorageOnly: false, euDataResidency: false },
+      privacy: basePrivacy({ localStorageOnly: false, euDataResidency: false }),
     });
     await expect(assertCloudAiAllowed('gemini')).resolves.toBeUndefined();
   });
@@ -193,6 +223,6 @@ describe('normalizeOllamaModelId', () => {
   });
 
   it('handles model without any prefix', () => {
-    expect(normalizeOllamaModelId('phi-3')).toBe('phi-3');
+    expect(normalizeOllamaModelId('gpt-4o-mini')).toBe('gpt-4o-mini');
   });
 });

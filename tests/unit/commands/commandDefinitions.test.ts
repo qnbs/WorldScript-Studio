@@ -86,6 +86,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableLoraAdapters: false,
     enablePluginSystem: false,
     enableVoiceSupport: false,
+    enableProForge: false,
   },
 };
 
