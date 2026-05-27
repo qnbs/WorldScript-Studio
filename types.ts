@@ -627,6 +627,8 @@ export interface VoiceSettings {
   ttsMuted: boolean;
   /** Dictation auto-punctuation */
   dictationAutoPunctuation: boolean;
+  /** GDPR Art. 13 consent granted for Web Speech API (routes audio to cloud STT providers) */
+  webSpeechConsentGranted?: boolean;
 }
 
 export interface Settings {

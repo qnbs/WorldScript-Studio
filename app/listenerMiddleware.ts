@@ -43,6 +43,9 @@ function addDebouncedListener(
     effect: async (_action, listenerApi) => {
       // QNBS-v3: RTK requires getOriginalState to be called synchronously (before first await).
       const originalState = listenerApi.getOriginalState() as RootState;
+      // QNBS-v3: True debounce — cancel any concurrent instances so only the last burst's
+      // invocation runs after the delay window. Without this, 50 rapid dispatches produce 50 saves.
+      listenerApi.cancelActiveListeners();
       await listenerApi.delay(delayMs);
       await effect({
         getState: () => listenerApi.getState() as RootState,

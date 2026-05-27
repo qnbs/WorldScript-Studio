@@ -15,6 +15,16 @@ import { WebrtcProvider } from 'y-webrtc';
 import * as Y from 'yjs';
 import type { CollaborationUser } from '../types';
 
+/** Thrown when connect() is called without a password in a non-test environment. */
+export class CollabEncryptionRequiredError extends Error {
+  constructor() {
+    super(
+      'Collaboration requires a password in production — passwordless connections are not allowed.',
+    );
+    this.name = 'CollabEncryptionRequiredError';
+  }
+}
+
 /** Default public signaling servers for y-webrtc (failover list). */
 export const DEFAULT_WEBRTC_SIGNALING_URLS: readonly string[] = [
   'wss://y-webrtc-signaling.fly.dev',
@@ -214,6 +224,10 @@ class CollaborationService {
     password?: string,
     signalingUrls?: readonly string[],
   ): Promise<void> {
+    // SECURITY: test-only bypass — NODE_ENV === 'test' allows passwordless connect for unit tests.
+    if (!password && process.env['NODE_ENV'] !== 'test') {
+      throw new CollabEncryptionRequiredError();
+    }
     if (this.provider) this.disconnect();
 
     this._roomId = await this.deriveRoomId(projectId, password);

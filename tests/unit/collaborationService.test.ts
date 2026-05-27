@@ -32,6 +32,7 @@ if (!globalThis.crypto?.subtle) {
 }
 
 import {
+  CollabEncryptionRequiredError,
   collaborationService,
   DEFAULT_WEBRTC_SIGNALING_URLS,
   resolveWebRtcSignalingUrls,
@@ -596,5 +597,27 @@ describe('collaborationService encryption', () => {
     expect((collaborationService as unknown as Record<string, unknown>)['_decryptedUsers']).toEqual(
       [],
     );
+  });
+
+  // QNBS-v3: SEC-1 — passwordless connect must throw CollabEncryptionRequiredError in production.
+  it('throws CollabEncryptionRequiredError when no password is supplied in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      await expect(
+        collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }),
+      ).rejects.toThrow(CollabEncryptionRequiredError);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // QNBS-v3: SEC-1 — getEncryptionStatus returns 'encrypted' only when AES-GCM key is derived.
+  it('getEncryptionStatus returns encrypted only when key is derived', async () => {
+    expect(collaborationService.getEncryptionStatus()).toBe('plaintext');
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' });
+    expect(collaborationService.getEncryptionStatus()).toBe('psk-only');
+    collaborationService.disconnect();
+    await collaborationService.connect('proj', { id: 'u', name: 'U', color: '#000' }, 'secret');
+    expect(collaborationService.getEncryptionStatus()).toBe('encrypted');
   });
 });

@@ -534,5 +534,12 @@
   "settings.voice.privacyNotice": "Voice data is processed locally on your device. No audio is sent to the cloud unless you explicitly enable cloud fallback below.",
   "settings.voice.title": "Voice Full Support",
   "settings.voice.ttsMuted": "Mute All Speech Output",
-  "settings.voice.ttsMutedHint": "Disable text-to-speech while keeping visual indicators."
+  "settings.voice.ttsMutedHint": "Disable text-to-speech while keeping visual indicators.",
+  "settings.voice.privacy.consentTitle": "Consentimiento Web Speech",
+  "settings.voice.privacy.consentBody": "La API de Web Speech envía su audio a los servidores de Google o Microsoft para su transcripción. Al hacer clic en Confirmar, consiente esta transferencia de datos según el RGPD Art. 13.",
+  "settings.voice.privacy.consentAcknowledge": "Confirmar y activar",
+  "settings.voice.privacy.consentDecline": "Rechazar",
+  "settings.voice.privacy.statusLocal": "Local",
+  "settings.voice.privacy.statusExternal": "Externo",
+  "settings.voice.privacy.revokeConsent": "Revocar consentimiento"
 }

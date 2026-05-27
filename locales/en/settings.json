@@ -535,5 +535,12 @@
   "settings.voice.autoPunctuationHint": "Automatically add periods and commas while dictating.",
   "settings.voice.cloudFallback": "Allow Cloud STT Fallback",
   "settings.voice.cloudFallbackHint": "When local speech recognition is unavailable, send audio to cloud providers. Requires internet.",
-  "settings.voice.listeningTimeout": "Listening Timeout"
+  "settings.voice.listeningTimeout": "Listening Timeout",
+  "settings.voice.privacy.consentTitle": "Web Speech Consent",
+  "settings.voice.privacy.consentBody": "The Web Speech API sends your audio to Google or Microsoft servers for transcription. By clicking Acknowledge, you consent to this data transfer under GDPR Art. 13.",
+  "settings.voice.privacy.consentAcknowledge": "Acknowledge & Enable",
+  "settings.voice.privacy.consentDecline": "Decline",
+  "settings.voice.privacy.statusLocal": "Local",
+  "settings.voice.privacy.statusExternal": "External",
+  "settings.voice.privacy.revokeConsent": "Revoke Consent"
 }

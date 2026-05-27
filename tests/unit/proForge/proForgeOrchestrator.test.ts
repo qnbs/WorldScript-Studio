@@ -555,4 +555,136 @@ describe('ProForgeOrchestrator', () => {
       expect(() => orch.dispose()).not.toThrow();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Phase 0 Integration Tests
+  // ---------------------------------------------------------------------------
+
+  describe('integration: full 8-stage happy path', () => {
+    // QNBS-v3: Verifies all 8 agent invocations + pipelineCompleted at the end.
+    it('runs all 8 stages and dispatches pipelineCompleted', async () => {
+      const allStages: import('../../../features/proForge/types').PipelineStage[] = [
+        'intake',
+        'structural',
+        'lineProse',
+        'copyEdit',
+        'proof',
+        'production',
+        'publishing',
+        'analytics',
+      ];
+
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [],
+          config: { ...DEFAULT_CONFIG, selectedStages: allStages, maxRetries: 0 },
+          label: 'Happy Path',
+        },
+        isRunning: true,
+      });
+
+      const orch = new ProForgeOrchestrator(ctx);
+
+      for (const stage of allStages) {
+        await orch.executeStage(stage);
+      }
+      await orch.advanceToNextStage('analytics');
+
+      const { stageCompleted, pipelineCompleted } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      expect(vi.mocked(stageCompleted)).toHaveBeenCalledTimes(8);
+      expect(vi.mocked(pipelineCompleted)).toHaveBeenCalledTimes(1);
+      expect(mockAgentExecute).toHaveBeenCalledTimes(8);
+    });
+  });
+
+  describe('integration: supervisor retry', () => {
+    // QNBS-v3: First supervisor verdict is 'fail' → retry → second verdict 'pass' → stageCompleted.
+    it('retries the agent once when supervisor fails first attempt', async () => {
+      const { SupervisorAgent } = await import(
+        '../../../services/proForge/pipelineAgents/supervisorAgent'
+      );
+
+      const evaluateSpy = vi
+        .spyOn(SupervisorAgent.prototype, 'evaluate')
+        .mockReturnValueOnce({
+          pass: false,
+          retryRecommended: true,
+          qualityScore: 40,
+          reasons: ['Quality score below threshold'],
+        })
+        .mockReturnValueOnce({
+          pass: true,
+          retryRecommended: false,
+          qualityScore: 78,
+          reasons: [],
+        });
+
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [],
+          config: { ...DEFAULT_CONFIG, maxRetries: 1 },
+          label: 'Retry Test',
+        },
+        isRunning: true,
+      });
+
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.executeStage('intake');
+
+      const { stageCompleted, stageFailed } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      // Agent ran twice (original + 1 retry), then passed on the second attempt
+      expect(mockAgentExecute).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(stageCompleted)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(stageFailed)).not.toHaveBeenCalled();
+
+      evaluateSpy.mockRestore();
+    });
+  });
+
+  describe('integration: snapshot rollback after failure', () => {
+    // QNBS-v3: When a stage fails mid-run, rollbackTo restores the pre-stage snapshot.
+    it('dispatches restoreSnapshot when rolling back after a failed stage', async () => {
+      mockAgentExecute.mockRejectedValueOnce(new Error('AI provider timeout'));
+
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [{ stage: 'structural', preSnapshotId: 'snap-structural-pre', status: 'failed' }],
+          config: DEFAULT_CONFIG,
+          label: 'Rollback Test',
+        },
+        isRunning: true,
+      });
+
+      const orch = new ProForgeOrchestrator(ctx);
+
+      // Execute structural — agent throws
+      await orch.executeStage('structural');
+
+      const { stageFailed } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(stageFailed)).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'structural', error: 'AI provider timeout' }),
+      );
+
+      // Roll back to structural
+      await orch.rollbackTo('structural');
+
+      const { versionControlActions } = await import(
+        '../../../features/versionControl/versionControlSlice'
+      );
+      // biome-ignore lint/suspicious/noExplicitAny: mock defines restoreSnapshot; not in production type
+      expect(vi.mocked((versionControlActions as any).restoreSnapshot)).toHaveBeenCalledWith(
+        expect.objectContaining({ snapshotId: 'snap-structural-pre' }),
+      );
+    });
+  });
 });

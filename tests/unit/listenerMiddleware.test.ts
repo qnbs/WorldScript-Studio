@@ -19,6 +19,7 @@ const mockExtractStoryCodex = vi.fn().mockReturnValue({ entries: [] });
 const mockLoggerError = vi.fn();
 const mockLoggerWarn = vi.fn();
 const mockSaveEnvelope = vi.fn((data: unknown) => data);
+const mockRebuildHybridRagIndex = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../../services/storageService', () => ({
   storageService: {
@@ -50,6 +51,27 @@ vi.mock('../../services/logger', () => ({
 
 vi.mock('../../services/storageBackend', () => ({
   saveEnvelopeFromProjectData: (data: unknown) => mockSaveEnvelope(data),
+}));
+
+// QNBS-v3: Phase 0 audit — duckdbListenerLoader is lazily imported in listenerMiddleware.
+// Mock all loader fns so listener effects complete cleanly in stress tests.
+vi.mock('../../services/duckdb/duckdbListenerLoader', () => ({
+  loadLocalRagService: vi.fn(() =>
+    Promise.resolve({ rebuildHybridRagIndex: mockRebuildHybridRagIndex }),
+  ),
+  loadDuckdbAnalytics: vi.fn(() =>
+    Promise.resolve({
+      duckdbDualWrite: vi.fn().mockResolvedValue(undefined),
+      withDuckDbRetry: vi.fn((fn: () => Promise<unknown>) => fn()),
+      duckdbCodexWrite: vi.fn().mockResolvedValue(undefined),
+    }),
+  ),
+  loadDuckdbMigration: vi.fn(() =>
+    Promise.resolve({ runIfNeeded: vi.fn().mockResolvedValue(undefined) }),
+  ),
+  loadRagVectorMigration: vi.fn(() =>
+    Promise.resolve({ runRagVectorMigration: vi.fn().mockResolvedValue(undefined) }),
+  ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -314,5 +336,51 @@ describe('codex auto-tracking listener', () => {
     store.dispatch(projectActions.addManuscriptSection({ title: 'Error Chapter' }));
     await vi.advanceTimersByTimeAsync(1500);
     expect(mockLoggerWarn).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 0 Hardening: Stress tests + cancelActiveListeners audit
+//
+// Audit results (as of Phase 0):
+//   1a auto-save project   — addDebouncedListener (cancelActiveListeners ✅ added Phase 0)
+//   1b auto-save settings  — addDebouncedListener (cancelActiveListeners ✅ added Phase 0)
+//   1c codex               — addDebouncedListener (cancelActiveListeners ✅ added Phase 0)
+//   RAG rebuild            — direct startListening (cancelActiveListeners ✅ pre-existing)
+//   DuckDB migration       — fire-once (no cancelActiveListeners needed — state-predicated)
+// ---------------------------------------------------------------------------
+
+describe('debounce stress tests', () => {
+  // QNBS-v3: 50 rapid project changes → exactly 1 saveProject call per debounce window.
+  // cancelActiveListeners() in addDebouncedListener ensures only the last burst's invocation runs.
+  it('project auto-save fires exactly once for 50 rapid title changes', async () => {
+    const store = makeFullStore();
+    for (let i = 0; i < 50; i++) {
+      store.dispatch(projectActions.updateTitle(`Title ${i}`));
+    }
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(mockSaveProject).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3: 50 rapid settings changes → exactly 1 saveSettings call.
+  it('settings auto-save fires exactly once for 50 rapid theme changes', async () => {
+    const store = makeFullStore();
+    for (let i = 0; i < 50; i++) {
+      store.dispatch(settingsActions.setTheme(i % 2 === 0 ? 'dark' : 'light'));
+    }
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(mockSaveSettings).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3: 50 rapid manuscript changes → RAG rebuild fires exactly once.
+  // cancelActiveListeners() in the RAG listener ensures only the final invocation completes.
+  it('RAG auto-rebuild fires exactly once for 50 rapid manuscript changes', async () => {
+    const store = makeFullStore();
+    for (let i = 0; i < 50; i++) {
+      store.dispatch(projectActions.addManuscriptSection({ title: `Scene ${i}` }));
+    }
+    // Advance past the 5000ms RAG delay
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(mockRebuildHybridRagIndex).toHaveBeenCalledTimes(1);
   });
 });

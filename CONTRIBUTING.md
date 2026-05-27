@@ -255,7 +255,7 @@ Tests live in `tests/e2e/`. Playwright tests verify core user flows:
 
 ### Mutation testing (Stryker)
 
-Targets 9 service files (see [`stryker.conf.json`](stryker.conf.json)): `codexService`, `dbMigration`, `fuzzyScore`, `palettePreferences`, `commandBuilder`, `hybridFallback`, `providerFactory`, `helpDocRetrieval`, `listenerMiddleware`. HTML report: `reports/mutation/`. `thresholds.break` is `null` until kill-rate improves; the CI mutation job uses `continue-on-error: true`.
+Targets service files (see [`stryker.conf.json`](stryker.conf.json)): `codexService`, `dbMigration`, `fuzzyScore`, `palettePreferences`, `commandBuilder`, `hybridFallback`, `providerFactory`, `helpDocRetrieval`, `listenerMiddleware`. HTML report: `reports/mutation/`. `thresholds.break` is `60` — CI fails if mutation score falls below this value.
 
 ```bash
 pnpm run mutation
@@ -329,11 +329,15 @@ We target **WCAG 2.2 AA** patterns where practical (Biome `a11y` rules are stric
 
 ## Security Guidelines
 
+For the full security policy, threat model, and active security work items, see [**`SECURITY.md`**](../.github/SECURITY.md).
+
 - **CSP**: `index.html` contains a `Content-Security-Policy` meta tag restricting resource origins
-- **API keys**: Never hardcode API keys; always use the encrypted IndexedDB storage
-- **AbortController**: All Gemini API calls support cancellation via `AbortSignal`
+- **API keys**: Never hardcode API keys; always use the encrypted IndexedDB storage (`dbService.ts`, AES-256-GCM)
+- **AbortController**: All AI API calls support cancellation via `AbortSignal`
 - **Rate limiting**: `geminiService.ts` handles 429 errors with exponential backoff
-- **Input sanitization**: User input displayed in HTML contexts uses `esc()` helpers
+- **Input sanitization**: User input displayed in HTML contexts must go through `DOMPurify.sanitize()` before `dangerouslySetInnerHTML`
+- **AI responses**: Never pass AI output through `eval()`, `new Function()`, or dynamic `<script>` injection
+- **Collaboration**: Always provide a password when calling `collaborationService.connect()` in production — passwordless connections throw `CollabEncryptionRequiredError`
 
 ---
 

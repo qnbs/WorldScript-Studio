@@ -14,7 +14,10 @@
 +      try {
 +        webrtcConn.peer.send(encrypted)
 +      } catch (e) {}
-+    }).catch(() => {})
++    }).catch(err => {
++      room._collabEncryptFailures = (room._collabEncryptFailures || 0) + 1
++      console.warn('[y-webrtc] encrypt failure in sendWebrtcConn:', err)
++    })
 +  } else {
 +    try {
 +      webrtcConn.peer.send(data)
@@ -39,7 +42,10 @@
 +          conn.peer.send(encrypted)
 +        } catch (e) {}
 +      })
-+    }).catch(() => {})
++    }).catch(err => {
++      room._collabEncryptFailures = (room._collabEncryptFailures || 0) + 1
++      console.warn('[y-webrtc] encrypt failure in broadcastWebrtcConn:', err)
++    })
 +  } else {
 +    room.webrtcConns.forEach(conn => {
 +      try {
@@ -63,7 +69,10 @@
 +          if (answer !== null) {
 +            sendWebrtcConn(this, answer)
 +          }
-+        }).catch(() => {})
++        }).catch(err => {
++          room._collabDecryptionFailures = (room._collabDecryptionFailures || 0) + 1
++          console.warn('[y-webrtc] decrypt failure in peer.on(data):', err)
++        })
 +      } else {
 +        const answer = readPeerMessage(this, data)
 +        if (answer !== null) {

@@ -7,6 +7,16 @@ import type { VoiceSttEngine } from '../../types';
 import { logger } from '../logger';
 import type { AudioStreamConfig, SttEngine, SttResult } from './voiceTypes';
 
+/** Thrown when Web Speech API is requested but the user has not granted GDPR Art. 13 consent. */
+export class ConsentRequiredError extends Error {
+  constructor() {
+    super(
+      'Web Speech API requires explicit consent before use — audio is routed to cloud STT providers.',
+    );
+    this.name = 'ConsentRequiredError';
+  }
+}
+
 // ── Web Speech API Implementation ────────────────────────────────────────────
 
 // QNBS-v3: DOM lib may not expose SpeechRecognition constructor on Window.
@@ -32,6 +42,12 @@ export class WebSpeechSttEngine implements SttEngine {
   private onResultCallback: ((result: SttResult) => void) | null = null;
   private onErrorCallback: ((error: Error) => void) | null = null;
   private isRunning = false;
+  // QNBS-v3: GDPR Art. 13 — Web Speech API routes audio to cloud providers; consent required.
+  private readonly consentGranted: boolean;
+
+  constructor(consentGranted = false) {
+    this.consentGranted = consentGranted;
+  }
 
   isAvailable(): Promise<boolean> {
     return Promise.resolve(
@@ -41,7 +57,10 @@ export class WebSpeechSttEngine implements SttEngine {
   }
 
   async initialize(): Promise<void> {
-    // Web Speech API requires no initialization
+    // QNBS-v3: Block initialization if user has not consented to cloud audio routing.
+    if (!this.isLocal && !this.consentGranted) {
+      throw new ConsentRequiredError();
+    }
   }
 
   async start(
@@ -120,14 +139,16 @@ export class WebSpeechSttEngine implements SttEngine {
 export interface SttEngineFactoryOptions {
   preferredEngine?: VoiceSttEngine;
   config?: AudioStreamConfig;
+  /** GDPR Art. 13 consent for Web Speech API cloud audio routing — must be true to use webSpeech engine. */
+  webSpeechConsentGranted?: boolean;
 }
 
 export async function createSttEngine(options: SttEngineFactoryOptions = {}): Promise<SttEngine> {
-  const { preferredEngine = 'auto' } = options;
+  const { preferredEngine = 'auto', webSpeechConsentGranted = false } = options;
 
   // QNBS-v3: In Phase 1 only Web Speech API is implemented.
   // Future phases add Whisper.cpp WASM and Sherpa-ONNX engines.
-  const engines: SttEngine[] = [new WebSpeechSttEngine()];
+  const engines: SttEngine[] = [new WebSpeechSttEngine(webSpeechConsentGranted)];
 
   if (preferredEngine !== 'auto') {
     const preferred = engines.find((e) => e.id === preferredEngine);
