@@ -21,6 +21,36 @@ Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku
 
 ---
 
+## v1.18 — ProForge Humanization & Refinement Sprint (2026-05-27)
+
+**Status:** ✅ Released — commit `60f12fd`, see [`CHANGELOG.md`](CHANGELOG.md) `[1.18.0]` and [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md).
+
+**Phase H — UX Polish:**
+- Author-facing stage labels and loading messages (no implementation jargon in UI)
+- RAG chunk count renamed to "context passages" throughout
+- Feature flag descriptions rewritten for non-technical readers
+- Behavioral tests replacing implementation-detail assertions across 8 agent test files
+
+**Phase A — Architecture Cleanup:**
+- `BaseAgent` abstract class — ~200 LOC removed from 8 pipeline agents
+- `services/ai/aiConstants.ts` — single source for `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS`
+- `addDebouncedListener` factory in `listenerMiddleware.ts`
+
+**Phase P — Quality Supervision:**
+- `SupervisorAgent` — heuristic quality gates, fallback detection, retry orchestration (no AI calls)
+- `executeStageWithSupervision` retry loop; hard intake quality gate (`qualityScore < 30`)
+- `BaseAgent.selfReflect()` — self-evaluation loop for DiagnosticAgent and StructuralAgent
+- Honest fallback reports: 0 scores + `isFallback: true` everywhere
+- `PipelineReviewPanel` redesign: Critical Actions card, severity-grouped view, Quick Accept button
+
+**Phase X — Settings & UX:**
+- Settings nav semantic grouping (`NAV_GROUPS` + `NavGroupHeader`)
+- Flow Mode — distraction-free writing (Zustand + `Escape` key exit)
+- Empty states for Characters, World, SceneBoard, and ProForge views
+- i18n: 2055 keys × 5 locales
+
+---
+
 ## v1.8 — RAG Prompt Assembly + UX (2026-05-21)
 
 **Status:** Implemented in tree — see [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md), [`CHANGELOG.md`](CHANGELOG.md) `[Unreleased]`.

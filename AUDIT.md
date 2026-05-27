@@ -1,9 +1,51 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.17.2** — 2026-05-26 (Local Inference Robustness Sprint)  
+**Current version:** **v1.18.0** — 2026-05-27 (ProForge Humanization & Refinement Sprint — Phases H/A/P/X)  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)
+
+### Sprint: ProForge Humanization & Refinement — Phases H/A/P/X (2026-05-27)
+
+**Goal:** Transform the ProForge pipeline from a functional scaffold into a polished, author-facing editorial system. Four phases: UX vocabulary (H), architecture cleanup (A), quality supervision (P), and Settings/empty-state polish (X).
+
+**Changes shipped:**
+
+| Phase | Area | What changed |
+|-------|------|--------------|
+| H | Vocabulary | Stage labels, loading messages, RAG "passages" rename, non-technical feature flag descriptions |
+| H | Tests | Behavioral tests replacing implementation-detail assertions across 8 agent test files |
+| A | `BaseAgent` | Abstract base class in `pipelineAgents/baseAgent.ts` — ~200 LOC removed from 8 agents |
+| A | `aiConstants.ts` | New consolidation module for `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS` — re-export shims keep existing imports valid |
+| A | `listenerMiddleware.ts` | `addDebouncedListener` factory; `getOriginalState()` synchronous capture fix (RTK constraint) |
+| P-1 | `supervisorAgent.ts` | New heuristic quality gate (no AI calls) — detects fallback sentinels, evaluates pacing and grammar ratios |
+| P-2 | Orchestrator | `executeStageWithSupervision` retry loop; hard gate: intake `qualityScore < 30` → fail |
+| P-3 | Self-evaluation | `BaseAgent.selfReflect()` — re-runs DiagnosticAgent/StructuralAgent on INCOHERENT flag; `reflectionNotes` in types |
+| P-4 | Honest fallbacks | All `createFallback*` use 0 scores + `isFallback: true`; SupervisorAgent detects and retries |
+| P-5 | `PipelineReviewPanel` | Critical Actions card, severity-grouped view, Quick Accept High-Confidence button (confidence ≥ 0.85) |
+| X-1 | `SettingsView` | `NAV_GROUPS` + `NavGroupHeader` — semantic sidebar grouping |
+| X-2 | Flow Mode | `transientUiStore` `flowMode`/`setFlowMode`; `WriterViewUI` Escape key exits |
+| X-3 | Empty states | `<EmptyState>` for Characters, World, SceneBoard, ProForge views |
+| i18n | All 5 locales | `proforge.pipeline.title`, `proforge.pipeline.noneActive`, loading messages, stage labels — 2055 keys × 5 locales |
+
+**New files:** `services/ai/aiConstants.ts`, `services/proForge/pipelineAgents/baseAgent.ts`, `services/proForge/pipelineAgents/supervisorAgent.ts`
+
+**Test fixes (6 files, 84 tests recovered):**
+
+| File | Root cause | Fix |
+|------|-----------|-----|
+| `listenerMiddleware.test.ts` | `getOriginalState()` after `await` | Synchronous capture before first `await` |
+| `writing/WriterViewUI.test.tsx` | `useWriterViewContext` missing mock | Added `vi.mock('../../../contexts/WriterViewContext')` |
+| `proForge/components/ProForgeDashboard.test.tsx` | i18n key assertion | Changed to `screen.getByText('proforge.pipeline.noneActive')` |
+| `thunks/writingAndCharacterThunks.test.ts` | `assertCloudAiAllowedSync` throws in localStorageOnly mode | Added `vi.mock('../../../services/ai/aiPolicy')` |
+| `thunks/outlineAndWorldThunks.test.ts` | same | same |
+| `thunks/plotBoardAiThunks.test.ts` | same | same |
+
+**Quality gate (2026-05-27 — v1.18.0):** lint ✅ (Biome — 0 errors) · typecheck ✅ · i18n:check ✅ (2055 keys × 5 locales) · tests ✅ (84 previously-failing tests green; no regressions)
 
 ---
 

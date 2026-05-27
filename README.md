@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2025_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2025 keys">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2055_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2055 keys">
   <img src="https://img.shields.io/badge/Tests-4044_%2F_360_files-22C55E" alt="4044 tests / 360 files">
   <img src="https://img.shields.io/badge/Coverage-L_73%25_%7C_B_58%25_%7C_F_65%25-22C55E" alt="Coverage: Lines 73% / Branches 58% / Functions 65%">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
@@ -179,6 +179,25 @@ Your tireless creative co-pilot, available at every stage:
 
 A dedicated view using **Retrieval-Augmented Generation (RAG)** to give the AI deep, contextualized knowledge of your _entire_ project. It cross-checks your manuscript against character profiles and world-building notes to surface subtle inconsistencies and continuity errors that a read-through would miss.
 
+### 🚀 ProForge Ultimate Author Pipeline _(Experimental — `enableProForge`)_
+
+An 8-stage agentic manuscript editing pipeline that transforms the Writer view into a full **Human-in-the-Loop** editorial workflow — from raw draft to publication-ready manuscript. All processing runs client-side; no cloud dependency for the pipeline itself.
+
+**Stage sequence:** Intake & Diagnostic → Structural → Line/Prose → Copy Edit → Proof → Production → Publishing → Analytics
+
+Key design points:
+- **Never auto-modifies** the manuscript — every agent output awaits explicit author approval in the Review Panel.
+- **SupervisorAgent** applies heuristic quality gates between stages and can trigger one automatic retry when it detects a fallback output or low-quality score.
+- **Self-evaluation loop** (`BaseAgent.selfReflect()`) flags incoherent AI output for a second-pass before surfacing to the author.
+- **Critical Actions summary card** + severity-grouped Review Panel with Quick Accept for high-confidence suggestions (≥ 0.85).
+- Enable via **Settings → Experimental Features → ProForge Pipeline**.
+
+See [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) for full architecture, types, and agent reference.
+
+### 🌊 Flow Mode _(Distraction-Free Writing)_
+
+A single-keystroke toggle that collapses all sidebars and chrome, leaving only the manuscript editor. Exit with `Escape` or the same toggle key. State is stored in the Zustand `transientUiStore` (`flowMode` flag) so it resets on page load.
+
 ### 🗣️ Voice Dictation
 
 Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field.
@@ -265,7 +284,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **1 440 i18n keys** across all 5 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2 055 i18n keys** across all 5 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -338,7 +357,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 1 625 keys × 5 locales; EN fallback; `localStorage` persistence      |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 055 keys × 5 locales; EN fallback; `localStorage` persistence      |
 | **Testing**          | Vitest 4.x (2 500+ tests / 360 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation gate          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
@@ -595,6 +614,8 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md) | Sprint reference: v1.8 RAG prompt assembly + Writer/Plot Board AI |
 | [`docs/SPRINT-V1.9.md`](docs/SPRINT-V1.9.md) | Sprint reference: v1.9 lazy loading, Help/Settings hub, Tauri desktop UX |
 | [`docs/SPRINT-V1.10.md`](docs/SPRINT-V1.10.md) | Sprint reference: v1.10 mobile UX, coverage 55 %, deploy & help expansion |
+| [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge Ultimate Author Pipeline — 8-stage agentic editing system architecture |
+| [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0 ProForge Humanization & Refinement (Phases H/A/P/X) |
 | [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA manifest, service worker, share-target checklist |
 | [`infra/low-end-ci/`](infra/low-end-ci/) | Local CI on low-end hardware (act + Eco-Forgejo) |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow: manual/tag builds, 7-step first-release checklist |

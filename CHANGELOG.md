@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-05-27
+
+### Added
+
+- **ProForge Humanization & Refinement Sprint (Phases H/A/P/X)** — Full editorial-quality overhaul of the ProForge pipeline:
+  - **Phase H — UX Polish:** Author-facing stage labels and loading messages (no implementation jargon); RAG chunk count renamed to "context passages"; feature flag descriptions rewritten for non-technical readers; behavioral tests replacing implementation-detail tests.
+  - **Phase A — Architecture:** `BaseAgent` abstract class eliminates ~200 LOC of duplicated scaffold across all 8 pipeline agents; `services/ai/aiConstants.ts` consolidates `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, and `ORCHESTRATION_READY_PROVIDERS` into a single source; `addDebouncedListener` factory in `listenerMiddleware.ts` replaces repeated `RootState` cast dance.
+  - **Phase P — Quality Supervision:** `SupervisorAgent` — heuristic quality gates (no AI calls) that detect fallback sentinels and trigger retries via `executeStageWithSupervision`; hard gate blocks pipeline if intake `qualityScore < 30`; `BaseAgent.selfReflect()` — self-evaluation loop flags `INCOHERENT` output in `DiagnosticAgent` and `StructuralAgent` for re-run; all `createFallback*` methods now produce 0 scores + `isFallback: true` instead of fake data; `reflectionNotes`, `supervisorDecision`, and `maxRetries` fields added to relevant types.
+  - **Phase P-5 — PipelineReviewPanel Redesign:** Critical Actions summary card; severity-grouped view (Critical / Warnings / Suggestions); Quick Accept High-Confidence button (confidence ≥ 0.85, non-critical, pending items only).
+  - **Phase X-1 — Settings Nav Grouping:** Semantic `NAV_GROUPS` with `NavGroupHeader` component (Writing, AI Models, Appearance & Accessibility, Privacy & Data, Connections, System).
+  - **Phase X-2 — Flow Mode:** Distraction-free writing mode via Zustand `transientUiStore` (`flowMode` / `setFlowMode`); `WriterViewUI` shows full-screen editor on toggle; `Escape` key exits.
+  - **Phase X-3 — Empty States:** `<EmptyState>` components for Characters, World, SceneBoard, and ProForge views — contextual guidance when collections are empty.
+- **i18n:** 2055 keys × 5 locales (added `proforge.pipeline.title`, `proforge.pipeline.noneActive`, loading messages, stage labels, empty-state strings across DE/EN/ES/FR/IT).
+- **.gitignore:** Added `.continue/` (Continue IDE local config directory).
+
+### Fixed
+
+- **listenerMiddleware.ts:** `getOriginalState()` captured synchronously before the first `await` inside `addDebouncedListener` factory (RTK constraint — calling after any `await` throws at runtime).
+- **WriterViewUI.test.tsx:** Added `vi.mock` for `useWriterViewContext` (component now requires the context after X-2 Flow Mode integration).
+- **ProForgeDashboard.test.tsx:** Assertion updated to use i18n key string (mock `t()` returns key; component uses `t('proforge.pipeline.noneActive')`).
+- **writingAndCharacterThunks / outlineAndWorldThunks / plotBoardAiThunks tests (pre-existing):** Added `vi.mock('../../../services/ai/aiPolicy', ...)` — `settingsReducer` defaults `localStorageOnly: true`, causing `assertCloudAiAllowedSync` to throw "Cloud provider blocked" and reject all 31 AI thunk tests at the gate.
+
 ## [1.17.1] — 2026-05-26
 
 ### Fixed

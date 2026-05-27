@@ -57,6 +57,9 @@ public/locales/*/*.json
 .claude/
 .lighthouseci/
 
+# Continue IDE config (local dev only)
+.continue/
+
 # CodeGraph — solo policy: only CODEGRAPH_REPORT.md committed; DB stays local
 .codegraph/*
 !.codegraph/CODEGRAPH_REPORT.md

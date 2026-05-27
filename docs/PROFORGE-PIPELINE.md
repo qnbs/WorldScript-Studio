@@ -1,24 +1,25 @@
 # StoryCraft ProForge Ultimate Author Pipeline (UAP)
 
-**Status:** v1.0.0 — Foundation + All 8 Agents Implemented  
-**Last Updated:** 24 May 2026  
+**Status:** v1.1.0 — Humanization & Refinement Sprint complete (Phases H/A/P/X)  
+**Last Updated:** 27 May 2026  
 **Feature Flag:** `enableProForge` (default: `false`)  
 
 ---
 
 ## Overview
 
-The **ProForge Ultimate Author Pipeline** is an agentic, 8-stage manuscript quality and production pipeline integrated directly into the KI Schreibstudio (Writer view). It transforms the existing tool-centric AI writer into a full **Human-in-the-Loop** editorial workflow — from raw draft to print- and publication-ready manuscript.
+The **ProForge Ultimate Author Pipeline** is an agentic, 8-stage manuscript quality and production pipeline integrated directly into the Writer view. It transforms the existing tool-centric AI writer into a full **Human-in-the-Loop** editorial workflow — from raw draft to print- and publication-ready manuscript.
 
 ### Architecture Principles
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Agentic Multi-Agent** | Each phase has a dedicated agent with specialized tools |
+| **Agentic Multi-Agent** | Each stage has a dedicated agent with specialized tools |
 | **Human-in-the-Loop** | No automatic manuscript modification without explicit approval |
 | **Privacy-First** | All processing client-side; no cloud dependency for the pipeline itself |
-| **Modular & Plugin-Ready** | New stages and tools can be registered via the plugin system |
-| **Full Audit Trail** | Every action logged; every stage snapshot-backed |
+| **Quality Supervised** | `SupervisorAgent` applies heuristic gates and triggers retries without calling any AI |
+| **Self-Evaluating** | `BaseAgent.selfReflect()` checks its own output for coherence before surfacing to author |
+| **Full Audit Trail** | Every action logged; every stage snapshot-backed; `isFallback` + `reflectionNotes` in output |
 | **Genre-Aware** | Templates and agents adapt to genre preset and style guide |
 
 ---
@@ -36,12 +37,15 @@ Each stage supports: `proceed` | `retry` | `skip` | `abort` | `rollback`
 ### Stage 1: Intake & Diagnostic
 - **Agent:** `DiagnosticAgent`
 - **Purpose:** Analyze manuscript structure, detect consistency issues, compute quality scores
-- **Output:** `DiagnosticReport` (JSON) — profile, consistency issues, structural gaps, quality score 0-100
+- **Output:** `DiagnosticReport` — profile, consistency issues, structural gaps, quality score 0–100
+- **Hard gate:** If `qualityScore < 30`, the `SupervisorAgent` fails the pipeline immediately (manuscript not ready for editing)
+- **Self-evaluation:** Runs `selfReflect()` and sets `reflectionNotes` on INCOHERENT output
 
 ### Stage 2: Developmental / Structural
 - **Agent:** `StructuralAgent`
 - **Purpose:** Macro-structure fixes: pacing, arcs, chapter boundaries
 - **Output:** `StructuralEditPlan` — edits with rationale, pacing report
+- **Self-evaluation:** Runs `selfReflect()` on INCOHERENT flag; re-runs the analysis before surfacing to author
 
 ### Stage 3: Line & Prose Correction
 - **Agent:** `ProseAgent`
@@ -83,9 +87,11 @@ features/proForge/
   proForgeSlice.ts            # Redux slice with stage machine
 
 services/proForge/
-  proForgeOrchestrator.ts     # Central orchestrator state machine
+  proForgeOrchestrator.ts     # Central orchestrator + executeStageWithSupervision loop
   proForgeMemoryBank.ts       # IndexedDB-backed project memory
   pipelineAgents/
+    baseAgent.ts              # Abstract base class (~200 LOC saved across 8 agents)
+    supervisorAgent.ts        # Heuristic quality gate — no AI calls
     diagnosticAgent.ts        # Stage 1
     structuralAgent.ts        # Stage 2
     proseAgent.ts             # Stage 3
@@ -100,9 +106,122 @@ services/proForge/
     structuredOutput.ts       # Zod schemas for all AI outputs
 
 services/promptLibrary.ts     # Extended with 6 ProForge prompt templates
+services/ai/aiConstants.ts    # CREATIVITY_TO_TEMPERATURE, ORCHESTRATION_READY_PROVIDERS
 features/featureFlags/        # Added enableProForge flag
 app/store.ts                  # Added proForge reducer
 ```
+
+---
+
+## BaseAgent Abstract Class
+
+All 8 pipeline agents extend `BaseAgent` (`services/proForge/pipelineAgents/baseAgent.ts`):
+
+```typescript
+export abstract class BaseAgent {
+  protected readonly context: OrchestratorContext;
+  constructor(context: OrchestratorContext) { this.context = context; }
+
+  // Implemented by each agent
+  abstract execute(signal: AbortSignal): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>>;
+
+  // Shared helpers
+  protected requireProject(): StoryProject { ... }
+  protected getMemoryBank(): ProForgeMemoryBank { ... }
+  protected elapsed(startTime: number): number { ... }
+
+  // Self-evaluation — checks AI output for coherence before returning to orchestrator
+  protected async selfReflect(
+    manuscriptExcerpt: string,
+    analysisSummary: string,
+    signal: AbortSignal,
+  ): Promise<{ coherent: boolean; note: string; tokensUsed: number }> { ... }
+}
+```
+
+Benefits: constructor boilerplate, `requireProject`, `getMemoryBank`, `elapsed` helpers, and `selfReflect` are shared — agents implement only `execute()`.
+
+---
+
+## SupervisorAgent
+
+`services/proForge/pipelineAgents/supervisorAgent.ts` — pure heuristic quality gate, **no AI calls**:
+
+```typescript
+export class SupervisorAgent {
+  evaluate(stage: PipelineStage, result: StageResult): SupervisionDecision
+}
+```
+
+`SupervisionDecision` shape:
+```typescript
+interface SupervisionDecision {
+  verdict: 'pass' | 'retry' | 'fail';
+  reason: string;
+  retryHint?: string;
+}
+```
+
+**Decision rules per stage:**
+- `intake`: Detects uniform 50/100 fallback sentinel (all scores = exactly 50) → retry. `qualityScore < 30` → fail (hard gate).
+- `structural`: If edit count > word count / 10 → retry (over-aggressive edits).
+- `proof`: If grammar issue count > word count / 20 → retry (implausible density).
+- All stages: `isFallback: true` on output → retry (up to `maxRetries` times).
+
+---
+
+## Orchestrator Supervision Loop
+
+`proForgeOrchestrator.ts` runs each stage through `executeStageWithSupervision`:
+
+```
+for each selected stage:
+  attempt = 0
+  loop:
+    result = await agent.execute(signal)
+    decision = supervisorAgent.evaluate(stage, result)
+    if decision.verdict === 'pass' OR attempt >= maxRetries:
+      dispatch stageCompleted / stageAwaitingReview
+      break
+    attempt++
+    (retry with updated context)
+```
+
+`maxRetries` (default `1`) is set in `PipelineConfig`. Set to `0` to disable supervision retries.
+
+---
+
+## Self-Evaluation Loop
+
+`DiagnosticAgent` and `StructuralAgent` call `this.selfReflect(excerpt, summary, signal)` after receiving AI output. If the result is flagged as `INCOHERENT`:
+
+1. `reflectionNotes` is populated with the AI's self-critique (not shown to author; visible in trace log).
+2. The agent re-runs its analysis one time.
+3. If still incoherent after re-run, it proceeds with the `reflectionNotes` attached so the `SupervisorAgent` can decide on retry.
+
+---
+
+## Honest Fallback Reports
+
+All `createFallback*` methods produce outputs with:
+- **0 scores** (not fake mid-range values that could mislead quality gates)
+- **`isFallback: true`** flag on the output type
+- A clear `reason` string explaining why the fallback was triggered
+
+The `SupervisorAgent` detects `isFallback: true` and schedules a retry up to `maxRetries`.
+
+---
+
+## PipelineReviewPanel (P-5 Redesign)
+
+The review panel at `components/proForge/PipelineReviewPanel.tsx` now shows:
+
+1. **Critical Actions Summary Card** — compact listing of all `severity: 'critical'` items at the top, always visible.
+2. **Severity-grouped view** — three sections: Critical → Warnings → Suggestions, each collapsible.
+3. **Quick Accept High-Confidence** button — accepts all `ReviewItem`s where:
+   - `confidence >= 0.85`
+   - `severity !== 'critical'`
+   - `status === 'pending'`
 
 ---
 
@@ -117,13 +236,14 @@ The pipeline uses a Redux-backed state machine (`proForgeSlice.ts`):
 | `awaitingReview` | Stage complete, waiting for Human-in-the-Loop approval |
 | `completed` | All selected stages finished |
 | `aborted` | Pipeline cancelled by user |
-| `failed` | Stage execution error |
+| `failed` | Stage execution error (or SupervisorAgent hard-fail) |
 
 ### Review System
 Every edit, issue, or suggestion produced by an agent becomes a `ReviewItem`:
 - `pending` → `accepted` | `rejected` | `ignored`
 - Batch operations: Accept All / Reject All per category
 - Per-item rationale and confidence score
+- Quick Accept for high-confidence non-critical items (≥ 0.85)
 
 ### Snapshots
 - **Pre-pipeline snapshot:** Auto-created at start
@@ -176,14 +296,72 @@ Pipeline configuration (`PipelineConfig`) includes:
 | `maxTokens` | `8000` | Token limit per call |
 | `creativity` | `Balanced` | Temperature mapping |
 | `autoAcceptThreshold` | `0` | Auto-accept edits above confidence (0 = never) |
+| `maxRetries` | `1` | Supervisor retry limit per stage (0 = no retries, max 1) |
+| `language` | `en` | Output language for agent prose |
+| `useDuckDb` | `false` | Enable DuckDB analytics dual-write |
+
+---
+
+## Type Reference
+
+Key types added in the Humanization Sprint:
+
+```typescript
+// Fallback marker — SupervisorAgent detects and triggers retry
+interface DiagnosticReport { isFallback?: boolean; ... }
+interface StructuralEditPlan { isFallback?: boolean; reflectionNotes?: string; ... }
+interface QualityGateReport { isFallback?: boolean; ... }
+
+// Self-evaluation result — stored for trace log, not shown in UI
+// (on DiagnosticReport and StructuralEditPlan)
+reflectionNotes?: string;
+
+// Supervisor decision — attached to StageResult after supervision
+interface SupervisionDecision {
+  verdict: 'pass' | 'retry' | 'fail';
+  reason: string;
+  retryHint?: string;
+}
+// On StageResult:
+supervisorDecision?: SupervisionDecision;
+```
 
 ---
 
 ## Enabling ProForge
 
 1. Go to **Settings → Experimental Features**
-2. Toggle **"ProForge Ultimate Author Pipeline"**
-3. Open **KI Schreibstudio** — the ProForge Dashboard tab appears
+2. Toggle **"ProForge Pipeline"**
+3. Open the **Writer view** — the ProForge Dashboard tab appears
+
+---
+
+## Integration with Writer View (Phase X)
+
+### Settings Navigation Groups (X-1)
+
+Settings sidebar now uses semantic `NAV_GROUPS` with `NavGroupHeader` dividers:
+- **Writing** — Editor, Advanced Editor, Writing AI
+- **AI Models** — AI Provider, Advanced AI, LoRA Adapters
+- **Appearance & Accessibility** — Appearance, Accessibility
+- **Privacy & Data** — Privacy, Data, Backup
+- **Connections** — Collaboration, Integrations, Notifications, Community
+- **System** — Performance, Plugins, Shortcuts, Guide, Experimental, About
+
+### Flow Mode (X-2)
+
+Distraction-free writing toggle in the Writer view toolbar:
+- Collapses all sidebars and ProForge panel chrome
+- Activated via toolbar button; exits with `Escape`
+- State stored in `app/transientUiStore.ts` (`flowMode` / `setFlowMode`) — resets on page load
+
+### Empty States (X-3)
+
+`<EmptyState>` contextual guidance when collections are empty:
+- **Characters** — prompt to add first character
+- **World** — prompt to create first world
+- **SceneBoard** — prompt to start planning
+- **ProForge Dashboard** — prompt to enable the feature or start the pipeline
 
 ---
 
@@ -191,6 +369,7 @@ Pipeline configuration (`PipelineConfig`) includes:
 
 | Version | Feature |
 |---------|---------|
+| v1.19 | PLANbib v1.7 features (Objects, MindMap, Character Interviews, Timeline, Analysis) |
 | v2.1 | Collaborative multi-agent consensus, custom agent builder |
 | v2.2 | Multi-language pipeline, audiobook generation |
 | v2.3 | Market analysis agent, A/B testing for edits |
@@ -198,4 +377,4 @@ Pipeline configuration (`PipelineConfig`) includes:
 
 ---
 
-*See AGENTS.md for coding conventions and `docs/CI.md` for testing requirements.*
+*See `CLAUDE.md` for engineering conventions and `docs/CI.md` for testing requirements.*

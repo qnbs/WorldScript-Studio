@@ -8,6 +8,24 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## v1.18.0 — ProForge Humanization & Refinement Sprint (RELEASED 2026-05-27)
+
+- ✅ **Phase H** — Author-facing vocabulary: stage labels, loading messages, RAG "passages" rename, flag descriptions, behavioral tests
+- ✅ **Phase A** — `BaseAgent` abstract class (~200 LOC removed); `aiConstants.ts` consolidation; `addDebouncedListener` factory in `listenerMiddleware.ts`
+- ✅ **Phase P-1** — `SupervisorAgent`: heuristic quality gates (no AI calls), fallback sentinel detection
+- ✅ **Phase P-2** — Orchestrator `executeStageWithSupervision` retry loop; hard gate: intake `qualityScore < 30`
+- ✅ **Phase P-3** — `BaseAgent.selfReflect()` self-evaluation loop; DiagnosticAgent + StructuralAgent re-run on INCOHERENT flag
+- ✅ **Phase P-4** — Honest fallbacks: all `createFallback*` use 0 scores + `isFallback: true`
+- ✅ **Phase P-5** — `PipelineReviewPanel` redesign: Critical Actions card, severity-grouped view, Quick Accept High-Confidence button
+- ✅ **Phase X-1** — Settings nav semantic grouping: `NAV_GROUPS` + `NavGroupHeader`
+- ✅ **Phase X-2** — Flow Mode: `transientUiStore` `flowMode`/`setFlowMode`; `Escape` exits
+- ✅ **Phase X-3** — Empty states for Characters, World, SceneBoard, ProForge views
+- ✅ **i18n parity** — 2055 keys × 5 locales; `proforge.pipeline.title/noneActive` added to DE/ES/FR/IT
+- ✅ **Test fixes** — 84 previously-failing tests green: `listenerMiddleware` (sync `getOriginalState`), `WriterViewUI` (context mock), `ProForgeDashboard` (i18n key assertion), 3× thunk files (aiPolicy mock)
+- ✅ **Quality gate** — lint ✅ · i18n:check ✅ · typecheck ✅ · tests ✅ (84 tests recovered, 0 regressions)
+
+---
+
 ## Coverage Sprint — Test Expansion + Maintenance (2026-05-26)
 
 - ✅ **89 new test files** — settings, writing, manuscript, mind-map, ui, services, hooks, root components
