@@ -16,48 +16,63 @@ import type { MindMapEdge, MindMapNode } from '../../../types';
 const NODES: MindMapNode[] = [
   {
     id: 'n1',
+    mindMapId: 'mm1',
     label: 'Node 1',
     position: { x: 100, y: 100 },
     type: 'free',
     shape: 'rectangle',
     color: '#6366f1',
+    textNotes: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'n2',
+    mindMapId: 'mm1',
     label: 'Node 2',
     position: { x: 300, y: 200 },
     type: 'free',
     shape: 'circle',
     color: '#a855f7',
+    textNotes: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'n3',
+    mindMapId: 'mm1',
     label: 'Node 3',
     position: { x: 500, y: 100 },
     type: 'free',
     shape: 'rectangle',
     color: '#10b981',
+    textNotes: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
 ];
 
 const EDGES: MindMapEdge[] = [
   {
     id: 'e1',
+    mindMapId: 'mm1',
     sourceNodeId: 'n1',
     targetNodeId: 'n2',
     label: 'connects',
     color: '#6366f1',
-    direction: 'forward',
+    direction: 'uni',
     style: 'solid',
+    createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'e2',
+    mindMapId: 'mm1',
     sourceNodeId: 'n2',
     targetNodeId: 'n3',
-    label: undefined,
     color: '#a855f7',
     direction: 'bi',
     style: 'dotted',
+    createdAt: '2026-01-01T00:00:00.000Z',
   },
 ];
 
@@ -103,21 +118,23 @@ describe('MindMapEdgeLayer', () => {
     const edges: MindMapEdge[] = [
       {
         id: 'e1',
+        mindMapId: 'mm1',
         sourceNodeId: 'missing-node',
         targetNodeId: 'n2',
-        label: undefined,
         color: '#fff',
-        direction: 'forward',
+        direction: 'uni',
         style: 'solid',
+        createdAt: '2026-01-01T00:00:00.000Z',
       },
       {
         id: 'e2',
+        mindMapId: 'mm1',
         sourceNodeId: 'n1',
         targetNodeId: 'n2',
-        label: undefined,
         color: '#fff',
-        direction: 'forward',
+        direction: 'uni',
         style: 'solid',
+        createdAt: '2026-01-01T00:00:00.000Z',
       },
     ];
     const { container } = renderEdges(edges);

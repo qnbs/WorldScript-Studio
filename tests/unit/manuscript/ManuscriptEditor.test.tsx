@@ -25,7 +25,6 @@ let mockActiveSection: {
   id: 'sec-1',
   title: 'Chapter One',
   content: 'Hello world teh quick brown fox',
-  prompt: undefined,
 };
 let mockMentions: { id: string; name: string; type: 'character' | 'world' }[] = [];
 let mockMentionPosition: { top: number; left: number } | null = null;
@@ -125,7 +124,6 @@ describe('ManuscriptEditor', () => {
       id: 'sec-1',
       title: 'Chapter One',
       content: 'Hello world teh quick brown fox',
-      prompt: undefined,
     };
     mockMentions = [];
     mockMentionPosition = null;
