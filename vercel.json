@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm install --frozen-lockfile",
+  "installCommand": "pnpm install",
   "buildCommand": "NODE_OPTIONS=--max-old-space-size=3072 pnpm run build:edge",
   "outputDirectory": "dist",
   "framework": null,
