@@ -65,7 +65,7 @@ export default defineConfig({
           'locales/**/bundle.json',
         ],
         // QNBS-v3: Exclude DuckDB chunks + WASM blobs from SW precache — loaded lazily when flag=on.
-        globIgnores: ['**/vendor-duckdb*', '**/*.wasm'],
+        globIgnores: ['**/vendor-duckdb*', '**/vendor-webllm*', '**/*.wasm'],
       },
       // Manifest bereits in public/manifest.json eingebunden
       manifest: false,
@@ -106,7 +106,7 @@ export default defineConfig({
       resolveDependencies: (_filename: string, deps: string[]) =>
         deps.filter(
           (d) =>
-            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx/.test(
+            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx|vendor-webllm/.test(
               d,
             ),
         ),
@@ -171,6 +171,10 @@ export default defineConfig({
           // QNBS-v3: DuckDB-WASM bundle is ~2 MB gzip; isolate so SW cache exclusion glob matches vendor-duckdb*.
           if (id.includes('@duckdb/duckdb-wasm')) {
             return 'vendor-duckdb';
+          }
+          // QNBS-v3: WebLLM is ~6 MB — isolate to prevent OOM during Vercel build and exclude from SW precache.
+          if (id.includes('@mlc-ai/web-llm')) {
+            return 'vendor-webllm';
           }
           // QNBS-v3: LoRA feature chunk — lazy-loaded, no heavy training libs (training is Python sidecar).
           if (
