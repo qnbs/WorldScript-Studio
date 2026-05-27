@@ -156,6 +156,7 @@ const defaultSettings: Settings = {
     pttShortcutId: 'voice-push-to-talk',
     ttsMuted: false,
     dictationAutoPunctuation: true,
+    webSpeechConsentGranted: false,
   },
 };
 

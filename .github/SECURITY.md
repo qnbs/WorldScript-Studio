@@ -2,14 +2,11 @@
 
 ## Supported Versions
 
-The project currently supports security fixes for the following versions:
-
 | Version | Supported |
 | --- | --- |
-| `main` (latest commit) | Yes |
-| `1.4.x` | Yes (current release) |
-| `1.3.x` | Best effort (upgrade recommended) |
-| `< 1.3.0` | No |
+| `main` (v1.18.0) | ✅ Full support |
+| `1.3.x – 1.17.x` | ⚠️ Best effort (upgrade strongly recommended) |
+| `< 1.3.0` | ❌ Not supported |
 
 Maintainer-facing documentation (CI, contributing, architecture) is indexed in [`README.md`](README.md#-documentation-hub) and enumerated in [`AUDIT.md`](AUDIT.md).
 
@@ -33,12 +30,28 @@ If the email channel is not configured, use GitHub Private Vulnerability Reporti
 - The embargo may be shortened for actively exploited issues or extended by mutual agreement when required for safe remediation.
 - After a fix is released (or the embargo expires), we publish a public advisory with impact, affected versions, and mitigation details.
 
+## Known Active Security Work Items
+
+These items are in active development as part of Phase 0 hardening:
+
+| ID | Area | Description | Status |
+| --- | --- | --- | --- |
+| SEC-1 | Collaboration | Mandatory password enforcement — `CollabEncryptionRequiredError` thrown in `collaborationService.ts` when no password is provided in production | Phase 0 active |
+| SEC-2 | Documentation | Updated security policy, version table, scope, and active-item tracking | Phase 0 active |
+| SEC-3 | Storage | IDB at-rest encryption design — passphrase-derived AES-256-GCM key wrapping for IndexedDB stores | Phase 0 design |
+| SEC-4 | Voice | Web Speech API consent gate — GDPR Art. 13 disclosure and explicit opt-in before audio is routed to cloud STT providers | Phase 0 active |
+
 ## Scope
 
 This includes vulnerabilities involving:
 
-- API key handling and storage
-- Authentication/authorization bypass risks
-- Data leakage or privacy violations
-- Remote code execution, XSS, injection, or sandbox escape
-- Supply-chain compromise in build/release workflows
+- **API key handling and storage** — encrypted AES-256-GCM via IndexedDB (`dbService.ts`); never `localStorage` or `sessionStorage`
+- **Collaboration E2E encryption** — signaling-channel and RTCDataChannel in-flight encryption (`collaborationService.ts`, patched `y-webrtc`); PBKDF2 310,000 iterations, SHA-256, deterministic salt from `projectId`
+- **IndexedDB at-rest privacy** — passphrase-derived key wrapping (design phase); migration path via `dbMigration.ts`
+- **Voice STT routing** — Web Speech API routes raw audio to Google/Microsoft servers; GDPR Art. 13 consent required before first use
+- **WebCrypto correctness** — IV uniqueness per operation, GCM authentication tag verification, PBKDF2 iteration count, non-extractable `CryptoKey` handles
+- **Yjs CRDT transport integrity** — in-flight data must be encrypted end-to-end; any new CRDT or transport layer must not bypass the existing encryption contract
+- **Authentication/authorization bypass risks**
+- **Data leakage or privacy violations**
+- **Remote code execution, XSS, injection, or sandbox escape**
+- **Supply-chain compromise in build/release workflows**

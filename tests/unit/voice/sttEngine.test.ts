@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSttEngine, WebSpeechSttEngine } from '../../../services/voice/sttEngine';
+import {
+  ConsentRequiredError,
+  createSttEngine,
+  WebSpeechSttEngine,
+} from '../../../services/voice/sttEngine';
 import type { SttResult } from '../../../services/voice/voiceTypes';
 
 function createMockRecognition() {
@@ -29,8 +33,14 @@ describe('WebSpeechSttEngine', () => {
     expect(await engine.isAvailable()).toBe(true);
   });
 
-  it('initializes without errors', async () => {
-    await expect(engine.initialize()).resolves.toBeUndefined();
+  // QNBS-v3: SEC-4 — initialize() requires consent for cloud STT engines.
+  it('throws ConsentRequiredError when initialized without consent', async () => {
+    await expect(engine.initialize()).rejects.toThrow(ConsentRequiredError);
+  });
+
+  it('initializes successfully when consent is granted', async () => {
+    const consentedEngine = new WebSpeechSttEngine(true);
+    await expect(consentedEngine.initialize()).resolves.toBeUndefined();
   });
 
   it('starts recognition and routes results', async () => {

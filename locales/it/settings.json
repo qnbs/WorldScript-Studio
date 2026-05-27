@@ -535,5 +535,12 @@
   "settings.voice.autoPunctuationHint": "Aggiungi automaticamente punti e virgole durante la dettatura.",
   "settings.voice.cloudFallback": "Consenti fallback STT cloud",
   "settings.voice.cloudFallbackHint": "Quando il riconoscimento vocale locale non è disponibile, invia audio ai provider cloud. Richiede internet.",
-  "settings.voice.listeningTimeout": "Timeout ascolto"
+  "settings.voice.listeningTimeout": "Timeout ascolto",
+  "settings.voice.privacy.consentTitle": "Consenso Web Speech",
+  "settings.voice.privacy.consentBody": "L'API Web Speech invia il tuo audio ai server Google o Microsoft per la trascrizione. Facendo clic su Conferma, acconsenti a questo trasferimento di dati ai sensi del GDPR Art. 13.",
+  "settings.voice.privacy.consentAcknowledge": "Conferma e attiva",
+  "settings.voice.privacy.consentDecline": "Rifiuta",
+  "settings.voice.privacy.statusLocal": "Locale",
+  "settings.voice.privacy.statusExternal": "Esterno",
+  "settings.voice.privacy.revokeConsent": "Revoca il consenso"
 }
