@@ -133,6 +133,7 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 - `--radius-sc-*` — border radius tokens (`--radius-sc-xl`, `--radius-sc-lg`, etc.)
 - `--icon-sc-*` — icon size tokens (`--icon-sc-sm/md/lg/xl`)
 - `--text-sc-*` — fluid type scale via `clamp()` (390px → 1280px interpolation)
+- `--sc-success-fg/bg`, `--sc-info-fg/bg`, `--sc-warning-fg/bg`, `--sc-danger-fg/bg/border` — state color tokens; always use these for status indicators, not hardcoded `text-green-700` or `text-blue-600` (which break on the dark theme)
 
 **Token migration status (DS-1 + DS-2 — complete):** All `dark:` Tailwind prefix violations are eliminated (DS-2 ✅). All undefined bridge CSS vars (`--background-hover`, `--background-elevated`, `--background-selected`, `--foreground-on-interactive`, `--foreground-tertiary`) have been replaced with `--sc-*` equivalents. The bridge block in `index.css` now contains only intentional tokens — do NOT remove them: `--border-interactive` (alias for `--sc-border-focus`), `--nav-*` (sidebar tokens), `--glass-*` (glassmorphism tokens), `--background-gradient-overlay-start` / `--card-gradient-overlay` (per-theme card image gradients). **DS-5 (delete remaining bridge block)** is deferred until one production verification cycle completes.
 
@@ -198,6 +199,8 @@ Real-time P2P editing via Yjs + y-webrtc (`services/collaborationService.ts`). S
 
 All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (export: `docx`, `jszip`, `jsPDF`; collaboration: Yjs; graphs: `react-force-graph-2d`) live in separate Vite manual chunks and are dynamically imported only when used. `listenerMiddleware.ts` and `aiApi.ts` use dynamic imports for DuckDB/RAG/provider init to keep cold-start fast. `CollaborationPanel` and Plot Board sub-components are also lazy (Vite `plot-board` manual chunk). Keep export/collaboration dependencies lazy.
 
+**SW-excluded chunks** (listed in `vite.config.ts` `globIgnores` — never add these to the SW precache): `vendor-duckdb` (DuckDB-WASM, ~2 MB gzip), `vendor-ai-onnx` (ONNX Runtime + @xenova/transformers), `vendor-webllm` (@mlc-ai/web-llm, ~6 MB — loaded only when local WebLLM inference is enabled). When adding a new heavy optional chunk, add it to both `manualChunks` and `globIgnores` using the same pattern.
+
 ### Feature Flags
 
 Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (19 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
@@ -243,7 +246,7 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 
 ## Key Constraints
 
-- `strict: true` + `exactOptionalPropertyTypes: true` — no `any` types; use `undefined` explicitly for optional props
+- Full TypeScript strict mode (v1.18.1): `strict`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `noFallthroughCasesInSwitch`. Practical implications: every declared variable/parameter must be used; array index access returns `T | undefined` (always guard it); index-signature properties must use bracket notation; no `any` — use `unknown` + type guards or a targeted `// biome-ignore` with reason
 - Never log or expose API keys; never `eval()` AI responses
 - All interactive elements require proper `role`, `aria-label`, `aria-expanded` attributes (WCAG **2.2** AA-oriented; Biome `a11y` warnings fail CI)
 - Modals must trap focus and restore on close; decorative icons need `aria-hidden="true"`
@@ -359,7 +362,7 @@ Apply this pattern for any `use*ViewContext` hook — `useProForgeViewContext`, 
 
 ### Virtual scrolling
 
-`NavigatorPanel.tsx` uses `useVirtualizer` from `@tanstack/react-virtual`. Pattern: scrollable `<ul>` gets `ref={scrollRef}` + `position: relative`; a sentinel `<li>` sets `height: virtualizer.getTotalSize()`; visible items render as `position: absolute` with `transform: translateY(${virtualRow.start}px)`. Each item `<li>` needs `data-index={index}` + `ref={virtualizer.measureElement}` for dynamic measurement. Use `estimateSize: () => 40, overscan: 5` as defaults. Never lift the virtual container's `overflow-y: auto` into a parent — the virtualizer's scroll element must be the direct scrollable node.
+`NavigatorPanel.tsx` uses `useVirtualizer` from `@tanstack/react-virtual`. Pattern: scrollable `<ul>` gets `ref={scrollRef}` + `position: relative`; a sentinel `<li>` sets `height: virtualizer.getTotalSize()`; visible items render as `position: absolute` with `transform: translateY(${virtualRow.start}px)`. Each item `<li>` needs `data-index={index}` + `ref={virtualizer.measureElement}` for dynamic measurement. Use `estimateSize: () => 40, overscan: 3` as defaults. Never lift the virtual container's `overflow-y: auto` into a parent — the virtualizer's scroll element must be the direct scrollable node.
 
 ## Known Technical Debt
 
