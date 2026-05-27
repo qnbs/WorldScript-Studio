@@ -125,9 +125,9 @@ export function useLoraView(projectId?: string) {
           datasetPath,
           outputDir,
           preset: selectedPreset,
-          customRank: customParams?.rank,
-          customAlpha: customParams?.alpha,
-          customEpochs: customParams?.epochs,
+          ...(customParams?.rank !== undefined && { customRank: customParams.rank }),
+          ...(customParams?.alpha !== undefined && { customAlpha: customParams.alpha }),
+          ...(customParams?.epochs !== undefined && { customEpochs: customParams.epochs }),
         }),
       );
     },

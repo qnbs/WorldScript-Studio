@@ -80,7 +80,7 @@ describe('saveAdapter', () => {
     await saveAdapter({ ...META, name: 'Updated' }, blob);
     const adapters = await listAdapters();
     expect(adapters).toHaveLength(1);
-    expect(adapters[0].name).toBe('Updated');
+    expect(adapters[0]!.name).toBe('Updated');
   });
 });
 

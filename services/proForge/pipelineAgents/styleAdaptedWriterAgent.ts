@@ -81,11 +81,12 @@ export class StyleAdaptedWriterAgent extends BaseAgent {
             severity: 'info',
             status: 'pending',
             sectionId: section.id,
-            position: 0,
-            originalText: text.slice(0, 200),
-            suggestedText: suggestion,
-            rationale: `Style-adapted suggestion from ${activeAdapter.name}`,
+            description: `Style-adapted suggestion from ${activeAdapter.name}`,
+            original: text.slice(0, 200),
+            proposed: suggestion,
+            rationale: `Adapter: ${activeAdapter.name}`,
             confidence: 0.7,
+            createdAt: new Date().toISOString(),
           });
           aiCalls++;
           tokensConsumed += suggestion.length;
