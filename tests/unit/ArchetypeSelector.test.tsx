@@ -61,7 +61,7 @@ describe('ArchetypeSelector', () => {
     const user = userEvent.setup();
     render(<ArchetypeSelector />);
     const options = screen.getAllByRole('option');
-    await user.click(options[0]);
+    await user.click(options[0]!);
     expect(mockSelectArchetype).toHaveBeenCalledTimes(1);
   });
 
@@ -84,7 +84,7 @@ describe('ArchetypeSelector', () => {
     const user = userEvent.setup();
     render(<ArchetypeSelector />);
     const options = screen.getAllByRole('option');
-    options[0].focus();
+    options[0]?.focus();
     await user.keyboard('{Enter}');
     expect(mockSelectArchetype).toHaveBeenCalledTimes(1);
   });
@@ -93,7 +93,7 @@ describe('ArchetypeSelector', () => {
     const user = userEvent.setup();
     render(<ArchetypeSelector />);
     const options = screen.getAllByRole('option');
-    options[0].focus();
+    options[0]?.focus();
     await user.keyboard(' ');
     expect(mockSelectArchetype).toHaveBeenCalledTimes(1);
   });

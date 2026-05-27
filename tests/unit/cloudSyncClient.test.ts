@@ -47,7 +47,7 @@ describe('CloudSyncClient', () => {
       fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
       const client = new CloudSyncClient(BASE_CONFIG);
       await client.put('key', 'data');
-      const [, init] = fetchMock.mock.calls[0];
+      const [, init] = fetchMock.mock.calls[0]!;
       expect((init as RequestInit).headers as Record<string, string>).toMatchObject({
         Authorization: 'Bearer test-token',
       });
@@ -121,7 +121,7 @@ describe('CloudSyncClient', () => {
       fetchMock.mockResolvedValueOnce(new Response('[]', { status: 200 }));
       const client = new CloudSyncClient(BASE_CONFIG);
       await client.list('user-123');
-      expect(fetchMock.mock.calls[0][0]).toContain('prefix=user-123');
+      expect(fetchMock.mock.calls[0]![0]).toContain('prefix=user-123');
     });
 
     it('throws when list response is not ok', async () => {
@@ -138,7 +138,7 @@ describe('CloudSyncClient', () => {
       fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
       const client = new CloudSyncClient({ ...BASE_CONFIG, endpoint: 'https://sync.example.com/' });
       await client.put('my-key', 'data');
-      const url = fetchMock.mock.calls[0][0] as string;
+      const url = fetchMock.mock.calls[0]![0] as string;
       expect(url).toBe('https://sync.example.com/sc-sync/my-key');
     });
 
@@ -146,14 +146,14 @@ describe('CloudSyncClient', () => {
       fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
       const client = new CloudSyncClient(BASE_CONFIG);
       await client.put('my key/v2', 'data');
-      expect(fetchMock.mock.calls[0][0]).toContain('my%20key%2Fv2');
+      expect(fetchMock.mock.calls[0]![0]).toContain('my%20key%2Fv2');
     });
 
     it('uses default bucket prefix when not specified', async () => {
       fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
       const client = new CloudSyncClient({ endpoint: 'https://sync.example.com', token: 'tok' });
       await client.put('key', 'data');
-      expect(fetchMock.mock.calls[0][0]).toContain('/sc-sync/');
+      expect(fetchMock.mock.calls[0]![0]).toContain('/sc-sync/');
     });
   });
 });

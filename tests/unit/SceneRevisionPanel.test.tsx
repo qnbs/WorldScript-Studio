@@ -44,10 +44,8 @@ const SECTION = {
   id: 'sec-1',
   title: 'Chapter 1',
   content: 'Current content',
-  act: 1,
+  act: 1 as const,
   wordCount: 2,
-  type: 'scene' as const,
-  order: 0,
 };
 
 const REVISION = {

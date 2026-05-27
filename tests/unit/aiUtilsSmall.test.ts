@@ -123,14 +123,14 @@ describe('getEffectiveTheme', () => {
     vi.stubGlobal('window', {
       matchMedia: vi.fn().mockReturnValue({ matches: false }),
     });
-    expect(getEffectiveTheme('sepia')).toBe('light');
+    expect(getEffectiveTheme('auto')).toBe('light');
   });
 
   it('returns "dark" via matchMedia when prefers-color-scheme is dark', () => {
     vi.stubGlobal('window', {
       matchMedia: vi.fn().mockReturnValue({ matches: true }),
     });
-    expect(getEffectiveTheme('sepia')).toBe('dark');
+    expect(getEffectiveTheme('auto')).toBe('dark');
   });
 
   it('falls back to "dark" when window is undefined', () => {

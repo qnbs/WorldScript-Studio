@@ -244,7 +244,8 @@ describe('useProForgeOrchestrator', () => {
         createdAt: '2026-01-01T00:00:00Z',
       };
       const { useAppSelector: mockUseAppSelector } = await import('../../../app/hooks');
-      vi.mocked(mockUseAppSelector).mockImplementation((selector: (s: unknown) => unknown) =>
+      // biome-ignore lint/suspicious/noExplicitAny: mock — RootState not needed in test
+      vi.mocked(mockUseAppSelector).mockImplementation((selector: (s: any) => unknown) =>
         selector({
           proForge: {
             ...mockProForgeState,

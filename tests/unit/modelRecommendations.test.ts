@@ -14,15 +14,13 @@ import {
 
 const baseReport = (vramTier: DeviceHealthReport['gpuVramTier']): DeviceHealthReport => ({
   gpuVramTier: vramTier,
-  gpuVramMb: 0,
   cpuCores: 4,
   deviceClass: 'mid-range',
-  supportsWebGpu: vramTier !== 'none',
-  supportsSharedArrayBuffer: true,
-  estimatedRamMb: 8192,
+  heapUsedMb: 1024,
+  heapTotalMb: 4096,
+  memoryPressureRatio: 0.25,
+  storageQuotaMb: 10240,
   batteryLevel: null,
-  isCharging: null,
-  connectionType: 'wifi',
   isMobile: false,
 });
 

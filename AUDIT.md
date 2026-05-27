@@ -1,9 +1,45 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)** → **2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.18.0** — 2026-05-27 (ProForge Humanization & Refinement Sprint — Phases H/A/P/X)  
+**Current version:** **v1.18.1** — 2026-05-27 (TypeScript strict-mode compliance sweep)  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)
+
+### Sprint: TypeScript Strict-Mode Compliance Sweep (2026-05-27)
+
+**Goal:** Eliminate all pre-existing TypeScript typecheck errors introduced by `strict: true` + `exactOptionalPropertyTypes: true` + `noUncheckedIndexedAccess: true` across source files and test files. Result: zero errors on `pnpm exec tsc --noEmit`.
+
+**Root causes addressed:**
+
+| Category | Files | Fix |
+|----------|-------|-----|
+| `exactOptionalPropertyTypes` in ProForge pipeline | 7 agent files + slice + orchestrator | Conditional spread `...(val !== undefined && { key: val })` pattern |
+| `AIRequestOptions` requires `model`+`provider` | 7 pipeline agents + `baseAgent.ts` | Added `buildAiOpts()` protected helper to `BaseAgent` |
+| Wrong module paths in `toolRegistry.ts` | 1 | `'../../app/store'` → `'../../../app/store'` |
+| Missing `author` in `EpubExportOptions` | `productionAgent.ts` | Added `author: project.author ?? 'Unknown'` |
+| `AiModel`/`AIProvider` type imports missing | `baseAgent.ts` | Added imports |
+| Voice component wrong imports | `VoicePrivacyConsentModal.tsx`, `VoicePrivacyStatus.tsx` | Fixed `useTranslation` import path; `Modal` named import; `setVoiceSettings` action |
+| `noUncheckedIndexedAccess` in test fixtures | 35+ test files | `[i]!` non-null assertions, `?.` optional chaining |
+| `StorySection` shape mismatch (no `type`/`order`) | 5 test files | Removed non-existent fixture fields |
+| `StorySection.act` literal type `1\|2\|3` | `SceneRevisionPanel.test.tsx` | `act: 1 as const` |
+| `AiModel`, `Theme`, `MindMapNodeType`, `StoryObjectType` union literals | 4 test files | Replaced with valid enum members |
+| `PrivacySettings` required fields (6 fields) | `aiPolicyAndUtils.test.ts` | Added `basePrivacy()` helper with all required fields |
+| `DeviceHealthReport` shape mismatch | `modelRecommendations.test.ts` | Removed non-existent fields, added missing ones |
+| `FlatHelpArticle` shape mismatch | `HelpSearchPanel.test.tsx` | `bodyKey`+`tags` → `contentKey` |
+| `FeatureFlagsState.enableProForge` missing | 3 command test files | Added `enableProForge: false` to mock objects |
+| Unused variables (`_result`, `_moveEvent`) | 2 test files | Removed or voided |
+| `versionControlActions.restoreSnapshot` missing | `versionControlSlice.ts` | Added stub reducer (typed signal only) |
+| `useTransientUiStore` selector type mismatch | `CompileWizardModal.test.tsx` | `any` cast with biome-ignore per occurrence |
+| `useAppSelector` selector type mismatch | `useProForgeOrchestrator.test.ts` | `any` cast with biome-ignore on `mockImplementation` |
+| `getByRole('combobox', { name: undefined })` | `ToolsPanel.test.tsx` | `getAllByRole('combobox')[0]` |
+| Generic `t<T>` function type cast | `useTranslation.test.tsx` | Double-cast `as unknown as <T>(k,opts?)=>T` |
+| `AsyncThunk.fulfilled.match` property | `BackupQuickActionsCard.test.tsx` | `Object.assign` + `as unknown as` cast |
+
+**Quality gate (2026-05-27 — v1.18.1):** lint ✅ (Biome — 0 errors) · typecheck ✅ (0 errors — tsc --noEmit) · i18n:check ✅ (2062 keys × 5 locales) · tests ✅
 
 ---
 

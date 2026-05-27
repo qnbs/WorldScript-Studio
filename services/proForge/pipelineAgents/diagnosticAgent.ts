@@ -17,7 +17,6 @@ import {
   stripJsonFences,
   validateWithSchema,
 } from '../pipelineOutput/structuredOutput';
-import type { ToolContext } from '../pipelineTools/toolRegistry';
 import { BaseAgent } from './baseAgent';
 
 export class DiagnosticAgent extends BaseAgent {
@@ -25,16 +24,9 @@ export class DiagnosticAgent extends BaseAgent {
     signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
     const startTime = performance.now();
-    const { dispatch, getState, projectId, config } = this.context;
+    const { config } = this.context;
     const project = this.requireProject();
     const memoryBank = this.getMemoryBank();
-    const _toolContext: ToolContext = {
-      projectId,
-      dispatch,
-      getState,
-      memoryBank,
-      signal,
-    };
 
     // Gather manuscript metadata
     const sections = project.manuscript;
@@ -76,9 +68,11 @@ export class DiagnosticAgent extends BaseAgent {
     let tokensConsumed = 0;
 
     try {
-      const response = await aiProviderService.generateText(prompt, config.creativity, {
-        maxOutputTokens: config.maxTokens,
-      });
+      const response = await aiProviderService.generateText(
+        prompt,
+        config.creativity,
+        this.buildAiOpts({ maxTokens: config.maxTokens }),
+      );
       aiCalls += 1;
       tokensConsumed += response.length; // rough estimate
 
@@ -97,9 +91,11 @@ export class DiagnosticAgent extends BaseAgent {
         if (!reflection.coherent && !signal.aborted) {
           logger.warn('DiagnosticAgent: Self-eval flagged INCOHERENT — retrying primary call');
           try {
-            const retryRaw = await aiProviderService.generateText(prompt, config.creativity, {
-              maxOutputTokens: config.maxTokens,
-            });
+            const retryRaw = await aiProviderService.generateText(
+              prompt,
+              config.creativity,
+              this.buildAiOpts({ maxTokens: config.maxTokens }),
+            );
             aiCalls += 1;
             tokensConsumed += retryRaw.length;
             const retried = this.parseDiagnosticResponse(retryRaw);
@@ -191,7 +187,7 @@ export class DiagnosticAgent extends BaseAgent {
       logger.warn('DiagnosticAgent: Schema validation failed:', validated.error);
       return null;
     }
-    return validated.data;
+    return validated.data as DiagnosticReport;
   }
 
   private createFallbackReport(

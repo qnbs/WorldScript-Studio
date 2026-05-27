@@ -42,7 +42,7 @@ export function useProForgeOrchestrator() {
       aiProvider: settings?.advancedAi?.provider,
       ragMode: settings?.advancedAi?.ragMode ?? 'hybrid',
       maxTokens: settings?.advancedAi?.maxTokens ?? 8000,
-      creativity: settings?.advancedAi?.creativity ?? 'Balanced',
+      creativity: settings?.aiCreativity ?? 'Balanced',
       useDuckDb: featureFlags?.enableDuckDbAnalytics ?? false,
       autoAcceptThreshold: 0,
       language,

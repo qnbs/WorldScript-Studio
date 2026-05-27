@@ -95,8 +95,6 @@ const SECTION: StorySection = {
   content: '',
   act: 1,
   wordCount: 100,
-  type: 'scene',
-  order: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -110,7 +108,7 @@ describe('ReferencePanelView', () => {
     mockCharacters.length = 0;
     mockWorlds.length = 0;
     mockComments.length = 0;
-    mockProjectData.binderNodes = [];
+    mockProjectData['binderNodes'] = [];
   });
 
   it('renders the tab bar with all tabs', () => {

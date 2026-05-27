@@ -69,8 +69,13 @@ export class ProductionAgent extends BaseAgent {
 
       // Generate EPUB (if epubApiService available)
       try {
-        const { generateEpub } = await import('../../epubApiService');
-        const epubBlob = await generateEpub(project, project.compileProfile);
+        const { exportEpubViaApi } = await import('../../epubApiService');
+        const epubBlob = await exportEpubViaApi({
+          title: project.title,
+          author: project.author ?? 'Unknown',
+          chapters: project.manuscript.map((s) => ({ title: s.title, content: s.content })),
+          ...(project.compileProfile !== undefined && { compileProfile: project.compileProfile }),
+        });
         artifacts.push({
           id: 'epub',
           format: 'epub',

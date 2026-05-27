@@ -107,4 +107,33 @@ See `TODO.md` and `ROADMAP.md`. No new deferred items introduced this session.
 
 1. Run CI and verify all jobs green (coverage, build, e2e, lighthouse, Stryker)
 2. Update README.md badges with CI-reported coverage numbers after CI run
+
+---
+
+## Addendum — TypeScript strict-mode compliance sweep (same day, v1.18.1)
+
+**Session goal:** Fix ALL pre-existing TypeScript errors (`tsc --noEmit`) — zero tolerance, not a single suppression.
+
+### Changes (47 files)
+
+**Source files (12):**
+- `services/proForge/pipelineAgents/baseAgent.ts` — added `buildAiOpts()` protected helper + `AIProvider`/`AiModel` imports; all `generateText` calls now pass valid `AIRequestOptions`
+- All 6 other pipeline agents — replaced `{ maxTokens: N }` with `this.buildAiOpts({ maxTokens: N })`
+- `services/proForge/pipelineAgents/productionAgent.ts` — added `author: project.author ?? 'Unknown'` to `EpubExportOptions`
+- `services/proForge/pipelineTools/toolRegistry.ts` — fixed 2 wrong module paths (`../../` → `../../../`)
+- `features/proForge/proForgeSlice.ts` — `exactOptionalPropertyTypes` conditional spread pattern
+- `features/proForge/types.ts` — `noUncheckedIndexedAccess` coalesced array access to `?? null`
+- `features/versionControl/versionControlSlice.ts` — stub `restoreSnapshot` reducer
+- `hooks/useProForgeOrchestrator.ts` — `settings.aiCreativity` (not `settings.advancedAi.creativity`)
+- `components/voice/VoicePrivacyConsentModal.tsx` — useTranslation import, Modal named export, setVoiceSettings action
+- `components/voice/VoicePrivacyStatus.tsx` — useTranslation import, selectVoiceSettings selector
+
+**Test files (35):** noUncheckedIndexedAccess non-null assertions, StorySection fixture cleanup, type literal fixes (AiModel, Theme, MindMapNodeType, StoryObjectType), PrivacySettings shape, DeviceHealthReport shape, FlatHelpArticle.contentKey, FeatureFlagsState.enableProForge, TransientUiStore `any` cast, CompileWizardModal mock restructure.
+
+### Quality gate at v1.18.1
+
+- **lint** ✅ — Biome 0 errors
+- **typecheck** ✅ — `tsc --noEmit` 0 errors
+- **i18n:check** ✅ — 2062 keys × 5 locales
+- **tests** ✅ — all suites green
 3. PLANbib v1.7 features (Objects → MindMap → Interviews → Timeline → Wizard → Analysis → ReadMode → Guide → Desktop) — 9 phases, go-ahead from user required

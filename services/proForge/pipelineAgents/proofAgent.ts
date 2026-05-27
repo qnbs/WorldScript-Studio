@@ -47,9 +47,11 @@ export class ProofAgent extends BaseAgent {
     let tokensConsumed = 0;
 
     try {
-      const response = await aiProviderService.generateText(prompt, 'Focused', {
-        maxOutputTokens: Math.min(config.maxTokens, 4000),
-      });
+      const response = await aiProviderService.generateText(
+        prompt,
+        'Focused',
+        this.buildAiOpts({ maxTokens: Math.min(config.maxTokens, 4000) }),
+      );
       aiCalls += 1;
       tokensConsumed += response.length;
 
@@ -69,7 +71,7 @@ export class ProofAgent extends BaseAgent {
         logger.warn('ProofAgent: Schema validation failed:', validated.error);
         report = this.createFallbackReport();
       } else {
-        report = validated.data;
+        report = validated.data as QualityGateReport;
       }
     } catch (err) {
       logger.error('ProofAgent: AI call failed:', err);
@@ -85,14 +87,11 @@ export class ProofAgent extends BaseAgent {
         type: 'grammarEdit' as ReviewItem['type'],
         severity: 'warning' as ReviewItem['severity'],
         sectionId: issue.sectionId,
-        range:
-          issue.startOffset !== undefined && issue.endOffset !== undefined
-            ? { start: issue.startOffset, end: issue.endOffset }
-            : undefined,
-        description: `[Grammar] ${issue.explanation ?? issue.issue}`,
+        range: { start: issue.startOffset, end: issue.endOffset },
+        description: `[Grammar] ${issue.explanation}`,
         original: issue.original,
         proposed: issue.proposed,
-        rationale: issue.explanation ?? 'Grammar issue',
+        rationale: issue.explanation,
         confidence: 0.9,
         status: 'pending' as ReviewItem['status'],
         createdAt: new Date().toISOString(),

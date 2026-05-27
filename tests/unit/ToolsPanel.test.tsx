@@ -146,7 +146,7 @@ describe('ToolsPanel', () => {
   it('shows style select for continue tool', () => {
     mockWriterState = { ...mockWriterState, activeTool: 'continue' };
     render(<ToolsPanel />);
-    expect(screen.getByRole('combobox', { name: undefined })).toBeInTheDocument();
+    expect(screen.getAllByRole('combobox')[0]).toBeInTheDocument();
   });
 
   it('shows RAG chunk badge when lastRagChunkCount > 0', () => {

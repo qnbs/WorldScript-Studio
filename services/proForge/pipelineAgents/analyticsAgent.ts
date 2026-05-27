@@ -35,12 +35,7 @@ export class AnalyticsAgent extends BaseAgent {
       stageDurations[stage.stage] = stage.metrics.durationMs;
     }
 
-    // Calculate quality improvement (rough estimate from diagnostic score)
-    const diagnosticStage = run.stages.find((s) => s.stage === 'intake');
-    const diagnosticOutput = diagnosticStage?.agentOutput as
-      | { qualityScore?: { overall: number } }
-      | undefined;
-    const _initialScore = diagnosticOutput?.qualityScore?.overall ?? 50;
+    // QNBS-v3: qualityImprovement is heuristic-only; per-run comparison requires stored diagnostic scores (future).
     const qualityImprovement = Math.min(30, totalEditsAccepted * 0.5); // heuristic
 
     const report: PipelineAnalyticsReport = {

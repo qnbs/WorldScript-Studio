@@ -128,7 +128,7 @@ describe('CommentsPanel', () => {
     await user.click(screen.getByText('comments.reply'));
     // Reply input is the last textbox
     const replyInputs = screen.getAllByRole('textbox');
-    const replyInput = replyInputs[replyInputs.length - 1];
+    const replyInput = replyInputs[replyInputs.length - 1]!;
     await user.type(replyInput, 'My reply');
     await user.click(screen.getByText('comments.send'));
     expect(screen.getByText('My reply')).toBeInTheDocument();

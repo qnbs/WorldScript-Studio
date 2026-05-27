@@ -4,13 +4,13 @@
  */
 
 import { useAppSelector } from '../../app/hooks';
-import { useTranslation } from '../../contexts/I18nContext';
-import { selectSettings } from '../../features/settings/settingsSlice';
+import { selectVoiceSettings } from '../../features/settings/settingsSlice';
+import { useTranslation } from '../../hooks/useTranslation';
 
 export default function VoicePrivacyStatus() {
   const { t } = useTranslation();
-  const settings = useAppSelector(selectSettings);
-  const sttEngine = settings.voice.sttEngine;
+  const voice = useAppSelector(selectVoiceSettings);
+  const sttEngine = voice.sttEngine;
 
   // Web Speech API is the only non-local engine in Phase 1.
   const isExternal = sttEngine === 'webSpeech';

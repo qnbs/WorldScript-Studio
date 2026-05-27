@@ -111,14 +111,14 @@ describe('SettingsView', () => {
   it('calls setActiveCategory when a nav button is clicked', () => {
     render(<SettingsView />);
     // Find the appearance nav button and click it
-    const appearanceButton = screen.getAllByText('settings.categories.appearance')[0];
+    const appearanceButton = screen.getAllByText('settings.categories.appearance')[0]!;
     fireEvent.click(appearanceButton);
     expect(baseContextValue.setActiveCategory).toHaveBeenCalledWith('appearance');
   });
 
   it('hides unmatched nav items when search query is entered', () => {
     render(<SettingsView />);
-    const searchInput = screen.getAllByRole('searchbox')[0];
+    const searchInput = screen.getAllByRole('searchbox')[0]!;
     // Type a query that matches nothing — expect categories to vanish
     fireEvent.change(searchInput, { target: { value: 'zzznotarealcategory' } });
     // All category nav buttons should be hidden; "no results" text or zero nav items
@@ -135,7 +135,7 @@ describe('SettingsView', () => {
 
   it('hides group headers when search is active', () => {
     render(<SettingsView />);
-    const searchInput = screen.getAllByRole('searchbox')[0];
+    const searchInput = screen.getAllByRole('searchbox')[0]!;
     fireEvent.change(searchInput, { target: { value: 'editor' } });
     // Group headers should not render in search mode
     expect(screen.queryByText('settings.categories.writing')).toBeNull();

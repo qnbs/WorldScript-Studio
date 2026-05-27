@@ -157,7 +157,7 @@ describe('MindMapListPanel', () => {
     render(<MindMapListPanel />);
     await user.click(screen.getByRole('button', { name: 'mindmap.deleteMap' }));
     // Now click the confirm delete button (text-based)
-    const confirmBtn = screen.getAllByText('mindmap.deleteMap')[0];
+    const confirmBtn = screen.getAllByText('mindmap.deleteMap')[0]!;
     await user.click(confirmBtn);
     expect(mockHandleDeleteMap).toHaveBeenCalledWith('map-1');
   });

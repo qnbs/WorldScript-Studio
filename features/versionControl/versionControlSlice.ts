@@ -173,6 +173,14 @@ export const versionControlSlice = createSlice({
       state.snapshots = state.snapshots.filter((s) => s.id !== action.payload);
     },
 
+    /**
+     * Signal that a snapshot should be restored. Actual manuscript state restoration
+     * is handled by the ProForge orchestrator via project slice — this marks intent.
+     */
+    restoreSnapshot(_state, _action: PayloadAction<{ snapshotId: string }>) {
+      // QNBS-v3: Cross-slice restore is orchestrated externally; this action is a typed signal.
+    },
+
     /** Open/close the version control panel */
     togglePanel(state) {
       state.isPanelOpen = !state.isPanelOpen;

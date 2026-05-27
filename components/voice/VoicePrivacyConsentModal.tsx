@@ -6,9 +6,9 @@
 
 import { useCallback } from 'react';
 import { useAppDispatch } from '../../app/hooks';
-import { useTranslation } from '../../contexts/I18nContext';
 import { settingsActions } from '../../features/settings/settingsSlice';
-import Modal from '../ui/Modal';
+import { useTranslation } from '../../hooks/useTranslation';
+import { Modal } from '../ui/Modal';
 
 interface VoicePrivacyConsentModalProps {
   isOpen: boolean;
@@ -23,22 +23,13 @@ export default function VoicePrivacyConsentModal({
   const dispatch = useAppDispatch();
 
   const handleAcknowledge = useCallback(() => {
-    dispatch(
-      settingsActions.updateSettings({
-        voice: { webSpeechConsentGranted: true } as Partial<import('../../types').VoiceSettings>,
-      }),
-    );
+    dispatch(settingsActions.setVoiceSettings({ webSpeechConsentGranted: true }));
     onClose();
   }, [dispatch, onClose]);
 
   const handleDecline = useCallback(() => {
     dispatch(
-      settingsActions.updateSettings({
-        voice: {
-          webSpeechConsentGranted: false,
-          sttEngine: 'auto',
-        } as Partial<import('../../types').VoiceSettings>,
-      }),
+      settingsActions.setVoiceSettings({ webSpeechConsentGranted: false, sttEngine: 'auto' }),
     );
     onClose();
   }, [dispatch, onClose]);

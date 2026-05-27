@@ -84,7 +84,7 @@ describe('VoiceControlPanel', () => {
     mockEnabled = true;
     mockIsListening = false;
     render(<VoiceControlPanel />);
-    const listenBtn = screen.getAllByRole('button')[0];
+    const listenBtn = screen.getAllByRole('button')[0]!;
     expect(listenBtn.getAttribute('aria-label')).toBe('voice.startListening');
   });
 
@@ -93,7 +93,7 @@ describe('VoiceControlPanel', () => {
     mockIsListening = true;
     mockMode = 'listening';
     render(<VoiceControlPanel />);
-    const listenBtn = screen.getAllByRole('button')[0];
+    const listenBtn = screen.getAllByRole('button')[0]!;
     expect(listenBtn.getAttribute('aria-label')).toBe('voice.stopListening');
   });
 
@@ -102,7 +102,7 @@ describe('VoiceControlPanel', () => {
     mockIsListening = false;
     const user = userEvent.setup();
     render(<VoiceControlPanel />);
-    await user.click(screen.getAllByRole('button')[0]);
+    await user.click(screen.getAllByRole('button')[0]!);
     expect(mockStartListening).toHaveBeenCalledTimes(1);
   });
 
@@ -111,7 +111,7 @@ describe('VoiceControlPanel', () => {
     mockIsListening = true;
     const user = userEvent.setup();
     render(<VoiceControlPanel />);
-    await user.click(screen.getAllByRole('button')[0]);
+    await user.click(screen.getAllByRole('button')[0]!);
     expect(mockStopListening).toHaveBeenCalledTimes(1);
   });
 
@@ -123,7 +123,7 @@ describe('VoiceControlPanel', () => {
     const buttons = screen.getAllByRole('button');
     // Second button is dictation toggle
     if (buttons.length > 1) {
-      await user.click(buttons[1]);
+      await user.click(buttons[1]!);
       expect(mockStartDictation).toHaveBeenCalledTimes(1);
     }
   });
@@ -135,7 +135,7 @@ describe('VoiceControlPanel', () => {
     render(<VoiceControlPanel />);
     const buttons = screen.getAllByRole('button');
     if (buttons.length > 1) {
-      await user.click(buttons[1]);
+      await user.click(buttons[1]!);
       expect(mockStopDictation).toHaveBeenCalledTimes(1);
     }
   });

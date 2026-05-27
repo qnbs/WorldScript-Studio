@@ -14,8 +14,6 @@ const SECTION: StorySection = {
   content: '',
   act: 1,
   wordCount: 0,
-  type: 'scene',
-  order: 0,
   color: '#ff0000',
 };
 
