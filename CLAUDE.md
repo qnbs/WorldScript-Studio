@@ -85,7 +85,8 @@ services/         → External adapters; notable sub-dirs:
                      help/        (helpCatalog.ts — 50+ articles, helpSearch.ts, helpDocRetrieval.ts)
                      keyboard/    (shortcut normalization, conflict detection)
                      proForge/    (proForgeOrchestrator.ts, proForgeMemoryBank.ts,
-                                   pipelineAgents/ — 8 agents: diagnosticAgent, structuralAgent,
+                                   pipelineAgents/ — baseAgent.ts (abstract base), supervisorAgent.ts
+                                   (heuristic gates), + 8 stage agents: diagnosticAgent, structuralAgent,
                                    proseAgent, copyEditAgent, proofAgent, productionAgent,
                                    publishingAgent, analyticsAgent; pipelineOutput/, pipelinePrompts/, pipelineTools/)
                      settingsExchange/
@@ -103,9 +104,11 @@ scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, g
 
 Redux Toolkit with feature-sliced slices: `features/project/`, `features/settings/`, `features/status/`, `features/writer/`, `features/versionControl/`, `features/featureFlags/`, `features/proForge/`. The `project` slice is wrapped with `redux-undo` (100-step history). Side effects (auto-save, Codex extraction, DuckDB dual-write) run in `app/listenerMiddleware.ts`, not in components or hooks.
 
+**`addDebouncedListener` factory** (`listenerMiddleware.ts`): use this helper instead of writing raw `startListening` calls with delay — it handles the `RootState` cast and delay pattern. **Critical RTK constraint:** `listenerApi.getOriginalState()` can only be called synchronously before the first `await` in an effect. Always capture it as `const originalState = listenerApi.getOriginalState() as RootState` at the top of the effect before any `await listenerApi.delay(...)` call.
+
 Use typed hooks everywhere: `useAppDispatch()`, `useAppSelector()`, `useAppSelectorShallow()`.
 
-Transient / ephemeral UI state (palette open, cross-project search open) lives in `app/transientUiStore.ts` (Zustand). Do not use a third state framework.
+Transient / ephemeral UI state (palette open, cross-project search open, Flow Mode) lives in `app/transientUiStore.ts` (Zustand). Do not use a third state framework. Key transient keys: `isCommandPaletteOpen`, `isCrossProjectSearchOpen`, `flowMode` / `setFlowMode` (distraction-free writing toggle).
 
 ### View Pattern
 
@@ -150,6 +153,8 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 ### AI Services
 
 `geminiService.ts` is the primary adapter for legacy thunks (Gemini API, retry logic, prompt construction). `aiProviderService.ts` provides the multi-provider abstraction (Gemini, OpenAI, Ollama, WebLLM, ONNX Runtime Web, Transformers.js). All legacy AI calls go through one of these. `features/project/aiThunkUtils.ts` provides a deduplicated async-thunk wrapper (service-level `_pendingRequests` Map) to prevent duplicate in-flight requests.
+
+**AI constants:** `services/ai/aiConstants.ts` is the single source for shared AI constants: `CREATIVITY_TO_TEMPERATURE` (AiCreativity → number), `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS` + `isOrchestrationReadyProvider()`, `LOCAL_INFERENCE_PROVIDERS` + `isLocalInferenceProvider()`. The older per-constant files (`creativityTemperature.ts`, `localBackendPresets.ts`, `orchestrationProviders.ts`) re-export from here and remain for import compatibility.
 
 **Vercel AI SDK layer (new paths, Strangler pattern):** `services/ai/index.ts` is the canonical entry — it exports the orchestration layer built on `@ai-sdk/google`, `@ai-sdk/openai`, and the `ai` package. New Writer streaming uses `hooks/useStoryCraftAI.ts` (wraps `useCompletion` from `@ai-sdk/react` with the custom `storyCraftCompletionFetch`). New code should route through `services/ai/` + `useStoryCraftAI`; legacy thunks remain in `aiProviderService.ts` / `geminiService.ts` for backwards compatibility. Always gate cloud AI calls with `assertCloudAiAllowed` from `services/ai/aiPolicy.ts`.
 
@@ -234,7 +239,7 @@ Skip the annotation for pure formatting, lockfile updates, or generated artefact
 
 All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**. Sprint notes: `docs/SPRINT-V1.8.md`, `docs/SPRINT-V1.9.md`, `docs/SPRINT-V1.10.md`, `docs/SPRINT-V1.16.md` (design system completion). Local CI: `infra/low-end-ci/DAILY-DRIVER.md`.
 
-**Before large or cross-cutting changes:** read [`ROADMAP.md`](ROADMAP.md) (planned features + priorities), [`AUDIT.md`](AUDIT.md) (follow-ups, metrics), and [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (architecture decisions, content/CI guidance). After merging, update README.md badges and the AUDIT.md quality-gate line with CI-reported numbers if the maintainer requests it.
+**Before large or cross-cutting changes:** read [`ROADMAP.md`](ROADMAP.md) (planned features + priorities), [`AUDIT.md`](AUDIT.md) (follow-ups, metrics), and [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (architecture decisions, content/CI guidance). ProForge architecture: [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md). Latest sprint handoff: [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md). After merging, update README.md badges and the AUDIT.md quality-gate line with CI-reported numbers if the maintainer requests it.
 
 ## Key Constraints
 
@@ -278,13 +283,19 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 **Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — `createProForgeOrchestrator({dispatch, getState, projectId, manuscript, characters, worlds, config})`. Agents are lazy-loaded per stage to avoid circular deps. Call via `hooks/useProForgeOrchestrator.ts` (never instantiate directly in components).
 
-**Agents** (`services/proForge/pipelineAgents/`): one file per stage — `diagnosticAgent.ts`, `structuralAgent.ts`, `proseAgent.ts`, `copyEditAgent.ts`, `proofAgent.ts`, `productionAgent.ts`, `publishingAgent.ts`, `analyticsAgent.ts`. Each exports a class with a `run(ctx)` method returning its stage-specific output type.
+**Agents** (`services/proForge/pipelineAgents/`): all 8 stage agents extend `BaseAgent` (abstract base in `baseAgent.ts`). `BaseAgent` provides `requireProject()`, `getMemoryBank()`, `elapsed(startTime)`, and `selfReflect(excerpt, summary, signal)` — agents implement only `execute(signal): Promise<Pick<StageResult, ...>>`. Do not duplicate these helpers in new agents.
+
+**SupervisorAgent** (`supervisorAgent.ts`): heuristic quality gate — no AI calls. `evaluate(stage, result)` returns `SupervisionDecision { verdict: 'pass'|'retry'|'fail', reason, retryHint? }`. Detects `isFallback: true`, uniform-score sentinels, implausible edit/issue ratios. Called by the orchestrator's `executeStageWithSupervision` loop (up to `maxRetries` retries). Hard gate: intake `qualityScore < 30` → `fail`.
+
+**Honest fallbacks:** All `createFallback*` methods use 0 scores + `isFallback: true`. Never produce fake mid-range values — the SupervisorAgent uses these flags to trigger retries.
 
 **Memory Bank:** `services/proForge/proForgeMemoryBank.ts` — IDB store `proforge-memory-bank` for cross-agent persistent context (lore, style, feedback). Accessed by agents, not by UI components directly.
 
 **View pattern:** `contexts/ProForgeViewContext.ts` + `hooks/useProForgeOrchestrator.ts` + `components/proForge/` (ProForgeDashboard, PipelineProgressPanel, PipelineReviewPanel). The context passes the full `useProForgeOrchestrator` return to sub-components; use `useProForgeViewContext()` to consume.
 
-**`PipelineConfig` key fields:** `genrePreset`, `selectedStages`, `aiProvider`, `ragMode`, `maxTokens`, `creativity`, `useDuckDb`, `autoAcceptThreshold` (0 = never auto-accept), `language`.
+**`PipelineConfig` key fields:** `genrePreset`, `selectedStages`, `aiProvider`, `ragMode`, `maxTokens`, `creativity`, `useDuckDb`, `autoAcceptThreshold` (0 = never auto-accept), `language`, `maxRetries` (0 | 1, default 1 — controls supervisor retry budget).
+
+**Key type additions (v1.18):** `isFallback?: boolean` on `DiagnosticReport`, `StructuralEditPlan`, `QualityGateReport`; `reflectionNotes?: string` on diagnostic/structural outputs (trace log only, not shown in UI); `supervisorDecision?: SupervisionDecision` on `StageResult`.
 
 ### Scene-level services
 
@@ -303,6 +314,26 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 **ConnectionLayer test IDs:** Connection `<g>` elements use `data-testid="connection-group"` — query by testid, not role.
 
 **DuckDB in tests:** Mock `services/duckdb/duckdbClient` with `{ execAsync: vi.fn(), queryAsync: vi.fn() }`. Never initialize a real DuckDB-WASM instance in unit tests.
+
+**AI thunk tests (localStorageOnly default):** `settingsReducer` initializes with `privacy.localStorageOnly: true`. Any test file that dispatches AI thunks through a real Redux store will have `createDeduplicatedThunk` call `assertCloudAiAllowedSync(provider, privacy)` and throw "Cloud provider blocked" before the payload creator runs. Fix: add this mock **before all imports** in the test file:
+```ts
+vi.mock('../../../services/ai/aiPolicy', () => ({
+  assertCloudAiAllowedSync: vi.fn(),
+  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
+}));
+```
+
+**Context hooks in component tests:** If a component calls `useSomeViewContext()` and the test renders without the provider, it throws "must be used within a Provider". Mock the context module rather than wrapping in the real provider tree:
+```ts
+vi.mock('../../../contexts/WriterViewContext', () => ({
+  useWriterViewContext: vi.fn(() => ({ flowMode: false, toggleFlowMode: vi.fn() })),
+}));
+```
+Apply this pattern for any `use*ViewContext` hook — `useProForgeViewContext`, `useWriterViewContext`, etc.
+
+### Settings Navigation
+
+`components/SettingsView.tsx` uses `NAV_GROUPS` — a typed array of `{ key: string; ids: readonly string[] }` — plus a `NavGroupHeader` component to render semantic sidebar sections (Writing, AI Models, Appearance & Accessibility, Privacy & Data, Connections, System). When adding a new settings tab: add its `id` to the correct group in `NAV_GROUPS`; do not create a flat ungrouped entry.
 
 ### Cross-project & backup
 
