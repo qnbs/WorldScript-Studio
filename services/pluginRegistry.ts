@@ -1,7 +1,10 @@
 /**
  * Plugin registry — lightweight service for discovering and managing StoryCraft Studio extensions.
  * QNBS-v3: Plugins declare a capability manifest; execute() validates permissions before dispatch.
+ *          v1: Permission gate only; Worker-scope isolation scheduled for v2 per ADR-06.
  */
+
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,7 +27,7 @@ export interface PluginDescriptor {
   version: string;
   name: string;
   type: PluginType;
-  /** Module path or URL to the plugin entrypoint (informational only — not auto-loaded). */
+  /** Module path or URL to the plugin entrypoint. */
   entrypoint: string;
   /** Declared permission scopes the plugin requires (capability manifest). */
   permissions: PluginPermission[];
@@ -45,12 +48,42 @@ export interface PluginSandboxedApi {
   appendToCurrentScene: (text: string) => void;
   /** Log a message to the diagnostic ring-buffer (never exposed to network). */
   log: (message: string) => void;
+  /** Generate text via AI provider. Requires 'ai.invoke'. */
+  generateText: (prompt: string, opts?: { maxTokens?: number }) => Promise<string>;
+  /** Read a plugin-namespaced value from IDB storage. Requires 'storage.read'. */
+  storageRead: (key: string) => Promise<unknown>;
+  /** Write a plugin-namespaced value to IDB storage. Requires 'storage.write'. */
+  storageWrite: (key: string, value: unknown) => Promise<void>;
 }
 
 export type PluginExecuteResult = { ok: true } | { ok: false; error: string };
 
 // ---------------------------------------------------------------------------
-// Permission validation
+// Zod schema — validates plugin manifests on registerWithValidation()
+// ---------------------------------------------------------------------------
+
+const PLUGIN_PERMISSIONS = [
+  'storage.read',
+  'storage.write',
+  'ai.invoke',
+  'project.read',
+  'project.write',
+  'scene.read',
+  'scene.write',
+] as const;
+
+export const PluginDescriptorSchema = z.object({
+  id: z.string().min(1, 'Plugin id must not be empty'),
+  version: z.string().min(1),
+  name: z.string().min(1, 'Plugin name must not be empty'),
+  type: z.enum(['command', 'ai-tool', 'local-ai-service']),
+  entrypoint: z.string().min(1),
+  permissions: z.array(z.enum(PLUGIN_PERMISSIONS)),
+  description: z.string().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Permission mapping — documents which API method requires which permission
 // ---------------------------------------------------------------------------
 
 const PERMISSION_API_MAP: Record<keyof PluginSandboxedApi, PluginPermission | null> = {
@@ -58,6 +91,9 @@ const PERMISSION_API_MAP: Record<keyof PluginSandboxedApi, PluginPermission | nu
   getSceneTitles: 'scene.read',
   appendToCurrentScene: 'scene.write',
   log: null, // always allowed
+  generateText: 'ai.invoke',
+  storageRead: 'storage.read',
+  storageWrite: 'storage.write',
 };
 
 // ---------------------------------------------------------------------------
@@ -71,6 +107,12 @@ export class PluginRegistry {
     if (!descriptor.id) throw new Error('PluginRegistry: descriptor must have a non-empty id');
     // QNBS-v3: Re-registration overwrites silently — same as npm module re-require.
     this.plugins.set(descriptor.id, descriptor);
+  }
+
+  /** Register with Zod schema validation — throws ZodError on invalid descriptor. */
+  registerWithValidation(raw: unknown): void {
+    const descriptor = PluginDescriptorSchema.parse(raw);
+    this.plugins.set(descriptor.id, descriptor as PluginDescriptor);
   }
 
   unregister(id: string): boolean {
@@ -97,9 +139,51 @@ export class PluginRegistry {
     this.plugins.clear();
   }
 
+  private buildSandbox(
+    descriptor: PluginDescriptor,
+    rawApi: PluginSandboxedApi,
+  ): PluginSandboxedApi {
+    const granted = new Set(descriptor.permissions);
+    const deny = (perm: PluginPermission): never => {
+      throw new Error(`Permission denied: ${perm}`);
+    };
+
+    // Silence PERMISSION_API_MAP from dead-code elimination — documents the mapping.
+    void PERMISSION_API_MAP;
+
+    return {
+      getProjectTitle: () => {
+        if (!granted.has('project.read')) deny('project.read');
+        return rawApi.getProjectTitle();
+      },
+      getSceneTitles: () => {
+        if (!granted.has('scene.read')) deny('scene.read');
+        return rawApi.getSceneTitles();
+      },
+      appendToCurrentScene: (text) => {
+        if (!granted.has('scene.write')) deny('scene.write');
+        rawApi.appendToCurrentScene(text);
+      },
+      log: rawApi.log,
+      generateText: (prompt, opts) => {
+        if (!granted.has('ai.invoke')) deny('ai.invoke');
+        return rawApi.generateText(prompt, opts);
+      },
+      storageRead: (key) => {
+        if (!granted.has('storage.read')) deny('storage.read');
+        return rawApi.storageRead(key);
+      },
+      storageWrite: (key, value) => {
+        if (!granted.has('storage.write')) deny('storage.write');
+        return rawApi.storageWrite(key, value);
+      },
+    };
+  }
+
   /**
-   * Execute a plugin by ID, passing a sandboxed API gated by its declared permissions.
-   * QNBS-v3: Each api method is wrapped to check declared permissions before calling through.
+   * Execute a plugin synchronously with a permission-gated sandboxed API.
+   * QNBS-v3: Plugins using async APIs (generateText, storageRead, storageWrite) should
+   *          use executeAsync() instead so errors propagate correctly.
    */
   execute(
     pluginId: string,
@@ -111,31 +195,55 @@ export class PluginRegistry {
       return { ok: false, error: `Plugin '${pluginId}' not registered` };
     }
 
-    const granted = new Set(descriptor.permissions);
+    try {
+      fn(this.buildSandbox(descriptor, rawApi));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
 
-    // Build a sandboxed proxy that enforces the declared permission set.
-    const sandboxed: PluginSandboxedApi = {
-      getProjectTitle: () => {
-        if (!granted.has('project.read')) throw new Error('Permission denied: project.read');
-        return rawApi.getProjectTitle();
-      },
-      getSceneTitles: () => {
-        if (!granted.has('scene.read')) throw new Error('Permission denied: scene.read');
-        return rawApi.getSceneTitles();
-      },
-      appendToCurrentScene: (text) => {
-        if (!granted.has('scene.write')) throw new Error('Permission denied: scene.write');
-        rawApi.appendToCurrentScene(text);
-      },
-      log: rawApi.log,
-    };
-
-    // Silence PERMISSION_API_MAP from dead-code elimination — it documents the mapping.
-    void PERMISSION_API_MAP;
+  /**
+   * Execute a plugin asynchronously — supports plugins that use async APIs
+   * (generateText, storageRead, storageWrite).
+   */
+  async executeAsync(
+    pluginId: string,
+    fn: (api: PluginSandboxedApi) => Promise<void>,
+    rawApi: PluginSandboxedApi,
+  ): Promise<PluginExecuteResult> {
+    const descriptor = this.plugins.get(pluginId);
+    if (!descriptor) {
+      return { ok: false, error: `Plugin '${pluginId}' not registered` };
+    }
 
     try {
-      fn(sandboxed);
+      await fn(this.buildSandbox(descriptor, rawApi));
       return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * Dynamically load a plugin by entrypoint URL and execute its run() export.
+   * QNBS-v3: v1 loads in the main thread; v2 will spawn a Worker per ADR-06.
+   * The entrypoint module must export `run(api: PluginSandboxedApi): Promise<void>`.
+   */
+  async loadPlugin(
+    descriptor: PluginDescriptor,
+    rawApi: PluginSandboxedApi,
+  ): Promise<PluginExecuteResult> {
+    this.register(descriptor);
+    try {
+      // Dynamic import — entrypoint must export a `run` function.
+      const module = (await import(/* @vite-ignore */ descriptor.entrypoint)) as {
+        run?: (api: PluginSandboxedApi) => Promise<void>;
+      };
+      if (typeof module['run'] !== 'function') {
+        return { ok: false, error: `Plugin '${descriptor.id}' has no exported run() function` };
+      }
+      return this.executeAsync(descriptor.id, module['run'], rawApi);
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

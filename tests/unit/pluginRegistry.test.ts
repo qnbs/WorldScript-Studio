@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type PluginDescriptor,
+  PluginDescriptorSchema,
   PluginRegistry,
   type PluginSandboxedApi,
 } from '../../services/pluginRegistry';
@@ -23,6 +24,9 @@ function makeApi(overrides: Partial<PluginSandboxedApi> = {}): PluginSandboxedAp
     getSceneTitles: vi.fn(() => ['Scene 1', 'Scene 2']),
     appendToCurrentScene: vi.fn(),
     log: vi.fn(),
+    generateText: vi.fn().mockResolvedValue('Generated text'),
+    storageRead: vi.fn().mockResolvedValue(null),
+    storageWrite: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -171,5 +175,169 @@ describe('PluginRegistry.execute()', () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe('plugin crash');
+  });
+});
+
+describe('PluginRegistry.executeAsync()', () => {
+  let registry: PluginRegistry;
+
+  beforeEach(() => {
+    registry = new PluginRegistry();
+  });
+
+  it('returns error for unregistered plugin', async () => {
+    const result = await registry.executeAsync('ghost', async () => {}, makeApi());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/not registered/);
+  });
+
+  it('allows generateText when ai.invoke is declared', async () => {
+    registry.register(makePlugin({ permissions: ['ai.invoke'] }));
+    const api = makeApi();
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.generateText('Write a scene', { maxTokens: 100 });
+      },
+      api,
+    );
+    expect(result.ok).toBe(true);
+    expect(api.generateText).toHaveBeenCalledWith('Write a scene', { maxTokens: 100 });
+  });
+
+  it('denies generateText without ai.invoke', async () => {
+    registry.register(makePlugin({ permissions: [] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.generateText('prompt');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/ai\.invoke/);
+  });
+
+  it('allows storageRead when storage.read is declared', async () => {
+    registry.register(makePlugin({ permissions: ['storage.read'] }));
+    const api = makeApi({ storageRead: vi.fn().mockResolvedValue(42) });
+    let value: unknown;
+    await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        value = await sandboxed.storageRead('my-key');
+      },
+      api,
+    );
+    expect(api.storageRead).toHaveBeenCalledWith('my-key');
+    expect(value).toBe(42);
+  });
+
+  it('denies storageRead without storage.read', async () => {
+    registry.register(makePlugin({ permissions: [] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageRead('key');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/storage\.read/);
+  });
+
+  it('allows storageWrite when storage.write is declared', async () => {
+    registry.register(makePlugin({ permissions: ['storage.write'] }));
+    const api = makeApi();
+    await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageWrite('scene-count', 5);
+      },
+      api,
+    );
+    expect(api.storageWrite).toHaveBeenCalledWith('scene-count', 5);
+  });
+
+  it('denies storageWrite without storage.write', async () => {
+    registry.register(makePlugin({ permissions: ['storage.read'] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageWrite('key', 'value');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/storage\.write/);
+  });
+
+  it('returns ok:false when async fn rejects', async () => {
+    registry.register(makePlugin({ permissions: [] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async () => {
+        throw new Error('async crash');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('async crash');
+  });
+});
+
+describe('PluginDescriptorSchema (Zod validation)', () => {
+  it('accepts a valid descriptor', () => {
+    const raw = {
+      id: 'valid-plugin',
+      version: '1.0.0',
+      name: 'Valid Plugin',
+      type: 'command',
+      entrypoint: './plugins/valid.ts',
+      permissions: ['storage.read', 'ai.invoke'],
+    };
+    expect(() => PluginDescriptorSchema.parse(raw)).not.toThrow();
+  });
+
+  it('rejects a descriptor with an empty id', () => {
+    const raw = {
+      id: '',
+      version: '1.0.0',
+      name: 'Bad Plugin',
+      type: 'command',
+      entrypoint: './plugins/bad.ts',
+      permissions: [],
+    };
+    expect(() => PluginDescriptorSchema.parse(raw)).toThrow();
+  });
+
+  it('rejects a descriptor with an invalid permission', () => {
+    const raw = {
+      id: 'plugin-x',
+      version: '1.0.0',
+      name: 'Plugin X',
+      type: 'command',
+      entrypoint: './plugins/x.ts',
+      permissions: ['network.unrestricted'],
+    };
+    expect(() => PluginDescriptorSchema.parse(raw)).toThrow();
+  });
+
+  it('registerWithValidation throws on invalid descriptor', () => {
+    const registry = new PluginRegistry();
+    expect(() => registry.registerWithValidation({ id: '', name: 'bad' })).toThrow();
+  });
+
+  it('registerWithValidation registers a valid descriptor', () => {
+    const registry = new PluginRegistry();
+    registry.registerWithValidation({
+      id: 'validated-plugin',
+      version: '1.0.0',
+      name: 'Validated Plugin',
+      type: 'command',
+      entrypoint: './plugins/validated.ts',
+      permissions: ['project.read'],
+    });
+    expect(registry.getById('validated-plugin')).toBeDefined();
   });
 });
