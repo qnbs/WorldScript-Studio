@@ -61,8 +61,8 @@ describe('listAdapters', () => {
     await saveAdapter(META, blob);
     const result = await listAdapters();
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('lora-1');
-    expect(result[0].name).toBe('Fantasy Style');
+    expect(result[0]!.id).toBe('lora-1');
+    expect(result[0]!.name).toBe('Fantasy Style');
   });
 });
 
@@ -70,8 +70,8 @@ describe('saveAdapter', () => {
   it('persists meta fields correctly', async () => {
     await saveAdapter(META, new ArrayBuffer(4));
     const adapters = await listAdapters();
-    expect(adapters[0].scale).toBe(0.8);
-    expect(adapters[0].modelCompatibility).toBe('Phi-3.5-mini');
+    expect(adapters[0]!.scale).toBe(0.8);
+    expect(adapters[0]!.modelCompatibility).toBe('Phi-3.5-mini');
   });
 
   it('overwrites existing adapter with same id', async () => {

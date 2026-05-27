@@ -1,0 +1,115 @@
+{
+  "lora": {
+    "title": "Messa a punto LoRA",
+    "onboarding": {
+      "title": "Allena il tuo stile di scrittura",
+      "description": "Crea un modello IA personalizzato addestrato sui tuoi manoscritti. I tuoi dati non lasciano mai il tuo dispositivo.",
+      "privacyPromise": "100% Privato e offline",
+      "privacyDetail": "Tutto l'addestramento avviene localmente. Il tuo manoscritto non viene mai inviato a nessun servizio cloud.",
+      "systemCheck": "Requisiti di sistema",
+      "checking": "Verifica dell'ambiente in corso…",
+      "installed": "installato",
+      "notFound": "non trovato",
+      "installCmd": "pip install unsloth trl peft",
+      "cpuFallback": "Fallback CPU (più lento)",
+      "getStarted": "Inizia"
+    },
+    "library": {
+      "title": "Libreria degli adattatori",
+      "empty": "Nessun adattatore ancora. Allena il tuo primo modello di stile per iniziare."
+    },
+    "wizard": {
+      "title": "Procedura guidata di addestramento",
+      "trainNew": "Allena nuovo adattatore",
+      "startFirstTraining": "Allena il tuo primo adattatore",
+      "abort": "Interrompi addestramento",
+      "steps": {
+        "label": "Fasi di addestramento",
+        "model": "Modello",
+        "dataset": "Dati",
+        "params": "Parametri",
+        "train": "Allena",
+        "deploy": "Distribuisci"
+      },
+      "model": {
+        "description": "Scegli un modello base. I modelli più grandi producono trasferimenti di stile migliori.",
+        "selectModel": "Seleziona modello base"
+      },
+      "dataset": {
+        "instruction": "Estrai le scene dal tuo manoscritto come dati di addestramento. Sono necessarie almeno 50 voci di qualità."
+      },
+      "params": {
+        "description": "Scegli un preset ottimizzato per il tuo caso d'uso."
+      },
+      "training": {
+        "inProgress": "Addestramento in corso… Potrebbe richiedere 30–90 minuti.",
+        "ready": "Clicca Avanti per iniziare l'addestramento."
+      },
+      "deploy": {
+        "title": "Addestramento completato!",
+        "description": "Il tuo adattatore è pronto. Attivalo per usarlo in ProForge.",
+        "activated": "{{name}} è ora attivo."
+      }
+    },
+    "presets": {
+      "writerStyleLight": {
+        "label": "Stile leggero",
+        "desc": "Trasferimento rapido — ~30 min, 8 GB VRAM"
+      },
+      "deepNarrative": {
+        "label": "Narrativa profonda",
+        "desc": "Stile narrativo completo — ~60 min, 12 GB VRAM"
+      },
+      "dialogueMaster": {
+        "label": "Maestro del dialogo",
+        "desc": "Ottimizzato per i dialoghi — ~45 min, 8 GB VRAM"
+      },
+      "fullStyleClone": {
+        "label": "Clone di stile completo",
+        "desc": "Massima fedeltà — ~90 min, 16 GB VRAM"
+      }
+    },
+    "adapter": {
+      "active": "Attivo",
+      "activate": "Attiva",
+      "deactivate": "Disattiva",
+      "merge": "Unisci",
+      "export": "Esporta",
+      "delete": "Elimina",
+      "version": "Versione"
+    },
+    "evaluation": {
+      "title": "Valutazione dello stile",
+      "score": "Punteggio di coerenza stilistica",
+      "compare": "Confronto affiancato",
+      "run": "Avvia valutazione",
+      "evaluating": "Valutazione in corso…",
+      "baseline": "Riferimento",
+      "improvement": "Miglioramento",
+      "base": "Modello base",
+      "adapted": "Stile adattato",
+      "noActiveAdapter": "Attiva un adattatore per avviare la valutazione."
+    },
+    "dataset": {
+      "title": "Costruttore di dataset",
+      "extract": "Estrai dal manoscritto",
+      "extracting": "Estrazione in corso…",
+      "export": "Esporta",
+      "synthetic": "sintetico",
+      "extracted": "estratto",
+      "empty": "Nessun dataset ancora. Estrai le scene dal tuo manoscritto.",
+      "total": "Totale",
+      "accepted": "Accettati",
+      "flagged": "Segnalati",
+      "rejected": "Rifiutati",
+      "notEnough": "Sono necessarie almeno 50 voci accettate prima dell'addestramento.",
+      "entries": "Voci del dataset"
+    },
+    "errors": {
+      "pythonNotFound": "Python 3 non trovato. Installa Python ≥ 3.10.",
+      "insufficientVram": "VRAM insufficiente per questo preset. Richiesto: {{required}} GB.",
+      "trainingFailed": "Addestramento fallito: {{message}}",
+      "cloudBlocked": "I modelli cloud non possono essere utilizzati per l'addestramento."
+    }
+  }
+}

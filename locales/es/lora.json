@@ -1,0 +1,115 @@
+{
+  "lora": {
+    "title": "Ajuste fino LoRA",
+    "onboarding": {
+      "title": "Entrena tu estilo de escritura",
+      "description": "Crea un modelo de IA personalizado entrenado con tus manuscritos. Tus datos nunca salen de tu dispositivo.",
+      "privacyPromise": "100% Privado y sin conexión",
+      "privacyDetail": "Todo el entrenamiento ocurre localmente. Tu manuscrito nunca se envía a ningún servicio en la nube.",
+      "systemCheck": "Requisitos del sistema",
+      "checking": "Comprobando el entorno…",
+      "installed": "instalado",
+      "notFound": "no encontrado",
+      "installCmd": "pip install unsloth trl peft",
+      "cpuFallback": "Reserva CPU (más lento)",
+      "getStarted": "Comenzar"
+    },
+    "library": {
+      "title": "Biblioteca de adaptadores",
+      "empty": "Sin adaptadores aún. Entrena tu primer modelo de estilo para comenzar."
+    },
+    "wizard": {
+      "title": "Asistente de entrenamiento",
+      "trainNew": "Entrenar nuevo adaptador",
+      "startFirstTraining": "Entrenar tu primer adaptador",
+      "abort": "Detener entrenamiento",
+      "steps": {
+        "label": "Pasos de entrenamiento",
+        "model": "Modelo",
+        "dataset": "Datos",
+        "params": "Parámetros",
+        "train": "Entrenar",
+        "deploy": "Desplegar"
+      },
+      "model": {
+        "description": "Elige un modelo base. Los modelos más grandes producen mejores transferencias de estilo.",
+        "selectModel": "Seleccionar modelo base"
+      },
+      "dataset": {
+        "instruction": "Extrae escenas de tu manuscrito como datos de entrenamiento. Necesitas al menos 50 entradas de calidad."
+      },
+      "params": {
+        "description": "Elige un preset optimizado para tu caso de uso."
+      },
+      "training": {
+        "inProgress": "Entrenamiento en curso… Esto puede tardar 30–90 minutos.",
+        "ready": "Haz clic en Siguiente para iniciar el entrenamiento."
+      },
+      "deploy": {
+        "title": "¡Entrenamiento completado!",
+        "description": "Tu adaptador está listo. Actívalo para usarlo en ProForge.",
+        "activated": "{{name}} está ahora activo."
+      }
+    },
+    "presets": {
+      "writerStyleLight": {
+        "label": "Estilo ligero",
+        "desc": "Transferencia rápida — ~30 min, 8 GB VRAM"
+      },
+      "deepNarrative": {
+        "label": "Narrativa profunda",
+        "desc": "Estilo narrativo completo — ~60 min, 12 GB VRAM"
+      },
+      "dialogueMaster": {
+        "label": "Maestro del diálogo",
+        "desc": "Optimizado para diálogos — ~45 min, 8 GB VRAM"
+      },
+      "fullStyleClone": {
+        "label": "Clon de estilo completo",
+        "desc": "Máxima fidelidad — ~90 min, 16 GB VRAM"
+      }
+    },
+    "adapter": {
+      "active": "Activo",
+      "activate": "Activar",
+      "deactivate": "Desactivar",
+      "merge": "Fusionar",
+      "export": "Exportar",
+      "delete": "Eliminar",
+      "version": "Versión"
+    },
+    "evaluation": {
+      "title": "Evaluación de estilo",
+      "score": "Puntuación de consistencia estilística",
+      "compare": "Comparación lado a lado",
+      "run": "Ejecutar evaluación",
+      "evaluating": "Evaluando…",
+      "baseline": "Línea base",
+      "improvement": "Mejora",
+      "base": "Modelo base",
+      "adapted": "Estilo adaptado",
+      "noActiveAdapter": "Activa un adaptador para ejecutar la evaluación."
+    },
+    "dataset": {
+      "title": "Constructor de dataset",
+      "extract": "Extraer del manuscrito",
+      "extracting": "Extrayendo…",
+      "export": "Exportar",
+      "synthetic": "sintético",
+      "extracted": "extraído",
+      "empty": "Sin dataset aún. Extrae escenas de tu manuscrito.",
+      "total": "Total",
+      "accepted": "Aceptados",
+      "flagged": "Marcados",
+      "rejected": "Rechazados",
+      "notEnough": "Necesitas al menos 50 entradas aceptadas antes del entrenamiento.",
+      "entries": "Entradas del dataset"
+    },
+    "errors": {
+      "pythonNotFound": "Python 3 no encontrado. Instala Python ≥ 3.10.",
+      "insufficientVram": "VRAM insuficiente para este preset. Requerido: {{required}} GB.",
+      "trainingFailed": "Entrenamiento fallido: {{message}}",
+      "cloudBlocked": "Los modelos en la nube no pueden usarse para entrenamiento."
+    }
+  }
+}

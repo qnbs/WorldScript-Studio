@@ -1,3 +1,4 @@
+mod lora;
 mod pandoc;
 
 use tauri::Emitter;
@@ -47,7 +48,14 @@ pub fn run() {
         .with_state_flags(tauri_plugin_window_state::StateFlags::all())
         .build(),
     )
-    .invoke_handler(tauri::generate_handler![pandoc::pandoc_markdown_to_epub])
+    .invoke_handler(tauri::generate_handler![
+      pandoc::pandoc_markdown_to_epub,
+      lora::train_lora,
+      lora::merge_lora,
+      lora::abort_lora_training,
+      lora::generate_ollama_modelfile,
+      lora::check_lora_environment,
+    ])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

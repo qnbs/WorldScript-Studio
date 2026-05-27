@@ -57,6 +57,11 @@ const loggerMiddleware: Middleware = (store) => (next) => (action) => {
 };
 
 import analyticsReducer from '../features/analytics/analyticsSlice';
+import loraReducer, {
+  hydrateLoraState,
+  loadPersistedLoraState,
+  loraPersistenceMiddleware,
+} from '../features/lora/loraSlice';
 import mindMapUiReducer, {
   mindMapUiPersistenceMiddleware,
 } from '../features/mindMap/mindMapUiSlice';
@@ -85,6 +90,8 @@ const combinedReducer = combineReducers({
   mindMapUi: mindMapUiReducer,
   // Voice mode state for voice command and control
   voice: voiceReducer,
+  // QNBS-v3: lora slice for LoRA fine-tuning module (v2.0-alpha); persisted to localStorage
+  lora: loraReducer,
   [aiApi.reducerPath]: aiApi.reducer,
 });
 
@@ -156,6 +163,7 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
           progressTrackerPersistenceMiddleware,
           sceneCommentsPersistenceMiddleware,
           mindMapUiPersistenceMiddleware,
+          loraPersistenceMiddleware,
           loggerMiddleware,
           aiApi.middleware as Middleware,
         ),
@@ -165,7 +173,15 @@ export const setupStore = (preloadedState?: PersistedRootState) => {
     storeOptions.preloadedState = preloadedState as unknown as ReturnType<typeof combinedReducer>;
   }
 
-  return configureStore(storeOptions);
+  const store = configureStore(storeOptions);
+
+  // Hydrate LoRA state from localStorage on store creation
+  const persistedLora = loadPersistedLoraState();
+  if (persistedLora) {
+    store.dispatch(hydrateLoraState(persistedLora));
+  }
+
+  return store;
 };
 
 // Temporary store instance used solely for TypeScript type inference.

@@ -1,0 +1,115 @@
+{
+  "lora": {
+    "title": "Affinage LoRA",
+    "onboarding": {
+      "title": "Entraîner votre style d'écriture",
+      "description": "Créez un modèle IA personnalisé entraîné sur vos manuscrits. Vos données ne quittent jamais votre appareil.",
+      "privacyPromise": "100% Privé et hors ligne",
+      "privacyDetail": "Tout l'entraînement se déroule localement. Votre manuscrit n'est jamais envoyé à un service cloud.",
+      "systemCheck": "Prérequis système",
+      "checking": "Vérification de l'environnement…",
+      "installed": "installé",
+      "notFound": "introuvable",
+      "installCmd": "pip install unsloth trl peft",
+      "cpuFallback": "Repli CPU (plus lent)",
+      "getStarted": "Commencer"
+    },
+    "library": {
+      "title": "Bibliothèque d'adaptateurs",
+      "empty": "Aucun adaptateur. Entraînez votre premier modèle de style pour commencer."
+    },
+    "wizard": {
+      "title": "Assistant d'entraînement",
+      "trainNew": "Entraîner un nouvel adaptateur",
+      "startFirstTraining": "Entraîner votre premier adaptateur",
+      "abort": "Arrêter l'entraînement",
+      "steps": {
+        "label": "Étapes d'entraînement",
+        "model": "Modèle",
+        "dataset": "Données",
+        "params": "Paramètres",
+        "train": "Entraîner",
+        "deploy": "Déployer"
+      },
+      "model": {
+        "description": "Choisissez un modèle de base. Les modèles plus grands produisent de meilleurs transferts de style.",
+        "selectModel": "Sélectionner le modèle de base"
+      },
+      "dataset": {
+        "instruction": "Extrayez les scènes de votre manuscrit comme données d'entraînement. Vous avez besoin d'au moins 50 entrées de qualité."
+      },
+      "params": {
+        "description": "Choisissez un préréglage optimisé pour votre cas d'usage."
+      },
+      "training": {
+        "inProgress": "Entraînement en cours… Cela peut prendre 30 à 90 minutes.",
+        "ready": "Cliquez sur Suivant pour commencer l'entraînement."
+      },
+      "deploy": {
+        "title": "Entraînement terminé !",
+        "description": "Votre adaptateur est prêt. Activez-le pour l'utiliser dans ProForge.",
+        "activated": "{{name}} est maintenant actif."
+      }
+    },
+    "presets": {
+      "writerStyleLight": {
+        "label": "Style léger",
+        "desc": "Transfert rapide — ~30 min, 8 Go VRAM"
+      },
+      "deepNarrative": {
+        "label": "Narration profonde",
+        "desc": "Style narratif complet — ~60 min, 12 Go VRAM"
+      },
+      "dialogueMaster": {
+        "label": "Maître du dialogue",
+        "desc": "Optimisé pour les dialogues — ~45 min, 8 Go VRAM"
+      },
+      "fullStyleClone": {
+        "label": "Clonage de style complet",
+        "desc": "Fidélité maximale — ~90 min, 16 Go VRAM"
+      }
+    },
+    "adapter": {
+      "active": "Actif",
+      "activate": "Activer",
+      "deactivate": "Désactiver",
+      "merge": "Fusionner",
+      "export": "Exporter",
+      "delete": "Supprimer",
+      "version": "Version"
+    },
+    "evaluation": {
+      "title": "Évaluation du style",
+      "score": "Score de cohérence stylistique",
+      "compare": "Comparaison côte à côte",
+      "run": "Lancer l'évaluation",
+      "evaluating": "Évaluation en cours…",
+      "baseline": "Référence",
+      "improvement": "Amélioration",
+      "base": "Modèle de base",
+      "adapted": "Style adapté",
+      "noActiveAdapter": "Activez un adaptateur pour lancer l'évaluation."
+    },
+    "dataset": {
+      "title": "Constructeur de dataset",
+      "extract": "Extraire du manuscrit",
+      "extracting": "Extraction…",
+      "export": "Exporter",
+      "synthetic": "synthétique",
+      "extracted": "extrait",
+      "empty": "Aucun dataset. Extrayez des scènes de votre manuscrit.",
+      "total": "Total",
+      "accepted": "Acceptés",
+      "flagged": "Signalés",
+      "rejected": "Rejetés",
+      "notEnough": "Il vous faut au moins 50 entrées acceptées avant l'entraînement.",
+      "entries": "Entrées du dataset"
+    },
+    "errors": {
+      "pythonNotFound": "Python 3 introuvable. Installez Python ≥ 3.10.",
+      "insufficientVram": "VRAM insuffisant pour ce préréglage. Requis : {{required}} Go.",
+      "trainingFailed": "Entraînement échoué : {{message}}",
+      "cloudBlocked": "Les modèles cloud ne peuvent pas être utilisés pour l'entraînement."
+    }
+  }
+}

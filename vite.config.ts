@@ -172,6 +172,14 @@ export default defineConfig({
           if (id.includes('@duckdb/duckdb-wasm')) {
             return 'vendor-duckdb';
           }
+          // QNBS-v3: LoRA feature chunk — lazy-loaded, no heavy training libs (training is Python sidecar).
+          if (
+            id.includes('features/lora/') ||
+            id.includes('components/lora/') ||
+            id.includes('services/lora/')
+          ) {
+            return 'lora-feature';
+          }
           return undefined;
         },
       },

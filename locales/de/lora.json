@@ -1,0 +1,115 @@
+{
+  "lora": {
+    "title": "LoRA-Feinabstimmung",
+    "onboarding": {
+      "title": "Deinen Schreibstil trainieren",
+      "description": "Erstelle ein personalisiertes KI-Modell, das auf deinen Manuskripten trainiert wurde. Deine Daten verlassen niemals dein Gerät.",
+      "privacyPromise": "100% Privat & Offline",
+      "privacyDetail": "Das gesamte Training findet lokal statt. Dein Manuskript wird niemals an einen Cloud-Dienst gesendet.",
+      "systemCheck": "Systemanforderungen",
+      "checking": "Umgebung wird geprüft…",
+      "installed": "installiert",
+      "notFound": "nicht gefunden",
+      "installCmd": "pip install unsloth trl peft",
+      "cpuFallback": "CPU-Fallback (langsamer)",
+      "getStarted": "Loslegen"
+    },
+    "library": {
+      "title": "Adapter-Bibliothek",
+      "empty": "Noch keine Adapter. Trainiere dein erstes Stilmodell, um loszulegen."
+    },
+    "wizard": {
+      "title": "Trainings-Assistent",
+      "trainNew": "Neuen Adapter trainieren",
+      "startFirstTraining": "Ersten Adapter trainieren",
+      "abort": "Training stoppen",
+      "steps": {
+        "label": "Trainingsschritte",
+        "model": "Modell",
+        "dataset": "Datensatz",
+        "params": "Parameter",
+        "train": "Trainieren",
+        "deploy": "Bereitstellen"
+      },
+      "model": {
+        "description": "Wähle ein Basismodell. Größere Modelle produzieren bessere Stiltransfers, benötigen aber mehr VRAM und Zeit.",
+        "selectModel": "Basismodell auswählen"
+      },
+      "dataset": {
+        "instruction": "Extrahiere Szenen aus deinem Manuskript als Trainingsdaten. Du benötigst mindestens 50 qualitativ hochwertige Einträge."
+      },
+      "params": {
+        "description": "Wähle ein Preset, das für deinen Anwendungsfall optimiert ist."
+      },
+      "training": {
+        "inProgress": "Training läuft… Dies kann 30–90 Minuten dauern.",
+        "ready": "Klicke auf Weiter, um das Training zu starten."
+      },
+      "deploy": {
+        "title": "Training abgeschlossen!",
+        "description": "Dein Adapter ist bereit. Aktiviere ihn für ProForge oder das KI-Schreibstudio.",
+        "activated": "{{name}} ist jetzt aktiv."
+      }
+    },
+    "presets": {
+      "writerStyleLight": {
+        "label": "Schreibstil Leicht",
+        "desc": "Schneller Akzenttransfer — ~30 Min., 8 GB VRAM"
+      },
+      "deepNarrative": {
+        "label": "Tiefe Erzählung",
+        "desc": "Vollständiger Erzählstil — ~60 Min., 12 GB VRAM"
+      },
+      "dialogueMaster": {
+        "label": "Dialog-Meister",
+        "desc": "Dialogoptimiert — ~45 Min., 8 GB VRAM"
+      },
+      "fullStyleClone": {
+        "label": "Vollständiger Stilklon",
+        "desc": "Maximale Genauigkeit — ~90 Min., 16 GB VRAM"
+      }
+    },
+    "adapter": {
+      "active": "Aktiv",
+      "activate": "Aktivieren",
+      "deactivate": "Deaktivieren",
+      "merge": "Zusammenführen",
+      "export": "Exportieren",
+      "delete": "Löschen",
+      "version": "Version"
+    },
+    "evaluation": {
+      "title": "Stilbewertung",
+      "score": "Stilkonsistenz-Score",
+      "compare": "Nebeneinander-Vergleich",
+      "run": "Bewertung starten",
+      "evaluating": "Wird bewertet…",
+      "baseline": "Baseline",
+      "improvement": "Verbesserung",
+      "base": "Basismodell",
+      "adapted": "Stilangepasst",
+      "noActiveAdapter": "Aktiviere einen Adapter, um die Bewertung durchzuführen."
+    },
+    "dataset": {
+      "title": "Datensatz-Builder",
+      "extract": "Aus Manuskript extrahieren",
+      "extracting": "Wird extrahiert…",
+      "export": "Exportieren",
+      "synthetic": "synthetisch",
+      "extracted": "extrahiert",
+      "empty": "Noch kein Datensatz. Extrahiere Szenen aus deinem Manuskript.",
+      "total": "Gesamt",
+      "accepted": "Akzeptiert",
+      "flagged": "Markiert",
+      "rejected": "Abgelehnt",
+      "notEnough": "Du benötigst mindestens 50 akzeptierte Einträge vor dem Training.",
+      "entries": "Datensatz-Einträge"
+    },
+    "errors": {
+      "pythonNotFound": "Python 3 nicht gefunden. Installiere Python ≥ 3.10.",
+      "insufficientVram": "Unzureichender VRAM für dieses Preset. Benötigt: {{required}} GB.",
+      "trainingFailed": "Training fehlgeschlagen: {{message}}",
+      "cloudBlocked": "Cloud-Modelle können nicht für das Training verwendet werden."
+    }
+  }
+}
