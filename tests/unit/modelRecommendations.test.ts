@@ -16,7 +16,7 @@ const baseReport = (vramTier: DeviceHealthReport['gpuVramTier']): DeviceHealthRe
   gpuVramTier: vramTier,
   gpuVramMb: 0,
   cpuCores: 4,
-  deviceClass: 'mid',
+  deviceClass: 'mid-range',
   supportsWebGpu: vramTier !== 'none',
   supportsSharedArrayBuffer: true,
   estimatedRamMb: 8192,
