@@ -285,7 +285,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                 {linkedChars.slice(0, 3).map((c) => (
                   <span
                     key={c.id}
-                    className="text-xs bg-indigo-500/15 text-indigo-400 px-1.5 py-0.5 rounded"
+                    className="text-xs bg-[var(--sc-accent-subtle)] text-[var(--sc-accent)] px-1.5 py-0.5 rounded"
                   >
                     @{c.name}
                   </span>

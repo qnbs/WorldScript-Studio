@@ -54,9 +54,13 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
         <button
           type="button"
           onClick={() => onSelect(section.id)}
-          className={`group rounded-md cursor-pointer p-2 min-h-[44px] md:min-h-0 flex items-center justify-between text-left transition-all duration-200 w-full ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'} ${isDragging ? 'opacity-60 scale-[1.02] shadow-2xl shadow-indigo-500/50' : ''}`}
+          className={`group relative rounded-md cursor-pointer py-1.5 pr-2 min-h-[44px] md:min-h-0 flex items-center justify-between text-left transition-all duration-200 w-full before:absolute before:left-0 before:inset-y-1 before:w-0.5 before:rounded-full before:bg-[var(--sc-accent)] before:transition-opacity before:duration-200 ${isActive ? 'pl-3 bg-[var(--nav-background-active)] text-[var(--nav-text-active)] before:opacity-100' : 'pl-2 hover:bg-[var(--nav-background-hover)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] before:opacity-0'} ${isDragging ? 'opacity-60 scale-[1.02] shadow-sc-xl' : ''}`}
         >
-          <span className="font-medium text-sm flex-grow truncate mr-2">{section.title}</span>
+          <span
+            className={`text-sm flex-grow truncate mr-2 ${isActive ? 'font-semibold tracking-tight' : 'font-medium'}`}
+          >
+            {section.title}
+          </span>
           {/* QNBS-v3: Always visible on touch devices (no hover); hidden until hover on pointer devices. */}
           <div className="flex-shrink-0 flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
             <button

@@ -63,9 +63,9 @@ const ToastItem: FC<{
 
   // QNBS-v3: Alpha-bg pattern replaces dark: prefixes — semantic colors visible on all appearance presets.
   const typeClasses = {
-    success: 'bg-green-500/15 border-green-500/30 text-green-700',
+    success: 'bg-green-500/15 border-green-500/30 text-[var(--sc-success-fg)]',
     error: 'bg-red-500/15 border-red-500/30 text-[var(--sc-danger-fg)]',
-    info: 'bg-blue-500/15 border-blue-500/30 text-blue-600',
+    info: 'bg-blue-500/15 border-blue-500/30 text-[var(--sc-info-fg)]',
   };
 
   const progressClasses = {
@@ -100,7 +100,7 @@ const ToastItem: FC<{
 
   return (
     <div
-      className={`relative w-full max-w-sm rounded-sc-md shadow-2xl bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border animate-fade-in-up overflow-hidden ${typeClasses[message.type]}`}
+      className={`relative w-full max-w-sm rounded-sc-md shadow-2xl bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border animate-toast-slide-up overflow-hidden ${typeClasses[message.type]}`}
     >
       <div className="p-4">
         <div className="flex items-start">
@@ -165,16 +165,16 @@ const ToastItem: FC<{
         style={{ animation: 'shrink-width 5s linear forwards' }}
       ></div>
       <style>{`
-        @keyframes fade-in-up {
-            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+        @keyframes toast-slide-up {
+            from { opacity: 0; transform: translateY(12px) scale(0.97); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
         @keyframes shrink-width {
             from { width: 100%; }
             to { width: 0%; }
         }
-        .animate-fade-in-up {
-            animation: fade-in-up 0.3s ease-out forwards;
+        .animate-toast-slide-up {
+            animation: toast-slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
       `}</style>
     </div>
