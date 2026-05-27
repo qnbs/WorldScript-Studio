@@ -1,7 +1,8 @@
 // QNBS-v3: Extracted from WriterView.tsx to keep each file ≤350 lines per architecture rules
 import type { FC } from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { useWriterViewContext } from '../../contexts/WriterViewContext';
 import { proForgeActions } from '../../features/proForge/proForgeSlice';
 import {
   selectIsPanelOpen,
@@ -17,12 +18,23 @@ import { ToolsPanel } from './ToolsPanel';
 const WriterViewUI: FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const { flowMode, toggleFlowMode } = useWriterViewContext();
   const isVCPanelOpen = useAppSelector(selectIsPanelOpen);
   const isProForgeEnabled = useAppSelector((s) => s.featureFlags.enableProForge);
   const isProForgeActive = useAppSelector((s) => s.proForge.isActive);
   const [activeMobileTab, setActiveMobileTab] = useState<'context' | 'tools' | 'result'>('tools');
   const [collapsedPanels, setCollapsedPanels] = useState<Record<string, boolean>>({});
   const [focusMode, setFocusMode] = useState(false);
+
+  // X-2: Escape exits Flow Mode without conflicting with global shortcuts (no existing Escape handler found in useGlobalKeyboardShortcuts)
+  useEffect(() => {
+    if (!flowMode) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') toggleFlowMode();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [flowMode, toggleFlowMode]);
 
   // Mobile swipe gesture for panel switching (outline → tools → result)
   const mobilePanelRef = useRef<HTMLDivElement>(null);
@@ -43,6 +55,28 @@ const WriterViewUI: FC = () => {
   const togglePanel = (panel: string) => {
     setCollapsedPanels((prev) => ({ ...prev, [panel]: !prev[panel] }));
   };
+
+  // X-2: Flow Mode — full-screen AiScratchpad, all panels hidden
+  if (flowMode) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-[var(--sc-text-muted)]">{t('writer.flowMode.hint')}</span>
+          <button
+            type="button"
+            onClick={toggleFlowMode}
+            aria-label={t('writer.flowMode.exit')}
+            className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)] transition-colors"
+          >
+            ⊠ {t('writer.flowMode.exitLabel')}
+          </button>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <AiScratchpad />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -92,6 +126,16 @@ const WriterViewUI: FC = () => {
           {focusMode
             ? `⊠ ${t('writer.focusMode.exitLabel')}`
             : `⊡ ${t('writer.focusMode.enterLabel')}`}
+        </button>
+        {/* X-2: Flow Mode — hides all panels, leaves only AiScratchpad + Esc-to-exit */}
+        <button
+          type="button"
+          onClick={toggleFlowMode}
+          title={t('writer.flowMode.title')}
+          aria-label={t('writer.flowMode.title')}
+          className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)] transition-colors"
+        >
+          ✦ {t('writer.flowMode.enterLabel')}
         </button>
         {/* QNBS-v3: Aria + Mindest-Touch-Ziel für VC-Toggle — axe/E2E und mobile Writer-Stabilität. */}
         <button

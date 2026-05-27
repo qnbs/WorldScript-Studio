@@ -21,6 +21,7 @@ import { usePlotBoardAi } from '../hooks/usePlotBoardAi';
 import { useSceneBoardView } from '../hooks/useSceneBoardView';
 import { SceneTimelinePanel } from './SceneTimelinePanel';
 import { ActSwimlane } from './scene-board/ActSwimlane';
+import { EmptyState } from './ui/EmptyState';
 import { Spinner } from './ui/Spinner';
 
 const PlotCanvas = lazy(() =>
@@ -298,6 +299,16 @@ const SceneBoardUI: FC = () => {
           onDragEnd={handleDragEnd}
           accessibility={{ announcements: dndAnnouncements }}
         >
+          {/* X-3: authored empty state when no scenes exist yet */}
+          {sections.length === 0 && (
+            <div className="flex-grow flex items-start pt-6 px-2">
+              <EmptyState
+                title={t('sceneboard.emptyState.title')}
+                description={t('sceneboard.emptyState.description')}
+                compact
+              />
+            </div>
+          )}
           {/* Kanban-Board mit 3 Swimlanes */}
           <div className="flex gap-4 overflow-x-auto pb-4 flex-grow">
             {([1, 2, 3] as const).map((act) => (

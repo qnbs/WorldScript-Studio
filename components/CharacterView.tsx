@@ -12,6 +12,7 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
+import { EmptyState } from './ui/EmptyState';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { SectionIcon } from './ui/SectionIcon';
@@ -622,6 +623,16 @@ const CharacterViewUI: FC = () => {
             variant="primary"
           />
         </div>
+        {characters.length === 0 && (
+          // X-3: authored empty state — appears below add buttons when cast is empty
+          <div className="col-span-full mt-4">
+            <EmptyState
+              title={t('characters.emptyState.title')}
+              description={t('characters.emptyState.description')}
+              compact
+            />
+          </div>
+        )}
         {characters.map((char, index) => (
           // QNBS-v3: content-visibility skips rendering off-screen cards — no-op for short lists, measurable win for 50+ characters.
           <div key={char.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 160px' }}>

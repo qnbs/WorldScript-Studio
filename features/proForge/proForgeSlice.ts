@@ -208,6 +208,8 @@ const proForgeSlice = createSlice({
       if (result.reviewItems) stageResult.reviewItems = result.reviewItems;
       if (result.metrics) stageResult.metrics = { ...stageResult.metrics, ...result.metrics };
       if (result.agentOutput) stageResult.agentOutput = result.agentOutput;
+      if (result.supervisorDecision !== undefined)
+        stageResult.supervisorDecision = result.supervisorDecision;
       stageResult.metrics.itemsFound = stageResult.reviewItems.length;
       state.currentRun.status = 'awaitingReview';
       state.currentRun.traceLog.push(

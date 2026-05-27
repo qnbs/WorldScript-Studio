@@ -77,6 +77,8 @@ export function createLanguageModelForStoryCraft(
 export function providerToKind(
   provider: AIProvider,
 ): 'gemini' | 'openai' | 'openaiCompatible' | 'unsupported' {
+  // QNBS-v3: webllm/onnx/transformers route through localAiFacade, not this factory.
+  // anthropic/grok are reserved in the type union but not yet implemented here.
   switch (provider) {
     case 'gemini':
       return 'gemini';
@@ -84,16 +86,7 @@ export function providerToKind(
       return 'openai';
     case 'ollama':
       return 'openaiCompatible';
-    case 'webllm':
-    case 'onnx':
-    case 'transformers':
+    default:
       return 'unsupported';
-    case 'anthropic':
-    case 'grok':
-      return 'unsupported';
-    default: {
-      const _e: never = provider;
-      return _e;
-    }
   }
 }

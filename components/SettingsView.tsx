@@ -62,6 +62,23 @@ const NavButton: FC<{
 ));
 NavButton.displayName = 'NavButton';
 
+const NavGroupHeader: FC<{ label: string }> = ({ label }) => (
+  <div className="px-3 pt-3 pb-0.5 text-xs font-semibold uppercase tracking-wider text-[var(--sc-text-muted)] select-none">
+    {label}
+  </div>
+);
+NavGroupHeader.displayName = 'NavGroupHeader';
+
+// X-1: category IDs grouped for sidebar nav; internal section IDs and renderContent() switch unchanged.
+const NAV_GROUPS = [
+  { key: 'writing', ids: ['editor', 'advanced-editor', 'project-ai'] },
+  { key: 'aiModels', ids: ['ai', 'advanced-ai', 'lora-adapters'] },
+  { key: 'appearanceAccessibility', ids: ['appearance', 'accessibility'] },
+  { key: 'privacyData', ids: ['privacy', 'data', 'backup'] },
+  { key: 'connections', ids: ['collaboration', 'integrations', 'notifications', 'community'] },
+  { key: 'system', ids: ['performance', 'plugins', 'shortcuts', 'guide', 'experimental', 'about'] },
+] as const satisfies ReadonlyArray<{ key: string; ids: readonly string[] }>;
+
 // ─── Main Settings UI ─────────────────────────────────────────────────────────
 
 const SettingsViewUI: FC = () => {
@@ -317,7 +334,8 @@ const SettingsViewUI: FC = () => {
               <p className="px-3 py-2 text-sm text-[var(--sc-text-muted)]">
                 {t('settings.search.noResults')}
               </p>
-            ) : (
+            ) : q ? (
+              // Search active: flat list without group headers
               filteredNavCategories.map((cat) => (
                 <NavButton
                   key={cat.id}
@@ -327,6 +345,41 @@ const SettingsViewUI: FC = () => {
                   onClick={() => setActiveCategory(cat.id)}
                 />
               ))
+            ) : (
+              // X-1: grouped nav — "General" first, then 6 semantic groups
+              <>
+                {navCategories
+                  .filter((cat) => cat.id === 'general')
+                  .map((cat) => (
+                    <NavButton
+                      key={cat.id}
+                      icon={cat.icon}
+                      label={cat.label}
+                      isActive={activeCategory === cat.id}
+                      onClick={() => setActiveCategory(cat.id)}
+                    />
+                  ))}
+                {NAV_GROUPS.map((group) => {
+                  const groupCats = navCategories.filter((cat) =>
+                    (group.ids as readonly string[]).includes(cat.id),
+                  );
+                  if (groupCats.length === 0) return null;
+                  return (
+                    <React.Fragment key={group.key}>
+                      <NavGroupHeader label={t(`settings.categories.${group.key}`)} />
+                      {groupCats.map((cat) => (
+                        <NavButton
+                          key={cat.id}
+                          icon={cat.icon}
+                          label={cat.label}
+                          isActive={activeCategory === cat.id}
+                          onClick={() => setActiveCategory(cat.id)}
+                        />
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </>
             )}
           </div>
         </div>

@@ -24,24 +24,50 @@ type ProjectStateWithHistory = {
 
 export const listenerMiddleware = createListenerMiddleware();
 
+// QNBS-v3: Factory for the common debounce-listener pattern — predicate + delay + typed effect.
+// Eliminates the RootState cast dance repeated across 3 auto-save / auto-track listeners.
+type DebouncedEffectApi = {
+  getState: () => RootState;
+  getOriginalState: () => RootState;
+  dispatch: AppDispatch;
+  delay: (ms: number) => Promise<void>;
+};
+
+function addDebouncedListener(
+  predicate: (curr: RootState, prev: RootState) => boolean,
+  delayMs: number,
+  effect: (api: DebouncedEffectApi) => Promise<void>,
+): void {
+  listenerMiddleware.startListening({
+    predicate: (_action, curr, prev) => predicate(curr as RootState, prev as RootState),
+    effect: async (_action, listenerApi) => {
+      // QNBS-v3: RTK requires getOriginalState to be called synchronously (before first await).
+      const originalState = listenerApi.getOriginalState() as RootState;
+      await listenerApi.delay(delayMs);
+      await effect({
+        getState: () => listenerApi.getState() as RootState,
+        getOriginalState: () => originalState,
+        dispatch: listenerApi.dispatch as AppDispatch,
+        delay: (ms) => listenerApi.delay(ms),
+      });
+    },
+  });
+}
+
 // --- 1a. Auto-Save: Project ---
-listenerMiddleware.startListening({
-  predicate: (_action, currentState, previousState) => {
-    const currentRoot = currentState as RootState;
-    const prevRoot = previousState as RootState;
-    const projectChanged = currentRoot.project?.present !== prevRoot.project?.present;
+addDebouncedListener(
+  (curr, prev) => {
+    const projectChanged = curr.project?.present !== prev.project?.present;
     const vcChanged =
-      currentRoot.versionControl?.snapshots !== prevRoot.versionControl?.snapshots ||
-      currentRoot.versionControl?.branches !== prevRoot.versionControl?.branches ||
-      currentRoot.versionControl?.currentBranchId !== prevRoot.versionControl?.currentBranchId;
+      curr.versionControl?.snapshots !== prev.versionControl?.snapshots ||
+      curr.versionControl?.branches !== prev.versionControl?.branches ||
+      curr.versionControl?.currentBranchId !== prev.versionControl?.currentBranchId;
     return projectChanged || vcChanged;
   },
-  effect: async (_action, listenerApi) => {
-    const originalState = listenerApi.getOriginalState() as RootState;
-    await listenerApi.delay(1000);
-
-    const state = listenerApi.getState() as RootState;
-    const orig = originalState as RootState;
+  1000,
+  async (api) => {
+    const state = api.getState();
+    const orig = api.getOriginalState();
     const unchangedProject = state.project.present === orig.project.present;
     const unchangedVc =
       state.versionControl.snapshots === orig.versionControl.snapshots &&
@@ -49,13 +75,13 @@ listenerMiddleware.startListening({
       state.versionControl.currentBranchId === orig.versionControl.currentBranchId;
     if (unchangedProject && unchangedVc) return;
 
-    listenerApi.dispatch(statusActions.setSavingStatus('saving'));
+    api.dispatch(statusActions.setSavingStatus('saving'));
 
     // QNBS-v3: Proactive storage health check before every save — warn early if quota is tight.
     try {
       const health = await checkStorageHealth();
       if (!health.ok && health.warning) {
-        listenerApi.dispatch(
+        api.dispatch(
           statusActions.addNotification({
             type: 'error',
             title: 'Storage Nearly Full',
@@ -73,7 +99,7 @@ listenerMiddleware.startListening({
 
       if (!presentData || presentData.title === undefined) {
         logger.error('Auto-save aborted: Invalid project state detected (missing present.data)');
-        listenerApi.dispatch(statusActions.setSavingStatus('idle'));
+        api.dispatch(statusActions.setSavingStatus('idle'));
         return;
       }
 
@@ -101,19 +127,15 @@ listenerMiddleware.startListening({
 
       await storageService.saveProject(projectDataToSave);
 
-      if (
-        (listenerApi.getState() as RootState).featureFlags?.enableCrossProjectSearch &&
-        presentData.id
-      ) {
-        const duckDbOn =
-          (listenerApi.getState() as RootState).featureFlags?.enableDuckDbAnalytics ?? false;
+      if (api.getState().featureFlags?.enableCrossProjectSearch && presentData.id) {
+        const duckDbOn = api.getState().featureFlags?.enableDuckDbAnalytics ?? false;
         const { indexProject } = await import('../services/crossProjectIndexService');
         indexProject(presentData.id, enriched, duckDbOn).catch((err: unknown) =>
           logger.warn('Cross-project index update failed (non-critical):', err),
         );
       }
 
-      if ((listenerApi.getState() as RootState).featureFlags?.enableDuckDbAnalytics) {
+      if (api.getState().featureFlags?.enableDuckDbAnalytics) {
         const projectId = presentData.id ?? 'default';
         const sections = presentData.manuscript.map((s, idx) => ({
           id: s.id,
@@ -141,45 +163,39 @@ listenerMiddleware.startListening({
         );
       }
 
-      listenerApi.dispatch(statusActions.setSavingStatus('saved'));
-      await listenerApi.delay(2000);
-      if ((listenerApi.getState() as RootState).status.saving === 'saved') {
-        listenerApi.dispatch(statusActions.setSavingStatus('idle'));
+      api.dispatch(statusActions.setSavingStatus('saved'));
+      await api.delay(2000);
+      if (api.getState().status.saving === 'saved') {
+        api.dispatch(statusActions.setSavingStatus('idle'));
       }
     } catch (error) {
       logger.error('Auto-save (project) failed:', error);
-      listenerApi.dispatch(
+      api.dispatch(
         statusActions.addNotification({
           type: 'error',
           title: 'Auto-Save Failed',
           description: 'Your changes could not be saved to the local database.',
         }),
       );
-      listenerApi.dispatch(statusActions.setSavingStatus('idle'));
+      api.dispatch(statusActions.setSavingStatus('idle'));
     }
   },
-});
+);
 
 // --- 1b. Auto-Save: Settings ---
-listenerMiddleware.startListening({
-  predicate: (_action, currentState, previousState) => {
-    const currentRoot = currentState as RootState;
-    const prevRoot = previousState as RootState;
-    return currentRoot.settings !== prevRoot.settings;
-  },
-  effect: async (_action, listenerApi) => {
-    const originalState = listenerApi.getOriginalState() as RootState;
-    await listenerApi.delay(1000);
-
-    const state = listenerApi.getState() as RootState;
-    if (state.settings === originalState.settings) return;
+addDebouncedListener(
+  (curr, prev) => curr.settings !== prev.settings,
+  1000,
+  async (api) => {
+    const state = api.getState();
+    if (state.settings === api.getOriginalState().settings) return;
 
     try {
       await storageService.saveSettings(state.settings);
     } catch (error) {
       logger.error('Auto-save (settings) failed:', error);
       // QNBS-v3: Mirror the project auto-save toast so the user knows settings weren't persisted.
-      listenerApi.dispatch(
+      api.dispatch(
         statusActions.addNotification({
           type: 'error',
           title: 'Auto-Save Failed',
@@ -188,20 +204,15 @@ listenerMiddleware.startListening({
       );
     }
   },
-});
+);
 
-listenerMiddleware.startListening({
-  predicate: (_action, currentState, previousState) => {
-    const currentRoot = currentState as RootState;
-    const prevRoot = previousState as RootState;
-    const currentManuscript = currentRoot.project?.present?.data?.manuscript;
-    const previousManuscript = prevRoot.project?.present?.data?.manuscript;
-    return currentManuscript !== previousManuscript;
-  },
-  effect: async (_action, listenerApi) => {
-    await listenerApi.delay(1200);
-
-    const state = listenerApi.getState() as RootState;
+// --- 1c. Codex Auto-Tracking ---
+addDebouncedListener(
+  (curr, prev) =>
+    curr.project?.present?.data?.manuscript !== prev.project?.present?.data?.manuscript,
+  1200,
+  async (api) => {
+    const state = api.getState();
     if (!state.featureFlags?.enableCodexAutoTracking) return;
 
     const project = state.project.present?.data;
@@ -252,7 +263,7 @@ listenerMiddleware.startListening({
       logger.warn('Story Codex auto-tracking failed:', error);
     }
   },
-});
+);
 
 listenerMiddleware.startListening({
   matcher: isRejected,

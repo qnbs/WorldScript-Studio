@@ -10,23 +10,14 @@ import type {
   StageResult,
 } from '../../../features/proForge/types';
 import { logger } from '../../logger';
-import type { OrchestratorContext } from '../proForgeOrchestrator';
+import { BaseAgent } from './baseAgent';
 
-export class ProductionAgent {
-  private context: OrchestratorContext;
-
-  constructor(context: OrchestratorContext) {
-    this.context = context;
-  }
-
+export class ProductionAgent extends BaseAgent {
   async execute(
     signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
     const startTime = performance.now();
-    const { getState } = this.context;
-    const state = getState();
-    const project = state.project.present?.data;
-    if (!project) throw new Error('No project data');
+    const project = this.requireProject();
 
     // Lazy-load heavy export libraries
     const artifacts: ProductionArtifact[] = [];
@@ -106,7 +97,7 @@ export class ProductionAgent {
       generatedAt: new Date().toISOString(),
     };
 
-    const durationMs = Math.round(performance.now() - startTime);
+    const durationMs = this.elapsed(startTime);
 
     const reviewItems: ReviewItem[] = artifacts.map((a) => ({
       id: `prod-${a.id}`,

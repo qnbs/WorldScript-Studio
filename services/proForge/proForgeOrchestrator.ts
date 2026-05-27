@@ -18,6 +18,7 @@ import type {
   PipelineConfig,
   PipelineStage,
   ReviewItemStatus,
+  SupervisionDecision,
 } from '../../features/proForge/types';
 import { nextStage } from '../../features/proForge/types';
 import { logger } from '../logger';
@@ -152,29 +153,70 @@ export class ProForgeOrchestrator {
 
     dispatch(stageStarted({ stage, snapshotId }));
 
-    try {
-      const AgentClass = await loadAgent(stage);
-      const agent = new AgentClass(this.context);
-      const result = await agent.execute(this.abortController.signal);
+    const maxRetries = run.config.maxRetries ?? 1;
+    await this.executeStageWithSupervision(stage, maxRetries);
+  }
 
-      if (this.abortController.signal.aborted) {
-        throw new Error('Stage aborted');
+  /** Runs the agent then applies supervisor heuristics, retrying once if needed. */
+  private async executeStageWithSupervision(
+    stage: PipelineStage,
+    maxRetries: number,
+  ): Promise<void> {
+    const { dispatch } = this.context;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const AgentClass = await loadAgent(stage);
+        const agent = new AgentClass(this.context);
+        const result = await agent.execute(this.abortController.signal);
+
+        if (this.abortController.signal.aborted) {
+          throw new Error('Stage aborted');
+        }
+
+        // QNBS-v3: Supervisor evaluates heuristic quality gates before advancing.
+        const { SupervisorAgent } = await import('./pipelineAgents/supervisorAgent');
+        const supervisor = new SupervisorAgent(this.context);
+        const decision = supervisor.evaluate(stage, result);
+
+        if (!decision.pass && attempt < maxRetries) {
+          logger.warn(
+            `SupervisorAgent: Stage ${stage} flagged (retry ${attempt + 1}):`,
+            decision.reasons,
+          );
+          continue;
+        }
+
+        // Hard gate: intake with qualityScore < 30 → fail with honest message.
+        if (stage === 'intake' && decision.qualityScore < 30) {
+          const message =
+            "The diagnostic couldn't analyze your manuscript. Check your AI provider connection and try again.";
+          dispatch(stageFailed({ stage, error: message }));
+          return;
+        }
+
+        const supervisorDecision: SupervisionDecision | undefined = !decision.pass
+          ? decision
+          : undefined;
+
+        dispatch(
+          stageCompleted({
+            stage,
+            result: {
+              reviewItems: result.reviewItems,
+              metrics: result.metrics,
+              agentOutput: result.agentOutput,
+              supervisorDecision,
+            },
+          }),
+        );
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error(`ProForge stage ${stage} failed (attempt ${attempt + 1}):`, err);
+        dispatch(stageFailed({ stage, error: message }));
+        return;
       }
-
-      dispatch(
-        stageCompleted({
-          stage,
-          result: {
-            reviewItems: result.reviewItems,
-            metrics: result.metrics,
-            agentOutput: result.agentOutput,
-          },
-        }),
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error(`ProForge stage ${stage} failed:`, err);
-      dispatch(stageFailed({ stage, error: message }));
     }
   }
 

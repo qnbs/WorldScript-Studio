@@ -6,9 +6,24 @@
 import type React from 'react';
 import { useMemo } from 'react';
 import { useProForgeViewContext } from '../../contexts/ProForgeViewContext';
+import type { PipelineStage } from '../../features/proForge/types';
+import { useTranslation } from '../../hooks/useTranslation';
+
+// QNBS-v3: Author-facing loading messages replace "Processing..." — each stage has its own voice.
+const STAGE_LOADING_KEY: Partial<Record<PipelineStage, string>> = {
+  intake: 'proforge.loading.intake',
+  structural: 'proforge.loading.structural',
+  lineProse: 'proforge.loading.lineProse',
+  copyEdit: 'proforge.loading.copyEdit',
+  proof: 'proforge.loading.proof',
+  production: 'proforge.loading.production',
+  publishing: 'proforge.loading.publishing',
+  analytics: 'proforge.loading.analytics',
+};
 
 export const PipelineProgressPanel: React.FC = () => {
   const { currentRun, isLoading, activeStageResult } = useProForgeViewContext();
+  const { t } = useTranslation();
 
   const totalMetrics = useMemo(() => {
     if (!currentRun) return null;
@@ -38,7 +53,11 @@ export const PipelineProgressPanel: React.FC = () => {
           {isLoading && (
             <span className="flex items-center gap-1.5 text-xs text-[var(--sc-accent)]">
               <span className="w-2 h-2 rounded-full bg-[var(--sc-accent)] animate-pulse" />
-              Processing...
+              {t(
+                currentRun
+                  ? (STAGE_LOADING_KEY[currentRun.activeStage] ?? 'proforge.loading.default')
+                  : 'proforge.loading.default',
+              )}
             </span>
           )}
         </div>

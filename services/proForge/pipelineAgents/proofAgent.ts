@@ -17,26 +17,16 @@ import {
   stripJsonFences,
   validateWithSchema,
 } from '../pipelineOutput/structuredOutput';
-import { getMemoryBank } from '../proForgeMemoryBank';
-import type { OrchestratorContext } from '../proForgeOrchestrator';
+import { BaseAgent } from './baseAgent';
 
-export class ProofAgent {
-  private context: OrchestratorContext;
-
-  constructor(context: OrchestratorContext) {
-    this.context = context;
-  }
-
+export class ProofAgent extends BaseAgent {
   async execute(
     signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
     const startTime = performance.now();
-    const { getState, projectId, config } = this.context;
-    const state = getState();
-    const project = state.project.present?.data;
-    if (!project) throw new Error('No project data');
-
-    const memoryBank = getMemoryBank(projectId);
+    const { config } = this.context;
+    const project = this.requireProject();
+    const memoryBank = this.getMemoryBank();
     const memoryContext = await memoryBank.buildContextString('proof', undefined, 2000);
 
     // Build full manuscript text (truncated for token limits)
@@ -147,7 +137,7 @@ export class ProofAgent {
       createdAt: new Date().toISOString(),
     });
 
-    const durationMs = Math.round(performance.now() - startTime);
+    const durationMs = this.elapsed(startTime);
 
     return {
       reviewItems,
@@ -164,25 +154,26 @@ export class ProofAgent {
   }
 
   private createFallbackReport(): QualityGateReport {
+    // QNBS-v3: isFallback=true + overallPass=false prevents silently advancing past a broken proof stage.
     return {
-      overallPass: true,
-      grammar: { pass: true, score: 80, issues: [] },
-      style: { pass: true, score: 80, issues: [] },
-      technical: { pass: true, score: 90, issues: [] },
-      legal: { pass: true, score: 100, warnings: [] },
+      overallPass: false,
+      isFallback: true,
+      grammar: { pass: false, score: 0, issues: [] },
+      style: { pass: false, score: 0, issues: [] },
+      technical: { pass: false, score: 0, issues: [] },
+      legal: { pass: false, score: 0, warnings: [] },
       readability: {
-        pass: true,
-        score: 85,
+        pass: false,
+        score: 0,
         metrics: {
-          fleschKincaid: 8,
-          fleschReadingEase: 60,
-          targetAgeMin: 12,
-          targetAgeMax: 99,
-          appropriateForGenre: true,
+          fleschKincaid: 0,
+          fleschReadingEase: 0,
+          targetAgeMin: 0,
+          targetAgeMax: 0,
+          appropriateForGenre: false,
         },
       },
-      summary:
-        'Quality gate could not be fully executed. Manual review recommended before production.',
+      summary: 'Quality gate could not run. Check your AI provider connection and try again.',
     };
   }
 }

@@ -17,8 +17,7 @@ import {
   stripJsonFences,
   validateWithSchema,
 } from '../pipelineOutput/structuredOutput';
-import { getMemoryBank } from '../proForgeMemoryBank';
-import type { OrchestratorContext } from '../proForgeOrchestrator';
+import { BaseAgent } from './baseAgent';
 
 // Filter words list for client-side pre-analysis
 const FILTER_WORDS = new Set([
@@ -45,23 +44,14 @@ const FILTER_WORDS = new Set([
   'extremely',
 ]);
 
-export class ProseAgent {
-  private context: OrchestratorContext;
-
-  constructor(context: OrchestratorContext) {
-    this.context = context;
-  }
-
+export class ProseAgent extends BaseAgent {
   async execute(
     signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
     const startTime = performance.now();
-    const { getState, projectId, config } = this.context;
-    const state = getState();
-    const project = state.project.present?.data;
-    if (!project) throw new Error('No project data');
-
-    const memoryBank = getMemoryBank(projectId);
+    const { config } = this.context;
+    const project = this.requireProject();
+    const memoryBank = this.getMemoryBank();
     const memoryContext = await memoryBank.buildContextString('lineProse', undefined, 2000);
 
     // Process sections in batches to avoid token limits
@@ -161,7 +151,7 @@ export class ProseAgent {
       createdAt: new Date().toISOString(),
     }));
 
-    const durationMs = Math.round(performance.now() - startTime);
+    const durationMs = this.elapsed(startTime);
 
     return {
       reviewItems,

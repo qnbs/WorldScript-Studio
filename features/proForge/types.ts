@@ -93,6 +93,8 @@ export interface PipelineConfig {
   autoAcceptThreshold: number; // 0.0 - 1.0, 0 = never auto-accept
   /** Language for AI responses */
   language: string;
+  /** Max supervisor-triggered retries per stage (0 = no retry, 1 = one retry) */
+  maxRetries?: 0 | 1;
 }
 
 export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
@@ -114,6 +116,7 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
   useDuckDb: false,
   autoAcceptThreshold: 0,
   language: 'en',
+  maxRetries: 1,
 };
 
 // ---------------------------------------------------------------------------
@@ -182,6 +185,17 @@ export interface StageMetrics {
   itemsRejected: number;
 }
 
+// ---------------------------------------------------------------------------
+// Supervisor
+// ---------------------------------------------------------------------------
+
+export interface SupervisionDecision {
+  pass: boolean;
+  retryRecommended: boolean;
+  qualityScore: number;
+  reasons: string[];
+}
+
 export interface StageResult {
   stage: PipelineStage;
   status: StageStatus;
@@ -201,6 +215,8 @@ export interface StageResult {
   agentOutput?: unknown;
   /** Error message if stage failed */
   error?: string;
+  /** Heuristic quality gate result from SupervisorAgent */
+  supervisorDecision?: SupervisionDecision;
 }
 
 // ---------------------------------------------------------------------------
@@ -340,8 +356,12 @@ export interface DiagnosticReport {
   consistencyIssues: ConsistencyIssue[];
   structuralGaps: StructuralGap[];
   qualityScore: QualityScore;
-  recommendedConfig: Partial<PipelineConfig>;
+  recommendedConfig?: Partial<PipelineConfig>;
   summary: string;
+  /** True when AI call failed — scores are zeroed, not real analysis. */
+  isFallback?: boolean;
+  /** Internal: coherence check note from self-evaluation call. Not shown to author. */
+  reflectionNotes?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -376,6 +396,10 @@ export interface StructuralEditPlan {
   edits: StructuralEdit[];
   pacingReport: PacingReport;
   summary: string;
+  /** True when AI call failed — edits array is empty, not a clean manuscript. */
+  isFallback?: boolean;
+  /** Internal: coherence check note from self-evaluation call. Not shown to author. */
+  reflectionNotes?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -498,6 +522,8 @@ export interface QualityGateReport {
   legal: { pass: boolean; score: number; warnings: LegalWarning[] };
   readability: { pass: boolean; score: number; metrics: ReadabilityScore };
   summary: string;
+  /** True when AI call failed — all scores are zeroed, not real analysis. */
+  isFallback?: boolean;
 }
 
 // ---------------------------------------------------------------------------

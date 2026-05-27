@@ -10,6 +10,7 @@ import type {
   PipelineStage,
   ReviewItemSeverity,
   ReviewItemType,
+  StageStatus,
 } from '../../../../features/proForge/types';
 
 // ---------------------------------------------------------------------------
@@ -78,7 +79,7 @@ const mockContextBase = {
   activeView: 'review' as const,
   activeStageResult: {
     stage: 'intake' as PipelineStage,
-    status: 'awaitingReview',
+    status: 'awaitingReview' as StageStatus,
     reviewItems: [makeItem('item-1'), makeItem('item-2', 'accepted')],
     agentOutput: null,
     metrics: {
@@ -424,7 +425,7 @@ describe('PipelineReviewPanel', () => {
         currentStageReviewItems: [makeItem('item-1', 'pending', { severity: 'critical' })],
       });
       render(<PipelineReviewPanel />);
-      // SEVERITY_ICONS.critical = '🔴'
+      // SEVERITY_ICONS.critical = '🔴' in ReviewItemCard; summary card shows longer string
       expect(screen.getByText('🔴')).toBeInTheDocument();
     });
 
@@ -435,6 +436,145 @@ describe('PipelineReviewPanel', () => {
       });
       render(<PipelineReviewPanel />);
       expect(screen.getByText('Chapter 1')).toBeInTheDocument();
+    });
+  });
+
+  describe('P-5: Critical Actions summary card', () => {
+    it('shows summary card when there are pending critical items', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [
+          makeItem('c-1', 'pending', { severity: 'critical', description: 'Plot break here' }),
+        ],
+      });
+      render(<PipelineReviewPanel />);
+      expect(screen.getByText(/1 Critical Issue Need/i)).toBeInTheDocument();
+      // Description appears in both summary card preview and the review item card
+      expect(screen.getAllByText(/Plot break here/i).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('does not show summary card when no critical pending items exist', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [makeItem('w-1', 'pending', { severity: 'warning' })],
+      });
+      render(<PipelineReviewPanel />);
+      expect(screen.queryByText(/Critical Issue/i)).not.toBeInTheDocument();
+    });
+
+    it('dispatches setReviewItemStatus for each critical item on "Accept All Critical"', async () => {
+      const user = userEvent.setup();
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [
+          makeItem('c-1', 'pending', { severity: 'critical' }),
+          makeItem('c-2', 'pending', { severity: 'critical' }),
+        ],
+      });
+      render(<PipelineReviewPanel />);
+
+      await user.click(screen.getByText('Accept All Critical'));
+      expect(vi.mocked(proForgeActions.setReviewItemStatus)).toHaveBeenCalledWith({
+        stage: 'intake',
+        itemId: 'c-1',
+        status: 'accepted',
+      });
+      expect(vi.mocked(proForgeActions.setReviewItemStatus)).toHaveBeenCalledWith({
+        stage: 'intake',
+        itemId: 'c-2',
+        status: 'accepted',
+      });
+    });
+  });
+
+  describe('P-5: Quick Accept High-Confidence', () => {
+    it('shows Quick Accept button when eligible items exist', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [
+          makeItem('w-1', 'pending', { severity: 'warning', confidence: 0.9 }),
+        ],
+      });
+      render(<PipelineReviewPanel />);
+      expect(screen.getByText(/Quick Accept \(1\)/i)).toBeInTheDocument();
+    });
+
+    it('does not show Quick Accept button for critical pending items', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [
+          makeItem('c-1', 'pending', { severity: 'critical', confidence: 0.95 }),
+        ],
+      });
+      render(<PipelineReviewPanel />);
+      expect(screen.queryByText(/Quick Accept/i)).not.toBeInTheDocument();
+    });
+
+    it('does not show Quick Accept button when confidence is below 0.85', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [
+          makeItem('w-1', 'pending', { severity: 'warning', confidence: 0.7 }),
+        ],
+      });
+      render(<PipelineReviewPanel />);
+      expect(screen.queryByText(/Quick Accept/i)).not.toBeInTheDocument();
+    });
+
+    it('dispatches setReviewItemStatus for each eligible item on Quick Accept click', async () => {
+      const user = userEvent.setup();
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [
+          makeItem('w-1', 'pending', { severity: 'warning', confidence: 0.9 }),
+          makeItem('i-1', 'pending', { severity: 'info', confidence: 0.88 }),
+          makeItem('c-1', 'pending', { severity: 'critical', confidence: 0.95 }), // excluded
+        ],
+      });
+      render(<PipelineReviewPanel />);
+
+      await user.click(screen.getByText(/Quick Accept \(2\)/i));
+      expect(vi.mocked(proForgeActions.setReviewItemStatus)).toHaveBeenCalledWith({
+        stage: 'intake',
+        itemId: 'w-1',
+        status: 'accepted',
+      });
+      expect(vi.mocked(proForgeActions.setReviewItemStatus)).toHaveBeenCalledWith({
+        stage: 'intake',
+        itemId: 'i-1',
+        status: 'accepted',
+      });
+      // Critical item must NOT be auto-accepted
+      const calls = vi.mocked(proForgeActions.setReviewItemStatus).mock.calls;
+      expect(calls.every(([p]) => (p as { itemId: string }).itemId !== 'c-1')).toBe(true);
+    });
+  });
+
+  describe('P-5: severity-grouped view', () => {
+    it('renders severity group headers in all view', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [
+          makeItem('c-1', 'pending', { severity: 'critical' }),
+          makeItem('w-1', 'pending', { severity: 'warning' }),
+          makeItem('i-1', 'pending', { severity: 'info' }),
+        ],
+      });
+      render(<PipelineReviewPanel />);
+      expect(screen.getByText('Critical Actions')).toBeInTheDocument();
+      expect(screen.getByText('Warnings')).toBeInTheDocument();
+      expect(screen.getByText('Suggestions')).toBeInTheDocument();
+    });
+
+    it('omits group headers for severities with no items', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentStageReviewItems: [makeItem('w-1', 'pending', { severity: 'warning' })],
+      });
+      render(<PipelineReviewPanel />);
+      expect(screen.queryByText('Critical Actions')).not.toBeInTheDocument();
+      expect(screen.getByText('Warnings')).toBeInTheDocument();
+      expect(screen.queryByText('Suggestions')).not.toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector, useAppSelectorShallow } from '../app/hooks';
+import { useTransientUiStore } from '../app/transientUiStore';
 import {
   selectAllCharacters,
   selectManuscript,
@@ -17,6 +18,9 @@ import { useTranslation } from './useTranslation';
 export const useWriterView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
+  const flowMode = useTransientUiStore((s) => s.flowMode);
+  const setFlowMode = useTransientUiStore((s) => s.setFlowMode);
+  const toggleFlowMode = useCallback(() => setFlowMode(!flowMode), [flowMode, setFlowMode]);
   const project = useAppSelector(selectProjectData);
   const characters = useAppSelector(selectAllCharacters);
   const manuscript = useAppSelector(selectManuscript);
@@ -377,6 +381,8 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     handleNavigateHistory,
     handleUpdateScratchpad,
     handleAccept,
+    flowMode,
+    toggleFlowMode,
   };
 };
 

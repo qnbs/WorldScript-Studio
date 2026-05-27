@@ -8,26 +8,19 @@ import type {
   ReviewItem,
   StageResult,
 } from '../../../features/proForge/types';
-import { getMemoryBank } from '../proForgeMemoryBank';
-import type { OrchestratorContext } from '../proForgeOrchestrator';
+import { BaseAgent } from './baseAgent';
 
-export class AnalyticsAgent {
-  private context: OrchestratorContext;
-
-  constructor(context: OrchestratorContext) {
-    this.context = context;
-  }
-
+export class AnalyticsAgent extends BaseAgent {
   async execute(
     _signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
     const startTime = performance.now();
-    const { getState, projectId } = this.context;
+    const { getState } = this.context;
     const state = getState();
     const run = state.proForge.currentRun;
     if (!run) throw new Error('No active pipeline run');
 
-    const memoryBank = getMemoryBank(projectId);
+    const memoryBank = this.getMemoryBank();
 
     // Aggregate metrics from all completed stages
     const totalAiCalls = run.stages.reduce((acc, s) => acc + s.metrics.aiCalls, 0);
@@ -105,7 +98,7 @@ export class AnalyticsAgent {
       },
     ];
 
-    const durationMs = Math.round(performance.now() - startTime);
+    const durationMs = this.elapsed(startTime);
 
     return {
       reviewItems,

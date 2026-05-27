@@ -101,7 +101,8 @@ describe('ProForgeDashboard', () => {
 
     it('shows "No active pipeline" subtitle when no run is active', () => {
       render(<ProForgeDashboard />);
-      expect(screen.getByText('No active pipeline')).toBeInTheDocument();
+      // t() returns the key in tests; component uses t('proforge.pipeline.noneActive')
+      expect(screen.getByText('proforge.pipeline.noneActive')).toBeInTheDocument();
     });
 
     it('disables Start Pipeline button when isLoading=true', () => {

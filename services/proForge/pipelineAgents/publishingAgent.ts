@@ -12,26 +12,16 @@ import {
   stripJsonFences,
   validateWithSchema,
 } from '../pipelineOutput/structuredOutput';
-import { getMemoryBank } from '../proForgeMemoryBank';
-import type { OrchestratorContext } from '../proForgeOrchestrator';
+import { BaseAgent } from './baseAgent';
 
-export class PublishingAgent {
-  private context: OrchestratorContext;
-
-  constructor(context: OrchestratorContext) {
-    this.context = context;
-  }
-
+export class PublishingAgent extends BaseAgent {
   async execute(
     signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
     const startTime = performance.now();
-    const { getState, projectId, config } = this.context;
-    const state = getState();
-    const project = state.project.present?.data;
-    if (!project) throw new Error('No project data');
-
-    const memoryBank = getMemoryBank(projectId);
+    const { config } = this.context;
+    const project = this.requireProject();
+    const memoryBank = this.getMemoryBank();
     const memoryContext = await memoryBank.buildContextString('publishing', undefined, 2000);
 
     const totalWords = project.manuscript.reduce(
@@ -125,7 +115,7 @@ export class PublishingAgent {
       },
     ];
 
-    const durationMs = Math.round(performance.now() - startTime);
+    const durationMs = this.elapsed(startTime);
 
     return {
       reviewItems,

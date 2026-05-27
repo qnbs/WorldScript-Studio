@@ -17,26 +17,16 @@ import {
   structuralEditPlanSchema,
   validateWithSchema,
 } from '../pipelineOutput/structuredOutput';
-import { getMemoryBank } from '../proForgeMemoryBank';
-import type { OrchestratorContext } from '../proForgeOrchestrator';
+import { BaseAgent } from './baseAgent';
 
-export class StructuralAgent {
-  private context: OrchestratorContext;
-
-  constructor(context: OrchestratorContext) {
-    this.context = context;
-  }
-
+export class StructuralAgent extends BaseAgent {
   async execute(
     signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
     const startTime = performance.now();
-    const { getState, projectId, config } = this.context;
-    const state = getState();
-    const project = state.project.present?.data;
-    if (!project) throw new Error('No project data');
-
-    const memoryBank = getMemoryBank(projectId);
+    const { config } = this.context;
+    const project = this.requireProject();
+    const memoryBank = this.getMemoryBank();
     const memoryContext = await memoryBank.buildContextString('structural', undefined, 3000);
 
     // Get diagnostic report from memory
@@ -66,6 +56,12 @@ export class StructuralAgent {
     let aiCalls = 0;
     let tokensConsumed = 0;
 
+    // Word count for reflection gate
+    const totalWords = sections.reduce(
+      (acc, s) => acc + (s.content?.trim().split(/\s+/).length ?? 0),
+      0,
+    );
+
     try {
       const response = await aiProviderService.generateText(prompt, config.creativity, {
         maxOutputTokens: config.maxTokens,
@@ -75,21 +71,30 @@ export class StructuralAgent {
 
       if (signal.aborted) throw new Error('Structural analysis aborted');
 
-      const cleaned = stripJsonFences(response);
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch {
-        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-        parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-      }
+      plan = this.parseStructuralResponse(response) ?? this.createFallbackPlan(sections);
 
-      const validated = validateWithSchema(structuralEditPlanSchema, parsed);
-      if (!validated.success) {
-        logger.warn('StructuralAgent: Schema validation failed:', validated.error);
-        plan = this.createFallbackPlan(sections);
-      } else {
-        plan = validated.data;
+      // P-3: Self-evaluation loop — only for substantial manuscripts, never on fallbacks.
+      if (totalWords > 500 && !plan.isFallback && !signal.aborted) {
+        const reflection = await this.selfReflect(fullExcerpt, plan.summary, signal);
+        aiCalls += 1;
+        tokensConsumed += reflection.tokensUsed;
+
+        if (!reflection.coherent && !signal.aborted) {
+          logger.warn('StructuralAgent: Self-eval flagged INCOHERENT — retrying primary call');
+          try {
+            const retryRaw = await aiProviderService.generateText(prompt, config.creativity, {
+              maxOutputTokens: config.maxTokens,
+            });
+            aiCalls += 1;
+            tokensConsumed += retryRaw.length;
+            const retried = this.parseStructuralResponse(retryRaw);
+            if (retried) plan = retried;
+          } catch (retryErr) {
+            logger.warn('StructuralAgent: Self-eval retry failed:', retryErr);
+          }
+        }
+
+        plan.reflectionNotes = reflection.note;
       }
     } catch (err) {
       logger.error('StructuralAgent: AI call failed:', err);
@@ -137,7 +142,7 @@ export class StructuralAgent {
       }
     }
 
-    const durationMs = Math.round(performance.now() - startTime);
+    const durationMs = this.elapsed(startTime);
 
     return {
       reviewItems,
@@ -153,23 +158,40 @@ export class StructuralAgent {
     };
   }
 
+  private parseStructuralResponse(raw: string): StructuralEditPlan | null {
+    const cleaned = stripJsonFences(raw);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    }
+    const validated = validateWithSchema(structuralEditPlanSchema, parsed);
+    if (!validated.success) {
+      logger.warn('StructuralAgent: Schema validation failed:', validated.error);
+      return null;
+    }
+    return validated.data;
+  }
+
   private createFallbackPlan(sections: Array<{ id: string; title: string }>): StructuralEditPlan {
+    // QNBS-v3: isFallback=true so SupervisorAgent recognizes this as a failed run, not a clean manuscript.
     return {
       edits: [],
+      isFallback: true,
       pacingReport: {
         sectionPacing: sections.map((s) => ({
           sectionId: s.id,
           sectionTitle: s.title,
-          tensionScore: 5,
+          tensionScore: 0,
           wordCount: 0,
           recommendedAction: 'keep',
         })),
         overallPacing: 'moderate',
-        suggestions: [
-          'No structural analysis available. Configure an AI provider for detailed structural editing.',
-        ],
+        suggestions: ['Structural analysis could not run. Check your AI provider and try again.'],
       },
-      summary: 'Structural analysis could not be completed. Basic pacing metrics shown.',
+      summary: 'Structural analysis could not run. Check your AI provider and try again.',
     };
   }
 }

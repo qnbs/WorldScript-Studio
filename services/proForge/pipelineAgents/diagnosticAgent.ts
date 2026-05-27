@@ -18,28 +18,16 @@ import {
   validateWithSchema,
 } from '../pipelineOutput/structuredOutput';
 import type { ToolContext } from '../pipelineTools/toolRegistry';
-import { getMemoryBank } from '../proForgeMemoryBank';
-import type { OrchestratorContext } from '../proForgeOrchestrator';
+import { BaseAgent } from './baseAgent';
 
-export class DiagnosticAgent {
-  private context: OrchestratorContext;
-
-  constructor(context: OrchestratorContext) {
-    this.context = context;
-  }
-
+export class DiagnosticAgent extends BaseAgent {
   async execute(
     signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
     const startTime = performance.now();
     const { dispatch, getState, projectId, config } = this.context;
-    const state = getState();
-    const project = state.project.present?.data;
-    if (!project) {
-      throw new Error('No project data available for diagnostic');
-    }
-
-    const memoryBank = getMemoryBank(projectId);
+    const project = this.requireProject();
+    const memoryBank = this.getMemoryBank();
     const _toolContext: ToolContext = {
       projectId,
       dispatch,
@@ -96,23 +84,32 @@ export class DiagnosticAgent {
 
       if (signal.aborted) throw new Error('Diagnostic aborted');
 
-      // Try to parse as JSON
-      const cleaned = stripJsonFences(response);
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch {
-        // Fallback: try extracting JSON from markdown
-        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-        parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-      }
+      report =
+        this.parseDiagnosticResponse(response) ??
+        this.createFallbackReport(project, totalWords, sections.length, avgSectionLength);
 
-      const validated = validateWithSchema(diagnosticReportSchema, parsed);
-      if (!validated.success) {
-        logger.warn('DiagnosticAgent: Schema validation failed, using fallback:', validated.error);
-        report = this.createFallbackReport(project, totalWords, sections.length, avgSectionLength);
-      } else {
-        report = validated.data;
+      // P-3: Self-evaluation loop — only for substantial manuscripts, never on fallbacks.
+      if (totalWords > 500 && !report.isFallback && !signal.aborted) {
+        const reflection = await this.selfReflect(manuscriptExcerpt, report.summary, signal);
+        aiCalls += 1;
+        tokensConsumed += reflection.tokensUsed;
+
+        if (!reflection.coherent && !signal.aborted) {
+          logger.warn('DiagnosticAgent: Self-eval flagged INCOHERENT — retrying primary call');
+          try {
+            const retryRaw = await aiProviderService.generateText(prompt, config.creativity, {
+              maxOutputTokens: config.maxTokens,
+            });
+            aiCalls += 1;
+            tokensConsumed += retryRaw.length;
+            const retried = this.parseDiagnosticResponse(retryRaw);
+            if (retried) report = retried;
+          } catch (retryErr) {
+            logger.warn('DiagnosticAgent: Self-eval retry failed:', retryErr);
+          }
+        }
+
+        report.reflectionNotes = reflection.note;
       }
     } catch (err) {
       logger.error('DiagnosticAgent: AI call failed:', err);
@@ -164,7 +161,7 @@ export class DiagnosticAgent {
       createdAt: new Date().toISOString(),
     });
 
-    const durationMs = Math.round(performance.now() - startTime);
+    const durationMs = this.elapsed(startTime);
 
     return {
       reviewItems,
@@ -180,12 +177,31 @@ export class DiagnosticAgent {
     };
   }
 
+  private parseDiagnosticResponse(raw: string): DiagnosticReport | null {
+    const cleaned = stripJsonFences(raw);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    }
+    const validated = validateWithSchema(diagnosticReportSchema, parsed);
+    if (!validated.success) {
+      logger.warn('DiagnosticAgent: Schema validation failed:', validated.error);
+      return null;
+    }
+    return validated.data;
+  }
+
   private createFallbackReport(
     project: { title: string; logline: string },
     wordCount: number,
     sectionCount: number,
     avgSectionLength: number,
   ): DiagnosticReport {
+    // QNBS-v3: isFallback=true marks scores as synthetic so SupervisorAgent can detect them.
+    // Scores are 0 (not 50) to be honest — the pipeline did not actually run this analysis.
     return {
       profile: {
         wordCount,
@@ -197,15 +213,16 @@ export class DiagnosticAgent {
       consistencyIssues: [],
       structuralGaps: [],
       qualityScore: {
-        overall: 50,
-        prose: 50,
-        structure: 50,
-        consistency: 50,
-        pacing: 50,
-        dialogue: 50,
-        marketability: 50,
+        overall: 0,
+        prose: 0,
+        structure: 0,
+        consistency: 0,
+        pacing: 0,
+        dialogue: 0,
+        marketability: 0,
       },
-      summary: `Diagnostic analysis for "${project.title}". Word count: ${wordCount}. Please run the diagnostic again with a configured AI provider for detailed analysis.`,
+      isFallback: true,
+      summary: `Diagnostic could not complete for "${project.title}". Please check your AI provider connection and try again.`,
     };
   }
 }

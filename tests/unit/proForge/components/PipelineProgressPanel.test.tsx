@@ -5,7 +5,7 @@
 
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PipelineStage } from '../../../../features/proForge/types';
+import type { PipelineStage, StageResult, StageStatus } from '../../../../features/proForge/types';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -63,6 +63,10 @@ vi.mock('../../../../contexts/ProForgeViewContext', () => ({
   useProForgeViewContext: vi.fn(() => mockContextBase),
 }));
 
+vi.mock('../../../../hooks/useTranslation', () => ({
+  useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
@@ -75,8 +79,8 @@ import { useProForgeViewContext } from '../../../../contexts/ProForgeViewContext
 // ---------------------------------------------------------------------------
 
 const makeStage = (
-  stage: string,
-  status: string,
+  stage: PipelineStage,
+  status: StageStatus,
   metrics: {
     aiCalls: number;
     tokensConsumed: number;
@@ -85,7 +89,7 @@ const makeStage = (
     itemsAccepted: number;
     itemsRejected: number;
   },
-) => ({ stage, status, metrics, reviewItems: [], agentOutput: null });
+): StageResult => ({ stage, status, metrics, reviewItems: [], agentOutput: null });
 
 const baseRun = {
   id: 'run-1',
@@ -148,18 +152,19 @@ describe('PipelineProgressPanel', () => {
       expect(screen.getByText('running')).toBeInTheDocument();
     });
 
-    it('shows Processing... indicator when isLoading=true', () => {
+    it('shows stage-specific loading message when isLoading=true', () => {
       vi.mocked(useProForgeViewContext).mockReturnValue({
         ...mockContextBase,
-        currentRun: baseRun,
+        currentRun: baseRun, // activeStage: 'intake'
         isLoading: true,
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.getByText('Processing...')).toBeInTheDocument();
+      // t() returns the key; 'intake' stage → 'proforge.loading.intake'
+      expect(screen.getByText('proforge.loading.intake')).toBeInTheDocument();
     });
 
-    it('does not show Processing... when isLoading=false', () => {
+    it('does not show loading message when isLoading=false', () => {
       vi.mocked(useProForgeViewContext).mockReturnValue({
         ...mockContextBase,
         currentRun: baseRun,
@@ -167,7 +172,7 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.queryByText('Processing...')).not.toBeInTheDocument();
+      expect(screen.queryByText('proforge.loading.intake')).not.toBeInTheDocument();
     });
 
     it('renders Stage Details section when activeStageResult is set', () => {

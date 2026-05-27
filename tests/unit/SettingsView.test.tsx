@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SettingsView } from '../../components/SettingsView';
 
@@ -106,5 +106,38 @@ describe('SettingsView', () => {
     // type="search" inputs have role "searchbox"
     const searchInputs = screen.getAllByRole('searchbox');
     expect(searchInputs.length).toBeGreaterThan(0);
+  });
+
+  it('calls setActiveCategory when a nav button is clicked', () => {
+    render(<SettingsView />);
+    // Find the appearance nav button and click it
+    const appearanceButton = screen.getAllByText('settings.categories.appearance')[0];
+    fireEvent.click(appearanceButton);
+    expect(baseContextValue.setActiveCategory).toHaveBeenCalledWith('appearance');
+  });
+
+  it('hides unmatched nav items when search query is entered', () => {
+    render(<SettingsView />);
+    const searchInput = screen.getAllByRole('searchbox')[0];
+    // Type a query that matches nothing — expect categories to vanish
+    fireEvent.change(searchInput, { target: { value: 'zzznotarealcategory' } });
+    // All category nav buttons should be hidden; "no results" text or zero nav items
+    expect(screen.queryAllByText('settings.categories.general').length).toBe(0);
+  });
+
+  it('shows group headers in ungrouped nav (X-1)', () => {
+    render(<SettingsView />);
+    // Group headers render as non-interactive divs with t() key values
+    expect(screen.getByText('settings.categories.writing')).toBeTruthy();
+    expect(screen.getByText('settings.categories.aiModels')).toBeTruthy();
+    expect(screen.getByText('settings.categories.system')).toBeTruthy();
+  });
+
+  it('hides group headers when search is active', () => {
+    render(<SettingsView />);
+    const searchInput = screen.getAllByRole('searchbox')[0];
+    fireEvent.change(searchInput, { target: { value: 'editor' } });
+    // Group headers should not render in search mode
+    expect(screen.queryByText('settings.categories.writing')).toBeNull();
   });
 });

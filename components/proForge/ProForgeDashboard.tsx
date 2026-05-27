@@ -10,16 +10,17 @@ import { PIPELINE_STAGES, type PipelineStage } from '../../features/proForge/typ
 import { PipelineProgressPanel } from './PipelineProgressPanel';
 import { PipelineReviewPanel } from './PipelineReviewPanel';
 
+// QNBS-v3: Author-facing stage names replace internal pipeline IDs — novelists understand editorial stages, not queue names.
 const STAGE_LABELS: Record<PipelineStage, string> = {
-  idle: 'Idle',
-  intake: '1. Intake & Diagnostic',
-  structural: '2. Structural Edit',
-  lineProse: '3. Line & Prose',
-  copyEdit: '4. Copy Edit',
-  proof: '5. Proof & Quality Gate',
-  production: '6. Production',
+  idle: 'Ready',
+  intake: '1. Reading Your Draft',
+  structural: '2. Shaping the Story',
+  lineProse: '3. Polishing the Prose',
+  copyEdit: '4. Copy Editing',
+  proof: '5. Final Proof',
+  production: '6. Preparing Your Files',
   publishing: '7. Publishing Prep',
-  analytics: '8. Analytics & Archive',
+  analytics: '8. Run Summary',
   archived: 'Archived',
 };
 
@@ -81,9 +82,9 @@ export const ProForgeDashboard: React.FC = () => {
             <span className="text-white font-bold text-sm">P</span>
           </div>
           <div>
-            <h2 className="text-base font-semibold">ProForge Pipeline</h2>
+            <h2 className="text-base font-semibold">{t('proforge.pipeline.title')}</h2>
             <p className="text-xs text-[var(--sc-text-tertiary)]">
-              {currentRun ? currentRun.label : 'No active pipeline'}
+              {currentRun ? currentRun.label : t('proforge.pipeline.noneActive')}
             </p>
           </div>
         </div>
@@ -121,10 +122,9 @@ export const ProForgeDashboard: React.FC = () => {
               >
                 <span className="text-2xl">🔥</span>
               </div>
-              <h3 className="text-lg font-semibold mb-2">Start New Pipeline</h3>
+              <h3 className="text-lg font-semibold mb-2">{t('proforge.emptyState.title')}</h3>
               <p className="text-sm text-[var(--sc-text-secondary)] mb-6">
-                Run your manuscript through the 8-stage ProForge pipeline for comprehensive editing
-                and production.
+                {t('proforge.emptyState.description')}
               </p>
             </div>
 

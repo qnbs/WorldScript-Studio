@@ -19,9 +19,17 @@
  * QNBS-v3: Strangler-Pattern — neue Schicht parallel zu `aiProviderService.ts`, Redux bleibt Source of Truth.
  */
 
+export {
+  CREATIVITY_TO_TEMPERATURE,
+  isLocalInferenceProvider,
+  isOrchestrationReadyProvider,
+  LOCAL_BACKEND_PRESET_DEFAULT_URL,
+  LOCAL_INFERENCE_PROVIDERS,
+  type LocalInferenceProvider,
+  ORCHESTRATION_READY_PROVIDERS,
+} from './aiConstants';
 export { aiInferenceCacheService } from './aiInferenceCacheService';
 export { assertCloudAiAllowed } from './aiPolicy';
-export { CREATIVITY_TO_TEMPERATURE } from './creativityTemperature';
 export {
   type AiTaskType,
   type DeviceClass,
@@ -57,10 +65,6 @@ export {
   summarizeText,
 } from './localNlpService';
 export { normalizeOllamaModelId, normalizeOpenAiCompatibleBaseUrl } from './modelNormalization';
-export {
-  isOrchestrationReadyProvider,
-  ORCHESTRATION_READY_PROVIDERS,
-} from './orchestrationProviders';
 export {
   createLanguageModelForStoryCraft,
   providerToKind,

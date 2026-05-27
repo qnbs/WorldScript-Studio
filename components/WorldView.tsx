@@ -12,6 +12,7 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
+import { EmptyState } from './ui/EmptyState';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { SectionIcon } from './ui/SectionIcon';
@@ -647,6 +648,16 @@ const WorldViewUI: FC = () => {
             variant="primary"
           />
         </div>
+        {worlds.length === 0 && (
+          // X-3: authored empty state — appears below add buttons when world is empty
+          <div className="col-span-full mt-4">
+            <EmptyState
+              title={t('worlds.emptyState.title')}
+              description={t('worlds.emptyState.description')}
+              compact
+            />
+          </div>
+        )}
         {worlds.map((world, index) => (
           // QNBS-v3: content-visibility skips rendering off-screen world cards — measurable win for large world collections.
           <div

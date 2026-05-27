@@ -53,6 +53,13 @@ vi.mock('../../../hooks/useSwipeGesture', () => ({
   useSwipeGesture: vi.fn(),
 }));
 
+vi.mock('../../../contexts/WriterViewContext', () => ({
+  useWriterViewContext: vi.fn(() => ({
+    flowMode: false,
+    toggleFlowMode: vi.fn(),
+  })),
+}));
+
 // Stub all child panels
 vi.mock('../../../components/writing/ContextPanel', () => ({
   ContextPanel: () => <div data-testid="context-panel">Context</div>,

@@ -2,6 +2,12 @@ import { configureStore } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// QNBS-v3: localStorageOnly defaults true in settingsReducer — bypass the cloud-AI gate so thunks can run.
+vi.mock('../../../services/ai/aiPolicy', () => ({
+  assertCloudAiAllowedSync: vi.fn(),
+  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../../features/project/thunks/thunkUtils', () => ({
   loadAiProvider: vi.fn(),
   buildAiOptions: vi.fn().mockReturnValue({ provider: 'gemini' }),

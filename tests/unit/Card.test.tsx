@@ -3,8 +3,8 @@
  * QNBS-v3: Pure UI components with no external deps — tests styles and slot composition.
  */
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 
 describe('Card', () => {
@@ -36,6 +36,17 @@ describe('Card', () => {
   it('passes arbitrary HTML props', () => {
     render(<Card data-testid="my-card">Content</Card>);
     expect(screen.getByTestId('my-card')).toBeInTheDocument();
+  });
+
+  it('fires onClick when rendered as button and clicked', () => {
+    const handleClick = vi.fn();
+    render(
+      <Card as="button" onClick={handleClick}>
+        Click me
+      </Card>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Click me' }));
+    expect(handleClick).toHaveBeenCalledTimes(1);
   });
 });
 

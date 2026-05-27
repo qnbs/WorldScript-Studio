@@ -268,13 +268,15 @@ describe('ProofAgent', () => {
   });
 
   describe('fallback behaviour', () => {
-    it('returns fallback report (overallPass=true) when AI call fails', async () => {
+    it('returns fallback report (overallPass=false, isFallback=true) when AI call fails', async () => {
       vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('AI error'));
 
       const agent = new ProofAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
 
-      expect((agentOutput as { overallPass: boolean }).overallPass).toBe(true);
+      // P-4: honest fallback — not a fake pass
+      expect((agentOutput as { overallPass: boolean }).overallPass).toBe(false);
+      expect((agentOutput as { isFallback: boolean }).isFallback).toBe(true);
       expect(vi.mocked(logger.error)).toHaveBeenCalled();
     });
 
@@ -286,18 +288,21 @@ describe('ProofAgent', () => {
       const agent = new ProofAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
 
-      const report = agentOutput as { grammar: { score: number } };
-      expect(report.grammar.score).toBe(80); // fallback value
+      const report = agentOutput as { grammar: { score: number }; isFallback: boolean };
+      // P-4: score is 0 (honest), not a fake plausible value
+      expect(report.grammar.score).toBe(0);
+      expect(report.isFallback).toBe(true);
       expect(vi.mocked(logger.warn)).toHaveBeenCalled();
     });
 
-    it('fallback report summary mentions "manual review"', async () => {
+    it('fallback report summary describes the failure', async () => {
       vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('fail'));
 
       const agent = new ProofAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
 
-      expect((agentOutput as { summary: string }).summary).toContain('Manual review');
+      // P-4: honest summary — no fake "manual review" framing
+      expect((agentOutput as { summary: string }).summary).toContain('Quality gate could not run');
     });
   });
 

@@ -248,9 +248,13 @@ describe('DiagnosticAgent', () => {
       const agent = new DiagnosticAgent(makeContext());
       const result = await agent.execute(new AbortController().signal);
 
-      // Fallback has quality score 50
-      const report = result.agentOutput as { qualityScore: { overall: number } };
-      expect(report.qualityScore.overall).toBe(50);
+      // P-4: Fallback reports are honest — overall is 0, not a fake 50
+      const report = result.agentOutput as {
+        qualityScore: { overall: number };
+        isFallback: boolean;
+      };
+      expect(report.qualityScore.overall).toBe(0);
+      expect(report.isFallback).toBe(true);
     });
 
     it('uses fallback report when schema validation fails', async () => {
@@ -262,8 +266,12 @@ describe('DiagnosticAgent', () => {
       const result = await agent.execute(new AbortController().signal);
 
       expect(vi.mocked(logger.warn)).toHaveBeenCalled();
-      const report = result.agentOutput as { qualityScore: { overall: number } };
-      expect(report.qualityScore.overall).toBe(50);
+      const report = result.agentOutput as {
+        qualityScore: { overall: number };
+        isFallback: boolean;
+      };
+      expect(report.qualityScore.overall).toBe(0);
+      expect(report.isFallback).toBe(true);
     });
 
     it('uses fallback report when aiProviderService.generateText throws', async () => {
@@ -273,8 +281,12 @@ describe('DiagnosticAgent', () => {
       const result = await agent.execute(new AbortController().signal);
 
       expect(vi.mocked(logger.error)).toHaveBeenCalled();
-      const report = result.agentOutput as { qualityScore: { overall: number } };
-      expect(report.qualityScore.overall).toBe(50);
+      const report = result.agentOutput as {
+        qualityScore: { overall: number };
+        isFallback: boolean;
+      };
+      expect(report.qualityScore.overall).toBe(0);
+      expect(report.isFallback).toBe(true);
     });
 
     it('fallback report summary contains the project title', async () => {
@@ -333,9 +345,7 @@ describe('DiagnosticAgent', () => {
       } as any);
 
       const agent = new DiagnosticAgent(ctx);
-      await expect(agent.execute(new AbortController().signal)).rejects.toThrow(
-        'No project data available',
-      );
+      await expect(agent.execute(new AbortController().signal)).rejects.toThrow('No project data');
     });
 
     it('uses fallback report when signal is aborted after AI call (abort caught by inner try-catch)', async () => {
@@ -349,9 +359,106 @@ describe('DiagnosticAgent', () => {
       const agent = new DiagnosticAgent(makeContext());
       // QNBS-v3: abort is caught by inner catch → fallback report returned (not thrown to caller)
       const result = await agent.execute(ac.signal);
-      const report = result.agentOutput as { qualityScore: { overall: number } };
-      expect(report.qualityScore.overall).toBe(50);
+      const report = result.agentOutput as {
+        qualityScore: { overall: number };
+        isFallback: boolean;
+      };
+      expect(report.qualityScore.overall).toBe(0);
+      expect(report.isFallback).toBe(true);
       expect(vi.mocked(logger.error)).toHaveBeenCalled();
+    });
+  });
+
+  describe('P-3: self-evaluation loop', () => {
+    // Helper: context with a manuscript large enough to trigger self-evaluation (>500 words)
+    function makeLargeContext() {
+      const bigContent = Array.from({ length: 60 }, (_, i) => `Word${i}`).join(' '); // 60 words
+      const tenSections = Array.from({ length: 10 }, (_, i) => makeSection(`s${i}`, bigContent));
+      const ctx = makeContext();
+      vi.mocked(ctx.getState).mockReturnValue({
+        project: {
+          present: {
+            data: {
+              title: 'Big Novel',
+              logline: '',
+              manuscript: tenSections, // 600 words > 500 threshold
+              characters: { ids: [], entities: {} },
+              worlds: { ids: [], entities: {} },
+              outline: [],
+            },
+          },
+        },
+        proForge: {
+          currentRun: null,
+          isActive: false,
+          activeView: 'dashboard',
+          runHistory: [],
+          isRunning: false,
+          isLoading: false,
+          error: null,
+          defaultConfig: DEFAULT_CONFIG,
+        },
+        // biome-ignore lint/suspicious/noExplicitAny: partial test state
+      } as any);
+      return ctx;
+    }
+
+    it('makes a second AI call (reflection) when totalWords > 500 and primary succeeds', async () => {
+      const reportJson = JSON.stringify(VALID_REPORT);
+      vi.mocked(aiProviderService.generateText)
+        .mockResolvedValueOnce(reportJson) // primary
+        .mockResolvedValueOnce('COHERENT: looks grounded'); // reflection
+
+      const agent = new DiagnosticAgent(makeLargeContext());
+      const { metrics } = await agent.execute(new AbortController().signal);
+
+      // primary (1) + reflection (2)
+      expect(metrics.aiCalls).toBe(2);
+    });
+
+    it('sets reflectionNotes on the report when self-eval runs', async () => {
+      vi.mocked(aiProviderService.generateText)
+        .mockResolvedValueOnce(JSON.stringify(VALID_REPORT))
+        .mockResolvedValueOnce('COHERENT: well grounded');
+
+      const agent = new DiagnosticAgent(makeLargeContext());
+      const { agentOutput } = await agent.execute(new AbortController().signal);
+
+      expect((agentOutput as { reflectionNotes?: string }).reflectionNotes).toContain('COHERENT');
+    });
+
+    it('retries primary call when reflection returns INCOHERENT', async () => {
+      const reportJson = JSON.stringify(VALID_REPORT);
+      vi.mocked(aiProviderService.generateText)
+        .mockResolvedValueOnce(reportJson) // primary
+        .mockResolvedValueOnce('INCOHERENT: hallucinated') // reflection
+        .mockResolvedValueOnce(reportJson); // retry primary
+
+      const agent = new DiagnosticAgent(makeLargeContext());
+      const { metrics } = await agent.execute(new AbortController().signal);
+
+      // primary (1) + reflection (2) + retry primary (3)
+      expect(metrics.aiCalls).toBe(3);
+    });
+
+    it('does not trigger self-eval when totalWords <= 500', async () => {
+      // Default makeContext has 5-word manuscript → no self-eval
+      vi.mocked(aiProviderService.generateText).mockResolvedValue(JSON.stringify(VALID_REPORT));
+
+      const agent = new DiagnosticAgent(makeContext());
+      const { metrics } = await agent.execute(new AbortController().signal);
+
+      expect(metrics.aiCalls).toBe(1);
+    });
+
+    it('does not trigger self-eval on fallback reports', async () => {
+      // generateText called twice would fail the test; ensure only 1 call on fallback
+      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('fail'));
+
+      const agent = new DiagnosticAgent(makeLargeContext());
+      const { metrics } = await agent.execute(new AbortController().signal);
+
+      expect(metrics.aiCalls).toBe(0); // caught before aiCalls increments for large context too — throw path
     });
   });
 
