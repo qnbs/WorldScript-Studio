@@ -19,11 +19,6 @@ overrides:
   uuid: '>=11.1.1'
   qs: '>=6.15.2'
 
-patchedDependencies:
-  y-webrtc@10.3.0:
-    hash: 96356db4895159c489e2da1cabb6a2e4713209afaabee385ca3a79d232a39807
-    path: patches/y-webrtc@10.3.0.patch
-
 importers:
 
   .:
@@ -49,6 +44,9 @@ importers:
       '@domain/ai-core':
         specifier: workspace:*
         version: link:packages/ai-core
+      '@domain/collab-transport':
+        specifier: workspace:*
+        version: link:packages/collab-transport
       '@domain/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -144,7 +142,7 @@ importers:
         version: 14.0.0
       y-webrtc:
         specifier: ^10.3.0
-        version: 10.3.0(patch_hash=96356db4895159c489e2da1cabb6a2e4713209afaabee385ca3a79d232a39807)(yjs@13.6.30)
+        version: 10.3.0(yjs@13.6.30)
       yjs:
         specifier: ^13.6.30
         version: 13.6.30
@@ -281,6 +279,21 @@ importers:
       onnxruntime-web:
         specifier: ^1.26.0
         version: 1.26.0
+
+  packages/collab-transport:
+    dependencies:
+      lib0:
+        specifier: ^0.2.42
+        version: 0.2.117
+      simple-peer:
+        specifier: ^9.11.0
+        version: 9.11.1
+      y-protocols:
+        specifier: ^1.0.6
+        version: 1.0.7(yjs@13.6.30)
+      yjs:
+        specifier: ^13.6.8
+        version: 13.6.30
 
   packages/ui: {}
 
@@ -15237,7 +15250,7 @@ snapshots:
       lib0: 0.2.117
       yjs: 13.6.30
 
-  y-webrtc@10.3.0(patch_hash=96356db4895159c489e2da1cabb6a2e4713209afaabee385ca3a79d232a39807)(yjs@13.6.30):
+  y-webrtc@10.3.0(yjs@13.6.30):
     dependencies:
       lib0: 0.2.117
       simple-peer: 9.11.1

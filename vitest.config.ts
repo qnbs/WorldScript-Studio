@@ -12,6 +12,8 @@ export default defineConfig({
       '@xenova/transformers': path.resolve(
         './packages/ai-core/node_modules/@xenova/transformers/src/transformers.js',
       ),
+      // QNBS-v3: B-3 vendor fork — resolve workspace package in tests
+      '@domain/collab-transport': path.resolve('./packages/collab-transport/src/index.ts'),
     },
   },
   test: {

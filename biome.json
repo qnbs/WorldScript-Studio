@@ -20,7 +20,10 @@
       "!!**/reports",
       "!!**/storybook-static",
       "!!**/graphify-out",
-      "!!**/.codegraph"
+      "!!**/.codegraph",
+      "!!**/packages/collab-transport/src/y-webrtc.js",
+      "!!**/packages/collab-transport/src/y-webrtc.d.ts",
+      "!!**/packages/collab-transport/src/crypto.d.ts"
     ]
   },
   "formatter": {

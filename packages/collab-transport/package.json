@@ -1,0 +1,20 @@
+{
+  "name": "@domain/collab-transport",
+  "version": "10.3.0-sc1",
+  "private": true,
+  "type": "module",
+  "description": "Vendored y-webrtc with StoryCraft RTCDataChannel E2E encryption patch",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "lib0": "^0.2.42",
+    "simple-peer": "^9.11.0",
+    "y-protocols": "^1.0.6"
+  },
+  "peerDependencies": {
+    "yjs": "^13.6.8"
+  }
+}

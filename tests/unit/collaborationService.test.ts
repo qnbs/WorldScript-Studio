@@ -38,8 +38,8 @@ import {
   resolveWebRtcSignalingUrls,
 } from '../../services/collaborationService';
 
-// Mock y-webrtc and yjs
-vi.mock('y-webrtc', () => {
+// Mock @domain/collab-transport (vendor fork of y-webrtc)
+vi.mock('@domain/collab-transport', () => {
   class MockWebrtcProvider {
     awareness = {
       setLocalStateField: vi.fn(),

@@ -107,6 +107,7 @@
     "recharts": "^3.8.1",
     "redux-undo": "^1.1.0",
     "uuid": "14",
+    "@domain/collab-transport": "workspace:*",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.30",
     "zod": "^4.1.5",
@@ -182,9 +183,7 @@
       "sharp",
       "workerd"
     ],
-    "patchedDependencies": {
-      "y-webrtc@10.3.0": "patches/y-webrtc@10.3.0.patch"
-    }
+    "patchedDependencies": {}
   },
   "simple-git-hooks": {
     "pre-commit": "npm exec -- lint-staged"

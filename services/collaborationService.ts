@@ -10,8 +10,9 @@
  *   collaborationService.disconnect();
  */
 
+// QNBS-v3: B-3 — import from vendor fork instead of patched y-webrtc npm package
+import { WebrtcProvider } from '@domain/collab-transport';
 import type { Awareness } from 'y-protocols/awareness';
-import { WebrtcProvider } from 'y-webrtc';
 import * as Y from 'yjs';
 import type { CollaborationUser } from '../types';
 
