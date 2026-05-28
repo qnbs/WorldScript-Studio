@@ -51,6 +51,7 @@ export default defineConfig({
         '**/*.d.ts',
         // QNBS-v3: B-3 vendored JS source — excluded from coverage (upstream code, not ours)
         'packages/collab-transport/src/y-webrtc.js',
+        'packages/collab-transport/src/crypto.js',
       ],
       // QNBS-v3: Phase 2 B-7 — raised after B-series sprint; baseline 73%L/58%B/65%F (2026-05-26).
       // Conservative headroom: 2% below last CI run to absorb B-1..B-6 new code paths.
