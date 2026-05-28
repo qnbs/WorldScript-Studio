@@ -41,7 +41,7 @@ Three security findings identified and fixed in the same session:
 
 **B-4:** `tests/e2e/a11y-axe.spec.ts` — Playwright axe-core gate across 8 views. WCAG 2.2 AA.
 
-**B-5:** RTL beta — `ar`/`he` locale stubs, `enableRtlLayout` flag, dir="rtl" wiring, RTL foundation tests.
+**B-5:** RTL beta — `ar`/`he` locale stubs, `enableRtlLayout` flag, dir="rtl" wiring, RTL foundation tests. **i18n-gate limitation:** `pnpm run i18n:check` verifies key parity only (all keys present), not translation quality. `ar` and `he` are excluded from the `LANGS` parity check — both locale trees are ~99.8% English copies. Full translation content is a Phase 3 / v2.0 community task.
 
 **B-6:** `services/logger.ts` — StructuredLogger: IDB sink (1000-entry LRU), Tauri JSONL (daily rotation), DEV console sink. `createLogger(module)` factory, `withContext()` chaining, GDPR key sanitization. 16 tests.
 
@@ -212,7 +212,7 @@ Three security findings identified and fixed in the same session:
 - 16 dependencies updated: patch (ai-sdk, dompurify, tanstack/virtual, vite 8.0.14, vitest 4.1.7, storybook 10.4.1, @types/*) + minor (@google/genai 2.6.0, docx 9.7.0, vite-plugin-pwa 1.3.0, wrangler 4.94.0)
 - `pnpm audit`: 0 known vulnerabilities
 
-**Quality gate (2026-05-26):** lint ✅ (Biome — 0 errors, 895 files) · typecheck ✅ · i18n:check ✅ (2025 keys × 5 locales) · build ✅ · tests ✅ (4 044 / 360 files) · coverage ✅ Stmts 71.29% / Branches 58.79% / Funcs 65.18% / Lines 73.06% (thresholds: S≥67/B≥55/F≥60/L≥68)
+**Quality gate (2026-05-26):** lint ✅ (Biome — 0 errors, 895 files) · typecheck ✅ · i18n:check ✅ (2025 keys × 5 locales; ar/he stubs excluded from parity check) · build ✅ · tests ✅ (4 044 / 386 files) · coverage ✅ Stmts 71.29% / Branches 58.79% / Funcs 65.18% / Lines 73.06% (thresholds: S≥67/B≥55/F≥60/L≥68)
 
 ---
 
@@ -1143,7 +1143,7 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 | 3   | ~~Validate undo-envelope reconstruction~~ | Low    | High   | ✅ Done       |
 | 4   | ~~Add per-view error boundaries~~         | Low    | Medium | ✅ Done       |
 | 5   | ~~Make Redux logger opt-in~~              | Low    | Medium | ✅ Done       |
-| 6   | ~~Fix `any` type casts~~                  | Medium | Medium | ✅ Partial    |
+| 6   | Fix `noExplicitAny` — 2 literal + **137 biome-ignore suppressions** (133 in test mocks [legitimate per CLAUDE.md pattern], 4 in production files) | Medium | Medium | 🟡 4 production fixed; 133 test mocks accepted |
 | 7   | Raise unit/integration coverage toward **50–70 %** (Vitest `vitest.config.ts`: breites `coverage.include`, Schwellen = aktueller Gesamt‑%; CI gate) | High | High | 🟡 Ongoing |
 | 8   | Add DevContainer configuration            | Low    | Medium | 🟠 Backlog    |
 | 9   | Fix ManuscriptView resize memory leak     | Low    | Medium | 🟠 Backlog    |

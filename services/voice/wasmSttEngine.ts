@@ -14,8 +14,11 @@ const MODEL_ID = 'Xenova/whisper-tiny.en';
 const TRANSCRIPTION_INTERVAL_MS = 3_500;
 
 // @xenova/transformers types (imported via alias in vite.config.ts + tsconfig paths)
-// biome-ignore lint/suspicious/noExplicitAny: transformers pipeline returns complex generic type
-type WhisperPipeline = (audio: Float32Array, opts: Record<string, unknown>) => Promise<any>;
+type WhisperPipelineResult = { text?: string } | Array<{ text?: string }>;
+type WhisperPipeline = (
+  audio: Float32Array,
+  opts: Record<string, unknown>,
+) => Promise<WhisperPipelineResult>;
 
 export class WasmSttEngine implements SttEngine {
   readonly id: VoiceSttEngine = 'whisper';
@@ -50,10 +53,12 @@ export class WasmSttEngine implements SttEngine {
     // QNBS-v3: Dynamic import keeps @xenova/transformers in vendor-ai-onnx chunk, not main bundle.
     const { pipeline, env } = await import('@xenova/transformers');
     // Disable WASM proxy — run inline; proxy adds latency and SharedArrayBuffer dependency.
-    // biome-ignore lint/suspicious/noExplicitAny: env.backends is dynamically typed
-    const envAny = env as any;
-    if (envAny.backends?.onnx?.wasm) {
-      envAny.backends.onnx.wasm.proxy = false;
+    interface XenovaEnv {
+      backends?: { onnx?: { wasm?: { proxy?: boolean } } };
+    }
+    const typedEnv = env as unknown as XenovaEnv;
+    if (typedEnv.backends?.onnx?.wasm) {
+      typedEnv.backends.onnx.wasm.proxy = false;
     }
     this.whisperPipeline = (await pipeline('automatic-speech-recognition', MODEL_ID, {
       quantized: true,
@@ -130,9 +135,9 @@ export class WasmSttEngine implements SttEngine {
     }
 
     try {
-      const result = (await this.whisperPipeline(audioData, {
+      const result = await this.whisperPipeline(audioData, {
         sampling_rate: this.config.sampleRate,
-      })) as { text?: string } | Array<{ text?: string }>;
+      });
       const text = (Array.isArray(result) ? result[0]?.text : result.text)?.trim() ?? '';
       if (text) {
         this.onResultCallback?.({

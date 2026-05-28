@@ -3,7 +3,7 @@ import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { ToggleSwitch } from './SettingsShared';
 
-/** All 12 experimental feature flags in one settings category. */
+/** All experimental feature flags in one settings category. */
 export const FeatureFlagsSection: FC = () => {
   const { t, featureFlags, handleSettingChange } = useSettingsViewContext();
 
@@ -27,6 +27,10 @@ export const FeatureFlagsSection: FC = () => {
     { key: 'enableCloudSync', labelKey: 'settings.featureFlags.enableCloudSync' },
     { key: 'enableLoraAdapters', labelKey: 'settings.featureFlags.enableLoraAdapters' },
     { key: 'enablePluginSystem', labelKey: 'settings.featureFlags.enablePluginSystem' },
+    // QNBS-v3: Voice + ProForge were in featureFlagsSlice but missing from the UI toggle list.
+    { key: 'enableVoiceSupport', labelKey: 'settings.featureFlags.enableVoiceSupport' },
+    { key: 'enableVoiceWasm', labelKey: 'settings.featureFlags.enableVoiceWasm' },
+    { key: 'enableProForge', labelKey: 'settings.featureFlags.enableProForge' },
   ];
 
   return (

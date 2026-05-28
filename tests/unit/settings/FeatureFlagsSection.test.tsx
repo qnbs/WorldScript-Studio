@@ -32,6 +32,9 @@ const mockFeatureFlags = {
   enableCloudSync: false,
   enableLoraAdapters: false,
   enablePluginSystem: false,
+  enableVoiceSupport: false,
+  enableVoiceWasm: false,
+  enableProForge: false,
 };
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
@@ -67,10 +70,10 @@ describe('FeatureFlagsSection', () => {
     expect(screen.getByText('settings.featureFlags.description')).toBeInTheDocument();
   });
 
-  it('renders all 16 feature flag toggles', () => {
+  it('renders all 19 feature flag toggles', () => {
     render(<FeatureFlagsSection />);
     const switches = screen.getAllByRole('switch');
-    expect(switches.length).toBe(16);
+    expect(switches.length).toBe(19);
   });
 
   it('renders DuckDB analytics toggle', () => {
@@ -80,9 +83,13 @@ describe('FeatureFlagsSection', () => {
 
   it('renders ProForge toggle', () => {
     render(<FeatureFlagsSection />);
-    // ProForge flag key isn't shown here — enableProForge is in featureFlagsSlice but this component
-    // lists different flags. Check mind maps flag which is included.
-    expect(screen.getByText('settings.featureFlags.enableMindMaps')).toBeInTheDocument();
+    expect(screen.getByText('settings.featureFlags.enableProForge')).toBeInTheDocument();
+  });
+
+  it('renders voice support and voice WASM toggles', () => {
+    render(<FeatureFlagsSection />);
+    expect(screen.getByText('settings.featureFlags.enableVoiceSupport')).toBeInTheDocument();
+    expect(screen.getByText('settings.featureFlags.enableVoiceWasm')).toBeInTheDocument();
   });
 
   it('renders character interviews toggle', () => {

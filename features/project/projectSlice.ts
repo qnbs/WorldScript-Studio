@@ -1,4 +1,4 @@
-import type { EntityState, PayloadAction } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
 import type {
@@ -13,7 +13,6 @@ import type {
   MindMapNode,
   ObjectGroup,
   OutlineSection,
-  PersistedVersionControlState,
   PlotConnection,
   PlotConnectionType,
   ProjectAiPreset,
@@ -25,6 +24,7 @@ import type {
   WritingSession,
 } from '../../types';
 import { charactersAdapter, worldsAdapter } from './adapters';
+import type { ProjectData } from './projectState';
 import {
   generateCharacterPortraitThunk,
   uploadCharacterImageThunk,
@@ -35,6 +35,7 @@ import { generateWorldImageThunk, uploadWorldImageThunk } from './thunks/worldTh
 // --- Re-exports for consumers ---
 export { charactersAdapter, worldsAdapter } from './adapters';
 export { createDeduplicatedThunk } from './aiThunkUtils';
+export type { ProjectData } from './projectState';
 export {
   importBinderFileThunk,
   removeBinderSubtreeWithAssetsThunk,
@@ -64,47 +65,6 @@ export {
   proofreadTextThunk,
   streamGenerationThunk,
 } from './thunks/writingThunks';
-
-// --- Types ---
-export interface ProjectData {
-  id?: string;
-  title: string;
-  logline: string;
-  author?: string;
-  characters: EntityState<Character, string>;
-  worlds: EntityState<World, string>;
-  outline: OutlineSection[];
-  manuscript: StorySection[];
-  relationships?: CharacterRelationship[];
-  projectGoals?: {
-    totalWordCount: number;
-    targetDate: string | null;
-  };
-  writingHistory?: {
-    date: string; // YYYY-MM-DD
-    words: number;
-  }[];
-  writingSessions?: WritingSession[];
-  writingGoals?: WritingGoal[];
-  sceneBoardLayout?: { [sectionId: string]: { x: number; y: number } };
-  binderNodes?: BinderNode[];
-  compileProfile?: CompileProfile;
-  /** Saved with project so version branches/snapshots survive reload (Embedded VC). */
-  persistedVersionControl?: PersistedVersionControlState;
-  // QNBS-v3: Moved from plotBoardSlice so connections/subplots/tension are undo-able via redux-undo.
-  plotConnections?: PlotConnection[];
-  plotSubplots?: Subplot[];
-  plotTensionOverrides?: Record<string, number>;
-  // QNBS-v3: Per-project AI preset — overrides global settings when enabled; supports LoRA path for v2.0.
-  aiPreset?: ProjectAiPreset;
-  // QNBS-v3: Story Objects/Groups inventory — foundational for MindMap linked entities in v1.7.
-  storyObjects?: StoryObject[];
-  objectGroups?: ObjectGroup[];
-  // QNBS-v3: Mind Maps stored with project for undo support; viewport state lives in mindMapUiSlice.
-  mindMaps?: MindMap[];
-  // QNBS-v3: Character Interview transcripts keyed by characterId for co-location with character data.
-  characterInterviews?: Record<string, CharacterInterview[]>;
-}
 
 // --- Initial State ---
 const initialState: { data: ProjectData } = {

@@ -346,7 +346,6 @@ export function _resetLoraDbForTest(): void {
   // Re-assign global so the next openDb() call starts fresh
   if (typeof global !== 'undefined' && 'IDBFactory' in global) {
     const { IDBFactory } = global as unknown as { IDBFactory: new () => IDBDatabase };
-    // biome-ignore lint/suspicious/noExplicitAny: test-only reset
-    (global as any).indexedDB = new (IDBFactory as any)();
+    (global as unknown as { indexedDB: IDBDatabase }).indexedDB = new IDBFactory();
   }
 }

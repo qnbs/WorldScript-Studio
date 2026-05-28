@@ -4,7 +4,7 @@
  *          Follows proForgeSlice.ts patterns exactly. NOT wrapped with redux-undo.
  */
 
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, type Middleware, type PayloadAction } from '@reduxjs/toolkit';
 import type {
   DatasetEntry,
   LoraActiveView,
@@ -272,14 +272,15 @@ const LORA_STORAGE_KEY = 'storycraft-lora';
 
 type StateWithLora = { lora: LoraState };
 
-export const loraPersistenceMiddleware =
-  // biome-ignore lint/suspicious/noExplicitAny: Redux middleware pattern
-  (store: any) => (next: any) => (action: any) => {
+// QNBS-v3: State typed as unknown (Redux store constraint); cast inside where lora shape is needed.
+export const loraPersistenceMiddleware: Middleware<Record<string, never>, unknown> =
+  (store) => (next) => (action) => {
     const result = next(action);
+    const act = action as Record<string, unknown>;
     if (
-      typeof action.type === 'string' &&
-      action.type.startsWith('lora/') &&
-      !action.type.includes('trainingProgress') // skip high-frequency updates
+      typeof act['type'] === 'string' &&
+      act['type'].startsWith('lora/') &&
+      !act['type'].includes('trainingProgress') // skip high-frequency updates
     ) {
       try {
         const state = store.getState() as StateWithLora;
