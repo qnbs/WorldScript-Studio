@@ -226,13 +226,19 @@ Client-side env vars must use the `VITE_*` prefix (from `.env` / `.env.local`, w
 
 ### Storage
 
-`dbService.ts` wraps **dual** IndexedDB databases (`storycraft-state-db` for Redux state, `storycraft-data-db` for assets/blobs) with LZ-String compression (payloads > 10 KB), AES-256-GCM encryption (API keys), and legacy migration via `services/dbMigration.ts`. `storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Data access must go through `dbService` or thunks — never raw IndexedDB calls. Never use `localStorage` for sensitive data.
+**Decomposed IDB layer (`services/storage/` — Phase 1):** `dbService.ts` is now an 8-line facade re-exporting from focused modules: `idbCore.ts` (openDb, retryDb, lifecycle), `idbProjectStore.ts` (project CRUD), `idbSnapshotStore.ts`, `idbKeyStore.ts` (API key AES-GCM), `idbCodexStore.ts` (Story Codex + RAG vectors), `idbAssetStore.ts` (images, binder blobs), `storageEncryptionService.ts` (passphrase-derived AES-256-GCM at-rest — B-1).
 
-`services/dbInitialization.ts` exports `checkStorageHealth()` — proactive low-storage warning that runs on app init. Returns a `StorageHealth` object; a low-storage event is surfaced via a toast rather than blocking writes.
+`storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Data access must go through `dbService` or thunks — never raw IndexedDB calls. Never use `localStorage` for sensitive data.
+
+**At-rest encryption (B-1, `enableIdbAtRestEncryption`):** `storageEncryptionService.ts` — PBKDF2 (310 000 iter, SHA-256) → AES-256-GCM, `extractable: false`. Call `initIdbEncryption(passphrase)` before any IDB read/write when flag is on. Do NOT enable in production until the passphrase UX (unlock modal, key rotation) is complete.
+
+`services/dbInitialization.ts` exports `checkStorageHealth()` — proactive low-storage warning on app init. Returns a `StorageHealth` object; surfaced via toast rather than blocking writes.
 
 ### Collaboration
 
-Real-time P2P editing via Yjs + `packages/collab-transport` (`services/collaborationService.ts`). Signaling-channel E2E encryption: AES-256-GCM with PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`. **RTCDataChannel in-flight E2E encryption** is baked into `packages/collab-transport` (vendor fork of y-webrtc 10.3.0 — B-3, v1.19.0). The pnpm-patch approach (`patches/y-webrtc@10.3.0.patch`) has been retired. Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
+Real-time P2P editing via Yjs + `packages/collab-transport` (`services/collaborationService.ts`). Signaling-channel E2E encryption: AES-256-GCM with PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`. **RTCDataChannel in-flight E2E encryption** is baked into `packages/collab-transport` (vendor fork of y-webrtc 10.3.0 — B-3, v1.19.0; crypto.js hardened in C-1: PBKDF2 100k→310k, `extractable: false`, `return promise.reject()` fix). Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
+
+**Vendor-fork maintenance:** `packages/collab-transport/src/` must contain ALL files imported by `y-webrtc.js` (check with `grep "from './"` on the JS source). Missing relative imports cause `UNRESOLVED_IMPORT` on Vercel/Rolldown builds even though Vite dev server resolves them via alias.
 
 ### Code Splitting
 
@@ -242,7 +248,7 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 ### Feature Flags
 
-Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (21 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
+Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (20 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
 
 Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProForge pipeline — off by default; gates the entire pipeline view in WriterView). **B-series flags (v1.19.0, all off by default):** `enableIdbAtRestEncryption` (B-1 — IDB at-rest encryption; do not enable without passphrase UX), `enableVoiceWasm` (B-2 — Whisper WASM STT + Silero VAD; model download UI not yet wired), `enableRtlLayout` (B-5 — RTL `html[dir]` + BiDi context; ar/he locale stubs only). Stub/future flags (off by default): `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
 
@@ -257,6 +263,8 @@ Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProF
 ### i18n
 
 Custom React Context in `I18nContext.tsx` — not i18next. Locale files exist for de, en, es, fr, it (15 modules merged into one **`public/locales/<lang>/bundle.json`** per language — rebuilt by **`pnpm run i18n:bundle`** or automatically via **`pnpm run i18n:check`** / **`prebuild`** / **`predev`**). The in-app selector exposes **de**, **en**, **fr**, **es**, and **it**. All user-facing strings must use `t('key.path')` from `useTranslation()` — no hardcoded text. New keys: add to **all five** locale trees (`node scripts/check-i18n-keys.mjs --fix` for parity), then run **`pnpm run i18n:bundle`**.
+
+**RTL stubs (B-5, v1.19.0):** `locales/ar/` and `locales/he/` exist as stub trees (English fallback content). `I18nContext` `Language` type includes `'ar' | 'he'`. The in-app selector does **not** expose ar/he yet — they are behind `enableRtlLayout`. Full translation content is a Phase 3 / v2.0 community task.
 
 **Cold-start repair:** `services/i18nBootstrap.ts` runs a synchronous locale bootstrap on app init; `services/projectI18nRepair.ts` repairs any project with raw i18n keys stored as data (e.g. `initialProject.title`). Both run automatically via `App.tsx` — do not bypass.
 
@@ -281,7 +289,7 @@ Skip the annotation for pure formatting, lockfile updates, or generated artefact
 
 All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**. Sprint notes: `docs/SPRINT-V1.16.md` (design system completion). Local CI: `infra/low-end-ci/DAILY-DRIVER.md`.
 
-**Before large or cross-cutting changes:** read [`ROADMAP.md`](ROADMAP.md) (planned features + priorities), [`AUDIT.md`](AUDIT.md) (follow-ups, metrics), and [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (architecture decisions, content/CI guidance). ProForge architecture: [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md). Latest sprint handoff: [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md). After merging, update README.md badges and the AUDIT.md quality-gate line with CI-reported numbers if the maintainer requests it.
+**Before large or cross-cutting changes:** read [`ROADMAP.md`](ROADMAP.md) (planned features + priorities), [`AUDIT.md`](AUDIT.md) (follow-ups, metrics), and [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (architecture decisions, content/CI guidance). ProForge architecture: [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md). Latest sprint handoffs: [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md) (Phase 2 — v1.19.0 B-series) · [`docs/SPRINT-HANDOFF-2026-05-28-phase3.md`](docs/SPRINT-HANDOFF-2026-05-28-phase3.md) (Phase 3 — C-1..C-5). After merging, update README.md badges and the AUDIT.md quality-gate line with CI-reported numbers if the maintainer requests it.
 
 ## Key Constraints
 
@@ -351,6 +359,8 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 **useAppSelectorShallow with plotBoard:** Tests must include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in the mock state. Connections/subplots/tensionOverrides are in `project.present.data` — mock via `selectPlotConnections: () => []` etc. in the `projectSelectors` mock. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines.
 
+**FeatureFlagsState mocks:** Always include ALL 20 flags in test mock objects (TypeScript strict mode rejects partial `FeatureFlagsState`). When new flags are added to the slice, update all test files that hardcode the full flag object. B-series flags to include: `enableIdbAtRestEncryption: false, enableVoiceWasm: false`.
+
 **ConnectionLayer test IDs:** Connection `<g>` elements use `data-testid="connection-group"` — query by testid, not role.
 
 **DuckDB in tests:** Mock `services/duckdb/duckdbClient` with `{ execAsync: vi.fn(), queryAsync: vi.fn() }`. Never initialize a real DuckDB-WASM instance in unit tests.
@@ -401,6 +411,36 @@ Apply this pattern for any `use*ViewContext` hook — `useProForgeViewContext`, 
 
 **localAiFacade / WebLLM:** `services/localAiFacade.ts` wraps WebLLM with the same provider interface as `aiProviderService.ts`. Model download progress surfaced via `onProgress`; mount-guard via `useRef` prevents stale updates after unmount.
 
+### Plugin System
+
+**Registry:** `services/pluginRegistry.ts` — `PluginRegistry` class + singleton `pluginRegistry`. Plugins declare a `PluginDescriptor` (Zod-validated) with `id`, `version`, `type`, `entrypoint`, and `permissions`. The sandboxed API (`PluginSandboxedApi`) gates every method behind the declared permissions — plugins never receive Redux dispatch directly.
+
+**Reference plugins** (`services/plugins/`): `wordCountOverlay.plugin.ts` (read-only: `project.read`, `scene.read`) and `sceneAppender.plugin.ts` (write: `scene.read/write`, `storage.read/write`). Use these as implementation templates.
+
+**Execution API:**
+- `pluginRegistry.execute(id, fn, rawApi)` — sync
+- `pluginRegistry.executeAsync(id, fn, rawApi)` — async (for plugins using `generateText`, `storageRead`, `storageWrite`)
+- `pluginRegistry.loadPlugin(descriptor, rawApi)` — dynamic import from `descriptor.entrypoint` + calls `run(api)`
+
+**Gating:** `enablePluginSystem` flag (off by default). Settings → System → Plugins panel (`PluginsSection.tsx`).
+
+### Cloud Sync (Cloudflare R2)
+
+**Implementation:** `services/cloudSync/` — 3 files, fully implemented:
+- `cloudSyncBackend.ts` — `StorageBackend` implementation; delegates projects/settings to R2; sensitive keys (API keys) are NEVER sent to cloud (delegation throws)
+- `cloudSyncClient.ts` — HTTP wrapper around R2 REST / Worker-proxied endpoint (fetch + Bearer token, no AWS SDK)
+- `cloudSyncEncryption.ts` — AES-256-GCM E2E; server sees only ciphertext
+
+**Gating:** `enableCloudSync` flag (off by default). Feature flag UI: Settings → Experimental → Cloud Sync. Requires `CloudSyncConfig` (`endpoint`, `token`, `bucketPrefix`) to be wired into settings before activation.
+
+### LoRA Adapter Inference
+
+**Wiring (C-3):** `AIRequestOptions.loraModelPath?: string` — when set and `provider === 'ollama'`, `streamProvider()` substitutes this value as the Ollama model identifier (overrides `opts.model`). `selectActiveLoraOllamaTag` selector (`features/lora/loraSelectors.ts`) returns the active adapter's `ollamaModelTag` or null.
+
+**Prerequisite:** User must run `ollama create <tag> -f Modelfile` with their adapter weights before setting `ollamaModelTag` on the adapter. Training is a Python sidecar workflow (not in-browser).
+
+**Gating:** `enableLoraAdapters` flag (off by default). UI entry: Settings → AI → Fine-Tuning (`ProjectAiPresetSection`).
+
 ### Virtual scrolling
 
 `NavigatorPanel.tsx` uses `useVirtualizer` from `@tanstack/react-virtual`. Pattern: scrollable `<ul>` gets `ref={scrollRef}` + `position: relative`; a sentinel `<li>` sets `height: virtualizer.getTotalSize()`; visible items render as `position: absolute` with `transform: translateY(${virtualRow.start}px)`. Each item `<li>` needs `data-index={index}` + `ref={virtualizer.measureElement}` for dynamic measurement. Use `estimateSize: () => 40, overscan: 3` as defaults. Never lift the virtual container's `overflow-y: auto` into a parent — the virtualizer's scroll element must be the direct scrollable node.
@@ -412,12 +452,12 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - **`StorageBackend` + `SaveProjectInput`** — contract in `services/storageBackend.ts`; use `storageService` in app code; backends implement the same `saveProject` union (Redux envelope or flat `StoryProject`).
 - `components/AdvancedImportExport.tsx` — keep browser vs Tauri export paths explicit
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
-- `workers/inference.worker.ts:50` — `@ts-expect-error` on `@xenova/transformers` dynamic import (lives in `packages/ai-core`; Vite resolves at build time but `tsc` can't see it from root)
+- `workers/inference.worker.ts` — `@xenova/transformers` resolved via `tsconfig.json` `paths` alias pointing to `packages/ai-core/node_modules/@xenova/transformers/types/` (added B-6); the old `@ts-expect-error` was removed. If the alias ever breaks, restore the `@ts-expect-error` and re-add the ignore comment.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 token migration verified in production (all intentional vars documented above)
 - **Voice WASM engines (B-2 scaffold delivered):** `wasmSttEngine.ts` + `sileroVadEngine.ts` scaffolds exist but model download UI is not yet wired. `enableVoiceWasm` flag is off by default. Phase 3: connect download UI to `WasmSttEngine.initialize()`, add Kokoro/Piper TTS WASM engines, E2E voice tests (Playwright). Semantic intent (MiniLM) and local LLM fallback are v1.2 / Phase 4.
 - **IDB at-rest encryption UX (B-1 service delivered):** `storageEncryptionService.ts` is ready; passphrase unlock modal, forgot-passphrase export flow, and key rotation UI are Phase 3. Do NOT enable `enableIdbAtRestEncryption` in production until UX is complete.
-- **B-3 collab-transport patch baked in:** The pnpm patch (`patches/y-webrtc@10.3.0.patch`) is retired; encryption is now in `packages/collab-transport` source. No further patch maintenance needed.
-- **v2.0 open (stubs behind feature flags):** RTL full content (ar/he stubs in B-5); LoRA adapter inference (`enableLoraAdapters`); Cloud-Sync Cloudflare R2 adapter (`enableCloudSync`); Plugin system loader (`enablePluginSystem`).
+- **v2.0 open (stubs / Phase 3 items behind feature flags):** RTL full translation content (ar/he stubs exist — needs community translators); IDB at-rest encryption UX (service ready, passphrase unlock modal + key rotation UI are Phase 3); Voice WASM model download UI (scaffold ready, `WasmSttEngine.initialize()` wiring is Phase 3); DS-5 (delete legacy bridge block from `index.css` after DS-1 verified in production).
+- **`vendor-voice-wasm` chunk:** If `wasmSttEngine.ts` or `sileroVadEngine.ts` grow to import heavy deps directly (vs. dynamic import), add them to `vite.config.ts` `globIgnores` to exclude from SW precache.
 
 ## graphify
 
