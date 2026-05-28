@@ -1,7 +1,8 @@
 /**
  * IdbSnapshotStore — Project snapshot CRUD + automatic snapshot scheduling.
- * ENCRYPTION: plaintext — snapshot data inherits the project's compression; at-rest encryption Phase 2.
+ * ENCRYPTION: AES-256-GCM via StorageEncryptionService when isIdbEncryptionReady() — else plaintext.
  * QNBS-v3: Extracted from dbService.ts. lastAutoSnapshotTime is protected so IdbProjectStore can reset it.
+ *          Phase 2 B-1: snapshot payload encrypted when session key is active.
  */
 
 import type { ProjectData } from '../../features/project/projectSlice';
@@ -9,6 +10,12 @@ import type { ProjectSnapshot } from '../../types';
 import { SNAPSHOTS_STORE } from '../dbConstants';
 import { IdbCodexStore } from './idbCodexStore';
 import { compressData, decompressData, getUserFriendlyDbError, retryDb } from './idbCore';
+import {
+  idbDecrypt,
+  idbEncrypt,
+  isEncryptedBlob,
+  isIdbEncryptionReady,
+} from './storageEncryptionService';
 
 export class IdbSnapshotStore extends IdbCodexStore {
   protected lastAutoSnapshotTime = Date.now();
@@ -20,12 +27,13 @@ export class IdbSnapshotStore extends IdbCodexStore {
       (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
       0,
     );
+    // QNBS-v3: Encrypt payload when session key is active; LZ-compress otherwise.
+    const snapshotPayload = isIdbEncryptionReady() ? await idbEncrypt(data) : compressData(data);
     const snapshotData = {
       date: new Date().toISOString(),
-      name: name || 'Automatic Snapshot',
+      name: name ?? 'Automatic Snapshot',
       wordCount,
-      // Compress snapshot payload – snapshots can be very large
-      data: compressData(data),
+      data: snapshotPayload,
     };
 
     return retryDb(async () => {
@@ -70,9 +78,14 @@ export class IdbSnapshotStore extends IdbCodexStore {
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       return new Promise<ProjectData>((resolve, reject) => {
         const request = store.get(id);
-        request.onsuccess = () => {
-          const raw = request.result?.data;
-          resolve(decompressData<ProjectData>(raw));
+        request.onsuccess = async () => {
+          const raw: unknown = request.result?.data;
+          // QNBS-v3: Decrypt encrypted snapshot payload; legacy plaintext falls through decompressData.
+          const result =
+            isEncryptedBlob(raw) && isIdbEncryptionReady()
+              ? await idbDecrypt<ProjectData>(raw)
+              : decompressData<ProjectData>(raw);
+          resolve(result);
         };
         request.onerror = () => reject(getUserFriendlyDbError(request.error));
       });

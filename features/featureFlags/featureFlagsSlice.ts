@@ -37,6 +37,8 @@ export interface FeatureFlagsState {
   enableVoiceSupport: boolean;
   /** ProForge Ultimate Author Pipeline — agentic 8-stage manuscript pipeline (default: false). */
   enableProForge: boolean;
+  /** IDB at-rest encryption — AES-256-GCM passphrase-derived key for all manuscript stores (default: false). */
+  enableIdbAtRestEncryption: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -72,6 +74,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableVoiceSupport: false,
   // QNBS-v3: ProForge Pipeline — off by default; major feature requiring agentic AI setup.
   enableProForge: false,
+  // QNBS-v3: IDB at-rest encryption — off by default; requires passphrase setup in Settings > Privacy.
+  enableIdbAtRestEncryption: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -167,6 +171,9 @@ const featureFlagsSlice = createSlice({
     setEnableProForge(state, action: PayloadAction<boolean>) {
       state.enableProForge = action.payload;
     },
+    setEnableIdbAtRestEncryption(state, action: PayloadAction<boolean>) {
+      state.enableIdbAtRestEncryption = action.payload;
+    },
   },
 });
 
@@ -209,6 +216,8 @@ export const selectEnableVoiceSupport = (state: { featureFlags: FeatureFlagsStat
   state.featureFlags.enableVoiceSupport;
 export const selectEnableProForge = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableProForge;
+export const selectEnableIdbAtRestEncryption = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableIdbAtRestEncryption;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

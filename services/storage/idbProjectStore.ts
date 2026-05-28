@@ -1,7 +1,8 @@
 /**
  * IdbProjectStore — Project / settings CRUD and state validation.
- * ENCRYPTION: plaintext — manuscript data; at-rest encryption planned for Phase 2 (P2-1).
+ * ENCRYPTION: AES-256-GCM via StorageEncryptionService when isIdbEncryptionReady() — else plaintext.
  * QNBS-v3: Extracted from dbService.ts. validateAndFixState is the canonical migration guard.
+ *          Phase 2 B-1: encrypt/decrypt on every saveSlice / loadState call when key is active.
  */
 
 import type { ProjectData } from '../../features/project/projectSlice';
@@ -11,6 +12,12 @@ import { APP_DATA_STORE } from '../dbConstants';
 import type { SaveProjectInput } from '../storageBackend';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, decompressData, getUserFriendlyDbError, retryDb } from './idbCore';
+import {
+  idbDecrypt,
+  idbEncrypt,
+  isEncryptedBlob,
+  isIdbEncryptionReady,
+} from './storageEncryptionService';
 
 // Define structure of state stored in DB
 interface PersistedProjectState {
@@ -142,8 +149,8 @@ export class IdbProjectStore extends IdbAssetStore {
     data: PersistedProjectState | Settings,
   ): Promise<void> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-    // Compress large state objects (project data can exceed 100 KB)
-    const payload = compressData(data);
+    // QNBS-v3: Encrypt when session key is active; fall back to LZ compression otherwise.
+    const payload = isIdbEncryptionReady() ? await idbEncrypt(data) : compressData(data);
     return new Promise((resolve, reject) => {
       const request = store.put(payload, sliceName);
       request.onsuccess = () => resolve();
@@ -190,12 +197,21 @@ export class IdbProjectStore extends IdbAssetStore {
           }
         };
 
-        projectRequest.onsuccess = () => {
-          project = decompressData(projectRequest.result);
+        projectRequest.onsuccess = async () => {
+          const raw = projectRequest.result;
+          // QNBS-v3: Decrypt encrypted blobs; fall back to decompressData for legacy plaintext.
+          project =
+            isEncryptedBlob(raw) && isIdbEncryptionReady()
+              ? await idbDecrypt(raw)
+              : decompressData(raw);
           onComplete();
         };
-        settingsRequest.onsuccess = () => {
-          settings = decompressData(settingsRequest.result);
+        settingsRequest.onsuccess = async () => {
+          const raw = settingsRequest.result;
+          settings =
+            isEncryptedBlob(raw) && isIdbEncryptionReady()
+              ? await idbDecrypt(raw)
+              : decompressData(raw);
           onComplete();
         };
 
