@@ -8,7 +8,8 @@ import type { BinderAssetPayload } from './storageBackend';
 import { storageService } from './storageService';
 
 export const LIBRARY_BACKUP_FORMAT = 'storycraft-library-v1' as const;
-const PBKDF2_ITERATIONS = 250_000;
+// QNBS-v3: 600k matches OWASP 2024 minimum for PBKDF2-HMAC-SHA-256.
+const PBKDF2_ITERATIONS = 600_000;
 
 export interface LibraryProjectBundle {
   projectId: string;

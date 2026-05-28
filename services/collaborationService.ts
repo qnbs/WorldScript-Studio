@@ -72,7 +72,7 @@ class CollaborationService {
     return this.stripControlChars(value).trim().replace(/\s+/g, ' ').slice(0, 128);
   }
 
-  // QNBS-v3: PBKDF2 310 000 iterations per OWASP 2024 — SHA-256 KDF, AES-256-GCM output.
+  // QNBS-v3: PBKDF2 600 000 iterations (OWASP 2024 minimum for SHA-256 KDF), AES-256-GCM output.
   // QNBS-v3: Explicit Uint8Array<ArrayBuffer> generic required by TS6 strict BufferSource typing.
   private async deriveEncryptionKey(
     password: string,
@@ -83,7 +83,7 @@ class CollaborationService {
       'deriveKey',
     ]);
     return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: 310_000, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt, iterations: 600_000, hash: 'SHA-256' },
       keyMaterial,
       { name: 'AES-GCM', length: 256 },
       false,
