@@ -47,18 +47,16 @@ pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 
 **CI pipeline order:** `security` → `quality` (Biome + tsc + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
-**Local CI simulation:** `act pull_request --job quality` (requires Docker + [`act`](https://github.com/nektos/act)). Low-end hardware scripts live in [`infra/low-end-ci/`](infra/low-end-ci/) — see `DAILY-DRIVER.md` there for the Forgejo + act workflow and the `ci:quick` / `ci:act` aliases.
-
-**CI-cloud-first workflow (recommended for this project):** On constrained hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, Playwright E2E, Lighthouse, and Stryker mutation are CI-gate jobs — run them in the cloud, not locally. The authoritative metric source is CI artifacts (Codecov, JUnit). After each push, monitor CI and update docs (README.md badges, AUDIT.md quality-gate line) with the CI-reported numbers. The merge bar is a green CI workflow — not a full local coverage run.
+**CI-cloud-first workflow (recommended):** On constrained hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, E2E, Lighthouse, and Stryker are CI-gate jobs. After each push, update README.md badges and AUDIT.md quality-gate line with CI-reported numbers. Local CI simulation: `act pull_request --job quality` (Docker + `act`; see `infra/low-end-ci/DAILY-DRIVER.md`).
 
 **CI audit & housekeeping policy (ALL CI runs must be fully green):**
 - After every commit, monitor ALL CI jobs: security (OSV + CodeQL), quality (Biome + tsc + Vitest), build, e2e, lighthouse, deploy, mutation, storybook.
 - **CodeQL scanning**: Check `https://github.com/qnbs/StoryCraft-Studio/security/code-scanning` after every push. Fix the root cause — do not just suppress alerts.
-- **Token-Permissions**: All GitHub Actions workflows must set top-level `permissions: contents: read`; write permissions (e.g. `packages: write`) belong at the job level, never top-level.
-- **OSV vulnerabilities**: Run `pnpm audit` or check the security CI job for new CVEs. Add `pnpm.overrides` to `package.json` with pinned exact versions.
-- Correction loop: fix → commit → verify CI → fix any new issues until all jobs are green and security alerts are resolved.
+- **Token-Permissions**: All GitHub Actions workflows must set top-level `permissions: contents: read`; write permissions belong at the job level, never top-level.
+- **OSV vulnerabilities**: Run `pnpm audit` or check the security CI job. Add `pnpm.overrides` with pinned exact versions.
+- Correction loop: fix → commit → verify CI → fix until all jobs green.
 
-**E2E notes:** Do NOT use `networkidle` waits against the Vite dev server (HMR keeps WebSocket connections open). Scope sidebar navigation via `#sidebar` when both mobile and desktop nav exist. Shared bootstrap helpers live in `tests/e2e/helpers.ts`. Mobile E2E: set `RUN_MOBILE_E2E=1` locally (off by default).
+**E2E notes:** Do NOT use `networkidle` waits (HMR keeps WebSocket open). Scope sidebar navigation via `#sidebar`. Shared helpers: `tests/e2e/helpers.ts`. Mobile E2E: set `RUN_MOBILE_E2E=1` locally (off by default).
 
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
@@ -82,34 +80,19 @@ contexts/         → React context providers — one per major view + I18nConte
 features/         → Redux slices: project, settings, status, writer, versionControl, featureFlags,
                      plotBoard, sceneComments, progressTracker, analytics, proForge
 hooks/            → View business logic (use*View.ts naming); useGlobalKeyboardShortcuts here too
-services/         → External adapters; notable sub-dirs:
-                     ai/          Vercel AI SDK orchestration layer (Strangler pattern over aiProviderService):
-                                   index.ts (canonical entry + exports), providerFactory.ts (LanguageModel
-                                   factory: Gemini via @ai-sdk/google, OpenAI-compatible via @ai-sdk/openai),
-                                   storyCraftCompletionFetch.ts (custom fetch adapter + STORYCRAFT_COMPLETION_URL),
-                                   hybridFallback.ts (resolveProviderFallbackChain), aiPolicy.ts
-                                   (assertCloudAiAllowed), aiRetry.ts (withTransientRetry), aiInferenceCacheService,
-                                   deviceHealthService, gpuResourceManager, ecoModeService,
-                                   localEmbeddingService, localNlpService, orchestrationProviders,
-                                   inferenceProgressEmitter, webGpuDetectorService
+services/         → External adapters; key sub-dirs:
+                     ai/          Vercel AI SDK layer (index.ts entry, providerFactory, storyCraftCompletionFetch,
+                                   hybridFallback, aiPolicy, aiRetry + cache/health/gpu/eco/embedding services)
                      commands/    (palette registry, fuzzy rank, recent/pinned)
-                     duckdb/      (duckdbClient, duckdbSchema, duckdbAnalytics, duckdbMigration,
-                                   duckdbListenerLoader, ragVectorMigration)
-                     help/        (helpCatalog.ts — 50+ articles, helpSearch.ts, helpDocRetrieval.ts)
+                     duckdb/      (duckdbClient, duckdbSchema, duckdbAnalytics, duckdbMigration, ragVectorMigration)
+                     help/        (helpCatalog, helpSearch, helpDocRetrieval)
                      keyboard/    (shortcut normalization, conflict detection)
-                     proForge/    (proForgeOrchestrator.ts, proForgeMemoryBank.ts,
-                                   pipelineAgents/ — baseAgent.ts (abstract base), supervisorAgent.ts
-                                   (heuristic gates), + 8 stage agents: diagnosticAgent, structuralAgent,
-                                   proseAgent, copyEditAgent, proofAgent, productionAgent,
-                                   publishingAgent, analyticsAgent; pipelineOutput/, pipelinePrompts/, pipelineTools/)
-                     settingsExchange/
-                     storage/     (IDB decomposition: idbCore, idbProjectStore, idbSnapshotStore,
-                                   idbKeyStore, idbCodexStore, idbAssetStore, storageEncryptionService,
-                                   index.ts barrel — AES-256-GCM at-rest encryption via B-1)
-                     voice/       (voiceCommandService, voiceTypes, sttEngine, ttsEngine, vadEngine,
-                                   wakeWordEngine, intentEngine, feedbackService, audioNavigator,
-                                   commandVoiceMappings, wasmSttEngine (B-2 Whisper scaffold),
-                                   sileroVadEngine (B-2 Silero VAD v4 scaffold))
+                     proForge/    (proForgeOrchestrator, proForgeMemoryBank, pipelineAgents/ — baseAgent,
+                                   supervisorAgent + 8 stage agents; pipelineOutput/, pipelinePrompts/, pipelineTools/)
+                     storage/     (idbCore, idbProjectStore, idbSnapshotStore, idbKeyStore, idbCodexStore,
+                                   idbAssetStore, storageEncryptionService — AES-256-GCM at-rest via B-1)
+                     voice/       (voiceCommandService, voiceTypes, stt/tts/vad/wakeWord/intent engines,
+                                   wasmSttEngine + sileroVadEngine — B-2 scaffolds)
 packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui,
                      collab-transport (vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption)
 locales/          → i18n source JSON (de/en/es/fr/it/ar/he × 15 modules); runtime: public/locales/<lang>/bundle.json
@@ -126,11 +109,11 @@ scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, g
 
 Redux Toolkit with feature-sliced slices: `features/project/`, `features/settings/`, `features/status/`, `features/writer/`, `features/versionControl/`, `features/featureFlags/`, `features/proForge/`. The `project` slice is wrapped with `redux-undo` (100-step history). Side effects (auto-save, Codex extraction, DuckDB dual-write) run in `app/listenerMiddleware.ts`, not in components or hooks.
 
-**`addDebouncedListener` factory** (`listenerMiddleware.ts`): use this helper instead of writing raw `startListening` calls with delay — it handles the `RootState` cast and delay pattern. **Critical RTK constraint:** `listenerApi.getOriginalState()` can only be called synchronously before the first `await` in an effect. Always capture it as `const originalState = listenerApi.getOriginalState() as RootState` at the top of the effect before any `await listenerApi.delay(...)` call.
+**`addDebouncedListener` factory** (`listenerMiddleware.ts`): use this helper instead of writing raw `startListening` calls with delay. **Critical RTK constraint:** `listenerApi.getOriginalState()` can only be called synchronously before the first `await`. Always capture it as `const originalState = listenerApi.getOriginalState() as RootState` at the top before any `await listenerApi.delay(...)`.
 
 Use typed hooks everywhere: `useAppDispatch()`, `useAppSelector()`, `useAppSelectorShallow()`.
 
-Transient / ephemeral UI state (palette open, cross-project search open, Flow Mode) lives in `app/transientUiStore.ts` (Zustand). Do not use a third state framework. Key transient keys: `isCommandPaletteOpen`, `isCrossProjectSearchOpen`, `flowMode` / `setFlowMode` (distraction-free writing toggle).
+Transient / ephemeral UI state (palette open, cross-project search open, Flow Mode) lives in `app/transientUiStore.ts` (Zustand). Do not use a third state framework. Key transient keys: `isCommandPaletteOpen`, `isCrossProjectSearchOpen`, `flowMode` / `setFlowMode`.
 
 ### View Pattern
 
@@ -155,122 +138,120 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 - `--radius-sc-*` — border radius tokens (`--radius-sc-xl`, `--radius-sc-lg`, etc.)
 - `--icon-sc-*` — icon size tokens (`--icon-sc-sm/md/lg/xl`)
 - `--text-sc-*` — fluid type scale via `clamp()` (390px → 1280px interpolation)
-- `--sc-success-fg/bg`, `--sc-info-fg/bg`, `--sc-warning-fg/bg`, `--sc-danger-fg/bg/border` — state color tokens; always use these for status indicators, not hardcoded `text-green-700` or `text-blue-600` (which break on the dark theme)
+- `--sc-success-fg/bg`, `--sc-info-fg/bg`, `--sc-warning-fg/bg`, `--sc-danger-fg/bg/border` — state color tokens; always use these, not hardcoded `text-green-700` or `text-blue-600` (break on dark theme)
 
-**Token migration status (DS-1 + DS-2 — complete):** All `dark:` Tailwind prefix violations are eliminated (DS-2 ✅). All undefined bridge CSS vars (`--background-hover`, `--background-elevated`, `--background-selected`, `--foreground-on-interactive`, `--foreground-tertiary`) have been replaced with `--sc-*` equivalents. The bridge block in `index.css` now contains only intentional tokens — do NOT remove them: `--border-interactive` (alias for `--sc-border-focus`), `--nav-*` (sidebar tokens), `--glass-*` (glassmorphism tokens), `--background-gradient-overlay-start` / `--card-gradient-overlay` (per-theme card image gradients). **DS-5 (delete remaining bridge block)** is deferred until one production verification cycle completes.
+**DS-1/DS-2 complete:** `dark:` violations eliminated. Bridge block in `index.css` contains only intentional vars — do NOT remove: `--border-interactive` (→`--sc-border-focus`), `--nav-*`, `--glass-*`, `--background-gradient-overlay-start`/`--card-gradient-overlay`. **DS-5** (delete bridge block) deferred until production verification.
 
 **Tailwind utilities:** `packages/ui/tailwind-preset.ts` registers `w/h-icon-sc-*`, `text-sc-*`, `rounded-sc-*`, `duration-sc-*`, `ease-sc-*` utilities. Prefer these over one-off `w-4`/`text-sm` for atoms.
 
-**Storybook:** New `components/ui/` primitives require a `.stories.tsx` file with `addon-a11y` checks passing (`pnpm run storybook`). Storybook test-runner (`pnpm run test:storybook`) runs against the built Storybook in CI.
+**Storybook:** New `components/ui/` primitives require a `.stories.tsx` file with `addon-a11y` checks passing. Test-runner (`pnpm run test:storybook`) runs against the built Storybook in CI.
 
-**Keyboard on non-button elements:** Use `useKeyWithClickEvents` rather than adding raw `onKeyDown` alongside `onClick`. Use `useButtonType` on custom button-like components to set the correct `type` attribute.
+**Keyboard on non-button elements:** Use `useKeyWithClickEvents` rather than adding raw `onKeyDown` alongside `onClick`. Use `useButtonType` on custom button-like components.
 
 **Accessibility hooks:** `useAnnounce()` from `LiveRegionContext` — signature is `announce(message: string, priority?: 'polite' | 'assertive')`. The second argument is a **string enum**, not an object. `useFocusTrap` re-queries focusable elements on every Tab press (live DOM query, not a cached list).
 
-**Container queries:** Resizable panels (Navigator, Inspector, WriterView sidebars) set `containerType: 'inline-size'` via inline style. Use `@container` CSS queries or the Tailwind `@container` variant for responsive panel content.
+**Container queries:** Resizable panels set `containerType: 'inline-size'` via inline style. Use `@container` CSS queries or the Tailwind `@container` variant for responsive panel content.
 
-**Tauri build isolation:** `vite.config.ts` uses `external: [/^@tauri-apps\//]` (regex) to exclude all Tauri packages from the web build. When adding new Tauri plugin imports to `services/tauriRuntime.ts`, the regex already covers them — do not add to the explicit list.
+**Tauri build isolation:** `vite.config.ts` uses `external: [/^@tauri-apps\//]` (regex) to exclude all Tauri packages from the web build. When adding new Tauri plugin imports to `services/tauriRuntime.ts`, the regex already covers them.
 
-**Tauri CSP:** When adding a new external endpoint (AI provider, LanguageTool, WebRTC signaling, etc.), extend `connect-src` in `src-tauri/tauri.conf.json`. Web `fetch` alone is not enough — the Tauri CSP is the gate for desktop.
+**Tauri CSP:** When adding a new external endpoint, extend `connect-src` in `src-tauri/tauri.conf.json`. Web `fetch` alone is not enough.
 
 ### AI Services
 
-`geminiService.ts` is the primary adapter for legacy thunks (Gemini API, retry logic, prompt construction). `aiProviderService.ts` provides the multi-provider abstraction (Gemini, OpenAI, Ollama, WebLLM, ONNX Runtime Web, Transformers.js). All legacy AI calls go through one of these. `features/project/aiThunkUtils.ts` provides a deduplicated async-thunk wrapper (service-level `_pendingRequests` Map) to prevent duplicate in-flight requests.
+`geminiService.ts` is the primary adapter for legacy thunks. `aiProviderService.ts` provides the multi-provider abstraction (Gemini, OpenAI, Ollama, WebLLM, ONNX Runtime Web, Transformers.js). `features/project/aiThunkUtils.ts` provides a deduplicated async-thunk wrapper (service-level `_pendingRequests` Map).
 
-**AI constants:** `services/ai/aiConstants.ts` is the single source for shared AI constants: `CREATIVITY_TO_TEMPERATURE` (AiCreativity → number), `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS` + `isOrchestrationReadyProvider()`, `LOCAL_INFERENCE_PROVIDERS` + `isLocalInferenceProvider()`. The older per-constant files (`creativityTemperature.ts`, `localBackendPresets.ts`, `orchestrationProviders.ts`) re-export from here and remain for import compatibility.
+**AI constants:** `services/ai/aiConstants.ts` is the single source for `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS`, `LOCAL_INFERENCE_PROVIDERS`. Older per-constant files re-export from here and remain for import compatibility.
 
-**Vercel AI SDK layer (new paths, Strangler pattern):** `services/ai/index.ts` is the canonical entry — it exports the orchestration layer built on `@ai-sdk/google`, `@ai-sdk/openai`, and the `ai` package. New Writer streaming uses `hooks/useStoryCraftAI.ts` (wraps `useCompletion` from `@ai-sdk/react` with the custom `storyCraftCompletionFetch`). New code should route through `services/ai/` + `useStoryCraftAI`; legacy thunks remain in `aiProviderService.ts` / `geminiService.ts` for backwards compatibility. Always gate cloud AI calls with `assertCloudAiAllowed` from `services/ai/aiPolicy.ts`.
+**Vercel AI SDK layer (Strangler pattern):** `services/ai/index.ts` is the canonical entry. New Writer streaming uses `hooks/useStoryCraftAI.ts` (wraps `useCompletion` with `storyCraftCompletionFetch`). New code routes through `services/ai/` + `useStoryCraftAI`; legacy thunks remain for backwards compatibility. Always gate cloud AI calls with `assertCloudAiAllowed` from `services/ai/aiPolicy.ts`.
 
-`services/ai/aiRetry.ts` — `withTransientRetry(fn, opts)` wraps any AI provider call with transient-error retries (network glitches, rate limits). Use this instead of ad-hoc retry logic.
+`services/ai/aiRetry.ts` — `withTransientRetry(fn, opts)` wraps any AI call with transient-error retries. Use this instead of ad-hoc retry logic.
 
-**WebLLM / local inference:** `services/localAiFacade.ts` wraps `@mlc-ai/web-llm` (via `packages/ai-core` + `workers/inference.worker.ts`). Supported models in `WEBLLM_SUPPORTED_MODELS` (Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B). Tab-leader election via BroadcastChannel prevents multi-tab GPU contention.
+**WebLLM / local inference:** `services/localAiFacade.ts` wraps `@mlc-ai/web-llm` (via `packages/ai-core`). Supported models: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B. Tab-leader election via BroadcastChannel prevents multi-tab GPU contention.
 
-**Local RAG:** `services/localRagIndex.ts` + `services/localRagService.ts` — hybrid retrieval (60% semantic MiniLM-L6-v2 + 30% lexical + 10% recency) over project content via `@xenova/transformers`. Lazy-loaded; never sends data to the cloud. `ragMode: 'hybrid' | 'lexical'` in `settings.advancedAi` (default `'hybrid'`).
+**Local RAG:** `services/localRagIndex.ts` + `localRagService.ts` — hybrid retrieval (60% semantic MiniLM-L6-v2 + 30% lexical + 10% recency). `ragMode: 'hybrid' | 'lexical'` in `settings.advancedAi` (default `'hybrid'`).
 
-**Prompt assembly:** `services/ragPromptAssembly.ts` — `assembleRAGPrompt(opts)` builds token-budgeted context blocks from RAG chunks. Use this rather than building context strings inline. Templates come from `services/promptLibrary.ts`.
+**Prompt assembly:** `services/ragPromptAssembly.ts` — `assembleRAGPrompt(opts)`. Templates from `services/promptLibrary.ts`.
 
 ### DuckDB Analytics
 
-`workers/duckdbWorker.ts` runs DuckDB-WASM off main thread (OPFS persistence → in-memory fallback). `services/duckdb/duckdbClient.ts` is a singleton proxy with AbortSignal, init retry (3×, exponential backoff), and OPFS fallback handler. Schema (`duckdbSchema.ts`) has 10 tables + 5 views including `rag_chunks` (FLOAT[384] embeddings), `cross_project_index`, and `codex_*`. `duckdbAnalytics.ts` exposes typed query helpers and `withDuckDbRetry`.
+`workers/duckdbWorker.ts` runs DuckDB-WASM off main thread (OPFS → in-memory fallback). `services/duckdb/duckdbClient.ts`: singleton with AbortSignal, init retry 3× exponential backoff. Schema: 10 tables + 5 views incl. `rag_chunks` (FLOAT[384]), `cross_project_index`, `codex_*`.
 
 Key rules:
 - Gate all DuckDB paths behind `featureFlagsSlice.enableDuckDbAnalytics` (off by default).
-- Dual-write (IDB + DuckDB) goes through `duckdbListenerLoader.ts` in `listenerMiddleware` — dynamically imported to avoid blocking cold start.
+- Dual-write (IDB + DuckDB) goes through `duckdbListenerLoader.ts` — dynamically imported to avoid blocking cold start.
 - `ragVectorMigration.ts` handles the FLOAT[64]→FLOAT[384] column upgrade.
 - `hooks/useDuckDb.ts` initializes with 30 s timeout; `hooks/useAnalytics.ts` parallelizes 4 queries behind the feature flag.
 
 ### Logging
 
-Use `services/logger.ts` (StructuredLogger — B-6, v1.19.0) for all diagnostic output. Never use `console.log` in production paths — Biome `noConsole` rule enforces this. `console.warn`/`console.error` are allowed per the Biome allowlist. Never write API keys, IVs, or plaintext payloads to any log.
+Use `services/logger.ts` (StructuredLogger — B-6, v1.19.0) for all diagnostic output. Never use `console.log` in production paths. `console.warn`/`console.error` are allowed. Never write API keys, IVs, or plaintext payloads to any log.
 
-**StructuredLogger API (preferred for new code):**
+**StructuredLogger API:**
 ```ts
-const log = createLogger('myModule');   // factory — module name for tagging
+const log = createLogger('myModule');
 log.info('Initialized');
-log.warn('Retry', { attempt: 2 });      // positional args joined to message
-log.error('Failed', new Error('...'));  // Error.stack included automatically
-
+log.warn('Retry', { attempt: 2 });
+log.error('Failed', new Error('...'));
 const scopedLog = log.withContext({ projectId: 'abc' });
-scopedLog.info('Saved');  // context attached to every entry
 ```
 
-**GDPR sanitization:** `sanitizeLogContext(ctx)` automatically redacts values whose key matches `/key|token|password|passphrase/i` → `'[REDACTED]'`. This runs on every `.withContext(ctx)` call and on all IDB/Tauri writes.
+**GDPR sanitization:** `sanitizeLogContext(ctx)` redacts keys matching `/key|token|password|passphrase/i` → `'[REDACTED]'` on every `.withContext()` and all IDB/Tauri writes.
 
 **Sinks:** IDB (`storycraft-logs-db`, 1 000-entry LRU) + Tauri JSONL (`$APPDATA/logs/storycraft-YYYY-MM-DD.jsonl`) + console (DEV-only). `getRecentLogs()` / `formatLogsForReport()` / `clearLogs()` — backward-compat ring-buffer API retained.
 
-**Backward-compat `logger` export** (legacy paths): `logger.warn('[module] message')` — module auto-extracted from `[bracket]` prefix.
+**Backward-compat `logger` export** (legacy): `logger.warn('[module] message')`.
 
 ### Environment Variables
 
-Client-side env vars must use the `VITE_*` prefix (from `.env` / `.env.local`, which are git-ignored). Access via `import.meta.env.VITE_*`. Sensitive user keys (Gemini, etc.) are never stored in env files — they go through the AES-256-GCM IDB path in `dbService.ts`.
+Client-side env vars must use the `VITE_*` prefix. Access via `import.meta.env.VITE_*`. Sensitive user keys go through the AES-256-GCM IDB path in `dbService.ts` — never in env files.
 
 ### Storage
 
-**Decomposed IDB layer (`services/storage/` — Phase 1):** `dbService.ts` is now an 8-line facade re-exporting from focused modules: `idbCore.ts` (openDb, retryDb, lifecycle), `idbProjectStore.ts` (project CRUD), `idbSnapshotStore.ts`, `idbKeyStore.ts` (API key AES-GCM), `idbCodexStore.ts` (Story Codex + RAG vectors), `idbAssetStore.ts` (images, binder blobs), `storageEncryptionService.ts` (passphrase-derived AES-256-GCM at-rest — B-1).
+**Decomposed IDB layer (`services/storage/`):** `dbService.ts` re-exports from: `idbCore.ts`, `idbProjectStore.ts`, `idbSnapshotStore.ts`, `idbKeyStore.ts`, `idbCodexStore.ts`, `idbAssetStore.ts`, `storageEncryptionService.ts`.
 
-`storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Data access must go through `dbService` or thunks — never raw IndexedDB calls. Never use `localStorage` for sensitive data.
+`storageService.ts` auto-detects IndexedDB vs. Tauri filesystem. Data access must go through `dbService` or thunks — never raw IndexedDB. Never use `localStorage` for sensitive data.
 
-**At-rest encryption (B-1, `enableIdbAtRestEncryption`):** `storageEncryptionService.ts` — PBKDF2 (600 000 iter, SHA-256, OWASP 2024 minimum) → AES-256-GCM, `extractable: false`. Call `initIdbEncryption(passphrase)` before any IDB read/write when flag is on. Do NOT enable in production until the passphrase UX (unlock modal, key rotation) is complete.
+**At-rest encryption (B-1, `enableIdbAtRestEncryption`):** PBKDF2 (600 000 iter, SHA-256) → AES-256-GCM, `extractable: false`. Call `initIdbEncryption(passphrase)` before any IDB read/write when flag is on. Do NOT enable in production until passphrase UX is complete.
 
-`services/dbInitialization.ts` exports `checkStorageHealth()` — proactive low-storage warning on app init. Returns a `StorageHealth` object; surfaced via toast rather than blocking writes.
+`services/dbInitialization.ts` exports `checkStorageHealth()` — proactive low-storage warning on app init.
 
 ### Collaboration
 
-Real-time P2P editing via Yjs + `packages/collab-transport` (`services/collaborationService.ts`). Signaling-channel E2E encryption: AES-256-GCM with PBKDF2 (600 000 iterations, SHA-256, OWASP 2024 minimum), deterministic salt from `projectId`. **RTCDataChannel in-flight E2E encryption** is baked into `packages/collab-transport` (vendor fork of y-webrtc 10.3.0 — B-3, v1.19.0; crypto.js hardened in C-1: PBKDF2 100k→310k→600k, `extractable: false`, `return promise.reject()` fix). Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
+Real-time P2P via Yjs + `packages/collab-transport` (`collaborationService.ts`). Signaling-channel AES-256-GCM with PBKDF2 (600 000 iter, SHA-256), deterministic salt from `projectId`. **RTCDataChannel E2E encryption** baked into `packages/collab-transport` (vendor fork y-webrtc 10.3.0, crypto hardened in C-1). Signaling URLs: `settings.collaboration.webrtcSignalingUrls`. No second CRDT layer.
 
-**Vendor-fork maintenance:** `packages/collab-transport/src/` must contain ALL files imported by `y-webrtc.js` (check with `grep "from './"` on the JS source). Missing relative imports cause `UNRESOLVED_IMPORT` on Vercel/Rolldown builds even though Vite dev server resolves them via alias.
+**Fork maintenance:** All files imported by `y-webrtc.js` must exist in `src/` — missing relative imports cause `UNRESOLVED_IMPORT` on Vercel builds. Security audit checklist: [issue #60](https://github.com/qnbs/StoryCraft-Studio/issues/60).
 
 ### Code Splitting
 
-All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (export: `docx`, `jszip`, `jsPDF`; collaboration: Yjs; graphs: `react-force-graph-2d`) live in separate Vite manual chunks and are dynamically imported only when used. `listenerMiddleware.ts` and `aiApi.ts` use dynamic imports for DuckDB/RAG/provider init to keep cold-start fast. `CollaborationPanel` and Plot Board sub-components are also lazy (Vite `plot-board` manual chunk). Keep export/collaboration dependencies lazy.
+All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (export: `docx`, `jszip`, `jsPDF`; collaboration: Yjs; graphs: `react-force-graph-2d`) live in separate Vite manual chunks. `listenerMiddleware.ts` and `aiApi.ts` use dynamic imports for DuckDB/RAG/provider init. Keep export/collaboration dependencies lazy.
 
-**SW-excluded chunks** (listed in `vite.config.ts` `globIgnores` — never add these to the SW precache): `vendor-duckdb` (DuckDB-WASM, ~2 MB gzip), `vendor-ai-onnx` (ONNX Runtime + @xenova/transformers), `vendor-webllm` (@mlc-ai/web-llm, ~6 MB — loaded only when local WebLLM inference is enabled). When adding a new heavy optional chunk, add it to both `manualChunks` and `globIgnores` using the same pattern.
+**SW-excluded chunks** (in `vite.config.ts` `globIgnores` — never precache): `vendor-duckdb` (~2 MB gzip), `vendor-ai-onnx` (ONNX + @xenova/transformers), `vendor-webllm` (~6 MB). When adding a new heavy optional chunk, add it to both `manualChunks` and `globIgnores`.
 
 ### Feature Flags
 
 Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (20 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
 
-Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProForge pipeline — off by default; gates the entire pipeline view in WriterView). **B-series flags (v1.19.0, all off by default):** `enableIdbAtRestEncryption` (B-1 — IDB at-rest encryption; do not enable without passphrase UX), `enableVoiceWasm` (B-2 — Whisper WASM STT + Silero VAD; model download UI not yet wired), `enableRtlLayout` (B-5 — RTL `html[dir]` + BiDi context; ar/he locale stubs only). Stub/future flags (off by default): `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
+Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`. **B-series (all off):** `enableIdbAtRestEncryption` (B-1, no passphrase UX yet), `enableVoiceWasm` (B-2, model download UI not wired), `enableRtlLayout` (B-5, ar/he stubs only). **Stub/future (all off):** `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
 
 ### Command Center & shortcuts
 
 - **`services/commands/`** — single registry for palette entries: definitions, fuzzy rank/score, recent/pinned prefs, lightweight AI suggestions. **`components/CommandPalette.tsx`** renders from this registry (ARIA combobox/listbox patterns).
 - **`contexts/CommandExecutorContext.tsx`** + **`CommandExecutorProvider` in `App.tsx`** — expose `executeCommand` / `runCommandById` to deep UI (Help „Try it" via `tryActionId`, toasts with `commandId`).
 - **`app/transientUiStore.ts`** — Zustand store includes **`isCommandPaletteOpen`** (palette wired here; avoid duplicate local-only state).
-- **`hooks/useGlobalKeyboardShortcuts.ts`** + **`services/keyboard/`** — normalize OS modifiers, match bindings from settings, optional conflict listing for the Shortcuts UI.
-- **Help system:** `services/help/` — `helpCatalog.ts` (50+ articles), `helpSearch.ts` (full-text search), `helpDocRetrieval.ts` (AI help context).
+- **`hooks/useGlobalKeyboardShortcuts.ts`** + **`services/keyboard/`** — normalize OS modifiers, match bindings from settings.
+- **Help system:** `services/help/` — `helpCatalog.ts` (50+ articles), `helpSearch.ts`, `helpDocRetrieval.ts`.
 
 ### i18n
 
-Custom React Context in `I18nContext.tsx` — not i18next. Locale files exist for de, en, es, fr, it (15 modules merged into one **`public/locales/<lang>/bundle.json`** per language — rebuilt by **`pnpm run i18n:bundle`** or automatically via **`pnpm run i18n:check`** / **`prebuild`** / **`predev`**). The in-app selector exposes **de**, **en**, **fr**, **es**, and **it**. All user-facing strings must use `t('key.path')` from `useTranslation()` — no hardcoded text. New keys: add to **all five** locale trees (`node scripts/check-i18n-keys.mjs --fix` for parity), then run **`pnpm run i18n:bundle`**.
+Custom React Context in `I18nContext.tsx` — not i18next. Locale files for de, en, es, fr, it (15 modules merged into `public/locales/<lang>/bundle.json` — rebuilt by `pnpm run i18n:bundle` or auto via `pnpm run i18n:check`). All user-facing strings must use `t('key.path')` from `useTranslation()`. New keys: add to **all five** locale trees (`node scripts/check-i18n-keys.mjs --fix`), then `pnpm run i18n:bundle`.
 
-**RTL stubs (B-5, v1.19.0):** `locales/ar/` and `locales/he/` exist as stub trees (English fallback content). `I18nContext` `Language` type includes `'ar' | 'he'`. The in-app selector does **not** expose ar/he yet — they are behind `enableRtlLayout`. Full translation content is a Phase 3 / v2.0 community task.
+**RTL stubs (B-5):** `locales/ar/` + `locales/he/` are English-fallback stubs behind `enableRtlLayout`. Full content is v2.0 community task.
 
-**Cold-start repair:** `services/i18nBootstrap.ts` runs a synchronous locale bootstrap on app init; `services/projectI18nRepair.ts` repairs any project with raw i18n keys stored as data (e.g. `initialProject.title`). Both run automatically via `App.tsx` — do not bypass.
+**Cold-start repair:** `services/i18nBootstrap.ts` + `services/projectI18nRepair.ts` run automatically via `App.tsx` — do not bypass.
 
-**Terminology glossary** (use these terms consistently in UI copy and keys): *Manuscript* (the document), *Outline*, *Template*, *Snapshot* (auto-save point) vs. *Scene Revision* (user-saved via `sceneRevisionService`), *Writing Session*, *Subplot*, *Connection* (plot board edge). AI is always framed as a **Co-Pilot**, not a ghostwriter. See `docs/BEST-PRACTICES.md` for the full glossary.
+**Terminology glossary:** *Manuscript*, *Outline*, *Template*, *Snapshot* (auto-save) vs. *Scene Revision* (user-saved), *Writing Session*, *Subplot*, *Connection* (plot board edge). AI is always **Co-Pilot**. See `docs/BEST-PRACTICES.md`.
 
-**Community templates:** canonical English source in `community-templates/index.json`, mirrored to `public/community-templates/`. Validation via Zod in `fetchCommunityTemplates`. Run `pnpm run content:guard` before committing any template changes (rejects embedded secrets and `eval`-like payloads).
+**Community templates:** `community-templates/index.json` → `public/community-templates/`. Run `pnpm run content:guard` before committing (rejects secrets + `eval`-like payloads).
 
 ### Code comment convention (QNBS-v3)
 
@@ -283,29 +264,27 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 | CSS | `/* QNBS-v3: … */` |
 | Pure config (JSON, YAML) | No inline comment — explain in the commit message |
 
-Skip the annotation for pure formatting, lockfile updates, or generated artefacts.
+Skip for pure formatting, lockfile updates, or generated artefacts.
 
 ## Documentation index
 
-All repository `.md` guides are listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility architecture: **[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)**. Sprint notes: `docs/SPRINT-V1.16.md` (design system completion). Local CI: `infra/low-end-ci/DAILY-DRIVER.md`.
-
-**Before large or cross-cutting changes:** read [`ROADMAP.md`](ROADMAP.md) (planned features + priorities), [`AUDIT.md`](AUDIT.md) (follow-ups, metrics), and [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (architecture decisions, content/CI guidance). ProForge architecture: [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md). Latest sprint handoffs: [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md) (Phase 2 — v1.19.0 B-series) · [`docs/SPRINT-HANDOFF-2026-05-28-phase3.md`](docs/SPRINT-HANDOFF-2026-05-28-phase3.md) (Phase 3 — C-1..C-5). After merging, update README.md badges and the AUDIT.md quality-gate line with CI-reported numbers if the maintainer requests it.
+All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility: [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md). Sprint handoffs: [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md) (Phase 2 B-series) · [`docs/SPRINT-HANDOFF-2026-05-28-phase3.md`](docs/SPRINT-HANDOFF-2026-05-28-phase3.md) (Phase 3 C-1..C-5). ProForge: [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md). Before large changes: read [`ROADMAP.md`](ROADMAP.md), [`AUDIT.md`](AUDIT.md), [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md).
 
 ## Key Constraints
 
-- Full TypeScript strict mode (v1.19.0): `strict`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `noFallthroughCasesInSwitch`. Practical implications: every declared variable/parameter must be used; array index access returns `T | undefined` (always guard it); index-signature properties must use bracket notation; no `any` — use `unknown` + type guards or a targeted `// biome-ignore` with reason
-- Never log or expose API keys; never `eval()` AI responses
-- All interactive elements require proper `role`, `aria-label`, `aria-expanded` attributes (WCAG **2.2** AA-oriented; Biome `a11y` warnings fail CI)
-- Modals must trap focus and restore on close; decorative icons need `aria-hidden="true"`
-- Gemini API calls must use `NetworkOnly` caching (never cache AI responses in the Service Worker)
-- Use `focus-visible:ring-2` for keyboard focus styles
-- `dangerouslySetInnerHTML` only with DOMPurify-sanitized content — never raw
-- No direct `@tauri-apps/api` imports in `components/ui/` atoms; abstract through `services/tauriRuntime.ts` so the web build stays unaffected
-- File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors
-- Never comment out or skip failing tests to green CI — fix the root cause. `it.skip` requires a file-level comment with a reason and a ticket/TODO reference
-- **Modus operandi — tests:** Whenever you modify, add, or delete a code file, always check whether a corresponding test file exists (in `tests/unit/` for components/hooks/services, or `tests/e2e/` for flows). If it does, update or extend it to cover the change. If it doesn't exist yet and the change is non-trivial, create one. Run the relevant test file with `pnpm exec vitest run <path>` to verify before committing. Write tests to be fully deterministic: mock `Date.now()` / use fake timers; never depend on real network or test execution order; reset global state (Redux store, localStorage, IndexedDB) in `beforeEach` using patterns from `tests/setup.ts`. Use `@testing-library/user-event` for user interactions (not `.click()` directly); use `findBy*` / `waitFor` for async assertions.
-- **Vitest concurrency:** `maxWorkers: 1` is set in `vitest.config.ts` — tests run serially. Do not attempt to parallelize Vitest runs on this project (low-end hardware + IDB isolation requirement).
-- **IDB unit tests:** Use `// @vitest-environment node` + instantiate `new IDBFactory()` per test in `beforeEach` + call `_resetDbForTest()` to clear state. See `sceneRevisionService` tests as the canonical pattern.
+- **TypeScript strict mode (v1.19.0):** `strict`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `noFallthroughCasesInSwitch`. Every declared variable/parameter must be used; array index access returns `T | undefined` (always guard it); index-sig props require bracket notation; no `any` — use `unknown` + type guards or a targeted `// biome-ignore` with reason.
+- Never log or expose API keys; never `eval()` AI responses.
+- All interactive elements require `role`, `aria-label`, `aria-expanded` (WCAG **2.2** AA; Biome `a11y` warnings fail CI).
+- Modals must trap focus and restore on close; decorative icons need `aria-hidden="true"`.
+- Gemini API calls must use `NetworkOnly` caching (never cache AI responses in the Service Worker).
+- Use `focus-visible:ring-2` for keyboard focus styles.
+- `dangerouslySetInnerHTML` only with DOMPurify-sanitized content — never raw.
+- No direct `@tauri-apps/api` imports in `components/ui/` atoms; abstract through `services/tauriRuntime.ts`.
+- File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors.
+- Never skip failing tests to green CI — fix the root cause. `it.skip` requires a file-level comment with reason + ticket.
+- **Modus operandi — tests:** When you modify, add, or delete a code file, check whether a corresponding test file exists (`tests/unit/` or `tests/e2e/`). If it does, update it. If it doesn't and the change is non-trivial, create it. Run with `pnpm exec vitest run <path>` to verify. Write fully deterministic tests: mock `Date.now()` / fake timers; no real network; reset Redux store + IDB in `beforeEach` (patterns from `tests/setup.ts`). Use `@testing-library/user-event` for interactions; `findBy*` / `waitFor` for async assertions.
+- **Vitest concurrency:** `maxWorkers: 1` — tests run serially. Do not parallelize.
+- **IDB unit tests:** `// @vitest-environment node` + `new IDBFactory()` per test + `_resetDbForTest()`. See `sceneRevisionService` tests as canonical pattern.
 
 ## Current Patterns
 
@@ -317,55 +296,55 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 **plotBoardService:** `services/plotBoardService.ts` — `computeTensionCurve(sections, overrides)`, `autoLayoutScenes(sections)`, `exportBoardAsSvg(svgEl)`.
 
-**Plot Board AI:** `features/project/thunks/plotBoardAiThunks.ts` — `suggestNextBeatThunk` calls `assembleRAGPrompt` then dispatches to AI. Hook: `hooks/usePlotBoardAi.ts`. Modal shows suggested beat with accept/reject.
+**Plot Board AI:** `features/project/thunks/plotBoardAiThunks.ts` — `suggestNextBeatThunk` calls `assembleRAGPrompt` then dispatches to AI. Hook: `hooks/usePlotBoardAi.ts`.
 
 **PlotMinimap:** `components/scene-board/PlotMinimap.tsx` — viewport overview overlay. `plotLayoutUtils.ts` provides grid-snap helpers.
 
 ### ProForge Pipeline
 
-**Overview:** 8-stage agentic manuscript editing pipeline with Human-in-the-Loop gates. Gated behind `featureFlags.enableProForge` (off by default). Full docs: `docs/PROFORGE-PIPELINE.md`.
+8-stage agentic editing pipeline. Flag: `enableProForge` (off by default). Full docs: `docs/PROFORGE-PIPELINE.md`.
 
-**Stage sequence:** `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Each stage supports proceed / retry / skip / abort / rollback. Stages pause at `awaitingReview` — the manuscript is **never auto-modified** without explicit user approval.
+**Stage sequence:** `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Stages pause at `awaitingReview` — **manuscript is never auto-modified** without explicit user approval.
 
-**Redux slice:** `features/proForge/proForgeSlice.ts` — root key `proForge`. NOT wrapped with `redux-undo`. Actions: `stageStarted`, `stageCompleted`, `stageAwaitingReview`, `submitStageReview`, `skipStage`, `rollbackToStage`, `pipelineAborted`, `pipelineCompleted`.
+**Redux slice** (`features/proForge/proForgeSlice.ts`, root key `proForge`, NOT undo-wrapped): actions `stageStarted`, `stageCompleted`, `stageAwaitingReview`, `submitStageReview`, `skipStage`, `rollbackToStage`, `pipelineAborted`, `pipelineCompleted`.
 
-**Types:** `features/proForge/types.ts` — `PipelineStage`, `PipelineConfig`, `PipelineRun`, `StageResult`, `ReviewItem`, `ReviewItemStatus`, and all per-stage output interfaces (`DiagnosticReport`, `StructuralEditPlan`, `ProseEditBatch`, `CopyEditPlan`, `QualityGateReport`, `ProductionManifest`, `PublishingPackage`, `PipelineAnalyticsReport`).
+**Types:** `features/proForge/types.ts` — `PipelineStage`, `PipelineConfig`, `PipelineRun`, `StageResult`, `ReviewItem`, `ReviewItemStatus` + per-stage output interfaces (`DiagnosticReport`, `StructuralEditPlan`, `ProseEditBatch`, etc.).
 
-**Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — `createProForgeOrchestrator({dispatch, getState, projectId, manuscript, characters, worlds, config})`. Agents are lazy-loaded per stage to avoid circular deps. Call via `hooks/useProForgeOrchestrator.ts` (never instantiate directly in components).
+**Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — call via `hooks/useProForgeOrchestrator.ts` (never instantiate in components). Agents are lazy-loaded per stage.
 
-**Agents** (`services/proForge/pipelineAgents/`): all 8 stage agents extend `BaseAgent` (abstract base in `baseAgent.ts`). `BaseAgent` provides `requireProject()`, `getMemoryBank()`, `elapsed(startTime)`, `selfReflect(excerpt, summary, signal)`, and `buildAiOpts(overrides?)` — agents implement only `execute(signal): Promise<Pick<StageResult, ...>>`. Do not duplicate these helpers in new agents. Always call `this.buildAiOpts({ maxTokens: N })` instead of passing bare `{ maxTokens: N }` to `generateText` — `AIRequestOptions` requires `model` and `provider`.
+**Agents** (`pipelineAgents/`): all 8 extend `BaseAgent`. Always call `this.buildAiOpts({ maxTokens: N })` — `AIRequestOptions` requires `model` and `provider`. Do not duplicate `requireProject()`, `getMemoryBank()`, `selfReflect()`, `elapsed()` — they're in BaseAgent.
 
-**SupervisorAgent** (`supervisorAgent.ts`): heuristic quality gate — no AI calls. `evaluate(stage, result)` returns `SupervisionDecision { verdict: 'pass'|'retry'|'fail', reason, retryHint? }`. Detects `isFallback: true`, uniform-score sentinels, implausible edit/issue ratios. Called by the orchestrator's `executeStageWithSupervision` loop (up to `maxRetries` retries). Hard gate: intake `qualityScore < 30` → `fail`.
+**SupervisorAgent** (`supervisorAgent.ts`): heuristic gate, no AI calls. `evaluate(stage, result)` → `{verdict: 'pass'|'retry'|'fail', reason, retryHint?}`. Detects `isFallback: true`, uniform-score sentinels, implausible ratios. Hard gate: intake `qualityScore < 30` → fail.
 
-**Honest fallbacks:** All `createFallback*` methods use 0 scores + `isFallback: true`. Never produce fake mid-range values — the SupervisorAgent uses these flags to trigger retries.
+**Honest fallbacks:** All `createFallback*` use 0 scores + `isFallback: true`. Never fake mid-range values — the SupervisorAgent uses these flags to trigger retries.
 
-**Memory Bank:** `services/proForge/proForgeMemoryBank.ts` — IDB store `proforge-memory-bank` for cross-agent persistent context (lore, style, feedback). Accessed by agents, not by UI components directly.
+**Memory Bank:** IDB store `proforge-memory-bank` (`proForgeMemoryBank.ts`). Accessed by agents only, not UI.
 
-**View pattern:** `contexts/ProForgeViewContext.ts` + `hooks/useProForgeOrchestrator.ts` + `components/proForge/` (ProForgeDashboard, PipelineProgressPanel, PipelineReviewPanel). The context passes the full `useProForgeOrchestrator` return to sub-components; use `useProForgeViewContext()` to consume.
+**View:** `ProForgeViewContext` + `useProForgeOrchestrator` + `components/proForge/`. Use `useProForgeViewContext()` to consume.
 
-**`PipelineConfig` key fields:** `genrePreset`, `selectedStages`, `aiProvider`, `ragMode`, `maxTokens`, `creativity`, `useDuckDb`, `autoAcceptThreshold` (0 = never auto-accept), `language`, `maxRetries` (0 | 1, default 1 — controls supervisor retry budget).
+**`PipelineConfig` key fields:** `genrePreset`, `selectedStages`, `aiProvider`, `ragMode`, `maxTokens`, `creativity`, `useDuckDb`, `autoAcceptThreshold` (0 = never auto-accept), `language`, `maxRetries` (0|1, default 1).
 
 ### Scene-level services
 
-**sceneRevisionService:** `services/sceneRevisionService.ts` — IDB `scene-revisions` store; `saveRevision(sectionId, snapshot, label?)`, `listRevisions(sectionId)`, `deleteRevision(id)`.
+**sceneRevisionService:** `services/sceneRevisionService.ts` — IDB `scene-revisions`; `saveRevision(sectionId, snapshot, label?)`, `listRevisions(sectionId)`, `deleteRevision(id)`.
 
-**sceneCommentsSlice:** `features/sceneComments/sceneCommentsSlice.ts` — EntityAdapter; selectors `selectCommentsBySection(sectionId)`, `selectUnresolvedCount`, `selectUnresolvedCountBySection(sectionId)`. Root state key: `sceneComments`.
+**sceneCommentsSlice:** `features/sceneComments/sceneCommentsSlice.ts` — EntityAdapter; `selectCommentsBySection(sectionId)`, `selectUnresolvedCount`, `selectUnresolvedCountBySection(sectionId)`. Root key: `sceneComments`.
 
-**progressTrackerSlice:** `features/progressTracker/progressTrackerSlice.ts` — `startSession(wordCount)`, `endSession({ currentWordCount })`, `setDailyGoal`, `setWeeklyGoal`, `syncStreak`. Exported: `computeStreak(history)` pure function.
+**progressTrackerSlice:** `features/progressTracker/progressTrackerSlice.ts` — `startSession`, `endSession`, `setDailyGoal`, `setWeeklyGoal`, `syncStreak`. Exported: `computeStreak(history)`.
 
 **deepLinkService:** `services/deepLinkService.ts` — `parseHash(hash)`, `pushHash(view, sectionId?)`, `readCurrentView()`. Views: `'board' | 'preview' | 'progress' | 'project'`.
 
 ### Test mock patterns
 
-**useAppSelectorShallow with plotBoard:** Tests must include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in the mock state. Connections/subplots/tensionOverrides are in `project.present.data` — mock via `selectPlotConnections: () => []` etc. in the `projectSelectors` mock. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines.
+**useAppSelectorShallow with plotBoard:** Include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in mock state. Connections/subplots/tensionOverrides are in `project.present.data` — mock via `selectPlotConnections: () => []` etc. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines.
 
-**FeatureFlagsState mocks:** Always include ALL 20 flags in test mock objects (TypeScript strict mode rejects partial `FeatureFlagsState`). When new flags are added to the slice, update all test files that hardcode the full flag object. B-series flags to include: `enableIdbAtRestEncryption: false, enableVoiceWasm: false`.
+**FeatureFlagsState mocks:** Always include ALL 20 flags (TypeScript strict rejects partial). B-series to include: `enableIdbAtRestEncryption: false, enableVoiceWasm: false`.
 
 **ConnectionLayer test IDs:** Connection `<g>` elements use `data-testid="connection-group"` — query by testid, not role.
 
-**DuckDB in tests:** Mock `services/duckdb/duckdbClient` with `{ execAsync: vi.fn(), queryAsync: vi.fn() }`. Never initialize a real DuckDB-WASM instance in unit tests.
+**DuckDB in tests:** Mock `services/duckdb/duckdbClient` with `{ execAsync: vi.fn(), queryAsync: vi.fn() }`. Never initialize real DuckDB-WASM in unit tests.
 
-**AI thunk tests:** `settingsReducer` defaults to `privacy.localStorageOnly: true`, so AI thunks throw "Cloud provider blocked". Fix: add this mock **before all imports**:
+**AI thunk tests:** `settingsReducer` defaults to `privacy.localStorageOnly: true`, so AI thunks throw "Cloud provider blocked". Fix: add before all imports:
 ```ts
 vi.mock('../../../services/ai/aiPolicy', () => ({
   assertCloudAiAllowedSync: vi.fn(),
@@ -373,91 +352,79 @@ vi.mock('../../../services/ai/aiPolicy', () => ({
 }));
 ```
 
-**Context hooks in component tests:** If a component calls `useSomeViewContext()` and the test renders without the provider, it throws "must be used within a Provider". Mock the context module rather than wrapping in the real provider tree:
+**Context hooks in component tests:** Mock the context module rather than wrapping in the real provider tree:
 ```ts
 vi.mock('../../../contexts/WriterViewContext', () => ({
   useWriterViewContext: vi.fn(() => ({ flowMode: false, toggleFlowMode: vi.fn() })),
 }));
 ```
-Apply this pattern for any `use*ViewContext` hook — `useProForgeViewContext`, `useWriterViewContext`, etc.
+Apply for any `use*ViewContext` hook.
 
 ### Settings Navigation
 
-`components/SettingsView.tsx` uses `NAV_GROUPS` — a typed array of `{ key: string; ids: readonly string[] }` — plus a `NavGroupHeader` component to render semantic sidebar sections (Writing, AI Models, Appearance & Accessibility, Privacy & Data, Connections, System). When adding a new settings tab: add its `id` to the correct group in `NAV_GROUPS`; do not create a flat ungrouped entry.
+`components/SettingsView.tsx` uses `NAV_GROUPS` — typed array of `{ key: string; ids: readonly string[] }` — for semantic sidebar sections (Writing, AI Models, Appearance & Accessibility, Privacy & Data, Connections, System). When adding a new settings tab: add its `id` to the correct group in `NAV_GROUPS`; do not create a flat ungrouped entry.
 
 ### Cross-project & backup
 
-**crossProjectIndexService / crossProjectSearchService:** `services/crossProjectIndexService.ts` — IDB `projects-index-store` (DB_VERSION 8); `services/crossProjectSearchService.ts` — `searchAcrossProjects()` via fuzzyScore. Indexing triggered on save via `listenerMiddleware.ts`. UI: `CrossProjectSearchPanel`; Zustand transient key: `isCrossProjectSearchOpen`.
+**crossProjectIndexService / crossProjectSearchService:** IDB `projects-index-store` (DB_VERSION 8); `searchAcrossProjects()` via fuzzyScore. Indexing triggered on save. UI: `CrossProjectSearchPanel`; Zustand key: `isCrossProjectSearchOpen`.
 
-**libraryBackupService:** `services/libraryBackupService.ts` — one-click encrypted ZIP export (AES-GCM, `META.json` + `vault.bin`). Entry point: Settings → Data. No new IDB keys; reads from existing `dbService` stores.
+**libraryBackupService:** one-click encrypted ZIP export (AES-GCM, `META.json` + `vault.bin`). Settings → Data.
 
 ### Voice Full Support
 
-**Abstract engine pattern:** `services/voice/voiceTypes.ts` defines `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine` interfaces. All implementations follow the same contract: `isAvailable()` → `initialize()` → use → `dispose()`.
+**Abstract engine pattern:** `services/voice/voiceTypes.ts` defines `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`. Contract: `isAvailable()` → `initialize()` → use → `dispose()`.
 
-**Web Speech API fallbacks:** `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` — zero downloads, work immediately in all modern browsers.
+**Web Speech API fallbacks:** `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` — zero downloads, all modern browsers.
 
-**WASM engine scaffolds (B-2, v1.19.0 — gated behind `enableVoiceWasm`):** `WasmSttEngine` (`wasmSttEngine.ts`) — Whisper.cpp WASM STT; `SileroVadEngine` (`sileroVadEngine.ts`) — Silero VAD v4 via ONNX Runtime Web. Both implement the same abstract interfaces. Model download UI is Phase 3; scaffold ready for connection.
+**WASM scaffolds (B-2, gated behind `enableVoiceWasm`):** `WasmSttEngine` (Whisper.cpp WASM) + `SileroVadEngine` (Silero VAD v4 via ONNX). Model download UI is Phase 3.
 
-**Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact template match (O(1) via Map) → fuzzy Jaccard scoring + keyword bonus → slot extraction for navigation commands. View-context filtering via `requiredViews` array. Character/section/world names injected from Redux state for slot matching.
+**Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact Map match → fuzzy Jaccard + keyword bonus → slot extraction. Character/section/world names injected from Redux state.
 
-**Orchestrator:** `VoiceCommandService` singleton manages engine lifecycle and state machine (idle → listening → processing → speaking → idle + dictating). Dispatches matched commands via `runCommandById`. `appStoreRef` object pattern allows singleton access to Redux state outside React lifecycle.
+**Orchestrator:** `VoiceCommandService` singleton — state machine (idle → listening → processing → speaking + dictating). Dispatches via `runCommandById`. `appStoreRef` object pattern for Redux access outside React.
 
-**Hooks:** `useVoice` (primary bridge), `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation` (editor transcript insertion), `useVoiceAccessibility` (ARIA live regions).
+**Hooks:** `useVoice`, `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation`, `useVoiceAccessibility`.
 
-**Opt-in gating:** Requires `settings.voice.enabled && featureFlags.enableVoiceSupport`. Onboarding notice shown in Settings → Voice on first access.
+**Gating:** Requires `settings.voice.enabled && featureFlags.enableVoiceSupport`.
 
 ### Local inference
 
-**localAiFacade / WebLLM:** `services/localAiFacade.ts` wraps WebLLM with the same provider interface as `aiProviderService.ts`. Model download progress surfaced via `onProgress`; mount-guard via `useRef` prevents stale updates after unmount.
+`services/localAiFacade.ts` wraps WebLLM with the same provider interface as `aiProviderService.ts`. Model download progress via `onProgress`; mount-guard via `useRef`.
 
 ### Plugin System
 
-**Registry:** `services/pluginRegistry.ts` — `PluginRegistry` class + singleton `pluginRegistry`. Plugins declare a `PluginDescriptor` (Zod-validated) with `id`, `version`, `type`, `entrypoint`, and `permissions`. The sandboxed API (`PluginSandboxedApi`) gates every method behind the declared permissions — plugins never receive Redux dispatch directly.
+`services/pluginRegistry.ts` — `PluginRegistry` + singleton. Plugins declare `PluginDescriptor` (Zod-validated: `id`, `version`, `type`, `entrypoint`, `permissions`). `PluginSandboxedApi` gates every method behind declared permissions.
 
-**Reference plugins** (`services/plugins/`): `wordCountOverlay.plugin.ts` (read-only: `project.read`, `scene.read`) and `sceneAppender.plugin.ts` (write: `scene.read/write`, `storage.read/write`). Use these as implementation templates.
+**Execution API:** `pluginRegistry.execute(id, fn, rawApi)` (sync) · `executeAsync` (async) · `loadPlugin(descriptor, rawApi)` (dynamic import + `run(api)`).
 
-**Execution API:**
-- `pluginRegistry.execute(id, fn, rawApi)` — sync
-- `pluginRegistry.executeAsync(id, fn, rawApi)` — async (for plugins using `generateText`, `storageRead`, `storageWrite`)
-- `pluginRegistry.loadPlugin(descriptor, rawApi)` — dynamic import from `descriptor.entrypoint` + calls `run(api)`
-
-**Gating:** `enablePluginSystem` flag (off by default). Settings → System → Plugins panel (`PluginsSection.tsx`).
+Reference plugins: `wordCountOverlay.plugin.ts`, `sceneAppender.plugin.ts`. Gate: `enablePluginSystem` flag.
 
 ### Cloud Sync (Cloudflare R2)
 
-**Implementation:** `services/cloudSync/` — 3 files, fully implemented:
-- `cloudSyncBackend.ts` — `StorageBackend` implementation; delegates projects/settings to R2; sensitive keys (API keys) are NEVER sent to cloud (delegation throws)
-- `cloudSyncClient.ts` — HTTP wrapper around R2 REST / Worker-proxied endpoint (fetch + Bearer token, no AWS SDK)
-- `cloudSyncEncryption.ts` — AES-256-GCM E2E; server sees only ciphertext
-
-**Gating:** `enableCloudSync` flag (off by default). Feature flag UI: Settings → Experimental → Cloud Sync. Requires `CloudSyncConfig` (`endpoint`, `token`, `bucketPrefix`) to be wired into settings before activation.
+`services/cloudSync/` — `cloudSyncBackend.ts` (StorageBackend, API keys never sent to cloud), `cloudSyncClient.ts` (fetch + Bearer token), `cloudSyncEncryption.ts` (AES-256-GCM E2E). Gate: `enableCloudSync` flag.
 
 ### LoRA Adapter Inference
 
-**Wiring (C-3):** `AIRequestOptions.loraModelPath?: string` — when set and `provider === 'ollama'`, `streamProvider()` substitutes this value as the Ollama model identifier (overrides `opts.model`). `selectActiveLoraOllamaTag` selector (`features/lora/loraSelectors.ts`) returns the active adapter's `ollamaModelTag` or null.
+**Wiring (C-3):** `AIRequestOptions.loraModelPath?: string` — when set and `provider === 'ollama'`, `streamProvider()` substitutes it as the Ollama model identifier. `selectActiveLoraOllamaTag` (`features/lora/loraSelectors.ts`) returns active adapter's `ollamaModelTag` or null.
 
-**Prerequisite:** User must run `ollama create <tag> -f Modelfile` with their adapter weights before setting `ollamaModelTag` on the adapter. Training is a Python sidecar workflow (not in-browser).
+**Prerequisite:** User must run `ollama create <tag> -f Modelfile` before setting `ollamaModelTag`. Training is a Python sidecar.
 
-**Gating:** `enableLoraAdapters` flag (off by default). UI entry: Settings → AI → Fine-Tuning (`ProjectAiPresetSection`).
+**Gating:** `enableLoraAdapters` flag. UI: Settings → AI → Fine-Tuning.
 
 ### Virtual scrolling
 
-`NavigatorPanel.tsx` uses `useVirtualizer` from `@tanstack/react-virtual`. Pattern: scrollable `<ul>` gets `ref={scrollRef}` + `position: relative`; a sentinel `<li>` sets `height: virtualizer.getTotalSize()`; visible items render as `position: absolute` with `transform: translateY(${virtualRow.start}px)`. Each item `<li>` needs `data-index={index}` + `ref={virtualizer.measureElement}` for dynamic measurement. Use `estimateSize: () => 40, overscan: 3` as defaults. Never lift the virtual container's `overflow-y: auto` into a parent — the virtualizer's scroll element must be the direct scrollable node.
+`NavigatorPanel.tsx` uses `useVirtualizer` from `@tanstack/react-virtual`. Pattern: scrollable `<ul>` with `ref={scrollRef}` + `position: relative`; sentinel `<li>` sets `height: virtualizer.getTotalSize()`; items `position: absolute` with `transform: translateY(${virtualRow.start}px)`. Each item `<li>` needs `data-index={index}` + `ref={virtualizer.measureElement}`. Use `estimateSize: () => 40, overscan: 3`. Never lift `overflow-y: auto` into a parent.
 
 ## Known Technical Debt
 
-See `AUDIT.md` and `TODO.md`. Key items:
+See `AUDIT.md` and `TODO.md` for the full list. Key items:
 
-- **`StorageBackend` + `SaveProjectInput`** — contract in `services/storageBackend.ts`; use `storageService` in app code; backends implement the same `saveProject` union (Redux envelope or flat `StoryProject`).
-- `components/AdvancedImportExport.tsx` — keep browser vs Tauri export paths explicit
-- `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
-- `workers/inference.worker.ts` — `@xenova/transformers` resolved via `tsconfig.json` `paths` alias pointing to `packages/ai-core/node_modules/@xenova/transformers/types/` (added B-6); the old `@ts-expect-error` was removed. If the alias ever breaks, restore the `@ts-expect-error` and re-add the ignore comment.
-- **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 token migration verified in production (all intentional vars documented above)
-- **Voice WASM engines (B-2 scaffold delivered):** `wasmSttEngine.ts` + `sileroVadEngine.ts` scaffolds exist but model download UI is not yet wired. `enableVoiceWasm` flag is off by default. Phase 3: connect download UI to `WasmSttEngine.initialize()`, add Kokoro/Piper TTS WASM engines, E2E voice tests (Playwright). Semantic intent (MiniLM) and local LLM fallback are v1.2 / Phase 4.
-- **IDB at-rest encryption UX (B-1 service delivered):** `storageEncryptionService.ts` is ready; passphrase unlock modal, forgot-passphrase export flow, and key rotation UI are Phase 3. Do NOT enable `enableIdbAtRestEncryption` in production until UX is complete.
-- **v2.0 open (stubs / Phase 3 items behind feature flags):** RTL full translation content (ar/he stubs exist — needs community translators); IDB at-rest encryption UX (service ready, passphrase unlock modal + key rotation UI are Phase 3); Voice WASM model download UI (scaffold ready, `WasmSttEngine.initialize()` wiring is Phase 3); DS-5 (delete legacy bridge block from `index.css` after DS-1 verified in production).
-- **`vendor-voice-wasm` chunk:** If `wasmSttEngine.ts` or `sileroVadEngine.ts` grow to import heavy deps directly (vs. dynamic import), add them to `vite.config.ts` `globIgnores` to exclude from SW precache.
+- **`StorageBackend` + `SaveProjectInput`** — contract in `services/storageBackend.ts`; use `storageService` in app code.
+- `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries.
+- `workers/inference.worker.ts` — `@xenova/transformers` resolved via `tsconfig.json` `paths` alias; if alias breaks, restore `@ts-expect-error`.
+- **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
+- **Voice WASM (B-2 scaffold ready):** `wasmSttEngine.ts` + `sileroVadEngine.ts` exist but model download UI not wired. Phase 3: connect to `WasmSttEngine.initialize()`.
+- **IDB at-rest encryption UX (B-1 service ready):** Passphrase unlock modal + key rotation UI are Phase 3. Do NOT enable `enableIdbAtRestEncryption` in production until UX complete.
+- **`vendor-voice-wasm` chunk:** If WASM engines import heavy deps directly, add to `vite.config.ts` `globIgnores`.
 
 ## graphify
 
@@ -466,8 +433,8 @@ This project has a graphify knowledge graph at `graphify-out/`. See [`docs/graph
 Rules:
 - Before answering architecture or codebase questions, read `graphify-out/GRAPH_REPORT.md` for god nodes and community structure
 - If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code files in this session, run `pnpm run graphify:update` (or `graphify update .` if the CLI is on `PATH`) to keep the graph current (AST-only, no API cost). First-time Python setup: `pnpm run graphify:bootstrap` (PyPI package **`graphifyy`**).
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep
+- After modifying code files in this session, run `pnpm run graphify:update` (AST-only, no API cost). First-time setup: `pnpm run graphify:bootstrap`.
 
 ## codegraph
 
