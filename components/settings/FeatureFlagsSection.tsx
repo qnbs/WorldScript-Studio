@@ -31,6 +31,11 @@ export const FeatureFlagsSection: FC = () => {
     { key: 'enableVoiceSupport', labelKey: 'settings.featureFlags.enableVoiceSupport' },
     { key: 'enableVoiceWasm', labelKey: 'settings.featureFlags.enableVoiceWasm' },
     { key: 'enableProForge', labelKey: 'settings.featureFlags.enableProForge' },
+    // QNBS-v3: Ghost flag promoted to dev-visible toggle; passphrase UX not complete — label includes ⚠ warning.
+    {
+      key: 'enableIdbAtRestEncryption',
+      labelKey: 'settings.featureFlags.enableIdbAtRestEncryption',
+    },
   ];
 
   return (

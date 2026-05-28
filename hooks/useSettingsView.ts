@@ -227,6 +227,17 @@ export const useSettingsView = () => {
         case 'enablePluginSystem':
           dispatch(featureFlagsActions.setEnablePluginSystem(Boolean(value)));
           break;
+        // QNBS-v3: Three flags were wired into FeatureFlagsSection.tsx but missing here;
+        // toggles fell to default and logged a warning without updating Redux/localStorage.
+        case 'enableProForge':
+          dispatch(featureFlagsActions.setEnableProForge(Boolean(value)));
+          break;
+        case 'enableVoiceWasm':
+          dispatch(featureFlagsActions.setEnableVoiceWasm(Boolean(value)));
+          break;
+        case 'enableIdbAtRestEncryption':
+          dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(Boolean(value)));
+          break;
         default:
           logger.warn(`Unknown setting key: ${key}`);
           break;

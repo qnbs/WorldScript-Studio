@@ -3,7 +3,7 @@
  * QNBS-v3: Data integrity tests prevent silent regressions when catalog entries are added/removed.
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   catalogToHelpCategories,

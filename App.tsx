@@ -463,10 +463,16 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       case 'progress':
         return <ProgressTrackerView />;
       case 'objects':
+        // QNBS-v3: Gate added — feature was always accessible regardless of flag state.
+        if (!featureFlags.enableObjectsGroups) return <Dashboard onNavigate={handleNavigate} />;
         return <ObjectsView />;
       case 'mindmap':
+        // QNBS-v3: Gate added — feature was always accessible regardless of flag state.
+        if (!featureFlags.enableMindMaps) return <Dashboard onNavigate={handleNavigate} />;
         return <MindMapView />;
       case 'characterInterviews':
+        if (!featureFlags.enableCharacterInterviews)
+          return <Dashboard onNavigate={handleNavigate} />;
         return <CharacterInterviewsView />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;

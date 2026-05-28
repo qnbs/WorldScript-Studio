@@ -95,23 +95,26 @@ function makeGetState(loraAdapters: unknown[] = []) {
   return () => ({ lora: { adapters: loraAdapters } });
 }
 
-// QNBS-v3: Single dispatch/getState call point — avoids per-test store setup boilerplate.
-function run<T>(
-  thunkResult: (d: unknown, g: unknown, e: undefined) => T,
-  dispatch = makeDispatch(),
-  getState = makeGetState(),
-): T {
+// QNBS-v3: RTK thunk test helper. ThunkFn uses `any` for dispatch/getState to satisfy
+// RTK's contravariant ThunkDispatch param — only call site, mocked in tests.
+// biome-ignore lint/suspicious/noExplicitAny: RTK thunk test helper — necessary for dispatch/getState contravariance
+type ThunkFn = (d: any, g: any, e: undefined) => unknown;
+function run(thunkResult: ThunkFn, dispatch = makeDispatch(), getState = makeGetState()): unknown {
   return thunkResult(dispatch, getState, undefined);
 }
 
 const PRESET: HyperparamPreset = {
-  id: 'fast',
-  label: 'Fast Training',
+  id: 'writer-style-light',
+  labelKey: 'writerStyleLight',
+  descKey: 'writerStyleLightDesc',
   rank: 8,
   alpha: 16,
   epochs: 3,
-  learningRate: 3e-4,
-  batchSize: 4,
+  method: 'lora',
+  targetModules: 'q_v',
+  maxSeqLen: 512,
+  estimatedMinutes: 15,
+  requiredVramGb: 8,
 };
 
 // ---------------------------------------------------------------------------
@@ -380,6 +383,7 @@ describe('mergeAdapterThunk', () => {
     mockMergeAdapter.mockResolvedValue(undefined);
   });
 
+  // QNBS-v3: mergeAdapterThunk reads getState().lora (typed RootState); cast to ThunkArg.
   it('calls mergeAdapter with correct args', async () => {
     const dispatch = makeDispatch();
     await run(
@@ -439,6 +443,8 @@ describe('evaluateAdapterThunk', () => {
     mockComputeStyleScore.mockResolvedValue({ consistencyScore: 0.87, details: [] });
   });
 
+  // QNBS-v3: evaluateAdapterThunk uses getState().lora which requires typed RootState;
+  // cast to ThunkArg to satisfy run()'s unknown-typed signature (safe — mock state matches).
   it('dispatches setIsEvaluating(true) on start', async () => {
     const dispatch = makeDispatch();
     await run(

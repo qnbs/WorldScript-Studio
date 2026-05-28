@@ -39,6 +39,9 @@ const completionBodySchema = z.object({
   openAiCompatibleBaseUrl: z.string().optional(),
   openAiSiteUrl: z.string().optional(),
   openAiSiteTitle: z.string().optional(),
+  // QNBS-v3: C-3 LoRA wiring — when enableLoraAdapters is on and an adapter has ollamaModelTag,
+  // useStoryCraftAI passes it here so the Ollama model identifier is overridden at inference time.
+  loraModelPath: z.string().optional(),
 });
 
 /** Virtuelle URL — nur für `useCompletion`; der echte Transport läuft über `storyCraftCompletionFetch`. */
@@ -144,9 +147,12 @@ export async function storyCraftCompletionFetch(
         ? { openAiSiteTitle: parsed.openAiSiteTitle }
         : {}),
     };
+    // QNBS-v3: C-3 LoRA wiring — Ollama model-tag override; mirrors aiProviderService.streamProvider() logic.
+    const effectiveModel =
+      parsed.provider === 'ollama' && parsed.loraModelPath ? parsed.loraModelPath : parsed.model;
     const resolved = await resolveModelConfig(
       parsed.provider,
-      parsed.model,
+      effectiveModel,
       parsed.ollamaBaseUrl,
       openAiExtras,
     );

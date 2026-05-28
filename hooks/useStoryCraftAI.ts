@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useAppSelector } from '../app/hooks';
 import type { RootState } from '../app/store';
+import { selectEnableLoraAdapters } from '../features/featureFlags/featureFlagsSlice';
+import { selectActiveLoraOllamaTag } from '../features/lora/loraSelectors';
 import {
   STORYCRAFT_COMPLETION_URL,
   storyCraftCompletionFetch,
@@ -31,6 +33,11 @@ export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
   );
   const openAiSiteUrl = useAppSelector((s: RootState) => s.settings.advancedAi.openAiSiteUrl);
   const openAiSiteTitle = useAppSelector((s: RootState) => s.settings.advancedAi.openAiSiteTitle);
+  // QNBS-v3: C-3 LoRA wiring — when enableLoraAdapters is on and an adapter has ollamaModelTag set,
+  // pass it as loraModelPath so streamProvider() substitutes it as the Ollama model identifier.
+  const enableLoraAdapters = useAppSelector(selectEnableLoraAdapters);
+  const activeLoraTag = useAppSelector(selectActiveLoraOllamaTag);
+  const loraModelPath = enableLoraAdapters && activeLoraTag ? activeLoraTag : undefined;
 
   const body = useMemo(
     () => ({
@@ -42,6 +49,7 @@ export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
       openAiCompatibleBaseUrl,
       openAiSiteUrl,
       openAiSiteTitle,
+      ...(loraModelPath !== undefined && { loraModelPath }),
     }),
     [
       provider,
@@ -52,6 +60,7 @@ export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
       openAiCompatibleBaseUrl,
       openAiSiteUrl,
       openAiSiteTitle,
+      loraModelPath,
     ],
   );
 

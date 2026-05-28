@@ -108,11 +108,14 @@
   },
   "overrides": [
     {
-      "includes": ["scripts/**/*.mjs"],
+      "includes": ["scripts/**/*.mjs", "scripts/**/*.ts"],
       "linter": {
         "rules": {
           "suspicious": {
             "noConsole": "off"
+          },
+          "style": {
+            "useTemplate": "off"
           }
         }
       }

@@ -1585,6 +1585,7 @@
   "settings.featureFlags.enableVoiceSupport": "Sprachbefehle & Diktat",
   "settings.featureFlags.enableVoiceWasm": "Sprach-WASM-Engine (Whisper.cpp — offline)",
   "settings.featureFlags.enableProForge": "ProForge Pipeline (8-stufige agentische Bearbeitung)",
+  "settings.featureFlags.enableIdbAtRestEncryption": "IDB-Ruheverschlüsselung ⚠ Entwicklervorschau – Passphrasen-UX unvollständig",
   "settings.featureFlags.enableMindMaps": "Erweiterte Mindmaps",
   "settings.featureFlags.enableObjectsGroups": "Objekte & Gruppen",
   "settings.featureFlags.enablePlotBoardV2": "Plot Board v2 (Canvas & Verbindungen)",

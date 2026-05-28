@@ -1735,6 +1735,7 @@
   "settings.featureFlags.enableVoiceSupport": "Comandi vocali e dettatura",
   "settings.featureFlags.enableVoiceWasm": "Motore vocale WASM (Whisper.cpp — offline)",
   "settings.featureFlags.enableProForge": "Pipeline ProForge (editing agentivo in 8 fasi)",
+  "settings.featureFlags.enableIdbAtRestEncryption": "Crittografia IDB a riposo ⚠ Anteprima sviluppatore — UX passphrase incompleta",
   "settings.loraAdapters.title": "Adattatori LoRA",
   "settings.loraAdapters.description": "Carica adattatori LoRA per modelli WebLLM locali. Gli adattatori sono memorizzati nel browser e non vengono mai inviati al cloud.",
   "settings.loraAdapters.flagGate": "Attiva «Inferenza adattatore LoRA» nei flag sperimentali per utilizzare questa sezione.",

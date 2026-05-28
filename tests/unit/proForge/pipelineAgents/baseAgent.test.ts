@@ -41,7 +41,18 @@ class StubAgent extends BaseAgent {
   async execute(
     _signal: AbortSignal,
   ): Promise<Pick<StageResult, 'reviewItems' | 'metrics' | 'agentOutput'>> {
-    return { reviewItems: [], metrics: { durationMs: 0, tokensUsed: 0 }, agentOutput: undefined };
+    return {
+      reviewItems: [],
+      metrics: {
+        durationMs: 0,
+        tokensConsumed: 0,
+        aiCalls: 0,
+        itemsFound: 0,
+        itemsAccepted: 0,
+        itemsRejected: 0,
+      },
+      agentOutput: undefined,
+    };
   }
 
   // Expose protected methods for testing
@@ -82,7 +93,12 @@ const DEFAULT_CONFIG: PipelineConfig = {
 };
 
 function makeContext(overrides: Partial<OrchestratorContext> = {}): OrchestratorContext {
-  const mockGateway = { generate: mockGenerate, embed: vi.fn(), modelList: vi.fn() };
+  const mockGateway = {
+    generate: mockGenerate,
+    embed: vi.fn(),
+    modelList: vi.fn(),
+    healthCheck: vi.fn(),
+  };
   return {
     projectId: 'proj-test',
     // biome-ignore lint/suspicious/noExplicitAny: test mock
@@ -129,7 +145,12 @@ describe('BaseAgent', () => {
 
   describe('constructor', () => {
     it('uses gateway from context when provided', () => {
-      const customGateway = { generate: vi.fn(), embed: vi.fn(), modelList: vi.fn() };
+      const customGateway = {
+        generate: vi.fn(),
+        embed: vi.fn(),
+        modelList: vi.fn(),
+        healthCheck: vi.fn(),
+      };
       const ctx = makeContext({ gateway: customGateway });
       const a = new StubAgent(ctx);
       expect(a['gateway']).toBe(customGateway);

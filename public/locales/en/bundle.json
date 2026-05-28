@@ -1735,6 +1735,7 @@
   "settings.featureFlags.enableVoiceSupport": "Voice commands & dictation",
   "settings.featureFlags.enableVoiceWasm": "Voice WASM engine (Whisper.cpp — offline)",
   "settings.featureFlags.enableProForge": "ProForge Pipeline (8-stage agentic editing)",
+  "settings.featureFlags.enableIdbAtRestEncryption": "IDB at-rest encryption ⚠ Dev preview — passphrase UX not complete",
   "settings.loraAdapters.title": "LoRA Adapters",
   "settings.loraAdapters.description": "Load LoRA fine-tuning adapters for local WebLLM models. Adapters are stored in your browser and never sent to the cloud.",
   "settings.loraAdapters.flagGate": "Enable \"LoRA adapter inference\" in Experimental Flags to use this section.",

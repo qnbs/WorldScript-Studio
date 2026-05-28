@@ -342,6 +342,7 @@
   "settings.featureFlags.enableVoiceSupport": "Comandos de voz y dictado",
   "settings.featureFlags.enableVoiceWasm": "Motor de voz WASM (Whisper.cpp — sin conexión)",
   "settings.featureFlags.enableProForge": "Pipeline ProForge (edición agéntica de 8 etapas)",
+  "settings.featureFlags.enableIdbAtRestEncryption": "Cifrado IDB en reposo ⚠ Vista previa de desarrollador — UX de frase de contraseña incompleta",
   "settings.featureFlags.enableMindMaps": "Mapas mentales mejorados",
   "settings.featureFlags.enableObjectsGroups": "Inventario de objetos y grupos",
   "settings.featureFlags.enablePlotBoardV2": "Plot Board v2 (lienzo y conexiones)",

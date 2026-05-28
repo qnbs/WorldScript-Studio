@@ -198,11 +198,13 @@ describe('SupervisorAgent', () => {
         reviewItems: [
           {
             id: 'ri-1',
-            type: 'suggestion',
+            stage: 'structural' as const,
+            type: 'structuralEdit',
             severity: 'info',
-            title: 'Test',
             description: 'Review this',
             status: 'pending',
+            confidence: 0.8,
+            createdAt: new Date().toISOString(),
           },
         ],
         agentOutput: { edits: [] },

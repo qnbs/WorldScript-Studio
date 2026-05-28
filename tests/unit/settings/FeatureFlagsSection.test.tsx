@@ -35,6 +35,7 @@ const mockFeatureFlags = {
   enableVoiceSupport: false,
   enableVoiceWasm: false,
   enableProForge: false,
+  enableIdbAtRestEncryption: false,
 };
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
@@ -70,10 +71,10 @@ describe('FeatureFlagsSection', () => {
     expect(screen.getByText('settings.featureFlags.description')).toBeInTheDocument();
   });
 
-  it('renders all 19 feature flag toggles', () => {
+  it('renders all 20 feature flag toggles', () => {
     render(<FeatureFlagsSection />);
     const switches = screen.getAllByRole('switch');
-    expect(switches.length).toBe(19);
+    expect(switches.length).toBe(20);
   });
 
   it('renders DuckDB analytics toggle', () => {
