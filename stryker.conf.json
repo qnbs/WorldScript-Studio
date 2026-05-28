@@ -44,12 +44,18 @@
     "hooks/useStoryCraftAI.ts",
     "app/listenerMiddleware.ts",
     "app/transientUiStore.ts",
-    "services/aiProviderService.ts"
+    "services/aiProviderService.ts",
+    "services/storage/storageEncryptionService.ts",
+    "services/logger.ts",
+    "services/collaborationService.ts",
+    "services/i18nBootstrap.ts",
+    "features/featureFlags/featureFlagsSlice.ts",
+    "services/crossProjectIndexService.ts"
   ],
   "thresholds": {
-    "high": 80,
-    "low": 65,
-    "break": 70
+    "high": 85,
+    "low": 70,
+    "break": 75
   },
   "reporters": ["progress", "clear-text", "html", "json"],
   "htmlReporter": {
