@@ -15,7 +15,11 @@ export interface FeatureFlagsState {
   enableCrossProjectSearch: boolean;
   /** Experimental: About-page runtime diagnostics (default: false). */
   enableAppHealthPanel: boolean;
-  /** Plot-Board v2: free-form canvas, SVG connections, tension curve (default: true). */
+  /**
+   * @deprecated v1 Plot Board was removed in v1.6; the flag has no effect.
+   * Kept in state to avoid breaking serialized localStorage values.
+   * Will be removed in v2.0 after a 2-version deprecation period.
+   */
   enablePlotBoardV2: boolean;
   /** DuckDB-WASM analytics side-car: OPFS-backed query engine for dashboards (default: false). */
   enableDuckDbAnalytics: boolean;

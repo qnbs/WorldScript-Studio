@@ -49,6 +49,7 @@ import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
+import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
 import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services/tauriMenuService';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
@@ -270,6 +271,12 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     const localeDir = RTL_LOCALES.has(language) ? 'rtl' : 'ltr';
     document.documentElement.dir = featureFlags.enableRtlLayout ? 'rtl' : localeDir;
   }, [language, featureFlags.enableRtlLayout]);
+
+  // QNBS-v3: Sync enablePluginSystem flag into pluginRegistry so execute/executeAsync/loadPlugin
+  // are properly gated without the registry needing direct Redux access.
+  useEffect(() => {
+    pluginRegistry.setEnabled(featureFlags.enablePluginSystem);
+  }, [featureFlags.enablePluginSystem]);
 
   // QNBS-v3: PWA share_target GET params → toast + stash for Writer paste flows; strip query to avoid leaking shared text in URL bar.
   useEffect(() => {

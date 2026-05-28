@@ -33,7 +33,16 @@ export class CloudSyncBackend implements StorageBackend {
     config: CloudSyncConfig,
     passphrase: string,
     userId: string,
+    /** Must pass featureFlags.enableCloudSync — prevents accidental activation without user consent. */
+    featureFlagEnabled = false,
   ): Promise<CloudSyncBackend> {
+    // QNBS-v3: Feature flag guard — featureCatalog drift P2 fix. Cloud sync must never activate
+    // without explicit user opt-in; this makes the check structural rather than relying on callers.
+    if (!featureFlagEnabled) {
+      throw new Error(
+        'CloudSyncBackend.create(): enableCloudSync feature flag is off. Enable it in Settings → Experimental Flags first.',
+      );
+    }
     const { deriveCloudSyncKey } = await import('./cloudSyncEncryption');
     const key = await deriveCloudSyncKey(passphrase, userId);
     return new CloudSyncBackend(new CloudSyncClient(config), key);

@@ -12,8 +12,8 @@
   <img src="https://img.shields.io/badge/Version-v1.19.0-6366F1" alt="v1.19.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2062_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2062 keys">
-  <img src="https://img.shields.io/badge/Tests-4174_%2F_391_files-22C55E" alt="4174 tests / 391 files">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2078_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2078 keys">
+  <img src="https://img.shields.io/badge/Tests-4192_%2F_392_files-22C55E" alt="4192 tests / 392 files">
   <img src="https://img.shields.io/badge/Coverage-L_73%25_%7C_B_58%25_%7C_F_65%25-22C55E" alt="Coverage: Lines 73% / Branches 58% / Functions 65%">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
@@ -376,7 +376,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
 | **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 055 keys × 5 locales; EN fallback; `localStorage` persistence      |
-| **Testing**          | Vitest 4.x (2 500+ tests / 391 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation gate          |
+| **Testing**          | Vitest 4.x (2 500+ tests / 392 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation gate          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -559,7 +559,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
 **Current test metrics (2026-05-28, v1.19.0):**
-- **4 174+ unit tests** across **391 test files** — all passing
+- **4 192+ unit tests** across **392 test files** — all passing
 - Coverage: **73.06 % lines · 58.79 % branches · 65.18 % functions · 71.29 % statements**
 - Vitest thresholds: lines ≥ 71 · statements ≥ 69 · branches ≥ 57 · functions ≥ 63 — all green
 

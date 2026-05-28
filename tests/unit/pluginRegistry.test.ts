@@ -111,6 +111,16 @@ describe('PluginRegistry.execute()', () => {
 
   beforeEach(() => {
     registry = new PluginRegistry();
+    // QNBS-v3: Must enable before execute() calls — matches App.tsx featureFlag sync.
+    registry.setEnabled(true);
+  });
+
+  it('returns error when plugin system is disabled', () => {
+    registry.setEnabled(false);
+    registry.register(makePlugin({ permissions: [] }));
+    const result = registry.execute('test-plugin', () => {}, makeApi());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/disabled/);
   });
 
   it('returns error for unregistered plugin', () => {
@@ -183,6 +193,15 @@ describe('PluginRegistry.executeAsync()', () => {
 
   beforeEach(() => {
     registry = new PluginRegistry();
+    registry.setEnabled(true);
+  });
+
+  it('returns error when plugin system is disabled', async () => {
+    registry.setEnabled(false);
+    registry.register(makePlugin({ permissions: [] }));
+    const result = await registry.executeAsync('test-plugin', async () => {}, makeApi());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/disabled/);
   });
 
   it('returns error for unregistered plugin', async () => {

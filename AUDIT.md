@@ -216,6 +216,8 @@ Three security findings identified and fixed in the same session:
 
 **Quality gate (2026-05-28, C-7 sprint):** lint ✅ (Biome — 0 errors, 1006 files) · typecheck ✅ · i18n:check ✅ (2077 keys × 5 locales) · tests ✅ (4 174 / 391 files — +130 tests: supervisorAgent, baseAgent, geminiService streaming, helpCatalog, idbCore, loraThunks) · coverage thresholds raised L73/F65/B58/S71 (CI will confirm actual numbers)
 
+**Quality gate (2026-05-29, Feature Parity Audit):** lint ✅ (Biome — 0 errors, 1008 files) · typecheck ✅ · i18n:check ✅ (2078 keys × 5 locales; enableIdbAtRestEncryption key added) · tests ✅ (4 192 / 392 files — +18 tests: pluginRegistry flag-gate ×2, cloudSyncBackend flag-gate ×2, 8 parity-audit drift fixes) · 8 runtime-gate drifts corrected; `docs/FEATURE-PARITY.md` + `features/featureCatalog.ts` added
+
 ---
 
 ## Follow-up Audit — 2026-05-24 (v1.17 — Voice Full Support Foundation)

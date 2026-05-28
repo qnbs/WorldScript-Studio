@@ -26,13 +26,15 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 ## Phase 3 — v2.0 Foundation (ACTIVE 2026-05-28)
 
 - ✅ **C-1** — `packages/collab-transport/src/crypto.js` security hardening: PBKDF2 100k→310k, extractable:false, return promise.reject() fix
-- ✅ **C-2** — Reference plugins: `services/plugins/wordCountOverlay.plugin.ts` + `sceneAppender.plugin.ts` (8 tests)
-- ✅ **C-3** — LoRA Ollama wiring: `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag`, `streamProvider()` override
-- ✅ **C-4** — Cloud-Sync verified: `services/cloudSync/` (3 files, 39 tests, AES-256-GCM, `enableCloudSync` flag)
+- ✅ **C-2** — Reference plugins: `services/plugins/wordCountOverlay.plugin.ts` + `sceneAppender.plugin.ts` (8 tests) + runtime flag gate (2026-05-29)
+- ✅ **C-3** — LoRA Ollama wiring: `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag`; **parity fix (2026-05-29)**: selector now wired into `useStoryCraftAI` + `storyCraftCompletionFetch`
+- ✅ **C-4** — Cloud-Sync verified: `services/cloudSync/` (3 files, 41 tests, AES-256-GCM); `create()` structural flag gate added (2026-05-29)
 - ✅ **C-5** — GitHub Issue Templates (`bug_report.yml`, `feature_request.yml`, `translation_pr.yml`) + AGENTS.md hardening
+- ✅ **Feature Parity Audit** (2026-05-29) — 8 critical drifts fixed; `docs/FEATURE-PARITY.md` + `features/featureCatalog.ts` + `scripts/audit-feature-parity.ts`
+- ✅ **C-7 partial** (2026-05-28) — +130 tests; thresholds raised L73/F65/B58/S71; 4 192 tests / 392 files
 - ⬜ **C-6** — Full ar/he translation content — requires native translator review (stubs exist in `locales/ar/`, `locales/he/`)
-- 🔄 **C-7** — Coverage → L85%/B75%/F80%; Stryker break 80 (current: 73%L/65%F/59%B; threshold: 71/63/57)
-- ⬜ IDB at-rest encryption UX (passphrase unlock modal, forgot-passphrase flow, key rotation) — C-5 of SEC roadmap
+- 🔄 **C-7 remainder** — Coverage → L85%/B75%/F80%; Stryker break 75→80 (current thresholds: L73/F65/B58)
+- ⬜ IDB at-rest encryption UX (passphrase unlock modal, forgot-passphrase flow, key rotation) — `enableIdbAtRestEncryption` flag now in UI with ⚠ warning
 - ⬜ Complete Whisper WASM STT model download + inference pipeline (B-2 continuation)
 - ⬜ Kokoro/Piper TTS WASM engines
 - ⬜ PLANbib v1.7 features (Objects → MindMap → Interviews → Timeline → Wizard → Analysis → ReadMode → Guide → Desktop) — 9 phases, go-ahead from user required

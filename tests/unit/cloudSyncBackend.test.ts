@@ -62,6 +62,26 @@ function makeBackend(): CloudSyncBackend {
 // Tests
 // ---------------------------------------------------------------------------
 
+// QNBS-v3: Feature flag gate tests — guard throws before any service calls.
+describe('CloudSyncBackend.create() feature flag gate', () => {
+  it('throws when featureFlagEnabled is false (default, no arg)', async () => {
+    await expect(
+      CloudSyncBackend.create({ accountId: 'a', bucketName: 'b', apiToken: 't' }, 'pass', 'u'),
+    ).rejects.toThrow(/enableCloudSync feature flag is off/);
+  });
+
+  it('throws when featureFlagEnabled is explicitly false', async () => {
+    await expect(
+      CloudSyncBackend.create(
+        { accountId: 'a', bucketName: 'b', apiToken: 't' },
+        'pass',
+        'u',
+        false,
+      ),
+    ).rejects.toThrow(/enableCloudSync feature flag is off/);
+  });
+});
+
 describe('CloudSyncBackend', () => {
   beforeEach(() => {
     vi.clearAllMocks();

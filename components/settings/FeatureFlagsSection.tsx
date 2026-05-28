@@ -15,7 +15,8 @@ export const FeatureFlagsSection: FC = () => {
     { key: 'enableProjectHealthScore', labelKey: 'settings.featureFlags.enableProjectHealthScore' },
     { key: 'enableCrossProjectSearch', labelKey: 'settings.featureFlags.enableCrossProjectSearch' },
     { key: 'enableAppHealthPanel', labelKey: 'settings.featureFlags.enableAppHealthPanel' },
-    { key: 'enablePlotBoardV2', labelKey: 'settings.featureFlags.enablePlotBoardV2' },
+    // QNBS-v3: enablePlotBoardV2 deprecated — v1 board removed in v1.6; toggle has no effect.
+    // Removed from UI to avoid confusion; retained in slice for localStorage compat until v2.0.
     { key: 'enableDuckDbAnalytics', labelKey: 'settings.featureFlags.enableDuckDbAnalytics' },
     { key: 'enableObjectsGroups', labelKey: 'settings.featureFlags.enableObjectsGroups' },
     { key: 'enableMindMaps', labelKey: 'settings.featureFlags.enableMindMaps' },

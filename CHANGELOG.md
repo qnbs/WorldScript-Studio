@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Feature Parity Audit — 8 critical runtime-gate drifts fixed** (2026-05-29):
+  - `enableProForge` / `enableVoiceWasm` / `enableIdbAtRestEncryption`: toggles in `FeatureFlagsSection.tsx` had no handler in `useSettingsView.ts` — UI toggle fired, Redux was never updated, localStorage unchanged. All 3 cases added.
+  - `ObjectsView` / `MindMapView` / `CharacterInterviewsView`: routed from `App.tsx` without any feature flag guard — views accessible regardless of flag state. Route guards added for all 3.
+  - `CloudSyncBackend.create()`: claimed to be feature-gated in comments but no code ever read `enableCloudSync`. Structural `featureFlagEnabled` parameter added — throws at construction if flag is off.
+  - `PluginRegistry.execute()` / `executeAsync()` / `loadPlugin()`: callable without flag. `setEnabled()` method added; `App.tsx` syncs `enablePluginSystem` flag on change.
+
 - **C-1 — collab-transport crypto hardening** (`packages/collab-transport/src/crypto.js`):
   - PBKDF2 iterations raised 100k → 310k (OWASP 2024 alignment; matches `collaborationService.ts` + `storageEncryptionService.ts`)
   - `extractable: false` on derived `CryptoKey` (was `true` — violates SEC-RULE-5; prevented key export)
@@ -16,23 +22,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **C-4 — Cloud-Sync (Cloudflare R2)** — already fully implemented (3 files, 39 tests):
+- **C-4 — Cloud-Sync (Cloudflare R2)** — already fully implemented (3 files, 41 tests):
   - `services/cloudSync/cloudSyncBackend.ts` — `StorageBackend` implementation; projects/settings → R2; API keys never sent to cloud; delegation throws on sensitive keys
   - `services/cloudSync/cloudSyncClient.ts` — thin HTTP wrapper around R2 REST / Worker-proxied API (fetch + Bearer token, no AWS SDK)
   - `services/cloudSync/cloudSyncEncryption.ts` — AES-256-GCM E2E encryption; server sees only ciphertext
-  - 39 unit tests; flag: `enableCloudSync` (off by default); UI: Settings → Experimental → Cloud Sync toggle
+  - 41 unit tests (39 + 2 feature flag gate tests); flag: `enableCloudSync` (off by default); `create()` throws structurally if flag is off
 
-- **C-3 — LoRA Inference Wiring** — connects LoRA adapter selection to the Ollama inference path:
+- **C-3 — LoRA Inference Wiring** — fully wired through Vercel AI SDK path (parity audit fix):
   - `LoraAdapter.ollamaModelTag?: string` — Ollama model tag created by `ollama create <tag> -f Modelfile`
   - `AIRequestOptions.loraModelPath?: string` — passed through to Ollama; overrides `opts.model` when set and `provider === 'ollama'`
   - `selectActiveLoraOllamaTag` selector (`features/lora/loraSelectors.ts`) — returns active adapter's Ollama tag or null
-  - When `enableLoraAdapters` is on and an adapter with `ollamaModelTag` is active, all Ollama inference calls automatically use that tag as the model identifier
-  - Training workflow remains Python sidecar (see `docs/VOICE_MASTER_PLAN.md` for the LoRA pipeline separation rationale)
+  - **Fix**: selector now imported by `useStoryCraftAI.ts`; `loraModelPath` injected into `body`; `completionBodySchema` updated to accept it; `storyCraftCompletionFetch.ts` applies Ollama override — closes C-3 completion gap
+  - Training workflow remains Python sidecar
 
-- **C-2 — Plugin System Beta** — reference plugins in `services/plugins/`:
+- **C-2 — Plugin System Beta** — reference plugins + runtime gate fix:
   - `wordCountOverlay.plugin.ts` — read-only plugin: logs project title + scene list via sandboxed API (`project.read`, `scene.read`)
   - `sceneAppender.plugin.ts` — write-capable plugin: appends a configurable snippet to the active scene and persists run count via IDB storage (`scene.read`, `scene.write`, `storage.read`, `storage.write`)
-  - 8 unit tests covering permission gate enforcement, storage persistence, and empty-scene guard
+  - `PluginRegistry.setEnabled()` + `App.tsx` sync — `execute/executeAsync/loadPlugin` now require `enablePluginSystem` flag to be on; 34 unit tests (was 30)
+
+- **C-7 — Coverage Sprint** (2026-05-28): +130 new tests across 5 previously untested modules:
+  - `supervisorAgent.ts` — 19 tests (intake/structural/proof heuristics, fallback sentinels, null-project word count)
+  - `baseAgent.ts` — 23 tests (constructor gateway injection, requireProject, buildAiOpts all 4 providers, generate, selfReflect)
+  - `geminiService.ts` — +17 tests covering `streamText`, `streamAiHelpResponse`, `detectPlotHoles`, `generateImage`, `handleInvalidApiKey`
+  - `helpCatalog.ts` — 16 tests (HELP_CATALOG data integrity + `catalogToHelpCategories()`)
+  - `idbCore.ts` — 19 tests (compressData/decompressData round-trip, retryDb transient backoff, getUserFriendlyDbError)
+  - `loraThunks.ts` — 25 tests (all 9 async thunks); coverage thresholds raised to L73/F65/B58/S71
+
+- **Refactor — 4 production `biome-ignore any` suppressions eliminated** (2026-05-28):
+  - `wasmSttEngine.ts` — typed `WhisperPipelineResult` + `XenovaEnv` interfaces replace `as any` casts
+  - `loraSlice.ts` — `loraPersistenceMiddleware` typed with `Middleware<Record<string, never>, unknown>`
+  - `loraAdapterService.ts` — `_resetLoraDbForTest()` uses typed cast instead of `(global as any)`
+  - `projectState.ts` (new) — `ProjectData` interface extracted from `projectSlice.ts`; re-exported for backward compat
 
 ## [1.19.0] — 2026-05-28
 

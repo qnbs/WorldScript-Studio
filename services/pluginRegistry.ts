@@ -102,6 +102,18 @@ const PERMISSION_API_MAP: Record<keyof PluginSandboxedApi, PluginPermission | nu
 
 export class PluginRegistry {
   private readonly plugins = new Map<string, PluginDescriptor>();
+  // QNBS-v3: Synced from featureFlags.enablePluginSystem via App.tsx effect.
+  // execute/executeAsync/loadPlugin are no-ops (with error result) when disabled.
+  private _enabled = false;
+
+  /** Call from App.tsx when featureFlags.enablePluginSystem changes. */
+  setEnabled(enabled: boolean): void {
+    this._enabled = enabled;
+  }
+
+  get isEnabled(): boolean {
+    return this._enabled;
+  }
 
   register(descriptor: PluginDescriptor): void {
     if (!descriptor.id) throw new Error('PluginRegistry: descriptor must have a non-empty id');
@@ -190,6 +202,9 @@ export class PluginRegistry {
     fn: (api: PluginSandboxedApi) => void,
     rawApi: PluginSandboxedApi,
   ): PluginExecuteResult {
+    // QNBS-v3: Guard matches featureCatalog drift P2 — registry callable without flag otherwise.
+    if (!this._enabled)
+      return { ok: false, error: 'Plugin system is disabled (enablePluginSystem flag is off)' };
     const descriptor = this.plugins.get(pluginId);
     if (!descriptor) {
       return { ok: false, error: `Plugin '${pluginId}' not registered` };
@@ -212,6 +227,8 @@ export class PluginRegistry {
     fn: (api: PluginSandboxedApi) => Promise<void>,
     rawApi: PluginSandboxedApi,
   ): Promise<PluginExecuteResult> {
+    if (!this._enabled)
+      return { ok: false, error: 'Plugin system is disabled (enablePluginSystem flag is off)' };
     const descriptor = this.plugins.get(pluginId);
     if (!descriptor) {
       return { ok: false, error: `Plugin '${pluginId}' not registered` };
@@ -234,6 +251,8 @@ export class PluginRegistry {
     descriptor: PluginDescriptor,
     rawApi: PluginSandboxedApi,
   ): Promise<PluginExecuteResult> {
+    if (!this._enabled)
+      return { ok: false, error: 'Plugin system is disabled (enablePluginSystem flag is off)' };
     this.register(descriptor);
     try {
       // Dynamic import — entrypoint must export a `run` function.

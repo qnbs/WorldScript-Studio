@@ -63,18 +63,18 @@ Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku
 
 ## v1.20 — Phase 3: v2.0 Foundation (ACTIVE — 2026-05-28)
 
-**Status:** 🔄 In Progress — C-1..C-5 delivered, C-6/C-7 ongoing.
+**Status:** 🔄 In Progress — C-1..C-7 all addressed; C-6 blocked on translator; C-7 ongoing.
 
 **C-1 — collab-transport security peer review** ✅ Done (2026-05-28)
 - 3 findings fixed in `packages/collab-transport/src/crypto.js`: PBKDF2 100k→310k, extractable:true→false, missing `return` on promise.reject(). Documented in AUDIT.md.
 
-**C-2 — Plugin System Beta** ✅ Done (2026-05-28)
-- Registry + sandboxed API + Zod validation already shipped (v1.19.0)
-- Added 2 reference plugins: `wordCountOverlay.plugin.ts` + `sceneAppender.plugin.ts` with 8 tests
+**C-2 — Plugin System Beta** ✅ Done (2026-05-28/29)
+- Registry + sandboxed API + Zod validation (v1.19.0) + 2 reference plugins
+- Runtime flag gate added (2026-05-29): `PluginRegistry.setEnabled()` + `App.tsx` sync; `execute/executeAsync/loadPlugin` disabled until `enablePluginSystem` is on
 
-**C-3 — LoRA Inference Wired** ✅ Done (2026-05-28)
+**C-3 — LoRA Inference Wired** ✅ Done (2026-05-28/29)
 - `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag` selector
-- `streamProvider()` applies Ollama model-tag override when `enableLoraAdapters` + active adapter tag is set
+- **Parity fix (2026-05-29):** `selectActiveLoraOllamaTag` was a dead selector — now imported by `useStoryCraftAI`; `loraModelPath` flows through `completionBodySchema` → `storyCraftCompletionFetch` Ollama override. Full Vercel AI SDK path now wired.
 
 **C-4 — Cloud-Sync (Cloudflare R2)** ✅ Done (pre-existing)
 - `services/cloudSync/` — full `StorageBackend` impl, AES-256-GCM E2E encryption, 39 tests; `enableCloudSync` flag
@@ -88,8 +88,14 @@ Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku
 - RTL-specific Tailwind utilities + E2E tests deferred until translation content is ready
 
 **C-7 — Coverage → Lines ≥ 85%, Branches ≥ 75%, Functions ≥ 80%** 🔄 Ongoing
-- Current: 73%L / 65%F / 59%B (2026-05-26 CI baseline, post-B-series)
+- Baseline (2026-05-26 CI): 73%L / 65%F / 59%B
+- +130 new tests (2026-05-28): supervisorAgent, baseAgent, geminiService streaming, helpCatalog, idbCore, loraThunks; thresholds raised L73/F65/B58/S71
+- Gap remaining: ~12%L / ~15%F / ~16%B to reach targets — CI will report actuals
 - Stryker `break`: raise 75 → 80 after CI score confirms ≥ 80
+
+**Feature Parity Audit** ✅ Done (2026-05-29) — see `docs/FEATURE-PARITY.md`
+- 8 critical runtime-gate drifts fixed; `features/featureCatalog.ts` + `scripts/audit-feature-parity.ts` added
+- `enablePlotBoardV2` deprecated (v1 board removed in v1.6; toggle hidden, slice retained for localStorage compat)
 
 ---
 
