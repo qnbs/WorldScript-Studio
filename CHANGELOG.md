@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **C-1 — collab-transport crypto hardening** (`packages/collab-transport/src/crypto.js`):
+  - PBKDF2 iterations raised 100k → 310k (OWASP 2024 alignment; matches `collaborationService.ts` + `storageEncryptionService.ts`)
+  - `extractable: false` on derived `CryptoKey` (was `true` — violates SEC-RULE-5; prevented key export)
+  - `return promise.reject(...)` in `decrypt()` — was missing `return`, swallowing unknown-algorithm errors and continuing with garbage IV/ciphertext
+
+### Added
+
+- **C-2 — Plugin System Beta** — reference plugins in `services/plugins/`:
+  - `wordCountOverlay.plugin.ts` — read-only plugin: logs project title + scene list via sandboxed API (`project.read`, `scene.read`)
+  - `sceneAppender.plugin.ts` — write-capable plugin: appends a configurable snippet to the active scene and persists run count via IDB storage (`scene.read`, `scene.write`, `storage.read`, `storage.write`)
+  - 8 unit tests covering permission gate enforcement, storage persistence, and empty-scene guard
+
 ## [1.19.0] — 2026-05-28
 
 ### Added
