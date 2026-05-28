@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] — 2026-05-28
+
+### Added
+
+- **B-1 — IDB At-Rest Encryption** (`services/storage/storageEncryptionService.ts`): Full AES-256-GCM passphrase-derived encryption for IndexedDB stores. PBKDF2 (310 000 iterations, SHA-256, 32-byte random salt stored in `app-data` as `idb_kdf_salt_v1`). `CryptoKey` is `{ extractable: false }`. Feature-flagged behind `enableIdbAtRestEncryption` (off by default). Tauri build uses `tauri-plugin-stronghold` for OS-keychain-backed passphrase (zero user friction). Web build shows passphrase unlock modal on cold start (session-scoped in-memory key wiped on tab close). GDPR threat model: encrypted blobs unreadable without passphrase from browser profile or malicious extension. Storage decomposition in `services/storage/` (`idbCore`, `idbProjectStore`, `idbSnapshotStore`, `idbKeyStore`, `idbCodexStore`, `idbAssetStore`).
+
+- **B-2 — Voice WASM Engine Scaffold** (`services/voice/wasmSttEngine.ts`, `services/voice/sileroVadEngine.ts`): Whisper.cpp WASM STT engine interface scaffold (model download, chunked inference, 99+ language detection). Silero VAD v4 via ONNX Runtime Web (~2 MB model, lazy-loaded). Both implement the existing abstract `SttEngine` / `VadEngine` interfaces from `voiceTypes.ts`. Feature-flagged behind `enableVoiceWasm` (off by default); falls back to `WebSpeechSttEngine` / `WebRtcVadEngine` when off.
+
+- **B-3 — collab-transport Vendor Fork** (`packages/collab-transport`): Vendor fork of y-webrtc 10.3.0 with RTCDataChannel in-flight E2E encryption baked into the package source. Replaces the pnpm-patch approach (`patches/y-webrtc@10.3.0.patch`). All Yjs sync updates and awareness protocol messages over peer-to-peer WebRTC data channels are encrypted via AES-256-GCM using `room.key`. Workspace package consumed as `workspace:*`.
+
+- **B-4 — axe-core E2E Accessibility Gate** (`tests/e2e/a11y-axe.spec.ts`): 8-view axe-core WCAG 2.2 AA Playwright scan run in CI on every push. Views covered: Dashboard, Writer, SceneBoard, Characters, Worlds, BookPreview, ProgressTracker, Settings. Zero violations enforced (`expect(violations).toHaveLength(0)`); known non-blocking notices logged but not failed.
+
+- **B-5 — RTL Layout Beta**: Arabic (`ar`) and Hebrew (`he`) locale stub files added to `locales/`. `enableRtlLayout` feature flag activates `html[dir="rtl"]` and a BiDi context provider for bidirectional text layout. Full RTL translation content and Persian (`fa`) support are v2.0 milestones. Existing `enableRtlLayout` flag wired to `html[dir]` control in `App.tsx`.
+
+- **B-6 — StructuredLogger** (`services/logger.ts` rewrite): Ring-buffer replaced with a multi-sink structured logger:
+  - **IDB sink** — `storycraft-logs-db` / `logs` store, 1 000-entry LRU cap, auto-eviction via forward cursor.
+  - **Tauri JSONL sink** — `$APPDATA/logs/storycraft-YYYY-MM-DD.jsonl`, lazy-loaded Tauri FS modules, date-rotated, `{ append: true, create: true }`.
+  - **Console sink** — DEV-only, prefixed `[StoryCraft:LEVEL:module]`.
+  - **GDPR sanitization** — `sanitizeLogContext(ctx)` redacts values whose key matches `/key|token|password|passphrase/i`.
+  - **New API** — `createLogger(module): ModuleLogger` factory with `.debug()/.info()/.warn()/.error()` and `.withContext(ctx)` for structured context injection. Default `logger` export and `getRecentLogs()` / `formatLogsForReport()` / `clearLogs()` retained for backward compatibility.
+
+- **B-7 — Coverage Thresholds Raised**: Vitest gate: Lines ≥ 71 / Functions ≥ 63 / Branches ≥ 57 / Statements ≥ 69. Measured: 73.06% L / 65.18% F / 58.79% B / 71.29% S — all green.
+
+- **B-8 — Stryker Gate Raised**: `thresholds.break` raised 70 → 75. `mutate` targets expanded from 34 → 40 source files to cover new services introduced in B-1..B-6.
+
+- **Sequential shell execution rule** codified in all 4 instruction files (`CLAUDE.md` project root, `.github/copilot-instructions.md`, `.cursorrules`, `infra/low-end-ci/DAILY-DRIVER.md`) — ONE Bash call per response, no parallel shell calls on this 3.7 GB RAM hardware.
+
+### Changed
+
+- `services/logger.ts` — backward-compat `logger` export, `getRecentLogs()`, `formatLogsForReport()`, and `clearLogs()` retained; in-memory cache kept at 200 entries as fast path for `formatLogsForReport`.
+- `packages/collab-transport` replaces pnpm-patched `y-webrtc` dependency; `patchedDependencies` entry removed from `package.json`.
+
 ## [1.18.1] — 2026-05-27
 
 ### Fixed
@@ -809,7 +841,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTPS-only external API communication
 - Device-scoped encryption key derivation
 
-[Unreleased]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.17.0...HEAD
+[Unreleased]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.19.0...HEAD
+[1.19.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.18.1...v1.19.0
+[1.18.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.18.0...v1.18.1
+[1.18.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.17.1...v1.18.0
+[1.17.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.17.0...v1.17.1
 [1.17.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.10.0...v1.17.0
 [1.11.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.9.0...v1.10.0

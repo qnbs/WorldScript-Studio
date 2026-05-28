@@ -16,8 +16,8 @@ StoryCraft Studio is an AI-powered creative writing application built as an offl
 - **State:** Redux Toolkit 2.x + Redux-Undo, feature-sliced design
 - **Styling:** Tailwind CSS 4.x with CSS custom properties for theming
 - **AI:** Google Gemini API via `@google/genai`, multi-provider abstraction (`aiProviderService.ts`)
-- **Storage:** Dual IndexedDB (`storycraft-state-db`, `storycraft-data-db`) via `dbService.ts` (LZ-String compression, AES-256-GCM key encryption); `storageService.ts` switches browser vs Tauri filesystem
-- **Collaboration:** Yjs + y-webrtc for P2P real-time editing
+- **Storage:** Dual IndexedDB via `services/storage/` (decomposed from `dbService.ts` in Phase 1); LZ-String compression + AES-256-GCM key encryption; `storageEncryptionService.ts` for at-rest IDB encryption (B-1, v1.19.0); `storageService.ts` switches browser vs Tauri filesystem
+- **Collaboration:** Yjs + `packages/collab-transport` (vendor fork of y-webrtc 10.3.0, RTCDataChannel E2E AES-256-GCM) for P2P real-time editing
 - **Desktop:** Tauri 2 (optional)
 - **Package manager:** pnpm@10.x
 - **Testing:** Vitest + @testing-library/react (unit), Playwright (E2E)

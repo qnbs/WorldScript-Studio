@@ -217,7 +217,7 @@ act pull_request -j quality -s CODECOV_TOKEN="$CODECOV_TOKEN" -W .github/workflo
 | `tests/e2e/collaboration.spec.ts` | Collaboration panel security warning banner pre-connect |
 | `services/commands/` | Command registry backing the palette (fuzzy search — regression-sensitive if E2E targets palette copy) |
 | `hooks/useGlobalKeyboardShortcuts.ts` | Global shortcut listener — keep in sync with **Settings → Shortcuts** defaults |
-| `stryker.conf.json` | Mutation testing targets + thresholds (`break: null` until score improves) |
+| `stryker.conf.json` | Mutation testing targets + thresholds (`break: 75`, `high: 85`, `low: 70`; 40 mutate targets as of v1.19.0) |
 
 ---
 

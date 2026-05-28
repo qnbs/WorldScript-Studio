@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript 6">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · Ollama · WebLLM">
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
+  <img src="https://img.shields.io/badge/Version-v1.19.0-6366F1" alt="v1.19.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2062_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2062 keys">
@@ -198,9 +199,13 @@ See [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) for full architectu
 
 A single-keystroke toggle that collapses all sidebars and chrome, leaving only the manuscript editor. Exit with `Escape` or the same toggle key. State is stored in the Zustand `transientUiStore` (`flowMode` flag) so it resets on page load.
 
-### 🗣️ Voice Dictation
+### 🗣️ Voice Dictation & WASM Voice Engines _(v1.17 foundation + v1.19.0 WASM scaffold)_
 
-Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field.
+Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field. **v1.19.0** adds WASM STT/VAD engine scaffolds:
+
+- **`WasmSttEngine`** (`services/voice/wasmSttEngine.ts`) — Whisper.cpp WASM interface scaffold (model download, chunked inference, 99+ language detection).
+- **`SileroVadEngine`** (`services/voice/sileroVadEngine.ts`) — Silero VAD v4 via ONNX Runtime Web (~2 MB model, lazy-loaded, replaces energy-threshold VAD).
+- Web Speech API fallback active in all environments; WASM engines activate when model is downloaded and `featureFlags.enableVoiceWasm` is on.
 
 ### ⌨️ Command Palette & Productivity Hub
 
@@ -224,12 +229,13 @@ Search across **all your projects** without loading them into memory. An Indexed
 - **Index management:** `crossProjectIndexService.ts` exposes `indexProject`, `listIndexedProjects`, `removeProjectIndex`.
 - Fully localized across all 5 UI languages.
 
-### 🤝 Real-Time Collaboration with Encryption Foundation
+### 🤝 Real-Time Collaboration with Full E2E Encryption
 
-Real-time P2P co-editing via **Yjs + y-webrtc** with multiple signaling endpoints for automatic failover:
+Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc 10.3.0 with E2E encryption baked in) with multiple signaling endpoints for automatic failover:
 
+- **RTCDataChannel in-flight E2E encryption** — all Yjs sync updates and awareness protocol messages over peer-to-peer WebRTC data channels are encrypted via AES-256-GCM using a room key. Shipped via `packages/collab-transport` (vendor fork with applied patch).
 - **Room isolation** — room IDs are derived from a SHA-256 hash of the room name.
-- **AES-256-GCM key derivation foundation** — `collaborationService.ts` includes `deriveEncryptionKey()` (PBKDF2, 310 000 iterations, SHA-256), `encryptUpdate()` / `decryptUpdate()` (AES-256-GCM, 12-byte random IV), and `getEncryptionStatus()` — the groundwork for full in-flight P2P transport encryption.
+- **AES-256-GCM key derivation** — `collaborationService.ts` includes `deriveEncryptionKey()` (PBKDF2, 310 000 iterations, SHA-256), `encryptUpdate()` / `decryptUpdate()` (AES-256-GCM, 12-byte random IV), and `getEncryptionStatus()`.
 - **Encryption status badge** — CollaborationPanel shows green `E2E Key Derived (AES-256-GCM)` or amber `Room isolation only` based on whether a room password is set.
 - **Security warning banner** (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) visible before connecting explains that public signaling relays observe connection metadata; disappears after connect.
 - **Configurable signaling URLs** in Settings → Collaboration.
@@ -241,6 +247,16 @@ Real-time P2P co-editing via **Yjs + y-webrtc** with multiple signaling endpoint
 2. Add your endpoint to `SIGNALING_SERVERS` in `services/collaborationService.ts`.
 3. Allow your endpoint in the CSP `connect-src` directive in `index.html`.
 4. Keep at least one fallback endpoint during migration to avoid downtime.
+
+### 🔒 IDB At-Rest Encryption _(B-1, v1.19.0)_
+
+All project data, snapshots, and settings stored in IndexedDB can be encrypted at rest via `services/storage/storageEncryptionService.ts`:
+
+- **AES-256-GCM** with a PBKDF2-derived key (310 000 iterations, SHA-256, 32-byte random salt).
+- Gated behind `featureFlags.enableIdbAtRestEncryption` (off by default — no migration risk).
+- Web build: passphrase-entry unlock screen on cold start (session-scoped in-memory key).
+- Tauri build: transparent OS-keychain protection via `tauri-plugin-stronghold` (no user friction).
+- GDPR-compliant: encrypted blobs are unreadable without the passphrase, even from the browser profile directory.
 
 ### 🔐 Encrypted Library Backup
 
@@ -284,7 +300,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2 055 i18n keys** across all 5 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2 062 i18n keys** across all 5 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -293,6 +309,8 @@ Shipped UI locales with **2 055 i18n keys** across all 5 languages — zero hard
 - 🇮🇹 **Italian** (Italiano)
 
 All five trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette.
+
+**RTL Layout Beta** (`enableRtlLayout` flag, off by default): Arabic (ar) and Hebrew (he) locale stubs added in v1.19.0. When the flag is on, `html[dir="rtl"]` is set and a BiDi context provider mirrors layout. Full RTL translation content is a v2.0 milestone.
 
 **Spotlight tour:** After first launch, a short guided tour (driver.js) highlights navigation, command palette, and Settings; restart anytime from the Dashboard ("Guided tour") or Help.
 
@@ -352,8 +370,8 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **Local Server AI**  | Ollama HTTP adapter                                       | Any locally served model; auto-detect via `/api/tags`                |
 | **AI Facade**        | `packages/ai-core` workspace package                     | Unified local inference interface; sanitizeForPrompt truncation      |
 | **Storage**          | Dual IndexedDB v8 (`StateDB` + `DataDB`)                 | Split state/asset persistence; LZ-String compression + AES-256-GCM  |
-| **Collaboration**    | Yjs + y-webrtc + AES-256-GCM key derivation              | P2P CRDT editing; PBKDF2 encryption foundation (310 000 iterations)  |
-| **Encryption**       | Web Crypto API (AES-256-GCM + PBKDF2)                    | API-key encryption at rest; library backup vault; collab key derivation |
+| **Collaboration**    | Yjs + `packages/collab-transport` (y-webrtc vendor fork)  | P2P CRDT editing; RTCDataChannel E2E AES-256-GCM; PBKDF2 310 000 iter |
+| **Encryption**       | Web Crypto API (AES-256-GCM + PBKDF2)                    | API-key encryption at rest; IDB at-rest encryption; library backup vault |
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
@@ -371,6 +389,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 StoryCraft-Studio/
 ├── packages/
 │   ├── ai-core/          # Local AI facade: 4-layer stack (WebLLM → ONNX → Transformers.js → heuristic)
+│   ├── collab-transport/ # Vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption baked in
 │   └── ui/               # Shared design tokens + Tailwind preset
 ├── app/                  # Redux store, typed hooks, listenerMiddleware, transientUiStore (Zustand)
 ├── components/           # All UI view components
@@ -533,16 +552,16 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `quality`    | after `security`     | Biome lint + format, **i18n key parity** (`pnpm run i18n:check`), `tsc --noEmit`, Vitest + V8 coverage (Node **22** + **24**); Codecov upload |
 | `build`      | after `quality`      | Production Vite build, **chunk budget** (max 7 000 KB/chunk, 4 500 KB entry), **rollup analyze** artifact; on `main`: SLSA provenance attestation + Pages artifact |
 | `e2e`        | after `quality`      | Playwright **Chromium**, `CI=true`; JUnit artifact uploaded for per-test PR annotations |
-| `mutation`   | after `quality`      | Stryker (`pnpm run mutation`); `break: 30` enforced |
+| `mutation`   | after `quality`      | Stryker (`pnpm run mutation`); `break: 75` enforced (high: 85, low: 70) |
 | `lighthouse` | after `build`        | LHCI against `dist` — accessibility `error:0.95`, CLS `error:0.1`, performance `warn:0.4`, SEO `warn:0.8` |
 | `storybook`  | after `quality`      | Static Storybook build artifact |
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-05-20, v1.7.0):**
-- **2 500+ unit tests** across **360 test files** — all passing
-- Coverage: **65.91 % lines · 50.59 % branches · 56.74 % functions · 64.25 % statements**
-- Vitest thresholds: lines ≥ 63 · statements ≥ 62 · branches ≥ 48 · functions ≥ 54 — all green
+**Current test metrics (2026-05-28, v1.19.0):**
+- **4 044+ unit tests** across **360 test files** — all passing
+- Coverage: **73.06 % lines · 58.79 % branches · 65.18 % functions · 71.29 % statements**
+- Vitest thresholds: lines ≥ 71 · statements ≥ 69 · branches ≥ 57 · functions ≥ 63 — all green
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 
@@ -584,7 +603,7 @@ Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, `clickNavIte
 - **🐛 Report Bugs** — Open a GitHub Issue with details and reproduction steps
 - **💡 Suggest Features** — Open a Discussion or Issue
 - **🌍 Improve Translations** — Five locale trees (`en` is the reference); native polish for FR/ES/IT especially welcome in PRs
-- **🧪 Write Tests** — Branch coverage target is ≥ 55 %; contributions to large components (collaboration, AI streaming paths) are particularly valuable
+- **🧪 Write Tests** — Branch coverage threshold is ≥ 57 %; functions ≥ 63 %; lines ≥ 71 %; contributions to large components (collaboration, AI streaming paths) are particularly valuable
 
 See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vitest / Playwright guide, and architecture notes.
 
@@ -616,6 +635,9 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/SPRINT-V1.10.md`](docs/SPRINT-V1.10.md) | Sprint reference: v1.10 mobile UX, coverage 55 %, deploy & help expansion |
 | [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge Ultimate Author Pipeline — 8-stage agentic editing system architecture |
 | [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0/v1.18.1 ProForge Humanization & Refinement + TypeScript strict-mode sweep |
+| [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md) | Sprint handoff: v1.19.0 Phase 2 — B-1..B-8 security, voice WASM, collab-transport, a11y gate, RTL |
+| [`docs/IDB-ENCRYPTION.md`](docs/IDB-ENCRYPTION.md) | IDB at-rest encryption architecture (B-1, AES-256-GCM, passphrase-derived key) |
+| [`docs/VOICE_MASTER_PLAN.md`](docs/VOICE_MASTER_PLAN.md) | Voice Full Support master plan — foundation v1.0 complete, WASM scaffold (B-2) in v1.19.0 |
 | [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA manifest, service worker, share-target checklist |
 | [`infra/low-end-ci/`](infra/low-end-ci/) | Local CI on low-end hardware (act + Eco-Forgejo) |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow: manual/tag builds, 7-step first-release checklist |

@@ -28,7 +28,7 @@ pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # TypeScript type check (tsc --noEmit)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
-pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 63%, branches 55%, functions 54%, statements 62%)
+pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 71%, branches 57%, functions 63%, statements 69%)
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
 pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
@@ -68,7 +68,7 @@ Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 
 StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
 
-**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Two internal workspace packages (`@domain/ai-core`, `@domain/ui` in `packages/`) are consumed as `workspace:*` deps.
+**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Three internal workspace packages (`@domain/ai-core`, `@domain/ui`, `collab-transport` in `packages/`) are consumed as `workspace:*` deps.
 
 **Live:** `https://storycraft-studio-indol.vercel.app/` (Vercel, primary) · GitHub Pages: `https://qnbs.github.io/StoryCraft-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
 
@@ -103,8 +103,17 @@ services/         → External adapters; notable sub-dirs:
                                    proseAgent, copyEditAgent, proofAgent, productionAgent,
                                    publishingAgent, analyticsAgent; pipelineOutput/, pipelinePrompts/, pipelineTools/)
                      settingsExchange/
-packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui
-locales/          → i18n source JSON (de/en/es/fr/it × 15 modules); runtime: public/locales/<lang>/bundle.json
+                     storage/     (IDB decomposition: idbCore, idbProjectStore, idbSnapshotStore,
+                                   idbKeyStore, idbCodexStore, idbAssetStore, storageEncryptionService,
+                                   index.ts barrel — AES-256-GCM at-rest encryption via B-1)
+                     voice/       (voiceCommandService, voiceTypes, sttEngine, ttsEngine, vadEngine,
+                                   wakeWordEngine, intentEngine, feedbackService, audioNavigator,
+                                   commandVoiceMappings, wasmSttEngine (B-2 Whisper scaffold),
+                                   sileroVadEngine (B-2 Silero VAD v4 scaffold))
+packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui,
+                     collab-transport (vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption)
+locales/          → i18n source JSON (de/en/es/fr/it/ar/he × 15 modules); runtime: public/locales/<lang>/bundle.json
+                     ar/ + he/ — locale stubs added in B-5 (RTL beta); full translation content is v2.0
 tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
 types/            → Supplemental TypeScript definitions (duckdb-wasm-worker.d.ts, tauri-plugins.d.ts)
 types.ts          → Core shared interfaces and types (root level)
@@ -192,7 +201,24 @@ Key rules:
 
 ### Logging
 
-Use `services/logger.ts` (ring-buffer + sink) for all diagnostic output. Never use `console.log` in production paths — Biome `noConsole` rule enforces this. `console.warn`/`console.error` are allowed per the Biome allowlist. Never write API keys, IVs, or plaintext payloads to any log.
+Use `services/logger.ts` (StructuredLogger — B-6, v1.19.0) for all diagnostic output. Never use `console.log` in production paths — Biome `noConsole` rule enforces this. `console.warn`/`console.error` are allowed per the Biome allowlist. Never write API keys, IVs, or plaintext payloads to any log.
+
+**StructuredLogger API (preferred for new code):**
+```ts
+const log = createLogger('myModule');   // factory — module name for tagging
+log.info('Initialized');
+log.warn('Retry', { attempt: 2 });      // positional args joined to message
+log.error('Failed', new Error('...'));  // Error.stack included automatically
+
+const scopedLog = log.withContext({ projectId: 'abc' });
+scopedLog.info('Saved');  // context attached to every entry
+```
+
+**GDPR sanitization:** `sanitizeLogContext(ctx)` automatically redacts values whose key matches `/key|token|password|passphrase/i` → `'[REDACTED]'`. This runs on every `.withContext(ctx)` call and on all IDB/Tauri writes.
+
+**Sinks:** IDB (`storycraft-logs-db`, 1 000-entry LRU) + Tauri JSONL (`$APPDATA/logs/storycraft-YYYY-MM-DD.jsonl`) + console (DEV-only). `getRecentLogs()` / `formatLogsForReport()` / `clearLogs()` — backward-compat ring-buffer API retained.
+
+**Backward-compat `logger` export** (legacy paths): `logger.warn('[module] message')` — module auto-extracted from `[bracket]` prefix.
 
 ### Environment Variables
 
@@ -206,7 +232,7 @@ Client-side env vars must use the `VITE_*` prefix (from `.env` / `.env.local`, w
 
 ### Collaboration
 
-Real-time P2P editing via Yjs + y-webrtc (`services/collaborationService.ts`). Signaling-channel E2E encryption: AES-256-GCM with PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`. **RTCDataChannel in-flight E2E encryption** is shipped via a patched y-webrtc (`patches/y-webrtc@10.3.0.patch` applied via `pnpm.patchedDependencies`). Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
+Real-time P2P editing via Yjs + `packages/collab-transport` (`services/collaborationService.ts`). Signaling-channel E2E encryption: AES-256-GCM with PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`. **RTCDataChannel in-flight E2E encryption** is baked into `packages/collab-transport` (vendor fork of y-webrtc 10.3.0 — B-3, v1.19.0). The pnpm-patch approach (`patches/y-webrtc@10.3.0.patch`) has been retired. Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
 
 ### Code Splitting
 
@@ -216,9 +242,9 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 ### Feature Flags
 
-Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (19 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
+Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (21 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
 
-Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProForge pipeline — off by default; gates the entire pipeline view in WriterView). Stub/future flags (off by default): `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableRtlLayout`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
+Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge` (ProForge pipeline — off by default; gates the entire pipeline view in WriterView). **B-series flags (v1.19.0, all off by default):** `enableIdbAtRestEncryption` (B-1 — IDB at-rest encryption; do not enable without passphrase UX), `enableVoiceWasm` (B-2 — Whisper WASM STT + Silero VAD; model download UI not yet wired), `enableRtlLayout` (B-5 — RTL `html[dir]` + BiDi context; ar/he locale stubs only). Stub/future flags (off by default): `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
 
 ### Command Center & shortcuts
 
@@ -259,7 +285,7 @@ All repository `.md` guides are listed in **[`README.md`](README.md#-documentati
 
 ## Key Constraints
 
-- Full TypeScript strict mode (v1.18.1): `strict`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `noFallthroughCasesInSwitch`. Practical implications: every declared variable/parameter must be used; array index access returns `T | undefined` (always guard it); index-signature properties must use bracket notation; no `any` — use `unknown` + type guards or a targeted `// biome-ignore` with reason
+- Full TypeScript strict mode (v1.19.0): `strict`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `noFallthroughCasesInSwitch`. Practical implications: every declared variable/parameter must be used; array index access returns `T | undefined` (always guard it); index-signature properties must use bracket notation; no `any` — use `unknown` + type guards or a targeted `// biome-ignore` with reason
 - Never log or expose API keys; never `eval()` AI responses
 - All interactive elements require proper `role`, `aria-label`, `aria-expanded` attributes (WCAG **2.2** AA-oriented; Biome `a11y` warnings fail CI)
 - Modals must trap focus and restore on close; decorative icons need `aria-hidden="true"`
@@ -361,6 +387,8 @@ Apply this pattern for any `use*ViewContext` hook — `useProForgeViewContext`, 
 
 **Web Speech API fallbacks:** `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` — zero downloads, work immediately in all modern browsers.
 
+**WASM engine scaffolds (B-2, v1.19.0 — gated behind `enableVoiceWasm`):** `WasmSttEngine` (`wasmSttEngine.ts`) — Whisper.cpp WASM STT; `SileroVadEngine` (`sileroVadEngine.ts`) — Silero VAD v4 via ONNX Runtime Web. Both implement the same abstract interfaces. Model download UI is Phase 3; scaffold ready for connection.
+
 **Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact template match (O(1) via Map) → fuzzy Jaccard scoring + keyword bonus → slot extraction for navigation commands. View-context filtering via `requiredViews` array. Character/section/world names injected from Redux state for slot matching.
 
 **Orchestrator:** `VoiceCommandService` singleton manages engine lifecycle and state machine (idle → listening → processing → speaking → idle + dictating). Dispatches matched commands via `runCommandById`. `appStoreRef` object pattern allows singleton access to Redux state outside React lifecycle.
@@ -386,8 +414,10 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries
 - `workers/inference.worker.ts:50` — `@ts-expect-error` on `@xenova/transformers` dynamic import (lives in `packages/ai-core`; Vite resolves at build time but `tsc` can't see it from root)
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 token migration verified in production (all intentional vars documented above)
-- **Voice v1.2 planned:** WASM STT/TTS/VAD engines, semantic intent (MiniLM), local LLM fallback, E2E voice tests (Playwright)
-- **v2.0 open (stubs behind feature flags):** RTL language support (`enableRtlLayout`); LoRA adapter inference (`enableLoraAdapters`); Cloud-Sync Cloudflare R2 adapter (`enableCloudSync`); Plugin system loader (`enablePluginSystem`).
+- **Voice WASM engines (B-2 scaffold delivered):** `wasmSttEngine.ts` + `sileroVadEngine.ts` scaffolds exist but model download UI is not yet wired. `enableVoiceWasm` flag is off by default. Phase 3: connect download UI to `WasmSttEngine.initialize()`, add Kokoro/Piper TTS WASM engines, E2E voice tests (Playwright). Semantic intent (MiniLM) and local LLM fallback are v1.2 / Phase 4.
+- **IDB at-rest encryption UX (B-1 service delivered):** `storageEncryptionService.ts` is ready; passphrase unlock modal, forgot-passphrase export flow, and key rotation UI are Phase 3. Do NOT enable `enableIdbAtRestEncryption` in production until UX is complete.
+- **B-3 collab-transport patch baked in:** The pnpm patch (`patches/y-webrtc@10.3.0.patch`) is retired; encryption is now in `packages/collab-transport` source. No further patch maintenance needed.
+- **v2.0 open (stubs behind feature flags):** RTL full content (ar/he stubs in B-5); LoRA adapter inference (`enableLoraAdapters`); Cloud-Sync Cloudflare R2 adapter (`enableCloudSync`); Plugin system loader (`enablePluginSystem`).
 
 ## graphify
 
