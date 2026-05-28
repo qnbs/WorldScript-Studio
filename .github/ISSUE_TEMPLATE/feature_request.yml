@@ -1,0 +1,77 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for StoryCraft Studio
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please check [ROADMAP.md](../ROADMAP.md) first — your idea might already be planned.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the writing or workflow problem you're trying to solve.
+      placeholder: "As a writer, I find it frustrating when I have to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work? Be as specific as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or alternative solutions you've tried or considered?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature area
+      options:
+        - AI writing tools
+        - Manuscript editor
+        - Plot Board / Scene Board
+        - Characters / World-building
+        - Collaboration (real-time)
+        - Export / Import
+        - Settings / UI
+        - Accessibility (WCAG / a11y)
+        - Local AI (WebLLM / ONNX / Ollama)
+        - Voice dictation / commands
+        - Performance / PWA
+        - Tauri desktop
+        - Plugin system
+        - i18n / localization
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: privacy
+    attributes:
+      label: Privacy impact
+      description: Does this feature require sending data to any server?
+      options:
+        - No — fully local / offline
+        - Optional — user-controlled cloud opt-in
+        - Yes — requires network access
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked ROADMAP.md and this is not already planned
+          required: false
+        - label: I searched existing feature requests and this is not a duplicate
+          required: true

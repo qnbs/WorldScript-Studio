@@ -303,10 +303,10 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 - **No build-time secrets.** API keys are entered via Settings UI and stored encrypted in IndexedDB (AES-256-GCM via Web Crypto API). Do not put AI keys in `.env` or host environment variables for inference.
 - **CSP:** Defined in `index.html` (web) and `src-tauri/tauri.conf.json` (desktop). Extend `connect-src` only when adding new AI hosts.
 - **No `dangerouslySetInnerHTML` without DOMPurify.** Biome flags `noDangerouslySetInnerHtml` as error.
-- **Never log API keys, IVs, or plaintext payloads.** Use `services/logger.ts` (ring-buffer + sink). `console.log` is warned by Biome in production paths.
+- **Never log API keys, IVs, or plaintext payloads.** Use `services/logger.ts` (`createLogger(module)` factory — IDB + Tauri JSONL + DEV console sinks; GDPR `sanitizeLogContext`). `console.log` is blocked by Biome in production paths.
 - **Service Worker:** AI hosts are network-only (`public/sw.js`). WASM/ONNX chunks are excluded from precache.
 - **Supply-chain:** SHA-pinned GitHub Actions, Dependabot weekly updates, OpenSSF Scorecard, CodeQL SAST, SLSA build provenance on `main`.
-- **Collaboration:** Yjs + y-webrtc with AES-256-GCM E2E encryption foundation (PBKDF2, 310k iterations). Signaling URLs are user-configurable.
+- **Collaboration:** Yjs + `packages/collab-transport` (vendor fork of y-webrtc 10.3.0) with AES-256-GCM E2E encryption baked in (PBKDF2, 310k iterations, `extractable: false`). Signaling URLs are user-configurable.
 - **Tauri isolation:** `vite.config.ts` externalizes `/^@tauri-apps\//` so web builds never bundle Tauri APIs. Abstract Tauri calls through `services/tauriRuntime.ts`.
 - **Vulnerability reporting:** GitHub Private Vulnerability Reporting preferred. 90-day coordinated disclosure embargo.
 
