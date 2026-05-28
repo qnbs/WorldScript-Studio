@@ -21,6 +21,88 @@ Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku
 
 ---
 
+## v1.19 — Phase 2: Security, Voice WASM, Collab Transport, A11y Gate, RTL Beta (2026-05-28)
+
+**Status:** ✅ Released — see [`CHANGELOG.md`](CHANGELOG.md) `[1.19.0]` and [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md).
+
+**B-1 — IDB At-Rest Encryption:**
+- `services/storage/storageEncryptionService.ts` — AES-256-GCM passphrase-derived encryption for IndexedDB stores
+- PBKDF2 (310 000 iterations, SHA-256), 32-byte random salt, `{ extractable: false }` CryptoKey
+- Feature flag `enableIdbAtRestEncryption` (off by default); Tauri path via `tauri-plugin-stronghold`
+
+**B-2 — Voice WASM Scaffold:**
+- `services/voice/wasmSttEngine.ts` — Whisper.cpp WASM STT engine interface scaffold
+- `services/voice/sileroVadEngine.ts` — Silero VAD v4 via ONNX Runtime Web
+- Feature flag `enableVoiceWasm` (off by default); falls back to Web Speech API when off
+
+**B-3 — collab-transport Vendor Fork:**
+- `packages/collab-transport` — vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption baked in
+- Replaces pnpm patch approach; encryption patch is now part of the package source
+
+**B-4 — axe-core E2E Accessibility Gate:**
+- 8-view axe-core WCAG 2.2 AA scan in Playwright (CI gate, `tests/e2e/a11y-axe.spec.ts`)
+- Zero violations enforced across Dashboard, Writer, SceneBoard, Characters, Worlds, Preview, Progress, Settings
+
+**B-5 — RTL Layout Beta:**
+- `ar` (Arabic) and `he` (Hebrew) locale stubs added to `locales/`
+- `enableRtlLayout` flag activates `html[dir="rtl"]` and BiDi context provider
+
+**B-6 — StructuredLogger:**
+- `services/logger.ts` rewritten — IDB sink (`storycraft-logs-db`, 1 000-entry LRU), Tauri JSONL sink (`storycraft-YYYY-MM-DD.jsonl`), GDPR sanitization (`sanitizeLogContext`)
+- New API: `createLogger(module)` → `ModuleLogger`; `.withContext(ctx)` for structured context injection
+- Backward-compat `logger` default export retained
+
+**B-7 — Coverage Thresholds Raised:**
+- Vitest gate: Lines 71% / Functions 63% / Branches 57% / Statements 69%
+- Measured: 73.06% L / 65.18% F / 58.79% B / 71.29% S
+
+**B-8 — Stryker Gate Raised:**
+- `break` threshold: 70 → 75; `mutate` targets expanded from 34 → 40 files
+
+---
+
+## v1.20 — Phase 3: v2.0 Foundation (NEXT — Weeks 11–16)
+
+**Status:** 🔄 Planned — Phase 2 complete, Phase 3 active next session.
+
+**C-1 — SEC-1 complete: collab-transport security peer review**
+- Formal security review of `packages/collab-transport` AES-256-GCM implementation in AUDIT.md
+- Verify PBKDF2 iteration count, IV uniqueness, GCM tag length, key derivation correctness
+- Add `@privacyClass external` JSDoc annotation to collaboration module (SEC-RULE-4)
+
+**C-2 — Plugin System Beta (`enablePluginSystem`)**
+- Plugin loader skeleton: manifest validation (Zod), sandboxed evaluation, capability grants
+- 1–2 reference plugin examples (word-count overlay, custom export format)
+- Plugin settings panel in Settings → System
+
+**C-3 — LoRA Inference Wired (`enableLoraAdapters`)**
+- Wire LoRA adapter selection in Settings → AI → Fine-Tuning (adapter already flagged in `featureFlagsSlice`)
+- Connect to local inference path (Ollama + custom model, or ONNX adapter injection)
+- Document training workflow (Python sidecar, separate from browser runtime)
+
+**C-4 — Cloud-Sync (`enableCloudSync`, Cloudflare R2)**
+- R2 bucket adapter implementing `StoragePort` interface
+- E2E-encrypted uploads (AES-256-GCM, client-side only — server sees ciphertext)
+- Conflict resolution: LWW with vector-clock tie-breaking
+- Opt-in UI in Settings → Data → Cloud Backup
+
+**C-5 — Community Readiness**
+- `CONTRIBUTING.md` — full dev setup guide (Biome / Vitest / Playwright / architecture)
+- Semantic-release configuration (auto-CHANGELOG + tag from commit convention)
+- GitHub issue templates (bug report, feature request, translation PR)
+- `AGENTS.md` — AI agent instructions for agentic collaboration platforms
+
+**C-6 — RTL: Arabic + Hebrew Locale Scaffolding**
+- Full `ar` and `he` translation trees (all 15 modules × 2062+ keys)
+- RTL-specific Tailwind utilities (`ps-*`, `pe-*`, `ms-*`, `me-*`)
+- Bidirectional layout testing in E2E suite
+
+**C-7 — Coverage → Lines ≥ 85%, Branches ≥ 75%, Functions ≥ 80%**
+- Targeted test expansion for AI streaming paths, collaboration, and voice services
+- Stryker `break` threshold: raise 75 → 80
+
+---
+
 ## v1.18 — ProForge Humanization & Refinement Sprint (2026-05-27)
 
 **Status:** ✅ Released — commit `60f12fd`, see [`CHANGELOG.md`](CHANGELOG.md) `[1.18.0]` and [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md).
@@ -290,11 +372,11 @@ Vereinfachte automatische Konsistenzprüfung:
 
 ## v2.0 — Community & Collaboration
 
-**Status:** 💡 Vision
+**Status:** 💡 Vision (partial delivery in v1.19.0 Phase 2)
 
-- Full E2E-Encryption für P2P-Collaboration (RTCDataChannel in-flight encryption)
+- ~~Full E2E-Encryption für P2P-Collaboration (RTCDataChannel in-flight encryption)~~ ✅ Done in B-3 (`packages/collab-transport`)
 - Community-Model-Liste (kuratierte Ollama-Modelle für kreatives Schreiben)
-- RTL language support (Arabic, Hebrew, Persian)
+- RTL language support — ar/he stubs in B-5; full translation content + Persian still v2.0
 - Fine-Tuning/LoRA-Support für personalisierte Schreibstile
 - Cloud-Sync Option (optional, E2E-verschlüsselt)
 - Plugin-System für benutzerdefinierte AI-Tools (build on PluginRegistry)

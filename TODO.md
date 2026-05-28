@@ -8,6 +8,32 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
+## v1.19.0 — Phase 2: B-Series Sprint (RELEASED 2026-05-28)
+
+- ✅ **B-1** — `services/storage/storageEncryptionService.ts` — AES-256-GCM IDB at-rest encryption; PBKDF2 (310k iter), 32-byte random salt, `extractable: false`; `enableIdbAtRestEncryption` flag
+- ✅ **B-2** — `services/voice/wasmSttEngine.ts` + `sileroVadEngine.ts` — Whisper WASM STT scaffold + Silero VAD v4 via ONNX; `enableVoiceWasm` flag
+- ✅ **B-3** — `packages/collab-transport` — vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption baked in (replaces pnpm patch approach)
+- ✅ **B-4** — `tests/e2e/a11y-axe.spec.ts` — 8-view axe-core WCAG 2.2 AA E2E gate (CI-enforced, zero violations)
+- ✅ **B-5** — `locales/ar/` + `locales/he/` locale stubs; `enableRtlLayout` flag activates `html[dir="rtl"]` + BiDi context provider
+- ✅ **B-6** — `services/logger.ts` StructuredLogger rewrite — IDB sink (1 000-entry LRU), Tauri JSONL sink, GDPR `sanitizeLogContext`; `createLogger(module)` + `.withContext(ctx)` API
+- ✅ **B-7** — Coverage thresholds raised: L 71 / F 63 / B 57 / S 69 (measured: 73/65/58/71)
+- ✅ **B-8** — Stryker `break` 70→75; `mutate` targets 34→40 files
+- ✅ **Docs** — `docs/SPRINT-HANDOFF-2026-05-28.md`, CHANGELOG `[1.19.0]`, ROADMAP, TODO, README, CLAUDE.md, SECURITY.md, IDB-ENCRYPTION.md, VOICE_MASTER_PLAN.md all updated
+- ✅ **Quality gate** — lint ✅ · typecheck ✅ · i18n:check ✅ · tests ✅
+
+---
+
+## Phase 3 — Next Sprint (planned)
+
+- ⬜ Complete Whisper WASM STT model download + inference pipeline (B-2 continuation)
+- ⬜ Kokoro/Piper TTS WASM engines
+- ⬜ PLANbib v1.7 features (Objects → MindMap → Interviews → Timeline → Wizard → Analysis → ReadMode → Guide → Desktop) — 9 phases, go-ahead from user required
+- ⬜ Full RTL translation content (ar/he) — locale stubs in v1.19.0; full copy requires translator review
+- ⬜ IDB at-rest encryption UX (passphrase unlock modal, forgot-passphrase flow, key rotation)
+- ⬜ DuckDB OPFS at-rest encryption (Phase 3 consideration, per IDB-ENCRYPTION.md)
+
+---
+
 ## v1.18.1 — TypeScript strict-mode compliance sweep (2026-05-27)
 
 - ✅ **All pre-existing TypeScript errors fixed** — zero `tsc --noEmit` errors across 47 changed files

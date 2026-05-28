@@ -1,6 +1,6 @@
 # StoryCraft Studio — Voice Full Support (opt-in) Master Plan v1.0
 
-> Created: 2026-05-24 | Updated: 2026-05-24 | Author: Senior Voice Architect | Status: **Completed (Foundation v1.0)**
+> Created: 2026-05-24 | Updated: 2026-05-28 | Author: Senior Voice Architect | Status: **Phase 1 Complete (v1.17.0) + Phase 2 WASM Scaffold Complete (v1.19.0 B-2)**
 
 ---
 
@@ -10,7 +10,9 @@ StoryCraft Studio erhält einen **vollständigen, opt-in Voice Full Support** al
 
 **Vision:** Voice als gleichwertiges Eingabemedium neben Maus/Tastatur — mit höchster Privacy (lokal-first), Offline-Fähigkeit und WCAG 2.2 AAA-konformer Barrierefreiheit. Der Voice-Mode ist ein Kraftmultiplikator für Power-User und ein Türöffner für Accessibility-Nutzer.
 
-**Status v1.0 Foundation:** Alle abstrakten Engine-Interfaces, Web Speech API Fallback-Implementierungen, Redux-State, UI-Komponenten, Intent-Engine, Command-Mappings und 83 Unit-Tests sind implementiert und grün. WASM-Engines (Whisper.cpp, Kokoro, Piper, Silero VAD, Sherpa-ONNX) sind für zukünftige Phasen vorbereitet.
+**Status v1.0 Foundation:** Alle abstrakten Engine-Interfaces, Web Speech API Fallback-Implementierungen, Redux-State, UI-Komponenten, Intent-Engine, Command-Mappings und 83 Unit-Tests sind implementiert und grün.
+
+**Status v1.19.0 WASM Scaffold (B-2):** `WasmSttEngine` (Whisper.cpp WASM STT scaffold) und `SileroVadEngine` (Silero VAD v4 via ONNX Runtime Web) implementiert in `services/voice/wasmSttEngine.ts` + `sileroVadEngine.ts`. Beide implementieren die abstrakten Interfaces aus `voiceTypes.ts`. Aktivierung via `enableVoiceWasm` flag (off by default). Model-Download-UI ist Phase 3.
 
 ---
 
@@ -288,7 +290,7 @@ Microphone (16kHz/16bit Mono)
 
 ## 12. Tiefe Integration in bestehende Codebase ✅ v1.0
 
-### Neue Dateien (v1.0)
+### Neue Dateien (v1.0 + v1.19.0 B-2)
 ```
 services/voice/
   voiceCommandService.ts    (orchestrator — 162 lines)
@@ -301,6 +303,8 @@ services/voice/
   feedbackService.ts        (TTS feedback orchestration — 130 lines)
   audioNavigator.ts         (ARIA focus management — 136 lines)
   commandVoiceMappings.ts   (25 static voice commands — 203 lines)
+  wasmSttEngine.ts          (Whisper.cpp WASM STT scaffold — v1.19.0 B-2)
+  sileroVadEngine.ts        (Silero VAD v4 / ONNX scaffold — v1.19.0 B-2)
 
 features/voice/
   voiceSlice.ts             (Redux state — 199 lines)
@@ -440,12 +444,12 @@ locales/*/settings.json            — 2025 keys × 5 locales (voice keys added)
 14. ✅ 83 Unit Tests (9 files)
 15. ✅ Quality gate: lint ✅ · i18n:check ✅ · typecheck ✅
 
-### Phase 2: Core WASM Engines (v1.1)
-16. VAD Engine (Silero via ONNX)
-17. Wake-Word Engine (Sherpa-ONNX)
-18. STT Engine (Whisper.cpp WASM)
-19. TTS Engine (Kokoro/Piper WASM)
-20. AudioWorklet für Mikrofon-Processing
+### Phase 2: Core WASM Engines (v1.19.0 B-2 — partial) ✅ Scaffold complete
+16. ✅ VAD Engine (Silero via ONNX) — `sileroVadEngine.ts` scaffold done; model download UI Phase 3
+17. ⬜ Wake-Word Engine (Sherpa-ONNX) — Phase 3
+18. ✅ STT Engine (Whisper.cpp WASM) — `wasmSttEngine.ts` scaffold done; chunked inference; model download UI Phase 3
+19. ⬜ TTS Engine (Kokoro/Piper WASM) — Phase 3
+20. ⬜ AudioWorklet für Mikrofon-Processing — Phase 3
 
 ### Phase 3: Advanced NLU (v1.2)
 21. Semantic Intent Matching (MiniLM Embeddings)

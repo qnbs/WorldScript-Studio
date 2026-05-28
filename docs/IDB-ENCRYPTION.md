@@ -1,15 +1,16 @@
-# IndexedDB At-Rest Encryption — Architecture Design
+# IndexedDB At-Rest Encryption — Implementation
 
-**Status:** Phase 0 design — implementation deferred to Phase 2  
-**Tracking:** SEC-3 (Master Plan Phase 0 hardening)
+**Status:** ✅ Implemented — `services/storage/storageEncryptionService.ts` (v1.19.0, B-1)
+**Feature flag:** `enableIdbAtRestEncryption` (off by default — passphrase UX is Phase 3)
+**Tracking:** SEC-3 (Master Plan Phase 2 delivery)
 
 ---
 
 ## Overview
 
-StoryCraft Studio stores all project data in IndexedDB. Currently, API keys are encrypted at rest via `dbService.ts` using AES-256-GCM with a locally-generated `CryptoKey`. All other stores (manuscripts, settings, snapshots, RAG vectors, codex) are stored in plaintext.
+StoryCraft Studio stores all project data in IndexedDB. API keys were already encrypted at rest via `dbService.ts` using AES-256-GCM with a locally-generated `CryptoKey`. As of v1.19.0 (B-1), `services/storage/storageEncryptionService.ts` extends at-rest encryption to all IDB stores using a passphrase-derived key, protecting data against offline extraction (e.g. from a shared or compromised browser profile).
 
-This document describes the design for extending at-rest encryption to all IDB stores using a passphrase-derived key, protecting data against offline extraction (e.g. from a shared or compromised browser profile).
+The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` (off by default). The passphrase unlock UX (modal, forgot-passphrase export, key rotation) is a Phase 3 deliverable. **Do not enable this flag in production until the UX is complete.**
 
 ---
 
@@ -116,29 +117,25 @@ Stores `proforge-memory-bank`, `scene-revisions`, `cross-project-index` are in s
 
 ---
 
-## API Shape (planned)
+## Implemented API
 
 ```ts
-// services/idbEncryptionService.ts  (new file — Phase 2)
+// services/storage/storageEncryptionService.ts  (v1.19.0, B-1)
 
-export async function initIdbEncryption(passphrase: string): Promise<void>
-// Derives CryptoKey, stores in module-level singleton. Throws if passphrase is empty.
+export async function initStorageEncryption(passphrase: string): Promise<void>
+// Derives CryptoKey via PBKDF2, stores in module-level singleton. Throws if passphrase is empty.
 
-export async function idbEncrypt(plaintext: unknown): Promise<Uint8Array>
-// Compress → encrypt → prepend IV → return Uint8Array
+export async function encryptForStorage(plaintext: unknown): Promise<Uint8Array>
+// JSON.stringify → LZ-String compress (> 10 KB) → AES-256-GCM encrypt → [ IV || ciphertext ] Uint8Array
 
-export async function idbDecrypt<T>(ciphertext: Uint8Array): Promise<T>
-// Verify GCM tag → decrypt → decompress → parse → return typed T
+export async function decryptFromStorage<T>(ciphertext: Uint8Array): Promise<T>
+// Split IV[0..12] + ciphertext[12..] → AES-256-GCM decrypt (GCM tag verified) → decompress → JSON.parse → T
 
-export function isIdbEncryptionReady(): boolean
-// Returns true once initIdbEncryption() has resolved successfully
+export function isStorageEncryptionReady(): boolean
+// Returns true once initStorageEncryption() has resolved successfully
 ```
 
-`dbService.ts` will call `idbEncrypt` / `idbDecrypt` in place of the existing raw `JSON.stringify` / `JSON.parse` paths after a feature-flag check:
-
-```ts
-featureFlags.enableIdbAtRestEncryption  // new flag, off by default
-```
+IDB store reads/writes in `services/storage/idbCore.ts` call `encryptForStorage` / `decryptFromStorage` when `featureFlags.enableIdbAtRestEncryption` is on and `isStorageEncryptionReady()` returns `true`.
 
 ---
 
@@ -179,19 +176,21 @@ byte 18..:  AES-GCM ciphertext + 16-byte GCM tag
 
 ---
 
-## Open Questions (Phase 2 planning)
+## Open Questions (Phase 3)
 
-1. **Web UX for passphrase entry:** unlock modal at app init vs. per-operation prompt. Recommendation: unlock modal on cold start with session-scoped in-memory key (key wiped on tab close / `visibilitychange` to `hidden`).
-2. **Forgot passphrase flow:** emergency export of unencrypted data while key is still known, or complete data loss. Needs explicit UX decision.
-3. **Multi-tab coordination:** all tabs must use the same derived key. `BroadcastChannel` can signal "passphrase unlocked" to sibling tabs; key itself stays per-tab in WebCrypto (non-extractable — cannot be transferred).
-4. **Key rotation:** change passphrase → re-derive key → re-encrypt all stores in one transaction. Expensive for large vaults; show progress spinner.
-5. **DuckDB OPFS:** DuckDB WAL and data files are outside IDB. Phase 3 consideration.
+1. **Web UX for passphrase entry:** unlock modal at app init with session-scoped in-memory key (key wiped on tab close / `visibilitychange` to `hidden`). Design approved; implementation is Phase 3.
+2. **Forgot passphrase flow:** emergency export of unencrypted data while key is still known, or complete data loss. UX decision deferred to Phase 3.
+3. **Multi-tab coordination:** all tabs must use the same derived key. `BroadcastChannel` can signal "passphrase unlocked" to sibling tabs; key itself stays per-tab in WebCrypto (non-extractable — cannot be transferred). Phase 3.
+4. **Key rotation:** change passphrase → re-derive key → re-encrypt all stores in one transaction. Expensive for large vaults; show progress spinner. Phase 3.
+5. **DuckDB OPFS:** DuckDB WAL and data files are outside IDB. Separate encryption layer required. Phase 3 design (SEC-6).
 
 ---
 
 ## References
 
-- `services/dbService.ts` — existing IDB layer with LZ-String + AES-256-GCM API key path
+- `services/storage/storageEncryptionService.ts` — **implemented service** (v1.19.0, B-1)
+- `services/storage/idbCore.ts` — IDB lifecycle; calls `encryptForStorage`/`decryptFromStorage` when flag is on
+- `services/storage/` (barrel) — `idbProjectStore`, `idbSnapshotStore`, `idbKeyStore`, `idbCodexStore`, `idbAssetStore`
 - `services/dbMigration.ts` — existing schema migration infrastructure
 - `services/dbConstants.ts` — `DB_VERSION`, store name constants
 - `services/collaborationService.ts` — reference PBKDF2 implementation (310,000 iterations, SHA-256)
