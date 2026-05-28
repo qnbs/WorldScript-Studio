@@ -1,0 +1,97 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in StoryCraft Studio
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill in as much detail as possible.
+        **Do not report security vulnerabilities here** — use [GitHub Private Vulnerability Reporting](https://github.com/qnbs/StoryCraft-Studio/security/advisories/new) instead.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear and concise description of what the bug is.
+      placeholder: When I do X, Y happens instead of Z...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Open the app
+        2. Navigate to...
+        3. Click on...
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Web (Chrome/Chromium)
+        - Web (Firefox)
+        - Web (Safari)
+        - Web (Edge)
+        - Desktop (Tauri — Linux)
+        - Desktop (Tauri — macOS)
+        - Desktop (Tauri — Windows)
+        - PWA (installed)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which version of StoryCraft Studio? (shown in Settings → About or the v badge in README)
+      placeholder: "e.g. v1.19.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ai-provider
+    attributes:
+      label: AI provider in use (if relevant)
+      options:
+        - Not relevant / no AI involved
+        - Google Gemini
+        - OpenAI
+        - Ollama (local)
+        - WebLLM (in-browser)
+        - ONNX Runtime Web
+        - Transformers.js
+    validations:
+      required: false
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors / logs (if any)
+      description: Paste any relevant browser console output here.
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I am not reporting a security vulnerability (those go to Private Vulnerability Reporting)
+          required: true

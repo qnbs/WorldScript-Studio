@@ -1,0 +1,50 @@
+name: Translation Contribution
+description: Contribute a translation improvement or fix for DE/EN/FR/ES/IT (or new language)
+title: "[i18n]: "
+labels: ["i18n", "good-first-issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping translate StoryCraft Studio!
+        Locale source files live in `locales/<lang>/*.json` (15 modules per language).
+        Run `pnpm run i18n:check` before submitting to verify key parity across all 5 locales.
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      options:
+        - German (de) — improvement
+        - French (fr) — improvement
+        - Spanish (es) — improvement
+        - Italian (it) — improvement
+        - English (en) — correction
+        - Arabic (ar) — new content (RTL beta stub)
+        - Hebrew (he) — new content (RTL beta stub)
+        - Other (new language)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What is being improved or added?
+      description: Which keys / modules / areas are affected? List specific i18n key paths if possible.
+      placeholder: |
+        - settings.ai.* — German translation improvements
+        - proforge.pipeline.* — missing French translations
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Translation checklist
+      options:
+        - label: "`pnpm run i18n:check` passes (all keys in parity across all 5 locales)"
+          required: true
+        - label: I am a native speaker or have had the translation reviewed by a native speaker
+          required: false
+        - label: No hardcoded strings remain — all user-facing text uses `t('key.path')`
+          required: true
