@@ -53,13 +53,14 @@ export default defineConfig({
         'packages/collab-transport/src/y-webrtc.js',
         'packages/collab-transport/src/crypto.js',
       ],
-      // QNBS-v3: Phase 2 B-7 — raised after B-series sprint; baseline 73%L/58%B/65%F (2026-05-26).
-      // Conservative headroom: 2% below last CI run to absorb B-1..B-6 new code paths.
+      // QNBS-v3: Phase 3 C-7 — raised after 105 new tests (supervisorAgent, baseAgent, geminiService
+      // streaming, helpCatalog, idbCore utilities, loraThunks); CI will confirm actual numbers.
+      // Previous thresholds: L71/F63/B57/S69 (2026-05-26).
       thresholds: {
-        lines: 71,
-        functions: 63,
-        branches: 57,
-        statements: 69,
+        lines: 73,
+        functions: 65,
+        branches: 58,
+        statements: 71,
         perFile: false,
       },
     },

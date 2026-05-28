@@ -214,6 +214,8 @@ Three security findings identified and fixed in the same session:
 
 **Quality gate (2026-05-26):** lint ✅ (Biome — 0 errors, 895 files) · typecheck ✅ · i18n:check ✅ (2025 keys × 5 locales; ar/he stubs excluded from parity check) · build ✅ · tests ✅ (4 044 / 386 files) · coverage ✅ Stmts 71.29% / Branches 58.79% / Funcs 65.18% / Lines 73.06% (thresholds: S≥67/B≥55/F≥60/L≥68)
 
+**Quality gate (2026-05-28, C-7 sprint):** lint ✅ (Biome — 0 errors, 1006 files) · typecheck ✅ · i18n:check ✅ (2077 keys × 5 locales) · tests ✅ (4 174 / 391 files — +130 tests: supervisorAgent, baseAgent, geminiService streaming, helpCatalog, idbCore, loraThunks) · coverage thresholds raised L73/F65/B58/S71 (CI will confirm actual numbers)
+
 ---
 
 ## Follow-up Audit — 2026-05-24 (v1.17 — Voice Full Support Foundation)
