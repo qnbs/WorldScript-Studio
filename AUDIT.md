@@ -1,9 +1,31 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)** → **2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)** → **2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger sprint B-1..B-8)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)** → **2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)** → **2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger sprint B-1..B-8)** → **2026-05-28 (Phase 3 C-1 — collab-transport security hardening)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.19.0** — 2026-05-28 (Security/Voice/RTL/Logger sprint — Phase 2 complete)  
+**Current version:** **v1.19.0** — 2026-05-28 (Phase 3 C-1 security hardening applied)  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-28 (Phase 3 C-1 — collab-transport Security Peer Review)
+
+### C-1: collab-transport Crypto Security Review
+
+**File:** `packages/collab-transport/src/crypto.js` (vendored y-webrtc 10.3.0 crypto module)
+
+Three security findings identified and fixed in the same session:
+
+| ID | Severity | Finding | Fix |
+|----|----------|---------|-----|
+| C1-F1 | **High** | PBKDF2 iterations = 100,000 — below OWASP 2024 minimum (600k for SHA-256); StoryCraft's own code uses 310k | Raised to 310,000 (matches `collaborationService.ts` + `storageEncryptionService.ts`) |
+| C1-F2 | **High** | `extractable: true` on the derived `CryptoKey` — violates SEC-RULE-5; allows key export via `crypto.subtle.exportKey()` | Changed to `extractable: false` |
+| C1-F3 | **Medium** | `promise.reject(...)` in decrypt() not `return`ed — error is swallowed, decrypt continues with garbage IV/ciphertext | Added `return` before the rejection |
+
+**Verification:** `pnpm exec vitest run tests/unit/collaborationService.test.ts` — 38/38 passing after fixes.
+
+**Residual risk (accepted):** The vendored `crypto.js` uses the y-webrtc PBKDF2 key derivation path (password → room key). The `collaborationService.ts` implements a separate PBKDF2 path (PBKDF2 310k → awareness payload encryption). Both paths now use 310k iterations and `extractable: false`. The room key derives salt from `roomName` (public, deterministic) — not a secret. This is intentional per y-webrtc design; collab session confidentiality depends on the password strength.
+
+**No known vulnerabilities** in `packages/collab-transport` after C1-F1..C1-F3 applied.
 
 ---
 

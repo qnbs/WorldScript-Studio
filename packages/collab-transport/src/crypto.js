@@ -21,11 +21,12 @@ export const deriveKey = (secret, roomName) => {
     false,
     ['deriveKey']
   ).then(keyMaterial =>
+    // SC-SEC: iterations raised 100k→310k (OWASP 2024 minimum); extractable false (SEC-RULE-5)
     crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
         salt,
-        iterations: 100000,
+        iterations: 310000,
         hash: 'SHA-256'
       },
       keyMaterial,
@@ -33,7 +34,7 @@ export const deriveKey = (secret, roomName) => {
         name: 'AES-GCM',
         length: 256
       },
-      true,
+      false,
       ['encrypt', 'decrypt']
     )
   )
@@ -88,7 +89,8 @@ export const decrypt = (data, key) => {
   const dataDecoder = decoding.createDecoder(data)
   const algorithm = decoding.readVarString(dataDecoder)
   if (algorithm !== 'AES-GCM') {
-    promise.reject(error.create('Unknown encryption algorithm'))
+    // SC-SEC: return the rejection so decrypt() aborts — without return the error is swallowed
+    return promise.reject(error.create('Unknown encryption algorithm'))
   }
   const iv = decoding.readVarUint8Array(dataDecoder)
   const cipher = decoding.readVarUint8Array(dataDecoder)
