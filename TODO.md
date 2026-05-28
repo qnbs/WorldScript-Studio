@@ -23,14 +23,19 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 ---
 
-## Phase 3 — Next Sprint (planned)
+## Phase 3 — v2.0 Foundation (ACTIVE 2026-05-28)
 
+- ✅ **C-1** — `packages/collab-transport/src/crypto.js` security hardening: PBKDF2 100k→310k, extractable:false, return promise.reject() fix
+- ✅ **C-2** — Reference plugins: `services/plugins/wordCountOverlay.plugin.ts` + `sceneAppender.plugin.ts` (8 tests)
+- ✅ **C-3** — LoRA Ollama wiring: `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag`, `streamProvider()` override
+- ✅ **C-4** — Cloud-Sync verified: `services/cloudSync/` (3 files, 39 tests, AES-256-GCM, `enableCloudSync` flag)
+- ✅ **C-5** — GitHub Issue Templates (`bug_report.yml`, `feature_request.yml`, `translation_pr.yml`) + AGENTS.md hardening
+- ⬜ **C-6** — Full ar/he translation content — requires native translator review (stubs exist in `locales/ar/`, `locales/he/`)
+- 🔄 **C-7** — Coverage → L85%/B75%/F80%; Stryker break 80 (current: 73%L/65%F/59%B; threshold: 71/63/57)
+- ⬜ IDB at-rest encryption UX (passphrase unlock modal, forgot-passphrase flow, key rotation) — C-5 of SEC roadmap
 - ⬜ Complete Whisper WASM STT model download + inference pipeline (B-2 continuation)
 - ⬜ Kokoro/Piper TTS WASM engines
 - ⬜ PLANbib v1.7 features (Objects → MindMap → Interviews → Timeline → Wizard → Analysis → ReadMode → Guide → Desktop) — 9 phases, go-ahead from user required
-- ⬜ Full RTL translation content (ar/he) — locale stubs in v1.19.0; full copy requires translator review
-- ⬜ IDB at-rest encryption UX (passphrase unlock modal, forgot-passphrase flow, key rotation)
-- ⬜ DuckDB OPFS at-rest encryption (Phase 3 consideration, per IDB-ENCRYPTION.md)
 
 ---
 
