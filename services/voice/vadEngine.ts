@@ -78,9 +78,21 @@ export class WebRtcVadEngine implements VadEngine {
 
 // ── Factory ──────────────────────────────────────────────────────────────────
 
-export async function createVadEngine(): Promise<VadEngine> {
-  // QNBS-v3: Phase 1 uses energy-based fallback.
-  // Phase 2 adds Silero VAD v4 via ONNX Runtime Web.
+export async function createVadEngine(enableVoiceWasm = false): Promise<VadEngine> {
+  // QNBS-v3: Phase 2 — try Silero VAD when enableVoiceWasm is on; falls back to energy-based.
+  if (enableVoiceWasm) {
+    try {
+      const { SileroVadEngine } = await import('./sileroVadEngine');
+      const silero = new SileroVadEngine();
+      if (await silero.isAvailable()) {
+        logger.info(`VAD engine selected: ${silero.name}`);
+        return silero;
+      }
+    } catch (err) {
+      logger.warn('[createVadEngine] SileroVadEngine unavailable, falling back:', err);
+    }
+  }
+
   const engine = new WebRtcVadEngine();
   if (await engine.isAvailable()) {
     logger.info(`VAD engine selected: ${engine.name}`);

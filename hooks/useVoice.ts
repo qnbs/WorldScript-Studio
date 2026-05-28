@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { appStoreRef } from '../app/store';
+import { selectEnableVoiceWasm } from '../features/featureFlags/featureFlagsSlice';
 import { selectVoiceSettings } from '../features/settings/settingsSlice';
 import {
   resetVoiceState,
@@ -25,6 +26,7 @@ import { getVoiceService } from '../services/voice/voiceCommandService';
 export const useVoice = () => {
   const dispatch = useAppDispatch();
   const voiceSettings = useAppSelector(selectVoiceSettings);
+  const enableVoiceWasm = useAppSelector(selectEnableVoiceWasm);
   const serviceRef = useRef(getVoiceService());
 
   // Sync service config with Redux settings whenever they change
@@ -41,9 +43,10 @@ export const useVoice = () => {
       wakeWordPhrase: voiceSettings.wakeWordPhrase,
       ttsMuted: voiceSettings.ttsMuted,
       dictationAutoPunctuation: voiceSettings.dictationAutoPunctuation,
+      enableVoiceWasm,
     };
     svc.updateConfig(config);
-  }, [voiceSettings]);
+  }, [voiceSettings, enableVoiceWasm]);
 
   // Provide dispatch and getState to service once
   useEffect(() => {

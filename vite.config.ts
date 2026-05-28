@@ -64,8 +64,13 @@ export default defineConfig({
           'community-templates/**/*.json',
           'locales/**/bundle.json',
         ],
-        // QNBS-v3: Exclude DuckDB chunks + WASM blobs from SW precache — loaded lazily when flag=on.
-        globIgnores: ['**/vendor-duckdb*', '**/vendor-webllm*', '**/*.wasm'],
+        // QNBS-v3: Exclude DuckDB, WebLLM, and voice WASM chunks from SW precache — loaded lazily when flag=on.
+        globIgnores: [
+          '**/vendor-duckdb*',
+          '**/vendor-webllm*',
+          '**/vendor-voice-wasm*',
+          '**/*.wasm',
+        ],
       },
       // Manifest bereits in public/manifest.json eingebunden
       manifest: false,
@@ -106,7 +111,7 @@ export default defineConfig({
       resolveDependencies: (_filename: string, deps: string[]) =>
         deps.filter(
           (d) =>
-            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx|vendor-webllm/.test(
+            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx|vendor-webllm|vendor-voice-wasm/.test(
               d,
             ),
         ),
@@ -175,6 +180,13 @@ export default defineConfig({
           // QNBS-v3: WebLLM is ~6 MB — isolate to prevent OOM during Vercel build and exclude from SW precache.
           if (id.includes('@mlc-ai/web-llm')) {
             return 'vendor-webllm';
+          }
+          // QNBS-v3: Voice WASM engines (WasmSttEngine, SileroVadEngine) — lazy-loaded when enableVoiceWasm=on.
+          if (
+            id.includes('services/voice/wasmSttEngine') ||
+            id.includes('services/voice/sileroVadEngine')
+          ) {
+            return 'vendor-voice-wasm';
           }
           // QNBS-v3: LoRA feature chunk — lazy-loaded, no heavy training libs (training is Python sidecar).
           if (
