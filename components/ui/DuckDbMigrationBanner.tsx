@@ -28,6 +28,7 @@ export function DuckDbMigrationBanner() {
     } else if (migrationStatus === 'error') {
       setVisible(true);
     }
+    return undefined;
   }, [migrationStatus, featureEnabled]);
 
   const dismiss = useCallback(() => {

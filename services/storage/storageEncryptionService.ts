@@ -35,7 +35,13 @@ export class StorageEncryptionService {
       ['deriveBits', 'deriveKey'],
     );
     return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      // QNBS-v3: new Uint8Array(salt) ensures ArrayBuffer backing — TS strict rejects ArrayBufferLike
+      {
+        name: 'PBKDF2',
+        salt: new Uint8Array(salt),
+        iterations: PBKDF2_ITERATIONS,
+        hash: 'SHA-256',
+      },
       keyMaterial,
       { name: 'AES-GCM', length: 256 },
       // QNBS-v3: extractable: false — key cannot leave the WebCrypto context (SEC-RULE-5)

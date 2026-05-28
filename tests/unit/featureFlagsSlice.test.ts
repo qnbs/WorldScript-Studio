@@ -24,6 +24,8 @@ describe('featureFlagsSlice', () => {
     enablePluginSystem: false,
     enableVoiceSupport: false,
     enableProForge: false,
+    enableIdbAtRestEncryption: false,
+    enableVoiceWasm: false,
   };
 
   it('should match default feature flag state on init', () => {
@@ -59,6 +61,8 @@ describe('featureFlagsSlice', () => {
       enablePluginSystem: false,
       enableVoiceSupport: false,
       enableProForge: false,
+      enableIdbAtRestEncryption: false,
+      enableVoiceWasm: false,
     };
     const state = featureFlagsReducer(undefined, featureFlagsActions.setFeatureFlags(next));
     expect(state).toEqual(next);

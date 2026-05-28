@@ -93,6 +93,8 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableMindMaps: false,
       enableRtlLayout: false,
       enableCloudSync: false,
+      enableIdbAtRestEncryption: false,
+      enableVoiceWasm: false,
     },
     ...overrides,
   };

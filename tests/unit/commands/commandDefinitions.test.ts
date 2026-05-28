@@ -87,6 +87,8 @@ const baseDeps: CommandRuntimeDeps = {
     enablePluginSystem: false,
     enableVoiceSupport: false,
     enableProForge: false,
+    enableIdbAtRestEncryption: false,
+    enableVoiceWasm: false,
   },
 };
 

@@ -39,6 +39,8 @@ let mockFeatureFlags: FeatureFlagsState = {
   enablePluginSystem: false,
   enableVoiceSupport: false,
   enableProForge: false,
+  enableIdbAtRestEncryption: false,
+  enableVoiceWasm: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -132,6 +134,8 @@ afterEach(() => {
     enablePluginSystem: false,
     enableVoiceSupport: false,
     enableProForge: false,
+    enableIdbAtRestEncryption: false,
+    enableVoiceWasm: false,
   };
 });
 

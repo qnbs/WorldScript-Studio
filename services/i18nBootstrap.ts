@@ -27,6 +27,17 @@ export const I18N_BOOTSTRAP: Record<Language, Record<string, string>> = {
     'initialProject.logline': 'Un viaggio di mille miglia inizia con un solo passo...',
     'initialProject.chapter1': 'Capitolo 1',
   },
+  // QNBS-v3: RTL beta stubs — fall back to English if bundles not loaded
+  ar: {
+    'initialProject.title': 'My Untitled Story',
+    'initialProject.logline': 'A journey of a thousand miles begins with a single step...',
+    'initialProject.chapter1': 'Chapter 1',
+  },
+  he: {
+    'initialProject.title': 'My Untitled Story',
+    'initialProject.logline': 'A journey of a thousand miles begins with a single step...',
+    'initialProject.chapter1': 'Chapter 1',
+  },
 };
 
 const KNOWN_PERSISTED_KEYS = new Set([
