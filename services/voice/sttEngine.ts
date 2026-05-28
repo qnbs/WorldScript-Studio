@@ -141,14 +141,30 @@ export interface SttEngineFactoryOptions {
   config?: AudioStreamConfig;
   /** GDPR Art. 13 consent for Web Speech API cloud audio routing — must be true to use webSpeech engine. */
   webSpeechConsentGranted?: boolean;
+  /** When true, tries WasmSttEngine (Whisper) before falling back to Web Speech API. */
+  enableVoiceWasm?: boolean;
 }
 
 export async function createSttEngine(options: SttEngineFactoryOptions = {}): Promise<SttEngine> {
-  const { preferredEngine = 'auto', webSpeechConsentGranted = false } = options;
+  const {
+    preferredEngine = 'auto',
+    webSpeechConsentGranted = false,
+    enableVoiceWasm = false,
+  } = options;
 
-  // QNBS-v3: In Phase 1 only Web Speech API is implemented.
-  // Future phases add Whisper.cpp WASM and Sherpa-ONNX engines.
-  const engines: SttEngine[] = [new WebSpeechSttEngine(webSpeechConsentGranted)];
+  const engines: SttEngine[] = [];
+
+  // QNBS-v3: Dynamically import WasmSttEngine — keeps Whisper/ONNX out of main bundle.
+  if (enableVoiceWasm && (preferredEngine === 'whisper' || preferredEngine === 'auto')) {
+    try {
+      const { WasmSttEngine } = await import('./wasmSttEngine');
+      engines.push(new WasmSttEngine(options.config));
+    } catch (err) {
+      logger.warn('[createSttEngine] WasmSttEngine load failed, falling back:', err);
+    }
+  }
+
+  engines.push(new WebSpeechSttEngine(webSpeechConsentGranted));
 
   if (preferredEngine !== 'auto') {
     const preferred = engines.find((e) => e.id === preferredEngine);

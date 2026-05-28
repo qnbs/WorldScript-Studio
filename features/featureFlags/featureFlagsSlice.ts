@@ -39,6 +39,8 @@ export interface FeatureFlagsState {
   enableProForge: boolean;
   /** IDB at-rest encryption — AES-256-GCM passphrase-derived key for all manuscript stores (default: false). */
   enableIdbAtRestEncryption: boolean;
+  /** Voice WASM engines — local Whisper STT + Silero VAD via ONNX; no cloud audio routing (default: false). */
+  enableVoiceWasm: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -76,6 +78,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableProForge: false,
   // QNBS-v3: IDB at-rest encryption — off by default; requires passphrase setup in Settings > Privacy.
   enableIdbAtRestEncryption: false,
+  // QNBS-v3: Voice WASM engines — off by default; ~40 MB Whisper model download on first use.
+  enableVoiceWasm: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -174,6 +178,9 @@ const featureFlagsSlice = createSlice({
     setEnableIdbAtRestEncryption(state, action: PayloadAction<boolean>) {
       state.enableIdbAtRestEncryption = action.payload;
     },
+    setEnableVoiceWasm(state, action: PayloadAction<boolean>) {
+      state.enableVoiceWasm = action.payload;
+    },
   },
 });
 
@@ -218,6 +225,8 @@ export const selectEnableProForge = (state: { featureFlags: FeatureFlagsState })
   state.featureFlags.enableProForge;
 export const selectEnableIdbAtRestEncryption = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableIdbAtRestEncryption;
+export const selectEnableVoiceWasm = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableVoiceWasm;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

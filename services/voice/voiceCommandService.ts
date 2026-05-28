@@ -51,6 +51,8 @@ export interface VoiceServiceConfig {
   wakeWordPhrase: string;
   ttsMuted: boolean;
   dictationAutoPunctuation: boolean;
+  /** When true, prefers WasmSttEngine (Whisper) + SileroVadEngine over Web Speech API. */
+  enableVoiceWasm: boolean;
 }
 
 export class VoiceCommandService {
@@ -81,6 +83,7 @@ export class VoiceCommandService {
       wakeWordPhrase: 'Hey StoryCraft',
       ttsMuted: false,
       dictationAutoPunctuation: true,
+      enableVoiceWasm: false,
       ...config,
     };
 
@@ -169,7 +172,10 @@ export class VoiceCommandService {
   private async initStt(): Promise<SttEngine | null> {
     try {
       this.d(setSttStatus('loading'));
-      const engine = await createSttEngine({ preferredEngine: this.config.preferredSttEngine });
+      const engine = await createSttEngine({
+        preferredEngine: this.config.preferredSttEngine,
+        enableVoiceWasm: this.config.enableVoiceWasm,
+      });
       this.d(setActiveSttEngine(engine.id));
       this.d(setSttStatus('ready'));
       return engine;
@@ -197,7 +203,7 @@ export class VoiceCommandService {
   private async initVad(): Promise<VadEngine | null> {
     try {
       this.d(setVadStatus('loading'));
-      const engine = await createVadEngine();
+      const engine = await createVadEngine(this.config.enableVoiceWasm);
       this.d(setVadStatus('ready'));
       return engine;
     } catch (err) {
