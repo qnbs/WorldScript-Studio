@@ -12,6 +12,11 @@
     "jsx": "react-jsx",
     "types": ["vite/client", "react", "react-dom"],
     "typeRoots": ["./types", "./node_modules/@types"],
+    "paths": {
+      "@xenova/transformers": [
+        "./packages/ai-core/node_modules/@xenova/transformers/types/transformers.d.ts"
+      ]
+    },
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitAny": true,

@@ -16,6 +16,8 @@ const TTS_LOCALE: Record<Language, string> = {
   fr: 'fr-FR',
   es: 'es-ES',
   it: 'it-IT',
+  ar: 'ar-SA',
+  he: 'he-IL',
 };
 
 const AiScratchpad: FC = React.memo(() => {

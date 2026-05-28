@@ -47,6 +47,8 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enablePluginSystem: false,
   enableVoiceSupport: false,
   enableProForge: false,
+  enableIdbAtRestEncryption: false,
+  enableVoiceWasm: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

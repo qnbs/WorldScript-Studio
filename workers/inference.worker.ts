@@ -47,7 +47,6 @@ let transformersModule: { pipeline: (...args: unknown[]) => Promise<unknown> } |
 async function getTransformers() {
   if (!transformersModule) {
     // Dynamic import so the worker bundle is only loaded when actually needed.
-    // @ts-expect-error TS2307: @xenova/transformers is in packages/ai-core; Vite resolves it at build time
     const mod = await import('@xenova/transformers');
     transformersModule = mod as unknown as typeof transformersModule;
   }

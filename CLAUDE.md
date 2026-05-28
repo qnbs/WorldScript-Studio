@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL: Sequential Shell Execution (LOW-END HARDWARE)
+
+**NEVER run multiple Bash tool calls in the same message.** This machine has ~3.7 GB RAM with often < 500 MB free. Concurrent shells (vitest, biome, tsc, vite, pnpm build) cause OOM, VS Code force-closes, and pool-worker timeouts.
+
+Rules — NO exceptions, every session, every turn:
+- ONE Bash tool call per turn. Wait for the result. Then proceed.
+- NO `run_in_background` for vitest, biome, tsc, vite, or any pnpm build command.
+- NO parallel Agent tool calls that each issue shell commands.
+- NO multiple Bash tool calls in the same response block.
+- Chain sequential steps inside ONE Bash call using `&&` if needed.
+
+This overrides the general "run tools in parallel" instruction — parallel shell execution has caused repeated VS Code crashes on this machine.
+
 ## Commands
 
 ```bash
