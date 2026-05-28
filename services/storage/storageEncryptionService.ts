@@ -1,11 +1,11 @@
 /**
  * StorageEncryptionService — AES-256-GCM at-rest encryption for IDB stores.
- * ENCRYPTION: AES-256-GCM, PBKDF2-SHA-256 (310k iterations), non-extractable key (SEC-RULE-5).
+ * ENCRYPTION: AES-256-GCM, PBKDF2-SHA-256 (600k iterations, OWASP 2024 minimum), non-extractable key (SEC-RULE-5).
  * QNBS-v3: Phase 2 B-1. Key held in-memory only; never serialised; cleared by clearIdbEncryptionKey().
  *          Salt is non-secret (prevents cross-install rainbow tables); stored in localStorage.
  */
 
-const PBKDF2_ITERATIONS = 310_000; // matches collaborationService.ts PBKDF2 budget
+const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
 const SALT_BYTE_LENGTH = 32;
 const SALT_STORAGE_KEY = 'storycraft-idb-kdf-salt-v1';

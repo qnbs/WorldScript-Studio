@@ -230,13 +230,13 @@ Client-side env vars must use the `VITE_*` prefix (from `.env` / `.env.local`, w
 
 `storageService.ts` is the unified interface that auto-detects IndexedDB vs. Tauri filesystem. Data access must go through `dbService` or thunks — never raw IndexedDB calls. Never use `localStorage` for sensitive data.
 
-**At-rest encryption (B-1, `enableIdbAtRestEncryption`):** `storageEncryptionService.ts` — PBKDF2 (310 000 iter, SHA-256) → AES-256-GCM, `extractable: false`. Call `initIdbEncryption(passphrase)` before any IDB read/write when flag is on. Do NOT enable in production until the passphrase UX (unlock modal, key rotation) is complete.
+**At-rest encryption (B-1, `enableIdbAtRestEncryption`):** `storageEncryptionService.ts` — PBKDF2 (600 000 iter, SHA-256, OWASP 2024 minimum) → AES-256-GCM, `extractable: false`. Call `initIdbEncryption(passphrase)` before any IDB read/write when flag is on. Do NOT enable in production until the passphrase UX (unlock modal, key rotation) is complete.
 
 `services/dbInitialization.ts` exports `checkStorageHealth()` — proactive low-storage warning on app init. Returns a `StorageHealth` object; surfaced via toast rather than blocking writes.
 
 ### Collaboration
 
-Real-time P2P editing via Yjs + `packages/collab-transport` (`services/collaborationService.ts`). Signaling-channel E2E encryption: AES-256-GCM with PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`. **RTCDataChannel in-flight E2E encryption** is baked into `packages/collab-transport` (vendor fork of y-webrtc 10.3.0 — B-3, v1.19.0; crypto.js hardened in C-1: PBKDF2 100k→310k, `extractable: false`, `return promise.reject()` fix). Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
+Real-time P2P editing via Yjs + `packages/collab-transport` (`services/collaborationService.ts`). Signaling-channel E2E encryption: AES-256-GCM with PBKDF2 (600 000 iterations, SHA-256, OWASP 2024 minimum), deterministic salt from `projectId`. **RTCDataChannel in-flight E2E encryption** is baked into `packages/collab-transport` (vendor fork of y-webrtc 10.3.0 — B-3, v1.19.0; crypto.js hardened in C-1: PBKDF2 100k→310k→600k, `extractable: false`, `return promise.reject()` fix). Signaling URLs come from Redux `settings.collaboration.webrtcSignalingUrls`. Do not introduce a second CRDT layer.
 
 **Vendor-fork maintenance:** `packages/collab-transport/src/` must contain ALL files imported by `y-webrtc.js` (check with `grep "from './"` on the JS source). Missing relative imports cause `UNRESOLVED_IMPORT` on Vercel/Rolldown builds even though Vite dev server resolves them via alias.
 

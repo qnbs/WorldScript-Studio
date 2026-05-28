@@ -17,13 +17,13 @@ Three security findings identified and fixed in the same session:
 
 | ID | Severity | Finding | Fix |
 |----|----------|---------|-----|
-| C1-F1 | **High** | PBKDF2 iterations = 100,000 — below OWASP 2024 minimum (600k for SHA-256); StoryCraft's own code uses 310k | Raised to 310,000 (matches `collaborationService.ts` + `storageEncryptionService.ts`) |
+| C1-F1 | **High** | PBKDF2 iterations = 100,000 — below OWASP 2024 minimum (600k for SHA-256); StoryCraft's own code uses 310k | Raised to 600,000 across all 5 KDF sites (`collab-transport/crypto.js`, `collaborationService.ts`, `storageEncryptionService.ts`, `cloudSyncEncryption.ts`, `libraryBackupService.ts`) |
 | C1-F2 | **High** | `extractable: true` on the derived `CryptoKey` — violates SEC-RULE-5; allows key export via `crypto.subtle.exportKey()` | Changed to `extractable: false` |
 | C1-F3 | **Medium** | `promise.reject(...)` in decrypt() not `return`ed — error is swallowed, decrypt continues with garbage IV/ciphertext | Added `return` before the rejection |
 
 **Verification:** `pnpm exec vitest run tests/unit/collaborationService.test.ts` — 38/38 passing after fixes.
 
-**Residual risk (accepted):** The vendored `crypto.js` uses the y-webrtc PBKDF2 key derivation path (password → room key). The `collaborationService.ts` implements a separate PBKDF2 path (PBKDF2 310k → awareness payload encryption). Both paths now use 310k iterations and `extractable: false`. The room key derives salt from `roomName` (public, deterministic) — not a secret. This is intentional per y-webrtc design; collab session confidentiality depends on the password strength.
+**Residual risk (accepted):** The vendored `crypto.js` uses the y-webrtc PBKDF2 key derivation path (password → room key). The `collaborationService.ts` implements a separate PBKDF2 path (PBKDF2 600k → awareness payload encryption). Both paths now use 600k iterations and `extractable: false`. The room key derives salt from `roomName` (public, deterministic) — not a secret. This is intentional per y-webrtc design; collab session confidentiality depends on the password strength.
 
 **No known vulnerabilities** in `packages/collab-transport` after C1-F1..C1-F3 applied.
 
@@ -33,7 +33,7 @@ Three security findings identified and fixed in the same session:
 
 ### Sprint: Phase 2 B-series (B-1..B-8) — 2026-05-28
 
-**B-1:** `services/storage/storageEncryptionService.ts` — AES-256-GCM IDB at-rest encryption, PBKDF2-SHA-256 (310k iterations), non-extractable key, sentinel-prefixed blobs. 24 tests.
+**B-1:** `services/storage/storageEncryptionService.ts` — AES-256-GCM IDB at-rest encryption, PBKDF2-SHA-256 (600k iterations, OWASP 2024 minimum), non-extractable key, sentinel-prefixed blobs. 24 tests.
 
 **B-2:** `services/voice/wasmSttEngine.ts` + `sileroVadEngine.ts` — Whisper tiny.en Q8 + Silero VAD scaffold via @xenova/transformers. Feature-flagged (`enableVoiceWasm`).
 
@@ -426,7 +426,7 @@ Three security findings identified and fixed in the same session:
 
 **AI Provider Extensions:** ONNX + Transformers.js as selectable primary providers. Service-level dedup in `aiThunkUtils.ts`. Per-project AI preset (hash-based deep links). `WorkerBus` backpressure guard (MAX_QUEUE_SIZE 32; critical bypass; telemetry extended).
 
-**Collaboration:** Y-WebRTC E2E AES-256-GCM encryption (`collaborationService.ts`); PBKDF2 310 000 iterations; `CollaborationPanel` E2E status badge.
+**Collaboration:** Y-WebRTC E2E AES-256-GCM encryption (`collaborationService.ts`); PBKDF2 600 000 iterations; `CollaborationPanel` E2E status badge.
 
 **Performance:** `PlotCanvas.tsx` pointer-move throttled via rAF; eliminates 60 Hz Redux dispatch storm.
 
@@ -540,7 +540,7 @@ Delivered: WorkerBus v2 (priority preemption, backpressure, transferables), GPU 
 
 ### Collaboration Encryption
 
-- **AES-256-GCM foundation:** `collaborationService.ts` gains `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 310 000 iterations, SHA-256, AES-256-GCM), and `getEncryptionStatus()` returning `'encrypted' | 'psk-only' | 'plaintext'`. Key derivation uses a deterministic SHA-256 salt from projectId. Full in-flight P2P encryption requires y-webrtc RTCDataChannel patching (deferred to v2.0). Implemented: encrypted persistence foundation + key derivation.
+- **AES-256-GCM foundation:** `collaborationService.ts` gains `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 600 000 iterations, SHA-256, AES-256-GCM), and `getEncryptionStatus()` returning `'encrypted' | 'psk-only' | 'plaintext'`. Key derivation uses a deterministic SHA-256 salt from projectId. Full in-flight P2P encryption requires y-webrtc RTCDataChannel patching (deferred to v2.0). Implemented: encrypted persistence foundation + key derivation.
 - **CollaborationPanel badge:** Green `E2E Key Derived (AES-256-GCM)` badge post-connect with password; amber `Room isolation only` without. `role="status"`, `aria-live="polite"`.
 
 ### Tauri Release Pipeline

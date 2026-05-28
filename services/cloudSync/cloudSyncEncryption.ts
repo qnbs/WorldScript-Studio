@@ -1,6 +1,6 @@
-// QNBS-v3: AES-256-GCM envelope for cloud-sync payloads — same KDF as collaborationService (PBKDF2 SHA-256, 310k iterations).
+// QNBS-v3: AES-256-GCM envelope for cloud-sync payloads — same KDF as collaborationService (PBKDF2 SHA-256, 600k iterations, OWASP 2024 minimum).
 
-const PBKDF2_ITERATIONS = 310_000;
+const PBKDF2_ITERATIONS = 600_000;
 const IV_LENGTH = 12;
 
 /** Derives a per-user AES-256-GCM key from a passphrase + deterministic salt (userId). */

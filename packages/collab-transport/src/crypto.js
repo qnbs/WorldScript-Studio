@@ -21,12 +21,12 @@ export const deriveKey = (secret, roomName) => {
     false,
     ['deriveKey']
   ).then(keyMaterial =>
-    // SC-SEC: iterations raised 100k→310k (OWASP 2024 minimum); extractable false (SEC-RULE-5)
+    // SC-SEC: iterations raised 100k→310k→600k (OWASP 2024 minimum for SHA-256); extractable false (SEC-RULE-5)
     crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
         salt,
-        iterations: 310000,
+        iterations: 600000,
         hash: 'SHA-256'
       },
       keyMaterial,
