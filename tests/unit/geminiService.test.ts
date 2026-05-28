@@ -2,6 +2,8 @@ import type { Type } from '@google/genai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGenerateContent = vi.fn().mockResolvedValue({ text: 'mock response' });
+// QNBS-v3: Hoisted so each test can set a fresh async generator before calling streamText/streamAiHelpResponse.
+const mockGenerateContentStream = vi.fn();
 
 // Mock the @google/genai module
 vi.mock('@google/genai', () => {
@@ -9,12 +11,7 @@ vi.mock('@google/genai', () => {
   class MockGoogleGenAI {
     models = {
       generateContent: mockGenerateContent,
-      generateContentStream: vi.fn().mockReturnValue(
-        (async function* () {
-          yield { text: 'chunk1' };
-          yield { text: 'chunk2' };
-        })(),
-      ),
+      generateContentStream: mockGenerateContentStream,
     };
   }
   return {
@@ -39,9 +36,16 @@ vi.mock('../../services/dbService', () => ({
 }));
 
 describe('geminiService', () => {
+  function makeStream(...texts: string[]) {
+    return (async function* () {
+      for (const t of texts) yield { text: t };
+    })();
+  }
+
   beforeEach(() => {
     vi.stubGlobal('navigator', { onLine: true });
     mockGenerateContent.mockResolvedValue({ text: 'mock response' });
+    mockGenerateContentStream.mockReturnValue(makeStream('chunk1', 'chunk2'));
   });
 
   afterEach(() => {
@@ -185,6 +189,148 @@ describe('geminiService', () => {
       await expect(
         analyzeAsCritic('sample text', 'Balanced', 'en', controller.signal),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('detectPlotHoles', () => {
+    it('returns plot-hole analysis text', async () => {
+      mockGenerateContent.mockResolvedValue({ text: 'Plot hole: X is unresolved.' });
+      const { detectPlotHoles } = await import('../../services/geminiService');
+      const result = await detectPlotHoles('manuscript text', 'Balanced', 'en');
+      expect(result).toBe('Plot hole: X is unresolved.');
+    });
+
+    it('throws when aborted', async () => {
+      const { detectPlotHoles } = await import('../../services/geminiService');
+      const ctrl = new AbortController();
+      ctrl.abort();
+      await expect(detectPlotHoles('text', 'Balanced', 'en', ctrl.signal)).rejects.toThrow();
+    });
+  });
+
+  describe('handleInvalidApiKey', () => {
+    it('clears the api key from storage', async () => {
+      const { storageService } = await import('../../services/storageService');
+      const { handleInvalidApiKey } = await import('../../services/geminiService');
+      await handleInvalidApiKey();
+      expect(storageService.clearGeminiApiKey).toHaveBeenCalled();
+    });
+
+    it('does not throw when clearGeminiApiKey fails', async () => {
+      const { storageService } = await import('../../services/storageService');
+      vi.mocked(storageService.clearGeminiApiKey).mockRejectedValueOnce(new Error('IDB error'));
+      const { handleInvalidApiKey } = await import('../../services/geminiService');
+      await expect(handleInvalidApiKey()).resolves.toBeUndefined();
+    });
+  });
+
+  describe('invalidateAiClientCache', () => {
+    it('does not throw', async () => {
+      const { invalidateAiClientCache } = await import('../../services/geminiService');
+      expect(() => invalidateAiClientCache()).not.toThrow();
+    });
+  });
+
+  describe('streamText', () => {
+    it('calls onChunk for each yielded chunk', async () => {
+      mockGenerateContentStream.mockReturnValue(makeStream('hello ', 'world'));
+      const { streamText } = await import('../../services/geminiService');
+      const chunks: string[] = [];
+      await streamText('prompt', 'Balanced', (c) => chunks.push(c));
+      expect(chunks).toEqual(['hello ', 'world']);
+    });
+
+    it('throws AbortError when signal is already aborted', async () => {
+      const { streamText } = await import('../../services/geminiService');
+      const ctrl = new AbortController();
+      ctrl.abort();
+      await expect(streamText('prompt', 'Balanced', vi.fn(), ctrl.signal)).rejects.toThrow(
+        'Aborted',
+      );
+    });
+
+    it('throws when offline', async () => {
+      vi.stubGlobal('navigator', { onLine: false });
+      const { streamText } = await import('../../services/geminiService');
+      await expect(streamText('prompt', 'Balanced', vi.fn())).rejects.toThrow('OFFLINE');
+    });
+
+    it('wraps non-AbortErrors and logs them', async () => {
+      mockGenerateContentStream.mockImplementation(() => {
+        throw new Error('Stream broken');
+      });
+      const { streamText } = await import('../../services/geminiService');
+      await expect(streamText('prompt', 'Balanced', vi.fn())).rejects.toThrow('Stream broken');
+    });
+
+    it('passes a custom model name when provided', async () => {
+      mockGenerateContentStream.mockReturnValue(makeStream('ok'));
+      const { streamText } = await import('../../services/geminiService');
+      await streamText('prompt', 'Focused', vi.fn(), undefined, 'gemini-custom');
+      expect(mockGenerateContentStream).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'gemini-custom' }),
+      );
+    });
+  });
+
+  describe('streamAiHelpResponse', () => {
+    it('calls onChunk with streamed chunks', async () => {
+      mockGenerateContentStream.mockReturnValue(makeStream('Answer: ', '42'));
+      const { streamAiHelpResponse } = await import('../../services/geminiService');
+      const chunks: string[] = [];
+      await streamAiHelpResponse('What is the answer?', (c) => chunks.push(c), 0.7);
+      expect(chunks).toEqual(['Answer: ', '42']);
+    });
+
+    it('throws AbortError when aborted before stream', async () => {
+      const { streamAiHelpResponse } = await import('../../services/geminiService');
+      const ctrl = new AbortController();
+      ctrl.abort();
+      await expect(streamAiHelpResponse('question', vi.fn(), 0.5, ctrl.signal)).rejects.toThrow(
+        'Aborted',
+      );
+    });
+
+    it('throws when offline', async () => {
+      vi.stubGlobal('navigator', { onLine: false });
+      const { streamAiHelpResponse } = await import('../../services/geminiService');
+      await expect(streamAiHelpResponse('q', vi.fn(), 0.7)).rejects.toThrow('OFFLINE');
+    });
+  });
+
+  describe('generateImage', () => {
+    it('returns base64 inline data from the first image part', async () => {
+      mockGenerateContent.mockResolvedValue({
+        candidates: [
+          {
+            content: {
+              parts: [{ inlineData: { data: 'base64imagedata' } }],
+            },
+          },
+        ],
+      });
+      const { generateImage } = await import('../../services/geminiService');
+      const result = await generateImage('a sunset over mountains');
+      expect(result).toBe('base64imagedata');
+    });
+
+    it('throws when no image part is returned', async () => {
+      mockGenerateContent.mockResolvedValue({ candidates: [{ content: { parts: [] } }] });
+      const { generateImage } = await import('../../services/geminiService');
+      await expect(generateImage('prompt')).rejects.toThrow('No image was generated.');
+    });
+
+    it('throws AbortError when signal is already aborted', async () => {
+      const { generateImage } = await import('../../services/geminiService');
+      const ctrl = new AbortController();
+      ctrl.abort();
+      await expect(generateImage('prompt', ctrl.signal)).rejects.toThrow('Aborted');
+    });
+
+    it('throws when offline', async () => {
+      vi.stubGlobal('navigator', { onLine: false });
+      const { generateImage } = await import('../../services/geminiService');
+      await expect(generateImage('prompt')).rejects.toThrow('OFFLINE');
     });
   });
 });
