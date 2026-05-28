@@ -20,7 +20,11 @@ vi.mock('../../services/logger', () => ({
 
 import { duckdbDualWrite } from '../../services/duckdb/duckdbAnalytics';
 import { duckdbClient } from '../../services/duckdb/duckdbClient';
-import { isMigrated, runIfNeeded } from '../../services/duckdb/duckdbMigration';
+import {
+  isMigrated,
+  runIfNeeded,
+  runMigrationWithRollback,
+} from '../../services/duckdb/duckdbMigration';
 
 const mockQuery = vi.mocked(duckdbClient.query);
 const mockExec = vi.mocked(duckdbClient.exec);
@@ -98,5 +102,51 @@ describe('runIfNeeded', () => {
     // 4th arg is totalWordCount, 7th is sections array
     const sections = callArgs[7] as { wordCount: number }[];
     expect(sections[0]!.wordCount).toBe(5);
+  });
+});
+
+describe('runMigrationWithRollback', () => {
+  it('no-ops when already migrated', async () => {
+    mockQuery.mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [{ value: '1' }] });
+    await runMigrationWithRollback(sampleProject);
+    expect(mockDualWrite).not.toHaveBeenCalled();
+  });
+
+  it('succeeds when migration succeeds — no rollback SQL issued', async () => {
+    // runMigrationWithRollback calls isMigrated, then runIfNeeded calls isMigrated again
+    mockQuery
+      .mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] })
+      .mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] });
+    await runMigrationWithRollback(sampleProject);
+    expect(mockDualWrite).toHaveBeenCalledOnce();
+    const deleteCalls = mockExec.mock.calls.filter(([sql]) =>
+      (sql as string).trimStart().startsWith('DELETE'),
+    );
+    expect(deleteCalls).toHaveLength(0);
+  });
+
+  it('executes rollback DELETE statements when migration fails', async () => {
+    // runMigrationWithRollback checks isMigrated, then runIfNeeded checks it again
+    mockQuery
+      .mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] })
+      .mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] });
+    mockDualWrite.mockRejectedValueOnce(new Error('disk full'));
+
+    await expect(runMigrationWithRollback(sampleProject)).rejects.toThrow('disk full');
+
+    const execSqls = mockExec.mock.calls.map(([sql]) => sql as string);
+    const rollbackCall = execSqls.find((sql) => sql.includes('DELETE FROM writing_sessions'));
+    expect(rollbackCall).toBeDefined();
+    expect(rollbackCall).toContain("project_id = 'proj-1'");
+  });
+
+  it('re-throws original error even when rollback exec also fails', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] })
+      .mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] });
+    mockDualWrite.mockRejectedValueOnce(new Error('original'));
+    mockExec.mockRejectedValueOnce(new Error('rollback also failed'));
+
+    await expect(runMigrationWithRollback(sampleProject)).rejects.toThrow('original');
   });
 });

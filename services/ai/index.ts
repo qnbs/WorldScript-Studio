@@ -48,6 +48,18 @@ export {
   gpuResourceManager,
 } from './gpuResourceManager';
 export {
+  createInferenceGateway,
+  DefaultInferenceGateway,
+  type EmbedRequest,
+  type EmbedResult,
+  type GatewayHealth,
+  type GenerateRequest,
+  type GenerateResult,
+  type InferenceGateway,
+  inferenceGateway,
+  type ModelInfo,
+} from './inferenceGateway';
+export {
   inferenceProgressEmitter,
   type WebLlmLoadingState,
   type WebLlmLoadProgress,

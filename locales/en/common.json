@@ -491,5 +491,9 @@
   "characters.emptyState.title": "Your cast list is empty",
   "characters.emptyState.description": "Every great story starts with someone. Add a character from scratch, or let AI sketch one from a concept.",
   "worlds.emptyState.title": "The world awaits",
-  "worlds.emptyState.description": "Build the places, rules, and histories your story lives in. Start with a location."
+  "worlds.emptyState.description": "Build the places, rules, and histories your story lives in. Start with a location.",
+  "duckdb.migration.running": "Upgrading analytics database…",
+  "duckdb.migration.complete": "Analytics database ready",
+  "duckdb.migration.failed": "Analytics database upgrade failed — will retry on next launch",
+  "duckdb.migration.dismiss": "Dismiss"
 }

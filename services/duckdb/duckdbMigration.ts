@@ -1,11 +1,15 @@
 // QNBS-v3: One-time IDB→DuckDB seed job. Reads project state, inserts plaintext analytics rows.
 //          Sensitive columns (content, backstory, etc.) are NOT migrated in P1 — deferred to P2.
 //          Idempotent: writes _meta marker on success; re-runs if marker absent.
+//          runMigrationWithRollback: deletes partial inserts on failure so state stays consistent.
 
 import { logger } from '../logger';
 import { duckdbDualWrite } from './duckdbAnalytics';
 import { duckdbClient } from './duckdbClient';
 import { DUCK_DB_SCHEMA_VERSION } from './duckdbSchema';
+
+// QNBS-v3: Dry-run skips all DuckDB writes; set VITE_DUCKDB_MIGRATION_DRY_RUN=1 for testing.
+const DRY_RUN = import.meta.env['VITE_DUCKDB_MIGRATION_DRY_RUN'] === '1';
 
 const MIGRATION_MARKER_KEY = `schema_v${DUCK_DB_SCHEMA_VERSION}_migrated`;
 
@@ -57,27 +61,66 @@ export async function runIfNeeded(project: MigratableProjectData): Promise<void>
 
     const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
 
-    await duckdbDualWrite(
-      projectId,
-      project.title,
-      project.logline,
-      totalWordCount,
-      project.projectGoals?.totalWordCount,
-      project.projectGoals?.targetDate,
-      project.writingHistory ?? [],
-      sections,
-    );
+    if (!DRY_RUN) {
+      await duckdbDualWrite(
+        projectId,
+        project.title,
+        project.logline,
+        totalWordCount,
+        project.projectGoals?.totalWordCount,
+        project.projectGoals?.targetDate,
+        project.writingHistory ?? [],
+        sections,
+      );
 
-    // Write migration marker — only after all inserts succeed
-    await duckdbClient.exec(
-      `INSERT INTO _meta (key, value) VALUES ('${MIGRATION_MARKER_KEY}', '${DUCK_DB_SCHEMA_VERSION}')
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    );
+      // Write migration marker — only after all inserts succeed
+      await duckdbClient.exec(
+        `INSERT INTO _meta (key, value) VALUES ('${MIGRATION_MARKER_KEY}', '${DUCK_DB_SCHEMA_VERSION}')
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      );
+    } else {
+      logger.debug('[duckdbMigration] DRY_RUN — skipping DuckDB writes');
+    }
 
     logger.debug('[duckdbMigration] Seed migration complete');
   } catch (err) {
     logger.warn('[duckdbMigration] Seed migration failed (non-fatal):', err);
     // Marker NOT written → will retry on next app load
+    throw err;
+  }
+}
+
+/**
+ * Run the seed migration with rollback: on failure, deletes any rows written for this project
+ * so the tables stay consistent. The _meta marker is never written on failure, so the next
+ * app load retries cleanly.
+ */
+export async function runMigrationWithRollback(project: MigratableProjectData): Promise<void> {
+  if (await isMigrated()) return;
+
+  const projectId = project.id ?? 'default';
+  logger.debug('[duckdbMigration] Starting migration with rollback for project', projectId);
+
+  if (DRY_RUN) {
+    logger.debug('[duckdbMigration] DRY_RUN — skipping migration');
+    return;
+  }
+
+  try {
+    await runIfNeeded(project);
+  } catch (err) {
+    // QNBS-v3: Best-effort rollback — delete partial rows for this project so the next retry starts clean.
+    try {
+      await duckdbClient.exec(
+        `DELETE FROM writing_sessions WHERE project_id = '${projectId}';
+         DELETE FROM scene_metrics WHERE project_id = '${projectId}';
+         DELETE FROM projects WHERE id = '${projectId}';
+         DELETE FROM _meta WHERE key = '${MIGRATION_MARKER_KEY}'`,
+      );
+      logger.debug('[duckdbMigration] Rollback complete for project', projectId);
+    } catch (rollbackErr) {
+      logger.warn('[duckdbMigration] Rollback failed (non-fatal):', rollbackErr);
+    }
     throw err;
   }
 }

@@ -9,7 +9,6 @@ import type {
   ReviewItem,
   StageResult,
 } from '../../../features/proForge/types';
-import { aiProviderService } from '../../aiProviderService';
 import { logger } from '../../logger';
 import { getPrompt } from '../../promptLibrary';
 import {
@@ -68,11 +67,7 @@ export class DiagnosticAgent extends BaseAgent {
     let tokensConsumed = 0;
 
     try {
-      const response = await aiProviderService.generateText(
-        prompt,
-        config.creativity,
-        this.buildAiOpts({ maxTokens: config.maxTokens }),
-      );
+      const response = await this.generate(prompt, config.maxTokens);
       aiCalls += 1;
       tokensConsumed += response.length; // rough estimate
 
@@ -91,11 +86,7 @@ export class DiagnosticAgent extends BaseAgent {
         if (!reflection.coherent && !signal.aborted) {
           logger.warn('DiagnosticAgent: Self-eval flagged INCOHERENT — retrying primary call');
           try {
-            const retryRaw = await aiProviderService.generateText(
-              prompt,
-              config.creativity,
-              this.buildAiOpts({ maxTokens: config.maxTokens }),
-            );
+            const retryRaw = await this.generate(prompt, config.maxTokens);
             aiCalls += 1;
             tokensConsumed += retryRaw.length;
             const retried = this.parseDiagnosticResponse(retryRaw);

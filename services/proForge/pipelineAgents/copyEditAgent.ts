@@ -10,7 +10,6 @@ import type {
   ReviewItem,
   StageResult,
 } from '../../../features/proForge/types';
-import { aiProviderService } from '../../aiProviderService';
 import { logger } from '../../logger';
 import { getPrompt } from '../../promptLibrary';
 import {
@@ -57,11 +56,7 @@ export class CopyEditAgent extends BaseAgent {
       });
 
       try {
-        const response = await aiProviderService.generateText(
-          prompt,
-          config.creativity,
-          this.buildAiOpts({ maxTokens: Math.min(config.maxTokens, 4000) }),
-        );
+        const response = await this.generate(prompt, Math.min(config.maxTokens, 4000));
         aiCalls += 1;
         tokensConsumed += response.length;
 

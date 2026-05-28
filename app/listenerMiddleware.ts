@@ -306,8 +306,8 @@ listenerMiddleware.startListening({
 
     listenerApi.dispatch(analyticsActions.setMigrationStatus('running'));
     try {
-      const { runIfNeeded } = await loadDuckdbMigration();
-      await runIfNeeded(project);
+      const { runMigrationWithRollback } = await loadDuckdbMigration();
+      await runMigrationWithRollback(project);
       const projectId = project.id || 'default';
       const { runRagVectorMigration } = await loadRagVectorMigration();
       await runRagVectorMigration(projectId, project.manuscript);

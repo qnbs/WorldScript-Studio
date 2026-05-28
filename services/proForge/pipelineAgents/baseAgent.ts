@@ -5,16 +5,20 @@
 
 import type { StageResult } from '../../../features/proForge/types';
 import type { AIProvider, AiModel } from '../../../types';
-import { type AIRequestOptions, aiProviderService } from '../../aiProviderService';
+import { type InferenceGateway, inferenceGateway } from '../../ai/inferenceGateway';
+import type { AIRequestOptions } from '../../aiProviderService';
 import { logger } from '../../logger';
 import { getMemoryBank, type ProForgeMemoryBank } from '../proForgeMemoryBank';
 import type { OrchestratorContext } from '../proForgeOrchestrator';
 
 export abstract class BaseAgent {
   protected readonly context: OrchestratorContext;
+  // QNBS-v3: Gateway injected from context or falls back to module singleton — keeps agents testable.
+  protected readonly gateway: InferenceGateway;
 
   constructor(context: OrchestratorContext) {
     this.context = context;
+    this.gateway = context.gateway ?? inferenceGateway;
   }
 
   abstract execute(
@@ -33,6 +37,18 @@ export abstract class BaseAgent {
 
   protected elapsed(startTime: number): number {
     return Math.round(performance.now() - startTime);
+  }
+
+  // QNBS-v3: Convenience wrapper — agents call this.generate(prompt) instead of the 3-line
+  // aiProviderService.generateText(prompt, creativity, this.buildAiOpts(...)) pattern.
+  protected async generate(prompt: string, maxTokens?: number): Promise<string> {
+    // QNBS-v3: exactOptionalPropertyTypes — only pass maxTokens when it's defined.
+    const result = await this.gateway.generate({
+      prompt,
+      creativity: this.context.config.creativity,
+      options: this.buildAiOpts(maxTokens !== undefined ? { maxTokens } : undefined),
+    });
+    return result.text;
   }
 
   // QNBS-v3: Builds AIRequestOptions from context.config — provider/model defaulting for pipeline agents.
@@ -78,13 +94,14 @@ ANALYSIS SUMMARY:
 ${analysisSummary.substring(0, 400)}`;
 
     try {
-      const response = await aiProviderService.generateText(
+      // QNBS-v3: selfReflect routes through gateway for consistent retry + policy handling.
+      const response = await this.gateway.generate({
         prompt,
-        'Focused',
-        this.buildAiOpts({ maxTokens: 100 }),
-      );
-      const coherent = response.trim().toUpperCase().startsWith('COHERENT');
-      return { coherent, note: response.trim(), tokensUsed: response.length };
+        creativity: 'Focused',
+        options: this.buildAiOpts({ maxTokens: 100 }),
+      });
+      const coherent = response.text.trim().toUpperCase().startsWith('COHERENT');
+      return { coherent, note: response.text.trim(), tokensUsed: response.text.length };
     } catch (err) {
       logger.warn('BaseAgent.selfReflect: reflection call failed, proceeding as coherent:', err);
       return { coherent: true, note: 'Reflection skipped (AI error)', tokensUsed: 0 };
