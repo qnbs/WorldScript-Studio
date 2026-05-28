@@ -61,45 +61,35 @@ Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku
 
 ---
 
-## v1.20 — Phase 3: v2.0 Foundation (NEXT — Weeks 11–16)
+## v1.20 — Phase 3: v2.0 Foundation (ACTIVE — 2026-05-28)
 
-**Status:** 🔄 Planned — Phase 2 complete, Phase 3 active next session.
+**Status:** 🔄 In Progress — C-1..C-5 delivered, C-6/C-7 ongoing.
 
-**C-1 — SEC-1 complete: collab-transport security peer review**
-- Formal security review of `packages/collab-transport` AES-256-GCM implementation in AUDIT.md
-- Verify PBKDF2 iteration count, IV uniqueness, GCM tag length, key derivation correctness
-- Add `@privacyClass external` JSDoc annotation to collaboration module (SEC-RULE-4)
+**C-1 — collab-transport security peer review** ✅ Done (2026-05-28)
+- 3 findings fixed in `packages/collab-transport/src/crypto.js`: PBKDF2 100k→310k, extractable:true→false, missing `return` on promise.reject(). Documented in AUDIT.md.
 
-**C-2 — Plugin System Beta (`enablePluginSystem`)**
-- Plugin loader skeleton: manifest validation (Zod), sandboxed evaluation, capability grants
-- 1–2 reference plugin examples (word-count overlay, custom export format)
-- Plugin settings panel in Settings → System
+**C-2 — Plugin System Beta** ✅ Done (2026-05-28)
+- Registry + sandboxed API + Zod validation already shipped (v1.19.0)
+- Added 2 reference plugins: `wordCountOverlay.plugin.ts` + `sceneAppender.plugin.ts` with 8 tests
 
-**C-3 — LoRA Inference Wired (`enableLoraAdapters`)**
-- Wire LoRA adapter selection in Settings → AI → Fine-Tuning (adapter already flagged in `featureFlagsSlice`)
-- Connect to local inference path (Ollama + custom model, or ONNX adapter injection)
-- Document training workflow (Python sidecar, separate from browser runtime)
+**C-3 — LoRA Inference Wired** ✅ Done (2026-05-28)
+- `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag` selector
+- `streamProvider()` applies Ollama model-tag override when `enableLoraAdapters` + active adapter tag is set
 
-**C-4 — Cloud-Sync (`enableCloudSync`, Cloudflare R2)**
-- R2 bucket adapter implementing `StoragePort` interface
-- E2E-encrypted uploads (AES-256-GCM, client-side only — server sees ciphertext)
-- Conflict resolution: LWW with vector-clock tie-breaking
-- Opt-in UI in Settings → Data → Cloud Backup
+**C-4 — Cloud-Sync (Cloudflare R2)** ✅ Done (pre-existing)
+- `services/cloudSync/` — full `StorageBackend` impl, AES-256-GCM E2E encryption, 39 tests; `enableCloudSync` flag
 
-**C-5 — Community Readiness**
-- `CONTRIBUTING.md` — full dev setup guide (Biome / Vitest / Playwright / architecture)
-- Semantic-release configuration (auto-CHANGELOG + tag from commit convention)
-- GitHub issue templates (bug report, feature request, translation PR)
-- `AGENTS.md` — AI agent instructions for agentic collaboration platforms
+**C-5 — Community Readiness** ✅ Done (2026-05-28)
+- GitHub Issue Templates: `bug_report.yml`, `feature_request.yml`, `translation_pr.yml`
+- `AGENTS.md` updated with v1.19.0 references (collab-transport, StructuredLogger)
 
-**C-6 — RTL: Arabic + Hebrew Locale Scaffolding**
-- Full `ar` and `he` translation trees (all 15 modules × 2062+ keys)
-- RTL-specific Tailwind utilities (`ps-*`, `pe-*`, `ms-*`, `me-*`)
-- Bidirectional layout testing in E2E suite
+**C-6 — RTL: Arabic + Hebrew Locale Scaffolding** ⬜ Requires native translator
+- Stubs exist (`locales/ar/`, `locales/he/`); full translation content needs community contribution
+- RTL-specific Tailwind utilities + E2E tests deferred until translation content is ready
 
-**C-7 — Coverage → Lines ≥ 85%, Branches ≥ 75%, Functions ≥ 80%**
-- Targeted test expansion for AI streaming paths, collaboration, and voice services
-- Stryker `break` threshold: raise 75 → 80
+**C-7 — Coverage → Lines ≥ 85%, Branches ≥ 75%, Functions ≥ 80%** 🔄 Ongoing
+- Current: 73%L / 65%F / 59%B (2026-05-26 CI baseline, post-B-series)
+- Stryker `break`: raise 75 → 80 after CI score confirms ≥ 80
 
 ---
 

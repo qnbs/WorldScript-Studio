@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **C-4 — Cloud-Sync (Cloudflare R2)** — already fully implemented (3 files, 39 tests):
+  - `services/cloudSync/cloudSyncBackend.ts` — `StorageBackend` implementation; projects/settings → R2; API keys never sent to cloud; delegation throws on sensitive keys
+  - `services/cloudSync/cloudSyncClient.ts` — thin HTTP wrapper around R2 REST / Worker-proxied API (fetch + Bearer token, no AWS SDK)
+  - `services/cloudSync/cloudSyncEncryption.ts` — AES-256-GCM E2E encryption; server sees only ciphertext
+  - 39 unit tests; flag: `enableCloudSync` (off by default); UI: Settings → Experimental → Cloud Sync toggle
+
 - **C-3 — LoRA Inference Wiring** — connects LoRA adapter selection to the Ollama inference path:
   - `LoraAdapter.ollamaModelTag?: string` — Ollama model tag created by `ollama create <tag> -f Modelfile`
   - `AIRequestOptions.loraModelPath?: string` — passed through to Ollama; overrides `opts.model` when set and `provider === 'ollama'`
