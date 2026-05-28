@@ -25,6 +25,9 @@ export interface LoraAdapter {
   isActive?: boolean;
   qualityScore?: number;
   localPath?: string;
+  // QNBS-v3: C-3 — Ollama model tag created via `ollama create <tag> -f Modelfile` with this adapter.
+  // When set and enableLoraAdapters is on, this tag overrides the base model in Ollama inference calls.
+  ollamaModelTag?: string;
   status: LoraAdapterStatus;
 }
 

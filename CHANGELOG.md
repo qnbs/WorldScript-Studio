@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **C-3 — LoRA Inference Wiring** — connects LoRA adapter selection to the Ollama inference path:
+  - `LoraAdapter.ollamaModelTag?: string` — Ollama model tag created by `ollama create <tag> -f Modelfile`
+  - `AIRequestOptions.loraModelPath?: string` — passed through to Ollama; overrides `opts.model` when set and `provider === 'ollama'`
+  - `selectActiveLoraOllamaTag` selector (`features/lora/loraSelectors.ts`) — returns active adapter's Ollama tag or null
+  - When `enableLoraAdapters` is on and an adapter with `ollamaModelTag` is active, all Ollama inference calls automatically use that tag as the model identifier
+  - Training workflow remains Python sidecar (see `docs/VOICE_MASTER_PLAN.md` for the LoRA pipeline separation rationale)
+
 - **C-2 — Plugin System Beta** — reference plugins in `services/plugins/`:
   - `wordCountOverlay.plugin.ts` — read-only plugin: logs project title + scene list via sandboxed API (`project.read`, `scene.read`)
   - `sceneAppender.plugin.ts` — write-capable plugin: appends a configurable snippet to the active scene and persists run count via IDB storage (`scene.read`, `scene.write`, `storage.read`, `storage.write`)

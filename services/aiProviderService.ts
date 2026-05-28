@@ -51,6 +51,9 @@ export interface AIRequestOptions {
   openAiSiteTitle?: string;
   hybridFallbackEnabled?: boolean;
   hybridFallbackChain?: AIProvider[];
+  // QNBS-v3: C-3 LoRA wiring — when set and provider is 'ollama', this tag overrides opts.model.
+  // Tag must be created via `ollama create <tag> -f Modelfile` with the adapter baked in.
+  loraModelPath?: string;
 }
 
 export interface AIStreamCallbacks {
@@ -238,23 +241,28 @@ async function streamProvider(
 ): Promise<void> {
   const o = withMergedAbortSignal(opts, signal);
   await assertCloudAiAllowed(o.provider);
-  switch (o.provider) {
+  // QNBS-v3: C-3 LoRA — override model with Ollama adapter tag when set
+  const oWithLora: AIRequestOptions =
+    o.provider === 'ollama' && o.loraModelPath
+      ? { ...o, model: o.loraModelPath as typeof o.model }
+      : o;
+  switch (oWithLora.provider) {
     case 'openai':
-      return streamOpenAI(prompt, o, callbacks);
+      return streamOpenAI(prompt, oWithLora, callbacks);
     case 'ollama':
-      return streamOllama(prompt, o, callbacks);
+      return streamOllama(prompt, oWithLora, callbacks);
     case 'anthropic':
-      return streamAnthropic(prompt, o, callbacks);
+      return streamAnthropic(prompt, oWithLora, callbacks);
     case 'grok':
-      return streamGrok(prompt, o, callbacks);
+      return streamGrok(prompt, oWithLora, callbacks);
     case 'webllm':
     case 'onnx':
     case 'transformers': {
       // QNBS-v3: all local-inference providers share the same facade; modelId selects the layer.
-      const merged = o.systemPrompt?.trim()
-        ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
+      const merged = oWithLora.systemPrompt?.trim()
+        ? `${sanitizePromptValue(oWithLora.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
         : sanitizePromptValue(prompt);
-      const local = await generateLocalText(merged, o.model);
+      const local = await generateLocalText(merged, oWithLora.model);
       callbacks.onChunk(local.text);
       callbacks.onDone?.();
       return;

@@ -47,6 +47,13 @@ export const selectLoraError = createSelector(selectLoraSlice, (s) => s.error);
 
 export const selectLastEvaluation = createSelector(selectLoraSlice, (s) => s.lastEvaluation);
 
+// QNBS-v3: C-3 — returns the Ollama model tag for the active LoRA adapter, or null.
+// When non-null and enableLoraAdapters is on, this tag should override the base model in Ollama calls.
+export const selectActiveLoraOllamaTag = createSelector(selectLoraSlice, (s): string | null => {
+  const adapter = s.adapters.find((a) => a.id === s.activeAdapterId);
+  return adapter?.ollamaModelTag ?? null;
+});
+
 export const selectIsTraining = createSelector(
   selectLoraSlice,
   (s) => s.currentRun?.status === 'training' || s.currentRun?.status === 'preparing',
