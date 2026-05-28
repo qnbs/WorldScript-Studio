@@ -20,6 +20,7 @@ const CrossProjectSearchPanelConnected = lazy(() =>
 
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { DuckDbMigrationBanner } from './components/ui/DuckDbMigrationBanner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { OfflineIndicator, PWAInstallBanner, PWAUpdateToast } from './components/ui/PWAComponents';
 import { Spinner } from './components/ui/Spinner';
@@ -563,6 +564,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
               <PWAUpdateToast />
               <PWAInstallBanner />
               <OfflineIndicator />
+              <DuckDbMigrationBanner />
               {featureFlags.enableVoiceSupport && (
                 <>
                   <VoiceIndicator />

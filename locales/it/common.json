@@ -491,5 +491,9 @@
   "characters.emptyState.title": "Il tuo elenco di personaggi è vuoto",
   "characters.emptyState.description": "Ogni grande storia inizia con qualcuno. Aggiungi un personaggio da zero o lascia che l'IA ne abbozzi uno da un concetto.",
   "worlds.emptyState.title": "Il mondo ti aspetta",
-  "worlds.emptyState.description": "Costruisci i luoghi, le regole e le storie in cui vive la tua narrazione. Inizia con una location."
+  "worlds.emptyState.description": "Costruisci i luoghi, le regole e le storie in cui vive la tua narrazione. Inizia con una location.",
+  "duckdb.migration.running": "Aggiornamento del database analitico in corso…",
+  "duckdb.migration.complete": "Database analitico pronto",
+  "duckdb.migration.failed": "Aggiornamento del database analitico non riuscito — verrà riprovato al prossimo avvio",
+  "duckdb.migration.dismiss": "Ignora"
 }

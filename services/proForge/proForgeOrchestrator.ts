@@ -62,6 +62,9 @@ export interface OrchestratorContext {
   characters: Array<{ id: string; name: string }>;
   worlds: Array<{ id: string; name: string }>;
   config: PipelineConfig;
+  // QNBS-v3: Optional injectable gateway — defaults to singleton if absent.
+  // Allows tests to inject a mock without touching aiProviderService.
+  gateway?: import('../ai/inferenceGateway').InferenceGateway;
 }
 
 export class ProForgeOrchestrator {
