@@ -1,9 +1,35 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)** → **2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)** → **2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)** → **2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger sprint B-1..B-8)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.18.1** — 2026-05-27 (TypeScript strict-mode compliance sweep)  
+**Current version:** **v1.19.0** — 2026-05-28 (Security/Voice/RTL/Logger sprint — Phase 2 complete)  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+---
+
+## Follow-up Audit — 2026-05-28 (v1.19.0 — Phase 2 Security/Voice/RTL/Logger Sprint)
+
+### Sprint: Phase 2 B-series (B-1..B-8) — 2026-05-28
+
+**B-1:** `services/storage/storageEncryptionService.ts` — AES-256-GCM IDB at-rest encryption, PBKDF2-SHA-256 (310k iterations), non-extractable key, sentinel-prefixed blobs. 24 tests.
+
+**B-2:** `services/voice/wasmSttEngine.ts` + `sileroVadEngine.ts` — Whisper tiny.en Q8 + Silero VAD scaffold via @xenova/transformers. Feature-flagged (`enableVoiceWasm`).
+
+**B-3:** `packages/collab-transport` workspace package — vendor fork of y-webrtc 10.3.0 with StoryCraft RTCDataChannel E2E encryption patch baked in. Removes `patchedDependencies` re-apply burden. Biome alias + tsconfig paths wired.
+
+**B-4:** `tests/e2e/a11y-axe.spec.ts` — Playwright axe-core gate across 8 views. WCAG 2.2 AA.
+
+**B-5:** RTL beta — `ar`/`he` locale stubs, `enableRtlLayout` flag, dir="rtl" wiring, RTL foundation tests.
+
+**B-6:** `services/logger.ts` — StructuredLogger: IDB sink (1000-entry LRU), Tauri JSONL (daily rotation), DEV console sink. `createLogger(module)` factory, `withContext()` chaining, GDPR key sanitization. 16 tests.
+
+**B-7:** Coverage thresholds raised: lines 68→71%, functions 60→63%, branches 55→57%, stmts 67→69%. Vendored y-webrtc.js excluded from V8 coverage. i18nBootstrap tests: 3→15 (resolveTranslation + ar/he RTL stubs).
+
+**B-8:** Stryker: break 70→75, high 80→85, low 65→70. Mutate targets: 34→40 files (added storageEncryptionService, logger, collaborationService, i18nBootstrap, featureFlagsSlice, crossProjectIndexService).
+
+**Also:** All 5 release tags (v1.17.1..v1.19.0) and GitHub Releases retroactively created. Sequential shell execution rule written into all 4 instruction files. TypeScript `paths` alias for `@xenova/transformers`.
+
+**Quality gate (2026-05-28 — v1.19.0):** lint ✅ · typecheck ✅ (0 errors) · tests ✅ (logger 16, encryption 24, collab 38, i18nBootstrap 15 — all green) · Stryker break 75 · coverage thresholds L71/F63/B57/S69
 
 ---
 
