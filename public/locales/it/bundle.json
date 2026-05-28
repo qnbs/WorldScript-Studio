@@ -1570,6 +1570,8 @@
   "settings.language.french": "Francese",
   "settings.language.german": "Tedesco",
   "settings.language.italian": "Italiano",
+  "settings.language.arabic": "Arabo (beta)",
+  "settings.language.hebrew": "Ebraico (beta)",
   "settings.language.spanish": "Spagnolo",
   "settings.language.title": "Lingua e regione",
   "settings.notifications.collaborationUpdates": "Aggiornamenti collaborazione",

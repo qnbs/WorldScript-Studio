@@ -591,3 +591,20 @@ select option {
     max-height: calc(100dvh - var(--sc-mobile-tab-bar-height));
   }
 }
+
+/* QNBS-v3: Phase 2 B-5 — RTL layout foundation. Basic direction flips for [dir="rtl"].
+   TODO-RTL: Manuscript editor Bidi, recharts labels, Plot Board SVG — tracked for post-beta. */
+[dir="rtl"] {
+  /* Swap standard text-align utilities */
+  .text-left {
+    text-align: right;
+  }
+  .text-right {
+    text-align: left;
+  }
+
+  /* Mirror chevron/arrow icons used in navigation */
+  .rtl-mirror {
+    transform: scaleX(-1);
+  }
+}

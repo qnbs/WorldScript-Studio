@@ -1,0 +1,20 @@
+{
+  "tour.intro.title": "Welcome aboard",
+  "tour.intro.body": "A short tour of StoryCraft Studio: navigation, command palette, and settings.",
+  "tour.navigationOnly.introBody": "Let’s focus on how you move around the app on desktop and mobile.",
+  "tour.navigationOnly.outroBody": "You can replay navigation-only tours anytime from Help.",
+  "tour.navigationOnly.startButton": "Navigation tour only",
+  "tour.nav.title": "Move around the app",
+  "tour.nav.body": "Use the sidebar on desktop or the bottom bar on your phone to open Dashboard, Manuscript, Characters, Export, and more.",
+  "tour.palette.title": "Command palette",
+  "tour.palette.body": "Press Ctrl+K (⌘K on Mac) to search commands, switch theme or language, and jump to any view.",
+  "tour.settings.title": "Settings",
+  "tour.settings.body": "Configure API keys, AI provider (Gemini cloud or local Ollama), appearance, editor, backups, and exports.",
+  "tour.outro.title": "You're set",
+  "tour.outro.body": "Your work saves automatically on this device. Open Help anytime to run this tour again.",
+  "tour.outro.helpCta": "Tip: open Help from the sidebar for articles, FAQs, and the AI guide — then use “Try it now” to jump straight into a view.",
+  "tour.btn.next": "Next",
+  "tour.btn.prev": "Back",
+  "tour.btn.done": "Done",
+  "tour.help.startButton": "Start guided tour"
+}

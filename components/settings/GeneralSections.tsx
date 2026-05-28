@@ -29,6 +29,9 @@ export const GeneralSection: FC = () => {
           <option value="fr">{t('settings.language.french')}</option>
           <option value="es">{t('settings.language.spanish')}</option>
           <option value="it">{t('settings.language.italian')}</option>
+          {/* QNBS-v3: Phase 2 B-5 — RTL beta stubs; English placeholder text until human review */}
+          <option value="ar">{t('settings.language.arabic')}</option>
+          <option value="he">{t('settings.language.hebrew')}</option>
         </Select>
       </CardContent>
     </Card>

@@ -4,10 +4,11 @@ import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { bootstrapTranslation } from '../services/i18nBootstrap';
 import { logger } from '../services/logger';
 
-export type Language = 'en' | 'de' | 'fr' | 'es' | 'it';
+export type Language = 'en' | 'de' | 'fr' | 'es' | 'it' | 'ar' | 'he';
 
-/** Languages whose natural writing direction is right-to-left. Extend when RTL locales ship. */
-export const RTL_LOCALES: ReadonlySet<Language> = new Set([]);
+// QNBS-v3: Phase 2 B-5 — ar/he are beta stubs (English placeholder text); RTL direction is active.
+/** Languages whose natural writing direction is right-to-left. */
+export const RTL_LOCALES: ReadonlySet<Language> = new Set(['ar', 'he']);
 
 interface I18nContextType {
   language: Language;
@@ -32,7 +33,7 @@ interface I18nProviderProps {
 }
 
 const LANG_KEY = 'storycraft-language';
-const VALID_LANGS: Language[] = ['en', 'de', 'fr', 'es', 'it'];
+const VALID_LANGS: Language[] = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he'];
 
 const getInitialLanguage = (): Language => {
   try {

@@ -22,7 +22,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
-const langs = ['en', 'de', 'fr', 'es', 'it'];
+// QNBS-v3: ar/he are Phase 2 beta stubs — English placeholders until human review completes.
+const langs = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he'];
 const modules = [
   'common',
   'tour',

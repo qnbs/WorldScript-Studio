@@ -65,4 +65,44 @@ test.describe('Accessibility (axe)', () => {
     await assertNoSeriousViolations(page, 'writer-version-control');
     await page.keyboard.press('Escape');
   });
+
+  test('characters view has no serious axe violations', async ({ page }) => {
+    await page.goto('/');
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await clickNavItem(page, /Characters/i);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
+    await assertNoSeriousViolations(page, 'characters-view');
+  });
+
+  test('world view has no serious axe violations', async ({ page }) => {
+    await page.goto('/');
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await clickNavItem(page, /World|Setting/i);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
+    await assertNoSeriousViolations(page, 'world-view');
+  });
+
+  test('plot board has no serious axe violations', async ({ page }) => {
+    await page.goto('/');
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await clickNavItem(page, /Outline|Plot Board|Board/i);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
+    await assertNoSeriousViolations(page, 'plot-board');
+  });
+
+  test('help view has no serious axe violations', async ({ page }) => {
+    await page.goto('/');
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await clickNavItem(page, /Help/i);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
+    await assertNoSeriousViolations(page, 'help-view');
+  });
 });

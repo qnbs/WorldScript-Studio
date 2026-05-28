@@ -1,0 +1,115 @@
+{
+  "lora": {
+    "title": "LoRA Fine-Tuning",
+    "onboarding": {
+      "title": "Train Your Writing Style",
+      "description": "Create a personalized AI model trained on your manuscripts. Your data never leaves your device.",
+      "privacyPromise": "100% Private & Offline",
+      "privacyDetail": "All training happens locally. Your manuscript is never sent to any cloud service.",
+      "systemCheck": "System Requirements",
+      "checking": "Checking your environment…",
+      "installed": "installed",
+      "notFound": "not found",
+      "installCmd": "pip install unsloth trl peft",
+      "cpuFallback": "CPU fallback (slower)",
+      "getStarted": "Get Started"
+    },
+    "library": {
+      "title": "Adapter Library",
+      "empty": "No adapters yet. Train your first style model to get started."
+    },
+    "wizard": {
+      "title": "Training Wizard",
+      "trainNew": "Train New Adapter",
+      "startFirstTraining": "Train Your First Adapter",
+      "abort": "Stop Training",
+      "steps": {
+        "label": "Training steps",
+        "model": "Model",
+        "dataset": "Dataset",
+        "params": "Parameters",
+        "train": "Train",
+        "deploy": "Deploy"
+      },
+      "model": {
+        "description": "Choose a base model. Larger models produce better style transfer but require more VRAM and time.",
+        "selectModel": "Select base model"
+      },
+      "dataset": {
+        "instruction": "Extract your manuscript scenes as training data. You need at least 50 quality entries before training."
+      },
+      "params": {
+        "description": "Choose a preset optimized for your use case. DoRA and rslora outperform classic LoRA for style transfer."
+      },
+      "training": {
+        "inProgress": "Training in progress… This may take 30–90 minutes.",
+        "ready": "Click Next to begin training with your selected settings."
+      },
+      "deploy": {
+        "title": "Training Complete!",
+        "description": "Your adapter is ready. Activate it to use in ProForge or the AI writing studio.",
+        "activated": "{{name}} is now active."
+      }
+    },
+    "presets": {
+      "writerStyleLight": {
+        "label": "Writer Style Light",
+        "desc": "Quick accent transfer — ~30 min, 8 GB VRAM"
+      },
+      "deepNarrative": {
+        "label": "Deep Narrative",
+        "desc": "Full narrative style — ~60 min, 12 GB VRAM"
+      },
+      "dialogueMaster": {
+        "label": "Dialogue Master",
+        "desc": "Dialogue-optimised — ~45 min, 8 GB VRAM"
+      },
+      "fullStyleClone": {
+        "label": "Full Style Clone",
+        "desc": "Maximum fidelity — ~90 min, 16 GB VRAM"
+      }
+    },
+    "adapter": {
+      "active": "Active",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "merge": "Merge",
+      "export": "Export",
+      "delete": "Delete",
+      "version": "Version"
+    },
+    "evaluation": {
+      "title": "Style Evaluation",
+      "score": "Style Consistency Score",
+      "compare": "Side-by-Side Comparison",
+      "run": "Run Evaluation",
+      "evaluating": "Evaluating…",
+      "baseline": "Baseline",
+      "improvement": "Improvement",
+      "base": "Base Model",
+      "adapted": "Style-Adapted",
+      "noActiveAdapter": "Activate an adapter to run evaluation."
+    },
+    "dataset": {
+      "title": "Dataset Builder",
+      "extract": "Extract from Manuscript",
+      "extracting": "Extracting…",
+      "export": "Export",
+      "synthetic": "synthetic",
+      "extracted": "extracted",
+      "empty": "No dataset yet. Extract scenes from your manuscript to create training data.",
+      "total": "Total",
+      "accepted": "Accepted",
+      "flagged": "Flagged",
+      "rejected": "Rejected",
+      "notEnough": "You need at least 50 accepted entries before training. Try generating synthetic pairs.",
+      "entries": "Dataset entries"
+    },
+    "errors": {
+      "pythonNotFound": "Python 3 not found. Install Python ≥ 3.10 and add it to your PATH.",
+      "insufficientVram": "Insufficient VRAM for this preset. This preset requires {{required}} GB.",
+      "trainingFailed": "Training failed: {{message}}",
+      "cloudBlocked": "Cloud-hosted models cannot be used for training. Select a local model."
+    }
+  }
+}

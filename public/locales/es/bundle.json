@@ -1665,6 +1665,8 @@
   "settings.language.french": "Francés",
   "settings.language.german": "Alemán",
   "settings.language.italian": "Italiano",
+  "settings.language.arabic": "Árabe (beta)",
+  "settings.language.hebrew": "Hebreo (beta)",
   "settings.language.spanish": "Español",
   "settings.language.title": "Idioma y región",
   "settings.loraAdapters.deleteBtn": "Eliminar",

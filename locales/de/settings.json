@@ -422,6 +422,8 @@
   "settings.language.french": "Französisch",
   "settings.language.german": "Deutsch",
   "settings.language.italian": "Italienisch",
+  "settings.language.arabic": "Arabisch (Beta)",
+  "settings.language.hebrew": "Hebräisch (Beta)",
   "settings.language.spanish": "Spanisch",
   "settings.language.title": "Sprache & Region",
   "settings.loraAdapters.deleteBtn": "Löschen",
