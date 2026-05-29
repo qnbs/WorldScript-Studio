@@ -1,6 +1,6 @@
 /**
  * Tests for DiagnosticAgent — ProForge Pipeline Stage 1 (intake).
- * QNBS-v3: Mocks aiProviderService + memoryBank + promptLibrary; exercises happy path, fallback, abort, metrics.
+ * QNBS-v3: Mocks InferenceGateway (via context.gateway) + memoryBank + promptLibrary.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,13 +16,11 @@ const mockMemoryBank = vi.hoisted(() => ({
   search: vi.fn().mockResolvedValue([]),
 }));
 
+const mockGenerate = vi.hoisted(() => vi.fn());
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
-
-vi.mock('../../../../services/aiProviderService', () => ({
-  aiProviderService: { generateText: vi.fn() },
-}));
 
 vi.mock('../../../../services/proForge/proForgeMemoryBank', () => ({
   getMemoryBank: vi.fn(() => mockMemoryBank),
@@ -36,15 +34,38 @@ vi.mock('../../../../services/promptLibrary', () => ({
   getPrompt: vi.fn(() => 'mocked diagnostic prompt'),
 }));
 
+// QNBS-v3: BaseAgent.generate() routes through this.gateway.generate() (InferenceGateway),
+// not aiProviderService.generateText directly — mock the gateway, not the service.
+vi.mock('../../../../services/ai/inferenceGateway', () => ({
+  inferenceGateway: {
+    generate: mockGenerate,
+    embed: vi.fn(),
+    modelList: vi.fn(),
+    healthCheck: vi.fn(),
+  },
+}));
+
+vi.mock('../../../../services/ai/aiPolicy', () => ({
+  assertCloudAiAllowedSync: vi.fn(),
+  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
 
 import type { PipelineConfig } from '../../../../features/proForge/types';
-import { aiProviderService } from '../../../../services/aiProviderService';
 import { logger } from '../../../../services/logger';
 import { DiagnosticAgent } from '../../../../services/proForge/pipelineAgents/diagnosticAgent';
 import type { OrchestratorContext } from '../../../../services/proForge/proForgeOrchestrator';
+
+// ---------------------------------------------------------------------------
+// Helper — gateway result wrapper
+// ---------------------------------------------------------------------------
+
+function gatewayResult(text: string) {
+  return { text, model: 'gemini-2.5-flash', provider: 'gemini', isFallback: false };
+}
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -139,6 +160,7 @@ function makeContext(overrides: Partial<OrchestratorContext> = {}): Orchestrator
     characters: [],
     worlds: [],
     config: DEFAULT_CONFIG,
+    gateway: { generate: mockGenerate, embed: vi.fn(), modelList: vi.fn(), healthCheck: vi.fn() },
     ...overrides,
   };
 }
@@ -150,7 +172,7 @@ function makeContext(overrides: Partial<OrchestratorContext> = {}): Orchestrator
 describe('DiagnosticAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(aiProviderService.generateText).mockResolvedValue(JSON.stringify(VALID_REPORT));
+    mockGenerate.mockResolvedValue(gatewayResult(JSON.stringify(VALID_REPORT)));
   });
 
   describe('happy path', () => {
@@ -195,7 +217,7 @@ describe('DiagnosticAgent', () => {
 
     it('records aiCalls=1 and tokensConsumed=response.length in metrics', async () => {
       const responseJson = JSON.stringify(VALID_REPORT);
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(responseJson);
+      mockGenerate.mockResolvedValue(gatewayResult(responseJson));
 
       const agent = new DiagnosticAgent(makeContext());
       const { metrics } = await agent.execute(new AbortController().signal);
@@ -231,8 +253,8 @@ describe('DiagnosticAgent', () => {
     });
 
     it('handles AI response wrapped in ```json code fences', async () => {
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(
-        `\`\`\`json\n${JSON.stringify(VALID_REPORT)}\n\`\`\``,
+      mockGenerate.mockResolvedValue(
+        gatewayResult(`\`\`\`json\n${JSON.stringify(VALID_REPORT)}\n\`\`\``),
       );
       const agent = new DiagnosticAgent(makeContext());
       const result = await agent.execute(new AbortController().signal);
@@ -243,7 +265,7 @@ describe('DiagnosticAgent', () => {
 
   describe('fallback behaviour', () => {
     it('uses fallback report when AI returns invalid JSON', async () => {
-      vi.mocked(aiProviderService.generateText).mockResolvedValue('not json at all');
+      mockGenerate.mockResolvedValue(gatewayResult('not json at all'));
 
       const agent = new DiagnosticAgent(makeContext());
       const result = await agent.execute(new AbortController().signal);
@@ -258,9 +280,7 @@ describe('DiagnosticAgent', () => {
     });
 
     it('uses fallback report when schema validation fails', async () => {
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(
-        JSON.stringify({ invalid: 'structure' }),
-      );
+      mockGenerate.mockResolvedValue(gatewayResult(JSON.stringify({ invalid: 'structure' })));
 
       const agent = new DiagnosticAgent(makeContext());
       const result = await agent.execute(new AbortController().signal);
@@ -275,7 +295,7 @@ describe('DiagnosticAgent', () => {
     });
 
     it('uses fallback report when aiProviderService.generateText throws', async () => {
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('Network error'));
+      mockGenerate.mockRejectedValue(new Error('Network error'));
 
       const agent = new DiagnosticAgent(makeContext());
       const result = await agent.execute(new AbortController().signal);
@@ -290,7 +310,7 @@ describe('DiagnosticAgent', () => {
     });
 
     it('fallback report summary contains the project title', async () => {
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('fail'));
+      mockGenerate.mockRejectedValue(new Error('fail'));
 
       const agent = new DiagnosticAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
@@ -299,7 +319,7 @@ describe('DiagnosticAgent', () => {
     });
 
     it('fallback report reflects actual word count from manuscript', async () => {
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('fail'));
+      mockGenerate.mockRejectedValue(new Error('fail'));
       const ctx = makeContext();
       vi.mocked(ctx.getState).mockReturnValue({
         project: {
@@ -350,10 +370,10 @@ describe('DiagnosticAgent', () => {
 
     it('uses fallback report when signal is aborted after AI call (abort caught by inner try-catch)', async () => {
       const ac = new AbortController();
-      // Abort synchronously inside generateText so signal.aborted=true when the check runs
-      vi.mocked(aiProviderService.generateText).mockImplementation(async () => {
+      // Abort synchronously inside gateway so signal.aborted=true when the check runs
+      mockGenerate.mockImplementation(async () => {
         ac.abort();
-        return JSON.stringify(VALID_REPORT);
+        return gatewayResult(JSON.stringify(VALID_REPORT));
       });
 
       const agent = new DiagnosticAgent(makeContext());
@@ -405,9 +425,9 @@ describe('DiagnosticAgent', () => {
 
     it('makes a second AI call (reflection) when totalWords > 500 and primary succeeds', async () => {
       const reportJson = JSON.stringify(VALID_REPORT);
-      vi.mocked(aiProviderService.generateText)
-        .mockResolvedValueOnce(reportJson) // primary
-        .mockResolvedValueOnce('COHERENT: looks grounded'); // reflection
+      mockGenerate
+        .mockResolvedValueOnce(gatewayResult(reportJson)) // primary
+        .mockResolvedValueOnce(gatewayResult('COHERENT: looks grounded')); // reflection
 
       const agent = new DiagnosticAgent(makeLargeContext());
       const { metrics } = await agent.execute(new AbortController().signal);
@@ -417,9 +437,9 @@ describe('DiagnosticAgent', () => {
     });
 
     it('sets reflectionNotes on the report when self-eval runs', async () => {
-      vi.mocked(aiProviderService.generateText)
-        .mockResolvedValueOnce(JSON.stringify(VALID_REPORT))
-        .mockResolvedValueOnce('COHERENT: well grounded');
+      mockGenerate
+        .mockResolvedValueOnce(gatewayResult(JSON.stringify(VALID_REPORT)))
+        .mockResolvedValueOnce(gatewayResult('COHERENT: well grounded'));
 
       const agent = new DiagnosticAgent(makeLargeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
@@ -429,10 +449,10 @@ describe('DiagnosticAgent', () => {
 
     it('retries primary call when reflection returns INCOHERENT', async () => {
       const reportJson = JSON.stringify(VALID_REPORT);
-      vi.mocked(aiProviderService.generateText)
-        .mockResolvedValueOnce(reportJson) // primary
-        .mockResolvedValueOnce('INCOHERENT: hallucinated') // reflection
-        .mockResolvedValueOnce(reportJson); // retry primary
+      mockGenerate
+        .mockResolvedValueOnce(gatewayResult(reportJson)) // primary
+        .mockResolvedValueOnce(gatewayResult('INCOHERENT: hallucinated')) // reflection
+        .mockResolvedValueOnce(gatewayResult(reportJson)); // retry primary
 
       const agent = new DiagnosticAgent(makeLargeContext());
       const { metrics } = await agent.execute(new AbortController().signal);
@@ -443,7 +463,7 @@ describe('DiagnosticAgent', () => {
 
     it('does not trigger self-eval when totalWords <= 500', async () => {
       // Default makeContext has 5-word manuscript → no self-eval
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(JSON.stringify(VALID_REPORT));
+      mockGenerate.mockResolvedValue(gatewayResult(JSON.stringify(VALID_REPORT)));
 
       const agent = new DiagnosticAgent(makeContext());
       const { metrics } = await agent.execute(new AbortController().signal);
@@ -452,13 +472,13 @@ describe('DiagnosticAgent', () => {
     });
 
     it('does not trigger self-eval on fallback reports', async () => {
-      // generateText called twice would fail the test; ensure only 1 call on fallback
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('fail'));
+      // gateway rejects → aiCalls never incremented (throw before += 1)
+      mockGenerate.mockRejectedValue(new Error('fail'));
 
       const agent = new DiagnosticAgent(makeLargeContext());
       const { metrics } = await agent.execute(new AbortController().signal);
 
-      expect(metrics.aiCalls).toBe(0); // caught before aiCalls increments for large context too — throw path
+      expect(metrics.aiCalls).toBe(0);
     });
   });
 
@@ -490,7 +510,7 @@ describe('DiagnosticAgent', () => {
         },
         // biome-ignore lint/suspicious/noExplicitAny: partial test state
       } as any);
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('fail'));
+      mockGenerate.mockRejectedValue(new Error('fail'));
 
       const agent = new DiagnosticAgent(ctx);
       const { agentOutput } = await agent.execute(new AbortController().signal);

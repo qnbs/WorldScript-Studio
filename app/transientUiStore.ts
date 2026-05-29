@@ -11,6 +11,8 @@ interface TransientUiState {
   isCrossProjectSearchOpen: boolean;
   // X-2: distraction-free writing mode — hides all AI studio panels, leaves only AiScratchpad + exit button
   flowMode: boolean;
+  // QNBS-v3: B-1 — shown on startup when enableIdbAtRestEncryption is on but key not yet in session
+  isIdbUnlockOpen: boolean;
   setCommandPaletteOpen: (value: boolean) => void;
   setInspectorPanelWidth: (value: number) => void;
   setCompileWizardOpen: (value: boolean) => void;
@@ -18,6 +20,7 @@ interface TransientUiState {
   setManuscriptPinnedBinderNodeId: (id: string | null) => void;
   setCrossProjectSearchOpen: (value: boolean) => void;
   setFlowMode: (value: boolean) => void;
+  setIdbUnlockOpen: (value: boolean) => void;
 }
 
 export const useTransientUiStore = create<TransientUiState>((set) => ({
@@ -28,6 +31,7 @@ export const useTransientUiStore = create<TransientUiState>((set) => ({
   manuscriptPinnedBinderNodeId: null,
   isCrossProjectSearchOpen: false,
   flowMode: false,
+  isIdbUnlockOpen: false,
   setCommandPaletteOpen: (value) => set({ isCommandPaletteOpen: value }),
   setInspectorPanelWidth: (value) => set({ inspectorPanelWidth: value }),
   setCompileWizardOpen: (value) => set({ compileWizardOpen: value }),
@@ -35,4 +39,5 @@ export const useTransientUiStore = create<TransientUiState>((set) => ({
   setManuscriptPinnedBinderNodeId: (id) => set({ manuscriptPinnedBinderNodeId: id }),
   setCrossProjectSearchOpen: (value) => set({ isCrossProjectSearchOpen: value }),
   setFlowMode: (value) => set({ flowMode: value }),
+  setIdbUnlockOpen: (value) => set({ isIdbUnlockOpen: value }),
 }));

@@ -20,6 +20,7 @@ const CrossProjectSearchPanelConnected = lazy(() =>
 
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
 import { DuckDbMigrationBanner } from './components/ui/DuckDbMigrationBanner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { OfflineIndicator, PWAInstallBanner, PWAUpdateToast } from './components/ui/PWAComponents';
@@ -51,6 +52,7 @@ import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
+import { isIdbEncryptionReady } from './services/storage/storageEncryptionService';
 import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services/tauriMenuService';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
@@ -168,6 +170,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
   const isPaletteOpen = useTransientUiStore((s) => s.isCommandPaletteOpen);
   const setCommandPaletteOpen = useTransientUiStore((s) => s.setCommandPaletteOpen);
+  const isIdbUnlockOpen = useTransientUiStore((s) => s.isIdbUnlockOpen);
+  const setIdbUnlockOpen = useTransientUiStore((s) => s.setIdbUnlockOpen);
   // Collaboration Panel State
   const [isCollabPanelOpen, setIsCollabPanelOpen] = useState(false);
 
@@ -277,6 +281,14 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   useEffect(() => {
     pluginRegistry.setEnabled(featureFlags.enablePluginSystem);
   }, [featureFlags.enablePluginSystem]);
+
+  // QNBS-v3: B-1 — when IDB at-rest encryption is on and the session key is not yet derived,
+  // prompt for the passphrase before any IDB read (key is never persisted, must be re-entered).
+  useEffect(() => {
+    if (featureFlags.enableIdbAtRestEncryption && !isIdbEncryptionReady()) {
+      setIdbUnlockOpen(true);
+    }
+  }, [featureFlags.enableIdbAtRestEncryption, setIdbUnlockOpen]);
 
   // QNBS-v3: PWA share_target GET params → toast + stash for Writer paste flows; strip query to avoid leaking shared text in URL bar.
   useEffect(() => {
@@ -584,6 +596,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   <VoiceControlPanel />
                 </>
               )}
+              {isIdbUnlockOpen && <IdbUnlockModal onUnlocked={() => setIdbUnlockOpen(false)} />}
             </div>
           </AppContext.Provider>
         </ToastProvider>

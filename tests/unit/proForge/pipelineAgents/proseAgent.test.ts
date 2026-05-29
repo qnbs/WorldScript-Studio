@@ -16,12 +16,19 @@ const mockMemoryBank = vi.hoisted(() => ({
   search: vi.fn().mockResolvedValue([]),
 }));
 
+const mockGenerate = vi.hoisted(() => vi.fn());
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../../../../services/aiProviderService', () => ({
-  aiProviderService: { generateText: vi.fn() },
+vi.mock('../../../../services/ai/inferenceGateway', () => ({
+  inferenceGateway: {
+    generate: mockGenerate,
+    embed: vi.fn(),
+    modelList: vi.fn(),
+    healthCheck: vi.fn(),
+  },
 }));
 
 vi.mock('../../../../services/proForge/proForgeMemoryBank', () => ({
@@ -36,15 +43,27 @@ vi.mock('../../../../services/promptLibrary', () => ({
   getPrompt: vi.fn(() => 'mocked prose prompt'),
 }));
 
+vi.mock('../../../../services/ai/aiPolicy', () => ({
+  assertCloudAiAllowedSync: vi.fn(),
+  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
 import type { PipelineConfig } from '../../../../features/proForge/types';
-import { aiProviderService } from '../../../../services/aiProviderService';
 import { logger } from '../../../../services/logger';
 import { ProseAgent } from '../../../../services/proForge/pipelineAgents/proseAgent';
 import type { OrchestratorContext } from '../../../../services/proForge/proForgeOrchestrator';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function gatewayResult(text: string) {
+  return { text, model: 'gemini-2.5-flash', provider: 'gemini', isFallback: false };
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -131,6 +150,7 @@ function makeContext(
     characters: [],
     worlds: [],
     config: DEFAULT_CONFIG,
+    gateway: { generate: mockGenerate, embed: vi.fn(), modelList: vi.fn(), healthCheck: vi.fn() },
   };
 }
 
@@ -141,7 +161,7 @@ function makeContext(
 describe('ProseAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(aiProviderService.generateText).mockResolvedValue(makeBatchResponse('s1'));
+    mockGenerate.mockResolvedValue(gatewayResult(makeBatchResponse('s1')));
   });
 
   describe('section loop', () => {
@@ -150,14 +170,14 @@ describe('ProseAgent', () => {
         { id: 's1', title: 'Ch 1', content: longContent() },
         { id: 's2', title: 'Ch 2', content: longContent() },
       ]);
-      vi.mocked(aiProviderService.generateText)
-        .mockResolvedValueOnce(makeBatchResponse('s1'))
-        .mockResolvedValueOnce(makeBatchResponse('s2'));
+      mockGenerate
+        .mockResolvedValueOnce(gatewayResult(makeBatchResponse('s1')))
+        .mockResolvedValueOnce(gatewayResult(makeBatchResponse('s2')));
 
       const agent = new ProseAgent(ctx);
       await agent.execute(new AbortController().signal);
 
-      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledTimes(2);
+      expect(mockGenerate).toHaveBeenCalledTimes(2);
     });
 
     it('skips sections with fewer than 50 words', async () => {
@@ -166,7 +186,7 @@ describe('ProseAgent', () => {
       const agent = new ProseAgent(ctx);
       await agent.execute(new AbortController().signal);
 
-      expect(vi.mocked(aiProviderService.generateText)).not.toHaveBeenCalled();
+      expect(mockGenerate).not.toHaveBeenCalled();
     });
 
     it('processes at most 5 sections', async () => {
@@ -175,13 +195,13 @@ describe('ProseAgent', () => {
         title: `Ch ${i}`,
         content: longContent(`Section ${i} `),
       }));
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(makeBatchResponse('s0'));
+      mockGenerate.mockResolvedValue(gatewayResult(makeBatchResponse('s0')));
 
       const ctx = makeContext(sections);
       const agent = new ProseAgent(ctx);
       await agent.execute(new AbortController().signal);
 
-      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledTimes(5);
+      expect(mockGenerate).toHaveBeenCalledTimes(5);
     });
 
     it('continues processing other sections when one AI call fails', async () => {
@@ -189,9 +209,9 @@ describe('ProseAgent', () => {
         { id: 's1', title: 'Ch 1', content: longContent() },
         { id: 's2', title: 'Ch 2', content: longContent() },
       ]);
-      vi.mocked(aiProviderService.generateText)
+      mockGenerate
         .mockRejectedValueOnce(new Error('API error'))
-        .mockResolvedValueOnce(makeBatchResponse('s2'));
+        .mockResolvedValueOnce(gatewayResult(makeBatchResponse('s2')));
 
       const agent = new ProseAgent(ctx);
       const result = await agent.execute(new AbortController().signal);
@@ -209,9 +229,9 @@ describe('ProseAgent', () => {
         content: longContent(),
       }));
       // Abort after first call
-      vi.mocked(aiProviderService.generateText).mockImplementation(async () => {
+      mockGenerate.mockImplementation(async () => {
         ac.abort();
-        return makeBatchResponse('s0');
+        return gatewayResult(makeBatchResponse('s0'));
       });
 
       const ctx = makeContext(sections);
@@ -219,7 +239,7 @@ describe('ProseAgent', () => {
       await agent.execute(ac.signal);
 
       // Only 1 section processed before abort check kicked in
-      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledTimes(1);
+      expect(mockGenerate).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -293,7 +313,7 @@ describe('ProseAgent', () => {
         },
         summary: 'Dup test',
       });
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(responseWithDup);
+      mockGenerate.mockResolvedValue(gatewayResult(responseWithDup));
 
       const agent = new ProseAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);

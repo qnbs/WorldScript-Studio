@@ -16,12 +16,21 @@ const mockMemoryBank = vi.hoisted(() => ({
   search: vi.fn().mockResolvedValue([]),
 }));
 
+const mockGenerate = vi.hoisted(() => vi.fn());
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../../../../services/aiProviderService', () => ({
-  aiProviderService: { generateText: vi.fn() },
+// QNBS-v3: BaseAgent.generate() routes through this.gateway.generate() (InferenceGateway),
+// not aiProviderService.generateText directly — mock the gateway, not the service.
+vi.mock('../../../../services/ai/inferenceGateway', () => ({
+  inferenceGateway: {
+    generate: mockGenerate,
+    embed: vi.fn(),
+    modelList: vi.fn(),
+    healthCheck: vi.fn(),
+  },
 }));
 
 vi.mock('../../../../services/proForge/proForgeMemoryBank', () => ({
@@ -36,15 +45,27 @@ vi.mock('../../../../services/promptLibrary', () => ({
   getPrompt: vi.fn(() => 'mocked copy edit prompt'),
 }));
 
+vi.mock('../../../../services/ai/aiPolicy', () => ({
+  assertCloudAiAllowedSync: vi.fn(),
+  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
 import type { PipelineConfig } from '../../../../features/proForge/types';
-import { aiProviderService } from '../../../../services/aiProviderService';
 import { logger } from '../../../../services/logger';
 import { CopyEditAgent } from '../../../../services/proForge/pipelineAgents/copyEditAgent';
 import type { OrchestratorContext } from '../../../../services/proForge/proForgeOrchestrator';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function gatewayResult(text: string) {
+  return { text, model: 'gemini-2.5-flash', provider: 'gemini', isFallback: false };
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -136,6 +157,7 @@ function makeContext(
     characters: [],
     worlds: [],
     config: DEFAULT_CONFIG,
+    gateway: { generate: mockGenerate, embed: vi.fn(), modelList: vi.fn(), healthCheck: vi.fn() },
   };
 }
 
@@ -146,7 +168,7 @@ function makeContext(
 describe('CopyEditAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(aiProviderService.generateText).mockResolvedValue(makeCopyEditResponse('s1'));
+    mockGenerate.mockResolvedValue(gatewayResult(makeCopyEditResponse('s1')));
   });
 
   describe('section loop', () => {
@@ -166,13 +188,13 @@ describe('CopyEditAgent', () => {
         title: `Ch ${i}`,
         content: longContent(),
       }));
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(makeCopyEditResponse('s0'));
+      mockGenerate.mockResolvedValue(gatewayResult(makeCopyEditResponse('s0')));
 
       const ctx = makeContext(sections);
       const agent = new CopyEditAgent(ctx);
       await agent.execute(new AbortController().signal);
 
-      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledTimes(3);
+      expect(mockGenerate).toHaveBeenCalledTimes(3);
     });
 
     it('skips sections with fewer than 50 words', async () => {
@@ -180,7 +202,7 @@ describe('CopyEditAgent', () => {
       const agent = new CopyEditAgent(ctx);
       await agent.execute(new AbortController().signal);
 
-      expect(vi.mocked(aiProviderService.generateText)).not.toHaveBeenCalled();
+      expect(mockGenerate).not.toHaveBeenCalled();
     });
 
     it('continues processing other sections when one AI call fails', async () => {
@@ -188,9 +210,9 @@ describe('CopyEditAgent', () => {
         { id: 's1', title: 'Ch 1', content: longContent() },
         { id: 's2', title: 'Ch 2', content: longContent() },
       ]);
-      vi.mocked(aiProviderService.generateText)
+      mockGenerate
         .mockRejectedValueOnce(new Error('API error'))
-        .mockResolvedValueOnce(makeCopyEditResponse('s2'));
+        .mockResolvedValueOnce(gatewayResult(makeCopyEditResponse('s2')));
 
       const agent = new CopyEditAgent(ctx);
       await agent.execute(new AbortController().signal);
@@ -205,16 +227,16 @@ describe('CopyEditAgent', () => {
         title: `Ch ${i}`,
         content: longContent(),
       }));
-      vi.mocked(aiProviderService.generateText).mockImplementation(async () => {
+      mockGenerate.mockImplementation(async () => {
         ac.abort();
-        return makeCopyEditResponse('s0');
+        return gatewayResult(makeCopyEditResponse('s0'));
       });
 
       const ctx = makeContext(sections);
       const agent = new CopyEditAgent(ctx);
       await agent.execute(ac.signal);
 
-      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledTimes(1);
+      expect(mockGenerate).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -293,7 +315,7 @@ describe('CopyEditAgent', () => {
         formatIssues: [],
         summary: 'Dup test',
       });
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(dupResponse);
+      mockGenerate.mockResolvedValue(gatewayResult(dupResponse));
 
       const agent = new CopyEditAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);

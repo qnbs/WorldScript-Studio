@@ -1,6 +1,6 @@
 /**
  * Tests for components/settings/PrivacySection.tsx
- * QNBS-v3: Mocks SettingsViewContext; tests all five privacy toggles.
+ * QNBS-v3: Mocks SettingsViewContext; covers privacy toggles + B-1 encryption card.
  */
 
 import { render, screen } from '@testing-library/react';
@@ -11,24 +11,33 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockHandleSettingChange } = vi.hoisted(() => ({
+const { mockHandleSettingChange, mockSetPassphraseModal } = vi.hoisted(() => ({
   mockHandleSettingChange: vi.fn(),
+  mockSetPassphraseModal: vi.fn(),
 }));
 
-vi.mock('../../../contexts/SettingsViewContext', () => ({
-  useSettingsViewContext: () => ({
-    t: (k: string) => k,
-    settings: {
-      privacy: {
-        analyticsEnabled: true,
-        crashReporting: false,
-        dataEncryption: true,
-        localStorageOnly: false,
-        shareUsageData: false,
-      },
+const makeCtx = (overrides?: Record<string, unknown>) => ({
+  t: (k: string) => k,
+  settings: {
+    privacy: {
+      analyticsEnabled: true,
+      crashReporting: false,
+      dataEncryption: true,
+      localStorageOnly: false,
+      shareUsageData: false,
     },
-    handleSettingChange: mockHandleSettingChange,
-  }),
+  },
+  featureFlags: { enableIdbAtRestEncryption: false },
+  encryptionReady: false,
+  passphraseModal: 'closed' as const,
+  setPassphraseModal: mockSetPassphraseModal,
+  handlePassphraseConfirm: vi.fn(),
+  handleSettingChange: mockHandleSettingChange,
+  ...overrides,
+});
+
+vi.mock('../../../contexts/SettingsViewContext', () => ({
+  useSettingsViewContext: vi.fn(() => makeCtx()),
 }));
 
 // ---------------------------------------------------------------------------
@@ -36,6 +45,9 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
 // ---------------------------------------------------------------------------
 
 import { PrivacySection } from '../../../components/settings/PrivacySection';
+import { useSettingsViewContext } from '../../../contexts/SettingsViewContext';
+
+const mockCtx = vi.mocked(useSettingsViewContext);
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -44,6 +56,7 @@ import { PrivacySection } from '../../../components/settings/PrivacySection';
 describe('PrivacySection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCtx.mockReturnValue(makeCtx() as ReturnType<typeof useSettingsViewContext>);
   });
 
   it('renders the privacy title', () => {
@@ -89,5 +102,73 @@ describe('PrivacySection', () => {
       'privacy',
       expect.objectContaining({ analyticsEnabled: false }),
     );
+  });
+
+  // B-1 encryption card
+  it('shows encryption disabled status when flag is off', () => {
+    render(<PrivacySection />);
+    expect(screen.getByText('settings.privacy.encryptionDisabledStatus')).toBeInTheDocument();
+  });
+
+  it('shows "Set Passphrase" button when encryption is disabled', () => {
+    render(<PrivacySection />);
+    expect(screen.getByText('settings.privacy.encryptionSetAction')).toBeInTheDocument();
+  });
+
+  it('opens set passphrase modal on button click', async () => {
+    const user = userEvent.setup();
+    render(<PrivacySection />);
+    await user.click(screen.getByText('settings.privacy.encryptionSetAction'));
+    expect(mockSetPassphraseModal).toHaveBeenCalledWith('set');
+  });
+
+  it('shows active status and change/disable buttons when encryption is on and ready', () => {
+    mockCtx.mockReturnValue(
+      makeCtx({
+        featureFlags: { enableIdbAtRestEncryption: true },
+        encryptionReady: true,
+      }) as ReturnType<typeof useSettingsViewContext>,
+    );
+    render(<PrivacySection />);
+    expect(screen.getByText('settings.privacy.encryptionActiveStatus')).toBeInTheDocument();
+    expect(screen.getByText('settings.privacy.encryptionChangeAction')).toBeInTheDocument();
+    expect(screen.getByText('settings.privacy.encryptionDisableAction')).toBeInTheDocument();
+  });
+
+  it('shows locked status when encryption is on but key not in session', () => {
+    mockCtx.mockReturnValue(
+      makeCtx({
+        featureFlags: { enableIdbAtRestEncryption: true },
+        encryptionReady: false,
+      }) as ReturnType<typeof useSettingsViewContext>,
+    );
+    render(<PrivacySection />);
+    expect(screen.getByText('settings.privacy.encryptionLockedStatus')).toBeInTheDocument();
+  });
+
+  it('opens change modal when change action is clicked', async () => {
+    const user = userEvent.setup();
+    mockCtx.mockReturnValue(
+      makeCtx({
+        featureFlags: { enableIdbAtRestEncryption: true },
+        encryptionReady: true,
+      }) as ReturnType<typeof useSettingsViewContext>,
+    );
+    render(<PrivacySection />);
+    await user.click(screen.getByText('settings.privacy.encryptionChangeAction'));
+    expect(mockSetPassphraseModal).toHaveBeenCalledWith('change');
+  });
+
+  it('opens disable modal when disable action is clicked', async () => {
+    const user = userEvent.setup();
+    mockCtx.mockReturnValue(
+      makeCtx({
+        featureFlags: { enableIdbAtRestEncryption: true },
+        encryptionReady: true,
+      }) as ReturnType<typeof useSettingsViewContext>,
+    );
+    render(<PrivacySection />);
+    await user.click(screen.getByText('settings.privacy.encryptionDisableAction'));
+    expect(mockSetPassphraseModal).toHaveBeenCalledWith('disable');
   });
 });

@@ -1,6 +1,6 @@
 /**
  * Tests for PublishingAgent — ProForge Pipeline Stage 7 (publishing).
- * QNBS-v3: Mocks aiProviderService + memoryBank; exercises happy path, fallback, schema validation, memoryBank calls.
+ * QNBS-v3: Mocks InferenceGateway (via context.gateway) + memoryBank; exercises happy path, fallback, schema validation, memoryBank calls.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,12 +16,19 @@ const mockMemoryBank = vi.hoisted(() => ({
   search: vi.fn().mockResolvedValue([]),
 }));
 
+const mockGenerate = vi.hoisted(() => vi.fn());
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../../../../services/aiProviderService', () => ({
-  aiProviderService: { generateText: vi.fn() },
+vi.mock('../../../../services/ai/inferenceGateway', () => ({
+  inferenceGateway: {
+    generate: mockGenerate,
+    embed: vi.fn(),
+    modelList: vi.fn(),
+    healthCheck: vi.fn(),
+  },
 }));
 
 vi.mock('../../../../services/proForge/proForgeMemoryBank', () => ({
@@ -36,15 +43,27 @@ vi.mock('../../../../services/promptLibrary', () => ({
   getPrompt: vi.fn(() => 'mocked publishing prompt'),
 }));
 
+vi.mock('../../../../services/ai/aiPolicy', () => ({
+  assertCloudAiAllowedSync: vi.fn(),
+  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
 import type { PipelineConfig } from '../../../../features/proForge/types';
-import { aiProviderService } from '../../../../services/aiProviderService';
 import { logger } from '../../../../services/logger';
 import { PublishingAgent } from '../../../../services/proForge/pipelineAgents/publishingAgent';
 import type { OrchestratorContext } from '../../../../services/proForge/proForgeOrchestrator';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function gatewayResult(text: string) {
+  return { text, model: 'gemini-2.5-flash', provider: 'gemini', isFallback: false };
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -129,6 +148,7 @@ function makeContext(): OrchestratorContext {
     characters: [],
     worlds: [],
     config: DEFAULT_CONFIG,
+    gateway: { generate: mockGenerate, embed: vi.fn(), modelList: vi.fn(), healthCheck: vi.fn() },
   };
 }
 
@@ -139,7 +159,7 @@ function makeContext(): OrchestratorContext {
 describe('PublishingAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(aiProviderService.generateText).mockResolvedValue(JSON.stringify(VALID_PACKAGE));
+    mockGenerate.mockResolvedValue(gatewayResult(JSON.stringify(VALID_PACKAGE)));
   });
 
   describe('happy path', () => {
@@ -197,8 +217,8 @@ describe('PublishingAgent', () => {
     });
 
     it('handles AI response wrapped in ```json code fences', async () => {
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(
-        `\`\`\`json\n${JSON.stringify(VALID_PACKAGE)}\n\`\`\``,
+      mockGenerate.mockResolvedValue(
+        gatewayResult(`\`\`\`json\n${JSON.stringify(VALID_PACKAGE)}\n\`\`\``),
       );
 
       const agent = new PublishingAgent(makeContext());
@@ -211,7 +231,7 @@ describe('PublishingAgent', () => {
 
   describe('fallback behaviour', () => {
     it('uses fallback package when AI returns invalid JSON', async () => {
-      vi.mocked(aiProviderService.generateText).mockResolvedValue('not valid json {{{');
+      mockGenerate.mockResolvedValue(gatewayResult('not valid json {{{'));
 
       const agent = new PublishingAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
@@ -222,9 +242,7 @@ describe('PublishingAgent', () => {
     });
 
     it('uses fallback package when schema validation fails', async () => {
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(
-        JSON.stringify({ invalid: 'structure' }),
-      );
+      mockGenerate.mockResolvedValue(gatewayResult(JSON.stringify({ invalid: 'structure' })));
 
       const agent = new PublishingAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
@@ -236,7 +254,7 @@ describe('PublishingAgent', () => {
     });
 
     it('uses fallback package when AI call throws', async () => {
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('API error'));
+      mockGenerate.mockRejectedValue(new Error('API error'));
 
       const agent = new PublishingAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
@@ -247,7 +265,7 @@ describe('PublishingAgent', () => {
     });
 
     it('fallback audiobookGuide has empty chapterMarks array', async () => {
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('fail'));
+      mockGenerate.mockRejectedValue(new Error('fail'));
 
       const agent = new PublishingAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);

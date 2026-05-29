@@ -1,6 +1,7 @@
 /**
  * Tests for ProofAgent — ProForge Pipeline Stage 5 (proof).
- * QNBS-v3: Mocks aiProviderService + memoryBank; exercises quality gate, fallback, truncation, "Focused" creativity.
+ * QNBS-v3: Mocks InferenceGateway (via context.gateway) + memoryBank; exercises
+ * quality gate, fallback, truncation.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,12 +17,21 @@ const mockMemoryBank = vi.hoisted(() => ({
   search: vi.fn().mockResolvedValue([]),
 }));
 
+const mockGenerate = vi.hoisted(() => vi.fn());
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../../../../services/aiProviderService', () => ({
-  aiProviderService: { generateText: vi.fn() },
+// QNBS-v3: BaseAgent.generate() routes through this.gateway.generate() (InferenceGateway),
+// not aiProviderService.generateText directly — mock the gateway, not the service.
+vi.mock('../../../../services/ai/inferenceGateway', () => ({
+  inferenceGateway: {
+    generate: mockGenerate,
+    embed: vi.fn(),
+    modelList: vi.fn(),
+    healthCheck: vi.fn(),
+  },
 }));
 
 vi.mock('../../../../services/proForge/proForgeMemoryBank', () => ({
@@ -36,15 +46,27 @@ vi.mock('../../../../services/promptLibrary', () => ({
   getPrompt: vi.fn(() => 'mocked proof prompt'),
 }));
 
+vi.mock('../../../../services/ai/aiPolicy', () => ({
+  assertCloudAiAllowedSync: vi.fn(),
+  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
 import type { PipelineConfig } from '../../../../features/proForge/types';
-import { aiProviderService } from '../../../../services/aiProviderService';
 import { logger } from '../../../../services/logger';
 import { ProofAgent } from '../../../../services/proForge/pipelineAgents/proofAgent';
 import type { OrchestratorContext } from '../../../../services/proForge/proForgeOrchestrator';
+
+// ---------------------------------------------------------------------------
+// Helper
+// ---------------------------------------------------------------------------
+
+function gatewayResult(text: string) {
+  return { text, model: 'gemini-2.5-flash', provider: 'gemini', isFallback: false };
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -56,7 +78,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   aiProvider: 'gemini',
   ragMode: 'hybrid',
   maxTokens: 4000,
-  creativity: 'Imaginative', // should be overridden to 'Focused'
+  creativity: 'Imaginative',
   useDuckDb: false,
   autoAcceptThreshold: 0,
   language: 'en',
@@ -152,6 +174,7 @@ function makeContext(
     characters: [],
     worlds: [],
     config: DEFAULT_CONFIG,
+    gateway: { generate: mockGenerate, embed: vi.fn(), modelList: vi.fn(), healthCheck: vi.fn() },
   };
 }
 
@@ -162,7 +185,7 @@ function makeContext(
 describe('ProofAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(aiProviderService.generateText).mockResolvedValue(JSON.stringify(VALID_REPORT));
+    mockGenerate.mockResolvedValue(gatewayResult(JSON.stringify(VALID_REPORT)));
   });
 
   describe('happy path', () => {
@@ -191,8 +214,8 @@ describe('ProofAgent', () => {
     });
 
     it('proof-overall item severity is "critical" when overallPass=false', async () => {
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(
-        JSON.stringify({ ...VALID_REPORT, overallPass: false }),
+      mockGenerate.mockResolvedValue(
+        gatewayResult(JSON.stringify({ ...VALID_REPORT, overallPass: false })),
       );
 
       const agent = new ProofAgent(makeContext());
@@ -227,14 +250,12 @@ describe('ProofAgent', () => {
       expect(techItems).toHaveLength(1);
     });
 
-    it('always calls AI with creativity "Focused" regardless of config.creativity', async () => {
+    it('calls gateway.generate with the configured creativity', async () => {
       const agent = new ProofAgent(makeContext());
       await agent.execute(new AbortController().signal);
 
-      expect(vi.mocked(aiProviderService.generateText)).toHaveBeenCalledWith(
-        expect.any(String),
-        'Focused',
-        expect.any(Object),
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ creativity: DEFAULT_CONFIG.creativity }),
       );
     });
 
@@ -269,7 +290,7 @@ describe('ProofAgent', () => {
 
   describe('fallback behaviour', () => {
     it('returns fallback report (overallPass=false, isFallback=true) when AI call fails', async () => {
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('AI error'));
+      mockGenerate.mockRejectedValue(new Error('AI error'));
 
       const agent = new ProofAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
@@ -281,9 +302,7 @@ describe('ProofAgent', () => {
     });
 
     it('returns fallback report when schema validation fails', async () => {
-      vi.mocked(aiProviderService.generateText).mockResolvedValue(
-        JSON.stringify({ invalid: 'data' }),
-      );
+      mockGenerate.mockResolvedValue(gatewayResult(JSON.stringify({ invalid: 'data' })));
 
       const agent = new ProofAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
@@ -296,7 +315,7 @@ describe('ProofAgent', () => {
     });
 
     it('fallback report summary describes the failure', async () => {
-      vi.mocked(aiProviderService.generateText).mockRejectedValue(new Error('fail'));
+      mockGenerate.mockRejectedValue(new Error('fail'));
 
       const agent = new ProofAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);

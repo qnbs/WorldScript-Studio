@@ -1,8 +1,8 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)** → **2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)** → **2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger sprint B-1..B-8)** → **2026-05-28 (Phase 3 C-1 — collab-transport security hardening)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)** → **2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)** → **2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger sprint B-1..B-8)** → **2026-05-28 (Phase 3 C-1 — collab-transport security hardening)** → **2026-05-30 (B-1 passphrase UX complete)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.19.0** — 2026-05-28 (Phase 3 C-1 security hardening applied)  
+**Current version:** **v1.19.0** — 2026-05-30 (B-1 IDB passphrase UX complete)  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
 
 ---
@@ -33,7 +33,7 @@ Three security findings identified and fixed in the same session:
 
 ### Sprint: Phase 2 B-series (B-1..B-8) — 2026-05-28
 
-**B-1:** `services/storage/storageEncryptionService.ts` — AES-256-GCM IDB at-rest encryption, PBKDF2-SHA-256 (600k iterations, OWASP 2024 minimum), non-extractable key, sentinel-prefixed blobs. 24 tests.
+**B-1:** `services/storage/storageEncryptionService.ts` — AES-256-GCM IDB at-rest encryption, PBKDF2-SHA-256 (600k iterations, OWASP 2024 minimum), non-extractable key, sentinel-prefixed blobs. **Passphrase UX complete (2026-05-30):** `IdbUnlockModal` (startup unlock when flag enabled), `PassphraseModal` (set/change/disable in Settings › Privacy), `PrivacySection` encryption card. 33 tests (18 service + 15 UI).
 
 **B-2:** `services/voice/wasmSttEngine.ts` + `sileroVadEngine.ts` — Whisper tiny.en Q8 + Silero VAD scaffold via @xenova/transformers. Feature-flagged (`enableVoiceWasm`).
 
@@ -217,6 +217,8 @@ Three security findings identified and fixed in the same session:
 **Quality gate (2026-05-28, C-7 sprint):** lint ✅ (Biome — 0 errors, 1006 files) · typecheck ✅ · i18n:check ✅ (2077 keys × 5 locales) · tests ✅ (4 174 / 391 files — +130 tests: supervisorAgent, baseAgent, geminiService streaming, helpCatalog, idbCore, loraThunks) · coverage thresholds raised L73/F65/B58/S71 (CI will confirm actual numbers)
 
 **Quality gate (2026-05-29, Feature Parity Audit):** lint ✅ (Biome — 0 errors, 1008 files) · typecheck ✅ · i18n:check ✅ (2078 keys × 5 locales; enableIdbAtRestEncryption key added) · tests ✅ (4 192 / 392 files — +18 tests: pluginRegistry flag-gate ×2, cloudSyncBackend flag-gate ×2, 8 parity-audit drift fixes) · 8 runtime-gate drifts corrected; `docs/FEATURE-PARITY.md` + `features/featureCatalog.ts` added
+
+**Quality gate (2026-05-30, B-1 Passphrase UX):** lint ✅ (Biome — 0 errors, 1010 files) · typecheck ✅ · i18n:check ✅ (2099 keys × 5 locales; +22 encryption UX keys) · tests ✅ (CI — +33 tests: 18 storageEncryptionService service-layer, 15 PrivacySection UI) · `IdbUnlockModal` + `PassphraseModal` + `PrivacySection` encryption card wired; `transientUiStore` `isIdbUnlockOpen` gate; flag label updated
 
 ---
 

@@ -119,7 +119,7 @@ logger.warn('[myModule] something happened');  // module auto-extracted from [br
 
 ## Known issues to watch
 
-- **`enableIdbAtRestEncryption` UX** — passphrase unlock modal and forgot-passphrase flow not yet built (Phase 3). Flag must remain off by default until UX is complete.
+- **`enableIdbAtRestEncryption` UX** — ✅ Complete (2026-05-30): `IdbUnlockModal` (startup unlock), `PassphraseModal` (set/change/disable in Settings › Privacy), `PrivacySection` encryption card wired. Flag may be enabled. Phase 4: actual IDB read/write path integration for project stores.
 - **`enableVoiceWasm` WASM download** — model download UI not yet wired to `WasmSttEngine.initialize()`. The scaffold is ready; the Settings UI for initiating the download is Phase 3.
 - **RTL translation content** — `locales/ar/` and `locales/he/` contain key stubs only (no translated strings). The `enableRtlLayout` flag gives correct `dir="rtl"` layout but all UI text remains in English until full translation.
 - **B-4 axe violations** — any regressions in ARIA or keyboard focus patterns will immediately fail CI. Monitor after any component refactor.
@@ -129,6 +129,6 @@ logger.warn('[myModule] something happened');  // module auto-extracted from [br
 
 1. Run CI and verify all jobs green (coverage, build, e2e including B-4 axe gate, lighthouse, Stryker at 75)
 2. PLANbib v1.7 features — go-ahead from user required (Objects → MindMap → Interviews → Timeline → Wizard → Analysis → ReadMode → Guide → Desktop)
-3. IDB encryption UX (passphrase unlock modal, forgot-passphrase export flow, key rotation)
+3. IDB encryption UX ✅ complete — Phase 4: integrate read/write path in `idbProjectStore` etc.
 4. WASM voice download UI (connect `WasmSttEngine.initialize()` to Settings → Voice)
 5. Full RTL translation content (ar/he) — requires translator review

@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import type { RootState } from '../app/store';
+import type { PassphraseModalMode } from '../components/settings/PassphraseModal';
 import { featureFlagsActions } from '../features/featureFlags/featureFlagsSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -13,6 +14,11 @@ import { settingsActions } from '../features/settings/settingsSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import { logger } from '../services/logger';
+import {
+  clearIdbEncryptionKey,
+  initIdbEncryption,
+  isIdbEncryptionReady,
+} from '../services/storage/storageEncryptionService';
 import { storageService } from '../services/storageService';
 import type {
   AccessibilitySettings,
@@ -71,6 +77,8 @@ export const useSettingsView = () => {
   const importFileRef = useRef<HTMLInputElement>(null);
   const [snapshots, setSnapshots] = useState<ProjectSnapshot[]>([]);
   const [snapshotName, setSnapshotName] = useState('');
+  const [passphraseModal, setPassphraseModal] = useState<PassphraseModalMode | 'closed'>('closed');
+  const [encryptionReady, setEncryptionReady] = useState(isIdbEncryptionReady());
 
   const refreshSnapshots = useCallback(async () => {
     const snaps = await storageService.listSnapshots();
@@ -334,6 +342,30 @@ export const useSettingsView = () => {
     }
   }, [modal.payload.id, refreshSnapshots]);
 
+  // QNBS-v3: B-1 passphrase handlers — initIdbEncryption stores key in memory only (SEC-RULE-5)
+  const handlePassphraseConfirm = useCallback(
+    async (_current: string, newPassphrase: string) => {
+      if (passphraseModal === 'set') {
+        await initIdbEncryption(newPassphrase);
+        dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(true));
+        setEncryptionReady(true);
+      } else if (passphraseModal === 'change') {
+        // Verify old key by re-deriving; service throws on wrong passphrase during decrypt
+        await initIdbEncryption(_current);
+        await initIdbEncryption(newPassphrase);
+        setEncryptionReady(true);
+      } else if (passphraseModal === 'disable') {
+        // Verify current key, then clear and disable the flag
+        await initIdbEncryption(_current);
+        clearIdbEncryptionKey();
+        dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
+        setEncryptionReady(false);
+      }
+      setPassphraseModal('closed');
+    },
+    [passphraseModal, dispatch],
+  );
+
   return {
     t,
     language,
@@ -358,6 +390,10 @@ export const useSettingsView = () => {
     handleDeleteSnapshot,
     projectSize,
     currentWordCount,
+    passphraseModal,
+    setPassphraseModal,
+    encryptionReady,
+    handlePassphraseConfirm,
   };
 };
 

@@ -211,7 +211,7 @@ Client-side env vars must use the `VITE_*` prefix. Access via `import.meta.env.V
 
 `storageService.ts` auto-detects IndexedDB vs. Tauri filesystem. Data access must go through `dbService` or thunks — never raw IndexedDB. Never use `localStorage` for sensitive data.
 
-**At-rest encryption (B-1, `enableIdbAtRestEncryption`):** PBKDF2 (600 000 iter, SHA-256) → AES-256-GCM, `extractable: false`. Call `initIdbEncryption(passphrase)` before any IDB read/write when flag is on. Do NOT enable in production until passphrase UX is complete.
+**At-rest encryption (B-1, `enableIdbAtRestEncryption`):** PBKDF2 (600 000 iter, SHA-256) → AES-256-GCM, `extractable: false`. Call `initIdbEncryption(passphrase)` before any IDB read/write when flag is on. Passphrase UX complete: Settings → Privacy → "Encrypt project data at rest". On startup with flag on, `IdbUnlockModal` prompts for the passphrase; `PassphraseModal` in Settings handles set/change/disable flows.
 
 `services/dbInitialization.ts` exports `checkStorageHealth()` — proactive low-storage warning on app init.
 
@@ -231,7 +231,7 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (20 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
 
-Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`. **B-series (all off):** `enableIdbAtRestEncryption` (B-1, no passphrase UX yet), `enableVoiceWasm` (B-2, model download UI not wired), `enableRtlLayout` (B-5, ar/he stubs only). **Stub/future (all off):** `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
+Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`. **B-series (all off):** `enableIdbAtRestEncryption` (B-1, passphrase UX complete — enable via Settings › Privacy), `enableVoiceWasm` (B-2, model download UI not wired), `enableRtlLayout` (B-5, ar/he stubs only). **Stub/future (all off):** `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
 
 ### Command Center & shortcuts
 
@@ -423,7 +423,7 @@ See `AUDIT.md` and `TODO.md` for the full list. Key items:
 - `workers/inference.worker.ts` — `@xenova/transformers` resolved via `tsconfig.json` `paths` alias; if alias breaks, restore `@ts-expect-error`.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
 - **Voice WASM (B-2 scaffold ready):** `wasmSttEngine.ts` + `sileroVadEngine.ts` exist but model download UI not wired. Phase 3: connect to `WasmSttEngine.initialize()`.
-- **IDB at-rest encryption UX (B-1 service ready):** Passphrase unlock modal + key rotation UI are Phase 3. Do NOT enable `enableIdbAtRestEncryption` in production until UX complete.
+- **IDB at-rest encryption (B-1 complete):** Passphrase UX shipped — `IdbUnlockModal` (startup), `PassphraseModal` (set/change/disable in Settings › Privacy). Flag `enableIdbAtRestEncryption` may be enabled; actual IDB read/write integration for `idbProjectStore` etc. is a separate Phase 4 task (currently service-layer only).
 - **`vendor-voice-wasm` chunk:** If WASM engines import heavy deps directly, add to `vite.config.ts` `globIgnores`.
 
 ## graphify
