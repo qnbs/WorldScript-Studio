@@ -107,14 +107,13 @@ const registerServiceWorker = async (): Promise<void> => {
     appLogger.info('[SW] Registered, scope:', registration.scope);
 
     // ── Detect and announce SW updates ───────────────────────
-    let userInitiatedUpdate = false;
-
+    // QNBS-v3: userInitiatedUpdate removed — skipWaiting is now automatic (install event),
+    // so controllerchange always reloads. The banner's applyUpdate still works for explicit UX.
     const announceUpdateAvailable = (worker: ServiceWorker) => {
       window.dispatchEvent(
         new CustomEvent('sw-update-available', {
           detail: {
             applyUpdate: () => {
-              userInitiatedUpdate = true;
               worker.postMessage({ type: 'SKIP_WAITING' });
             },
           },
@@ -141,10 +140,12 @@ const registerServiceWorker = async (): Promise<void> => {
       announceUpdateAvailable(registration.waiting);
     }
 
-    // Handle SW controller change (after skipWaiting)
+    // QNBS-v3: Reload on any SW controller change — install now calls skipWaiting() automatically,
+    // so controllerchange fires whenever a new SW activates (not just on user-initiated updates).
+    // The app auto-saves to IDB so a mid-session reload is safe and always serves fresh assets.
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (userInitiatedUpdate && !refreshing) {
+      if (!refreshing) {
         refreshing = true;
         window.location.reload();
       }

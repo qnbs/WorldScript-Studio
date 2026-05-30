@@ -5,7 +5,7 @@
 //           offline fallback, push notifications, share target
 // ============================================================
 
-const APP_VERSION   = '1.17.0';
+const APP_VERSION   = '1.19.0';
 const CACHE_STATIC  = `storycraft-static-v${APP_VERSION}`;
 const CACHE_DYNAMIC = `storycraft-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `storycraft-images-v${APP_VERSION}`;
@@ -95,6 +95,10 @@ async function offlineFallback(request) {
 // INSTALL — Precache shell
 // ════════════════════════════════════════════════════════════
 self.addEventListener('install', (event) => {
+  // QNBS-v3: skipWaiting immediately so a new SW never sits in "waiting" state behind a stale
+  // active SW that serves cached v.old assets. The app auto-saves to IDB so a mid-session
+  // reload is safe. Paired with clients.claim() in activate this ensures all tabs get new code.
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_STATIC)
       .then((cache) => cache.addAll(PRECACHE_URLS))
