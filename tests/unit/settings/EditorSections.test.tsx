@@ -11,33 +11,36 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockHandleSettingChange } = vi.hoisted(() => ({
+const { mockHandleSettingChange, settingsRef } = vi.hoisted(() => ({
   mockHandleSettingChange: vi.fn(),
+  settingsRef: { current: {} as Record<string, unknown> },
 }));
+
+const makeSettings = () => ({
+  editorFont: 'serif',
+  customFont: null,
+  fontSize: 16,
+  lineSpacing: 1.6,
+  paragraphSpacing: 1.0,
+  indentFirstLine: false,
+  advancedEditor: {
+    autoComplete: true,
+    spellCheck: true,
+    grammarCheck: false,
+    wordCount: true,
+    readingTime: false,
+    writingStats: false,
+    distractionFree: false,
+    typewriterMode: false,
+    zenMode: false,
+    focusMode: false,
+  },
+});
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
     t: (k: string) => k,
-    settings: {
-      editorFont: 'serif',
-      customFont: null,
-      fontSize: 16,
-      lineSpacing: 1.6,
-      paragraphSpacing: 1.0,
-      indentFirstLine: false,
-      advancedEditor: {
-        autoComplete: true,
-        spellCheck: true,
-        grammarCheck: false,
-        wordCount: true,
-        readingTime: false,
-        writingStats: false,
-        distractionFree: false,
-        typewriterMode: false,
-        zenMode: false,
-        focusMode: false,
-      },
-    },
+    settings: { ...makeSettings(), ...settingsRef.current },
     handleSettingChange: mockHandleSettingChange,
   }),
 }));
@@ -126,6 +129,14 @@ describe('EditorSection', () => {
 describe('AdvancedEditorSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    settingsRef.current = {};
+  });
+
+  // QNBS-v3: regression — pre-v1.8 settings had no advancedEditor; page must not crash.
+  it('renders without crashing when advancedEditor is undefined', () => {
+    settingsRef.current = { advancedEditor: undefined };
+    expect(() => render(<AdvancedEditorSection />)).not.toThrow();
+    expect(screen.getByText('settings.advancedEditor.title')).toBeInTheDocument();
   });
 
   it('renders the advanced editor title', () => {

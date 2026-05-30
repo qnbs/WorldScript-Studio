@@ -11,9 +11,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockHandleSettingChange, mockHandleNavigate } = vi.hoisted(() => ({
+const { mockHandleSettingChange, mockHandleNavigate, settingsRef } = vi.hoisted(() => ({
   mockHandleSettingChange: vi.fn(),
   mockHandleNavigate: vi.fn(),
+  settingsRef: { current: {} as Record<string, unknown> },
 }));
 
 const makeSettings = (overrides = {}) => ({
@@ -41,7 +42,7 @@ const makeSettings = (overrides = {}) => ({
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
     t: (k: string) => k,
-    settings: makeSettings(),
+    settings: { ...makeSettings(), ...settingsRef.current },
     handleSettingChange: mockHandleSettingChange,
     handleResetSettings: vi.fn(),
     handleExportSettings: vi.fn(),
@@ -81,6 +82,14 @@ import { AccessibilitySection } from '../../../components/settings/Accessibility
 describe('AccessibilitySection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    settingsRef.current = {};
+  });
+
+  // QNBS-v3: regression — pre-v1.8 settings had no accessibility object; page must not crash.
+  it('renders without crashing when accessibility is undefined', () => {
+    settingsRef.current = { accessibility: undefined };
+    expect(() => render(<AccessibilitySection />)).not.toThrow();
+    expect(screen.getByText('settings.accessibility.title')).toBeInTheDocument();
   });
 
   it('renders the section heading', () => {

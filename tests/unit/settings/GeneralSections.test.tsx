@@ -11,26 +11,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockHandleSettingChange, mockHandleLanguageChange } = vi.hoisted(() => ({
+const { mockHandleSettingChange, mockHandleLanguageChange, settingsRef } = vi.hoisted(() => ({
   mockHandleSettingChange: vi.fn(),
   mockHandleLanguageChange: vi.fn(),
+  settingsRef: { current: {} as Record<string, unknown> },
 }));
+
+const defaultMockSettings = () => ({
+  theme: 'dark',
+  language: 'en',
+  accessibility: { presetId: 'custom' },
+  editorFont: 'serif',
+  fontSize: 16,
+  lineSpacing: 1.5,
+  themeCustomization: { primaryColor: '#6366f1', accentColor: '#8b5cf6' },
+  appearance: { preset: 'default' },
+});
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
     t: (k: string) => k,
     language: 'en',
     handleLanguageChange: mockHandleLanguageChange,
-    settings: {
-      theme: 'dark',
-      language: 'en',
-      accessibility: { presetId: 'custom' },
-      editorFont: 'serif',
-      fontSize: 16,
-      lineSpacing: 1.5,
-      themeCustomization: { primaryColor: '#6366f1', accentColor: '#8b5cf6' },
-      appearance: { preset: 'default' },
-    },
+    settings: { ...defaultMockSettings(), ...settingsRef.current },
     handleSettingChange: mockHandleSettingChange,
     handleResetSettings: vi.fn(),
   }),
@@ -107,6 +110,14 @@ describe('GeneralSection', () => {
 describe('AppearanceSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    settingsRef.current = {};
+  });
+
+  // QNBS-v3: regression — pre-v1.8 settings had no themeCustomization; page must not crash.
+  it('renders without crashing when themeCustomization is undefined', () => {
+    settingsRef.current = { themeCustomization: undefined };
+    expect(() => render(<AppearanceSection />)).not.toThrow();
+    expect(screen.getByText('settings.appearance.customization')).toBeInTheDocument();
   });
 
   it('renders the appearance title', () => {
