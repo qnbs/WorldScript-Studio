@@ -1,7 +1,7 @@
 /**
  * Tests for components/writing/WriterViewUI.tsx
  * QNBS-v3: Mocks Redux hooks + sub-components; tests mobile tabs, version-control toggle,
- *          focus mode, ProForge toggle visibility, panel collapse.
+ *          focus mode, ProForge toggle visibility (desktop + mobile), panel collapse.
  */
 
 import { render, screen } from '@testing-library/react';
@@ -142,23 +142,98 @@ describe('WriterViewUI', () => {
   it('does not render ProForge toggle when flag is disabled', () => {
     mockIsProForgeEnabled = false;
     render(<WriterViewUI />);
-    expect(screen.queryByText('ProForge')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('writer-proforge-btn-desktop')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('writer-proforge-btn-mobile')).not.toBeInTheDocument();
   });
 
-  it('renders ProForge toggle button when flag is enabled', () => {
+  it('renders desktop ProForge toggle button when flag is enabled', () => {
     mockIsProForgeEnabled = true;
     render(<WriterViewUI />);
-    // The toggle button renders "ProForge" or "🔥 ProForge"
-    expect(screen.getByRole('button', { name: /ProForge/ })).toBeInTheDocument();
+    expect(screen.getByTestId('writer-proforge-btn-desktop')).toBeInTheDocument();
   });
 
-  it('dispatches setProForgeActive when ProForge button clicked', async () => {
+  it('renders mobile ProForge toggle button when flag is enabled', () => {
+    mockIsProForgeEnabled = true;
+    render(<WriterViewUI />);
+    expect(screen.getByTestId('writer-proforge-btn-mobile')).toBeInTheDocument();
+  });
+
+  it('desktop ProForge button has correct aria-label when inactive', () => {
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = false;
+    render(<WriterViewUI />);
+    expect(screen.getByTestId('writer-proforge-btn-desktop')).toHaveAttribute(
+      'aria-label',
+      'Activate ProForge Pipeline',
+    );
+  });
+
+  it('mobile ProForge button has correct aria-label when inactive', () => {
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = false;
+    render(<WriterViewUI />);
+    expect(screen.getByTestId('writer-proforge-btn-mobile')).toHaveAttribute(
+      'aria-label',
+      'Activate ProForge Pipeline',
+    );
+  });
+
+  it('desktop ProForge button has deactivate label when active', () => {
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = true;
+    render(<WriterViewUI />);
+    expect(screen.getByTestId('writer-proforge-btn-desktop')).toHaveAttribute(
+      'aria-label',
+      'Deactivate ProForge',
+    );
+  });
+
+  it('mobile ProForge button has deactivate label when active', () => {
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = true;
+    render(<WriterViewUI />);
+    expect(screen.getByTestId('writer-proforge-btn-mobile')).toHaveAttribute(
+      'aria-label',
+      'Deactivate ProForge',
+    );
+  });
+
+  it('dispatches setProForgeActive when desktop ProForge button clicked', async () => {
     const user = userEvent.setup();
     mockIsProForgeEnabled = true;
     mockIsProForgeActive = false;
     render(<WriterViewUI />);
-    await user.click(screen.getByRole('button', { name: /ProForge/ }));
+    await user.click(screen.getByTestId('writer-proforge-btn-desktop'));
     expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('dispatches setProForgeActive when mobile ProForge button clicked', async () => {
+    const user = userEvent.setup();
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = false;
+    render(<WriterViewUI />);
+    await user.click(screen.getByTestId('writer-proforge-btn-mobile'));
+    expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('desktop ProForge button aria-pressed reflects active state', () => {
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = true;
+    render(<WriterViewUI />);
+    expect(screen.getByTestId('writer-proforge-btn-desktop')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('mobile ProForge button aria-pressed reflects active state', () => {
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = true;
+    render(<WriterViewUI />);
+    expect(screen.getByTestId('writer-proforge-btn-mobile')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('switches to context tab when context tab clicked', async () => {
