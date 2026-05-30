@@ -6,6 +6,7 @@
  */
 
 import type { ProjectData } from '../../features/project/projectSlice';
+import { normalizeAccessibilitySettings } from '../../features/settings/accessibilitySchema';
 import type { Settings, StoryProject } from '../../types';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
@@ -69,6 +70,9 @@ export class IdbProjectStore extends IdbAssetStore {
         indentFirstLine: false,
         ...incoming,
       } as Settings;
+      // QNBS-v3: Normalize accessibility — old IDB states (pre-v1.8) may not have this field,
+      // causing settings.accessibility.highContrast to throw on first render in App.tsx.
+      validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
       validSettings.privacy = {
         analyticsEnabled: false,
         crashReporting: false,
