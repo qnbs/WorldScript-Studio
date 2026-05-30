@@ -28,26 +28,32 @@ jobs:
             const KEEP = 3;
             const env = 'github-pages';
 
-            // List all deployments for the environment, newest first
-            const { data: deployments } = await github.rest.repos.listDeployments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              environment: env,
-              per_page: 100,
-            });
+            // QNBS-v3: Paginate to fetch ALL deployments — per_page:100 single-page fetch misses
+            // deployments beyond the first 100, leaving them permanently un-pruned.
+            const allDeployments = await github.paginate(
+              github.rest.repos.listDeployments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                environment: env,
+                per_page: 100,
+              },
+            );
 
             // Sort descending by ID (newest first) and skip the ones we want to keep
-            const toDelete = deployments
+            const toDelete = allDeployments
               .sort((a, b) => b.id - a.id)
               .slice(KEEP);
 
             if (toDelete.length === 0) {
-              core.info(`Nothing to prune — only ${deployments.length} deployment(s) found.`);
+              core.info(`Nothing to prune — only ${allDeployments.length} deployment(s) found.`);
               return;
             }
 
-            core.info(`Pruning ${toDelete.length} deployment(s), keeping ${KEEP} latest.`);
+            core.info(`Found ${allDeployments.length} deployment(s) total; pruning ${toDelete.length}, keeping ${KEEP} latest.`);
 
+            let deleted = 0;
+            let failed = 0;
             for (const dep of toDelete) {
               // A deployment must be marked inactive before it can be deleted
               try {
@@ -68,7 +74,11 @@ jobs:
                   deployment_id: dep.id,
                 });
                 core.info(`Deleted deployment ${dep.id} (${dep.ref} @ ${dep.created_at})`);
+                deleted++;
               } catch (e) {
                 core.warning(`Could not delete deployment ${dep.id}: ${e.message}`);
+                failed++;
               }
             }
+
+            core.info(`Done: ${deleted} deleted, ${failed} failed, ${KEEP} kept.`);

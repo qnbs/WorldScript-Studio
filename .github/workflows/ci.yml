@@ -258,6 +258,9 @@ jobs:
         run: pnpm run test:e2e
         env:
           CI: 'true'
+          # QNBS-v3: Skip VRT in E2E job — visual regression is handled by the dedicated
+          # vrt job which serves the production build and owns the baseline PNGs.
+          PLAYWRIGHT_SKIP_VRT: 'true'
 
       - name: Upload Playwright HTML report
         if: always()
@@ -375,7 +378,11 @@ jobs:
         env:
           CI: true
         run: |
-          pnpm exec http-server dist -p 3000 -s &
+          # QNBS-v3: The GitHub Pages build has base=/StoryCraft-Studio/. Mirror that structure
+          # so http-server serves assets at the expected paths matching playwright.config baseURL.
+          mkdir -p serve_root/StoryCraft-Studio
+          cp -r dist/. serve_root/StoryCraft-Studio/
+          pnpm exec http-server serve_root -p 3000 -s &
           pnpm exec wait-on http://127.0.0.1:3000 --timeout 30000
           pnpm run test:vrt
 

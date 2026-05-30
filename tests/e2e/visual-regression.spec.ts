@@ -5,11 +5,18 @@
  */
 import { expect, test } from '@playwright/test';
 
-// QNBS-v3: Only Desktop Chromium baselines — Mobile would duplicate PNG sets and increase flakiness.
+// QNBS-v3: Skip in the main E2E job (PLAYWRIGHT_SKIP_VRT=true) — handled by the dedicated VRT job
+// that serves the production dist build. Running against the dev server here would compare against
+// production-build baselines and always mismatch on unrelated HMR/port differences.
 test.describe('Visual regression', () => {
   test.use({ viewport: { width: 1280, height: 720 } });
 
-  test.beforeEach(async (_fixture, testInfo) => {
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright requires destructuring for fixture args; no fixture needed here
+  test.beforeEach(async ({}, testInfo) => {
+    test.skip(
+      !!process.env['PLAYWRIGHT_SKIP_VRT'],
+      'VRT handled by dedicated VRT job (PLAYWRIGHT_SKIP_VRT=true in e2e job)',
+    );
     test.skip(
       testInfo.project.name !== 'chromium',
       'Desktop 1280×720 baseline only (see playwright.config projects)',

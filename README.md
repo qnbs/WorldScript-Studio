@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2078_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2078 keys">
   <img src="https://img.shields.io/badge/Tests-4567_%2F_382_files-22C55E" alt="4567 tests / 382 files">
-  <img src="https://img.shields.io/badge/Coverage-L_73%25_%7C_B_58%25_%7C_F_65%25-22C55E" alt="Coverage: Lines 73% / Branches 58% / Functions 65%">
+  <img src="https://img.shields.io/badge/Coverage-L_73%25_%7C_B_59%25_%7C_F_65%25-22C55E" alt="Coverage: Lines 73% / Branches 59% / Functions 65%">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
