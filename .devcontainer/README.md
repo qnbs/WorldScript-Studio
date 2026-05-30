@@ -1,8 +1,10 @@
-# StoryCraft Studio — Dev Container
+# StoryCraft Studio — Dev Container & GitHub Codespaces
 
 ## Overview
 
-This dev container provides a **complete, reproducible development environment** for StoryCraft Studio. It includes every tool the project needs — Node.js, pnpm, Rust/Tauri, Playwright, Python/graphify — pre-installed and cached.
+This dev container provides a **complete, reproducible development environment** for StoryCraft Studio. It includes every tool the project needs — Node.js, pnpm, Rust/Tauri, Playwright, Python/graphify, Claude Code CLI — pre-installed and cached.
+
+Optimized for both **local Docker** and **GitHub Codespaces** (8-core / 16GB recommended).
 
 ## What's Inside
 
@@ -13,16 +15,41 @@ This dev container provides a **complete, reproducible development environment**
 | Rust | stable | Tauri desktop app builds |
 | Playwright | Chromium | E2E testing |
 | Python 3 | system | graphify knowledge graph tool |
+| Claude Code CLI | latest | AI-assisted development |
 | GitHub CLI | latest | PR/issue workflows |
 | Starship | latest | Shell prompt |
 | fzf | 0.56.3 | Fuzzy finder |
 | zoxide | 0.9.6 | Smart directory jumping |
 
-## Quick Start
+---
+
+## Quick Start — GitHub Codespaces
+
+1. **Open in Codespaces**: Repo → Code → Codespaces → Create codespace on main
+2. **Choose machine**: Use **8-core (16GB)** — the full test suite needs it
+3. **Wait for setup**: `postCreateCommand` runs automatically (3–5 min on first build)
+4. **Authenticate Claude Code**: `claude` → follow OAuth flow
+5. **Run quality gate**: `pnpm run lint && pnpm run typecheck`
+6. **Run tests**: `pnpm exec vitest run` (full suite, ~10 min on 8-core)
+7. **Start developing**: `pnpm run dev` (Vite on port 3000, auto-forwarded)
+
+### Current Session Context
+
+See `docs/SPRINT-HANDOFF-2026-05-30-encryption-a11y.md` (auto-opened) for what was done and what's remaining. The CI correction loop may still have failing tests — run:
+
+```bash
+pnpm exec vitest run 2>&1 | grep "^FAIL " | sort -u
+```
+
+---
+
+## Quick Start — Local Docker
 
 1. **Open in Dev Container**: VS Code → `Dev Containers: Reopen in Container`
 2. **Wait for setup**: The `postCreateCommand` installs dependencies, builds i18n, and sets up git hooks automatically
 3. **Start developing**: `pnpm run dev` (Vite on port 3000)
+
+---
 
 ## Ports
 
@@ -33,6 +60,8 @@ This dev container provides a **complete, reproducible development environment**
 | 6006 | Storybook | Notify |
 | 9323 | Playwright Report | Notify |
 
+---
+
 ## Lifecycle Commands
 
 | Phase | Command | Purpose |
@@ -42,8 +71,13 @@ This dev container provides a **complete, reproducible development environment**
 | `postCreateCommand` | `pnpm run i18n:bundle` | Build i18n bundles |
 | `postCreateCommand` | `npx playwright install chromium` | Install Playwright browsers |
 | `postCreateCommand` | `pnpm run prepare` | Set up git hooks |
+| `postCreateCommand` | `npm install -g @anthropic-ai/claude-code` | Install Claude Code CLI |
+| `postCreateCommand` | `pnpm run lint && pnpm run typecheck` | Quality gate smoke test |
 | `postStartCommand` | `node --version && pnpm --version && rustc --version` | Verify toolchain |
-| `postAttachCommand` | `echo '✅ StoryCraft Studio ready'` | Ready notification |
+| `postStartCommand` | `gh run list --limit 3` | Show CI status |
+| `postAttachCommand` | `echo '✅ ready'` | Ready notification |
+
+---
 
 ## Volumes (Persistent Cache)
 
@@ -55,38 +89,70 @@ This dev container provides a **complete, reproducible development environment**
 
 These volumes survive container rebuilds, so you don't re-download everything.
 
+---
+
 ## Environment Variables
 
-See [`.env.example`](.env.example) for all available variables. Key defaults:
+Key defaults set in `containerEnv`:
 
-- `NODE_OPTIONS=--max-old-space-size=6144` — 6GB heap for Vite + TypeScript
-- `CI=true` — Enables Playwright E2E tests
-- `VITE_BASE=/` — Dev container serves at root (no GitHub Pages subpath)
+| Variable | Value | Purpose |
+|---|---|---|
+| `NODE_OPTIONS` | `--max-old-space-size=8192` | 8GB heap for Vite + tsc + Vitest |
+| `CI` | `true` | Enables Playwright E2E + parity check |
+| `VITE_BASE` | `/` | Root-relative assets (no GitHub Pages subpath) |
+| `RUN_MOBILE_E2E` | `0` | Mobile E2E off by default (enable manually) |
+| `VITEST_MAX_WORKERS` | `1` | Serial tests (matches `vitest.config.ts`) |
+| `PLAYWRIGHT_BROWSERS_PATH` | `/usr/local/playwright` | Pre-installed Chromium location |
+
+---
+
+## CI Correction Loop (Codespaces Workflow)
+
+When the GitHub Quality Gate fails, use this workflow:
+
+```bash
+# 1. Find failing tests
+pnpm exec vitest run 2>&1 | grep "^FAIL " | sort -u
+
+# 2. Diagnose a specific file
+pnpm exec vitest run tests/unit/THE_FILE.test.ts
+
+# 3. Common fix patterns:
+#    - "Cannot read properties of undefined (reading 'enableXxx')"
+#      → Add all 20 featureFlags to useAppSelector mock state
+#    - "Mock<Constructable | Procedure> not assignable"
+#      → Use vi.fn<T>() with explicit type; declare vars as Mock<T>
+#    - Wrong assertion values (iterations, paths, counts)
+#      → Check actual implementation vs test expectation
+
+# 4. After fixing, commit and push
+git add tests/unit/...  &&  git commit -m "fix(tests): ..."  &&  git push
+
+# 5. Monitor CI
+gh run watch
+```
+
+---
 
 ## Design Decisions
 
-### Why a Custom Dockerfile instead of a pre-built image?
+### Why 16GB RAM / 8-core?
 
-The pre-built `javascript-node:24-bookworm` image had several issues:
-1. **Node 24 is not LTS** — `package.json` requires `node >= 22`; Node 24 can have breaking changes
-2. **No Rust toolchain** — Tauri builds require `rustc` + `cargo`
-3. **No Playwright system deps** — Chromium needs `libnss3`, `libgbm1`, etc.
-4. **No Python** — `graphify` requires Python 3 + pip
-5. **No caching volumes** — Every rebuild re-downloads all dependencies
+The full test suite (Vitest serial, tsc, Biome, parity check) takes ~10 min on 8-core but crashes with OOM on 4-core/8GB machines. The TypeScript language server + Vite HMR together need ~6GB. Giving the full suite room avoids forced CI-cloud-first workflow.
 
-The custom Dockerfile installs everything in one layer for optimal caching.
+### Why `VITEST_MAX_WORKERS=1`?
 
-### Why Node 22 LTS and not 24?
+The project's `vitest.config.ts` has `maxWorkers: 1` because parallel test workers cause IDB/state leaks between test files. The env var ensures this applies even when running Vitest from the VS Code extension.
 
-Node 22 is the **current LTS** (until October 2026). Node 24 is in `current` status and may have incompatible API changes. The project's `engines.node >= 22` field supports 22, and 22 LTS is the safest choice.
+### Why a Custom Dockerfile?
 
-### Why 8GB RAM?
+The pre-built `javascript-node:24-bookworm` image lacked: Node 22 LTS, Rust, Playwright system deps, Python/graphify, pre-cached npm store. The custom Dockerfile installs everything in one layer for optimal layer caching.
 
-The project runs Vitest (single-threaded, `maxWorkers: 1`), Vite HMR, and the TypeScript language server simultaneously. 4GB was insufficient — the TypeScript server would OOM during type-checking. 8GB provides comfortable headroom.
+### Why Node 22 LTS?
 
-### Why `CI=true` by default?
+Node 22 is the current LTS (until October 2026). Node 24 is `current` status with potential breaking changes. `engines.node >= 22` supports both but 22 LTS is the safest default.
 
-The project's `test:e2e` script requires `CI=true` to run. Setting it in the container env means E2E tests work out of the box without manual env var setup.
+---
 
 ## Maintenance
 
@@ -111,23 +177,43 @@ Edit `.devcontainer/Dockerfile` → `apt-get install` section, then rebuild.
 
 Edit `.devcontainer/devcontainer.json` → `customizations.vscode.extensions`, then rebuild.
 
+---
+
 ## Troubleshooting
 
-### Container won't start
-- Check Docker has ≥ 8GB RAM allocated (Docker Desktop → Settings → Resources)
+### Codespaces — wrong machine size
+
+Use the machine picker to switch to 8-core / 16GB:
+GitHub → Your Codespace → Machine type → 8-core.
+
+### Container won't start (local Docker)
+
+- Check Docker has ≥ 16GB RAM allocated (Docker Desktop → Settings → Resources)
 - Check disk space ≥ 32GB available
 
 ### pnpm install fails
+
 - Delete the `storycraft-pnpm-store` volume: `docker volume rm storycraft-pnpm-store`
 - Rebuild the container
 
 ### Playwright tests fail
-- Verify Chromium is installed: `npx playwright install chromium`
-- Check `CI=true` is set: `echo $CI`
+
+- Verify Chromium: `npx playwright install chromium`
+- Check `CI=true`: `echo $CI`
 
 ### Rust/Tauri build fails
-- Verify Rust toolchain: `rustc --version && cargo --version`
-- Clear Cargo cache: `cargo cache --autoclean` or delete the `storycraft-cargo-cache` volume
+
+- Verify: `rustc --version && cargo --version`
+- Clear cache: delete the `storycraft-cargo-cache` volume
 
 ### TypeScript server OOM
-- Increase `NODE_OPTIONS` → `--max-old-space-size=8192` in `.devcontainer/.env`
+
+- Already set to 8GB in `containerEnv.NODE_OPTIONS`
+- If still OOM, kill tsc server: `Ctrl+Shift+P` → "TypeScript: Restart TS Server"
+
+### Claude Code not found after container create
+
+```bash
+npm install -g @anthropic-ai/claude-code
+claude auth login
+```

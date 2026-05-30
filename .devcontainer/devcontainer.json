@@ -47,13 +47,20 @@
     // QNBS-v3: Install Playwright browsers for the vscode user (not root).
     "install-playwright": "npx playwright install chromium",
     // QNBS-v3: Set up git hooks (simple-git-hooks + lint-staged).
-    "setup-hooks": "pnpm run prepare"
+    "setup-hooks": "pnpm run prepare",
+    // QNBS-v3: Install Claude Code CLI globally — enables AI-assisted development
+    // in Codespaces. Falls back gracefully if npm is temporarily unavailable.
+    "install-claude": "npm install -g @anthropic-ai/claude-code 2>/dev/null || true",
+    // QNBS-v3: Quick quality gate smoke-test so the user sees CI state on first open.
+    "verify-quality": "pnpm run lint --quiet && pnpm run typecheck && echo '✅ Quality gate: lint + typecheck OK' || echo '⚠️  Quality gate has issues — run: pnpm run lint && pnpm run typecheck'"
   },
   "postStartCommand": {
     // QNBS-v3: Verify toolchain versions on every start — catches image drift.
-    "verify-toolchain": "node --version && pnpm --version && rustc --version 2>/dev/null || true"
+    "verify-toolchain": "node --version && pnpm --version && rustc --version 2>/dev/null || true",
+    // QNBS-v3: Show recent CI status on container start so the team knows what's green.
+    "ci-status": "gh run list --limit 3 --json status,conclusion,name 2>/dev/null | node -e \"process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);r.forEach(x=>console.log(x.conclusion==='success'?'✅':'❌',x.name,x.status))}catch{}})\" || true"
   },
-  "postAttachCommand": "echo '✅ StoryCraft Studio ready — run: pnpm run dev'",
+  "postAttachCommand": "echo '✅ StoryCraft Studio ready — see docs/SPRINT-HANDOFF-2026-05-30-encryption-a11y.md for session context. Run: pnpm run dev'",
   // ─── Ports ─────────────────────────────────────────────────────────────────
   // QNBS-v3: Vite dev server (3000), Storybook (6006), Vite preview (4173),
   // and Playwright report (9323) for CI debugging.
@@ -77,23 +84,28 @@
     }
   },
   // ─── Environment ───────────────────────────────────────────────────────────
-  // QNBS-v3: NODE_OPTIONS for Vite + TypeScript memory; CI=true for Playwright;
+  // QNBS-v3: NODE_OPTIONS bumped to 8GB for 16GB machine; CI=true for Playwright;
   // PLAYWRIGHT_BROWSERS_PATH matches Dockerfile pre-install location.
+  // RUN_MOBILE_E2E=0: mobile E2E off by default (enable manually when testing).
+  // VITEST_MAX_WORKERS set to match vitest.config.ts maxWorkers:1 (serial tests).
   "containerEnv": {
-    "NODE_OPTIONS": "--max-old-space-size=6144",
+    "NODE_OPTIONS": "--max-old-space-size=8192",
     "CI": "true",
     "PLAYWRIGHT_BROWSERS_PATH": "/usr/local/playwright",
-    "VITE_BASE": "/"
+    "VITE_BASE": "/",
+    "RUN_MOBILE_E2E": "0",
+    "VITEST_MAX_WORKERS": "1"
   },
   "remoteEnv": {
     "PATH": "${containerEnv:PATH}:/usr/local/cargo/bin"
   },
   // ─── Host requirements ─────────────────────────────────────────────────────
-  // QNBS-v3: 8GB RAM for Vitest + Vite HMR + TypeScript server simultaneously.
-  // 4 CPUs for parallel builds (turbo). 32GB storage for node_modules + Rust.
+  // QNBS-v3: Full test suite (Vitest serial + tsc + Biome + Vite HMR) needs 16GB.
+  // Use 8-core Codespaces machine for parallel pnpm tasks and fast Rust builds.
+  // Storage: node_modules (~1.5GB) + Rust target (~5GB) + Playwright browsers.
   "hostRequirements": {
-    "cpus": 4,
-    "memory": "8gb",
+    "cpus": 8,
+    "memory": "16gb",
     "storage": "32gb"
   },
   // ─── Volumes ───────────────────────────────────────────────────────────────
@@ -248,7 +260,7 @@
       ]
     },
     "codespaces": {
-      "openFiles": ["README.md"]
+      "openFiles": ["docs/SPRINT-HANDOFF-2026-05-30-encryption-a11y.md", "README.md"]
     }
   }
 }
