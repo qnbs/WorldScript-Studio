@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
 
     <!-- ── Manifest & Icons ───────────────────────────────── -->
-    <link rel="manifest" href="/StoryCraft-Studio/manifest.json" />
-    <link rel="icon" type="image/svg+xml" href="/StoryCraft-Studio/favicon.svg" />
-    <link rel="apple-touch-icon" href="/StoryCraft-Studio/favicon.svg" />
+    <!-- QNBS-v3: %BASE_URL% substituted by Vite at build time — resolves to / for Vercel/CF edge and /StoryCraft-Studio/ for GitHub Pages. -->
+    <link rel="manifest" href="%BASE_URL%manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <link rel="apple-touch-icon" href="%BASE_URL%favicon.svg" />
 
     <!-- ── Viewport & Theme ──────────────────────────────── -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
@@ -26,13 +27,13 @@
     <meta property="og:title"       content="StoryCraft Studio — AI Creative Writing" />
     <meta property="og:description" content="Craft entire novels, characters & worlds with Gemini AI. Works offline as a PWA." />
     <meta property="og:url"         content="https://storycraft-studio.app/StoryCraft-Studio/" />
-    <meta property="og:image"       content="/StoryCraft-Studio/favicon.svg" />
+    <meta property="og:image"       content="%BASE_URL%favicon.svg" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card"        content="summary" />
     <meta name="twitter:title"       content="StoryCraft Studio" />
     <meta name="twitter:description" content="AI-Powered Creative Writing Studio — Gemini AI, offline-ready PWA." />
-    <meta name="twitter:image"       content="/StoryCraft-Studio/favicon.svg" />
+    <meta name="twitter:image"       content="%BASE_URL%favicon.svg" />
 
     <!-- ── PWA / Mobile Capable ──────────────────────────── -->
     <meta name="mobile-web-app-capable"            content="yes" />

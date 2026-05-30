@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Vercel blank screen** (`index.html`): Replaced hardcoded `/StoryCraft-Studio/` paths with Vite `%BASE_URL%` template for manifest link, favicon icon, apple-touch-icon, og:image, and twitter:image. With `build:edge` (base `/`), these resolve to root paths — fixing 404s on Vercel and Cloudflare Pages. With `build` (base `/StoryCraft-Studio/`), GitHub Pages paths remain correct.
+- **Startup blank screen safety net** (`index.tsx`): Added `window.addEventListener('error')` outer handler that renders a static error recovery UI if the async IIFE never executes due to module-evaluation or bundle errors — prevents silent blank page with no user feedback.
+
+### Changed
+
+- **CLAUDE.md — environment-aware shell rules**: Replaced the blanket "ONE Bash call per turn (LOW-END HARDWARE)" rule with environment-aware guidance. On GitHub Codespaces (8-core/16GB), parallel Bash calls and `run_in_background` are allowed. Sequential rules are retained for constrained local hardware. Added "Codespaces Modus Operandi" section with session-start checklist, daily workflow, and test failure triage patterns.
+- **Devcontainer re-enabled** (`.devcontainer/devcontainer.json`): Renamed from `.devcontainer.json.disabled` back to active. `hostRequirements: { cpus: 8, memory: "16gb", storage: "32gb" }` ensures correct Codespaces machine provisioning. Root `devcontainer.json` (empty schema redirect) deleted. `postAttachCommand` and `openFiles` updated to current sprint handoff doc.
+- **`.devcontainer/README.md`**: Added "Optimal Modus Operandi" section — session-start checklist, daily workflow pattern, full quality gate command, test failure triage table, and timeout-prevention guidance.
+
 ### Security
 
 - **Feature Parity Audit — 8 critical runtime-gate drifts fixed** (2026-05-29):
