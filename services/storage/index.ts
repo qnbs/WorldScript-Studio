@@ -24,5 +24,6 @@ export {
   retryDb,
 } from './idbCore';
 export { IdbKeyStore } from './idbKeyStore';
+export * from './idbPassphraseSentinel';
 export { IdbProjectStore } from './idbProjectStore';
 export { IdbSnapshotStore } from './idbSnapshotStore';

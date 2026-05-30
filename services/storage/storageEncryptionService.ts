@@ -3,7 +3,19 @@
  * ENCRYPTION: AES-256-GCM, PBKDF2-SHA-256 (600k iterations, OWASP 2024 minimum), non-extractable key (SEC-RULE-5).
  * QNBS-v3: Phase 2 B-1. Key held in-memory only; never serialised; cleared by clearIdbEncryptionKey().
  *          Salt is non-secret (prevents cross-install rainbow tables); stored in localStorage.
+ *
+ * Passphrase sentinel (added for correct opt-in behaviour):
+ *   A small AES-GCM encrypted token is persisted in IDB (via idbPassphraseSentinel) the first
+ *   time the user sets up encryption. On every subsequent app start the sentinel is decrypted
+ *   with the derived key — AES-GCM's auth-tag guarantees a wrong passphrase throws immediately.
+ *   If no sentinel exists the feature flag is silently cleared (App.tsx startup guard).
  */
+
+import {
+  deletePassphraseSentinel,
+  getPassphraseSentinel,
+  savePassphraseSentinel,
+} from './idbPassphraseSentinel';
 
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
@@ -154,4 +166,69 @@ export function isEncryptedBlob(value: unknown): value is Uint8Array {
     if (value[i] !== SENTINEL[i]) return false;
   }
   return true;
+}
+
+// ─── Sentinel-backed API (correct opt-in behaviour) ─────────────────────────
+
+/**
+ * Set up encryption for the first time (or after a change):
+ * derives key → encrypts sentinel → persists sentinel in IDB → activates the key.
+ * Call from the "set passphrase" UI flow.
+ */
+export async function setupIdbEncryption(passphrase: string): Promise<void> {
+  if (!passphrase) throw new Error('Passphrase must not be empty');
+  const salt = getOrCreateSalt();
+  const key = await _svc.deriveKey(passphrase, salt);
+  const blob = await _svc.encrypt(key, { v: 1 });
+  await savePassphraseSentinel(blob.bytes);
+  _activeKey = key;
+}
+
+/**
+ * Verify passphrase against the stored sentinel then activate the key.
+ * Throws if the passphrase is wrong (AES-GCM auth-tag mismatch) or if no
+ * sentinel exists (encryption was never properly set up).
+ * Call from IdbUnlockModal.
+ */
+export async function verifyAndInitIdbEncryption(passphrase: string): Promise<void> {
+  if (!passphrase) throw new Error('Passphrase must not be empty');
+  const sentinelBytes = await getPassphraseSentinel();
+  if (!sentinelBytes) throw new Error('No passphrase sentinel found — encryption was not set up');
+  const salt = getOrCreateSalt();
+  const key = await _svc.deriveKey(passphrase, salt);
+  // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
+  await _svc.decrypt(key, { bytes: sentinelBytes });
+  _activeKey = key;
+}
+
+/**
+ * Returns true if a passphrase sentinel exists in IDB, meaning the user has
+ * previously configured encryption. Used by App.tsx startup guard to auto-heal
+ * a stale flag (flag on, no sentinel → flag never properly set up → disable flag).
+ */
+export async function hasPassphraseSentinel(): Promise<boolean> {
+  const bytes = await getPassphraseSentinel();
+  return bytes !== null;
+}
+
+/**
+ * Delete the passphrase sentinel from IDB and clear the in-memory key.
+ * Call when the user disables encryption (after verifying current passphrase).
+ */
+export async function clearIdbPassphrase(): Promise<void> {
+  await deletePassphraseSentinel();
+  _activeKey = null;
+}
+
+/**
+ * Change the passphrase: verify the old one against the sentinel, then replace
+ * the sentinel with one encrypted under the new key and activate the new key.
+ */
+export async function rotateIdbPassphrase(
+  oldPassphrase: string,
+  newPassphrase: string,
+): Promise<void> {
+  // QNBS-v3: verifyAndInitIdbEncryption throws on wrong old passphrase — caller catches and shows error
+  await verifyAndInitIdbEncryption(oldPassphrase);
+  await setupIdbEncryption(newPassphrase);
 }

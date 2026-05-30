@@ -3,15 +3,39 @@
  * Unit tests for services/storage/storageEncryptionService.ts (B-1)
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// Mock idbPassphraseSentinel so sentinel-backed functions don't need real IDB
+// vi.hoisted ensures these variables are available when vi.mock factory runs
+// ---------------------------------------------------------------------------
+
+const { mockSaveSentinel, mockGetSentinel, mockDeleteSentinel } = vi.hoisted(() => ({
+  mockSaveSentinel: vi.fn<(bytes: Uint8Array) => Promise<void>>().mockResolvedValue(undefined),
+  mockGetSentinel: vi.fn<() => Promise<Uint8Array | null>>().mockResolvedValue(null),
+  mockDeleteSentinel: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../services/storage/idbPassphraseSentinel', () => ({
+  savePassphraseSentinel: (...args: Parameters<typeof mockSaveSentinel>) =>
+    mockSaveSentinel(...args),
+  getPassphraseSentinel: () => mockGetSentinel(),
+  deletePassphraseSentinel: () => mockDeleteSentinel(),
+}));
+
 import {
   clearIdbEncryptionKey,
+  clearIdbPassphrase,
+  hasPassphraseSentinel,
   idbDecrypt,
   idbEncrypt,
   initIdbEncryption,
   isEncryptedBlob,
   isIdbEncryptionReady,
+  rotateIdbPassphrase,
   StorageEncryptionService,
+  setupIdbEncryption,
+  verifyAndInitIdbEncryption,
 } from '../../services/storage/storageEncryptionService';
 
 describe('StorageEncryptionService (class)', () => {
@@ -153,5 +177,129 @@ describe('Module-level singleton API', () => {
     await initIdbEncryption('consistent-pass');
     const result = await idbDecrypt<{ chapter: number }>(bytes);
     expect(result.chapter).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sentinel-backed API (setupIdbEncryption / verifyAndInitIdbEncryption / etc.)
+// ---------------------------------------------------------------------------
+
+describe('Sentinel-backed API', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearIdbEncryptionKey();
+    // deterministic salt (32 bytes of 0x01)
+    localStorage.setItem(
+      'storycraft-idb-kdf-salt-v1',
+      btoa(String.fromCharCode(...new Array(32).fill(1))),
+    );
+    mockGetSentinel.mockResolvedValue(null);
+    mockSaveSentinel.mockResolvedValue(undefined);
+    mockDeleteSentinel.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    clearIdbEncryptionKey();
+    localStorage.clear();
+  });
+
+  // ── setupIdbEncryption ────────────────────────────────────────────────────
+
+  it('setupIdbEncryption saves a sentinel and sets the key ready', async () => {
+    await setupIdbEncryption('correct-horse');
+    expect(mockSaveSentinel).toHaveBeenCalledTimes(1);
+    expect(mockSaveSentinel.mock.calls[0]?.[0]).toBeInstanceOf(Uint8Array);
+    expect(isIdbEncryptionReady()).toBe(true);
+  });
+
+  it('setupIdbEncryption throws on empty passphrase', async () => {
+    await expect(setupIdbEncryption('')).rejects.toThrow('Passphrase must not be empty');
+  });
+
+  // ── verifyAndInitIdbEncryption ────────────────────────────────────────────
+
+  it('verifyAndInitIdbEncryption succeeds with the correct passphrase', async () => {
+    // First set up so a sentinel is stored
+    await setupIdbEncryption('my-secret');
+    // Retrieve the sentinel bytes that were saved
+    const savedBytes = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
+    clearIdbEncryptionKey();
+
+    // Make getPassphraseSentinel return the stored bytes
+    mockGetSentinel.mockResolvedValue(savedBytes);
+    await verifyAndInitIdbEncryption('my-secret');
+    expect(isIdbEncryptionReady()).toBe(true);
+  });
+
+  it('verifyAndInitIdbEncryption throws with the wrong passphrase', async () => {
+    await setupIdbEncryption('correct');
+    const savedBytes = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
+    clearIdbEncryptionKey();
+
+    mockGetSentinel.mockResolvedValue(savedBytes);
+    await expect(verifyAndInitIdbEncryption('wrong')).rejects.toThrow();
+    expect(isIdbEncryptionReady()).toBe(false);
+  });
+
+  it('verifyAndInitIdbEncryption throws when no sentinel exists', async () => {
+    mockGetSentinel.mockResolvedValue(null);
+    await expect(verifyAndInitIdbEncryption('any')).rejects.toThrow('No passphrase sentinel found');
+  });
+
+  it('verifyAndInitIdbEncryption throws on empty passphrase', async () => {
+    await expect(verifyAndInitIdbEncryption('')).rejects.toThrow('Passphrase must not be empty');
+  });
+
+  // ── hasPassphraseSentinel ─────────────────────────────────────────────────
+
+  it('hasPassphraseSentinel returns false when no sentinel is stored', async () => {
+    mockGetSentinel.mockResolvedValue(null);
+    expect(await hasPassphraseSentinel()).toBe(false);
+  });
+
+  it('hasPassphraseSentinel returns true when a sentinel is stored', async () => {
+    mockGetSentinel.mockResolvedValue(new Uint8Array(30));
+    expect(await hasPassphraseSentinel()).toBe(true);
+  });
+
+  // ── clearIdbPassphrase ────────────────────────────────────────────────────
+
+  it('clearIdbPassphrase deletes the sentinel and clears the active key', async () => {
+    await setupIdbEncryption('pass');
+    expect(isIdbEncryptionReady()).toBe(true);
+
+    await clearIdbPassphrase();
+    expect(mockDeleteSentinel).toHaveBeenCalledTimes(1);
+    expect(isIdbEncryptionReady()).toBe(false);
+  });
+
+  // ── rotateIdbPassphrase ───────────────────────────────────────────────────
+
+  it('rotateIdbPassphrase fails with wrong old passphrase', async () => {
+    await setupIdbEncryption('original');
+    const savedBytes = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
+    clearIdbEncryptionKey();
+
+    mockGetSentinel.mockResolvedValue(savedBytes);
+    await expect(rotateIdbPassphrase('wrong-old', 'new-pass')).rejects.toThrow();
+  });
+
+  it('rotateIdbPassphrase replaces sentinel and activates new key', async () => {
+    await setupIdbEncryption('original');
+    const firstSentinel = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
+    clearIdbEncryptionKey();
+
+    // verifyAndInitIdbEncryption will read firstSentinel; setupIdbEncryption will write a new one
+    mockGetSentinel.mockResolvedValue(firstSentinel);
+    mockSaveSentinel.mockClear();
+
+    await rotateIdbPassphrase('original', 'new-pass');
+
+    // A new sentinel was written
+    expect(mockSaveSentinel).toHaveBeenCalledTimes(1);
+    // The new sentinel is different from the first (new key, random IV)
+    const newSentinel = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
+    expect(newSentinel).not.toEqual(firstSentinel);
+    expect(isIdbEncryptionReady()).toBe(true);
   });
 });

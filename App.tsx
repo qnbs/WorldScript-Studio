@@ -35,7 +35,7 @@ import { CommandExecutorProvider } from './contexts/CommandExecutorContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { I18nProvider, RTL_LOCALES } from './contexts/I18nContext';
 import { LiveRegionProvider, useAnnounce } from './contexts/LiveRegionContext';
-import { selectFeatureFlags } from './features/featureFlags/featureFlagsSlice';
+import { featureFlagsActions, selectFeatureFlags } from './features/featureFlags/featureFlagsSlice';
 import {
   selectAllCharacters,
   selectAllWorlds,
@@ -52,7 +52,11 @@ import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
-import { isIdbEncryptionReady } from './services/storage/storageEncryptionService';
+import {
+  clearIdbPassphrase,
+  hasPassphraseSentinel,
+  isIdbEncryptionReady,
+} from './services/storage/storageEncryptionService';
 import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services/tauriMenuService';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
@@ -172,6 +176,16 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const setCommandPaletteOpen = useTransientUiStore((s) => s.setCommandPaletteOpen);
   const isIdbUnlockOpen = useTransientUiStore((s) => s.isIdbUnlockOpen);
   const setIdbUnlockOpen = useTransientUiStore((s) => s.setIdbUnlockOpen);
+
+  // QNBS-v3: escape hatch — clears sentinel + disables flag so the app is accessible again
+  const handleForgotPassphrase = useCallback(async () => {
+    await clearIdbPassphrase();
+    dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
+    setIdbUnlockOpen(false);
+    // QNBS-v3: WCAG 4.1.3 — assertive announcement so screen reader users know the security state changed
+    announce(t('settings.privacy.encryptionDisabledStatus'), 'assertive');
+  }, [dispatch, setIdbUnlockOpen, announce, t]);
+
   // Collaboration Panel State
   const [isCollabPanelOpen, setIsCollabPanelOpen] = useState(false);
 
@@ -282,13 +296,20 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     pluginRegistry.setEnabled(featureFlags.enablePluginSystem);
   }, [featureFlags.enablePluginSystem]);
 
-  // QNBS-v3: B-1 — when IDB at-rest encryption is on and the session key is not yet derived,
-  // prompt for the passphrase before any IDB read (key is never persisted, must be re-entered).
+  // QNBS-v3: B-1 sentinel guard — async because IDB sentinel read is async.
+  // Three cases: flag off → skip; key already in session → skip; sentinel missing →
+  // flag was toggled without proper setup → auto-disable; sentinel present → show modal.
   useEffect(() => {
-    if (featureFlags.enableIdbAtRestEncryption && !isIdbEncryptionReady()) {
+    if (!featureFlags.enableIdbAtRestEncryption || isIdbEncryptionReady()) return;
+    void (async () => {
+      const hasSentinel = await hasPassphraseSentinel();
+      if (!hasSentinel) {
+        dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
+        return;
+      }
       setIdbUnlockOpen(true);
-    }
-  }, [featureFlags.enableIdbAtRestEncryption, setIdbUnlockOpen]);
+    })();
+  }, [featureFlags.enableIdbAtRestEncryption, dispatch, setIdbUnlockOpen]);
 
   // QNBS-v3: PWA share_target GET params → toast + stash for Writer paste flows; strip query to avoid leaking shared text in URL bar.
   useEffect(() => {
@@ -596,7 +617,12 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   <VoiceControlPanel />
                 </>
               )}
-              {isIdbUnlockOpen && <IdbUnlockModal onUnlocked={() => setIdbUnlockOpen(false)} />}
+              {isIdbUnlockOpen && (
+                <IdbUnlockModal
+                  onUnlocked={() => setIdbUnlockOpen(false)}
+                  onForgotPassphrase={() => void handleForgotPassphrase()}
+                />
+              )}
             </div>
           </AppContext.Provider>
         </ToastProvider>
