@@ -18,7 +18,7 @@ export const Checkbox = React.memo(
               border border-[var(--sc-border-subtle)]
               bg-[var(--glass-bg)] backdrop-blur-sm
               checked:bg-[var(--sc-accent)] checked:border-[var(--sc-accent)]
-              focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)] focus:ring-offset-1 focus:ring-offset-[var(--sc-surface-base)]
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--sc-surface-base)]
               transition-all duration-sc-fast cursor-pointer
               hover:border-[var(--sc-border-strong)] hover:bg-[var(--glass-bg-hover)]
               ${className}

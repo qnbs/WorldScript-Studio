@@ -40,7 +40,7 @@ export const Input = React.memo(
                 px-4 py-2 pr-10 text-sm 
                 text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] 
                 shadow-sm transition-all duration-sc-fast
-                focus:outline-none focus:border-[var(--border-interactive)] focus:ring-4 focus:ring-[var(--sc-ring-focus)] focus:bg-[var(--sc-surface-raised)]/50
+                focus-visible:outline-none focus-visible:border-[var(--border-interactive)] focus-visible:ring-4 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:bg-[var(--sc-surface-raised)]/50
                 hover:border-[var(--sc-border-strong)] hover:bg-[var(--glass-bg-hover)]
                 disabled:opacity-50 disabled:cursor-not-allowed
                 ${className}
@@ -51,7 +51,7 @@ export const Input = React.memo(
           <button
             type="button"
             onClick={toggleListening}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-sc-md transition-all duration-sc-fast focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)] z-10 ${
+            className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-sc-md transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] z-10 ${
               isListening
                 ? 'text-red-500 bg-red-500/10 animate-pulse ring-1 ring-red-500/50'
                 : 'text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--glass-bg-hover)]'

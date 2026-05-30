@@ -237,6 +237,7 @@ export const DataSection: FC = () => {
             <Button
               type="button"
               disabled={libraryBusy || !libraryPassphrase.trim()}
+              aria-busy={libraryBusy}
               onClick={() => void handleEncryptedLibraryExport()}
             >
               {libraryBusy

@@ -15,6 +15,9 @@ interface Props {
 
 const MIN_LEN = 8;
 
+// Stable element IDs for aria-describedby / aria-labelledby wiring.
+const ERROR_ID = 'passphrase-modal-error';
+
 export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
   const { t } = useTranslation();
   const [current, setCurrent] = useState('');
@@ -63,8 +66,16 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
         ? t('settings.privacy.encryptionChangeButton')
         : t('settings.privacy.encryptionDisableButton');
 
+  const hasError = error.length > 0;
+
+  // QNBS-v3: 'disable' mode is a destructive confirmation — alertdialog announces immediately via AT
   return (
-    <Modal isOpen={true} onClose={onClose} title={title}>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={title}
+      variant={mode === 'disable' ? 'alertdialog' : 'dialog'}
+    >
       <div className="space-y-4">
         {(mode === 'change' || mode === 'disable') && (
           <div className="space-y-1">
@@ -79,8 +90,14 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
               type="password"
               autoComplete="current-password"
               value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-accent)] outline-none"
+              onChange={(e) => {
+                setCurrent(e.target.value);
+                setError('');
+              }}
+              // QNBS-v3: aria-describedby + aria-invalid wire the error to the field for screen readers
+              aria-describedby={hasError ? ERROR_ID : undefined}
+              aria-invalid={hasError}
+              className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
             />
           </div>
         )}
@@ -103,7 +120,9 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
                   setNext(e.target.value);
                   setError('');
                 }}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-accent)] outline-none"
+                aria-describedby={hasError ? ERROR_ID : undefined}
+                aria-invalid={hasError}
+                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
               />
             </div>
             <div className="space-y-1">
@@ -122,7 +141,9 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
                   setConfirm(e.target.value);
                   setError('');
                 }}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-accent)] outline-none"
+                aria-describedby={hasError ? ERROR_ID : undefined}
+                aria-invalid={hasError}
+                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
               />
             </div>
           </>
@@ -132,11 +153,16 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
           {t('settings.privacy.encryptionWarning')}
         </p>
 
-        {error && (
-          <p role="alert" className="text-sm text-[var(--sc-danger-fg)]">
-            {error}
-          </p>
-        )}
+        {/* QNBS-v3: pre-rendered with minHeight so the DOM node exists before text is injected —
+            required by NVDA/JAWS for role="alert" to fire the live-region announcement */}
+        <p
+          id={ERROR_ID}
+          role="alert"
+          className="text-sm text-[var(--sc-danger-fg)]"
+          style={{ minHeight: '1.25rem' }}
+        >
+          {error}
+        </p>
 
         <div className="flex justify-end gap-3 pt-1">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
@@ -144,8 +170,9 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
           </Button>
           <Button
             variant={mode === 'disable' ? 'danger' : 'primary'}
-            onClick={handleSubmit}
+            onClick={() => void handleSubmit()}
             disabled={busy}
+            aria-busy={busy}
           >
             {busy ? '…' : confirmButtonLabel}
           </Button>
