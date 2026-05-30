@@ -486,6 +486,7 @@
   "proforge.pipeline.noneActive": "No active pipeline",
   "proforge.emptyState.title": "Your manuscript, refined.",
   "proforge.emptyState.description": "ProForge reads every chapter, then walks you through editing stage by stage. Nothing gets lost — every change is reversible.",
+  "proforge.enabledHint": "ProForge Pipeline enabled. Open the Writer view and click the ProForge button in the tools panel to start.",
   "sceneboard.emptyState.title": "Your plot board is a blank canvas",
   "sceneboard.emptyState.description": "Add your first scene or import your outline to start planning your story.",
   "characters.emptyState.title": "Your cast list is empty",

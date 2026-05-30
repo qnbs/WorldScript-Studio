@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import type { RootState } from '../app/store';
 import type { PassphraseModalMode } from '../components/settings/PassphraseModal';
+import { useToast } from '../components/ui/Toast';
 import { featureFlagsActions } from '../features/featureFlags/featureFlagsSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -49,6 +50,7 @@ type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: num
 export const useSettingsView = () => {
   const { t, language, setLanguage } = useTranslation();
   const dispatch = useAppDispatch();
+  const toast = useToast();
   const settings = useAppSelector((state) => state.settings);
   const featureFlags = useAppSelector((state) => state.featureFlags);
   const projectState = useAppSelector((state) => state.project.present);
@@ -239,6 +241,8 @@ export const useSettingsView = () => {
         // toggles fell to default and logged a warning without updating Redux/localStorage.
         case 'enableProForge':
           dispatch(featureFlagsActions.setEnableProForge(Boolean(value)));
+          // QNBS-v3: guide user to the ProForge button — it is only in WriterView, not the sidebar
+          if (value) toast.info(t('proforge.enabledHint'));
           break;
         case 'enableVoiceWasm':
           dispatch(featureFlagsActions.setEnableVoiceWasm(Boolean(value)));
@@ -251,7 +255,7 @@ export const useSettingsView = () => {
           break;
       }
     },
-    [dispatch],
+    [dispatch, t, toast.info],
   );
 
   const projectSize = useMemo(() => {

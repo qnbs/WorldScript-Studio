@@ -486,6 +486,7 @@
   "proforge.pipeline.noneActive": "Nessuna pipeline attiva",
   "proforge.emptyState.title": "Il tuo manoscritto, rifinito.",
   "proforge.emptyState.description": "ProForge legge ogni capitolo e ti guida nell'editing fase per fase. Niente va perso — ogni modifica è reversibile.",
+  "proforge.enabledHint": "Pipeline ProForge attivata. Apri la vista Scrittore e fai clic sul pulsante ProForge nel pannello strumenti.",
   "sceneboard.emptyState.title": "Il tuo storyboard è una tela bianca",
   "sceneboard.emptyState.description": "Aggiungi la tua prima scena o importa la tua scaletta per iniziare a pianificare la tua storia.",
   "characters.emptyState.title": "Il tuo elenco di personaggi è vuoto",

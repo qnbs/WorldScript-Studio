@@ -486,6 +486,7 @@
   "proforge.pipeline.noneActive": "Sin pipeline activa",
   "proforge.emptyState.title": "Tu manuscrito, refinado.",
   "proforge.emptyState.description": "ProForge lee cada capítulo y te guía por la edición etapa por etapa. No se pierde nada — cada cambio es reversible.",
+  "proforge.enabledHint": "Pipeline ProForge activado. Abre la vista de Escritor y haz clic en el botón ProForge en el panel de herramientas.",
   "sceneboard.emptyState.title": "Tu tablero de tramas es un lienzo en blanco",
   "sceneboard.emptyState.description": "Añade tu primera escena o importa tu esquema para comenzar a planificar tu historia.",
   "characters.emptyState.title": "Tu lista de personajes está vacía",

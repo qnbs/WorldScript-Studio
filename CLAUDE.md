@@ -28,7 +28,7 @@ pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # TypeScript type check (tsc --noEmit)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
-pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 71%, branches 57%, functions 63%, statements 69%)
+pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 73%, branches 58%, functions 65%, statements 71%)
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
 pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
@@ -229,9 +229,9 @@ All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 ### Feature Flags
 
-Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (20 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
+Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (20 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2` (@deprecated — v1 board removed in v1.6; retained in slice for localStorage compat; hidden from Settings UI). All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`, 19 visible toggles). Do not use scattered `if (true)` hacks.
 
-Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`. **B-series (all off):** `enableIdbAtRestEncryption` (B-1, passphrase UX complete — enable via Settings › Privacy), `enableVoiceWasm` (B-2, model download UI not wired), `enableRtlLayout` (B-5, ar/he stubs only). **Stub/future (all off):** `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
+Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`, `enableStoryBibleAdvanced`, `enableBinderResearch`, `enableCompileWizard`, `enableProjectHealthScore`, `enableAppHealthPanel`. **B-series (all off):** `enableIdbAtRestEncryption` (B-1, passphrase UX complete — enable via Settings › Privacy), `enableVoiceWasm` (B-2, model download UI not wired), `enableRtlLayout` (B-5, ar/he stubs only). **Stub/future (all off):** `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
 
 ### Command Center & shortcuts
 
