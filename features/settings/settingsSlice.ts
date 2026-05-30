@@ -161,6 +161,10 @@ const defaultSettings: Settings = {
 };
 
 export const defaultVoiceSettings = defaultSettings.voice;
+// QNBS-v3: exported so components + IDB rehydration can backfill missing nested objects
+// (older persisted settings lacked advancedEditor/themeCustomization → page crash on read).
+export const defaultAdvancedEditorSettings = defaultSettings.advancedEditor;
+export const defaultThemeCustomization = defaultSettings.themeCustomization;
 
 const initialState: Settings = { ...defaultSettings };
 

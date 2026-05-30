@@ -65,3 +65,4 @@ public/locales/*/*.json
 !.codegraph/CODEGRAPH_REPORT.md
 .codegraph/codegraph.db-shm
 .codegraph/codegraph.db-wal
+voice-spike/

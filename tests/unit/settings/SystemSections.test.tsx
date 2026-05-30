@@ -107,6 +107,11 @@ vi.mock('../../../features/settings/accessibilitySchema', () => ({
     liveRegionVerbosity: 'full',
     presetId: 'default',
   })),
+  normalizeAccessibilitySettings: vi.fn((input: unknown) =>
+    typeof input === 'object' && input
+      ? { presetId: 'custom', ...input }
+      : { presetId: 'custom', highContrast: false, reducedMotion: false },
+  ),
 }));
 
 vi.mock('../../../services/collaborationService', () => ({

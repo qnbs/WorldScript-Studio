@@ -489,3 +489,49 @@ Rules:
 - Architecture questions → `graphify-out/GRAPH_REPORT.md`
 - Symbol/impact → CodeGraph MCP tools
 - Cross-module → Graphify `query`/`path` or CodeGraph `context`
+
+## Agent Checklist — Post-Change Verification
+
+The following rules are derived from the v1.19.0 audit (AUDIT.md) and MUST be
+followed after any change in the respective area.
+
+### Feature Flags
+- When adding, removing, or modifying a feature flag, always run:
+  ```bash
+  pnpm exec tsx scripts/audit-feature-parity.ts
+  ```
+  The script must report **0 drifts** before the change is considered complete.
+
+### Content Security Policy (CSP)
+- When modifying `src-tauri/tauri.conf.json` CSP directives or `index.html` CSP
+  meta tags, validate the result with:
+  ```bash
+  # Online validator (manual)
+  open https://csp-evaluator.withgoogle.com
+  ```
+  Tauri builds must never contain `*` in `default-src`, `connect-src`, or
+  `img-src`. WebSocket sources must be explicit hostnames, not protocol-only.
+
+### Dependencies & Supply Chain
+- When adding a new dependency (prod or dev), run:
+  ```bash
+  pnpm audit --audit-level=high
+  ```
+  If transitive vulnerabilities are introduced, evaluate:
+  1. Can the dependency be replaced with a lighter alternative?
+  2. Can the vulnerable transitive dep be overridden via `pnpm.overrides`?
+  3. Document the accepted risk in `AUDIT.md` under "Known Vulnerabilities".
+
+### Vendor Forks
+- When modifying `packages/collab-transport/`, update `VENDOR-FORKS.md` and
+  ensure `scripts/verify-vendor-fork.mjs` still passes:
+  ```bash
+  pnpm run verify:vendor
+  ```
+
+### Settings / Storage
+- When adding a new nested settings object, add a corresponding default-merge
+  guard in **both** places:
+  1. `services/storage/idbProjectStore.ts` → `normalizePersistedSettings`
+  2. `features/settings/settingsSlice.ts` → `setSettings` reducer
+  3. The consuming component must use `?? defaults` as a defensive fallback.
