@@ -5,6 +5,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -53,8 +54,8 @@ type OnClose = () => void;
 
 const makeProps = (
   mode: 'set' | 'change' | 'disable',
-  onConfirm: OnConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined),
-  onClose: OnClose = vi.fn<OnClose>(),
+  onConfirm: Mock<OnConfirm> = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>,
+  onClose: Mock<OnClose> = vi.fn<OnClose>(),
 ) => ({ mode, onConfirm, onClose });
 
 // ---------------------------------------------------------------------------
@@ -62,13 +63,13 @@ const makeProps = (
 // ---------------------------------------------------------------------------
 
 describe('PassphraseModal — set mode', () => {
-  let onClose: OnClose;
-  let onConfirm: OnConfirm;
+  let onClose: Mock<OnClose>;
+  let onConfirm: Mock<OnConfirm>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     onClose = vi.fn<OnClose>();
-    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined);
+    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>;
   });
 
   it('renders set title', () => {
@@ -167,13 +168,13 @@ describe('PassphraseModal — set mode', () => {
 // ---------------------------------------------------------------------------
 
 describe('PassphraseModal — change mode', () => {
-  let onClose: OnClose;
-  let onConfirm: OnConfirm;
+  let onClose: Mock<OnClose>;
+  let onConfirm: Mock<OnConfirm>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     onClose = vi.fn<OnClose>();
-    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined);
+    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>;
   });
 
   it('renders change title', () => {
@@ -221,13 +222,13 @@ describe('PassphraseModal — change mode', () => {
 // ---------------------------------------------------------------------------
 
 describe('PassphraseModal — disable mode', () => {
-  let onClose: OnClose;
-  let onConfirm: OnConfirm;
+  let onClose: Mock<OnClose>;
+  let onConfirm: Mock<OnConfirm>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     onClose = vi.fn<OnClose>();
-    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined);
+    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>;
   });
 
   it('renders disable title', () => {

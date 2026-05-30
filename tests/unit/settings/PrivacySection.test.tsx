@@ -127,7 +127,7 @@ describe('PrivacySection', () => {
       makeCtx({
         featureFlags: { enableIdbAtRestEncryption: true },
         encryptionReady: true,
-      }) as ReturnType<typeof useSettingsViewContext>,
+      }) as unknown as ReturnType<typeof useSettingsViewContext>,
     );
     render(<PrivacySection />);
     expect(screen.getByText('settings.privacy.encryptionActiveStatus')).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe('PrivacySection', () => {
       makeCtx({
         featureFlags: { enableIdbAtRestEncryption: true },
         encryptionReady: false,
-      }) as ReturnType<typeof useSettingsViewContext>,
+      }) as unknown as ReturnType<typeof useSettingsViewContext>,
     );
     render(<PrivacySection />);
     expect(screen.getByText('settings.privacy.encryptionLockedStatus')).toBeInTheDocument();
@@ -152,7 +152,7 @@ describe('PrivacySection', () => {
       makeCtx({
         featureFlags: { enableIdbAtRestEncryption: true },
         encryptionReady: true,
-      }) as ReturnType<typeof useSettingsViewContext>,
+      }) as unknown as ReturnType<typeof useSettingsViewContext>,
     );
     render(<PrivacySection />);
     await user.click(screen.getByText('settings.privacy.encryptionChangeAction'));
@@ -165,7 +165,7 @@ describe('PrivacySection', () => {
       makeCtx({
         featureFlags: { enableIdbAtRestEncryption: true },
         encryptionReady: true,
-      }) as ReturnType<typeof useSettingsViewContext>,
+      }) as unknown as ReturnType<typeof useSettingsViewContext>,
     );
     render(<PrivacySection />);
     await user.click(screen.getByText('settings.privacy.encryptionDisableAction'));
