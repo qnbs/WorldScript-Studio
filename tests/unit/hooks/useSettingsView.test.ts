@@ -22,6 +22,7 @@ const mockListSnapshots = vi.fn().mockResolvedValue([]);
 const mockSaveSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockDeleteSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockLoggerWarn = vi.fn();
+const mockToastInfo = vi.fn();
 
 const mockSettings = {
   theme: 'dark' as const,
@@ -149,6 +150,18 @@ vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
       type: 'featureFlags/setEnableAppHealthPanel',
       payload: v,
     }),
+    setEnableProForge: (v: unknown) => ({
+      type: 'featureFlags/setEnableProForge',
+      payload: v,
+    }),
+    setEnableVoiceWasm: (v: unknown) => ({
+      type: 'featureFlags/setEnableVoiceWasm',
+      payload: v,
+    }),
+    setEnableIdbAtRestEncryption: (v: unknown) => ({
+      type: 'featureFlags/setEnableIdbAtRestEncryption',
+      payload: v,
+    }),
   },
 }));
 
@@ -156,6 +169,14 @@ vi.mock('../../../features/status/statusSlice', () => ({
   statusActions: {
     addNotification: (payload: unknown) => ({ type: 'status/addNotification', payload }),
   },
+}));
+
+vi.mock('../../../components/ui/Toast', () => ({
+  useToast: () => ({
+    info: mockToastInfo,
+    success: vi.fn(),
+    error: vi.fn(),
+  }),
 }));
 
 vi.mock('../../../services/logger', () => ({
@@ -274,6 +295,26 @@ describe('handleSettingChange', () => {
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'featureFlags/setEnableCrossProjectSearch', payload: true }),
     );
+  });
+
+  it('dispatches setEnableProForge when enableProForge flag toggled on', () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => result.current.handleSettingChange('enableProForge', true));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'featureFlags/setEnableProForge', payload: true }),
+    );
+  });
+
+  it('calls toast.info when enableProForge toggled on', () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => result.current.handleSettingChange('enableProForge', true));
+    expect(mockToastInfo).toHaveBeenCalledWith('proforge.enabledHint');
+  });
+
+  it('does not call toast.info when enableProForge toggled off', () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => result.current.handleSettingChange('enableProForge', false));
+    expect(mockToastInfo).not.toHaveBeenCalled();
   });
 
   it('logs warning for unknown key', () => {

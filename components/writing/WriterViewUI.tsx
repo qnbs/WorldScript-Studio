@@ -86,13 +86,15 @@ const WriterViewUI: FC = () => {
         {isProForgeEnabled && (
           <button
             type="button"
+            data-testid="writer-proforge-btn-desktop"
             onClick={() => dispatch(proForgeActions.setProForgeActive(!isProForgeActive))}
+            aria-pressed={isProForgeActive}
+            aria-label={isProForgeActive ? 'Deactivate ProForge' : 'Activate ProForge Pipeline'}
             className={`text-xs px-2 py-1 rounded border transition-colors ${
               isProForgeActive
                 ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]'
                 : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'
             }`}
-            aria-pressed={isProForgeActive}
           >
             {isProForgeActive ? '🔥 ProForge' : 'ProForge'}
           </button>
