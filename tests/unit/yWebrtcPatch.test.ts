@@ -5,9 +5,10 @@ import { describe, expect, it } from 'vitest';
 // QNBS-v3: Smoke-test verifies the y-webrtc RTCDataChannel encryption patch is applied.
 // This catches accidental patch removal or y-webrtc upgrades that overwrite the patch.
 describe('y-webrtc RTCDataChannel encryption patch', () => {
+  // QNBS-v3: encryption lives in the vendor fork, not in node_modules
   const yWebrtcPath = path.resolve(
     import.meta.dirname,
-    '../../node_modules/y-webrtc/src/y-webrtc.js',
+    '../../packages/collab-transport/src/y-webrtc.js',
   );
 
   it('patch file exists and is non-empty', () => {

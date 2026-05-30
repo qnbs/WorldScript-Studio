@@ -38,9 +38,32 @@ let mockDictationActive = false;
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
+  // QNBS-v3: featureFlags must include ALL 20 flags (strict TypeScript) — useVoice accesses enableVoiceWasm
   useAppSelector: (selector: (s: unknown) => unknown) =>
     selector({
       settings: { voice: mockVoiceSettings },
+      featureFlags: {
+        enableCodexAutoTracking: true,
+        enableStoryBibleAdvanced: false,
+        enableBinderResearch: false,
+        enableCompileWizard: false,
+        enableProjectHealthScore: false,
+        enableCrossProjectSearch: true,
+        enableAppHealthPanel: false,
+        enablePlotBoardV2: true,
+        enableDuckDbAnalytics: false,
+        enableObjectsGroups: false,
+        enableMindMaps: false,
+        enableCharacterInterviews: false,
+        enableRtlLayout: false,
+        enableCloudSync: false,
+        enableLoraAdapters: false,
+        enablePluginSystem: false,
+        enableVoiceSupport: false,
+        enableVoiceWasm: false,
+        enableProForge: false,
+        enableIdbAtRestEncryption: false,
+      },
       voice: {
         mode: mockVoiceMode,
         error: mockVoiceError,

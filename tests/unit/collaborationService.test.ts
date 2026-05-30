@@ -351,7 +351,7 @@ describe('collaborationService', () => {
 });
 
 // ─── Encryption methods ───────────────────────────────────────────────────────
-// QNBS-v3: vi.spyOn mocks avoid real PBKDF2 310k iterations while still exercising the call path.
+// QNBS-v3: vi.spyOn mocks avoid real PBKDF2 600k iterations while still exercising the call path.
 
 describe('collaborationService encryption', () => {
   const mockCryptoKey = {} as CryptoKey;
@@ -421,7 +421,7 @@ describe('collaborationService encryption', () => {
     expect(collaborationService.getEncryptionStatus()).toBe('encrypted');
     expect(importKeySpy).toHaveBeenCalled();
     expect(deriveKeySpy).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'PBKDF2', iterations: 310_000 }),
+      expect.objectContaining({ name: 'PBKDF2', iterations: 600_000 }),
       mockCryptoKey,
       expect.objectContaining({ name: 'AES-GCM', length: 256 }),
       false,
