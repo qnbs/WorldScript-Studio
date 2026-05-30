@@ -1,10 +1,9 @@
 # ============================================================
-# StoryCraft Studio – Standalone Mutation Testing (Cloud-First)
+# StoryCraft Studio – Mutation Testing (Stryker)
 # Runs weekly (Monday 03:00 UTC) and on manual dispatch.
-# Cloud run uses concurrency:6 + TypeScript-Checker for full
-# power; local run stays at concurrency:2 (Low-End friendly).
-# Does NOT gate the main CI pipeline — informational only until
-# a stable baseline score is established via this workflow.
+# Cloud run: concurrency 6 + TypeScript-Checker for full power.
+# Informational on main CI pipeline (continue-on-error:true);
+# break threshold enforced here as a standalone gate.
 # ============================================================
 
 name: 🧬 Mutation Tests (Stryker)
@@ -13,13 +12,18 @@ on:
   workflow_dispatch:
     inputs:
       break_threshold:
-        description: 'Mutation score break threshold (0 = disabled)'
+        description: 'Mutation score break threshold (0 = disabled, default = stryker.conf.json value)'
         required: false
-        default: '0'
+        default: ''
+      concurrency:
+        description: 'Concurrent mutant runners (default: 6)'
+        required: false
+        default: '6'
   schedule:
     # QNBS-v3: weekly Monday 03:00 UTC — off-hours to avoid runner contention
     - cron: '0 3 * * 1'
 
+# QNBS-v3: top-level read-only; write permissions scoped to job level
 permissions:
   contents: read
 
@@ -27,30 +31,77 @@ jobs:
   stryker:
     name: 🧬 Stryker Mutation Report
     runs-on: ubuntu-latest
-    # QNBS-v3: Cloud-First: concurrency:6 + TypeScript-Checker; 35 min covers full mutant set
-    timeout-minutes: 35
+    # QNBS-v3: concurrency 6 + TypeScript-Checker; 45 min covers 43 mutate files
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      # QNBS-v3: write needed for GitHub Check annotations from Stryker HTML summary
+      checks: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: ./.github/actions/setup
 
-      - name: Run Stryker mutation tests (Cloud – concurrency 6)
-        # QNBS-v3: --force clears incremental cache on CI; --concurrency 6 uses ubuntu-latest cores
+      - name: Run Stryker mutation tests
+        # QNBS-v3: --force clears incremental cache on CI to avoid stale-state false positives.
+        # Break threshold: use workflow input if provided, else stryker.conf.json default (75).
+        # Concurrency: use workflow input if provided, else default 6 (ubuntu-latest has 4 cores;
+        # 6 allows for TypeScript-Checker overhead + vitest parallel scheduling).
         run: |
+          BREAK_ARG=""
+          if [ -n "${{ github.event.inputs.break_threshold }}" ]; then
+            BREAK_ARG="--breakAt ${{ github.event.inputs.break_threshold }}"
+          fi
+          CONCURRENCY="${{ github.event.inputs.concurrency || '6' }}"
           pnpm exec stryker run \
             --force \
-            --concurrency 6 \
-            --reporters progress,clear-text,html,json
+            --concurrency "$CONCURRENCY" \
+            --reporters progress,clear-text,html,json \
+            $BREAK_ARG
         env:
           # QNBS-v3: optional Dashboard reporter — only active if secret is set
           STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
+
+      - name: Write job summary
+        if: always()
+        run: |
+          REPORT=reports/mutation/mutation.json
+          if [ -f "$REPORT" ]; then
+            # Extract mutation score from JSON report (top-level "metrics.mutationScore")
+            SCORE=$(node -e "
+              const r = require('./$REPORT');
+              const s = r?.metrics?.mutationScore ?? r?.schemaVersion ? r.files ? Object.values(r.files).reduce((a,f)=>a+(f.metrics?.killed??0),0) : 'N/A' : 'N/A';
+              console.log(typeof s === 'number' ? s.toFixed(1) + '%' : s);
+            " 2>/dev/null || echo "N/A")
+            KILLED=$(node -e "const r=require('./$REPORT'); console.log(r?.metrics?.killed ?? 'N/A')" 2>/dev/null || echo "N/A")
+            SURVIVED=$(node -e "const r=require('./$REPORT'); console.log(r?.metrics?.survived ?? 'N/A')" 2>/dev/null || echo "N/A")
+            TIMEOUT=$(node -e "const r=require('./$REPORT'); console.log(r?.metrics?.timeout ?? 'N/A')" 2>/dev/null || echo "N/A")
+            NOCOV=$(node -e "const r=require('./$REPORT'); console.log(r?.metrics?.noCoverage ?? 'N/A')" 2>/dev/null || echo "N/A")
+            cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
+          ## 🧬 Mutation Test Results
+
+          | Metric | Value |
+          |--------|-------|
+          | **Mutation Score** | **$SCORE** |
+          | Killed | $KILLED |
+          | Survived | $SURVIVED |
+          | Timeout | $TIMEOUT |
+          | No Coverage | $NOCOV |
+
+          > Threshold: break ≥ 75 | low ≥ 70 | high ≥ 85
+          >
+          > [View full HTML report in artifacts ↗](../actions/runs/${{ github.run_id }})
+          SUMMARY
+          else
+            echo "⚠️ Stryker JSON report not found — mutation run may have failed before reporting." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload Stryker HTML report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: stryker-report
-          path: reports/mutation/
+          name: stryker-report-html
+          path: reports/mutation/mutation.html
           if-no-files-found: warn
           retention-days: 30
 

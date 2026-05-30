@@ -50,7 +50,12 @@
     "services/collaborationService.ts",
     "services/i18nBootstrap.ts",
     "features/featureFlags/featureFlagsSlice.ts",
-    "services/crossProjectIndexService.ts"
+    "services/crossProjectIndexService.ts",
+    "features/settings/accessibilitySchema.ts",
+    "services/pluginRegistry.ts",
+    "services/deepLinkService.ts",
+    "services/voice/voiceCommandService.ts",
+    "features/progressTracker/progressTrackerSlice.ts"
   ],
   "thresholds": {
     "high": 85,
