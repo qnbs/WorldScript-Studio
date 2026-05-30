@@ -28,14 +28,16 @@ export default defineConfig({
     entries: [path.resolve(__dirname, 'index.html')],
   },
 
+  // QNBS-v3: secure-by-default bind to loopback; opt into network exposure
+  // (e.g. Codespaces port-forwarding) only via explicit VITE_DEV_HOST=0.0.0.0.
   server: {
     port: 3000,
-    host: '0.0.0.0',
+    host: process.env['VITE_DEV_HOST'] === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1',
   },
 
   preview: {
     port: 4173,
-    host: '0.0.0.0',
+    host: process.env['VITE_DEV_HOST'] === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1',
   },
 
   plugins: [
