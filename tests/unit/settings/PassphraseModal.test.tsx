@@ -47,10 +47,14 @@ import { PassphraseModal } from '../../../components/settings/PassphraseModal';
 // Helpers
 // ---------------------------------------------------------------------------
 
+// QNBS-v3: typed vi.fn() prevents Mock<Constructable|Procedure> vs Mock<Procedure> TS2345
+type OnConfirm = (current: string, next: string) => Promise<void>;
+type OnClose = () => void;
+
 const makeProps = (
   mode: 'set' | 'change' | 'disable',
-  onConfirm = vi.fn().mockResolvedValue(undefined),
-  onClose = vi.fn(),
+  onConfirm: OnConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined),
+  onClose: OnClose = vi.fn<OnClose>(),
 ) => ({ mode, onConfirm, onClose });
 
 // ---------------------------------------------------------------------------
@@ -58,13 +62,13 @@ const makeProps = (
 // ---------------------------------------------------------------------------
 
 describe('PassphraseModal — set mode', () => {
-  let onClose: ReturnType<typeof vi.fn>;
-  let onConfirm: ReturnType<typeof vi.fn>;
+  let onClose: OnClose;
+  let onConfirm: OnConfirm;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    onClose = vi.fn();
-    onConfirm = vi.fn().mockResolvedValue(undefined);
+    onClose = vi.fn<OnClose>();
+    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined);
   });
 
   it('renders set title', () => {
@@ -163,13 +167,13 @@ describe('PassphraseModal — set mode', () => {
 // ---------------------------------------------------------------------------
 
 describe('PassphraseModal — change mode', () => {
-  let onClose: ReturnType<typeof vi.fn>;
-  let onConfirm: ReturnType<typeof vi.fn>;
+  let onClose: OnClose;
+  let onConfirm: OnConfirm;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    onClose = vi.fn();
-    onConfirm = vi.fn().mockResolvedValue(undefined);
+    onClose = vi.fn<OnClose>();
+    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined);
   });
 
   it('renders change title', () => {
@@ -217,13 +221,13 @@ describe('PassphraseModal — change mode', () => {
 // ---------------------------------------------------------------------------
 
 describe('PassphraseModal — disable mode', () => {
-  let onClose: ReturnType<typeof vi.fn>;
-  let onConfirm: ReturnType<typeof vi.fn>;
+  let onClose: OnClose;
+  let onConfirm: OnConfirm;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    onClose = vi.fn();
-    onConfirm = vi.fn().mockResolvedValue(undefined);
+    onClose = vi.fn<OnClose>();
+    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined);
   });
 
   it('renders disable title', () => {

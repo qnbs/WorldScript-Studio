@@ -56,7 +56,7 @@ const mockCtx = vi.mocked(useSettingsViewContext);
 describe('PrivacySection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCtx.mockReturnValue(makeCtx() as ReturnType<typeof useSettingsViewContext>);
+    mockCtx.mockReturnValue(makeCtx() as unknown as ReturnType<typeof useSettingsViewContext>);
   });
 
   it('renders the privacy title', () => {
