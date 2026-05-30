@@ -212,9 +212,7 @@ export const useSettingsView = () => {
         case 'enableAppHealthPanel':
           dispatch(featureFlagsActions.setEnableAppHealthPanel(Boolean(value)));
           break;
-        case 'enablePlotBoardV2':
-          dispatch(featureFlagsActions.setEnablePlotBoardV2(Boolean(value)));
-          break;
+        // QNBS-v3: enablePlotBoardV2 deprecated (v1 board removed in v1.6); no UI toggle.
         case 'enableDuckDbAnalytics':
           dispatch(featureFlagsActions.setEnableDuckDbAnalytics(Boolean(value)));
           break;
@@ -249,9 +247,8 @@ export const useSettingsView = () => {
         case 'enableVoiceWasm':
           dispatch(featureFlagsActions.setEnableVoiceWasm(Boolean(value)));
           break;
-        case 'enableIdbAtRestEncryption':
-          dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(Boolean(value)));
-          break;
+        // QNBS-v3: enableIdbAtRestEncryption intentionally absent — managed via handlePassphraseConfirm
+        // in Settings > Privacy, not the experimental flags UI toggle.
         default:
           logger.warn(`Unknown setting key: ${key}`);
           break;
