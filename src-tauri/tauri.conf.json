@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "StoryCraft Studio",
-  "version": "1.17.0",
+  "version": "1.19.0",
   "identifier": "com.storycraft.studio",
   "build": {
     "frontendDist": "../dist",
@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com https://api.x.ai http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 https://openrouter.ai https://api.openrouter.ai https://api.groq.com wss://y-webrtc-signaling.fly.dev wss: ws:; img-src 'self' data: blob:; media-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com https://api.x.ai http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 https://openrouter.ai https://api.openrouter.ai https://api.groq.com wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev; img-src 'self' data: blob:; media-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
     }
   },
   "bundle": {
