@@ -151,8 +151,24 @@ const WriterViewUI: FC = () => {
         </button>
       </div>
 
-      {/* QNBS-v3: mobile VC button — desktop VC toggle is hidden md:flex, unreachable on Pixel 5 */}
-      <div className="md:hidden flex items-center justify-end mb-1 px-1">
+      {/* QNBS-v3: mobile VC + ProForge buttons — desktop equivalents are hidden md:flex, unreachable on small viewports */}
+      <div className="md:hidden flex items-center justify-end mb-1 px-1 gap-2">
+        {isProForgeEnabled && (
+          <button
+            type="button"
+            data-testid="writer-proforge-btn-mobile"
+            onClick={() => dispatch(proForgeActions.setProForgeActive(!isProForgeActive))}
+            aria-pressed={isProForgeActive}
+            aria-label={isProForgeActive ? 'Deactivate ProForge' : 'Activate ProForge Pipeline'}
+            className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${
+              isProForgeActive
+                ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]'
+                : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'
+            }`}
+          >
+            {isProForgeActive ? '🔥 ProForge' : 'ProForge'}
+          </button>
+        )}
         <button
           type="button"
           data-testid="writer-version-control-btn"

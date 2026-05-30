@@ -225,23 +225,22 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
 
   {
     flagKey: 'enablePlotBoardV2',
-    name: 'Plot Board v2',
+    // QNBS-v3: @deprecated — v1 board removed in v1.6; flag retained in slice for localStorage
+    // compat until v2.0 cleanup. Hidden from FeatureFlagsSection UI since df185c7.
+    name: 'Plot Board v2 (deprecated)',
     description:
-      'Full canvas plot board with free-form pan/zoom, SVG tension curve, subplot swimlanes, and minimap.',
+      'Full canvas plot board with free-form pan/zoom, SVG tension curve, subplot swimlanes, and minimap. v1 board was removed in v1.6 — this flag is a no-op retained for localStorage compat.',
     maturity: 'stable',
     tier: 'core',
     defaultOn: true,
-    gateLocations: [
-      // QNBS-v3: No runtime gate found — Plot Board v2 IS the board; v1 code was removed.
-      // Flag should be deprecated or used to toggle legacy swimlane-only mode.
-    ],
+    gateLocations: [],
     implementedIn: ['components/SceneBoardView.tsx', 'features/plotBoard/plotBoardSlice.ts'],
     drifts: [
       {
-        severity: 'warning',
+        severity: 'info',
         description:
-          'Flag exists and is togglable but no runtime code reads it — v1 board was removed.',
-        fix: 'Either deprecate the flag (remove from FeatureFlagsSection) or use it to toggle a legacy swimlane-only mode',
+          'Flag is deprecated. No runtime code reads it. Hidden from UI. Remove in v2.0 after localStorage migration is safe.',
+        fix: 'Delete from FeatureFlagsState + slice after localStorage entries are considered legacy-safe (v2.0 cleanup)',
       },
     ],
   },
@@ -277,20 +276,18 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     maturity: 'beta',
     tier: 'core',
     defaultOn: false,
-    gateLocations: [],
+    gateLocations: [
+      {
+        file: 'App.tsx:486',
+        description: 'Returns Dashboard when flag is off — added in parity audit (df185c7)',
+      },
+    ],
     implementedIn: [
       'components/ObjectsView.tsx',
       'hooks/useObjectsView.ts',
       'features/project/projectSlice.ts',
     ],
-    drifts: [
-      {
-        severity: 'critical',
-        description:
-          'App.tsx renders ObjectsView at case "objects" with NO feature flag gate — view is accessible regardless of flag state.',
-        fix: 'Add `if (!featureFlags.enableObjectsGroups) return <Dashboard ... />;` in App.tsx case "objects"',
-      },
-    ],
+    drifts: [],
     roadmapTarget: 'v1.7 / PLANbib Phase 1',
   },
 
@@ -302,20 +299,18 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     maturity: 'beta',
     tier: 'core',
     defaultOn: false,
-    gateLocations: [],
+    gateLocations: [
+      {
+        file: 'App.tsx:490',
+        description: 'Returns Dashboard when flag is off — added in parity audit (df185c7)',
+      },
+    ],
     implementedIn: [
       'components/MindMapView.tsx',
       'components/mind-map/',
       'hooks/useMindMapView.ts',
     ],
-    drifts: [
-      {
-        severity: 'critical',
-        description:
-          'App.tsx renders MindMapView at case "mindmap" with NO feature flag gate — always accessible.',
-        fix: 'Add `if (!featureFlags.enableMindMaps) return <Dashboard ... />;` in App.tsx case "mindmap"',
-      },
-    ],
+    drifts: [],
     roadmapTarget: 'v1.7 / PLANbib Phase 2',
   },
 
@@ -329,6 +324,10 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     defaultOn: false,
     gateLocations: [
       {
+        file: 'App.tsx:493',
+        description: 'Returns Dashboard when flag is off — added in parity audit (df185c7)',
+      },
+      {
         file: 'hooks/useCharacterInterviewsView.ts:39',
         description: 'Returns isEnabled=false to hook consumers when off',
       },
@@ -338,14 +337,7 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
       'hooks/useCharacterInterviewsView.ts',
       'features/project/thunks/interviewThunks.ts',
     ],
-    drifts: [
-      {
-        severity: 'warning',
-        description:
-          'CharacterInterviewsView component mounts regardless — only hook reports isEnabled=false. The component should gate its own render.',
-        fix: 'Add App.tsx route guard or early-return in CharacterInterviewsView when isEnabled=false',
-      },
-    ],
+    drifts: [],
     roadmapTarget: 'v1.7 / PLANbib Phase 3',
   },
 
@@ -373,7 +365,13 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     maturity: 'stub',
     tier: 'sync',
     defaultOn: false,
-    gateLocations: [],
+    gateLocations: [
+      {
+        file: 'services/cloudSync/cloudSyncBackend.ts:41',
+        description:
+          'CloudSyncBackend.create() throws if featureFlagEnabled=false — structural param guard added in parity audit (df185c7)',
+      },
+    ],
     implementedIn: [
       'services/cloudSync/cloudSyncBackend.ts',
       'services/cloudSync/cloudSyncClient.ts',
@@ -381,10 +379,10 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     ],
     drifts: [
       {
-        severity: 'critical',
+        severity: 'warning',
         description:
-          'Service files say "gated behind enableCloudSync" in comments but no code reads the flag at runtime — cloud sync could theoretically be called without user consent.',
-        fix: 'Add `if (!getState().featureFlags.enableCloudSync) throw new Error("Cloud Sync not enabled")` guard in cloudSyncBackend.ts',
+          'No CloudSyncSection UI exists — enabling the flag produces no visible UX change. The backend is never instantiated from Redux state.',
+        fix: 'Create components/settings/CloudSyncSection.tsx; add nav entry in SettingsView.tsx NAV_GROUPS; instantiate backend from featureFlags.enableCloudSync in Redux state',
       },
     ],
     roadmapTarget: 'v2.0',
@@ -404,16 +402,14 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
         description: 'Shows flag-gate message when off',
       },
       { file: 'hooks/useLoraView.ts:50', description: 'Returns isEnabled=false when off' },
-    ],
-    implementedIn: ['services/loraAdapterService.ts', 'services/lora/', 'features/lora/'],
-    drifts: [
       {
-        severity: 'warning',
+        file: 'hooks/useStoryCraftAI.ts:39',
         description:
-          "`selectActiveLoraOllamaTag` selector (loraSelectors.ts:51) is defined but never imported or used — no production code reads the active adapter's ollamaModelTag to inject it into AI calls.",
-        fix: 'Import selectActiveLoraOllamaTag in useStoryCraftAI.ts or writingThunks.ts and pass result as loraModelPath in AIRequestOptions when enableLoraAdapters is on',
+          'Reads selectActiveLoraOllamaTag; passes ollamaModelTag as loraModelPath in AIRequestOptions — C-3 wiring complete (df185c7)',
       },
     ],
+    implementedIn: ['services/loraAdapterService.ts', 'services/lora/', 'features/lora/'],
+    drifts: [],
     roadmapTarget: 'v2.0',
   },
 
@@ -427,19 +423,28 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     defaultOn: false,
     gateLocations: [
       {
+        file: 'App.tsx:279',
+        description: 'Syncs enablePluginSystem into pluginRegistry.setEnabled() on flag change',
+      },
+      {
         file: 'components/settings/PluginsSection.tsx:16',
         description: 'Shows flag-gate message when off',
       },
-    ],
-    implementedIn: ['services/pluginRegistry.ts', 'services/plugins/'],
-    drifts: [
       {
-        severity: 'warning',
-        description:
-          '`pluginRegistry.execute()` and `loadPlugin()` are callable without checking the flag — only the settings UI is gated.',
-        fix: 'Add `if (!selectEnablePluginSystem(store.getState())) throw new Error("Plugin system disabled")` in PluginRegistry.execute()',
+        file: 'services/pluginRegistry.ts:206',
+        description: 'execute() returns error result when _enabled=false',
+      },
+      {
+        file: 'services/pluginRegistry.ts:230',
+        description: 'executeAsync() returns error result when _enabled=false',
+      },
+      {
+        file: 'services/pluginRegistry.ts:254',
+        description: 'loadPlugin() returns error result when _enabled=false',
       },
     ],
+    implementedIn: ['services/pluginRegistry.ts', 'services/plugins/'],
+    drifts: [],
   },
 
   {
@@ -450,7 +455,9 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     maturity: 'experimental',
     tier: 'voice',
     defaultOn: false,
-    gateLocations: [{ file: 'App.tsx:568', description: 'Renders VoiceControlPanel when on' }],
+    gateLocations: [
+      { file: 'App.tsx:593', description: 'Renders VoiceIndicator + VoiceControlPanel when on' },
+    ],
     implementedIn: ['services/voice/', 'hooks/useVoice.ts', 'hooks/usePushToTalk.ts'],
     drifts: [],
   },
@@ -465,17 +472,31 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     defaultOn: false,
     gateLocations: [
       {
-        file: 'components/writing/WriterViewUI.tsx:23',
-        description: 'Shows ProForge panel button when on',
+        file: 'components/writing/WriterViewUI.tsx:86',
+        description: 'Renders ProForge toggle button (desktop only — hidden md:flex)',
+      },
+      {
+        file: 'components/writing/WriterViewUI.tsx:216',
+        description: 'Conditionally renders ProForgeDashboard instead of ToolsPanel when active',
+      },
+      {
+        file: 'hooks/useSettingsView.ts:240',
+        description: 'Dispatches setEnableProForge on Settings toggle',
       },
     ],
     implementedIn: ['features/proForge/', 'services/proForge/', 'components/proForge/'],
     drifts: [
       {
-        severity: 'critical',
+        severity: 'warning',
         description:
-          'No `case "enableProForge"` in useSettingsView.ts handleSettingChange() — toggling in UI does nothing (falls to default logger.warn).',
-        fix: 'Add `case "enableProForge": dispatch(featureFlagsActions.setEnableProForge(Boolean(value))); break;` in hooks/useSettingsView.ts',
+          'ProForge toggle button is inside `hidden md:flex` — invisible on mobile viewports (<768px). Users on mobile cannot activate the pipeline.',
+        fix: 'Duplicate button into md:hidden mobile controls row in components/writing/WriterViewUI.tsx',
+      },
+      {
+        severity: 'info',
+        description:
+          'No discoverability signal after enabling the flag — user must independently find the ProForge button in Writer view.',
+        fix: 'Show a toast in useSettingsView.ts after dispatching setEnableProForge(true) guiding user to Writer view',
       },
     ],
   },
@@ -485,20 +506,43 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     name: 'IDB At-Rest Encryption',
     description:
       'AES-256-GCM passphrase-derived encryption for all IndexedDB manuscript stores. PBKDF2 (600k iterations, SHA-256).',
-    maturity: 'ghost',
+    // QNBS-v3: B-1 complete (f0afca3) — passphrase UX shipped; maturity updated from ghost→beta
+    maturity: 'beta',
     tier: 'privacy',
     defaultOn: false,
-    gateLocations: [],
-    implementedIn: ['services/storage/storageEncryptionService.ts'],
-    drifts: [
+    gateLocations: [
       {
-        severity: 'critical',
-        description:
-          'GHOST FLAG: defined in slice with selector, but (1) no i18n key in any locale, (2) not in FeatureFlagsSection.tsx, (3) no handler in useSettingsView.ts, (4) storageEncryptionService.ts never reads the flag.',
-        fix: 'Phase 3 deliverable: add i18n key, UI toggle (with warning banner), useSettingsView handler, and initIdbEncryption() call gated on flag in dbService',
+        file: 'App.tsx:288',
+        description: 'Shows IdbUnlockModal on startup when flag is on and encryption not ready',
+      },
+      {
+        file: 'components/settings/FeatureFlagsSection.tsx:37',
+        description: 'Feature toggle visible in Experimental Flags section',
+      },
+      {
+        file: 'hooks/useSettingsView.ts:246',
+        description: 'Dispatches setEnableIdbAtRestEncryption on Settings toggle',
+      },
+      {
+        file: 'components/settings/PrivacySection.tsx:20',
+        description: 'Encryption status + PassphraseModal shown when flag is on',
       },
     ],
-    roadmapTarget: 'Phase 3 / IDB Encryption UX complete',
+    implementedIn: [
+      'services/storage/storageEncryptionService.ts',
+      'components/IdbUnlockModal.tsx',
+      'components/PassphraseModal.tsx',
+      'components/settings/PrivacySection.tsx',
+    ],
+    drifts: [
+      {
+        severity: 'warning',
+        description:
+          'Service layer (storageEncryptionService.ts) is ready but idbProjectStore.saveProject() / loadProject() do not yet call encryptPayload() / decryptPayload(). Encryption UX is present but data is not actually encrypted at the IDB store level.',
+        fix: 'Phase 4: wire encryptPayload/decryptPayload into idbProjectStore.ts gated on initIdbEncryption() having been called',
+      },
+    ],
+    roadmapTarget: 'v2.0 Phase 4 — full IDB read/write encryption',
   },
 
   {
@@ -512,6 +556,10 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     requires: ['enableVoiceSupport'],
     gateLocations: [
       {
+        file: 'hooks/useSettingsView.ts:243',
+        description: 'Dispatches setEnableVoiceWasm on Settings toggle',
+      },
+      {
         file: 'hooks/useVoice.ts:29',
         description: 'Passes enableVoiceWasm to voice service config',
       },
@@ -520,12 +568,6 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     ],
     implementedIn: ['services/voice/wasmSttEngine.ts', 'services/voice/sileroVadEngine.ts'],
     drifts: [
-      {
-        severity: 'critical',
-        description:
-          'No `case "enableVoiceWasm"` in useSettingsView.ts — toggling in UI falls to default logger.warn.',
-        fix: 'Add `case "enableVoiceWasm": dispatch(featureFlagsActions.setEnableVoiceWasm(Boolean(value))); break;` in hooks/useSettingsView.ts',
-      },
       {
         severity: 'warning',
         description:

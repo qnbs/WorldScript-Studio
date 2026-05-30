@@ -486,6 +486,7 @@
   "proforge.pipeline.noneActive": "Keine aktive Pipeline",
   "proforge.emptyState.title": "Dein Manuskript, verfeinert.",
   "proforge.emptyState.description": "ProForge liest jedes Kapitel und führt dich Schritt für Schritt durch die Bearbeitung. Nichts geht verloren — jede Änderung ist rückgängig zu machen.",
+  "proforge.enabledHint": "ProForge Pipeline aktiviert. Wechsle zur Schreibansicht und klicke im Werkzeugbereich auf die Schaltfläche ProForge.",
   "sceneboard.emptyState.title": "Dein Handlungsbrett ist eine leere Leinwand",
   "sceneboard.emptyState.description": "Füge deine erste Szene hinzu oder importiere deine Gliederung, um mit der Planung deiner Geschichte zu beginnen.",
   "characters.emptyState.title": "Deine Figurenliste ist leer",

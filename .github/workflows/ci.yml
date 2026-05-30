@@ -93,6 +93,9 @@ jobs:
       - name: i18n key parity (vs en)
         run: pnpm run i18n:check
 
+      - name: Feature parity audit
+        run: pnpm run parity:check
+
       - name: Typecheck (tsc)
         run: pnpm run typecheck
 
