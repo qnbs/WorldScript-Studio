@@ -66,14 +66,14 @@ function makeBackend(): CloudSyncBackend {
 describe('CloudSyncBackend.create() feature flag gate', () => {
   it('throws when featureFlagEnabled is false (default, no arg)', async () => {
     await expect(
-      CloudSyncBackend.create({ accountId: 'a', bucketName: 'b', apiToken: 't' }, 'pass', 'u'),
+      CloudSyncBackend.create({ endpoint: 'https://sync.example.com', token: 't' }, 'pass', 'u'),
     ).rejects.toThrow(/enableCloudSync feature flag is off/);
   });
 
   it('throws when featureFlagEnabled is explicitly false', async () => {
     await expect(
       CloudSyncBackend.create(
-        { accountId: 'a', bucketName: 'b', apiToken: 't' },
+        { endpoint: 'https://sync.example.com', token: 't' },
         'pass',
         'u',
         false,

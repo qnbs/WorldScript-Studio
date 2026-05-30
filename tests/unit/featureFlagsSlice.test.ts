@@ -95,9 +95,11 @@ describe('featureFlagsSlice', () => {
 // ---------------------------------------------------------------------------
 
 describe('featureFlagsSlice — individual setters', () => {
+  // QNBS-v3: action typed with plain {payload,type:string} so every setter is assignable
+  // (RTK returns a specific type literal; constraining to one setter's literal breaks the rest)
   const cases: Array<{
     flag: keyof FeatureFlagsState;
-    action: (v: boolean) => ReturnType<typeof featureFlagsActions.setEnableCodexAutoTracking>;
+    action: (v: boolean) => { payload: boolean; type: string };
     defaultOn: boolean;
   }> = [
     {
