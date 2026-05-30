@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Settings crash hardening** (`components/settings/*`):
+  - `AdvancedEditorSection`, `AccessibilitySection`, `AppearanceSection` now read from defaults-merged local objects. Missing `advancedEditor`, `accessibility`, or `themeCustomization` nested objects (from pre-v1.8 persisted state) can no longer crash the page.
+  - `normalizePersistedSettings` already backfilled these fields in IDB rehydration; the component-level guards are a second line of defense.
+- **Tauri CSP hardening** (`src-tauri/tauri.conf.json`): Removed unrestricted `wss:`/`ws:` protocol-only wildcards from `connect-src`. Added `frame-ancestors 'none'`. Synced desktop version to `1.19.0` (matches `package.json`).
+- **Dev server security** (`vite.config.ts`): Default host changed from `0.0.0.0` to `127.0.0.1` with opt-in via `VITE_DEV_HOST=0.0.0.0` for Codespaces port-forwarding.
 - **Vercel blank screen** (`index.html`): Replaced hardcoded `/StoryCraft-Studio/` paths with Vite `%BASE_URL%` template for manifest link, favicon icon, apple-touch-icon, og:image, and twitter:image. With `build:edge` (base `/`), these resolve to root paths — fixing 404s on Vercel and Cloudflare Pages. With `build` (base `/StoryCraft-Studio/`), GitHub Pages paths remain correct.
 - **Startup blank screen safety net** (`index.tsx`): Added `window.addEventListener('error')` outer handler that renders a static error recovery UI if the async IIFE never executes due to module-evaluation or bundle errors — prevents silent blank page with no user feedback.
 
