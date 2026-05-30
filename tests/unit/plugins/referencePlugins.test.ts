@@ -40,6 +40,8 @@ describe('wordCountOverlay plugin', () => {
 
   it('executes successfully through PluginRegistry', async () => {
     const registry = new PluginRegistry();
+    // QNBS-v3: must enable plugin system before executing — default is disabled
+    registry.setEnabled(true);
     const api = makeMockApi();
     registry.register(wordCountOverlayDescriptor);
     const result = await registry.executeAsync(wordCountOverlayDescriptor.id, wordCountRun, api);
@@ -49,6 +51,7 @@ describe('wordCountOverlay plugin', () => {
 
   it('is denied scene.write access (not in permissions)', () => {
     const registry = new PluginRegistry();
+    registry.setEnabled(true);
     const api = makeMockApi();
     registry.register(wordCountOverlayDescriptor);
     const result = registry.execute(
