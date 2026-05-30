@@ -248,6 +248,11 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
         contentKey: 'help.settingsGuide.shortcuts.content',
         tryActionId: 'nav-settings',
       },
+      {
+        titleKey: 'help.settingsGuide.pwaInstall.title',
+        contentKey: 'help.settingsGuide.pwaInstall.content',
+        tryActionId: 'nav-settings',
+      },
     ],
   },
   {

@@ -21,7 +21,8 @@ function formatKeysForDisplay(keys: string[]): string {
 export const ShortcutsSection: FC = () => {
   const { t, settings } = useSettingsViewContext();
   const dispatch = useAppDispatch();
-  const shortcuts = settings.keyboardShortcuts;
+  // QNBS-v3: Defensive fallback — old IDB states (pre-v1.8) may not have keyboardShortcuts
+  const shortcuts = settings.keyboardShortcuts ?? [];
 
   const [recordingAction, setRecordingAction] = useState<string | null>(null);
 

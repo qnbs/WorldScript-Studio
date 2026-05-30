@@ -45,6 +45,22 @@ vi.mock('../../../services/tauriRuntime', () => ({
   getTauriAppVersion: vi.fn().mockResolvedValue('1.0.0'),
 }));
 
+const { mockUsePWA } = vi.hoisted(() => ({
+  mockUsePWA: vi.fn(() => ({
+    isInstallable: false,
+    isInstalled: false,
+    isUpdateAvailable: false,
+    isOffline: false,
+    installApp: vi.fn(),
+    dismissInstall: vi.fn(),
+    applyUpdate: vi.fn(),
+    dismissUpdate: vi.fn(),
+    clearCache: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+vi.mock('../../../hooks/usePWA', () => ({ usePWA: mockUsePWA }));
+
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     getStorageInfo: vi.fn().mockResolvedValue({ used: 1024, total: 10240, percent: 10 }),
@@ -127,5 +143,59 @@ describe('AboutSection', () => {
     render(<AboutSection />);
     // App name should be present
     expect(screen.getByText(/StoryCraft/i)).toBeInTheDocument();
+  });
+});
+
+// QNBS-v3: PWAInstallCard — added to GeneralSection for persistent install access.
+describe('GeneralSection — PWAInstallCard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the PWA install title on web (non-Tauri)', () => {
+    render(<GeneralSection />);
+    expect(screen.getByText('settings.pwa.title')).toBeInTheDocument();
+  });
+
+  it('shows the install button when isInstallable is true', () => {
+    mockUsePWA.mockReturnValueOnce({
+      isInstallable: true,
+      isInstalled: false,
+      isUpdateAvailable: false,
+      isOffline: false,
+      installApp: vi.fn(),
+      dismissInstall: vi.fn(),
+      applyUpdate: vi.fn(),
+      dismissUpdate: vi.fn(),
+      clearCache: vi.fn().mockResolvedValue(undefined),
+    });
+    render(<GeneralSection />);
+    expect(screen.getByText('settings.pwa.installBtn')).toBeInTheDocument();
+  });
+
+  it('shows installed status when isInstalled is true', () => {
+    mockUsePWA.mockReturnValueOnce({
+      isInstallable: false,
+      isInstalled: true,
+      isUpdateAvailable: false,
+      isOffline: false,
+      installApp: vi.fn(),
+      dismissInstall: vi.fn(),
+      applyUpdate: vi.fn(),
+      dismissUpdate: vi.fn(),
+      clearCache: vi.fn().mockResolvedValue(undefined),
+    });
+    render(<GeneralSection />);
+    expect(screen.getByText('settings.pwa.installedTitle')).toBeInTheDocument();
+  });
+
+  it('shows browser install instructions when neither installable nor installed', () => {
+    render(<GeneralSection />);
+    expect(screen.getByText('settings.pwa.notAvailableTitle')).toBeInTheDocument();
+  });
+
+  it('shows the clear cache button in all states', () => {
+    render(<GeneralSection />);
+    expect(screen.getByText('settings.pwa.clearCache')).toBeInTheDocument();
   });
 });

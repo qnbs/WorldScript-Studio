@@ -1,8 +1,9 @@
 import type { FC } from 'react';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ICONS } from '../../constants';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { usePWA } from '../../hooks/usePWA';
 import packageJson from '../../package.json';
 import { storageService } from '../../services/storageService';
 import { getTauriAppVersion, isTauriRuntime } from '../../services/tauriRuntime';
@@ -10,31 +11,135 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Select } from '../ui/Select';
 
-export const GeneralSection: FC = () => {
-  const { t, language, handleLanguageChange } = useSettingsViewContext();
+// QNBS-v3: PWA install card — always accessible from Settings even after banner dismissed.
+const PWAInstallCard: FC = () => {
+  const { t } = useSettingsViewContext();
+  const { isInstallable, isInstalled, installApp, clearCache } = usePWA();
+  const [cacheCleared, setCacheCleared] = useState(false);
+
+  const handleClearCache = useCallback(async () => {
+    await clearCache();
+    setCacheCleared(true);
+    setTimeout(() => window.location.reload(), 1200);
+  }, [clearCache]);
+
+  // Don't render in Tauri desktop — install has no meaning there
+  if (isTauriRuntime()) return null;
+
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-          {t('settings.language.title')}
-        </h2>
+        <div className="flex items-center gap-2">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            className="h-5 w-5 text-[var(--sc-text-accent)]"
+            aria-hidden="true"
+          >
+            {/* device-phone-mobile — represents PWA / home screen install */}
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 8.25h3"
+            />
+          </svg>
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+            {t('settings.pwa.title')}
+          </h2>
+        </div>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-[var(--sc-text-secondary)] mb-2">
-          {t('settings.language.description')}
-        </p>
-        <Select id="language-select" value={language} onChange={handleLanguageChange}>
-          <option value="en">{t('settings.language.english')}</option>
-          <option value="de">{t('settings.language.german')}</option>
-          <option value="fr">{t('settings.language.french')}</option>
-          <option value="es">{t('settings.language.spanish')}</option>
-          <option value="it">{t('settings.language.italian')}</option>
-          {/* QNBS-v3: Phase 2 B-5 — RTL beta stubs; English placeholder text until human review */}
-          <option value="ar">{t('settings.language.arabic')}</option>
-          <option value="he">{t('settings.language.hebrew')}</option>
-        </Select>
+      <CardContent className="space-y-4">
+        {isInstalled ? (
+          <div className="flex items-start gap-3">
+            <span
+              className="mt-0.5 h-5 w-5 flex-shrink-0 text-[var(--sc-success-fg)]"
+              aria-hidden="true"
+            >
+              ✓
+            </span>
+            <div>
+              <p className="text-sm font-medium text-[var(--sc-text-primary)]">
+                {t('settings.pwa.installedTitle')}
+              </p>
+              <p className="text-sm text-[var(--sc-text-secondary)] mt-0.5">
+                {t('settings.pwa.installedDescription')}
+              </p>
+            </div>
+          </div>
+        ) : isInstallable ? (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--sc-text-secondary)]">
+              {t('settings.pwa.description')}
+            </p>
+            <p className="text-xs text-[var(--sc-text-tertiary)]">{t('settings.pwa.benefits')}</p>
+            <Button
+              variant="primary"
+              onClick={() => void installApp()}
+              className="w-full sm:w-auto"
+            >
+              {t('settings.pwa.installBtn')}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-[var(--sc-text-primary)]">
+              {t('settings.pwa.notAvailableTitle')}
+            </p>
+            <p className="text-sm text-[var(--sc-text-secondary)]">
+              {t('settings.pwa.notAvailableDescription')}
+            </p>
+          </div>
+        )}
+
+        {/* Cache clear — always visible as a secondary action */}
+        <div className="border-t border-[var(--sc-border-default)] pt-4">
+          <p className="text-xs text-[var(--sc-text-tertiary)] mb-2">
+            {t('settings.pwa.clearCacheDescription')}
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void handleClearCache()}
+            disabled={cacheCleared}
+          >
+            {cacheCleared ? t('settings.pwa.clearCacheSuccess') : t('settings.pwa.clearCache')}
+          </Button>
+        </div>
       </CardContent>
     </Card>
+  );
+};
+
+export const GeneralSection: FC = () => {
+  const { t, language, handleLanguageChange } = useSettingsViewContext();
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+            {t('settings.language.title')}
+          </h2>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-[var(--sc-text-secondary)] mb-2">
+            {t('settings.language.description')}
+          </p>
+          <Select id="language-select" value={language} onChange={handleLanguageChange}>
+            <option value="en">{t('settings.language.english')}</option>
+            <option value="de">{t('settings.language.german')}</option>
+            <option value="fr">{t('settings.language.french')}</option>
+            <option value="es">{t('settings.language.spanish')}</option>
+            <option value="it">{t('settings.language.italian')}</option>
+            {/* QNBS-v3: Phase 2 B-5 — RTL beta stubs; English placeholder text until human review */}
+            <option value="ar">{t('settings.language.arabic')}</option>
+            <option value="he">{t('settings.language.hebrew')}</option>
+          </Select>
+        </CardContent>
+      </Card>
+      <PWAInstallCard />
+    </div>
   );
 };
 

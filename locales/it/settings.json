@@ -578,5 +578,18 @@
   "settings.voice.privacy.consentDecline": "Rifiuta",
   "settings.voice.privacy.statusLocal": "Locale",
   "settings.voice.privacy.statusExternal": "Esterno",
-  "settings.voice.privacy.revokeConsent": "Revoca il consenso"
+  "settings.voice.privacy.revokeConsent": "Revoca il consenso",
+
+  "settings.pwa.title": "Installa come app",
+  "settings.pwa.description": "Installa StoryCraft Studio direttamente sul tuo dispositivo per accesso offline istantaneo, una finestra dedicata e un'icona nella schermata iniziale — nessuno store necessario.",
+  "settings.pwa.benefits": "Funziona offline · Senza store · Finestra dedicata · Icona home",
+  "settings.pwa.installBtn": "Installa StoryCraft Studio",
+  "settings.pwa.installedTitle": "App installata",
+  "settings.pwa.installedDescription": "StoryCraft Studio è in esecuzione come app installata su questo dispositivo.",
+  "settings.pwa.notAvailableTitle": "Installa dal browser",
+  "settings.pwa.notAvailableDescription": "Per installare, apri StoryCraft in Chrome, Edge o Safari e cerca l'icona di installazione (⊕) nella barra degli indirizzi. Su mobile, usa «Aggiungi alla schermata Home» dal menu del browser.",
+  "settings.pwa.clearCache": "Svuota cache app",
+  "settings.pwa.clearCacheDescription": "Forza il service worker a ri-scaricare tutte le risorse al prossimo caricamento. Usalo se l'interfaccia sembra obsoleta dopo un aggiornamento.",
+  "settings.pwa.clearCacheConfirm": "Svuota cache e ricarica",
+  "settings.pwa.clearCacheSuccess": "Cache svuotata. Ricaricamento…"
 }

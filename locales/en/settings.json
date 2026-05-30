@@ -578,5 +578,18 @@
   "settings.voice.privacy.consentDecline": "Decline",
   "settings.voice.privacy.statusLocal": "Local",
   "settings.voice.privacy.statusExternal": "External",
-  "settings.voice.privacy.revokeConsent": "Revoke Consent"
+  "settings.voice.privacy.revokeConsent": "Revoke Consent",
+
+  "settings.pwa.title": "Install as App",
+  "settings.pwa.description": "Install StoryCraft Studio directly on your device for instant offline access, a dedicated window, and a home-screen icon — no app store required.",
+  "settings.pwa.benefits": "Works offline · No app store · Direct window · Home screen icon",
+  "settings.pwa.installBtn": "Install StoryCraft Studio",
+  "settings.pwa.installedTitle": "App is installed",
+  "settings.pwa.installedDescription": "StoryCraft Studio is running as an installed app on this device.",
+  "settings.pwa.notAvailableTitle": "Install via browser",
+  "settings.pwa.notAvailableDescription": "To install, open StoryCraft in Chrome, Edge, or Safari and look for the install icon (⊕) in the address bar. On mobile, use \"Add to Home Screen\" from the browser menu.",
+  "settings.pwa.clearCache": "Clear app cache",
+  "settings.pwa.clearCacheDescription": "Force the service worker to re-download all app assets on the next reload. Use this if you see stale UI after an update.",
+  "settings.pwa.clearCacheConfirm": "Clear cache and reload",
+  "settings.pwa.clearCacheSuccess": "Cache cleared. Reloading…"
 }

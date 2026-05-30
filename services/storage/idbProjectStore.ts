@@ -7,6 +7,8 @@
 
 import type { ProjectData } from '../../features/project/projectSlice';
 import { normalizeAccessibilitySettings } from '../../features/settings/accessibilitySchema';
+import { getDefaultKeyboardShortcuts } from '../../features/settings/keyboardShortcutsDefaults';
+import { defaultVoiceSettings } from '../../features/settings/settingsSlice';
 import type { Settings, StoryProject } from '../../types';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
@@ -19,6 +21,137 @@ import {
   isEncryptedBlob,
   isIdbEncryptionReady,
 } from './storageEncryptionService';
+
+// ─── Exported for unit testing ────────────────────────────────────────────────
+
+/**
+ * Merges a raw (potentially incomplete) persisted settings object with safe defaults.
+ * Exported so tests can verify migration behavior without opening IndexedDB.
+ * QNBS-v3: Each sub-object is normalized separately to guard against absent fields
+ * in IDB states saved by older app versions (pre-v1.8).
+ */
+export function normalizePersistedSettings(incoming: Record<string, unknown>): Settings {
+  const validSettings = {
+    theme: 'dark',
+    appearancePreset: 'default',
+    editorFont: 'serif',
+    fontSize: 16,
+    lineSpacing: 1.6,
+    aiCreativity: 'Balanced',
+    paragraphSpacing: 1,
+    indentFirstLine: false,
+    ...incoming,
+  } as Settings;
+
+  validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
+
+  validSettings.privacy = {
+    analyticsEnabled: false,
+    crashReporting: false,
+    dataEncryption: true,
+    localStorageOnly: true,
+    shareUsageData: false,
+    euDataResidency: true,
+    ...(incoming['privacy'] as Partial<Settings['privacy']> | undefined),
+  };
+
+  const incomingCollab = incoming['collaboration'] as
+    | Partial<Settings['collaboration']>
+    | undefined;
+  validSettings.collaboration = {
+    realTimeCollaboration: false,
+    publicSharing: false,
+    commentSystem: true,
+    versionHistory: true,
+    webrtcSignalingUrls: [...DEFAULT_WEBRTC_SIGNALING_URLS],
+    ...(incomingCollab ?? {}),
+  };
+  if (
+    !validSettings.collaboration.webrtcSignalingUrls ||
+    validSettings.collaboration.webrtcSignalingUrls.length === 0
+  ) {
+    validSettings.collaboration.webrtcSignalingUrls = [...DEFAULT_WEBRTC_SIGNALING_URLS];
+  }
+
+  validSettings.integrations = {
+    syncProvider: 'none' as const,
+    evernoteSync: false,
+    notionSync: false,
+    scrivenerExport: false,
+    googleDocsImport: false,
+    languageToolEnabled: false,
+    languageToolBaseUrl: 'http://localhost:8010',
+    ...(incoming['integrations'] as Partial<Settings['integrations']> | undefined),
+  };
+
+  const advancedAiDefaults: Settings['advancedAi'] = {
+    model: 'gemini-3.5-flash',
+    provider: 'gemini',
+    temperature: 0.7,
+    maxTokens: 4096,
+    topP: 0.9,
+    frequencyPenalty: 0.0,
+    presencePenalty: 0.0,
+    customPrompts: {},
+    rateLimit: 60,
+    ollamaBaseUrl: 'http://localhost:11434',
+    localBackendPreset: 'ollama_default',
+    openAiCompatibleBaseUrl: '',
+    openAiSiteUrl: '',
+    openAiSiteTitle: 'StoryCraft Studio',
+    hybridFallbackEnabled: false,
+    hybridFallbackChain: [],
+    ragMode: 'hybrid',
+  };
+  validSettings.advancedAi = {
+    ...advancedAiDefaults,
+    ...(incoming['advancedAi'] as Partial<Settings['advancedAi']> | undefined),
+  };
+
+  if (!Array.isArray(validSettings.keyboardShortcuts)) {
+    validSettings.keyboardShortcuts = getDefaultKeyboardShortcuts();
+  }
+  if (!Array.isArray(validSettings.writingGoals)) {
+    validSettings.writingGoals = [
+      { type: 'words', target: 2000, period: 'daily', enabled: false },
+      { type: 'time', target: 120, period: 'daily', enabled: false },
+    ] as Settings['writingGoals'];
+  }
+  if (!validSettings.notifications || typeof validSettings.notifications !== 'object') {
+    validSettings.notifications = {
+      desktopNotifications: false,
+      emailNotifications: false,
+      writingReminders: 'never',
+      goalAchievements: true,
+      collaborationUpdates: false,
+    };
+  }
+  if (!validSettings.backup || typeof validSettings.backup !== 'object') {
+    validSettings.backup = {
+      autoBackup: true,
+      backupFrequency: 'weekly',
+      backupLocation: './backups',
+      maxBackups: 10,
+      encryptBackups: false,
+    } as Settings['backup'];
+  }
+  if (!validSettings.voice || typeof validSettings.voice !== 'object') {
+    validSettings.voice = { ...defaultVoiceSettings };
+  }
+  if (!validSettings.performance || typeof validSettings.performance !== 'object') {
+    validSettings.performance = {
+      autoSaveInterval: 30,
+      cacheSize: 100,
+      preloadContent: true,
+      lazyLoadImages: true,
+      offlineMode: false,
+    };
+  }
+
+  return validSettings;
+}
+
+// ─── Database structures ───────────────────────────────────────────────────────
 
 // Define structure of state stored in DB
 interface PersistedProjectState {
@@ -56,91 +189,10 @@ export class IdbProjectStore extends IdbAssetStore {
     }
 
     // Ensure settings has defaults if missing keys
-    let validSettings: Settings | undefined;
-    if (settings) {
-      const incoming = settings as Record<string, unknown>;
-      validSettings = {
-        theme: 'dark',
-        appearancePreset: 'default',
-        editorFont: 'serif',
-        fontSize: 16,
-        lineSpacing: 1.6,
-        aiCreativity: 'Balanced',
-        paragraphSpacing: 1,
-        indentFirstLine: false,
-        ...incoming,
-      } as Settings;
-      // QNBS-v3: Normalize accessibility — old IDB states (pre-v1.8) may not have this field,
-      // causing settings.accessibility.highContrast to throw on first render in App.tsx.
-      validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
-      validSettings.privacy = {
-        analyticsEnabled: false,
-        crashReporting: false,
-        dataEncryption: true,
-        localStorageOnly: true,
-        shareUsageData: false,
-        euDataResidency: true,
-        ...(incoming['privacy'] as Partial<Settings['privacy']> | undefined),
-      };
-      const incomingCollab = incoming['collaboration'] as
-        | Partial<Settings['collaboration']>
-        | undefined;
-      const collabDefaults: Settings['collaboration'] = {
-        realTimeCollaboration: false,
-        publicSharing: false,
-        commentSystem: true,
-        versionHistory: true,
-        webrtcSignalingUrls: [...DEFAULT_WEBRTC_SIGNALING_URLS],
-      };
-      validSettings.collaboration = {
-        ...collabDefaults,
-        ...(incomingCollab ?? {}),
-      };
-      if (
-        !validSettings.collaboration.webrtcSignalingUrls ||
-        validSettings.collaboration.webrtcSignalingUrls.length === 0
-      ) {
-        validSettings.collaboration.webrtcSignalingUrls = [...DEFAULT_WEBRTC_SIGNALING_URLS];
-      }
-      const integrationsDefaults = {
-        syncProvider: 'none' as const,
-        evernoteSync: false,
-        notionSync: false,
-        scrivenerExport: false,
-        googleDocsImport: false,
-        languageToolEnabled: false,
-        languageToolBaseUrl: 'http://localhost:8010',
-      };
-      validSettings.integrations = {
-        ...integrationsDefaults,
-        ...(incoming['integrations'] as Partial<Settings['integrations']> | undefined),
-      };
-
-      // QNBS-v3: Hybrid-AI-Felder nachziehen — ältere IndexedDB-Stände ohne neue Keys bleiben kompatibel.
-      const advancedAiDefaults: Settings['advancedAi'] = {
-        model: 'gemini-3.5-flash',
-        provider: 'gemini',
-        temperature: 0.7,
-        maxTokens: 4096,
-        topP: 0.9,
-        frequencyPenalty: 0.0,
-        presencePenalty: 0.0,
-        customPrompts: {},
-        rateLimit: 60,
-        ollamaBaseUrl: 'http://localhost:11434',
-        localBackendPreset: 'ollama_default',
-        openAiCompatibleBaseUrl: '',
-        openAiSiteUrl: '',
-        openAiSiteTitle: 'StoryCraft Studio',
-        hybridFallbackEnabled: false,
-        hybridFallbackChain: [],
-        ragMode: 'hybrid',
-      };
-      validSettings.advancedAi = {
-        ...advancedAiDefaults,
-        ...(incoming['advancedAi'] as Partial<Settings['advancedAi']> | undefined),
-      };
-    }
+    // QNBS-v3: Delegates to normalizePersistedSettings — exported for unit testing.
+    const validSettings: Settings | undefined = settings
+      ? normalizePersistedSettings(settings as Record<string, unknown>)
+      : undefined;
 
     const result: PersistedState = {};
     if (validProject) result.project = validProject;

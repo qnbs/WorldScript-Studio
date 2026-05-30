@@ -577,5 +577,18 @@
   "settings.voice.privacy.consentDecline": "Ablehnen",
   "settings.voice.privacy.statusLocal": "Lokal",
   "settings.voice.privacy.statusExternal": "Extern",
-  "settings.voice.privacy.revokeConsent": "Zustimmung widerrufen"
+  "settings.voice.privacy.revokeConsent": "Zustimmung widerrufen",
+
+  "settings.pwa.title": "Als App installieren",
+  "settings.pwa.description": "Installiere StoryCraft Studio direkt auf deinem Gerät für sofortigen Offline-Zugriff, ein eigenes Fenster und ein Startbildschirm-Symbol – kein App-Store nötig.",
+  "settings.pwa.benefits": "Offline verfügbar · Kein App-Store · Eigenes Fenster · Startbildschirm-Symbol",
+  "settings.pwa.installBtn": "StoryCraft Studio installieren",
+  "settings.pwa.installedTitle": "App ist installiert",
+  "settings.pwa.installedDescription": "StoryCraft Studio läuft als installierte App auf diesem Gerät.",
+  "settings.pwa.notAvailableTitle": "Über Browser installieren",
+  "settings.pwa.notAvailableDescription": "Zum Installieren öffne StoryCraft in Chrome, Edge oder Safari und klicke auf das Installations-Symbol (⊕) in der Adressleiste. Mobil: 'Zum Startbildschirm hinzufügen' im Browser-Menü.",
+  "settings.pwa.clearCache": "App-Cache leeren",
+  "settings.pwa.clearCacheDescription": "Veranlasst den Service Worker, beim nächsten Laden alle App-Ressourcen neu herunterzuladen. Verwende dies bei veralteter Oberfläche nach einem Update.",
+  "settings.pwa.clearCacheConfirm": "Cache leeren und neu laden",
+  "settings.pwa.clearCacheSuccess": "Cache geleert. Wird neu geladen…"
 }
