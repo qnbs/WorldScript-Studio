@@ -18,11 +18,13 @@ const PRESET_IDS: Exclude<AccessibilityPresetId, 'custom'>[] = [
 
 export const AccessibilitySection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
+  // QNBS-v3: Defensive merge — old persisted states may lack accessibility entirely.
+  const accessibility = normalizeAccessibilitySettings(settings.accessibility);
   const appCtx = useContext(AppContext);
 
   const patchA11y = (partial: Partial<AccessibilitySettings>) => {
     handleSettingChange('accessibility', {
-      ...settings.accessibility,
+      ...accessibility,
       ...partial,
       presetId: 'custom',
     });
@@ -50,7 +52,7 @@ export const AccessibilitySection: FC = () => {
           <p className="text-xs text-[var(--sc-text-muted)] mt-2">
             {t('settings.accessibility.activePreset')}:{' '}
             <span className="font-medium text-[var(--sc-text-secondary)]">
-              {t(`settings.accessibility.preset.${settings.accessibility.presetId ?? 'custom'}`)}
+              {t(`settings.accessibility.preset.${accessibility.presetId ?? 'custom'}`)}
             </span>
           </p>
         </CardHeader>
@@ -71,10 +73,10 @@ export const AccessibilitySection: FC = () => {
                 >
                   <Button
                     type="button"
-                    variant={settings.accessibility.presetId === id ? 'primary' : 'secondary'}
+                    variant={accessibility.presetId === id ? 'primary' : 'secondary'}
                     size="sm"
                     className="w-full justify-center"
-                    aria-pressed={settings.accessibility.presetId === id}
+                    aria-pressed={accessibility.presetId === id}
                     aria-label={t(presetTitleKey(id))}
                     onClick={() => applyPreset(id)}
                   >
@@ -135,7 +137,7 @@ export const AccessibilitySection: FC = () => {
             </label>
             <Select
               id="settings-live-region-verbosity"
-              value={settings.accessibility.liveRegionVerbosity}
+              value={accessibility.liveRegionVerbosity}
               onChange={(e) =>
                 patchA11y({
                   liveRegionVerbosity: e.target
@@ -152,27 +154,27 @@ export const AccessibilitySection: FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ToggleSwitch
               label={t('settings.accessibility.highContrast')}
-              checked={settings.accessibility.highContrast}
+              checked={accessibility.highContrast}
               onChange={(v) => patchA11y({ highContrast: v })}
             />
             <ToggleSwitch
               label={t('settings.accessibility.reducedMotion')}
-              checked={settings.accessibility.reducedMotion}
+              checked={accessibility.reducedMotion}
               onChange={(v) => patchA11y({ reducedMotion: v })}
             />
             <ToggleSwitch
               label={t('settings.accessibility.largeText')}
-              checked={settings.accessibility.largeText}
+              checked={accessibility.largeText}
               onChange={(v) => patchA11y({ largeText: v })}
             />
             <ToggleSwitch
               label={t('settings.accessibility.screenReader')}
-              checked={settings.accessibility.screenReader}
+              checked={accessibility.screenReader}
               onChange={(v) => patchA11y({ screenReader: v })}
             />
             <ToggleSwitch
               label={t('settings.accessibility.focusIndicators')}
-              checked={settings.accessibility.focusIndicators}
+              checked={accessibility.focusIndicators}
               onChange={(v) => patchA11y({ focusIndicators: v })}
             />
           </div>
@@ -185,7 +187,7 @@ export const AccessibilitySection: FC = () => {
             </label>
             <Select
               id="settings-colorblind-mode"
-              value={settings.accessibility.colorBlindMode}
+              value={accessibility.colorBlindMode}
               onChange={(e) =>
                 patchA11y({
                   colorBlindMode: e.target.value as AccessibilitySettings['colorBlindMode'],

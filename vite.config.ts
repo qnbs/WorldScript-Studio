@@ -30,12 +30,13 @@ export default defineConfig({
 
   server: {
     port: 3000,
-    host: '0.0.0.0',
+    // QNBS-v3: Default to loopback for security; opt-in to 0.0.0.0 via VITE_DEV_HOST for Codespaces.
+    host: process.env['VITE_DEV_HOST'] || '127.0.0.1',
   },
 
   preview: {
     port: 4173,
-    host: '0.0.0.0',
+    host: process.env['VITE_DEV_HOST'] || '127.0.0.1',
   },
 
   plugins: [

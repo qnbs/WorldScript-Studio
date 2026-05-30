@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ICONS } from '../../constants';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { defaultThemeCustomization } from '../../features/settings/settingsSlice';
 import { usePWA } from '../../hooks/usePWA';
 import packageJson from '../../package.json';
 import { storageService } from '../../services/storageService';
@@ -145,6 +146,8 @@ export const GeneralSection: FC = () => {
 
 export const AppearanceSection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
+  // QNBS-v3: Defensive merge — old persisted states may lack themeCustomization entirely.
+  const themeCustomization = settings.themeCustomization ?? defaultThemeCustomization;
   return (
     <div className="space-y-6">
       <Card>
@@ -243,10 +246,10 @@ export const AppearanceSection: FC = () => {
               <input
                 id="settings-primary-color"
                 type="color"
-                value={settings.themeCustomization.primaryColor}
+                value={themeCustomization.primaryColor}
                 onChange={(e) =>
                   handleSettingChange('themeCustomization', {
-                    ...settings.themeCustomization,
+                    ...themeCustomization,
                     primaryColor: e.target.value,
                   })
                 }
@@ -263,10 +266,10 @@ export const AppearanceSection: FC = () => {
               <input
                 id="settings-secondary-color"
                 type="color"
-                value={settings.themeCustomization.secondaryColor}
+                value={themeCustomization.secondaryColor}
                 onChange={(e) =>
                   handleSettingChange('themeCustomization', {
-                    ...settings.themeCustomization,
+                    ...themeCustomization,
                     secondaryColor: e.target.value,
                   })
                 }
@@ -283,10 +286,10 @@ export const AppearanceSection: FC = () => {
               <input
                 id="settings-accent-color"
                 type="color"
-                value={settings.themeCustomization.accentColor}
+                value={themeCustomization.accentColor}
                 onChange={(e) =>
                   handleSettingChange('themeCustomization', {
-                    ...settings.themeCustomization,
+                    ...themeCustomization,
                     accentColor: e.target.value,
                   })
                 }
@@ -303,10 +306,10 @@ export const AppearanceSection: FC = () => {
               <input
                 id="settings-bg-color"
                 type="color"
-                value={settings.themeCustomization.backgroundColor}
+                value={themeCustomization.backgroundColor}
                 onChange={(e) =>
                   handleSettingChange('themeCustomization', {
-                    ...settings.themeCustomization,
+                    ...themeCustomization,
                     backgroundColor: e.target.value,
                   })
                 }
@@ -323,10 +326,10 @@ export const AppearanceSection: FC = () => {
             </label>
             <textarea
               id="settings-custom-css"
-              value={settings.themeCustomization.customCss}
+              value={themeCustomization.customCss}
               onChange={(e) =>
                 handleSettingChange('themeCustomization', {
-                  ...settings.themeCustomization,
+                  ...themeCustomization,
                   customCss: e.target.value,
                 })
               }
