@@ -1,6 +1,7 @@
 /**
  * Tests for components/settings/IdbUnlockModal.tsx
- * QNBS-v3: Mocks initIdbEncryption; covers unlock flow, error display, Enter-key shortcut.
+ * QNBS-v3: Mocks verifyAndInitIdbEncryption; covers unlock flow, wrong-passphrase error,
+ *          Enter-key shortcut, and the forgot-passphrase escape hatch.
  */
 
 import { render, screen, waitFor } from '@testing-library/react';
@@ -11,14 +12,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockInitIdbEncryption = vi.fn();
+const mockVerifyAndInit = vi.fn();
 
 vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
 }));
 
 vi.mock('../../../services/storage/storageEncryptionService', () => ({
-  initIdbEncryption: (...args: unknown[]) => mockInitIdbEncryption(...args),
+  verifyAndInitIdbEncryption: (...args: unknown[]) => mockVerifyAndInit(...args),
 }));
 
 vi.mock('../../../components/ui/Button', () => ({
@@ -56,10 +57,11 @@ import { IdbUnlockModal } from '../../../components/settings/IdbUnlockModal';
 
 describe('IdbUnlockModal', () => {
   const mockOnUnlocked = vi.fn();
+  const mockOnForgotPassphrase = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockInitIdbEncryption.mockResolvedValue(undefined);
+    mockVerifyAndInit.mockResolvedValue(undefined);
   });
 
   it('renders the unlock modal dialog', () => {
@@ -85,61 +87,61 @@ describe('IdbUnlockModal', () => {
 
   it('unlock button is disabled when passphrase is empty', () => {
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
-    const btn = screen.getByRole('button');
-    expect(btn).toBeDisabled();
+    // First button is the unlock button
+    expect(screen.getAllByRole('button')[0]).toBeDisabled();
   });
 
   it('unlock button is enabled after typing a passphrase', async () => {
     const user = userEvent.setup();
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     await user.type(screen.getByLabelText('settings.privacy.encryptionPassphrase'), 'secret123');
-    expect(screen.getByRole('button')).not.toBeDisabled();
+    expect(screen.getAllByRole('button')[0]).not.toBeDisabled();
   });
 
-  it('calls initIdbEncryption with the entered passphrase on click', async () => {
+  it('calls verifyAndInitIdbEncryption with the entered passphrase on click', async () => {
     const user = userEvent.setup();
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     await user.type(screen.getByLabelText('settings.privacy.encryptionPassphrase'), 'mypassword');
-    await user.click(screen.getByRole('button'));
-    await waitFor(() => expect(mockInitIdbEncryption).toHaveBeenCalledWith('mypassword'));
+    await user.click(screen.getAllByRole('button')[0] as HTMLElement);
+    await waitFor(() => expect(mockVerifyAndInit).toHaveBeenCalledWith('mypassword'));
   });
 
-  it('calls onUnlocked after successful initIdbEncryption', async () => {
+  it('calls onUnlocked after successful verifyAndInitIdbEncryption', async () => {
     const user = userEvent.setup();
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     await user.type(screen.getByLabelText('settings.privacy.encryptionPassphrase'), 'mypassword');
-    await user.click(screen.getByRole('button'));
+    await user.click(screen.getAllByRole('button')[0] as HTMLElement);
     await waitFor(() => expect(mockOnUnlocked).toHaveBeenCalledTimes(1));
   });
 
-  it('shows error message when initIdbEncryption rejects', async () => {
-    mockInitIdbEncryption.mockRejectedValue(new Error('wrong key'));
+  it('shows error message when verifyAndInitIdbEncryption rejects', async () => {
+    mockVerifyAndInit.mockRejectedValue(new Error('wrong key'));
     const user = userEvent.setup();
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     await user.type(screen.getByLabelText('settings.privacy.encryptionPassphrase'), 'wrongpass');
-    await user.click(screen.getByRole('button'));
+    await user.click(screen.getAllByRole('button')[0] as HTMLElement);
     await waitFor(() => {
       expect(screen.getByText('settings.privacy.encryptionWrongPassphrase')).toBeInTheDocument();
     });
   });
 
-  it('does not call onUnlocked when initIdbEncryption rejects', async () => {
-    mockInitIdbEncryption.mockRejectedValue(new Error('wrong key'));
+  it('does not call onUnlocked when verifyAndInitIdbEncryption rejects', async () => {
+    mockVerifyAndInit.mockRejectedValue(new Error('wrong key'));
     const user = userEvent.setup();
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     await user.type(screen.getByLabelText('settings.privacy.encryptionPassphrase'), 'wrongpass');
-    await user.click(screen.getByRole('button'));
-    await waitFor(() => expect(mockInitIdbEncryption).toHaveBeenCalled());
+    await user.click(screen.getAllByRole('button')[0] as HTMLElement);
+    await waitFor(() => expect(mockVerifyAndInit).toHaveBeenCalled());
     expect(mockOnUnlocked).not.toHaveBeenCalled();
   });
 
   it('clears error when passphrase changes after a failed attempt', async () => {
-    mockInitIdbEncryption.mockRejectedValueOnce(new Error('wrong key'));
+    mockVerifyAndInit.mockRejectedValueOnce(new Error('wrong key'));
     const user = userEvent.setup();
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     const input = screen.getByLabelText('settings.privacy.encryptionPassphrase');
     await user.type(input, 'wrong');
-    await user.click(screen.getByRole('button'));
+    await user.click(screen.getAllByRole('button')[0] as HTMLElement);
     await waitFor(() =>
       expect(screen.getByText('settings.privacy.encryptionWrongPassphrase')).toBeInTheDocument(),
     );
@@ -154,13 +156,75 @@ describe('IdbUnlockModal', () => {
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     await user.type(screen.getByLabelText('settings.privacy.encryptionPassphrase'), 'passphrase');
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(mockInitIdbEncryption).toHaveBeenCalledWith('passphrase'));
+    await waitFor(() => expect(mockVerifyAndInit).toHaveBeenCalledWith('passphrase'));
   });
 
-  it('does not call initIdbEncryption on Enter with empty passphrase', async () => {
+  it('does not call verifyAndInitIdbEncryption on Enter with empty passphrase', async () => {
     const user = userEvent.setup();
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     await user.keyboard('{Enter}');
-    expect(mockInitIdbEncryption).not.toHaveBeenCalled();
+    expect(mockVerifyAndInit).not.toHaveBeenCalled();
+  });
+
+  // ── Forgot passphrase escape hatch ─────────────────────────────────────────
+
+  it('does not show forgot-passphrase button when onForgotPassphrase prop is absent', () => {
+    render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+    expect(
+      screen.queryByText('settings.privacy.encryptionForgotPassphrase'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows forgot-passphrase link when onForgotPassphrase prop is provided', () => {
+    render(
+      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
+    );
+    expect(screen.getByText('settings.privacy.encryptionForgotPassphrase')).toBeInTheDocument();
+  });
+
+  it('shows confirmation UI after clicking forgot-passphrase link', async () => {
+    const user = userEvent.setup();
+    render(
+      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionForgotPassphrase'));
+    expect(
+      screen.getByText('settings.privacy.encryptionForgotPassphraseWarning'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('settings.privacy.encryptionDisableConfirm')).toBeInTheDocument();
+    expect(screen.getByText('common.cancel')).toBeInTheDocument();
+  });
+
+  it('calls onForgotPassphrase when confirm button is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionForgotPassphrase'));
+    await user.click(screen.getByText('settings.privacy.encryptionDisableConfirm'));
+    expect(mockOnForgotPassphrase).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onForgotPassphrase when cancel button is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionForgotPassphrase'));
+    await user.click(screen.getByText('common.cancel'));
+    expect(mockOnForgotPassphrase).not.toHaveBeenCalled();
+  });
+
+  it('hides confirmation UI after cancel is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionForgotPassphrase'));
+    await user.click(screen.getByText('common.cancel'));
+    expect(
+      screen.queryByText('settings.privacy.encryptionForgotPassphraseWarning'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('settings.privacy.encryptionForgotPassphrase')).toBeInTheDocument();
   });
 });

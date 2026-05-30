@@ -71,10 +71,17 @@ describe('FeatureFlagsSection', () => {
     expect(screen.getByText('settings.featureFlags.description')).toBeInTheDocument();
   });
 
-  it('renders all 19 feature flag toggles (enablePlotBoardV2 deprecated/hidden)', () => {
+  it('renders 18 feature flag toggles (enablePlotBoardV2 deprecated, enableIdbAtRestEncryption moved to Privacy)', () => {
     render(<FeatureFlagsSection />);
     const switches = screen.getAllByRole('switch');
-    expect(switches.length).toBe(19);
+    expect(switches.length).toBe(18);
+  });
+
+  it('does not render the IDB at-rest encryption toggle (managed in Privacy settings)', () => {
+    render(<FeatureFlagsSection />);
+    expect(
+      screen.queryByText('settings.featureFlags.enableIdbAtRestEncryption'),
+    ).not.toBeInTheDocument();
   });
 
   it('renders DuckDB analytics toggle', () => {

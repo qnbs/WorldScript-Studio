@@ -16,9 +16,11 @@ import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import { logger } from '../services/logger';
 import {
-  clearIdbEncryptionKey,
-  initIdbEncryption,
+  clearIdbPassphrase,
   isIdbEncryptionReady,
+  rotateIdbPassphrase,
+  setupIdbEncryption,
+  verifyAndInitIdbEncryption,
 } from '../services/storage/storageEncryptionService';
 import { storageService } from '../services/storageService';
 import type {
@@ -346,28 +348,32 @@ export const useSettingsView = () => {
     }
   }, [modal.payload.id, refreshSnapshots]);
 
-  // QNBS-v3: B-1 passphrase handlers — initIdbEncryption stores key in memory only (SEC-RULE-5)
+  // QNBS-v3: B-1 passphrase handlers — sentinel-backed; each operation verifies against IDB token
   const handlePassphraseConfirm = useCallback(
     async (_current: string, newPassphrase: string) => {
       if (passphraseModal === 'set') {
-        await initIdbEncryption(newPassphrase);
+        // QNBS-v3: setupIdbEncryption derives key, writes sentinel to IDB, sets _activeKey
+        await setupIdbEncryption(newPassphrase);
         dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(true));
         setEncryptionReady(true);
+        // QNBS-v3: WCAG 4.1.3 — toast confirms success for keyboard/AT users who can't see status text
+        toast.success(t('settings.privacy.encryptionActiveStatus'));
       } else if (passphraseModal === 'change') {
-        // Verify old key by re-deriving; service throws on wrong passphrase during decrypt
-        await initIdbEncryption(_current);
-        await initIdbEncryption(newPassphrase);
+        // QNBS-v3: rotateIdbPassphrase verifies old passphrase against sentinel, then replaces it
+        await rotateIdbPassphrase(_current, newPassphrase);
         setEncryptionReady(true);
+        toast.success(t('settings.privacy.encryptionActiveStatus'));
       } else if (passphraseModal === 'disable') {
-        // Verify current key, then clear and disable the flag
-        await initIdbEncryption(_current);
-        clearIdbEncryptionKey();
+        // QNBS-v3: verify current passphrase first, then remove sentinel and disable flag
+        await verifyAndInitIdbEncryption(_current);
+        await clearIdbPassphrase();
         dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
         setEncryptionReady(false);
+        toast.info(t('settings.privacy.encryptionDisabledStatus'));
       }
       setPassphraseModal('closed');
     },
-    [passphraseModal, dispatch],
+    [passphraseModal, dispatch, toast, t],
   );
 
   return {

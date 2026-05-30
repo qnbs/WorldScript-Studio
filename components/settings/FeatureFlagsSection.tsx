@@ -32,11 +32,8 @@ export const FeatureFlagsSection: FC = () => {
     { key: 'enableVoiceSupport', labelKey: 'settings.featureFlags.enableVoiceSupport' },
     { key: 'enableVoiceWasm', labelKey: 'settings.featureFlags.enableVoiceWasm' },
     { key: 'enableProForge', labelKey: 'settings.featureFlags.enableProForge' },
-    // QNBS-v3: Ghost flag promoted to dev-visible toggle; passphrase UX not complete — label includes ⚠ warning.
-    {
-      key: 'enableIdbAtRestEncryption',
-      labelKey: 'settings.featureFlags.enableIdbAtRestEncryption',
-    },
+    // QNBS-v3: enableIdbAtRestEncryption removed — toggling without passphrase setup blocks all users.
+    // Dedicated UI lives in Settings → Privacy (PrivacySection.tsx).
   ];
 
   return (
