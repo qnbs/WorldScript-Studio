@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload coverage report
         # QNBS-v3: Matrix-Wert bleibt Literal 'lts/*' — ein Upload pro Workflow reicht (Codecov optional).
-        if: always() && matrix.node-version == 'lts/*'
+        if: always() && matrix.node-version == '22'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
@@ -114,7 +114,7 @@ jobs:
 
       # QNBS-v3: fail_ci_if_error: false — Forks ohne CODECOV_TOKEN; Coverage bleibt trotzdem im Artifact.
       - name: Publish coverage to Codecov
-        if: always() && matrix.node-version == 'lts/*'
+        if: always() && matrix.node-version == '22'
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -362,7 +362,8 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Download dist artifact
-        uses: actions/download-artifact@v4
+        # QNBS-v3: SHA-pinned to match all other download-artifact usages in this workflow
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: dist
           path: dist/
