@@ -134,6 +134,73 @@ gh run watch
 
 ---
 
+## Optimal Modus Operandi (Codespaces 8-Core / 16 GB)
+
+### Session-Start Checklist
+
+```bash
+# 1. Sync with remote
+git pull origin main
+
+# 2. Install any new deps (fast — pnpm store volume is cached)
+pnpm install --frozen-lockfile
+
+# 3. Quick smoke test (lint + typecheck, ~60 s)
+pnpm run lint && pnpm run typecheck
+
+# 4. Check recent CI status
+gh run list --limit 5
+```
+
+### Daily Workflow
+
+- **Parallel Bash calls are safe** on 8-core Codespaces — fire independent lint + typecheck simultaneously.
+- **`run_in_background`** is OK for `pnpm run build`, `pnpm run build:edge`, `pnpm exec vitest run --coverage`.
+- Before every push: `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run`
+- Before opening a PR: `pnpm exec vitest run --coverage` — update README badge numbers.
+
+### Full Quality Gate (~10–12 min on 8-core, matches CI `quality` job)
+
+```bash
+pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage
+```
+
+### Background Build Pattern
+
+```bash
+# Start edge build in background while continuing to edit tests
+# In Claude Code: use run_in_background=true on the Bash tool call
+pnpm run build:edge
+# Notified when complete; check dist/index.html for correctness
+```
+
+### Test Failure Triage
+
+```bash
+# Find all failing test files
+pnpm exec vitest run 2>&1 | grep "^FAIL " | sort -u
+
+# Run a single failing file for diagnosis
+pnpm exec vitest run tests/unit/THE_FILE.test.ts
+```
+
+Common root causes in this project:
+
+| Symptom | Fix |
+|---------|-----|
+| `Cannot read 'enableIdbAtRestEncryption'` | Add all 20 featureFlags to mock state (B-series: `enableIdbAtRestEncryption: false`, `enableVoiceWasm: false`) |
+| PBKDF2 assertion mismatch | Update assertion from `310_000` → `600_000` (OWASP 2024 standard) |
+| `execute called before registry enabled` | Add `registry.setEnabled(true)` before execute/executeAsync |
+| Context hook throws in tests | Use `vi.mock('../../../contexts/XxxContext', () => ({ useXxxViewContext: vi.fn(...) }))` |
+
+### Timeout Prevention
+
+- Active terminal activity keeps Codespace alive (Vite HMR, test runs, etc.).
+- Run `pnpm run dev` in a persistent terminal during long planning or review phases.
+- Codespace inactivity timeout: **240 min** (configured in GitHub account settings).
+
+---
+
 ## Design Decisions
 
 ### Why 16GB RAM / 8-core?

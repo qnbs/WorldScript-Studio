@@ -32,6 +32,8 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ✅ **C-5** — GitHub Issue Templates (`bug_report.yml`, `feature_request.yml`, `translation_pr.yml`) + AGENTS.md hardening
 - ✅ **Feature Parity Audit** (2026-05-29) — 8 critical drifts fixed; `docs/FEATURE-PARITY.md` + `features/featureCatalog.ts` + `scripts/audit-feature-parity.ts`
 - ✅ **C-7 partial** (2026-05-28) — +130 tests; thresholds raised L73/F65/B58/S71; 4 192 tests / 392 files
+- ✅ **Codespace Uplift** (2026-05-30) — CLAUDE.md environment-aware shell rules; devcontainer re-activated (8-core/16GB); `.devcontainer/README.md` Modus Operandi section
+- ✅ **Vercel blank screen fix** (2026-05-30) — `index.html` `%BASE_URL%` for manifest/favicon/og; `index.tsx` error safety net; 382 test files / 4567 tests all green
 - ⬜ **C-6** — Full ar/he translation content — requires native translator review (stubs exist in `locales/ar/`, `locales/he/`)
 - 🔄 **C-7 remainder** — Coverage → L85%/B75%/F80%; Stryker break 75→80 (current thresholds: L73/F65/B58)
 - ⬜ IDB at-rest encryption UX (passphrase unlock modal, forgot-passphrase flow, key rotation) — `enableIdbAtRestEncryption` flag now in UI with ⚠ warning

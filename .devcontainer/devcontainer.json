@@ -60,7 +60,7 @@
     // QNBS-v3: Show recent CI status on container start so the team knows what's green.
     "ci-status": "gh run list --limit 3 --json status,conclusion,name 2>/dev/null | node -e \"process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);r.forEach(x=>console.log(x.conclusion==='success'?'✅':'❌',x.name,x.status))}catch{}})\" || true"
   },
-  "postAttachCommand": "echo '✅ StoryCraft Studio ready — see docs/SPRINT-HANDOFF-2026-05-30-encryption-a11y.md for session context. Run: pnpm run dev'",
+  "postAttachCommand": "echo '✅ StoryCraft Studio ready — see docs/SPRINT-HANDOFF-2026-05-30-codespace-uplift.md for session context. Run: pnpm run dev'",
   // ─── Ports ─────────────────────────────────────────────────────────────────
   // QNBS-v3: Vite dev server (3000), Storybook (6006), Vite preview (4173),
   // and Playwright report (9323) for CI debugging.
@@ -260,7 +260,7 @@
       ]
     },
     "codespaces": {
-      "openFiles": ["docs/SPRINT-HANDOFF-2026-05-30-encryption-a11y.md", "README.md"]
+      "openFiles": ["docs/SPRINT-HANDOFF-2026-05-30-codespace-uplift.md", "README.md"]
     }
   }
 }

@@ -2,18 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## CRITICAL: Sequential Shell Execution (LOW-END HARDWARE)
+## Shell Execution — Environment-Aware Rules
 
-**NEVER run multiple Bash tool calls in the same message.** This machine has ~3.7 GB RAM with often < 500 MB free. Concurrent shells (vitest, biome, tsc, vite, pnpm build) cause OOM, VS Code force-closes, and pool-worker timeouts.
+### GitHub Codespaces (CODESPACES=true) — 8-Core / 16 GB RAM
 
-Rules — NO exceptions, every session, every turn:
+Parallel Bash calls are safe. Use the full Claude Code parallel tooling model:
+- **Multiple Bash tool calls in the same message are allowed** — run independent commands in parallel.
+- **`run_in_background` is allowed** for long builds (`pnpm run build`, `pnpm run build:edge`, `pnpm exec vitest run --coverage`).
+- Chain dependent steps with `&&` in a single call; fire independent reads/greps in parallel.
+- Full quality gate runs locally: `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`
+
+### On Low-End Local Hardware (< 4 GB RAM free)
+
+**ONE Bash tool call per turn.** This machine had ~3.7 GB RAM with < 500 MB free. Concurrent shells (vitest, biome, tsc, vite, pnpm build) cause OOM, VS Code force-closes, and pool-worker timeouts.
 - ONE Bash tool call per turn. Wait for the result. Then proceed.
 - NO `run_in_background` for vitest, biome, tsc, vite, or any pnpm build command.
 - NO parallel Agent tool calls that each issue shell commands.
 - NO multiple Bash tool calls in the same response block.
 - Chain sequential steps inside ONE Bash call using `&&` if needed.
 
-This overrides the general "run tools in parallel" instruction — parallel shell execution has caused repeated VS Code crashes on this machine.
+This overrides the general "run tools in parallel" instruction on low-end hardware only — parallel shell execution has caused repeated VS Code crashes on constrained machines.
 
 ## Commands
 
@@ -47,7 +55,9 @@ pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 
 **CI pipeline order:** `security` → `quality` (Biome + tsc + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
-**CI-cloud-first workflow (recommended):** On constrained hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, E2E, Lighthouse, and Stryker are CI-gate jobs. After each push, update README.md badges and AUDIT.md quality-gate line with CI-reported numbers. Local CI simulation: `act pull_request --job quality` (Docker + `act`; see `infra/low-end-ci/DAILY-DRIVER.md`).
+**Workflow on Codespaces (recommended):** Run the full quality gate locally before pushing — `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Codespaces has 16 GB RAM; the full gate takes ~10 min. Background builds are fine with `run_in_background`.
+
+**CI-cloud-first workflow (constrained local hardware only):** On low-end hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, E2E, Lighthouse, and Stryker are CI-gate jobs. After each push, update README.md badges and AUDIT.md quality-gate line with CI-reported numbers. Local CI simulation: `act pull_request --job quality` (Docker + `act`; see `infra/low-end-ci/DAILY-DRIVER.md`).
 
 **CI audit & housekeeping policy (ALL CI runs must be fully green):**
 - After every commit, monitor ALL CI jobs: security (OSV + CodeQL), quality (Biome + tsc + Vitest), build, e2e, lighthouse, deploy, mutation, storybook.
@@ -61,6 +71,34 @@ pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
 Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
+
+## Codespaces Modus Operandi
+
+**Session-start checklist (every Codespace session):**
+1. `git pull origin main` — sync with remote
+2. `pnpm install --frozen-lockfile` — pick up lockfile changes (fast via volume cache)
+3. `pnpm run lint && pnpm run typecheck` — 60-second smoke test
+4. `gh run list --limit 5` — review recent CI runs
+
+**Daily workflow (8-Core / 16 GB):**
+- Parallel Bash calls are safe — fire independent lint + typecheck simultaneously.
+- Background builds: `pnpm run build:edge` can run while fixing tests (`run_in_background=true`).
+- Before every push: `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run`
+- Before opening a PR: `pnpm exec vitest run --coverage` — record numbers in README badges.
+
+**Full quality gate (local, matches CI `quality` job):**
+```bash
+pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage
+```
+
+**Test failure triage:**
+```bash
+pnpm exec vitest run 2>&1 | grep "^FAIL " | sort -u        # failing files
+pnpm exec vitest run tests/unit/FILENAME.test.ts             # single file
+```
+Known root causes: featureFlags mock must include ALL 20 flags (TS strict); PBKDF2 assertions → 600_000; `registry.setEnabled(true)` before execute/executeAsync; mock context hooks via `vi.mock(...)` not real Provider.
+
+**Timeout prevention:** Keep a terminal running `pnpm run dev` (Vite HMR) during long planning phases. Codespace inactivity timeout: 240 min (configured in GitHub account settings).
 
 ## Architecture
 
