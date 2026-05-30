@@ -17,6 +17,7 @@
     "i18n:bundle": "node scripts/build-i18n.mjs",
     "i18n:check": "node scripts/check-i18n-keys.mjs && node scripts/build-i18n.mjs && node scripts/content-guard.mjs",
     "content:guard": "node scripts/content-guard.mjs",
+    "verify:vendor": "node scripts/verify-vendor-fork.mjs",
     "parity:check": "tsx scripts/audit-feature-parity.ts",
     "graphify": "node scripts/graphify-cli.mjs",
     "graphify:install": "node scripts/graphify-cli.mjs install",

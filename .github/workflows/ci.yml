@@ -48,6 +48,11 @@ jobs:
       - name: pnpm audit (high + critical)
         run: pnpm audit --audit-level=high
 
+      # QNBS-v3: vendored y-webrtc fork has no upstream updater — assert its C-1 crypto
+      # patches (PBKDF2 600k, extractable=false, return-on-reject) haven't regressed (issue #60).
+      - name: Verify vendored collab-transport fork
+        run: pnpm run verify:vendor
+
       # QNBS-v3: osv-scanner.toml (in src-tauri/) suppresses accepted RUSTSEC advisories for Cargo.lock;
       # scan both lockfiles so npm + Rust advisories are caught on every push
       - name: OSV vulnerability scan
