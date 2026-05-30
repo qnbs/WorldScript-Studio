@@ -19,7 +19,14 @@ export const TauriUpdaterBanner: FC = () => {
           {t('settings.tauri.updaterTitle')}
         </p>
         {checking && <Spinner className="w-5 h-5" />}
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        {/* QNBS-v3: pre-rendered with minHeight so role="alert" fires on NVDA/JAWS; text-[--sc-danger-fg] for theme compliance */}
+        <p
+          role="alert"
+          className="text-xs text-[var(--sc-danger-fg)]"
+          style={{ minHeight: '1rem' }}
+        >
+          {error ?? ''}
+        </p>
         {update?.available && (
           <p className="text-sm text-[var(--sc-text-secondary)]">
             {t('settings.tauri.updateAvailable', {

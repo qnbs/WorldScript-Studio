@@ -147,7 +147,7 @@ export const BottomSheet: FC<BottomSheetProps> = ({
         <button
           type="button"
           onClick={onClose}
-          className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:right-3 focus:z-10 focus:rounded focus:px-2 focus:py-1 focus:text-xs focus:bg-[var(--sc-surface-overlay)] focus:text-[var(--sc-text-primary)] focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
+          className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:top-3 focus-visible:right-3 focus-visible:z-10 focus-visible:rounded focus-visible:px-2 focus-visible:py-1 focus-visible:text-xs focus-visible:bg-[var(--sc-surface-overlay)] focus-visible:text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
           {t('common.close')}
         </button>

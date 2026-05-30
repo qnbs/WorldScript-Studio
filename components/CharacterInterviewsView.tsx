@@ -54,7 +54,7 @@ function CharacterInterviewsViewContent() {
             id="ci-character-select"
             value={selectedCharacterId ?? ''}
             onChange={(e) => selectCharacter(e.target.value)}
-            className="w-full rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-2 py-1.5 text-sm text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
+            className="w-full rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-2 py-1.5 text-sm text-[var(--sc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
           >
             <option value="" disabled>
               {t('characterInterviews.selectCharacterPlaceholder')}
@@ -97,7 +97,7 @@ function CharacterInterviewsViewContent() {
                       onChange={(e) => setNewTitle(e.target.value)}
                       placeholder={t('characterInterviews.interviewTitlePlaceholder')}
                       aria-label={t('characterInterviews.interviewTitle')}
-                      className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-2 py-1 text-sm text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
+                      className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-2 py-1 text-sm text-[var(--sc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
                     />
                     <div className="flex gap-2">
                       <button

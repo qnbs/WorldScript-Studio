@@ -55,7 +55,7 @@ export const Textarea = React.memo(
                 px-4 py-3 pb-12 text-sm 
                 text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] 
                 shadow-sm transition-all duration-sc-fast
-                focus:outline-none focus:border-[var(--border-interactive)] focus:ring-4 focus:ring-[var(--sc-ring-focus)] focus:bg-[var(--sc-surface-raised)]/50
+                focus-visible:outline-none focus-visible:border-[var(--border-interactive)] focus-visible:ring-4 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:bg-[var(--sc-surface-raised)]/50
                 hover:border-[var(--sc-border-strong)] hover:bg-[var(--glass-bg-hover)]
                 disabled:opacity-50 disabled:cursor-not-allowed
                 scrollbar-thin scrollbar-thumb-rounded-md
@@ -68,7 +68,7 @@ export const Textarea = React.memo(
           <button
             type="button"
             onClick={toggleListening}
-            className={`absolute right-3 bottom-3 p-2 rounded-full transition-all duration-sc-normal focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[var(--sc-ring-focus)] z-10 ${
+            className={`absolute right-3 bottom-3 p-2 rounded-full transition-all duration-sc-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--sc-ring-focus)] z-10 ${
               isListening
                 ? 'text-red-500 bg-red-500/10 animate-pulse shadow-[0_0_0_4px_rgba(239,68,68,0.3)] scale-110'
                 : 'text-[var(--sc-text-muted)] bg-[var(--sc-surface-raised)]/80 hover:text-[var(--sc-text-primary)] hover:bg-[var(--glass-bg-hover)] shadow-sm border border-[var(--sc-border-subtle)]'

@@ -271,7 +271,7 @@ export const ProjectAiPresetSection: FC = () => {
                 value={preset?.customSystemPrompt ?? ''}
                 placeholder={t('settings.projectAi.systemPromptHint')}
                 onChange={(e) => patch({ customSystemPrompt: e.target.value || undefined })}
-                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] placeholder-[var(--sc-text-muted)] focus:border-[var(--sc-ring-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
+                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] placeholder-[var(--sc-text-muted)] focus-visible:border-[var(--sc-ring-focus)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               />
               <p className="text-xs text-[var(--sc-text-muted)]">
                 {t('settings.projectAi.systemPromptHint')}

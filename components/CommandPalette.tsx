@@ -382,7 +382,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             aria-autocomplete="list"
             role="combobox"
             aria-expanded={true}
-            className="w-full bg-transparent border-none focus:ring-2 focus:ring-[var(--sc-ring-focus)] focus:ring-offset-2 focus:ring-offset-[var(--sc-surface-base)] rounded-md text-lg text-[var(--sc-text-primary)] placeholder-[var(--sc-text-muted)] h-10"
+            className="w-full bg-transparent border-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sc-surface-base)] rounded-md text-lg text-[var(--sc-text-primary)] placeholder-[var(--sc-text-muted)] h-10"
             placeholder={t('palette.placeholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}

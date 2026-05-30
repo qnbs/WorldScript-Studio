@@ -140,7 +140,7 @@ const ToastItem: FC<{
               type="button"
               onClick={() => onDismiss(message.id)}
               aria-label={t('common.close')}
-              className="inline-flex rounded-sc-sm text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--sc-ring-focus)]"
+              className="inline-flex rounded-sc-sm text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--sc-ring-focus)]"
             >
               <span className="sr-only">Close</span>
               <svg

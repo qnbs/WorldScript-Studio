@@ -134,7 +134,7 @@ export const ProForgeDashboard: React.FC = () => {
                 value={pipelineLabel}
                 onChange={(e) => setPipelineLabel(e.target.value)}
                 placeholder="Pipeline label (optional)"
-                className="w-full px-3 py-2 rounded-sc-md bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sc-ring-focus)]"
+                className="w-full px-3 py-2 rounded-sc-md bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               />
               <button
                 type="button"

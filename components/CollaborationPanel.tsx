@@ -385,12 +385,18 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
             )}
           </section>
 
-          {/* Error */}
-          {connectionError && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400">
-              {connectionError}
-            </div>
-          )}
+          {/* QNBS-v3: pre-rendered with role="alert" so live-region fires correctly on NVDA/JAWS */}
+          <div
+            role="alert"
+            className="text-sm text-[var(--sc-danger-fg)]"
+            style={{ minHeight: connectionError ? undefined : 0, overflow: 'hidden' }}
+          >
+            {connectionError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                {connectionError}
+              </div>
+            )}
+          </div>
 
           {/* Security warning — only visible before connecting (QNBS-v3: public relay discloses room metadata; must be shown pre-connection so users can make an informed choice) */}
           {!isConnected && (

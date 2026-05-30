@@ -13,7 +13,7 @@ export const Select = React.memo(
             px-4 py-2.5 pr-10 text-sm 
             text-[var(--sc-text-primary)] 
             shadow-sm transition-all duration-sc-fast
-            focus:outline-none focus:border-[var(--border-interactive)] focus:ring-4 focus:ring-[var(--sc-ring-focus)] focus:bg-[var(--sc-surface-raised)]/50
+            focus-visible:outline-none focus-visible:border-[var(--border-interactive)] focus-visible:ring-4 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:bg-[var(--sc-surface-raised)]/50
             hover:border-[var(--sc-border-strong)] hover:bg-[var(--glass-bg-hover)]
             disabled:opacity-50 disabled:cursor-not-allowed
             cursor-pointer
