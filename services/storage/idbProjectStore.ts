@@ -20,6 +20,7 @@ import {
   idbEncrypt,
   isEncryptedBlob,
   isIdbEncryptionReady,
+  StorageEncryptionService,
 } from './storageEncryptionService';
 
 // ─── Exported for unit testing ────────────────────────────────────────────────
@@ -328,5 +329,32 @@ export class IdbProjectStore extends IdbAssetStore {
         req.onerror = () => reject(getUserFriendlyDbError(req.error));
       });
     });
+  }
+
+  /**
+   * Re-encrypt all APP_DATA_STORE records (project + settings) with a new key.
+   * QNBS-v3: Called during passphrase rotation. Does NOT touch the global _activeKey;
+   * instead uses the provided keys directly via StorageEncryptionService.
+   */
+  async reEncryptAllAppData(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
+    const svc = new StorageEncryptionService();
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+
+    for (const key of ['project', 'settings'] as const) {
+      const raw: unknown = await new Promise((resolve, reject) => {
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
+        const decrypted = await svc.decrypt(oldKey, { bytes: raw });
+        const reEncrypted = await svc.encrypt(newKey, decrypted);
+        await new Promise<void>((resolve, reject) => {
+          const req = store.put(reEncrypted.bytes, key);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+      }
+    }
   }
 }

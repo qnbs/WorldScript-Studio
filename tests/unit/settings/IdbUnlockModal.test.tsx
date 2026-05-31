@@ -14,6 +14,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockVerifyAndInit = vi.fn();
 
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (k: string) => store[k] ?? null,
+    setItem: (k: string, v: string) => {
+      store[k] = v;
+    },
+    removeItem: (k: string) => {
+      delete store[k];
+    },
+    clear: () => {
+      store = {};
+    },
+  };
+})();
+Object.defineProperty(global, 'localStorage', { value: localStorageMock, writable: true });
+
 vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
 }));
@@ -61,6 +78,7 @@ describe('IdbUnlockModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorageMock.clear();
     mockVerifyAndInit.mockResolvedValue(undefined);
   });
 
@@ -133,6 +151,63 @@ describe('IdbUnlockModal', () => {
     await user.click(screen.getAllByRole('button')[0] as HTMLElement);
     await waitFor(() => expect(mockVerifyAndInit).toHaveBeenCalled());
     expect(mockOnUnlocked).not.toHaveBeenCalled();
+  });
+
+  it('shows rate-limit message after 4 failed attempts', async () => {
+    mockVerifyAndInit.mockRejectedValue(new Error('wrong key'));
+    const user = userEvent.setup();
+    render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+    const input = screen.getByLabelText('settings.privacy.encryptionPassphrase');
+    for (let i = 0; i < 4; i++) {
+      await user.type(input, 'wrong', { initialSelectionStart: 0, initialSelectionEnd: 100 });
+      await user.click(screen.getAllByRole('button')[0] as HTMLElement);
+      await waitFor(() => expect(mockVerifyAndInit).toHaveBeenCalledTimes(i + 1));
+    }
+    await waitFor(() => {
+      expect(screen.getByText(/settings.privacy.encryptionTooManyAttempts/)).toBeInTheDocument();
+    });
+  });
+
+  it('disables unlock button during rate-limit lockout', async () => {
+    mockVerifyAndInit.mockRejectedValue(new Error('wrong key'));
+    const user = userEvent.setup();
+    render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+    const input = screen.getByLabelText('settings.privacy.encryptionPassphrase');
+    for (let i = 0; i < 4; i++) {
+      await user.type(input, 'wrong', { initialSelectionStart: 0, initialSelectionEnd: 100 });
+      await user.click(screen.getAllByRole('button')[0] as HTMLElement);
+      await waitFor(() => expect(mockVerifyAndInit).toHaveBeenCalledTimes(i + 1));
+    }
+    await waitFor(() => {
+      expect(screen.getAllByRole('button')[0]).toBeDisabled();
+    });
+  });
+
+  it('resets attempt count after successful unlock', async () => {
+    mockVerifyAndInit.mockRejectedValueOnce(new Error('wrong key'));
+    mockVerifyAndInit.mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+    const input = screen.getByLabelText('settings.privacy.encryptionPassphrase');
+    await user.type(input, 'wrong');
+    await user.click(screen.getAllByRole('button')[0] as HTMLElement);
+    await waitFor(() =>
+      expect(screen.getByText('settings.privacy.encryptionWrongPassphrase')).toBeInTheDocument(),
+    );
+    await user.type(input, 'correct', { initialSelectionStart: 0, initialSelectionEnd: 100 });
+    await user.click(screen.getAllByRole('button')[0] as HTMLElement);
+    await waitFor(() => expect(mockOnUnlocked).toHaveBeenCalledTimes(1));
+    // After success, attempts should be reset — another wrong attempt should show normal error, not rate-limit
+    mockVerifyAndInit.mockRejectedValue(new Error('wrong key'));
+    render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+    const newInput = screen.getAllByLabelText(
+      'settings.privacy.encryptionPassphrase',
+    )[0] as HTMLElement;
+    await user.type(newInput, 'wrongagain');
+    await user.click(screen.getAllByRole('button')[0] as HTMLElement);
+    await waitFor(() => {
+      expect(screen.getByText('settings.privacy.encryptionWrongPassphrase')).toBeInTheDocument();
+    });
   });
 
   it('clears error when passphrase changes after a failed attempt', async () => {

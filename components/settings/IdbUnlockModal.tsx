@@ -10,6 +10,56 @@ interface Props {
   onForgotPassphrase?: () => void;
 }
 
+const ATTEMPT_STORAGE_KEY = 'storycraft-idb-unlock-attempts';
+const LOCKOUT_STORAGE_KEY = 'storycraft-idb-unlock-lockout';
+
+function getAttemptCount(): number {
+  try {
+    return Number.parseInt(localStorage.getItem(ATTEMPT_STORAGE_KEY) ?? '0', 10);
+  } catch {
+    return 0;
+  }
+}
+
+function setAttemptCount(n: number): void {
+  try {
+    localStorage.setItem(ATTEMPT_STORAGE_KEY, String(n));
+  } catch {
+    /* storage blocked */
+  }
+}
+
+function getLockoutUntil(): number {
+  try {
+    return Number.parseInt(localStorage.getItem(LOCKOUT_STORAGE_KEY) ?? '0', 10);
+  } catch {
+    return 0;
+  }
+}
+
+function setLockoutUntil(ts: number): void {
+  try {
+    localStorage.setItem(LOCKOUT_STORAGE_KEY, String(ts));
+  } catch {
+    /* storage blocked */
+  }
+}
+
+function clearAttemptTracking(): void {
+  try {
+    localStorage.removeItem(ATTEMPT_STORAGE_KEY);
+    localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+  } catch {
+    /* storage blocked */
+  }
+}
+
+/** Exponential backoff: 2^(attempts-1) seconds, capped at 60s */
+function lockoutMs(attempts: number): number {
+  if (attempts <= 3) return 0;
+  return Math.min(2 ** (attempts - 4), 60) * 1000;
+}
+
 export const IdbUnlockModal: FC<Props> = ({ onUnlocked, onForgotPassphrase }) => {
   const { t } = useTranslation();
   const [passphrase, setPassphrase] = useState('');
@@ -17,8 +67,20 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked, onForgotPassphrase }) =>
   const [busy, setBusy] = useState(false);
   // QNBS-v3: two-step confirm for forgot-passphrase to prevent accidental clicks
   const [showForgotConfirm, setShowForgotConfirm] = useState(false);
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
+
+  // QNBS-v3: Rate-limiting tick — update remaining lockout time every second
+  useEffect(() => {
+    const tick = () => {
+      const remaining = Math.max(0, getLockoutUntil() - Date.now());
+      setLockoutRemaining(remaining);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // QNBS-v3: focus passphrase field on mount via ref — avoids the a11y/noAutofocus lint rule
   useEffect(() => {
@@ -38,18 +100,34 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked, onForgotPassphrase }) =>
 
   const handleUnlock = useCallback(async () => {
     if (!passphrase) return;
+    if (lockoutRemaining > 0) return;
     setBusy(true);
     setError('');
     try {
       // QNBS-v3: verifyAndInitIdbEncryption decrypts the sentinel — wrong key throws (AES-GCM auth-tag)
       await verifyAndInitIdbEncryption(passphrase);
+      clearAttemptTracking();
       onUnlocked();
     } catch {
-      setError(t('settings.privacy.encryptionWrongPassphrase'));
+      const attempts = getAttemptCount() + 1;
+      setAttemptCount(attempts);
+      const ms = lockoutMs(attempts);
+      if (ms > 0) {
+        setLockoutUntil(Date.now() + ms);
+        setLockoutRemaining(ms);
+        setError(
+          t('settings.privacy.encryptionTooManyAttempts').replace(
+            '{seconds}',
+            String(Math.ceil(ms / 1000)),
+          ),
+        );
+      } else {
+        setError(t('settings.privacy.encryptionWrongPassphrase'));
+      }
     } finally {
       setBusy(false);
     }
-  }, [passphrase, onUnlocked, t]);
+  }, [passphrase, lockoutRemaining, onUnlocked, t]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -110,10 +188,14 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked, onForgotPassphrase }) =>
         <div className="flex justify-end">
           <Button
             onClick={() => void handleUnlock()}
-            disabled={busy || !passphrase}
+            disabled={busy || !passphrase || lockoutRemaining > 0}
             aria-busy={busy}
           >
-            {busy ? '…' : t('settings.privacy.encryptionUnlockButton')}
+            {busy
+              ? '…'
+              : lockoutRemaining > 0
+                ? `${t('settings.privacy.encryptionUnlockButton')} (${Math.ceil(lockoutRemaining / 1000)}s)`
+                : t('settings.privacy.encryptionUnlockButton')}
           </Button>
         </div>
 

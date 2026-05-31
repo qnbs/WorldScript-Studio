@@ -15,6 +15,7 @@ import {
   idbEncrypt,
   isEncryptedBlob,
   isIdbEncryptionReady,
+  StorageEncryptionService,
 } from './storageEncryptionService';
 
 export class IdbSnapshotStore extends IdbCodexStore {
@@ -121,6 +122,41 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
     for (const key of toDelete) {
       await this.deleteSnapshot(key);
+    }
+  }
+
+  /**
+   * Re-encrypt all snapshot payloads with a new key.
+   * QNBS-v3: Iterates every snapshot, decrypts with oldKey, encrypts with newKey.
+   */
+  async reEncryptAllSnapshots(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
+    const svc = new StorageEncryptionService();
+    const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
+    const keys: number[] = await new Promise((resolve, reject) => {
+      const req = store.getAllKeys();
+      req.onsuccess = () => resolve(req.result as number[]);
+      req.onerror = () => reject(req.error);
+    });
+
+    for (const id of keys) {
+      const record: { date: string; name: string; wordCount: number; data: unknown } | undefined =
+        await new Promise((resolve, reject) => {
+          const req = store.get(id);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      if (!record) continue;
+      const raw = record.data;
+      if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
+        const decrypted = await svc.decrypt(oldKey, { bytes: raw });
+        const reEncrypted = await svc.encrypt(newKey, decrypted);
+        record.data = reEncrypted.bytes;
+        await new Promise<void>((resolve, reject) => {
+          const req = store.put(record, id);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+      }
     }
   }
 }

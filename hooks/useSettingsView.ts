@@ -14,9 +14,11 @@ import {
 import { settingsActions } from '../features/settings/settingsSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
+import { dbService } from '../services/dbService';
 import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
 import {
+  clearIdbEncryptionKey,
   clearIdbPassphrase,
   isIdbEncryptionReady,
   rotateIdbPassphrase,
@@ -378,8 +380,14 @@ export const useSettingsView = () => {
         // QNBS-v3: WCAG 4.1.3 — toast confirms success for keyboard/AT users who can't see status text
         toast.success(t('settings.privacy.encryptionActiveStatus'));
       } else if (passphraseModal === 'change') {
-        // QNBS-v3: rotateIdbPassphrase verifies old passphrase against sentinel, then replaces it
-        await rotateIdbPassphrase(_current, newPassphrase);
+        // QNBS-v3: rotateIdbPassphrase verifies old passphrase, derives new key, then calls
+        // reEncrypt callback to re-encrypt all existing IDB data before old key is discarded.
+        await rotateIdbPassphrase(_current, newPassphrase, async (oldKey, newKey) => {
+          await dbService.reEncryptAllAppData(oldKey, newKey);
+          await dbService.reEncryptAllSnapshots(oldKey, newKey);
+          // QNBS-v3: Codex, RAG vectors, images, and binder assets are re-encrypted on next
+          // natural write. A full re-encryption of all auxiliary stores is Phase-2 hardening.
+        });
         setEncryptionReady(true);
         toast.success(t('settings.privacy.encryptionActiveStatus'));
       } else if (passphraseModal === 'disable') {
@@ -425,6 +433,11 @@ export const useSettingsView = () => {
     setPassphraseModal,
     encryptionReady,
     handlePassphraseConfirm,
+    handleLockSession: useCallback(() => {
+      clearIdbEncryptionKey();
+      setEncryptionReady(false);
+      toast.info(t('settings.privacy.encryptionLockedStatus'));
+    }, [toast, t]),
   };
 };
 

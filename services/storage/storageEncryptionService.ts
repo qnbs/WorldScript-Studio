@@ -221,14 +221,27 @@ export async function clearIdbPassphrase(): Promise<void> {
 }
 
 /**
- * Change the passphrase: verify the old one against the sentinel, then replace
- * the sentinel with one encrypted under the new key and activate the new key.
+ * Change the passphrase: verify the old one against the sentinel, derive the new
+ * key, replace the sentinel, then optionally re-encrypt all existing IDB data.
+ *
+ * @param reEncrypt — optional callback that receives (oldKey, newKey) and must
+ *   re-encrypt all existing data. Called while oldKey is still valid so decryption
+ *   of legacy records is possible. If omitted, old data remains encrypted under
+ *   the old key until the next natural overwrite.
  */
 export async function rotateIdbPassphrase(
   oldPassphrase: string,
   newPassphrase: string,
+  reEncrypt?: (oldKey: CryptoKey, newKey: CryptoKey) => Promise<void>,
 ): Promise<void> {
   // QNBS-v3: verifyAndInitIdbEncryption throws on wrong old passphrase — caller catches and shows error
   await verifyAndInitIdbEncryption(oldPassphrase);
+  const oldKey = _activeKey;
+  if (!oldKey) throw new Error('Encryption not active');
   await setupIdbEncryption(newPassphrase);
+  const newKey = _activeKey;
+  if (!newKey) throw new Error('Encryption not active after rotation');
+  if (reEncrypt) {
+    await reEncrypt(oldKey, newKey);
+  }
 }
