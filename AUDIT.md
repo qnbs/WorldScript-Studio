@@ -1,11 +1,27 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-22 (v1.16) → **2026-05-23 (v2.0 — Phase 2 complete: LORA-1/PLUGIN-1/PERF-1/COM-1)** → **2026-05-24 (v1.17 — Voice Full Support Foundation)** → **2026-05-26 (Coverage Sprint — 360 test files / 2500+ tests)** → **2026-05-26 (v1.17.2 — Local Inference Robustness Sprint)** → **2026-05-27 (v1.18.0 — ProForge Humanization & Refinement Sprint)** → **2026-05-27 (v1.18.1 — TypeScript strict-mode compliance sweep)** → **2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger sprint B-1..B-8)** → **2026-05-28 (Phase 3 C-1 — collab-transport security hardening)** → **2026-05-30 (B-1 passphrase UX complete)** → **2026-05-30 (Codespace uplift + Vercel blank screen fix)** → **2026-05-30 (CI unblock — E2E/VRT/Storybook/prune fixes → GitHub Pages deploy re-enabled)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.19.0** — 2026-05-30 (CI fully green, GitHub Pages deploy unblocked)
+**Current version:** **v1.19.0** — 2026-05-31 (i18n audit complete, community templates localized, settings hardened)
 
-**Quality gate (2026-05-30 — Codespace uplift + CI fixes):** lint ✅ · typecheck ✅ · i18n:check ✅ · tests ✅ (4567 / 382 files, 0 failures) · coverage L 73% / F 65% / B 59% / S 71% · build:edge ✅ · build ✅ · E2E/deploy: CI pending (fixes pushed, awaiting GitHub Actions)  
+**Quality gate (2026-05-31):** lint ✅ · typecheck ✅ · i18n:check ✅ (2129 keys × 5 locales) · tests ✅ (12 new communityTemplateService tests) · CI pending (TS fixes pushed, awaiting Quality Gate + downstream jobs)  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+## Follow-up Audit — 2026-05-31 (i18n Audit + Settings + CI Stabilization)
+
+### i18n: Community Templates Localized
+- All 14 community templates now have locale-specific JSON files for DE, FR, ES, IT
+- `communityTemplateService.ts` is locale-aware — tries `index.<lang>.json`, falls back to EN
+- `useFocusTrap.ts` bug fixed: selector now excludes `tabIndex=-1` inputs (mobile keyboard no longer pops on palette open)
+- 27 DE voice settings keys translated; total 2129 keys (up from 2117)
+
+### Settings: New Danger Zone features
+- **Factory Reset** (`services/factoryResetService.ts`): wipes all IDB databases, localStorage, SW caches
+- **Repeat Onboarding**: dispatches `storycraft:openPortal` event; `useApp.ts` listener re-opens WelcomePortal
+
+### CI: Stabilization
+- `deploy-cloudflare-pages.yml` paused (manual trigger only) — eliminates phantom 0-job failures on branch pushes
+- Fixed 3 TS errors (invalid Modal size prop + null-check for test mock) that caused cascade-skip of E2E/Build/Storybook
 
 ---
 

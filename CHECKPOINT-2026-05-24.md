@@ -1,6 +1,47 @@
 # StoryCraft Studio — Checkpoint
-**Date:** 2026-05-24  
-**Session duration:** ~3.5 hours continuous work  
+**Date:** 2026-05-31 (updated)  
+**Last commits (2026-05-31):** `2cb3b55` → `394af8c` → `5966fa2` → `4e69c0d` → `4bfc253` → `0c18198`  
+**Active branch:** main  
+
+## ✅ 2026-05-31 Session — i18n Audit + Settings + CI Fixes
+
+### DE→EN Developer Comment Translation
+- All German inline comments, JSDoc, and developer-facing docs translated to English (`0c18198`)
+- README.md: removed duplicate German section (–181 lines)
+- 49 files changed
+
+### i18n — Community Templates Localized
+- `public/community-templates/index.de.json` + `index.fr.json` + `index.es.json` + `index.it.json`
+- All 14 community templates translated (names, descriptions, section titles, AI-prompt descriptions)
+- `communityTemplateService.ts`: locale-aware loading (tries `index.<lang>.json`, falls back to EN)
+- `TemplateView.tsx`: passes `language` from I18n context, re-fetches on language change
+- 12 new tests for locale loading, fallback, per-locale cache isolation (`4e69c0d`)
+
+### DE i18n Quality Fixes
+- 27 Voice settings keys translated to German (activationMode, TTSMuted, cloudFallback, privacy consent, etc.)
+- `proforge.pipeline.title`, `sceneboard.canvas.modeLabel`, `vc.newBranch`, `sidebar.mindmap`, PWA install help translated
+- All 5 locales: 2117 → 2129 keys (12 new keys for factory reset + onboarding features)
+
+### Settings — New Features
+- **Factory Reset**: Danger Zone section in DataSection; wipes all IDB databases, localStorage, SW caches, reloads
+- **Repeat Onboarding**: button dispatches `storycraft:openPortal` event; `useApp.ts` listener re-opens WelcomePortal
+- `services/factoryResetService.ts`: `wipeAllAppData()` with `indexedDB.databases()` API + known-list fallback
+- Confirmation modal with irreversibility warning in `SettingsModals.tsx` (`5966fa2`)
+
+### Mobile Command Palette — Focus Trap Fix
+- `useFocusTrap.ts`: changed selector to `input:not([tabindex="-1"])` — was including tabIndex=-1 inputs
+- This was root cause of virtual keyboard appearing on mobile when palette opened
+- CommandPalette already had `tabIndex={isTouchDevice ? -1 : 0}` but focusTrap overrode it
+
+### CI Fixes
+- `deploy-cloudflare-pages.yml`: paused automatic push triggers (manual-only now); gate job added
+- Cloudflare phantom 0-job failure eliminated from push-triggered CI runs
+- Fixed 3 TypeScript errors: `size="md"` invalid Modal prop + `mock.calls[0]` null-check (`2cb3b55`)
+- E2E/Build/Storybook no longer cascade-skipped once Quality Gate passes
+
+---
+
+## Previous checkpoint (2026-05-24)  
 **Last commit:** `33cb544`  
 **Git tag:** `v1.17.0` (pushed)  
 
