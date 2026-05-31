@@ -7,6 +7,16 @@
 import { duckdbClient } from '../duckdb/duckdbClient';
 import { logger as log } from '../logger';
 
+// QNBS-v3: Module-level gate — caller (App.tsx / listenerMiddleware) syncs this with the
+//          enableDuckDbAnalytics feature flag. Both DuckDB and localStorage writes are skipped
+//          when disabled, preventing data collection the user hasn't opted into.
+let _telemetryEnabled = false;
+
+/** Called by App.tsx and the featureFlags listener to keep telemetry in sync with the flag. */
+export function setTelemetryEnabled(enabled: boolean): void {
+  _telemetryEnabled = enabled;
+}
+
 const TELEMETRY_STORAGE_KEY = 'storycraft-ai-telemetry';
 const MAX_LOCAL_ENTRIES = 200;
 
@@ -83,13 +93,16 @@ function writeLocalEntry(entry: InferenceTelemetryEntry): void {
 
 /**
  * Record a single inference telemetry entry.
+ * QNBS-v3: No-op when enableDuckDbAnalytics is off — prevents collecting data the user
+ *          hasn't opted into. setTelemetryEnabled() must be called from App.tsx on init.
  * Prefers DuckDB when available; falls back to localStorage.
  */
 export async function recordInferenceTelemetry(entry: InferenceTelemetryEntry): Promise<void> {
+  if (!_telemetryEnabled) return;
   try {
     await writeToDuckDb(entry);
   } catch {
-    // DuckDB unavailable (worker not ready, flag off, etc.) — use local fallback
+    // DuckDB unavailable (worker not ready, etc.) — use local fallback
     writeLocalEntry(entry);
   }
 }

@@ -281,11 +281,9 @@ function recommendBackend(
     return 'onnx-webgpu';
   }
 
-  if (profile.memoryTier === 'high') {
-    return 'transformers-webgpu';
-  }
-
-  if (profile.memoryTier === 'medium') {
+  // QNBS-v3: WebGPU is unavailable at this point (checked above) — transformers-webgpu is not valid;
+  //          use CPU backends graded by available RAM instead
+  if (profile.memoryTier === 'high' || profile.memoryTier === 'medium') {
     return 'onnx-wasm';
   }
 

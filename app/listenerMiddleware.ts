@@ -368,8 +368,11 @@ listenerMiddleware.startListening({
     return curr?.enableAdaptiveAiEngine === true && prev?.enableAdaptiveAiEngine !== true;
   },
   effect: async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: window augmentation for cross-service gate
-    (window as any).__storycraft_adaptive_ai__ = true;
+    // QNBS-v3: guard for SSR / worker contexts where window is not defined
+    if (typeof window !== 'undefined') {
+      // biome-ignore lint/suspicious/noExplicitAny: window augmentation for cross-service gate
+      (window as any).__storycraft_adaptive_ai__ = true;
+    }
     try {
       const { generateDeviceProfile } = await import('../services/ai/localAiDeviceProfiler');
       await generateDeviceProfile();
@@ -387,15 +390,20 @@ listenerMiddleware.startListening({
     return curr?.enableAdaptiveAiEngine !== true && prev?.enableAdaptiveAiEngine === true;
   },
   effect: async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: window augmentation for cross-service gate
-    (window as any).__storycraft_adaptive_ai__ = false;
+    // QNBS-v3: guard for SSR / worker contexts where window is not defined
+    if (typeof window !== 'undefined') {
+      // biome-ignore lint/suspicious/noExplicitAny: window augmentation for cross-service gate
+      (window as any).__storycraft_adaptive_ai__ = false;
+    }
     try {
       const [aiCore, profiler] = await Promise.all([
         import('@domain/ai-core'),
         import('../services/ai/localAiDeviceProfiler'),
       ]);
       aiCore.releaseAllWebLlmEngines();
-      aiCore.releaseAllOnnxSessions();
+      // QNBS-v3: releaseAllOnnxSessions is async — must await to ensure GPU session cleanup
+      //          completes before the engine is re-enabled (avoids dangling WASM handles)
+      await aiCore.releaseAllOnnxSessions();
       profiler.invalidateDeviceProfile();
       logger.info('Adaptive AI engine disabled — GPU resources released');
     } catch (err) {
@@ -403,6 +411,21 @@ listenerMiddleware.startListening({
     }
   },
 });
+
+/**
+ * QNBS-v3: Issue 5 — On cold-start the listener only fires on flag OFF→ON transitions.
+ * If enableAdaptiveAiEngine is already true in localStorage/persisted state, set the
+ * window gate immediately so localAiFacade uses the adaptive path from the first call.
+ */
+export function initAdaptiveAiOnStartup(enabled: boolean): void {
+  if (!enabled) return;
+  if (typeof window !== 'undefined') {
+    // biome-ignore lint/suspicious/noExplicitAny: window augmentation for cross-service gate
+    (window as any).__storycraft_adaptive_ai__ = true;
+  }
+  // Profile generation is handled by useAdaptiveAi on first mount
+  logger.info('Adaptive AI engine: window gate set on cold start');
+}
 
 export const startAppListening = listenerMiddleware.startListening as TypedStartListening<
   RootState,

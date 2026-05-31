@@ -124,6 +124,28 @@ describe('getComputeDevice', () => {
     expect(dev2).toBe(fakeDevice);
     expect(navigator.gpu.requestAdapter).toHaveBeenCalledTimes(1);
   });
+
+  it('concurrent calls share one device (thread-safe mutex)', async () => {
+    // QNBS-v3: Issue 4 — two concurrent callers must not create two GPU devices
+    releaseComputeDevice();
+    const fakeDevice = createFakeDevice();
+    const fakeAdapter = createFakeAdapter();
+    fakeAdapter.requestDevice = vi.fn(async () => fakeDevice);
+
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        gpu: { requestAdapter: vi.fn(async () => fakeAdapter) },
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const [dev1, dev2] = await Promise.all([getComputeDevice(), getComputeDevice()]);
+    expect(dev1).toBe(fakeDevice);
+    expect(dev2).toBe(fakeDevice);
+    // requestAdapter must be called exactly once even under concurrent access
+    expect(navigator.gpu.requestAdapter).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('createComputePipeline', () => {

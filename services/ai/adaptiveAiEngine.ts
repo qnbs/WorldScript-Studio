@@ -35,6 +35,7 @@ export interface TaskConfig {
 }
 
 export interface WarmedModelEntry {
+  task: AiTaskType;
   modelId: string;
   backend: ComputeBackend;
   warmedAt: number;
@@ -218,6 +219,7 @@ class AdaptiveAiEngine {
     }
 
     this.warmedModels.set(cacheKey, {
+      task,
       modelId: config.modelId,
       backend: config.backend,
       warmedAt: Date.now(),

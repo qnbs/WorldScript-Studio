@@ -16,6 +16,8 @@ interface MLCEngine {
       }) => Promise<{ choices: { message?: { content?: string } }[] }>;
     };
   };
+  // QNBS-v3: dispose() releases GPU buffers and model weights — always call on cache eviction
+  dispose?: () => Promise<void>;
 }
 
 interface MLCModule {
@@ -76,7 +78,12 @@ export async function getWebLlmEngine(
       }
     }
     if (oldestKey) {
+      // QNBS-v3: dispose() releases GPU memory before evicting from cache
+      const evicted = engineCache.get(oldestKey);
       engineCache.delete(oldestKey);
+      if (evicted) {
+        void evicted.engine.dispose?.().catch(() => {});
+      }
     }
   }
 
@@ -124,17 +131,33 @@ export async function prewarmWebLlm(
 
 /**
  * Release a cached WebLLM engine to free GPU memory.
- * QNBS-v3: Call when memory pressure is detected or when switching models.
+ * QNBS-v3: When powerPreference is omitted, BOTH cache variants are released to avoid leaking
+ *          the non-default variant when the caller doesn't know which preference was used.
  */
 export function releaseWebLlm(modelId: WebLlmModelId, powerPreference?: PowerPreference): void {
-  const key = getCacheKey(modelId, powerPreference ?? 'high-performance');
-  engineCache.delete(key);
+  if (powerPreference !== undefined) {
+    const key = getCacheKey(modelId, powerPreference);
+    const entry = engineCache.get(key);
+    engineCache.delete(key);
+    if (entry) void entry.engine.dispose?.().catch(() => {});
+  } else {
+    // QNBS-v3: delete both variants when powerPreference is unknown
+    for (const variant of ['high-performance', 'low-power'] as PowerPreference[]) {
+      const key = getCacheKey(modelId, variant);
+      const entry = engineCache.get(key);
+      engineCache.delete(key);
+      if (entry) void entry.engine.dispose?.().catch(() => {});
+    }
+  }
 }
 
 /**
  * Release ALL cached WebLLM engines (emergency memory pressure handler).
  */
 export function releaseAllWebLlmEngines(): void {
+  for (const entry of engineCache.values()) {
+    void entry.engine.dispose?.().catch(() => {});
+  }
   engineCache.clear();
 }
 

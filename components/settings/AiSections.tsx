@@ -3,6 +3,7 @@ import type { FC } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { selectEnableAdaptiveAiEngine } from '../../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import { statusActions } from '../../features/status/statusSlice';
 import { RECOMMENDED_OLLAMA_MODEL_IDS } from '../../services/ai/modelRecommendations';
@@ -44,6 +45,9 @@ const isCustomOllamaModel = (model: string) =>
 
 export const AiSection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
+  // QNBS-v3: Issue 10 — gate at the parent level so useAdaptiveAi hook + device profiling
+  //          never run when the feature flag is off (saves GPU queries + IDB reads on every settings open)
+  const adaptiveAiEnabled = useAppSelector(selectEnableAdaptiveAiEngine);
 
   const creativityMap: Record<string, number> = { Focused: 0, Balanced: 1, Imaginative: 2 };
   const creativityReverseMap = ['Focused', 'Balanced', 'Imaginative'];
@@ -53,8 +57,9 @@ export const AiSection: FC = () => {
       {/* QNBS-v3: Download progress modal renders above settings panel (portal-like absolute position). */}
       <LocalAiDownloadProgress />
       <GpuMetricsPanel />
-      {/* QNBS-v3: B3 — Adaptive AI hardware panel (gated by enableAdaptiveAiEngine flag) */}
-      <AdaptiveAiHardwarePanel />
+      {/* QNBS-v3: B3 — Adaptive AI hardware panel; conditionally mounted so useAdaptiveAi
+          does not trigger device profiling when the feature is disabled */}
+      {adaptiveAiEnabled && <AdaptiveAiHardwarePanel />}
       <AiProviderCard
         advancedAi={settings.advancedAi}
         onAdvancedAiPatch={(patch) =>

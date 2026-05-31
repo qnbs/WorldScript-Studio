@@ -75,35 +75,51 @@ export function clearShaderCache(): void {
 // ------------------------------------------------------------------
 
 let cachedDevice: GPUDevice | null = null;
+// QNBS-v3: in-flight promise prevents concurrent requestDevice() calls when two callers
+//          race on a null cachedDevice — without this guard both create separate GPU devices
+let deviceInitPromise: Promise<GPUDevice | null> | null = null;
 
 export async function getComputeDevice(): Promise<GPUDevice | null> {
   if (cachedDevice) {
     return cachedDevice;
   }
 
+  // QNBS-v3: serialise concurrent init requests; second caller awaits the first
+  if (deviceInitPromise) {
+    return deviceInitPromise;
+  }
+
   if (typeof navigator === 'undefined' || !navigator.gpu) {
     return null;
   }
 
-  const adapter = await navigator.gpu.requestAdapter({
-    powerPreference: 'high-performance',
-  });
-  if (!adapter) {
-    return null;
-  }
+  deviceInitPromise = (async () => {
+    try {
+      const adapter = await navigator.gpu.requestAdapter({
+        powerPreference: 'high-performance',
+      });
+      if (!adapter) return null;
 
-  const device = await adapter.requestDevice();
-  if (!device) {
-    return null;
-  }
+      const device = await adapter.requestDevice();
+      if (!device) return null;
 
-  device.lost.then((info) => {
-    logger.warn('WebGPU device lost', { reason: info.reason, message: info.message });
-    cachedDevice = null;
-  });
+      device.lost.then((info) => {
+        logger.warn('WebGPU device lost', { reason: info.reason, message: info.message });
+        cachedDevice = null;
+        deviceInitPromise = null;
+      });
 
-  cachedDevice = device;
-  return device;
+      cachedDevice = device;
+      return device;
+    } catch (err) {
+      logger.warn('WebGPU device acquisition failed', err as Error);
+      return null;
+    } finally {
+      deviceInitPromise = null;
+    }
+  })();
+
+  return deviceInitPromise;
 }
 
 export function releaseComputeDevice(): void {
@@ -111,6 +127,8 @@ export function releaseComputeDevice(): void {
     cachedDevice.destroy();
     cachedDevice = null;
   }
+  // QNBS-v3: reset in-flight promise so next caller re-creates a fresh device
+  deviceInitPromise = null;
 }
 
 // ------------------------------------------------------------------
