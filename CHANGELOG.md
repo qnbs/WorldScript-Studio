@@ -38,6 +38,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CI: Cloud-first Storybook strategy + Debug workflow** (2026-05-31):
+  - `storybook` CI job: Playwright browser cache (`actions/cache`) to save ~60 s on each run; upload path extended with `**/screenshots/`; comment updated for low-end-hardware context
+  - New `.github/workflows/storybook-debug.yml` — manually triggerable (`workflow_dispatch`) debug workflow with configurable `max_workers` (1–4), `retries` (0–5), and verbose Playwright debug output (`pw:browser*,pw:api`); all artifacts uploaded for 14 days even on failure; named `storybook-debug-<run_number>` for easy lookup
+  - **Cloud-first rationale documented**: Storybook build + test-runner are CI-only; local hardware cannot run them reliably
+
+- **Local AI Perfection Sprint — Phase 1.1: IDB Session Lock & Key Rotation** (2026-05-31, commits `698f326`, `c289949`):
+  - `services/storage/storageEncryptionService.ts` — `lockSession()` clears in-memory key; `rotateKey(oldPassphrase, newPassphrase)` re-encrypts all 5 stores atomically via `reEncryptAllAppData()` + `reEncryptAllSnapshots()`; rate-limiting enforced in `IdbUnlockModal` (3 failures → 5 s lockout; 6 failures → 30 s lockout)
+  - `components/settings/PrivacySection.tsx` — "Lock Session" button wired to `lockSession()` + Redux dispatch; passphrase change flow fully integrated
+  - i18n: 7 new keys × 5 locales (`settings.privacy.lockSession`, `settings.privacy.lockSessionConfirm`, `settings.privacy.sessionLocked`, `settings.privacy.unlockSession`, `settings.privacy.keyRotation`, `settings.privacy.keyRotationSuccess`, `settings.privacy.keyRotationError`)
+
+- **Local AI Perfection Sprint — Phase 1.2: Voice Async Refactor + Silero VAD + Kokoro TTS** (2026-05-31, commit `754aff0`):
+  - All voice engine interfaces (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`) refactored to `async processChunk()` — enables non-blocking pipeline usage
+  - `services/voice/sileroVadEngine.ts` — full Silero VAD v4 implementation via ONNX Runtime Web; LSTM hidden-state threading; `processChunk(Float32Array)` → `{ isSpeech: boolean, probability: number }`; lazy `ort.InferenceSession` creation; ~2 MB model lazy-loaded; gated behind `enableVoiceWasm`
+  - `services/voice/kokoroTtsEngine.ts` — full Kokoro TTS ONNX implementation; text → PCM Float32Array; lazy model session; phoneme-pad preprocessing; `dispose()` releases ONNX session; gated behind `enableVoiceWasm`
+  - TTS factory (`createTtsEngine`) updated to prefer `KokoroTtsEngine` when `enableVoiceWasm` is on; falls back to `WebSpeechTtsEngine`
+  - All existing engine tests updated to async interface
+
+- **Local AI Perfection Sprint — Phase 1.3: GPU Metrics & Diagnostics** (2026-05-31, commits `4441f1f`, `c289949`):
+  - `services/ai/aiProviderService.ts` — `fallbackReason` field added to provider result; tracks whether fallback was due to GPU OOM, worker crash, missing adapter, or missing model
+  - `packages/ai-core/src/index.ts` — `MAX_RESTART_ATTEMPTS = 5` hard cap on worker restarts prevents runaway restart loops after GPU crashes
+  - `services/ai/ecoModeService.ts` — RAM-pressure eco-mode trigger: if `performance.memory.usedJSHeapSize / jsHeapSizeLimit > 0.85`, eco mode activates automatically
+  - `components/settings/AdaptiveAiHardwarePanel.tsx` — 3 troubleshooting cards ("GPU not detected", "Inference crashes", "Slow generation") with WGSL shader diagnostics
+  - i18n: 7 new keys × 5 locales (`settings.ai.gpuDiagnostics.*`)
+
+- **Local AI Perfection Sprint — Phase 2.1: Real Local Text-Gen Pipelines + AbortSignal** (2026-05-31, commit `4441f1f`):
+  - `packages/ai-core/src/index.ts` — `runLocalTextGeneration` refactored into `runWebLlmLayer` + `runTransformersLayer` helpers; echo stubs replaced with real `@huggingface/transformers@3.8.1` (`text-generation`) pipelines
+  - WebLLM layer: SmolLM2-135M-Instruct (128 max tokens, `dtype: 'q8'`); Transformers.js layer: distilgpt2 (64 tokens, `dtype: 'q8'`)
+  - `AbortSignal` propagated end-to-end: `runLocalTextGeneration` → `runWebLlmLayer` → worker task → `inference.worker.ts` pre/post pipeline checks; `onProgress` short-circuits on abort
+  - Error propagation hardened: no empty `catch` blocks; all errors logged via `StructuredLogger` with context
+
+- **Local AI Perfection Sprint — Build: transformers.js v2 → v3 migration** (2026-05-31, commit `9ceafb9`):
+  - `packages/ai-core/package.json` — `@xenova/transformers@2.17.2` → `@huggingface/transformers@3.8.1` (optionalDependencies)
+  - `tsconfig.json` paths + `vite.config.ts` + `vitest.config.ts` aliases updated to `dist/transformers.web.js` (v3 ESM entry)
+  - API migration: `quantized: true` → `dtype: 'q8'`; pipeline typed-overload union too large (TS2590) — loose-cast to `FeatureExtractionPipeline | TextGenerationPipeline` via `as unknown`
+  - **Resolves long-standing "vitest broken / Failed to load url basic" blocker** — v3 ESM structure is correctly tree-shakeable by Vitest
+
 - **C-4 — Cloud-Sync (Cloudflare R2)** — already fully implemented (3 files, 41 tests):
   - `services/cloudSync/cloudSyncBackend.ts` — `StorageBackend` implementation; projects/settings → R2; API keys never sent to cloud; delegation throws on sensitive keys
   - `services/cloudSync/cloudSyncClient.ts` — thin HTTP wrapper around R2 REST / Worker-proxied API (fetch + Bearer token, no AWS SDK)

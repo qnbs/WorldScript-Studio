@@ -63,7 +63,7 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 
 ## v1.20 — Phase 3: v2.0 Foundation (ACTIVE — 2026-05-28)
 
-**Status:** 🔄 In Progress — C-1..C-7 all addressed; C-6 blocked on translator; C-7 ongoing.
+**Status:** 🔄 In Progress — C-1..C-7 all addressed; C-6 blocked on translator; Local AI Perfection Phase 1+2.1 complete (2026-05-31).
 
 **C-1 — collab-transport security peer review** ✅ Done (2026-05-28)
 - 3 findings fixed in `packages/collab-transport/src/crypto.js`: PBKDF2 100k→310k, extractable:true→false, missing `return` on promise.reject(). Documented in AUDIT.md.
@@ -96,6 +96,18 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 **Feature Parity Audit** ✅ Done (2026-05-29) — see `docs/FEATURE-PARITY.md`
 - 8 critical runtime-gate drifts fixed; `features/featureCatalog.ts` + `scripts/audit-feature-parity.ts` added
 - `enablePlotBoardV2` deprecated (v1 board removed in v1.6; toggle hidden, slice retained for localStorage compat)
+
+**Local AI Perfection Sprint** 🔄 Phase 1 + 2.1 complete (2026-05-31)
+- **Build:** `@xenova/transformers@2.17.2` → `@huggingface/transformers@3.8.1` (v3 ESM); resolves vitest broken blocker
+- **Phase 1.1:** IDB session lock + atomic key rotation (`reEncryptAllAppData`/`reEncryptAllSnapshots`); brute-force rate limiting
+- **Phase 1.2:** All voice engines async; `SileroVadEngine` (ONNX LSTM); `KokoroTtsEngine` (ONNX PCM)
+- **Phase 1.3:** GPU fallback reason tracking; worker restart cap (MAX=5); RAM-pressure eco-mode; AdaptiveAiHardwarePanel
+- **Phase 2.1:** Real `text-generation` pipelines (WebLLM: SmolLM2-135M; Transformers.js: distilgpt2); AbortSignal end-to-end
+- **Remaining:** Phase 2.2 (LoRA productionization), 2.3 (perf hardening), 2.4 (coverage), Phase 3 (final QA)
+
+**CI: Cloud-first Storybook** ✅ Done (2026-05-31)
+- Playwright browser cache in `storybook` CI job; `**/screenshots/` in artifact upload
+- New `.github/workflows/storybook-debug.yml` — manually triggered debug workflow with configurable workers/retries
 
 ---
 
