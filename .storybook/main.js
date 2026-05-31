@@ -1,8 +1,9 @@
-// QNBS-v3: CJS shim — .storybook/package.json sets type:commonjs so all .js files here are CJS.
-// Storybook CLI picks up main.js before main.ts; must include framework so build doesn't error.
-// Full viteFinal config (Tailwind, plugin filters) lives in main.ts — used by ts-aware runners.
+// QNBS-v3: CJS shim — two roles:
+// 1. @storybook/test-runner reads this via serverRequire() to discover stories
+// 2. Storybook CLI reads this before main.ts — must have framework to avoid MissingBuilderError
+// Two separate glob entries for maximum glob-library compatibility.
 module.exports = {
-  stories: ['../stories/**/*.stories.{ts,tsx}'],
+  stories: ['../stories/**/*.stories.tsx', '../stories/**/*.stories.ts'],
   addons: ['@storybook/addon-a11y'],
   framework: {
     name: '@storybook/react-vite',
