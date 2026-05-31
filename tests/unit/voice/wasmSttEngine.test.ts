@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ── Mock @xenova/transformers ────────────────────────────────────────────────
+// ── Mock @huggingface/transformers ───────────────────────────────────────────
 const mockPipelineFn = vi.fn().mockResolvedValue({ text: ' hello world' });
-vi.mock('@xenova/transformers', () => ({
+vi.mock('@huggingface/transformers', () => ({
   pipeline: vi.fn().mockResolvedValue(mockPipelineFn),
   env: {
     backends: {
@@ -170,19 +170,19 @@ describe('WasmSttEngine', () => {
     expect(await engine.isAvailable()).toBe(false);
   });
 
-  it('initialize() calls pipeline() with whisper-tiny.en + quantized:true', async () => {
-    const { pipeline } = await import('@xenova/transformers');
+  it('initialize() calls pipeline() with whisper-tiny.en + dtype:q8', async () => {
+    const { pipeline } = await import('@huggingface/transformers');
     const engine = new WasmSttEngine();
     await engine.initialize();
     expect(pipeline).toHaveBeenCalledWith(
       'automatic-speech-recognition',
       'Xenova/whisper-tiny.en',
-      { quantized: true },
+      { dtype: 'q8' },
     );
   });
 
   it('start() requests microphone with getUserMedia', async () => {
-    const { pipeline: _p } = await import('@xenova/transformers');
+    const { pipeline: _p } = await import('@huggingface/transformers');
     const engine = new WasmSttEngine();
     await engine.initialize();
     const onResult = vi.fn();

@@ -91,7 +91,8 @@ export interface VadEngine {
   readonly name: string;
   isAvailable(): Promise<boolean>;
   initialize(): Promise<void>;
-  processChunk(chunk: AudioChunk): VadSegment | null;
+  /** QNBS-v3: async to support ONNX-based VAD (Silero). */
+  processChunk(chunk: AudioChunk): Promise<VadSegment | null>;
   dispose(): Promise<void>;
 }
 
@@ -102,7 +103,7 @@ export interface WakeWordEngine {
   isAvailable(): Promise<boolean>;
   initialize(): Promise<void>;
   /** Process audio; returns true if wake word detected */
-  processChunk(chunk: AudioChunk): boolean;
+  processChunk(chunk: AudioChunk): Promise<boolean>;
   /** Set wake-word phrase (if supported) */
   setPhrase?(phrase: string): void;
   dispose(): Promise<void>;

@@ -1,5 +1,5 @@
 /**
- * WasmSttEngine — local Whisper STT via @xenova/transformers (whisper-tiny.en, Q8 quantized).
+ * WasmSttEngine — local Whisper STT via @huggingface/transformers v3 (whisper-tiny.en, q8 dtype).
  * QNBS-v3: Phase 2 B-2 — eliminates cloud audio routing; gated behind enableVoiceWasm flag.
  * Audio capture: getUserMedia → MediaRecorder → decodeAudioData → Float32Array → Whisper pipeline.
  */
@@ -13,7 +13,7 @@ const MODEL_ID = 'Xenova/whisper-tiny.en';
 // Transcribe every N ms of recorded audio
 const TRANSCRIPTION_INTERVAL_MS = 3_500;
 
-// @xenova/transformers types (imported via alias in vite.config.ts + tsconfig paths)
+// @huggingface/transformers types (imported via alias in vite.config.ts + tsconfig paths)
 type WhisperPipelineResult = { text?: string } | Array<{ text?: string }>;
 type WhisperPipeline = (
   audio: Float32Array,
@@ -50,8 +50,8 @@ export class WasmSttEngine implements SttEngine {
   }
 
   async initialize(): Promise<void> {
-    // QNBS-v3: Dynamic import keeps @xenova/transformers in vendor-ai-onnx chunk, not main bundle.
-    const { pipeline, env } = await import('@xenova/transformers');
+    // QNBS-v3: Dynamic import keeps @huggingface/transformers in vendor-ai-onnx chunk, not main bundle.
+    const { pipeline, env } = await import('@huggingface/transformers');
     // Disable WASM proxy — run inline; proxy adds latency and SharedArrayBuffer dependency.
     interface XenovaEnv {
       backends?: { onnx?: { wasm?: { proxy?: boolean } } };
@@ -60,9 +60,16 @@ export class WasmSttEngine implements SttEngine {
     if (typedEnv.backends?.onnx?.wasm) {
       typedEnv.backends.onnx.wasm.proxy = false;
     }
-    this.whisperPipeline = (await pipeline('automatic-speech-recognition', MODEL_ID, {
-      quantized: true,
-    })) as WhisperPipeline;
+    // QNBS-v3: cast pipeline to a loose signature — v3's typed overload union is too large to
+    //          represent (TS2590). Same pattern as workers/inference.worker.ts loadPipeline().
+    const createPipeline = pipeline as (
+      task: string,
+      model: string,
+      opts: unknown,
+    ) => Promise<unknown>;
+    this.whisperPipeline = (await createPipeline('automatic-speech-recognition', MODEL_ID, {
+      dtype: 'q8',
+    })) as unknown as WhisperPipeline;
     logger.info('[WasmSttEngine] Whisper pipeline ready');
   }
 

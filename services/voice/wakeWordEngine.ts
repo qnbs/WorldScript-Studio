@@ -27,7 +27,7 @@ export class EnergyThresholdWakeWordEngine implements WakeWordEngine {
     this.phrase = phrase.toLowerCase().trim();
   }
 
-  processChunk(_chunk: AudioChunk): boolean {
+  async processChunk(_chunk: AudioChunk): Promise<boolean> {
     // QNBS-v3: This fallback engine does not process raw audio.
     // It relies on the STT engine to provide transcripts and checks them.
     // In Phase 2, Sherpa-ONNX will process raw audio directly.

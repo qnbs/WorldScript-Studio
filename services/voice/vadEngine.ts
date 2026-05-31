@@ -33,7 +33,7 @@ export class WebRtcVadEngine implements VadEngine {
     this.isSpeechActive = false;
   }
 
-  processChunk(chunk: AudioChunk): VadSegment | null {
+  async processChunk(chunk: AudioChunk): Promise<VadSegment | null> {
     // Calculate RMS energy
     let sum = 0;
     for (let i = 0; i < chunk.buffer.length; i++) {
