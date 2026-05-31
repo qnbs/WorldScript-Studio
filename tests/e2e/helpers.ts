@@ -83,10 +83,12 @@ export async function seedGeminiApiKey(page: Page): Promise<void> {
   await page.getByRole('button', { name: /Save Key|Speichern/i }).click();
   await expect(page.getByText(/Configured|Konfiguriert/i)).toBeVisible({ timeout: 15000 });
   await page.keyboard.press('Escape');
-  // QNBS-v3: default localStorageOnly:true blocks cloud AI — must disable so Gemini calls go through
+  // QNBS-v3: default localStorageOnly:true blocks cloud AI — must disable so Gemini calls go through.
+  //          ToggleSwitch uses role="switch" (not "checkbox") — wrong role means the locator never finds it.
   await page.getByRole('button', { name: /Privacy & Security/i }).click();
-  const localOnlyToggle = page.getByRole('checkbox', { name: /Local Storage Only/i });
-  if (await localOnlyToggle.isChecked().catch(() => false)) {
+  const localOnlyToggle = page.getByRole('switch', { name: /Local Storage Only/i });
+  const isOn = await localOnlyToggle.getAttribute('aria-checked').catch(() => null);
+  if (isOn === 'true') {
     await localOnlyToggle.click();
   }
 }
@@ -94,6 +96,9 @@ export async function seedGeminiApiKey(page: Page): Promise<void> {
 /**
  * Vite dev server keeps the HMR/WebSocket busy → `networkidle` often never settles.
  * Wait for either the welcome portal primary action or the desktop sidebar shell.
+ * QNBS-v3: Also waits for the body theme class to be applied by the App useEffect so
+ *          that CSS custom properties (--sc-text-primary, etc.) are fully resolved before
+ *          axe or visual checks run — without this, variables resolve to intermediate values.
  */
 export async function waitForSpaReady(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded');
@@ -104,6 +109,17 @@ export async function waitForSpaReady(page: Page): Promise<void> {
       .getByRole('button', { name: /Start a New Project/i })
       .waitFor({ state: 'visible', timeout: 25000 }),
   ]);
+  // QNBS-v3: theme class is applied in App useEffect after first render — wait for it so
+  //          CSS variable values are stable (avoids axe false-positives on mid-transition colors)
+  await page
+    .waitForFunction(
+      () =>
+        document.body.classList.contains('light-theme') ||
+        document.body.classList.contains('dark-theme') ||
+        document.body.classList.contains('sepia-theme'),
+      { timeout: 5000 },
+    )
+    .catch(() => {}); // best-effort: if no theme class, continue anyway
 }
 
 /**

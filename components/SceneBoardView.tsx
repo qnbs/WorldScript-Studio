@@ -190,9 +190,11 @@ const SceneBoardUI: FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 justify-end">
+          {/* QNBS-v3: role="toolbar" not "tablist" — these are toggle buttons (aria-pressed), not tabs;
+              tablist requires role="tab" children which conflicts with aria-pressed semantics */}
           <div
             className="flex flex-wrap items-center gap-2"
-            role="tablist"
+            role="toolbar"
             aria-label={t('sceneboard.timeline.modeTabs')}
           >
             <Button
