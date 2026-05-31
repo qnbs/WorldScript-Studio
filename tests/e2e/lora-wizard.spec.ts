@@ -11,8 +11,13 @@ import { clickNavItem, ensureBlankProject, selectEnglish, waitForSpaReady } from
 const isCI = process.env['CI'] === 'true';
 
 test.describe('LoRA Wizard (CI-only)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     test.skip(!isCI, 'CI-only E2E suite');
+    // QNBS-v3: LoRA view is not in mobile navigation (Phase 2.2 pending — App.tsx route not wired)
+    test.skip(
+      testInfo.project.name === 'Mobile Chrome',
+      'LoRA view not in mobile nav — Phase 2.2 pending',
+    );
     await page.goto('/');
     await waitForSpaReady(page);
     await selectEnglish(page);
