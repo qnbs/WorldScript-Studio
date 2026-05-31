@@ -82,7 +82,7 @@ test.describe('Accessibility (axe)', () => {
     await page.goto('/');
     await selectEnglish(page);
     await ensureBlankProject(page);
-    await clickNavItem(page, /World|Setting/i);
+    await clickNavItem(page, /World Building/i);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(500);
     await assertNoSeriousViolations(page, 'world-view');
@@ -92,7 +92,7 @@ test.describe('Accessibility (axe)', () => {
     await page.goto('/');
     await selectEnglish(page);
     await ensureBlankProject(page);
-    await clickNavItem(page, /Outline|Plot Board|Board/i);
+    await clickNavItem(page, /Scene Board/i);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(500);
     await assertNoSeriousViolations(page, 'plot-board');

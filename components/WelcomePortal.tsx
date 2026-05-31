@@ -40,7 +40,8 @@ const LanguageSelector = () => {
             key={code}
             type="button"
             onClick={() => setLanguage(code)}
-            className={`px-2.5 py-1 text-xs sm:text-sm rounded-md transition-colors ${language === code ? 'bg-indigo-600 text-white' : 'bg-[var(--sc-surface-overlay)]/50 text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)]'}`}
+            // QNBS-v3: design tokens ensure contrast in all themes; bg-indigo-600/text-secondary failed WCAG AA (2.91:1/2.03:1)
+            className={`px-2.5 py-1 text-xs sm:text-sm rounded-md transition-colors ${language === code ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]' : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
           >
             {label}
           </button>
