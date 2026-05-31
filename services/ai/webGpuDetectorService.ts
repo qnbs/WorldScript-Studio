@@ -34,10 +34,12 @@ export async function detectWebGpuDetails(
 
   let adapter: GPUAdapter | null = null;
   try {
-    adapter = await (navigator.gpu as GPU).requestAdapter({
-      powerPreference: opts.powerPreference,
-      forceFallbackAdapter: opts.forceFallbackAdapter,
-    });
+    // QNBS-v3: cast options to avoid exactOptionalPropertyTypes overload mismatch
+    const adapterOpts: GPURequestAdapterOptions = {};
+    if (opts.powerPreference !== undefined) adapterOpts.powerPreference = opts.powerPreference;
+    if (opts.forceFallbackAdapter !== undefined)
+      adapterOpts.forceFallbackAdapter = opts.forceFallbackAdapter;
+    adapter = await (navigator.gpu as GPU).requestAdapter(adapterOpts);
   } catch {
     return { status: 'unknown' };
   }

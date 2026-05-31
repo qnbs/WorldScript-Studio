@@ -306,10 +306,11 @@ export async function runLocalTextGeneration(
   try {
     const { pipeline } = await import('@xenova/transformers');
     if (typeof pipeline === 'function') {
+      // QNBS-v3: cast to unknown first since @xenova/transformers types may not include `device`
       const generator = await pipeline('text-generation', resolvedOnnxModelId, {
         quantized: true,
         device: 'wasm',
-      });
+      } as unknown as Parameters<typeof pipeline>[2]);
       const result = (await generator(sanitizedPrompt, {
         max_new_tokens: 128,
         do_sample: true,
@@ -330,10 +331,11 @@ export async function runLocalTextGeneration(
     const { pipeline } = await import('@xenova/transformers');
     if (typeof pipeline === 'function') {
       const useGpu = hasWebGpu && gpuTabLeader;
+      // QNBS-v3: cast to unknown first since @xenova/transformers types may not include `device`
       const generator = await pipeline('text-generation', resolvedOnnxModelId, {
         quantized: true,
         device: useGpu ? 'webgpu' : 'wasm',
-      });
+      } as unknown as Parameters<typeof pipeline>[2]);
       const result = (await generator(sanitizedPrompt, {
         max_new_tokens: 128,
         do_sample: true,

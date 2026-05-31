@@ -144,10 +144,10 @@ export const AdaptiveAiHardwarePanel: FC = () => {
           <ul className="space-y-0.5">
             {warmedModels.map((m) => (
               <li
-                key={`${m.task}:${m.modelId}`}
+                key={`${m.backend}:${m.modelId}`}
                 className="text-sc-xs text-[var(--sc-text-secondary)] font-mono truncate"
               >
-                <span className="text-[var(--sc-text-tertiary)]">{m.task}</span>
+                <span className="text-[var(--sc-text-tertiary)]">{m.backend}</span>
                 {' → '}
                 {m.modelId}
               </li>
