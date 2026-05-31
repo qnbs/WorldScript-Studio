@@ -32,6 +32,10 @@ export const FeatureFlagsSection: FC = () => {
     { key: 'enableVoiceSupport', labelKey: 'settings.featureFlags.enableVoiceSupport' },
     { key: 'enableVoiceWasm', labelKey: 'settings.featureFlags.enableVoiceWasm' },
     { key: 'enableProForge', labelKey: 'settings.featureFlags.enableProForge' },
+    // QNBS-v3: Edge-AI Perfection Cycle — adaptive engine, WebNN, and compute shaders
+    { key: 'enableAdaptiveAiEngine', labelKey: 'settings.featureFlags.enableAdaptiveAiEngine' },
+    { key: 'enableWebnnInference', labelKey: 'settings.featureFlags.enableWebnnInference' },
+    { key: 'enableComputeShaders', labelKey: 'settings.featureFlags.enableComputeShaders' },
     // QNBS-v3: enableIdbAtRestEncryption removed — toggling without passphrase setup blocks all users.
     // Dedicated UI lives in Settings → Privacy (PrivacySection.tsx).
   ];
