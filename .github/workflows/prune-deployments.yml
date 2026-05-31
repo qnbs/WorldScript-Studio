@@ -21,64 +21,77 @@ jobs:
     permissions:
       deployments: write
     steps:
-      - name: Delete stale deployments — keep latest 3
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      - name: Delete stale deployments — keep latest 3 per environment
+        # QNBS-v3: v9.0.0 uses node24 — v7 was node20 (deprecated June 2026)
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
         with:
           script: |
             const KEEP = 3;
-            const env = 'github-pages';
 
-            // QNBS-v3: Paginate to fetch ALL deployments — per_page:100 single-page fetch misses
-            // deployments beyond the first 100, leaving them permanently un-pruned.
+            // QNBS-v3: Paginate ALL deployments (not just one environment) — Vercel creates
+            //          "Production" and "Preview" environments that accumulate independently
+            //          of the "github-pages" environment; the old filter missed them entirely.
             const allDeployments = await github.paginate(
               github.rest.repos.listDeployments,
               {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                environment: env,
                 per_page: 100,
               },
             );
 
-            // Sort descending by ID (newest first) and skip the ones we want to keep
-            const toDelete = allDeployments
-              .sort((a, b) => b.id - a.id)
-              .slice(KEEP);
-
-            if (toDelete.length === 0) {
-              core.info(`Nothing to prune — only ${allDeployments.length} deployment(s) found.`);
-              return;
+            // Group by environment, sort each group newest-first, keep the first KEEP
+            const byEnv = {};
+            for (const dep of allDeployments) {
+              const env = dep.environment || 'unknown';
+              (byEnv[env] ??= []).push(dep);
             }
 
-            core.info(`Found ${allDeployments.length} deployment(s) total; pruning ${toDelete.length}, keeping ${KEEP} latest.`);
+            let totalDeleted = 0;
+            let totalFailed = 0;
 
-            let deleted = 0;
-            let failed = 0;
-            for (const dep of toDelete) {
-              // A deployment must be marked inactive before it can be deleted
-              try {
-                await github.rest.repos.createDeploymentStatus({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  deployment_id: dep.id,
-                  state: 'inactive',
-                });
-              } catch (e) {
-                core.warning(`Could not inactivate deployment ${dep.id}: ${e.message}`);
+            for (const [env, deps] of Object.entries(byEnv)) {
+              const sorted = deps.sort((a, b) => b.id - a.id);
+              const toDelete = sorted.slice(KEEP);
+
+              if (toDelete.length === 0) {
+                core.info(`[${env}] Nothing to prune — only ${deps.length} deployment(s).`);
+                continue;
               }
 
-              try {
-                await github.rest.repos.deleteDeployment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  deployment_id: dep.id,
-                });
-                core.info(`Deleted deployment ${dep.id} (${dep.ref} @ ${dep.created_at})`);
-                deleted++;
-              } catch (e) {
-                core.warning(`Could not delete deployment ${dep.id}: ${e.message}`);
-                failed++;
+              core.info(`[${env}] ${deps.length} total → pruning ${toDelete.length}, keeping ${KEEP} latest.`);
+
+              let deleted = 0;
+              let failed = 0;
+              for (const dep of toDelete) {
+                // A deployment must be inactive before it can be deleted
+                try {
+                  await github.rest.repos.createDeploymentStatus({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    deployment_id: dep.id,
+                    state: 'inactive',
+                  });
+                } catch (e) {
+                  core.warning(`[${env}] Could not inactivate ${dep.id}: ${e.message}`);
+                }
+
+                try {
+                  await github.rest.repos.deleteDeployment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    deployment_id: dep.id,
+                  });
+                  deleted++;
+                } catch (e) {
+                  core.warning(`[${env}] Could not delete ${dep.id}: ${e.message}`);
+                  failed++;
+                }
               }
+
+              core.info(`[${env}] Done: ${deleted} deleted, ${failed} failed.`);
+              totalDeleted += deleted;
+              totalFailed += failed;
             }
 
-            core.info(`Done: ${deleted} deleted, ${failed} failed, ${KEEP} kept.`);
+            core.info(`All environments: ${totalDeleted} deleted, ${totalFailed} failed.`);
