@@ -1,0 +1,33 @@
+// QNBS-v3: Desktop Lighthouse config — runs alongside the mobile config (.lighthouserc.cjs).
+// Serves production dist (pnpm run preview) and audits with desktop emulation.
+// continue-on-error: true in ci.yml until desktop baselines stabilise.
+module.exports = {
+  ci: {
+    collect: {
+      startServerCommand: 'pnpm run preview',
+      startServerReadyPattern: 'Local',
+      url: ['http://127.0.0.1:4173/StoryCraft-Studio/'],
+      numberOfRuns: 2,
+      settings: {
+        preset: 'desktop',
+        throttlingMethod: 'simulate',
+      },
+    },
+    assert: {
+      assertions: {
+        // QNBS-v3: Accessibility is an error gate on desktop too — mirrors mobile + axe-core E2E commitment.
+        'categories:accessibility': ['error', { minScore: 0.95 }],
+        // QNBS-v3: Desktop performance bar is higher than mobile (no throttling penalty).
+        'categories:performance': ['warn', { minScore: 0.7 }],
+        'categories:seo': ['warn', { minScore: 0.8 }],
+        'first-contentful-paint': ['warn', { maxNumericValue: 3000 }],
+        'largest-contentful-paint': ['warn', { maxNumericValue: 5000 }],
+        'total-blocking-time': ['warn', { maxNumericValue: 300 }],
+        'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],
+      },
+    },
+    upload: {
+      target: 'temporary-public-storage',
+    },
+  },
+};

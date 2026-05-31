@@ -39,6 +39,9 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: src-tauri
+          cache-all-crates: true
+          # QNBS-v3: bump prefix-key when changing Rust channel or after major Cargo.lock churn
+          prefix-key: "v1"
 
       - name: Install Linux dependencies (WebKitGTK)
         if: contains(matrix.os, 'ubuntu')

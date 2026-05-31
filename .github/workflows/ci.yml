@@ -131,10 +131,8 @@ jobs:
     # QNBS-v3: ignoreStatic:true drops runtime from ~90 min to ~10 min; 20 min is ample headroom on shared runners
     timeout-minutes: 20
     needs: [quality]
-    # QNBS-v3: informational only — score is ~0.93% overall because most mutants in these 9 files
-    # have NoCoverage status (perTest analysis; no unit tests cover them directly). The real-time
-    # progress (30→87%) reflects covered-mutant score only. break:null until coverage improves.
-    continue-on-error: true
+    # QNBS-v3: break:75 in stryker.conf.json gates the score — score < 75 fails this job.
+    # NoCoverage mutants don't count against the denominator (ignoreStatic:true excludes them).
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup
@@ -287,7 +285,8 @@ jobs:
   lighthouse:
     name: 🔦 Lighthouse CI
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # QNBS-v3: 25 min — two lhci runs (mobile 3× + desktop 2×); was 15 min for mobile only
+    timeout-minutes: 25
     needs: [build]
     continue-on-error: false
     steps:
@@ -302,8 +301,16 @@ jobs:
 
       # QNBS-v3: no --assert.exitCode flag — let .lighthouserc.cjs assertions drive the
       # exit code; error-level assertions (CLS, accessibility) will correctly fail this job.
-      - name: Run Lighthouse CI
+      - name: Run Lighthouse CI (mobile)
         run: pnpm exec lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      # QNBS-v3: desktop run is continue-on-error until baselines stabilise; accessibility
+      # and CLS are still error gates so critical issues surface immediately.
+      - name: Run Lighthouse CI (desktop)
+        run: pnpm exec lhci autorun --config=.lighthouserc.desktop.cjs
+        continue-on-error: true
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 

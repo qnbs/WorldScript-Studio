@@ -53,14 +53,13 @@ export default defineConfig({
         'packages/collab-transport/src/y-webrtc.js',
         'packages/collab-transport/src/crypto.js',
       ],
-      // QNBS-v3: Phase 3 C-7 — raised after 105 new tests (supervisorAgent, baseAgent, geminiService
-      // streaming, helpCatalog, idbCore utilities, loraThunks); CI will confirm actual numbers.
-      // Previous thresholds: L71/F63/B57/S69 (2026-05-26).
+      // QNBS-v3: C-7 sprint increment — raised +3 across all metrics (2026-05-31).
+      // Previous thresholds: L73/F65/B58/S71 (2026-05-30). Before that: L71/F63/B57/S69.
       thresholds: {
-        lines: 73,
-        functions: 65,
-        branches: 58,
-        statements: 71,
+        lines: 76,
+        functions: 68,
+        branches: 61,
+        statements: 74,
         perFile: false,
       },
     },
