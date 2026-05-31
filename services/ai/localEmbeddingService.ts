@@ -2,6 +2,9 @@
 //          Uses Xenova/all-MiniLM-L6-v2 (384-dim, L2-normalized) for semantic RAG and cross-project search.
 //          Adapted from CannaGuide-2025 embeddingService.ts patterns.
 
+// QNBS-v3: logger import was missing — restartWorker() references logger.error on restart-limit.
+import { logger } from '../logger';
+
 const EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 const MAX_INPUT_CHARS = 512;
 const MICRO_BATCH_SIZE = 8;
@@ -27,6 +30,15 @@ const PONG_TIMEOUT_MS = 5_000;
 let pingTimer: ReturnType<typeof setInterval> | null = null;
 let pongTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
+// QNBS-v3: Exponential backoff for worker restart to prevent infinite spin on permanent failure.
+let restartAttemptCount = 0;
+const MAX_RESTART_ATTEMPTS = 5;
+const MAX_RESTART_BACKOFF_MS = 60_000;
+
+function getRestartBackoffMs(): number {
+  return Math.min(2 ** restartAttemptCount * 1000, MAX_RESTART_BACKOFF_MS);
+}
+
 function clearWorkerHealthTimers(): void {
   if (pingTimer) {
     clearInterval(pingTimer);
@@ -47,7 +59,20 @@ function restartWorker(): void {
   if (import.meta.env?.DEV) {
     console.warn('[localEmbeddingService] Inference worker restarted (missed health check pong)');
   }
-  startWorkerHealthCheck();
+  restartAttemptCount++;
+  if (restartAttemptCount > MAX_RESTART_ATTEMPTS) {
+    logger.error(
+      `[localEmbeddingService] Worker restart limit (${MAX_RESTART_ATTEMPTS}) reached. ` +
+        'Embedding service is offline. Reload the app to retry.',
+    );
+    return;
+  }
+  const backoff = getRestartBackoffMs();
+  if (backoff > 0) {
+    setTimeout(() => startWorkerHealthCheck(), backoff);
+  } else {
+    startWorkerHealthCheck();
+  }
 }
 
 function startWorkerHealthCheck(): void {
@@ -57,12 +82,14 @@ function startWorkerHealthCheck(): void {
     if (!w) return;
     w.postMessage({ type: 'WORKER_PING' });
     pongTimeoutTimer = setTimeout(() => {
-      // QNBS-v3: No pong received — worker is dead or hung; restart.
+      // QNBS-v3: No pong received — worker is dead or hung; restart with backoff.
       restartWorker();
     }, PONG_TIMEOUT_MS);
 
     const pongHandler = (ev: MessageEvent<{ type?: string }>) => {
       if (ev.data?.type === 'WORKER_PONG') {
+        // QNBS-v3: Successful pong resets the restart counter.
+        restartAttemptCount = 0;
         if (pongTimeoutTimer) {
           clearTimeout(pongTimeoutTimer);
           pongTimeoutTimer = null;

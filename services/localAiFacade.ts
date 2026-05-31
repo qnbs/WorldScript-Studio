@@ -18,6 +18,7 @@ export async function generateLocalText(
   modelId?: string,
   onProgress?: (report: WebLlmProgressReport) => void,
   loraAdapterId?: string,
+  signal?: AbortSignal,
 ): Promise<LocalAiResponse> {
   const taskId =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -51,7 +52,6 @@ export async function generateLocalText(
   const startedAt = performance.now();
   try {
     // QNBS-v3: When adaptive AI engine is enabled, use its task config for optimal backend/model.
-    //          Otherwise fall back to legacy runLocalTextGeneration.
     const adaptiveEnabled =
       typeof window !== 'undefined' &&
       (window as unknown as Record<string, boolean>)['__storycraft_adaptive_ai__'] === true;
@@ -64,7 +64,7 @@ export async function generateLocalText(
       const config = await adaptiveAiEngine.getTaskConfig('text-gen-short');
       usedBackend = config.backend;
       usedModel = config.modelId;
-      result = await runLocalTextGeneration(prompt, config.modelId, onProgress);
+      result = await runLocalTextGeneration(prompt, config.modelId, onProgress, signal);
       adaptiveAiEngine.recordTaskLatency(
         'text-gen-short',
         config.backend,
@@ -72,7 +72,7 @@ export async function generateLocalText(
         performance.now() - startedAt,
       );
     } else {
-      result = await runLocalTextGeneration(prompt, modelId, onProgress);
+      result = await runLocalTextGeneration(prompt, modelId, onProgress, signal);
       usedBackend = result.layer;
     }
 
@@ -94,9 +94,10 @@ export async function generateLocalText(
       .catch(() => {
         /* telemetry is best-effort */
       });
-
     return result;
-  } catch {
+  } catch (err) {
+    // QNBS-v3: Log the actual error so telemetry and bug reports are useful.
+    logger.warn('Local text generation failed:', err);
     localWorkerBus.recordResult(performance.now() - startedAt, false);
 
     // QNBS-v3: C2 — record failure telemetry
