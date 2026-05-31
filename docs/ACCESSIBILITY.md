@@ -33,6 +33,8 @@ Maintainer reference: where accessibility is anchored in the app and how we veri
 | `BookPreviewView` | `role="article"` per section (semantic HTML already), `aria-live="off"` on container |
 | `SubplotPanel` | Color picker `<input type="color">` labelled via `aria-label` |
 | Download-progress modal | `role="progressbar"` + `aria-valuenow` / `aria-valuemin` / `aria-valuemax` (WCAG 2.2) |
+| `SceneBoardView` display-mode selector | `role="toolbar"` + `aria-label` — **not** `role="tablist"`; the buttons use `aria-pressed` (toggle button pattern), which is incompatible with `role="tab"` semantics |
+| `ActSwimlane` DnD list | `<ul>` + `<li>` — DnD kit adds `role="button"` to the card `<div>`; wrapping in `<li>` satisfies the axe `list` rule (ul must contain only li children) |
 
 ## Manual Checks
 
@@ -42,7 +44,7 @@ Maintainer reference: where accessibility is anchored in the app and how we veri
 
 ## Automated Checks
 
-- **Playwright:** [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts) — axe-core; critical/serious violations must be zero. Color-contrast rule is intentionally disabled (design tokens are tracked separately — use Storybook `addon-a11y` or a targeted local axe run with `color-contrast` enabled when refining tokens).
+- **Playwright:** [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts) — axe-core; **critical and serious violations (including `color-contrast`) must be zero** — the test filters by `impact === 'serious' || impact === 'critical'` and fails on any match. WCAG AA minimum ratio: 4.5:1 for normal text, 3:1 for large text. Always use design tokens (`--sc-text-primary`, `--sc-text-on-accent`, `--sc-accent`, etc.) — never hardcoded Tailwind colors like `bg-indigo-600` which may not meet contrast thresholds. Use Storybook `addon-a11y` for component-level contrast audits during development.
 - **Lighthouse CI:** [`.lighthouserc.cjs`](../.lighthouserc.cjs) — Accessibility category at **`error`** level `minScore: 0.95` — blocks CI on regression.
 - **Storybook:** Dev-dependency `@storybook/addon-a11y` — use the A11y tab after `pnpm run storybook`.
 - **Biome:** `a11y/*` lint rules run on every commit via pre-commit hook; warnings fail CI.

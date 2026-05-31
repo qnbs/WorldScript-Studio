@@ -558,10 +558,11 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-05-28, v1.19.0):**
-- **4 192+ unit tests** across **392 test files** — all passing
-- Coverage: **73.06 % lines · 58.79 % branches · 65.18 % functions · 71.29 % statements**
-- Vitest thresholds: lines ≥ 71 · statements ≥ 69 · branches ≥ 57 · functions ≥ 63 — all green
+**Current test metrics (2026-06-01, v1.19.0+):**
+- **4 200+ unit tests** across **390+ test files** — all passing (2026-06-01 CI run)
+- Coverage: **73 % lines · 58 % branches · 65 % functions · 71 % statements** (CI-reported; see Codecov badge)
+- Vitest thresholds: lines ≥ 73 · statements ≥ 71 · branches ≥ 58 · functions ≥ 65 — all green
+- i18n: **2160 keys × 5 locales** (en/de/fr/es/it); ar/he stubs (2074 keys)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

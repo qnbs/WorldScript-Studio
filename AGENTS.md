@@ -125,7 +125,7 @@ StoryCraft-Studio/
 - `vite.config.ts` — dev server (port 3000), PWA plugin, manual chunks, `@tauri-apps/*` externalized for web builds
 - `tsconfig.json` — `strict: true`, `exactOptionalPropertyTypes: true`, `noUnusedLocals: true`, `noUnusedParameters: true`, `noUncheckedIndexedAccess: true`, `noPropertyAccessFromIndexSignature: true`
 - `biome.json` — lint + format rules; `a11y`, `security`, `correctness` rules enabled; line width 100; 2-space indent
-- `vitest.config.ts` — coverage thresholds (lines 76, branches 61, functions 68, statements 74), `maxWorkers: 1`
+- `vitest.config.ts` — coverage thresholds (lines 73, branches 58, functions 65, statements 71), `maxWorkers: 1`
 - `playwright.config.ts` — E2E projects: Chromium desktop + Pixel 5 mobile in CI; Firefox + optional mobile locally
 - `turbo.json` — task graph for `build`, `dev`, `lint`, `typecheck`, `test`, `mutation`
 - `pnpm-workspace.yaml` — workspace packages + `onlyBuiltDependencies` allowlist
