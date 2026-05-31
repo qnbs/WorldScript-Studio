@@ -126,7 +126,6 @@ export const SettingsModals: FC = () => {
         isOpen={true}
         onClose={() => setModal({ state: 'closed', payload: {} })}
         title={t('settings.data.dangerZone.factoryReset.modalTitle')}
-        size="md"
       >
         <div className="space-y-4">
           <p className="text-[var(--sc-text-secondary)]">

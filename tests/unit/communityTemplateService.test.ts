@@ -115,7 +115,7 @@ describe('fetchCommunityTemplates', () => {
     const result = await fetchCommunityTemplates('de');
 
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect((fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain('index.de.json');
+    expect((fetch as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toContain('index.de.json');
     expect(result.templates).toEqual(mockDeTemplates);
   });
 
@@ -154,7 +154,7 @@ describe('fetchCommunityTemplates', () => {
     await fetchCommunityTemplates('ar'); // ar is not a translated locale
 
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect((fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).not.toContain('index.ar.json');
+    expect((fetch as ReturnType<typeof vi.fn>).mock.calls[0]![0]).not.toContain('index.ar.json');
   });
 });
 
