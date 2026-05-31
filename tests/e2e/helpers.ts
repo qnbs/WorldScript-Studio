@@ -83,6 +83,12 @@ export async function seedGeminiApiKey(page: Page): Promise<void> {
   await page.getByRole('button', { name: /Save Key|Speichern/i }).click();
   await expect(page.getByText(/Configured|Konfiguriert/i)).toBeVisible({ timeout: 15000 });
   await page.keyboard.press('Escape');
+  // QNBS-v3: default localStorageOnly:true blocks cloud AI — must disable so Gemini calls go through
+  await page.getByRole('button', { name: /Privacy & Security/i }).click();
+  const localOnlyToggle = page.getByRole('checkbox', { name: /Local Storage Only/i });
+  if (await localOnlyToggle.isChecked().catch(() => false)) {
+    await localOnlyToggle.click();
+  }
 }
 
 /**
