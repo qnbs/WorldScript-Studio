@@ -91,11 +91,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
-      // QNBS-v3: @xenova/transformers lives in packages/ai-core; Rolldown can't hoist it from
-      // a nested workspace node_modules. Alias mirrors the vitest.config.ts fix.
-      '@xenova/transformers': path.resolve(
+      // QNBS-v3: @huggingface/transformers (transformers.js v3) lives in packages/ai-core; Rolldown
+      // can't hoist it from a nested workspace node_modules. Alias mirrors the vitest.config.ts fix.
+      // v3 ships a bundled web entry at dist/transformers.web.js (no src/ in the published package).
+      '@huggingface/transformers': path.resolve(
         __dirname,
-        './packages/ai-core/node_modules/@xenova/transformers/src/transformers.js',
+        './packages/ai-core/node_modules/@huggingface/transformers/dist/transformers.web.js',
       ),
       // QNBS-v3: B-3 vendor fork — resolve @domain/collab-transport to the workspace package source
       '@domain/collab-transport': path.resolve(
@@ -176,7 +177,7 @@ export default defineConfig({
             return 'export-vendor-docx-ebook';
           }
           // QNBS-v3: onnx/transformers exceed Workbox 8 MiB SW cache limit — separate chunk prevents exclusion.
-          if (id.includes('onnxruntime-web') || id.includes('@xenova/transformers')) {
+          if (id.includes('onnxruntime-web') || id.includes('@huggingface/transformers')) {
             return 'vendor-ai-onnx';
           }
           // QNBS-v3: DuckDB-WASM bundle is ~2 MB gzip; isolate so SW cache exclusion glob matches vendor-duckdb*.
