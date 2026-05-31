@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-// QNBS-v3: Off-main-thread inference worker for @xenova/transformers (ONNX backend).
+// QNBS-v3: Off-main-thread inference worker for @huggingface/transformers v3 (ONNX backend).
 //          Uses WorkerBus request/response protocol with messageId correlation.
 //          Adapted from CannaGuide-2025 inference.worker.ts patterns for creative-writing tasks.
 
@@ -47,7 +47,7 @@ let transformersModule: { pipeline: (...args: unknown[]) => Promise<unknown> } |
 async function getTransformers() {
   if (!transformersModule) {
     // Dynamic import so the worker bundle is only loaded when actually needed.
-    const mod = await import('@xenova/transformers');
+    const mod = await import('@huggingface/transformers');
     transformersModule = mod as unknown as typeof transformersModule;
   }
   return transformersModule!;
@@ -90,16 +90,22 @@ async function loadPipeline(task: WorkerTaskType, modelId: string, quantized = t
   const pipe = await (pipeline as (task: string, model: string, opts: unknown) => Promise<unknown>)(
     task,
     modelId,
-    { quantized, device },
+    // QNBS-v3: transformers.js v3 replaced `quantized: boolean` with `dtype`; q8 ≈ the old quantized=true.
+    { dtype: quantized ? 'q8' : 'fp32', device },
   );
   pipelineCache.set(cacheKey, { pipeline: pipe, lastUsedAt: Date.now() });
   return pipe;
 }
 
-async function runInference(req: InferenceRequest): Promise<InferenceResponse> {
+async function runInference(
+  req: InferenceRequest,
+  signal?: AbortSignal,
+): Promise<InferenceResponse> {
   const start = Date.now();
   try {
+    if (signal?.aborted) throw new Error('Aborted');
     const pipe = await loadPipeline(req.task, req.modelId, req.pipelineOptions?.quantized ?? true);
+    if (signal?.aborted) throw new Error('Aborted');
 
     const opts = req.inferenceOptions ?? {};
     let rawResult: unknown;
@@ -181,7 +187,7 @@ self.addEventListener('message', (event: MessageEvent) => {
   const controller = new AbortController();
   abortMap.set(data.messageId, controller);
 
-  void runInference(data).then((response) => {
+  void runInference(data, controller.signal).then((response) => {
     abortMap.delete(data.messageId);
     self.postMessage(response);
   });

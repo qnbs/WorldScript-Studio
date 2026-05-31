@@ -3,9 +3,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 // QNBS-v3: Relative path mock — same resolution trick as aiCoreFallbackPaths.test.ts.
 const mockPipelineFn = vi.hoisted(() => vi.fn());
 
-vi.mock('../../packages/ai-core/node_modules/@xenova/transformers/src/transformers.js', () => ({
-  pipeline: mockPipelineFn,
-}));
+vi.mock(
+  '../../packages/ai-core/node_modules/@huggingface/transformers/dist/transformers.web.js',
+  () => ({
+    pipeline: mockPipelineFn,
+  }),
+);
 
 // Simulate worker globals. postMessages are pushed to `posted` for assertion.
 const posted: unknown[] = [];

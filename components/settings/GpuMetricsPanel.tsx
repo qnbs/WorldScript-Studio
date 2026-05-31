@@ -13,11 +13,13 @@ import {
 } from '../../services/ai/deviceHealthService';
 import { ecoModeService } from '../../services/ai/ecoModeService';
 import { gpuResourceManager } from '../../services/ai/gpuResourceManager';
+import { getLastAiFallbackReason } from '../../services/aiProviderService';
 
 interface GpuState {
   deviceClass: DeviceClass;
   queueState: ReturnType<typeof gpuResourceManager.getQueueState>;
   isEco: boolean;
+  fallbackReason: string;
 }
 
 function deviceClassColor(cls: DeviceClass): string {
@@ -41,6 +43,7 @@ export const GpuMetricsPanel: FC = () => {
     deviceClass: 'unknown',
     queueState: gpuResourceManager.getQueueState(),
     isEco: ecoModeService.isEcoMode(),
+    fallbackReason: '',
   });
 
   const refresh = useCallback(async () => {
@@ -50,6 +53,7 @@ export const GpuMetricsPanel: FC = () => {
       deviceClass,
       queueState: gpuResourceManager.getQueueState(),
       isEco: ecoModeService.isEcoMode(),
+      fallbackReason: getLastAiFallbackReason(),
     });
   }, []);
 
@@ -103,6 +107,36 @@ export const GpuMetricsPanel: FC = () => {
           <span>{t<string>('settings.ai.gpu.waitingConsumers')}</span>
           <span className="font-mono">{queue.length > 0 ? queue.join(', ') : '–'}</span>
         </div>
+      </div>
+
+      {/* Fallback reason */}
+      {state.fallbackReason && (
+        <div
+          role="alert"
+          className="rounded-md border border-[var(--sc-warning-border)] bg-[var(--sc-warning-bg)] p-2 text-xs text-[var(--sc-warning-fg)]"
+        >
+          <strong>{t<string>('settings.ai.gpu.fallbackTitle')}</strong>
+          <p className="mt-0.5">{state.fallbackReason}</p>
+        </div>
+      )}
+
+      {/* Troubleshooting cards */}
+      <div className="space-y-2">
+        {state.deviceClass === 'low-end' && (
+          <div className="rounded-md border border-[var(--sc-info-border)] bg-[var(--sc-info-bg)] p-2 text-xs text-[var(--sc-info-fg)]">
+            {t<string>('settings.ai.gpu.troubleshootLowEnd')}
+          </div>
+        )}
+        {state.queueState.current !== null && state.queueState.queue.length > 0 && (
+          <div className="rounded-md border border-[var(--sc-warning-border)] bg-[var(--sc-warning-bg)] p-2 text-xs text-[var(--sc-warning-fg)]">
+            {t<string>('settings.ai.gpu.troubleshootQueue')}
+          </div>
+        )}
+        {state.isEco && (
+          <div className="rounded-md border border-[var(--sc-info-border)] bg-[var(--sc-info-bg)] p-2 text-xs text-[var(--sc-info-fg)]">
+            {t<string>('settings.ai.gpu.troubleshootEco')}
+          </div>
+        )}
       </div>
 
       {/* Eco mode toggle */}
