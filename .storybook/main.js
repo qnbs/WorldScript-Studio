@@ -1,6 +1,12 @@
-// QNBS-v3: CJS shim for @storybook/test-runner (v0.21) which reads main.js via serverRequire
-// and doesn't resolve the ESM default export from main.ts. The full build config lives in main.ts.
-// This file only provides the `stories` glob so the test-runner can discover story files.
+// QNBS-v3: CJS shim — .storybook/package.json sets type:commonjs so all .js files here are CJS.
+// Storybook CLI picks up main.js before main.ts; must include framework so build doesn't error.
+// Full viteFinal config (Tailwind, plugin filters) lives in main.ts — used by ts-aware runners.
 module.exports = {
   stories: ['../stories/**/*.stories.@(ts|tsx)'],
+  addons: ['@storybook/addon-a11y'],
+  framework: {
+    name: '@storybook/react-vite',
+    options: {},
+  },
+  docs: { autodocs: 'tag' },
 };
