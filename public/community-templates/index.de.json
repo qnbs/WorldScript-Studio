@@ -1,0 +1,634 @@
+[
+  {
+    "id": "community-hero-journey",
+    "name": "Die Heldenreise (Community)",
+    "description": "Campbells klassisches Monomythos-Gerüst, für moderne Geschichten adaptiert.",
+    "type": "Structure",
+    "author": "Community",
+    "tags": ["Klassisch", "Abenteuer", "Transformation"],
+    "arcDescription": "Der Held verlässt die gewohnte Welt, besteht Prüfungen und kehrt verwandelt zurück.",
+    "stars": 42,
+    "sections": [
+      {
+        "title": "Die gewohnte Welt",
+        "description": "Stelle das alltägliche Leben des Helden und seine Unzulänglichkeiten vor, bevor das Abenteuer beginnt."
+      },
+      {
+        "title": "Der Ruf des Abenteuers",
+        "description": "Ein Problem oder eine Herausforderung taucht auf und stört den gewohnten Alltag."
+      },
+      {
+        "title": "Die Weigerung",
+        "description": "Der Held zögert und zeigt die Einsätze und seinen inneren Widerstand."
+      },
+      {
+        "title": "Begegnung mit dem Mentor",
+        "description": "Eine weise Figur gibt dem Helden Orientierung, Werkzeuge oder Motivation für die bevorstehende Reise."
+      },
+      {
+        "title": "Das Überschreiten der ersten Schwelle",
+        "description": "Der Held verpflichtet sich zum Abenteuer und betritt die unbekannte Welt."
+      },
+      {
+        "title": "Prüfungen, Verbündete und Feinde",
+        "description": "Der Held stellt sich einer Reihe von Herausforderungen, schmiedet Allianzen und erkennt die Antagonisten."
+      },
+      {
+        "title": "Vordringen zur tiefsten Höhle",
+        "description": "Der Held nähert sich dem gefährlichsten Ort – physisch oder psychologisch."
+      },
+      {
+        "title": "Die entscheidende Prüfung",
+        "description": "Die zentrale Krise. Der Held stellt sich dem Tod oder seiner größten Angst."
+      },
+      {
+        "title": "Die Belohnung",
+        "description": "Der Held hat überlebt und ergreift den Preis – einen Schatz, Wissen oder Versöhnung."
+      },
+      {
+        "title": "Der Rückweg",
+        "description": "Der Held beginnt die Rückkehr, doch die antagonistische Kraft ist möglicherweise noch nicht besiegt."
+      },
+      {
+        "title": "Die Auferstehung",
+        "description": "Der entscheidende letzte Test. Der Held wird durch die Erfahrung transformiert."
+      },
+      {
+        "title": "Rückkehr mit dem Elixier",
+        "description": "Der Held kehrt verändert heim und bringt etwas Wertvolles, das er mit der Welt teilen kann."
+      }
+    ]
+  },
+  {
+    "id": "community-dark-romantik",
+    "name": "Dark Romance",
+    "description": "Gotische Liebesgeschichte mit Spannung und dunklen Geheimnissen. Enthält reife Themen – nur verwenden, wenn es zur Geschichte und zum Publikum passt.",
+    "type": "Genre",
+    "author": "NightWriter42",
+    "tags": ["Romanze", "Gotisch", "Mystery", "Dunkel"],
+    "arcDescription": "Verbotene Liebe in einer Welt voller Geheimnisse – Spannung und Leidenschaft in Balance.",
+    "stars": 31,
+    "sections": [
+      {
+        "title": "Erste Begegnung im Dunkeln",
+        "description": "Die beiden Protagonisten treffen sich unter aufgeladenen, zweideutigen Umständen, die gefährlich und magnetisch wirken."
+      },
+      {
+        "title": "Das verborgene Geheimnis",
+        "description": "Etwas an dem Liebesinteresse ist verborgen – eine Vergangenheit, eine Natur, ein Pakt."
+      },
+      {
+        "title": "Anziehung trotz Warnung",
+        "description": "Die Protagonistin wird immer näher herangezogen, obwohl jedes rationale Signal sagt, sie solle fernbleiben."
+      },
+      {
+        "title": "Das erste Versprechen",
+        "description": "Eine Bindung entsteht – zögernd, bedingt oder unausgesprochen – die keiner leicht brechen kann."
+      },
+      {
+        "title": "Entdeckung der wahren Natur",
+        "description": "Das Geheimnis wird enthüllt und stellt alles neu in Frage, was die Protagonistin geglaubt hatte."
+      },
+      {
+        "title": "Verrat und Trennung",
+        "description": "Die Enthüllung zerstört das Vertrauen. Distanz – emotional oder physisch – folgt."
+      },
+      {
+        "title": "Die Entscheidung",
+        "description": "Die Protagonistin muss wählen: für immer weggehen oder die Dunkelheit neben der Liebe akzeptieren."
+      },
+      {
+        "title": "Opfer und Erlösung",
+        "description": "Liebe verlangt einen Preis. Die Lösung wird erkämpft, nicht geschenkt – und kostet wirklich etwas."
+      }
+    ]
+  },
+  {
+    "id": "community-thriller-countdown",
+    "name": "Countdown-Thriller",
+    "description": "Hohe Spannung mit tickender Uhr – Zeitdruck von der ersten bis zur letzten Seite.",
+    "type": "Structure",
+    "author": "ThrillMaster",
+    "tags": ["Thriller", "Action", "Zeitdruck"],
+    "arcDescription": "Eine Protagonistin mit begrenzter Zeit, ein Antagonist, der im Verborgenen operiert.",
+    "stars": 28,
+    "sections": [
+      {
+        "title": "Die Bombe tickt (Setup)",
+        "description": "Protagonistin, Einsätze und tickende Uhr werden auf den ersten Seiten eingeführt."
+      },
+      {
+        "title": "Erster Hinweis",
+        "description": "Die Protagonistin entdeckt den ersten echten Anhaltspunkt – unvollständig, irreführend, aber genug zum Handeln."
+      },
+      {
+        "title": "Falsche Spur",
+        "description": "Der Hinweis führt in die falsche Richtung. Zeit geht verloren. Der Antagonist gewinnt an Boden."
+      },
+      {
+        "title": "Eskalation – Erstes Opfer",
+        "description": "Die Bedrohung wird real. Jemand zahlt einen Preis, und die Einsätze sind nicht mehr abstrakt."
+      },
+      {
+        "title": "Wendepunkt: Enthüllung",
+        "description": "Eine Entdeckung stellt alles neu dar. Die Protagonistin weiß nun, womit sie es wirklich zu tun hat."
+      },
+      {
+        "title": "Der Countdown beschleunigt sich",
+        "description": "Das Tempo intensiviert sich. In jedem Kapitel tickt die Uhr lauter. Die Optionen werden enger."
+      },
+      {
+        "title": "Alles verloren – Heldin allein",
+        "description": "Verbündete fallen, Ressourcen sind aufgebraucht, und die Protagonistin steht der Schlussphase allein gegenüber."
+      },
+      {
+        "title": "Finale Konfrontation",
+        "description": "Der Höhepunkt: Protagonistin gegen Antagonist – alles auf dem Spiel, Sekunden bis zum Ende."
+      },
+      {
+        "title": "Lösung & Nachspiel",
+        "description": "Der Staub legt sich. Zeige, was gerettet wurde, was verloren ging und wo die Protagonistin landet."
+      }
+    ]
+  },
+  {
+    "id": "community-cozy-mystery",
+    "name": "Cozy Mystery",
+    "description": "Ein sanftes Rätsel in einer charmanten Kleinstadt – leichter Ton, Witz statt Blut.",
+    "type": "Genre",
+    "author": "TeaAndClues",
+    "tags": ["Mystery", "Gemütlich", "Humor", "Kleinstadt"],
+    "arcDescription": "Eine Amateurdetektivin löst Dorfgeheimnisse zwischen Backen und Klatsch.",
+    "stars": 19,
+    "sections": [
+      {
+        "title": "Die charmante Kleinstadt",
+        "description": "Führe das herzliche, skurrile Setting und seine liebenswerten Stammgäste ein. Etabliere das Alltagsleben der Hobby-Ermittlerin."
+      },
+      {
+        "title": "Das seltsame Ereignis",
+        "description": "Etwas stört den Frieden – ein Todesfall, ein Diebstahl, ein Verschwinden. Die Polizei ist ratlos oder gleichgültig."
+      },
+      {
+        "title": "Verdächtige Dorfbewohner",
+        "description": "Jeder Nachbar hat einen Grund, ein Geheimnis oder ein Alibi, das nicht ganz aufgeht."
+      },
+      {
+        "title": "Erste Ermittlungen",
+        "description": "Die Protagonistin beginnt Fragen zu stellen – beim Tee, beim Buchclub, an der Bäckertheke."
+      },
+      {
+        "title": "Falsche Fährte",
+        "description": "Ein perfekt verdächtiger Täter wird entlastet und wirft die Ermittlung aus dem Gleichgewicht."
+      },
+      {
+        "title": "Persönliche Gefahr",
+        "description": "Die Ermittlerin kommt zu nah. Eine Warnung trifft ein – subtil, aber unmissverständlich."
+      },
+      {
+        "title": "Der entscheidende Hinweis",
+        "description": "Ein früher übersehenes Detail ergibt plötzlich Sinn. Alles fügt sich zusammen."
+      },
+      {
+        "title": "Auflösung beim Dorffest",
+        "description": "Der Täter wird in einem befriedigenden, öffentlichen Rahmen entlarvt. Das Dorf atmet auf."
+      }
+    ]
+  },
+  {
+    "id": "community-scifi-first-contact",
+    "name": "Erstkontakt-Science-Fiction",
+    "description": "Die Menschheit trifft zum ersten Mal auf intelligentes Leben – ideengetriebene Science-Fiction.",
+    "type": "Genre",
+    "author": "StargazerX",
+    "tags": ["Science-Fiction", "Erstkontakt", "Philosophie"],
+    "arcDescription": "Was bedeutet es, Mensch zu sein – wenn man es jemandem erklären muss, der vollkommen anders ist?",
+    "stars": 25,
+    "sections": [
+      {
+        "title": "Das Signal",
+        "description": "Eine Anomalie wird entdeckt – ein Muster, das zu geordnet ist, um natürlich zu sein. Die Welt weiß es noch nicht."
+      },
+      {
+        "title": "Globale Reaktion",
+        "description": "Regierungen, Wissenschaftler und Fraktionen reagieren mit Staunen, Angst und konkurrierenden Agenden."
+      },
+      {
+        "title": "Die erste Nachricht",
+        "description": "Es kommt zu Kontakt. Die Botschaft ist real, aber ihre Bedeutung ist ungewiss und umstritten."
+      },
+      {
+        "title": "Diplomatische Krise",
+        "description": "Fraktionen innerhalb der Menschheit streiten darüber, wie zu antworten ist – und wer für die Erde spricht."
+      },
+      {
+        "title": "Missverständnis und Eskalation",
+        "description": "Eine kulturelle oder konzeptionelle Lücke führt zu einem gefährlichen Missverständnis auf einer oder beiden Seiten."
+      },
+      {
+        "title": "Der Durchbruch",
+        "description": "Ein Mensch (oder Alien) baut durch Kunst, Mathematik oder gemeinsame Verletzlichkeit eine Brücke."
+      },
+      {
+        "title": "Wahre Absichten",
+        "description": "Die echten Ziele der Aliens werden enthüllt – komplexer, fremder oder trauriger als angenommen."
+      },
+      {
+        "title": "Entscheidung für die Menschheit",
+        "description": "Die Menschheit muss wählen: die Tür öffnen, schließen oder etwas bisher Unvorhergesehenes tun."
+      },
+      {
+        "title": "Nachspiel – Eine veränderte Welt",
+        "description": "Die Welt ist eine andere. Zeige, was der Kontakt gekostet hat, was er gegeben hat und was als nächstes kommt."
+      }
+    ]
+  },
+  {
+    "id": "community-bildungsroman",
+    "name": "Bildungsroman",
+    "description": "Ein literarischer Bildungsroman – Unschuld, Scheitern, Liebe und reife Identität.",
+    "type": "Structure",
+    "author": "LitProfessor",
+    "tags": ["Literarisch", "Erwachsenwerden", "Wachstum"],
+    "arcDescription": "Von jugendlicher Naivität zur erwachsenen Identität – durch Scheitern, Liebe und Verlust.",
+    "stars": 22,
+    "sections": [
+      {
+        "title": "Kindheit und Unschuld",
+        "description": "Zeige die Welt des Protagonisten, wie er sie versteht – klein, sicher, unvollständig."
+      },
+      {
+        "title": "Erste Konfrontation mit der Welt",
+        "description": "Etwas von außerhalb der geschützten Sphäre dringt ein. Das Weltbild des Protagonisten bekommt Risse."
+      },
+      {
+        "title": "Mentor und Begleiter",
+        "description": "Eine Figur bietet Weisheit an, aber unvollkommen – der Protagonist muss letztendlich seine eigenen Entscheidungen treffen."
+      },
+      {
+        "title": "Erste Liebe / Erste Niederlage",
+        "description": "Eine intensive Erfahrung von Bindung und Verlust. Das emotionale Herzstück des Bildungsromans."
+      },
+      {
+        "title": "Identitätskrise",
+        "description": "Wer bin ich? Der Protagonist kann keine Antwort geben. Äußere Gewissheiten sind verschwunden."
+      },
+      {
+        "title": "Rebellion und Konsequenzen",
+        "description": "Der Protagonist handelt gegen die bestehende Ordnung – und spürt die wahren Kosten der Freiheit."
+      },
+      {
+        "title": "Der Tiefpunkt",
+        "description": "Der niedrigste Punkt. Alles, was der Protagonist versucht hat, ist gescheitert oder hohl geworden."
+      },
+      {
+        "title": "Versöhnung mit der Vergangenheit",
+        "description": "Der Protagonist macht Frieden – mit einem Elternteil, einem Fehler, einer verlorenen Version seiner selbst."
+      },
+      {
+        "title": "Die Bewährungsprobe",
+        "description": "Ein letzter Test, der zeigt, wie weit der Protagonist wirklich gewachsen ist."
+      },
+      {
+        "title": "Aufbruch in die Zukunft",
+        "description": "Die Geschichte endet nicht mit Ankunft, sondern mit Aufbruch – in ein ungewisses, aber selbst gewähltes Leben."
+      }
+    ]
+  },
+  {
+    "id": "community-five-act",
+    "name": "Shakespeares Fünf-Akt-Struktur",
+    "description": "Das klassische dramatische Gerüst Shakespeares – ideal für bühnenhafte Intensität und formal tragische oder komödiantische Bögen.",
+    "type": "Structure",
+    "author": "TheatreMajor",
+    "tags": ["Klassisch", "Drama", "Literarisch", "Theater"],
+    "arcDescription": "Exposition, steigende Handlung, Höhepunkt, fallende Handlung, Katastrophe – der ewige Rhythmus des Dramas.",
+    "stars": 17,
+    "sections": [
+      {
+        "title": "Akt I – Exposition",
+        "description": "Führe die Welt, die zentralen Figuren und den auslösenden Konflikt ein. Säe die Keime von Tragödie und Auflösung."
+      },
+      {
+        "title": "Akt II – Steigende Handlung",
+        "description": "Komplikationen häufen sich. Die Situation des Protagonisten wird verworrener. Allianzen entstehen und zerbrechen."
+      },
+      {
+        "title": "Akt III – Höhepunkt",
+        "description": "Der Wendepunkt – der Moment höchster Spannung, der Entscheidung, der Drehpunkt, um den sich alles dreht."
+      },
+      {
+        "title": "Akt IV – Fallende Handlung",
+        "description": "Konsequenzen kaskadieren. Ereignisse bewegen sich auf das unvermeidliche Ende zu. Umkehrungen und Enthüllungen beschleunigen sich."
+      },
+      {
+        "title": "Akt V – Katastrophe oder Auflösung",
+        "description": "Die letzte Bewegung: Die Tragödie fordert ihren Tribut, oder die Komödie findet ihre Auflösung. Ordnung wird wiederhergestellt – oder für immer zerstört."
+      }
+    ]
+  },
+  {
+    "id": "community-psychological-horror",
+    "name": "Psychologischer Horror",
+    "description": "Horror, der im Geist lebt – unzuverlässige Erzähler, schleichendes Grauen und Fragen danach, was real ist.",
+    "type": "Genre",
+    "author": "NightmareInk",
+    "tags": ["Horror", "Psychologisch", "Suspense", "Unzuverlässiger Erzähler"],
+    "arcDescription": "Das Monster ist real – aber ebenso die Möglichkeit, dass der Protagonist es erschaffen hat.",
+    "stars": 33,
+    "sections": [
+      {
+        "title": "Alles scheint normal",
+        "description": "Eröffne mit einem Leben, das sich gewöhnlich anfühlt – aber die Prosa soll den Leser unbehaglich stimmen, ohne dass er weiß warum."
+      },
+      {
+        "title": "Der erste falsche Ton",
+        "description": "Ein kleines Detail, das nicht aufgeht. Der Protagonist erklärt es weg. Der Leser kann es nicht."
+      },
+      {
+        "title": "Eskalation des Seltsamen",
+        "description": "Ereignisse werden schwerer zu rationalisieren. Der Griff des Protagonisten auf die Normalität lockert sich sichtbar."
+      },
+      {
+        "title": "Realität wird hinterfragt",
+        "description": "Ist die Bedrohung äußerlich oder innerlich? Pflanze echten Zweifel – der Leser soll nicht sicher sein."
+      },
+      {
+        "title": "Isolation",
+        "description": "Der Protagonist wird abgeschnitten – von Verbündeten, von der Vernunft, von seinem früheren Ich."
+      },
+      {
+        "title": "Der Abgrund schaut zurück",
+        "description": "Der Horror offenbart sich vollständig. Ob real oder eingebildet – er ist nun unbestreitbar und intim."
+      },
+      {
+        "title": "Kein sicherer Ausweg",
+        "description": "Jede Option, die der Protagonist hatte, ist verschwunden. Der Höhepunkt erzwingt eine Konfrontation, die er nicht vermeiden kann."
+      },
+      {
+        "title": "Nachspiel – Gebrochen oder verändert",
+        "description": "Die Auflösung kehrt nicht zur Normalität zurück. Etwas Grundlegendes wurde verändert, verloren oder aufgedeckt."
+      }
+    ]
+  },
+  {
+    "id": "community-romantic-comedy",
+    "name": "Romantische Komödie",
+    "description": "Zwei Menschen, die sich nicht verlieben sollten, tun genau das – nach genug Hindernissen, Missverständnissen und komischen Rückschlägen.",
+    "type": "Genre",
+    "author": "HappyEndings",
+    "tags": ["Romanze", "Komödie", "Leichtherzig", "Feel-Good"],
+    "arcDescription": "Die Liebe findet einen Weg – trotz schlechtem Timing, falschen Annahmen und den besten Bemühungen beider Seiten.",
+    "stars": 36,
+    "sections": [
+      {
+        "title": "Begegnung (schlecht)",
+        "description": "Die beiden treffen sich unter Umständen, die sofort Reibung, Missverständnis oder Konkurrenz erzeugen."
+      },
+      {
+        "title": "Zwangsweise zusammen",
+        "description": "Umstände, ein Job, eine Wette oder ein gemeinsames Ziel bringen sie in eine Nähe, der sie nicht entkommen können."
+      },
+      {
+        "title": "Mauern werden errichtet",
+        "description": "Beide Figuren widersetzen sich der wachsenden Anziehung – sie haben jeweils einen Grund, warum es nicht funktionieren kann."
+      },
+      {
+        "title": "Mauern fallen kurz",
+        "description": "Ein echter Moment der Verbindung. Sie erhaschen einen Blick darauf, wer der andere wirklich unter der Oberfläche ist."
+      },
+      {
+        "title": "Das Missverständnis",
+        "description": "Ein klassischer Romcom-Beat: eine Lüge, ein Geheimnis, eine falsche Annahme – die sie trennt, genau als es gut wurde."
+      },
+      {
+        "title": "Alles verloren (in der Liebe)",
+        "description": "Sie sind getrennt. Der Protagonist erkennt, dass er ohne diese Person, die er nicht wollen wollte, unglücklich ist."
+      },
+      {
+        "title": "Die große Geste",
+        "description": "Einer von beiden tut etwas Mutiges, Lächerliches oder Herzliches, das nicht falsch gedeutet werden kann."
+      },
+      {
+        "title": "Das Happy End",
+        "description": "Sie kommen zusammen – ehrlich, ohne Verstellung – und der Leser glaubt, dass es halten wird."
+      }
+    ]
+  },
+  {
+    "id": "community-seven-point",
+    "name": "Sieben-Punkte-Erzählstruktur",
+    "description": "Dan Wells' Methode – rückwärts von der Auflösung arbeiten, vorwärts vom Aufhänger aufbauen.",
+    "type": "Structure",
+    "author": "PlotArchitect",
+    "tags": ["Struktur", "Handlungsgetrieben", "Planung"],
+    "arcDescription": "Sieben präzise Momente, die sicherstellen, dass eine Geschichte mit Absicht und Befriedigung voranschreitet.",
+    "stars": 29,
+    "sections": [
+      {
+        "title": "Aufhänger – Ausgangszustand",
+        "description": "Zeige die Welt des Protagonisten, wie sie ist, bevor die Geschichte irgendetwas verändert. Dies ist das Gegenteil von dort, wo er enden wird."
+      },
+      {
+        "title": "Handlungswendung 1 – Aufruf zur Handlung",
+        "description": "Etwas treibt den Protagonisten aus seinem Ausgangszustand heraus und in die eigentliche Geschichte hinein."
+      },
+      {
+        "title": "Druckpunkt 1 – Druck wird aufgebaut",
+        "description": "Der Antagonist oder der Konflikt übt echten Druck aus. Der Protagonist spürt das Gewicht dessen, dem er gegenübersteht."
+      },
+      {
+        "title": "Mittelpunkt – Von Reaktion zu Aktion",
+        "description": "Der Protagonist hört auf zu reagieren und beginnt zu handeln. Eine Enthüllung oder Entscheidung wandelt ihn von passiv zu aktiv."
+      },
+      {
+        "title": "Druckpunkt 2 – Größter Druck",
+        "description": "Der Antagonist übt maximalen Druck aus. Die Dinge sehen hier am schlimmsten aus – für den Protagonisten und den Leser."
+      },
+      {
+        "title": "Handlungswendung 2 – Letzter Hinweis",
+        "description": "Der Protagonist erlangt das letzte Puzzlestück – Wissen, Mut oder ein Werkzeug – um zu gewinnen."
+      },
+      {
+        "title": "Auflösung – Endzustand",
+        "description": "Der Protagonist erreicht den Zustand, der das Gegenteil seines Ausgangszustands ist. Der Konflikt ist gelöst."
+      }
+    ]
+  },
+  {
+    "id": "community-historical-epic",
+    "name": "Historisches Epos",
+    "description": "Weitgreifende Fiktion, verwurzelt in einer echten Epoche – intime persönliche Geschichte verwoben mit den Kräften der Geschichte.",
+    "type": "Genre",
+    "author": "Archivist",
+    "tags": ["Historisch", "Episch", "Literarisch", "Figurengetrieben"],
+    "arcDescription": "Ein Leben, gefangen im Strom der Geschichte – verändert durch Ereignisse, die zu groß sind zum Kontrollieren, zu wichtig zum Ignorieren.",
+    "stars": 21,
+    "sections": [
+      {
+        "title": "Eine Welt am Rande",
+        "description": "Stelle die historische Epoche mit lebhaften, konkreten Details vor. Zeige die Figuren vor dem Umbruch."
+      },
+      {
+        "title": "Das wendende Ereignis",
+        "description": "Die Geschichte bewegt sich. Der Protagonist steht nicht mehr außerhalb der Ereignisse – er steht mitten drin."
+      },
+      {
+        "title": "Zwischen den Mächten",
+        "description": "Die Figur navigiert Kräfte – politische, militärische, gesellschaftliche –, die größer sind als jeder Einzelne."
+      },
+      {
+        "title": "Der Preis des Überlebens",
+        "description": "Am Leben oder in Freiheit zu bleiben erfordert Kompromisse. Zeige, was die Figur aufgibt und was sie schützt."
+      },
+      {
+        "title": "Trauer um die verlorene Welt",
+        "description": "Was vorher existierte, ist verschwunden – ein Ort, eine Gemeinschaft, eine Lebensweise. Lass die Figur ehrlich trauern."
+      },
+      {
+        "title": "Bündnis und Verrat",
+        "description": "Im Chaos entstehen Bündnisse über unerwartete Grenzen hinweg. Manche halten; manche zerbrechen im schlimmsten Moment."
+      },
+      {
+        "title": "Der entscheidende historische Moment",
+        "description": "Der Protagonist steht an der Kreuzung von persönlicher Entscheidung und historischem Ereignis."
+      },
+      {
+        "title": "Was bleibt",
+        "description": "Nicht Triumph – was übrig bleibt. Zeige, was durch den Sturm getragen wurde und was es kostete, es zu tragen."
+      }
+    ]
+  },
+  {
+    "id": "community-nonlinear-experimental",
+    "name": "Nichtlineares / Experimentelles Erzählen",
+    "description": "Eine zerbrochene Zeitlinie, mehrere Perspektiven oder genrebrechende Form – für Autoren, die Struktur suchen, die sich lebendig anfühlt.",
+    "type": "Structure",
+    "author": "AvantGarde",
+    "tags": ["Literarisch", "Experimentell", "Nichtlinear", "Fortgeschritten"],
+    "arcDescription": "Der Leser setzt die Geschichte aus Fragmenten zusammen – jedes Stück enthüllt etwas, das die anderen verbergen.",
+    "stars": 14,
+    "sections": [
+      {
+        "title": "Fragment A – Gegenwart (Nachspiel)",
+        "description": "Eröffne im Nachspiel. Der Leser weiß noch nicht, was passiert ist – nur dass etwas geschehen ist."
+      },
+      {
+        "title": "Fragment B – Vergangenheit (Ursprung)",
+        "description": "Springe zurück. Zeige, wer diese Figuren waren, bevor. Etabliere, was sie zu verlieren hatten."
+      },
+      {
+        "title": "Fragment C – Paralleler Faden",
+        "description": "Eine zweite Stimme, Zeit oder Perspektive beginnt. Ihre Beziehung zur ersten ist unklar – und diese Spannung ist der Motor."
+      },
+      {
+        "title": "Konvergenzpunkt 1",
+        "description": "Die Fäden kommen zum ersten Mal in Kontakt. Ein geteiltes Detail, Ereignis oder eine Figur verbindet sie."
+      },
+      {
+        "title": "Enthüllungsebene 1",
+        "description": "Etwas, das der Leser zu verstehen glaubte, wird neu gerahmt. Die Fragmentstruktur ist kein Dekor – sie verbirgt Bedeutung."
+      },
+      {
+        "title": "Konvergenzpunkt 2",
+        "description": "Die Zeitlinien oder Stimmen nähern sich an. Die Lücke zwischen ihnen verengt sich mit wachsender Spannung."
+      },
+      {
+        "title": "Enthüllungsebene 2 – Die Kernwahrheit",
+        "description": "Was die Struktur schützte, wird bloßgelegt. Dies ist das emotionale Zentrum, um das die Fragmente kreisten."
+      },
+      {
+        "title": "Auflösung – Alle Fäden landen",
+        "description": "Die Erzählung muss nicht linear sein, um vollständig zu sein. Finde die Form, die alle Teile unvermeidlich erscheinen lässt."
+      }
+    ]
+  },
+  {
+    "id": "community-western",
+    "name": "Western",
+    "description": "Staub, Ehre und moralische Mehrdeutigkeit – die amerikanische Grenze als moralische Landschaft.",
+    "type": "Genre",
+    "author": "SaddleScribe",
+    "tags": ["Western", "Abenteuer", "Moralische Mehrdeutigkeit", "Action"],
+    "arcDescription": "Eine einsame Figur gegen gesetzloses Land – aber der eigentliche Konflikt ist der Kodex, den sie innen trägt.",
+    "stars": 18,
+    "sections": [
+      {
+        "title": "In die Stadt reiten",
+        "description": "Etabliere das Setting und die Ankunft oder das Erwachen des Protagonisten. Hier stimmt etwas nicht – und er ist die falsche Person, um es zu ignorieren."
+      },
+      {
+        "title": "Das Problem, dem sich niemand stellt",
+        "description": "Die Gemeinschaft hat eine Bedrohung. Alle wissen es. Niemand ist bereit, allein dagegen zu stehen."
+      },
+      {
+        "title": "Der Kodex des Protagonisten",
+        "description": "Zeige das innere Gesetz des Protagonisten: was er tun wird und was nicht, und warum. Dies ist der moralische Motor der Geschichte."
+      },
+      {
+        "title": "Die Macht des Antagonisten",
+        "description": "Der Schurke wird etabliert – real, fähig und in gewisser Weise verständlich. Er ist nicht einfach böse."
+      },
+      {
+        "title": "Bündnisse unter Druck",
+        "description": "Ein unwahrscheinlicher Partner, ein Einheimischer, der glaubt, eine überraschende Loyalität – und ein Verrat."
+      },
+      {
+        "title": "Die Konfrontation, die keine ist",
+        "description": "Die erste große Auseinandersetzung, die nichts löst – jemand ist noch nicht bereit, nicht willens oder noch nicht dort."
+      },
+      {
+        "title": "Die finale Abrechnung",
+        "description": "Staubige Straße, Mittag oder etwas Moderneres – der Höhepunkt ist durch alles verdient, was davor kam."
+      },
+      {
+        "title": "Weiterreiten",
+        "description": "Der Protagonist darf nicht bleiben. Die Welt ist besser – oder einfach anders. Er zieht weiter."
+      }
+    ]
+  },
+  {
+    "id": "community-memoir-arc",
+    "name": "Memoirenbogen",
+    "description": "Ein echtes Leben mit dem Blick eines Romanautors erzählt – strukturiert für emotionale Wahrheit, nicht chronologische Vollständigkeit.",
+    "type": "Structure",
+    "author": "TrueVoice",
+    "tags": ["Memoiren", "Sachbuch", "Persönlich", "Literarisch"],
+    "arcDescription": "Der Erzähler von heute schaut auf die Person zurück, die er war – und findet die Bedeutung dazwischen.",
+    "stars": 20,
+    "sections": [
+      {
+        "title": "Die Stimme des Erzählers in der Gegenwart",
+        "description": "Etabliere, wer du jetzt bist – mit der Perspektive, die diese Geschichte erzählenswert macht."
+      },
+      {
+        "title": "Die Welt davor",
+        "description": "Bereite die Szene der Vergangenheit vor. Gib dem Leser den Kontext und die Einsätze vor der zentralen Erfahrung."
+      },
+      {
+        "title": "Das auslösende Erlebnis",
+        "description": "Das Ereignis, die Beziehung oder die Erkenntnis, die dieses Leben zu einer Geschichte gemacht haben, die erzählt werden musste."
+      },
+      {
+        "title": "Vertiefung – Was es kostete",
+        "description": "Zeige die Erfahrung von innen: die Verwirrung, das Gefühl, die menschliche Textur des Durchlebens."
+      },
+      {
+        "title": "Der Mensch, der ich wurde (und dem ich widerstand)",
+        "description": "Veränderung ist selten willkommen. Zeige den Widerstand – die Gewohnheiten, die Verleugnungen, die Person, die du zu bleiben kämpfte."
+      },
+      {
+        "title": "Die entscheidende Erkenntnis",
+        "description": "Der Moment echter Einsicht – noch keine Lösung, aber Verständnis. Der Nebel lichtet sich auf etwas."
+      },
+      {
+        "title": "Abrechnung mit anderen",
+        "description": "Die Menschen in einem Memoir sind real. Wie du sie darstellst, verzeihst oder zur Rechenschaft ziehst, ist Teil der Geschichte."
+      },
+      {
+        "title": "Die gefundene Bedeutung",
+        "description": "Keine Lektion – Bedeutung. Was diese Erfahrung jetzt für dich bedeutet, ohne ihr eine Schleife zu binden, die sie nicht verdient."
+      }
+    ]
+  }
+]

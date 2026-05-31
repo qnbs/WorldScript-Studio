@@ -430,11 +430,12 @@ const CommunityTab: FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isFallback, setIsFallback] = useState(false);
   const { t: _t } = useTemplateViewContext();
+  const { language } = useTranslation();
 
   useEffect(() => {
     const ac = new AbortController();
     setIsLoading(true);
-    fetchCommunityTemplates(ac.signal)
+    fetchCommunityTemplates(language, ac.signal)
       .then((res) => {
         setTemplates(res.templates);
         setIsFallback(Boolean(res.isFallback));
@@ -444,7 +445,8 @@ const CommunityTab: FC = () => {
       })
       .finally(() => setIsLoading(false));
     return () => ac.abort();
-  }, []);
+    // QNBS-v3: re-fetch when language changes so locale-specific template files are loaded.
+  }, [language]);
 
   const handleApply = (ct: CommunityTemplate) => {
     // Dispatch a new project with sections from community template — navigated via window event

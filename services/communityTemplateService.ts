@@ -5,15 +5,18 @@
  * Template definitions live in /public/community-templates/index.json
  * and are served at ${BASE_URL}community-templates/index.json — no
  * third-party requests, works offline and with Tauri desktop builds.
+ *
+ * Locale-specific variants (index.de.json, index.fr.json, …) are tried
+ * first; the default English index is used as fallback.
  */
 
 import { z } from 'zod';
 
 import type { CommunityTemplate } from '../types';
 
-const INDEX_URL = `${import.meta.env.BASE_URL}community-templates/index.json`;
+const BASE_INDEX_URL = `${import.meta.env.BASE_URL}community-templates/index.json`;
 
-// QNBS-v3: Zod an der Asset-Grenze — kaputte JSON-Lieferungen fallen auf eingebettete Fallbacks zurück statt still UI zu brüchen.
+// QNBS-v3: Zod at the asset boundary — broken JSON deliveries fall back to embedded fallbacks rather than silently breaking the UI.
 const communityTemplateSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
@@ -28,8 +31,11 @@ const communityTemplateSchema = z.object({
 
 const communityTemplatesSchema = z.array(communityTemplateSchema).min(1);
 
-// In-memory cache (valid for the duration of the session)
-let cachedTemplates: CommunityTemplate[] | null = null;
+/** Locales for which a translated index exists. */
+const TRANSLATED_LOCALES = new Set(['de', 'fr', 'es', 'it']);
+
+// Per-locale in-memory cache (valid for the duration of the session).
+const templateCache = new Map<string, CommunityTemplate[]>();
 
 export interface CommunityTemplateResult {
   templates: CommunityTemplate[];
@@ -39,54 +45,56 @@ export interface CommunityTemplateResult {
 
 /**
  * Fetch the community template index from the bundled static asset.
- * Falls back to embedded templates on network/fetch errors.
+ * Tries a locale-specific file first (e.g. index.de.json), falls back
+ * to the default English index, then to embedded fallback templates.
  */
 export async function fetchCommunityTemplates(
+  lang?: string,
   signal?: AbortSignal,
 ): Promise<CommunityTemplateResult> {
-  if (cachedTemplates) return { templates: cachedTemplates };
+  const locale = lang && TRANSLATED_LOCALES.has(lang) ? lang : 'en';
+  const cached = templateCache.get(locale);
+  if (cached) return { templates: cached };
 
-  try {
-    const res = await fetch(INDEX_URL, {
-      signal: signal ?? null,
-      headers: { Accept: 'application/json' },
-    });
+  // QNBS-v3: Try locale-specific file first; fall back to English default index.
+  const urls =
+    locale !== 'en'
+      ? [`${import.meta.env.BASE_URL}community-templates/index.${locale}.json`, BASE_INDEX_URL]
+      : [BASE_INDEX_URL];
 
-    if (!res.ok) {
-      return {
-        templates: getFallbackTemplates(),
-        error: `Failed to load community templates: HTTP ${res.status}`,
-      };
-    }
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        signal: signal ?? null,
+        headers: { Accept: 'application/json' },
+      });
 
-    const raw: unknown = await res.json();
-    const parsed = communityTemplatesSchema.safeParse(raw);
-    if (!parsed.success) {
-      return {
-        templates: getFallbackTemplates(),
-        error: 'Community templates failed validation',
-        isFallback: true,
-      };
+      if (!res.ok) continue;
+
+      const raw: unknown = await res.json();
+      const parsed = communityTemplatesSchema.safeParse(raw);
+      if (!parsed.success) continue;
+
+      const data = parsed.data as CommunityTemplate[];
+      templateCache.set(locale, data);
+      return { templates: data };
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return { templates: [] };
+      // Network error — try next URL in list
     }
-    const data = parsed.data as CommunityTemplate[];
-    cachedTemplates = data;
-    return { templates: data };
-  } catch (e) {
-    if ((e as Error)?.name === 'AbortError') {
-      return { templates: [] };
-    }
-    // Network error — use embedded fallbacks so the feature still works offline
-    return {
-      templates: getFallbackTemplates(),
-      error: 'Community templates could not be loaded (offline?)',
-      isFallback: true,
-    };
   }
+
+  // All URLs failed — use embedded fallbacks so the feature still works offline
+  return {
+    templates: getFallbackTemplates(),
+    error: 'Community templates could not be loaded (offline?)',
+    isFallback: true,
+  };
 }
 
-/** Clear the session cache (e.g., after user presses "Refresh") */
+/** Clear the session cache (e.g., after user presses "Refresh" or language change). */
 export function clearCommunityTemplateCache(): void {
-  cachedTemplates = null;
+  templateCache.clear();
 }
 
 // ─── Fallback Templates (embedded) ───────────────────────────────────────────

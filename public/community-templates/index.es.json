@@ -1,0 +1,634 @@
+[
+  {
+    "id": "community-hero-journey",
+    "name": "El Viaje del Héroe (Comunidad)",
+    "description": "El marco clásico del monomito de Campbell, adaptado para historias modernas.",
+    "type": "Structure",
+    "author": "Community",
+    "tags": ["Clásico", "Aventura", "Transformación"],
+    "arcDescription": "El héroe deja el mundo ordinario, supera pruebas y regresa transformado.",
+    "stars": 42,
+    "sections": [
+      {
+        "title": "El Mundo Ordinario",
+        "description": "Establece la vida cotidiana del héroe y sus carencias antes de que comience la aventura."
+      },
+      {
+        "title": "El Llamado a la Aventura",
+        "description": "Un problema o desafío se presenta, alterando el statu quo."
+      },
+      {
+        "title": "El Rechazo del Llamado",
+        "description": "El héroe vacila, mostrando las apuestas y la resistencia interna."
+      },
+      {
+        "title": "El Encuentro con el Mentor",
+        "description": "Una figura sabia proporciona guía, herramientas o motivación para enfrentar el viaje."
+      },
+      {
+        "title": "El Cruce del Primer Umbral",
+        "description": "El héroe se compromete con la aventura y entra en el mundo desconocido."
+      },
+      {
+        "title": "Pruebas, Aliados y Enemigos",
+        "description": "El héroe enfrenta una serie de desafíos, forma alianzas e identifica a los antagonistas."
+      },
+      {
+        "title": "La Cueva más Profunda",
+        "description": "El héroe se acerca al lugar más peligroso — físico o psicológico."
+      },
+      {
+        "title": "La Prueba Suprema",
+        "description": "La crisis central. El héroe enfrenta la muerte o su mayor miedo."
+      },
+      {
+        "title": "La Recompensa",
+        "description": "Habiendo sobrevivido, el héroe toma el premio — un tesoro, conocimiento o reconciliación."
+      },
+      {
+        "title": "El Camino de Regreso",
+        "description": "El héroe comienza el regreso, pero la fuerza antagonista puede no haber terminado."
+      },
+      {
+        "title": "La Resurrección",
+        "description": "La prueba final decisiva. El héroe es transformado por la experiencia."
+      },
+      {
+        "title": "El Regreso con el Elixir",
+        "description": "El héroe regresa cambiado, llevando algo valioso para compartir con el mundo."
+      }
+    ]
+  },
+  {
+    "id": "community-dark-romantik",
+    "name": "Dark Romance",
+    "description": "Historia de amor gótica con suspenso y oscuros secretos. Contiene temas maduros — úsalo solo si encaja con tu historia y audiencia.",
+    "type": "Genre",
+    "author": "NightWriter42",
+    "tags": ["Romance", "Gótico", "Misterio", "Oscuro"],
+    "arcDescription": "Amor prohibido en un mundo lleno de secretos — suspenso y pasión en equilibrio.",
+    "stars": 31,
+    "sections": [
+      {
+        "title": "Primer Encuentro en la Oscuridad",
+        "description": "Los dos protagonistas se conocen bajo circunstancias cargadas y ambiguas que se sienten peligrosas y magnéticas."
+      },
+      {
+        "title": "El Secreto Oculto",
+        "description": "Algo sobre el interés amoroso está oculto — un pasado, una naturaleza, un pacto."
+      },
+      {
+        "title": "Atracción a Pesar de la Advertencia",
+        "description": "El protagonista es atraído más cerca a pesar de cada señal racional que le dice que se aleje."
+      },
+      {
+        "title": "La Primera Promesa",
+        "description": "Se forma un vínculo — reticente, condicional o tácito — que ninguno puede romper fácilmente."
+      },
+      {
+        "title": "Descubrimiento de la Verdadera Naturaleza",
+        "description": "El secreto se revela, reformulando todo lo que el protagonista creía."
+      },
+      {
+        "title": "Traición y Separación",
+        "description": "La revelación destruye la confianza. La distancia — emocional o física — sigue."
+      },
+      {
+        "title": "La Decisión",
+        "description": "El protagonista debe elegir: alejarse para siempre, o aceptar la oscuridad junto al amor."
+      },
+      {
+        "title": "Sacrificio y Redención",
+        "description": "El amor exige un precio. La resolución se gana, no se da — y cuesta algo real."
+      }
+    ]
+  },
+  {
+    "id": "community-thriller-countdown",
+    "name": "Thriller de Cuenta Regresiva",
+    "description": "Alta tensión con un reloj que corre — presión temporal de la primera a la última página.",
+    "type": "Structure",
+    "author": "ThrillMaster",
+    "tags": ["Thriller", "Acción", "Presión Temporal"],
+    "arcDescription": "Una protagonista con tiempo limitado, un antagonista operando en las sombras.",
+    "stars": 28,
+    "sections": [
+      {
+        "title": "La Bomba Hace Tictac (Configuración)",
+        "description": "Establece la protagonista, las apuestas y el reloj que corre en las primeras páginas."
+      },
+      {
+        "title": "Primera Pista",
+        "description": "La protagonista descubre la primera pista real — incompleta, engañosa, pero suficiente para actuar."
+      },
+      {
+        "title": "Falsa Pista",
+        "description": "La pista apunta en la dirección equivocada. Se pierde tiempo. El antagonista gana terreno."
+      },
+      {
+        "title": "Escalada — Primera Víctima",
+        "description": "La amenaza se vuelve real. Alguien paga un precio, y las apuestas ya no son abstractas."
+      },
+      {
+        "title": "Punto de Inflexión: Revelación",
+        "description": "Un descubrimiento reencuadra todo. La protagonista ahora sabe a lo que realmente se enfrenta."
+      },
+      {
+        "title": "La Cuenta Regresiva se Acelera",
+        "description": "El ritmo se intensifica. En cada capítulo el reloj hace más ruido. Las opciones se reducen."
+      },
+      {
+        "title": "Todo Perdido — La Heroína Sola",
+        "description": "Los aliados caen, los recursos se agotan, y la protagonista enfrenta el tramo final sola."
+      },
+      {
+        "title": "Confrontación Final",
+        "description": "El clímax: protagonista contra antagonista con todo en juego y segundos para lograrlo."
+      },
+      {
+        "title": "Resolución y Secuelas",
+        "description": "El polvo se asienta. Muestra qué se salvó, qué se perdió y dónde aterriza la protagonista."
+      }
+    ]
+  },
+  {
+    "id": "community-cozy-mystery",
+    "name": "Misterio Tranquilo",
+    "description": "Un suave acertijo en un encantador pueblo pequeño — tono ligero, ingenio antes que sangre.",
+    "type": "Genre",
+    "author": "TeaAndClues",
+    "tags": ["Misterio", "Tranquilo", "Humor", "Pueblo Pequeño"],
+    "arcDescription": "Una detective aficionada resuelve misterios del pueblo entre hornear y chismes.",
+    "stars": 19,
+    "sections": [
+      {
+        "title": "El Encantador Pueblo Pequeño",
+        "description": "Presenta el cálido y excéntrico escenario con su adorable elenco de habituales. Establece la vida cotidiana de la detective aficionada."
+      },
+      {
+        "title": "El Extraño Evento",
+        "description": "Algo altera la paz — una muerte, un robo, una desaparición. La policía está desconcertada o indiferente."
+      },
+      {
+        "title": "Vecinos Sospechosos",
+        "description": "Cada vecino tiene una razón, un secreto o una coartada que no termina de encajar."
+      },
+      {
+        "title": "Primeras Investigaciones",
+        "description": "La protagonista comienza a hacer preguntas — tomando té, en el club de libros, en el mostrador de la panadería."
+      },
+      {
+        "title": "Pista Falsa",
+        "description": "Un sospechoso perfectamente plausible queda descartado, desequilibrando la investigación."
+      },
+      {
+        "title": "Peligro Personal",
+        "description": "La detective se acerca demasiado. Llega una advertencia — sutil pero inconfundible."
+      },
+      {
+        "title": "La Pista Crucial",
+        "description": "Un detalle pasado por alto antes de repente tiene sentido. Todo encaja."
+      },
+      {
+        "title": "Resolución en el Festival del Pueblo",
+        "description": "El culpable es revelado en un escenario satisfactorio y público. El pueblo respira de nuevo."
+      }
+    ]
+  },
+  {
+    "id": "community-scifi-first-contact",
+    "name": "Ciencia Ficción de Primer Contacto",
+    "description": "La humanidad se encuentra con vida inteligente por primera vez — ciencia ficción orientada a las ideas.",
+    "type": "Genre",
+    "author": "StargazerX",
+    "tags": ["Ciencia Ficción", "Primer Contacto", "Filosofía"],
+    "arcDescription": "¿Qué significa ser humano — cuando debes explicárselo a alguien completamente diferente?",
+    "stars": 25,
+    "sections": [
+      {
+        "title": "La Señal",
+        "description": "Se detecta una anomalía — un patrón demasiado ordenado para ser natural. El mundo aún no lo sabe."
+      },
+      {
+        "title": "Respuesta Global",
+        "description": "Gobiernos, científicos y facciones reaccionan con asombro, miedo y agendas en competencia."
+      },
+      {
+        "title": "El Primer Mensaje",
+        "description": "Se establece contacto. El mensaje es real, pero su significado es incierto y controvertido."
+      },
+      {
+        "title": "Crisis Diplomática",
+        "description": "Facciones dentro de la humanidad discrepan sobre cómo responder — y quién habla por la Tierra."
+      },
+      {
+        "title": "Malentendido y Escalada",
+        "description": "Una brecha cultural o conceptual provoca una lectura peligrosa en uno o ambos lados."
+      },
+      {
+        "title": "El Avance",
+        "description": "Un humano (o alienígena) construye un puente a través del arte, las matemáticas o una vulnerabilidad compartida."
+      },
+      {
+        "title": "Verdaderas Intenciones",
+        "description": "El verdadero propósito de los alienígenas se revela — más complejo, más extraño o más triste de lo supuesto."
+      },
+      {
+        "title": "Decisión para la Humanidad",
+        "description": "La humanidad debe elegir: abrir la puerta, cerrarla, o hacer algo sin precedentes."
+      },
+      {
+        "title": "Secuelas — Un Mundo Cambiado",
+        "description": "El mundo es diferente ahora. Muestra lo que costó el contacto, lo que dio y lo que viene después."
+      }
+    ]
+  },
+  {
+    "id": "community-bildungsroman",
+    "name": "Novela de Formación",
+    "description": "Un bildungsroman literario — inocencia, fracaso, amor e identidad madura.",
+    "type": "Structure",
+    "author": "LitProfessor",
+    "tags": ["Literario", "Paso a la Madurez", "Crecimiento"],
+    "arcDescription": "De la ingenuidad juvenil a la identidad adulta — a través del fracaso, el amor y la pérdida.",
+    "stars": 22,
+    "sections": [
+      {
+        "title": "Infancia e Inocencia",
+        "description": "Muestra el mundo del protagonista tal como lo entiende — pequeño, seguro, incompleto."
+      },
+      {
+        "title": "Primera Confrontación con el Mundo",
+        "description": "Algo fuera de la esfera protegida irrumpe. La comprensión del protagonista se agrieta."
+      },
+      {
+        "title": "Mentor y Guía",
+        "description": "Una figura ofrece sabiduría, pero imperfectamente — el protagonista debe tomar sus propias decisiones al final."
+      },
+      {
+        "title": "Primer Amor / Primera Derrota",
+        "description": "Una experiencia intensa de apego y pérdida. El núcleo emocional del bildungsroman."
+      },
+      {
+        "title": "Crisis de Identidad",
+        "description": "¿Quién soy? El protagonista no puede responder. Las certezas externas han desaparecido."
+      },
+      {
+        "title": "Rebeldía y Consecuencias",
+        "description": "El protagonista actúa contra el orden establecido — y enfrenta el verdadero costo de la libertad."
+      },
+      {
+        "title": "Fondo del Abismo",
+        "description": "El punto más bajo. Todo lo que el protagonista intentó ha fracasado o demostrado ser hueco."
+      },
+      {
+        "title": "Reconciliación con el Pasado",
+        "description": "El protagonista hace las paces — con un padre, un error, una versión perdida de sí mismo."
+      },
+      {
+        "title": "La Prueba de Madurez",
+        "description": "Una última prueba que demuestra hasta dónde ha crecido genuinamente el protagonista."
+      },
+      {
+        "title": "El Camino hacia el Futuro",
+        "description": "La historia termina no con una llegada sino con una partida — hacia una vida incierta pero elegida."
+      }
+    ]
+  },
+  {
+    "id": "community-five-act",
+    "name": "Estructura de Cinco Actos de Shakespeare",
+    "description": "El andamiaje dramático clásico de Shakespeare — ideal para intensidad teatral y arcos trágicos o cómicos formales.",
+    "type": "Structure",
+    "author": "TheatreMajor",
+    "tags": ["Clásico", "Drama", "Literario", "Teatro"],
+    "arcDescription": "Exposición, acción ascendente, clímax, acción descendente, catástrofe — el ritmo eterno del drama.",
+    "stars": 17,
+    "sections": [
+      {
+        "title": "Acto I — Exposición",
+        "description": "Introduce el mundo, los personajes centrales y el conflicto desencadenante. Siembra las semillas de la tragedia y la resolución."
+      },
+      {
+        "title": "Acto II — Acción Ascendente",
+        "description": "Las complicaciones se multiplican. La situación del protagonista se enreda más. Las alianzas se forman y deshacen."
+      },
+      {
+        "title": "Acto III — Clímax",
+        "description": "El punto de inflexión — el momento de máxima tensión, la decisión, el pivote sobre el que todo gira."
+      },
+      {
+        "title": "Acto IV — Acción Descendente",
+        "description": "Las consecuencias se precipitan. Los eventos avanzan hacia la conclusión inevitable. Los giros y revelaciones se aceleran."
+      },
+      {
+        "title": "Acto V — Catástrofe o Resolución",
+        "description": "El movimiento final: la tragedia cobra su precio, o la comedia encuentra su resolución. El orden se restaura — o se destruye para siempre."
+      }
+    ]
+  },
+  {
+    "id": "community-psychological-horror",
+    "name": "Terror Psicológico",
+    "description": "El horror que vive dentro de la mente — narradores poco fiables, terror gradual y preguntas sobre lo que es real.",
+    "type": "Genre",
+    "author": "NightmareInk",
+    "tags": ["Terror", "Psicológico", "Suspense", "Narrador Poco Fiable"],
+    "arcDescription": "El monstruo es real — pero también lo es la posibilidad de que el protagonista lo haya creado.",
+    "stars": 33,
+    "sections": [
+      {
+        "title": "Todo Parece Normal",
+        "description": "Abre con una vida que parece ordinaria — pero la prosa debe incomodar al lector sin que sepa por qué."
+      },
+      {
+        "title": "La Primera Nota Discordante",
+        "description": "Un pequeño detalle que no encaja. El protagonista lo racionaliza. El lector no puede."
+      },
+      {
+        "title": "Escalada de Extrañeza",
+        "description": "Los eventos se vuelven más difíciles de racionalizar. El control del protagonista sobre la normalidad se afloja visiblemente."
+      },
+      {
+        "title": "La Realidad Cuestionada",
+        "description": "¿Es la amenaza externa o interna? Siembra duda real — el lector no debe estar seguro."
+      },
+      {
+        "title": "Aislamiento",
+        "description": "El protagonista queda incomunicado — de aliados, de la razón, de su yo anterior."
+      },
+      {
+        "title": "El Abismo Mira de Vuelta",
+        "description": "El horror se revela por completo. Sea real o imaginado, ahora es innegable e íntimo."
+      },
+      {
+        "title": "Sin Escape Seguro",
+        "description": "Cada opción del protagonista ha desaparecido. El clímax fuerza una confrontación que no puede evitar."
+      },
+      {
+        "title": "Secuelas — Roto o Cambiado",
+        "description": "La resolución no vuelve a la normalidad. Algo fundamental ha sido alterado, perdido o descubierto."
+      }
+    ]
+  },
+  {
+    "id": "community-romantic-comedy",
+    "name": "Comedia Romántica",
+    "description": "Dos personas que no deberían enamorarse hacen exactamente eso — después de suficientes obstáculos, malentendidos y contratiempos cómicos.",
+    "type": "Genre",
+    "author": "HappyEndings",
+    "tags": ["Romance", "Comedia", "Ligero", "Feel-Good"],
+    "arcDescription": "El amor encuentra un camino — a pesar del mal momento, las suposiciones erróneas y los mejores esfuerzos de ambas partes.",
+    "stars": 36,
+    "sections": [
+      {
+        "title": "Encuentro (Mal)",
+        "description": "Los dos protagonistas se conocen en circunstancias que crean fricción, malentendido o competencia inmediata."
+      },
+      {
+        "title": "Forzados Juntos",
+        "description": "Las circunstancias, un trabajo, una apuesta o un objetivo compartido los lanza a una proximidad de la que no pueden escapar."
+      },
+      {
+        "title": "Los Muros Suben",
+        "description": "Ambos personajes resisten la atracción creciente — cada uno tiene una razón por la que no puede funcionar."
+      },
+      {
+        "title": "Los Muros Caen (Brevemente)",
+        "description": "Un momento genuino de conexión. Vislumbran quién es realmente el otro bajo la superficie."
+      },
+      {
+        "title": "El Malentendido",
+        "description": "Un clásico de la comedia romántica: una mentira, un secreto, una suposición errónea — que los separa justo cuando iba bien."
+      },
+      {
+        "title": "Todo Perdido (En el Amor)",
+        "description": "Están separados. El protagonista se da cuenta de que es miserable sin esta persona que intentó no querer."
+      },
+      {
+        "title": "El Gran Gesto",
+        "description": "Uno de ellos hace algo valiente, ridículo o sincero que no puede malinterpretarse."
+      },
+      {
+        "title": "El Final Feliz",
+        "description": "Se unen — honestamente, sin pretensión — y el lector cree que durará."
+      }
+    ]
+  },
+  {
+    "id": "community-seven-point",
+    "name": "Estructura de Siete Puntos",
+    "description": "El método de Dan Wells — trabajar hacia atrás desde la resolución, construir hacia adelante desde el gancho.",
+    "type": "Structure",
+    "author": "PlotArchitect",
+    "tags": ["Estructura", "Impulsado por la Trama", "Planificación"],
+    "arcDescription": "Siete momentos precisos que garantizan que una historia avance con propósito y satisfacción.",
+    "stars": 29,
+    "sections": [
+      {
+        "title": "Gancho — Estado Inicial",
+        "description": "Muestra el mundo del protagonista tal como es antes de que la historia cambie algo. Este es el opuesto de donde terminará."
+      },
+      {
+        "title": "Giro de Trama 1 — Llamada a la Acción",
+        "description": "Algo empuja al protagonista fuera de su estado inicial y hacia la historia propiamente dicha."
+      },
+      {
+        "title": "Punto de Presión 1 — Presión Aplicada",
+        "description": "El antagonista o el conflicto ejerce presión real. El protagonista siente el peso de lo que enfrenta."
+      },
+      {
+        "title": "Punto Medio — De Reacción a Acción",
+        "description": "El protagonista deja de reaccionar y comienza a actuar. Una revelación o decisión lo cambia de pasivo a activo."
+      },
+      {
+        "title": "Punto de Presión 2 — Mayor Presión",
+        "description": "El antagonista ejerce presión máxima. Las cosas se ven peor aquí — para el protagonista y el lector."
+      },
+      {
+        "title": "Giro de Trama 2 — Pista Final",
+        "description": "El protagonista obtiene la última pieza que necesita — conocimiento, coraje o una herramienta — para ganar."
+      },
+      {
+        "title": "Resolución — Estado Final",
+        "description": "El protagonista alcanza el estado que es el opuesto de donde comenzó. El conflicto está resuelto."
+      }
+    ]
+  },
+  {
+    "id": "community-historical-epic",
+    "name": "Épica Histórica",
+    "description": "Ficción de largo aliento enraizada en una época real — historia personal íntima entretejida con las fuerzas de la historia.",
+    "type": "Genre",
+    "author": "Archivist",
+    "tags": ["Histórico", "Épico", "Literario", "Centrado en Personajes"],
+    "arcDescription": "Una vida atrapada en la marea de la historia — cambiada por eventos demasiado grandes para controlar, demasiado importantes para ignorar.",
+    "stars": 21,
+    "sections": [
+      {
+        "title": "Un Mundo al Borde",
+        "description": "Establece la época histórica con detalles vívidos y específicos. Muestra a los personajes antes del cataclismo."
+      },
+      {
+        "title": "El Evento Detonante",
+        "description": "La historia se mueve. El protagonista ya no está fuera de los eventos — está dentro de ellos."
+      },
+      {
+        "title": "Atrapado Entre Poderes",
+        "description": "El personaje navega fuerzas — políticas, militares, sociales — más grandes que cualquier individuo."
+      },
+      {
+        "title": "El Precio de la Supervivencia",
+        "description": "Mantenerse vivo o libre requiere compromisos. Muestra lo que el personaje sacrifica y lo que protege."
+      },
+      {
+        "title": "Luto por el Mundo Perdido",
+        "description": "Lo que existía antes ha desaparecido — un lugar, una comunidad, una forma de vida. Deja que el personaje llore honestamente."
+      },
+      {
+        "title": "Alianza y Traición",
+        "description": "En el caos, las alianzas se forman a través de líneas inesperadas. Algunas se mantienen; algunas se rompen en el peor momento."
+      },
+      {
+        "title": "El Momento Histórico Decisivo",
+        "description": "El protagonista se encuentra en la intersección de la elección personal y el evento histórico."
+      },
+      {
+        "title": "Lo Que Sobrevive",
+        "description": "No el triunfo — lo que queda. Muestra lo que se llevó a través de la tormenta y lo que costó llevarlo."
+      }
+    ]
+  },
+  {
+    "id": "community-nonlinear-experimental",
+    "name": "Narrativa No Lineal / Experimental",
+    "description": "Una línea de tiempo fragmentada, múltiples puntos de vista o forma que rompe géneros — para escritores que quieren estructura que se siente viva.",
+    "type": "Structure",
+    "author": "AvantGarde",
+    "tags": ["Literario", "Experimental", "No Lineal", "Avanzado"],
+    "arcDescription": "El lector ensambla la historia a partir de fragmentos — cada pieza revela algo que las otras ocultan.",
+    "stars": 14,
+    "sections": [
+      {
+        "title": "Fragmento A — Tiempo Presente (Secuelas)",
+        "description": "Abre en las secuelas. El lector aún no sabe qué pasó — solo que algo lo hizo."
+      },
+      {
+        "title": "Fragmento B — Pasado (Origen)",
+        "description": "Retrocede. Muestra quiénes eran estos personajes antes. Establece lo que tenían que perder."
+      },
+      {
+        "title": "Fragmento C — Hilo Paralelo",
+        "description": "Comienza una segunda voz, tiempo o perspectiva. Su relación con la primera no está clara — y esa tensión es el motor."
+      },
+      {
+        "title": "Punto de Convergencia 1",
+        "description": "Los hilos hacen contacto por primera vez. Un detalle, evento o personaje compartido los conecta."
+      },
+      {
+        "title": "Capa de Revelación 1",
+        "description": "Algo que el lector creía entender es reencuadrado. La estructura fragmentada no es decoración — oculta significado."
+      },
+      {
+        "title": "Punto de Convergencia 2",
+        "description": "Las líneas de tiempo o voces se acercan entre sí. La brecha entre ellas se estrecha con creciente tensión."
+      },
+      {
+        "title": "Capa de Revelación 2 — La Verdad Central",
+        "description": "Lo que la estructura estaba protegiendo queda expuesto. Este es el centro emocional alrededor del cual giraban los fragmentos."
+      },
+      {
+        "title": "Resolución — Todos los Hilos Aterrizan",
+        "description": "La narrativa no necesita ser lineal para ser completa. Encuentra la forma que hace que todas las piezas parezcan inevitables."
+      }
+    ]
+  },
+  {
+    "id": "community-western",
+    "name": "Western",
+    "description": "Polvo, honor y ambigüedad moral — la frontera americana como paisaje moral.",
+    "type": "Genre",
+    "author": "SaddleScribe",
+    "tags": ["Western", "Aventura", "Ambigüedad Moral", "Acción"],
+    "arcDescription": "Una figura solitaria contra una tierra sin ley — pero el verdadero conflicto es el código que lleva dentro.",
+    "stars": 18,
+    "sections": [
+      {
+        "title": "Llegando al Pueblo",
+        "description": "Establece el escenario y la llegada o despertar del protagonista. Algo está mal aquí — y es la persona equivocada para ignorarlo."
+      },
+      {
+        "title": "El Problema Que Nadie Más Enfrentará",
+        "description": "La comunidad tiene una amenaza. Todos lo saben. Nadie está dispuesto a enfrentarse a ella solo."
+      },
+      {
+        "title": "El Código del Protagonista",
+        "description": "Muestra la ley interior del protagonista: lo que hará y no hará, y por qué. Este es el motor moral de la historia."
+      },
+      {
+        "title": "El Poder del Antagonista",
+        "description": "El villano se establece — real, capaz y de alguna manera comprensible. No es simplemente malvado."
+      },
+      {
+        "title": "Alianzas Formadas bajo Presión",
+        "description": "Un compañero improbable, un lugareño que cree, una lealtad sorprendente — y una traición."
+      },
+      {
+        "title": "La Confrontación Que No Lo Es",
+        "description": "El primer gran enfrentamiento que no resuelve nada — alguien no está listo, no está dispuesto o aún no ha llegado."
+      },
+      {
+        "title": "El Ajuste Final de Cuentas",
+        "description": "Calle polvorienta, mediodía o algo más moderno — el clímax es ganado por todo lo que vino antes."
+      },
+      {
+        "title": "Partiendo",
+        "description": "El protagonista no puede quedarse. El mundo es mejor — o simplemente diferente. Sigue adelante."
+      }
+    ]
+  },
+  {
+    "id": "community-memoir-arc",
+    "name": "Arco de Memorias",
+    "description": "Una vida real contada con el ojo de un novelista — estructurada para la verdad emocional, no la completitud cronológica.",
+    "type": "Structure",
+    "author": "TrueVoice",
+    "tags": ["Memorias", "No Ficción", "Personal", "Literario"],
+    "arcDescription": "El narrador de hoy mirando hacia atrás a la persona que era — y encontrando el significado en medio.",
+    "stars": 20,
+    "sections": [
+      {
+        "title": "La Voz Presente del Narrador",
+        "description": "Establece quién eres ahora — con la perspectiva que hace que esta historia valga la pena contar."
+      },
+      {
+        "title": "El Mundo de Antes",
+        "description": "Prepara la escena del pasado. Dale al lector el contexto y las apuestas antes de la experiencia central."
+      },
+      {
+        "title": "La Experiencia Desencadenante",
+        "description": "El evento, relación o realización que convirtió esta vida en una historia que necesitaba ser contada."
+      },
+      {
+        "title": "Profundización — Lo Que Costó",
+        "description": "Muestra la experiencia desde adentro: la confusión, el sentimiento, la textura humana de vivirla."
+      },
+      {
+        "title": "La Persona En Que Me Convertí (Y Resistí)",
+        "description": "El cambio rara vez es bienvenido. Muestra la resistencia — los hábitos, las negaciones, la persona que luchaste por seguir siendo."
+      },
+      {
+        "title": "La Realización Decisiva",
+        "description": "El momento de comprensión genuina — no resolución aún, sino entendimiento. La niebla se levanta sobre algo."
+      },
+      {
+        "title": "Rendición de Cuentas con Otros",
+        "description": "Las personas en unas memorias son reales. Cómo las retratas, las perdonas o las haces responsables es parte de la historia."
+      },
+      {
+        "title": "El Significado Encontrado",
+        "description": "No una lección — significado. Lo que esta experiencia significa para ti ahora, sin atarle un lazo que no merece."
+      }
+    ]
+  }
+]
