@@ -1,6 +1,6 @@
 # CI Audit — StoryCraft Studio
 
-**As of:** 2026-05-21 · **Workflow files:** 2 (`ci.yml`, `tauri-build.yml`) + Renovate
+**As of:** 2026-05-21; **last updated:** 2026-06-01 · **Workflow files:** `ci.yml`, `tauri-build.yml`, `prune-deployments.yml`, `storybook-debug.yml`, `scorecard.yml`, `codeql.yml`, `docker.yml`
 
 This document summarizes the **current inventory** and **stabilization measures** for the GitHub pipeline. Full job descriptions: [`docs/CI.md`](../docs/CI.md).
 
@@ -10,10 +10,15 @@ This document summarizes the **current inventory** and **stabilization measures*
 
 | File | Trigger | Core jobs |
 |------|---------|-----------|
-| [`workflows/ci.yml`](workflows/ci.yml) | `push`/`pull_request` **main**, tags, `workflow_dispatch` | `security` → `quality` (matrix) → `build` \| `e2e` \| `storybook` \| `mutation` → `lighthouse` → `deploy` (main) |
+| [`workflows/ci.yml`](workflows/ci.yml) | `push`/`pull_request` **main**, tags, `workflow_dispatch` | `security` → `quality` (matrix) → `build` \| `e2e` \| `storybook` \| `mutation` → `lighthouse` \| `vrt` → `deploy` (main) |
 | [`workflows/tauri-build.yml`](workflows/tauri-build.yml) | `workflow_dispatch`, tags `v*` | Desktop bundles (Linux/Win/macOS) |
+| [`workflows/prune-deployments.yml`](workflows/prune-deployments.yml) | `workflow_run` (after CI/CD), weekly cron, `workflow_dispatch` | Prune ALL environments (Production/Preview/github-pages); keeps latest 3 per env |
+| [`workflows/storybook-debug.yml`](workflows/storybook-debug.yml) | `workflow_dispatch` only | Cloud-first Storybook debug: configurable workers/retries, PWDEBUG output |
+| [`workflows/scorecard.yml`](workflows/scorecard.yml) | `push` main, weekly cron | OpenSSF Scorecard → GitHub Code Scanning SARIF |
+| [`workflows/codeql.yml`](workflows/codeql.yml) | `push`/`pull_request` main, weekly cron | CodeQL JS/TS SAST |
+| [`workflows/docker.yml`](workflows/docker.yml) | `push` main | Docker image build + push to GHCR |
 
-**Not present (intentionally optional):** separate `codeql.yml`, `dependabot.yml` (Renovate instead), MDC validation in CI, Graphify Doctor in runner.
+**All actions on node24** — node20 actions were upgraded 2026-06-01: `actions/cache` v4.2.3→v5.0.5, `actions/github-script` v7→v9.0.0.
 
 ---
 

@@ -1,6 +1,6 @@
 # StoryCraft Studio — Voice Full Support (opt-in) Master Plan v1.0
 
-> Created: 2026-05-24 | Updated: 2026-05-28 | Author: Senior Voice Architect | Status: **Phase 1 Complete (v1.17.0) + Phase 2 WASM Scaffold Complete (v1.19.0 B-2)**
+> Created: 2026-05-24 | Updated: 2026-06-01 | Author: Senior Voice Architect | Status: **Phase 1 Complete (v1.17.0) + Phase 2 WASM Scaffold + KokoroTTS + Async Engine Refactor Complete (2026-05-31)**
 
 ---
 
@@ -13,6 +13,13 @@ StoryCraft Studio receives a **complete, opt-in Voice Full Support** as a premiu
 **Status v1.0 Foundation:** All abstract engine interfaces, Web Speech API fallback implementations, Redux state, UI components, intent engine, command mappings, and 83 unit tests are implemented and green.
 
 **Status v1.19.0 WASM Scaffold (B-2):** `WasmSttEngine` (Whisper.cpp WASM STT scaffold) und `SileroVadEngine` (Silero VAD v4 via ONNX Runtime Web) implementiert in `services/voice/wasmSttEngine.ts` + `sileroVadEngine.ts`. Beide implementieren die abstrakten Interfaces aus `voiceTypes.ts`. Aktivierung via `enableVoiceWasm` flag (off by default). Model-Download-UI ist Phase 3.
+
+**Status 2026-05-31 (Local AI Perfection — Phase 1.2):**
+- `KokoroTtsEngine` (`services/voice/kokoroTtsEngine.ts`) — full ONNX TTS implementation; text → PCM Float32Array; lazy ONNX session; phoneme-pad preprocessing; `dispose()` releases session. Gated by `enableVoiceWasm`.
+- `SileroVadEngine` — upgraded to full LSTM implementation with hidden-state threading; `processChunk(Float32Array)` → `{ isSpeech: boolean, probability: number }`.
+- All engine interfaces (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`) refactored to `async processChunk()` — enables non-blocking pipeline usage.
+- TTS factory updated to prefer `KokoroTtsEngine` when `enableVoiceWasm` is on; falls back to `WebSpeechTtsEngine`.
+- Eco-mode subscriber: when battery level < 30%, `voiceCommandService` switches to Web Speech API fallback to save battery.
 
 ---
 
@@ -444,12 +451,13 @@ locales/*/settings.json            — 2025 keys × 5 locales (voice keys added)
 14. ✅ 83 unit tests (9 files)
 15. ✅ Quality gate: lint ✅ · i18n:check ✅ · typecheck ✅
 
-### Phase 2: Core WASM Engines (v1.19.0 B-2 — partial) ✅ Scaffold complete
-16. ✅ VAD Engine (Silero via ONNX) — `sileroVadEngine.ts` scaffold done; model download UI Phase 3
+### Phase 2: Core WASM Engines (2026-05-31 Local AI Perfection — complete) ✅
+16. ✅ VAD Engine (Silero via ONNX) — full LSTM implementation; `processChunk` async; model download UI Phase 3
 17. ⬜ Wake-Word Engine (Sherpa-ONNX) — Phase 3
-18. ✅ STT engine (Whisper.cpp WASM) — `wasmSttEngine.ts` scaffold done; chunked inference; model download UI Phase 3
-19. ⬜ TTS engine (Kokoro/Piper WASM) — Phase 3
-20. ⬜ AudioWorklet for microphone processing — Phase 3
+18. ✅ STT engine (Whisper.cpp WASM) — `wasmSttEngine.ts` scaffold; chunked inference; model download UI Phase 3
+19. ✅ TTS engine (Kokoro ONNX) — `kokoroTtsEngine.ts` full implementation; PCM Float32Array output; `enableVoiceWasm` gated
+20. ✅ Async engine refactor — all `processChunk()` methods async; eco-mode eco-mode battery subscriber
+21. ⬜ AudioWorklet for microphone processing — Phase 3
 
 ### Phase 3: Advanced NLU (v1.2)
 21. Semantic intent matching (MiniLM embeddings)

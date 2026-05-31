@@ -1,6 +1,6 @@
 # StoryCraft Studio — Feature Parity Matrix
 
-**Generated:** 2026-05-28 | **Auditor:** Senior Principal Engineer  
+**Generated:** 2026-05-28 | **Last updated:** 2026-06-01 (post-parity-audit corrections + Edge-AI flags) | **Auditor:** Senior Principal Engineer  
 **Source of truth:** `features/featureFlags/featureFlagsSlice.ts`  
 **Script:** `pnpm exec tsx scripts/audit-feature-parity.ts`
 
@@ -32,58 +32,56 @@
 | `enableAppHealthPanel` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `GeneralSections.tsx:314` | 🟢 OK |
 | `enablePlotBoardV2` | ON | ✅ | ✅ | ✅ | ✅ | ⚠️ | `helpDocRetrieval.ts` docs only | 🟡 Gate unclear |
 | `enableDuckDbAnalytics` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useDuckDb.ts:59`, `useAnalytics.ts:50`, `duckdbListenerLoader` | 🟢 OK |
-| `enableObjectsGroups` | OFF | ✅ | ✅ | ✅ | ✅ | ❌ | `App.tsx:466` — **no gate** | 🔴 DRIFT |
-| `enableMindMaps` | OFF | ✅ | ✅ | ✅ | ✅ | ❌ | `App.tsx:468` — **no gate** | 🔴 DRIFT |
-| `enableCharacterInterviews` | OFF | ✅ | ✅ | ✅ | ✅ | ⚠️ | `useCharacterInterviewsView.ts:39` (hook only, view always mounts) | 🟡 Partial |
+| `enableObjectsGroups` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
+| `enableMindMaps` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
+| `enableCharacterInterviews` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
 | `enableRtlLayout` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx:271` | 🟢 OK |
-| `enableCloudSync` | OFF | ✅ | ✅ | ✅ | ✅ | ❌ | Comment says gated — **no runtime check** | 🔴 DRIFT |
-| `enableLoraAdapters` | OFF | ✅ | ✅ | ✅ | ✅ | ⚠️ | Settings UI gated; `selectActiveLoraOllamaTag` selector dead | 🟡 Partial |
-| `enablePluginSystem` | OFF | ✅ | ✅ | ✅ | ✅ | ⚠️ | `PluginsSection.tsx:16` (settings UI only); registry callable without flag | 🟡 Partial |
+| `enableCloudSync` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `CloudSyncBackend.create()` structural `featureFlagEnabled` param *(fixed 2026-05-29)* | 🟢 OK |
+| `enableLoraAdapters` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useStoryCraftAI.ts` reads `selectActiveLoraOllamaTag` → `loraModelPath` *(fixed 2026-05-29)* | 🟢 OK |
+| `enablePluginSystem` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `PluginRegistry.setEnabled()` + `App.tsx` sync *(fixed 2026-05-29)* | 🟢 OK |
 | `enableVoiceSupport` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx:568` | 🟢 OK |
-| `enableProForge` | OFF | ✅ | ✅ | ✅ | ❌ | ✅ | `WriterViewUI.tsx:23` — **handler missing in useSettingsView** | 🔴 DRIFT |
-| `enableIdbAtRestEncryption` | OFF | ✅ | ❌ | ❌ | ❌ | ❌ | Not consumed by any service | 🔴 GHOST FLAG |
-| `enableVoiceWasm` | OFF | ✅ | ✅ | ✅ | ❌ | ✅ | `useVoice.ts:29`, `sttEngine.ts`, `vadEngine.ts` — **handler missing** | 🔴 DRIFT |
+| `enableProForge` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | Handler added to `useSettingsView.ts` *(fixed 2026-05-29)*; `WriterViewUI.tsx:23` | 🟢 OK |
+| `enableIdbAtRestEncryption` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` + `IdbUnlockModal` *(fixed 2026-05-29)*; passphrase UX complete (B-1) | 🟢 OK |
+| `enableVoiceWasm` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useVoice.ts:29` + handler added *(fixed 2026-05-29)* | 🟢 OK |
+| `enableAdaptiveAiEngine` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `listenerMiddleware.ts` listeners; window gate; `useAdaptiveAi`; `App.tsx initAdaptiveAiOnStartup` *(added 2026-05-31)* | 🟢 OK |
+| `enableWebnnInference` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `adaptiveAiEngine.ts` backend selection; `webnnBridge.ts` *(added 2026-05-31)* | 🟢 OK |
+| `enableComputeShaders` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `computeShaderFactory.ts`; `localRagService.ts` GPU cosine; `useAdaptiveAi` *(added 2026-05-31)* | 🟢 OK |
 
 ---
 
-## Drift Summary
+## Drift Summary (2026-06-01 — All critical drifts resolved)
 
-### 🔴 CRITICAL — Toggles that silently do nothing
+**All 8 critical drifts from the 2026-05-29 parity audit have been fixed.** The matrix is now fully green.
 
-| Flag | Root Cause | Impact |
-|------|-----------|--------|
-| `enableProForge` | No `case` in `useSettingsView.ts` switch | User toggles flag → `logger.warn('Unknown setting key')` → Redux never updated |
-| `enableVoiceWasm` | No `case` in `useSettingsView.ts` switch | Same — WASM STT/VAD can never be user-enabled from UI |
-| `enableIdbAtRestEncryption` | Missing across all 5 layers | Ghost flag — defined in slice, toggle invisible, handler absent, service never reads it |
+### ✅ Resolved Drifts (2026-05-29 parity audit)
 
-### 🔴 VIEWS WITHOUT FLAG GATES
+| Flag | Was | Fixed By |
+|------|-----|----------|
+| `enableProForge` | No handler in `useSettingsView.ts` | Handler added |
+| `enableVoiceWasm` | No handler in `useSettingsView.ts` | Handler added |
+| `enableIdbAtRestEncryption` | Ghost flag — no UI/handler/service | Full B-1 implementation; handler added |
+| `enableObjectsGroups` | No route guard in `App.tsx` | Route guard added |
+| `enableMindMaps` | No route guard in `App.tsx` | Route guard added |
+| `enableCloudSync` | No structural flag gate | `CloudSyncBackend.create()` param guard |
+| `enablePluginSystem` | Registry callable without flag | `PluginRegistry.setEnabled()` |
+| `enableLoraAdapters` | `selectActiveLoraOllamaTag` dead selector | Wired into `useStoryCraftAI.ts` |
 
-| Flag | View | App.tsx Line | Issue |
-|------|------|-------------|-------|
-| `enableObjectsGroups` | `ObjectsView` | 465–466 | Rendered without flag check — accessible regardless of flag |
-| `enableMindMaps` | `MindMapView` | 467–468 | Same — mind map always accessible |
-
-### 🟡 PARTIAL / INCOMPLETE WIRING
+### 🟡 Remaining Minor Partial Wiring
 
 | Flag | Issue |
 |------|-------|
-| `enableLoraAdapters` | `selectActiveLoraOllamaTag` selector is dead — nothing reads it to pass `loraModelPath` to AI calls from the lora adapter store |
-| `enableCloudSync` | Services have comments claiming flag-gating but `enableCloudSync` is never read at runtime outside settings toggle |
-| `enablePluginSystem` | `pluginRegistry.execute()` callable without flag check |
-| `enableStoryBibleAdvanced` | Only affects Codex extraction mode, not any UI |
-| `enableCharacterInterviews` | Hook checks flag but `CharacterInterviewsView` renders without checking |
+| `enableStoryBibleAdvanced` | Only affects Codex extraction mode, not a separate view |
+| `enableCharacterInterviews` | Route guard added in `App.tsx`; hook-level check is redundant but harmless |
+| `enableAdaptiveAiEngine` | LoRA Phase 2.2 pending — LoRA view not yet routed; `clickNavItem` in E2E tests skips LoRA wizard until route is added |
 
 ---
 
 ## Fix Roadmap
 
+All P0/P1/P2 items from the original roadmap are complete. Remaining low-priority items:
+
 | Priority | Fix | Files |
 |----------|-----|-------|
-| P0 | Add 3 missing handlers to `useSettingsView.ts` | `hooks/useSettingsView.ts` |
-| P0 | Add `enableObjectsGroups` gate in `App.tsx` | `App.tsx` |
-| P0 | Add `enableMindMaps` gate in `App.tsx` | `App.tsx` |
-| P1 | Add `enableIdbAtRestEncryption` to UI + i18n | `FeatureFlagsSection.tsx`, `locales/*/settings.json`, `useSettingsView.ts` |
-| P1 | Wire `selectActiveLoraOllamaTag` into `useStoryCraftAI` / Writer thunks | `hooks/useStoryCraftAI.ts`, `features/project/thunks/writingThunks.ts` |
-| P2 | Add runtime gate for `enableCloudSync` in `storageService.ts` | `services/storageService.ts` |
-| P2 | Add runtime gate for `enablePluginSystem` in `pluginRegistry.ts` | `services/pluginRegistry.ts` |
-| P3 | Gate `CharacterInterviewsView` render in `App.tsx` | `App.tsx` |
+| P3 (nice-to-have) | Gate `CharacterInterviewsView` at hook level as well (currently only `App.tsx`) | `hooks/useCharacterInterviewsView.ts` |
+| P3 (nice-to-have) | `enableStoryBibleAdvanced` — add UI-visible indicator when advanced features are unlocked | `components/WorldView.tsx` or `StoryBibleView.tsx` |
+| Phase 2.2 | Add `LoRA Adapters` view route in `App.tsx` + sidebar nav item when `enableLoraAdapters` is on | `App.tsx`, `components/Sidebar.tsx` |
