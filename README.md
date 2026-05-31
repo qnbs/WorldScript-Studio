@@ -637,6 +637,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge Ultimate Author Pipeline — 8-stage agentic editing system architecture |
 | [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0/v1.18.1 ProForge Humanization & Refinement + TypeScript strict-mode sweep |
 | [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md) | Sprint handoff: v1.19.0 Phase 2 — B-1..B-8 security, voice WASM, collab-transport, a11y gate, RTL |
+| [`docs/SPRINT-HANDOFF-2026-06-01.md`](docs/SPRINT-HANDOFF-2026-06-01.md) | Sprint handoff: 2026-06-01 CI hardening — 14 CodeAnt AI fixes, E2E stabilisation (24→0), prune-deployments, node24 upgrade |
 | [`docs/IDB-ENCRYPTION.md`](docs/IDB-ENCRYPTION.md) | IDB at-rest encryption architecture (B-1, AES-256-GCM, passphrase-derived key) |
 | [`docs/VOICE_MASTER_PLAN.md`](docs/VOICE_MASTER_PLAN.md) | Voice Full Support master plan — foundation v1.0 complete, WASM scaffold (B-2) in v1.19.0 |
 | [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA manifest, service worker, share-target checklist |
