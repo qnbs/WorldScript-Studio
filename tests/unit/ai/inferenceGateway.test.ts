@@ -181,17 +181,32 @@ describe('DefaultInferenceGateway.embed', () => {
 // DefaultInferenceGateway.modelList / healthCheck (stubs)
 // ---------------------------------------------------------------------------
 
-describe('DefaultInferenceGateway stubs', () => {
-  it('modelList returns empty array', async () => {
+// QNBS-v3: modelList() was a stub returning [] — now returns curated cloud + local models
+describe('DefaultInferenceGateway modelList / healthCheck', () => {
+  it('modelList returns a non-empty array of models', async () => {
     const gw = new DefaultInferenceGateway();
     const models = await gw.modelList();
-    expect(models).toEqual([]);
+    expect(models.length).toBeGreaterThan(0);
+    // Each entry must have id, displayName, isLocal, and provider fields
+    for (const m of models) {
+      expect(m).toHaveProperty('id');
+      expect(m).toHaveProperty('displayName');
+      expect(m).toHaveProperty('isLocal');
+      expect(m).toHaveProperty('provider');
+    }
   });
 
-  it('healthCheck returns ok status', async () => {
+  it('modelList includes at least one cloud and one local model', async () => {
+    const gw = new DefaultInferenceGateway();
+    const models = await gw.modelList();
+    expect(models.some((m) => !m.isLocal)).toBe(true);
+    expect(models.some((m) => m.isLocal)).toBe(true);
+  });
+
+  it('healthCheck returns ok or degraded status (embedding service may be unavailable in test)', async () => {
     const gw = new DefaultInferenceGateway();
     const health = await gw.healthCheck();
-    expect(health.status).toBe('ok');
+    expect(['ok', 'degraded', 'unavailable']).toContain(health.status);
   });
 });
 
