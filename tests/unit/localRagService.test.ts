@@ -23,6 +23,28 @@ vi.mock('../../services/ai/localEmbeddingService', () => ({
   cosineSimilarity: vi.fn().mockReturnValue(0),
 }));
 
+// QNBS-v3: B1 — mock compute shader factory for GPU cosine path tests
+const mockGetComputeDevice = vi.fn().mockResolvedValue(null);
+const mockCreateSimilarityPipeline = vi.fn();
+const mockCreateSimilarityBuffers = vi.fn();
+const mockEncodeSimilarityUniforms = vi.fn();
+
+vi.mock('../../services/ai/computeShaderFactory', () => ({
+  getComputeDevice: (...args: unknown[]) => mockGetComputeDevice(...args),
+  createSimilarityPipeline: (...args: unknown[]) => mockCreateSimilarityPipeline(...args),
+  createSimilarityBuffers: (...args: unknown[]) => mockCreateSimilarityBuffers(...args),
+  encodeSimilarityUniforms: (...args: unknown[]) => mockEncodeSimilarityUniforms(...args),
+}));
+
+// Mock WebGPU globals required by batchCosineGpu
+if (typeof GPUBufferUsage === 'undefined') {
+  Object.defineProperty(globalThis, 'GPUBufferUsage', {
+    value: { STORAGE: 128, COPY_DST: 8, COPY_SRC: 4, UNIFORM: 64, MAP_READ: 1 },
+    writable: true,
+    configurable: true,
+  });
+}
+
 import {
   hashEmbedText,
   rebuildHybridRagIndex,
@@ -280,5 +302,92 @@ describe('rebuildHybridRagIndex — semantic embedding population', () => {
     expect(hybridResult[0]?.sectionId).toBe('s1');
     // In lexical mode, recency wins → s2 (more recent) ranks first
     expect(lexResult[0]?.sectionId).toBe('s2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// retrieveContext — GPU batch cosine path (B1)
+// ---------------------------------------------------------------------------
+describe('retrieveContext — GPU batch cosine', () => {
+  function makeSemRecord(id: string, sectionId: string, semVec: Float32Array) {
+    return { ...makeRecord(id, sectionId, 0, `text ${id}`, Date.now()), semanticVec: semVec };
+  }
+
+  beforeEach(() => {
+    mockGetComputeDevice.mockReset();
+    mockCreateSimilarityPipeline.mockReset();
+    mockCreateSimilarityBuffers.mockReset();
+    mockEncodeSimilarityUniforms.mockReset();
+  });
+
+  it('falls back to CPU cosine when getComputeDevice returns null', async () => {
+    mockGetComputeDevice.mockResolvedValue(null);
+
+    const queryEmb = new Float32Array([1, 0, 0, 0]);
+    const semHigh = new Float32Array([1, 0, 0, 0]); // perfect match
+    const semLow = new Float32Array([0, 1, 0, 0]);
+
+    const recs = [makeSemRecord('a', 's1', semHigh), makeSemRecord('b', 's2', semLow)];
+    mockGetRagVectors.mockResolvedValue(recs);
+
+    const result = await retrieveContext('p1', 'q', 2, 'semantic', queryEmb, false, true);
+    // CPU fallback should still rank by cosine correctly
+    expect(result[0]?.sectionId).toBe('s1');
+    expect(mockCreateSimilarityPipeline).not.toHaveBeenCalled();
+  });
+
+  it('uses GPU scores when device is available and returns non-null scores', async () => {
+    const fakeBindGroupLayout = {};
+    const fakePipeline = {
+      pipeline: {},
+      bindGroupLayout: fakeBindGroupLayout,
+      label: 'test',
+      device: {},
+    };
+    const outBuffer = {
+      destroy: vi.fn(),
+      // Simulate a readback: mapAsync + getMappedRange returning GPU scores
+      mapAsync: vi.fn().mockResolvedValue(undefined),
+      getMappedRange: vi.fn(() => new Float32Array([0.9, 0.1]).buffer),
+      unmap: vi.fn(),
+    };
+    const fakeBuffers = {
+      queryBuffer: { destroy: vi.fn() },
+      docBuffer: { destroy: vi.fn() },
+      outBuffer,
+      uniformBuffer: { destroy: vi.fn() },
+    };
+    const fakeCommandEncoder = {
+      beginComputePass: vi.fn(() => ({
+        setPipeline: vi.fn(),
+        setBindGroup: vi.fn(),
+        dispatchWorkgroups: vi.fn(),
+        end: vi.fn(),
+      })),
+      copyBufferToBuffer: vi.fn(),
+      finish: vi.fn(() => ({})),
+    };
+    const fakeDevice = {
+      createBindGroup: vi.fn(() => ({})),
+      createCommandEncoder: vi.fn(() => fakeCommandEncoder),
+      createBuffer: vi.fn(() => outBuffer),
+      queue: { submit: vi.fn(), writeBuffer: vi.fn() },
+    };
+
+    mockGetComputeDevice.mockResolvedValue(fakeDevice);
+    mockCreateSimilarityPipeline.mockResolvedValue(fakePipeline);
+    mockCreateSimilarityBuffers.mockReturnValue(fakeBuffers);
+
+    const queryEmb = new Float32Array([1, 0, 0, 0]);
+    const recs = [
+      makeSemRecord('a', 's1', new Float32Array([1, 0, 0, 0])),
+      makeSemRecord('b', 's2', new Float32Array([0, 1, 0, 0])),
+    ];
+    mockGetRagVectors.mockResolvedValue(recs);
+
+    const result = await retrieveContext('p1', 'q', 2, 'semantic', queryEmb, false, true);
+    // GPU returned [0.9, 0.1] → s1 should rank first
+    expect(result[0]?.sectionId).toBe('s1');
+    expect(mockCreateSimilarityPipeline).toHaveBeenCalled();
   });
 });

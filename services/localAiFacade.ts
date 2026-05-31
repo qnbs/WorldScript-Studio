@@ -6,7 +6,9 @@ import {
   type WebLlmProgressReport,
   WorkerBus,
 } from '@domain/ai-core';
+import { adaptiveAiEngine } from './ai/adaptiveAiEngine';
 import { gpuResourceManager } from './ai/gpuResourceManager';
+// QNBS-v3: C2 — lazy-import telemetry to avoid blocking cold start
 import { logger } from './logger';
 
 const localWorkerBus = new WorkerBus();
@@ -48,11 +50,71 @@ export async function generateLocalText(
 
   const startedAt = performance.now();
   try {
-    const result = await runLocalTextGeneration(prompt, modelId, onProgress);
-    localWorkerBus.recordResult(performance.now() - startedAt, true);
+    // QNBS-v3: When adaptive AI engine is enabled, use its task config for optimal backend/model.
+    //          Otherwise fall back to legacy runLocalTextGeneration.
+    const adaptiveEnabled =
+      typeof window !== 'undefined' &&
+      (window as unknown as Record<string, boolean>)['__storycraft_adaptive_ai__'] === true;
+
+    let result: LocalAiResponse;
+    let usedBackend = 'heuristic';
+    let usedModel = modelId ?? 'unknown';
+
+    if (adaptiveEnabled) {
+      const config = await adaptiveAiEngine.getTaskConfig('text-gen-short');
+      usedBackend = config.backend;
+      usedModel = config.modelId;
+      result = await runLocalTextGeneration(prompt, config.modelId, onProgress);
+      adaptiveAiEngine.recordTaskLatency(
+        'text-gen-short',
+        config.backend,
+        config.modelId,
+        performance.now() - startedAt,
+      );
+    } else {
+      result = await runLocalTextGeneration(prompt, modelId, onProgress);
+      usedBackend = result.layer;
+    }
+
+    const elapsedMs = performance.now() - startedAt;
+    localWorkerBus.recordResult(elapsedMs, true);
+
+    // QNBS-v3: C2 — record telemetry asynchronously (non-blocking, fire-and-forget)
+    import('./ai/telemetryService')
+      .then(({ recordInferenceTelemetry }) => {
+        void recordInferenceTelemetry({
+          taskType: 'text-gen-short',
+          backend: usedBackend,
+          modelId: usedModel,
+          latencyMs: Math.round(elapsedMs),
+          success: true,
+          timestamp: Date.now(),
+        });
+      })
+      .catch(() => {
+        /* telemetry is best-effort */
+      });
+
     return result;
   } catch {
     localWorkerBus.recordResult(performance.now() - startedAt, false);
+
+    // QNBS-v3: C2 — record failure telemetry
+    import('./ai/telemetryService')
+      .then(({ recordInferenceTelemetry }) => {
+        void recordInferenceTelemetry({
+          taskType: 'text-gen-short',
+          backend: 'heuristic',
+          modelId: modelId ?? 'unknown',
+          latencyMs: Math.round(performance.now() - startedAt),
+          success: false,
+          timestamp: Date.now(),
+        });
+      })
+      .catch(() => {
+        /* telemetry is best-effort */
+      });
+
     return { layer: 'heuristic', text: 'Heuristic fallback response' };
   } finally {
     // QNBS-v3: Always release — gpuResourceManager has a 30s auto-release safety net too.

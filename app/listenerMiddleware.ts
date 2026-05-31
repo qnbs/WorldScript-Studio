@@ -24,6 +24,18 @@ type ProjectStateWithHistory = {
 
 export const listenerMiddleware = createListenerMiddleware();
 
+// QNBS-v3: Listener categories in this file:
+//   1. Auto-Save        — project data + version control → IDB (debounced 1s)
+//   2. Auto-Track       — Codex extraction from manuscript changes (debounced 2s)
+//   3. RAG Index        — incremental re-embedding on manuscript edits (debounced 3s)
+//   4. DuckDB Dual-Write — analytics tables updated on save (when enableDuckDbAnalytics)
+//   5. Storage Health   — quota check before every save
+//   6. Cross-Project    — search index updated on save (when enableCrossProjectSearch)
+//
+// All AI inference side effects (local/cloud) are intentionally NOT in this middleware —
+// they belong in service-layer thunks (aiProviderService, localAiFacade) to keep the
+// middleware focused on persistence and indexing.
+
 // QNBS-v3: Factory for the common debounce-listener pattern — predicate + delay + typed effect.
 // Eliminates the RootState cast dance repeated across 3 auto-save / auto-track listeners.
 type DebouncedEffectApi = {
@@ -342,6 +354,52 @@ listenerMiddleware.startListening({
       await rebuildHybridRagIndex(projectId, project.manuscript, duckDbOn);
     } catch (err) {
       logger.warn('RAG auto-rebuild failed (non-critical):', err);
+    }
+  },
+});
+
+// QNBS-v3: B4 — Adaptive AI engine activation listener.
+// On flag enable: set window flag + generate device profile.
+// On flag disable: release GPU resources + invalidate cached profile.
+listenerMiddleware.startListening({
+  predicate: (_action, currentState, previousState) => {
+    const curr = (currentState as RootState).featureFlags;
+    const prev = (previousState as RootState).featureFlags;
+    return curr?.enableAdaptiveAiEngine === true && prev?.enableAdaptiveAiEngine !== true;
+  },
+  effect: async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: window augmentation for cross-service gate
+    (window as any).__storycraft_adaptive_ai__ = true;
+    try {
+      const { generateDeviceProfile } = await import('../services/ai/localAiDeviceProfiler');
+      await generateDeviceProfile();
+      logger.info('Adaptive AI engine enabled — device profile generated');
+    } catch (err) {
+      logger.warn('Adaptive AI device profile generation failed', err);
+    }
+  },
+});
+
+listenerMiddleware.startListening({
+  predicate: (_action, currentState, previousState) => {
+    const curr = (currentState as RootState).featureFlags;
+    const prev = (previousState as RootState).featureFlags;
+    return curr?.enableAdaptiveAiEngine !== true && prev?.enableAdaptiveAiEngine === true;
+  },
+  effect: async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: window augmentation for cross-service gate
+    (window as any).__storycraft_adaptive_ai__ = false;
+    try {
+      const [aiCore, profiler] = await Promise.all([
+        import('@domain/ai-core'),
+        import('../services/ai/localAiDeviceProfiler'),
+      ]);
+      aiCore.releaseAllWebLlmEngines();
+      aiCore.releaseAllOnnxSessions();
+      profiler.invalidateDeviceProfile();
+      logger.info('Adaptive AI engine disabled — GPU resources released');
+    } catch (err) {
+      logger.warn('Adaptive AI cleanup failed', err);
     }
   },
 });

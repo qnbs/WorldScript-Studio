@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
+import { AdaptiveAiHardwarePanel } from './AdaptiveAiHardwarePanel';
 import { AiProviderCard } from './AiProviderCard';
 import { GpuMetricsPanel } from './GpuMetricsPanel';
 import { LocalAiDownloadProgress } from './LocalAiDownloadProgress';
@@ -52,6 +53,8 @@ export const AiSection: FC = () => {
       {/* QNBS-v3: Download progress modal renders above settings panel (portal-like absolute position). */}
       <LocalAiDownloadProgress />
       <GpuMetricsPanel />
+      {/* QNBS-v3: B3 — Adaptive AI hardware panel (gated by enableAdaptiveAiEngine flag) */}
+      <AdaptiveAiHardwarePanel />
       <AiProviderCard
         advancedAi={settings.advancedAi}
         onAdvancedAiPatch={(patch) =>

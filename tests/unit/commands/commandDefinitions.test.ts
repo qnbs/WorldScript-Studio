@@ -89,6 +89,9 @@ const baseDeps: CommandRuntimeDeps = {
     enableProForge: false,
     enableIdbAtRestEncryption: false,
     enableVoiceWasm: false,
+    enableAdaptiveAiEngine: false,
+    enableWebnnInference: false,
+    enableComputeShaders: false,
   },
 };
 

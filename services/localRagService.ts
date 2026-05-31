@@ -4,6 +4,12 @@
  */
 
 import type { StorySection } from '../types';
+import {
+  createSimilarityBuffers,
+  createSimilarityPipeline,
+  encodeSimilarityUniforms,
+  getComputeDevice,
+} from './ai/computeShaderFactory';
 import { embedText } from './ai/localEmbeddingService';
 import { duckdbRagWrite, queryRagSimilarity } from './duckdb/duckdbAnalytics';
 import {
@@ -160,6 +166,87 @@ function tokenOverlapScore(queryTokens: string[], chunkText: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// GPU batch cosine similarity (B1 — WebGPU acceleration)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute cosine similarities for all document vectors against a query embedding on the GPU.
+ * Returns null if WebGPU is unavailable or the pipeline dispatch fails.
+ * QNBS-v3: Uses batchCosineSimilarity WGSL kernel — 64 threads/workgroup, one thread per doc.
+ */
+async function batchCosineGpu(
+  queryEmbedding: Float32Array,
+  docVecs: Float32Array[],
+): Promise<number[] | null> {
+  if (docVecs.length === 0) return null;
+  const device = await getComputeDevice();
+  if (!device) return null;
+
+  try {
+    const dim = queryEmbedding.length;
+    const numDocs = docVecs.length;
+
+    // Flatten all doc vectors into a contiguous Float32Array
+    const flatDocs = new Float32Array(numDocs * dim);
+    for (let i = 0; i < numDocs; i++) {
+      const v = docVecs[i];
+      if (v) flatDocs.set(v.length >= dim ? v.subarray(0, dim) : v, i * dim);
+    }
+
+    const pipeline = await createSimilarityPipeline(device);
+    const buffers = createSimilarityBuffers(device, numDocs, dim);
+
+    device.queue.writeBuffer(buffers.queryBuffer, 0, queryEmbedding);
+    device.queue.writeBuffer(buffers.docBuffer, 0, flatDocs);
+    encodeSimilarityUniforms(device, buffers.uniformBuffer, numDocs, dim);
+
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.bindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: buffers.queryBuffer } },
+        { binding: 1, resource: { buffer: buffers.docBuffer } },
+        { binding: 2, resource: { buffer: buffers.outBuffer } },
+        { binding: 3, resource: { buffer: buffers.uniformBuffer } },
+      ],
+    });
+
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline.pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(numDocs / 64));
+    pass.end();
+    device.queue.submit([encoder.finish()]);
+
+    // Readback via staging buffer
+    const readBuffer = device.createBuffer({
+      size: numDocs * 4,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const copyEncoder = device.createCommandEncoder();
+    copyEncoder.copyBufferToBuffer(buffers.outBuffer, 0, readBuffer, 0, numDocs * 4);
+    device.queue.submit([copyEncoder.finish()]);
+
+    // 1 = GPUMapMode.READ (avoids global reference for SSR/test compat)
+    await readBuffer.mapAsync(1);
+    const scores = Array.from(new Float32Array(readBuffer.getMappedRange()));
+    readBuffer.unmap();
+
+    // Cleanup GPU resources
+    buffers.queryBuffer.destroy();
+    buffers.docBuffer.destroy();
+    buffers.outBuffer.destroy();
+    buffers.uniformBuffer.destroy();
+    readBuffer.destroy();
+
+    return scores;
+  } catch (err) {
+    logger.warn('batchCosineGpu failed, falling back to CPU', { error: String(err) });
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // retrieveContext — unified entry point
 // ---------------------------------------------------------------------------
 
@@ -173,6 +260,7 @@ function tokenOverlapScore(queryTokens: string[], chunkText: string): number {
  *
  * When `mode` is 'semantic' or 'hybrid' and no `queryEmbedding` is provided,
  * the function falls back to 'lexical' transparently.
+ * Set `useGpuSimilarity=true` (with `enableComputeShaders` flag) to batch-rank via WebGPU.
  */
 export async function retrieveContext(
   projectId: string,
@@ -182,6 +270,8 @@ export async function retrieveContext(
   queryEmbedding?: Float32Array,
   // QNBS-v3: P2 — when true and queryEmbedding is provided, delegates ranking to DuckDB.
   useDuckDb = false,
+  // QNBS-v3: B1 — when true and WebGPU available, uses GPU batch cosine similarity.
+  useGpuSimilarity = false,
 ): Promise<RagChunk[]> {
   // DuckDB path: vector similarity via list_dot_product; text fetched from IDB after ranking.
   if (useDuckDb && queryEmbedding) {
@@ -204,7 +294,30 @@ export async function retrieveContext(
   const minTs = Math.min(...timestamps, now - 3_600_000);
   const tsRange = now - minTs || 1;
 
-  const scored = raw.map((r): RagChunk & { _raw: number } => {
+  // QNBS-v3: B1 — GPU batch cosine pre-computation. When useGpuSimilarity=true and
+  // WebGPU is available, scores all semantic embeddings in one dispatch instead of per-doc CPU loops.
+  let gpuScoresByIndex: Map<number, number> | null = null;
+  if (
+    useGpuSimilarity &&
+    queryEmbedding &&
+    (activeMode === 'semantic' || activeMode === 'hybrid')
+  ) {
+    const semVecsWithIndex: Array<[number, Float32Array]> = raw
+      .map((r, i): [number, Float32Array | undefined] => [i, r.semanticVec])
+      .filter((pair): pair is [number, Float32Array] => pair[1] !== undefined);
+
+    if (semVecsWithIndex.length > 0) {
+      const gpuScores = await batchCosineGpu(
+        queryEmbedding,
+        semVecsWithIndex.map(([, v]) => v),
+      );
+      if (gpuScores) {
+        gpuScoresByIndex = new Map(semVecsWithIndex.map(([idx], i) => [idx, gpuScores[i] ?? 0]));
+      }
+    }
+  }
+
+  const scored = raw.map((r, rawIdx): RagChunk & { _raw: number } => {
     let score = 0;
 
     if (activeMode === 'lexical') {
@@ -213,13 +326,14 @@ export async function retrieveContext(
         Array.isArray(r.vector) && r.vector.length === queryBow.length ? r.vector : null;
       score = bowVec ? bowCosineSim(bowVec, queryBow) : 0;
     } else if (activeMode === 'semantic' && queryEmbedding) {
-      // Pure semantic — use the semantic embedding stored in a parallel field if present,
-      // otherwise fall through to BoW as proxy
-      const semVec = r.semanticVec;
-      score = semVec ? cosineSim(semVec, queryEmbedding) : 0;
+      // GPU-batched score when available; otherwise CPU cosine
+      score =
+        gpuScoresByIndex?.get(rawIdx) ??
+        (r.semanticVec ? cosineSim(r.semanticVec, queryEmbedding) : 0);
     } else if (activeMode === 'hybrid' && queryEmbedding) {
-      const semVec = r.semanticVec;
-      const semScore = semVec ? cosineSim(semVec, queryEmbedding) : 0;
+      const semScore =
+        gpuScoresByIndex?.get(rawIdx) ??
+        (r.semanticVec ? cosineSim(r.semanticVec, queryEmbedding) : 0);
       const lexScore = tokenOverlapScore(queryTokens, r.text);
       const recencyScore = ((r.indexedAt ?? minTs) - minTs) / tsRange;
       score = W_SEMANTIC * semScore + W_LEXICAL * lexScore + W_RECENCY * recencyScore;

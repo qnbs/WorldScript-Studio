@@ -21,6 +21,8 @@ import {
   setWakeWordStatus,
 } from '../../features/voice/voiceSlice';
 import type { VoiceFeedbackLevel } from '../../types';
+// QNBS-v3: B5 — eco-mode forces lightweight WebSpeech backend when battery is low
+import { ecoModeService } from '../ai/ecoModeService';
 import { logger } from '../logger';
 import { FeedbackService } from './feedbackService';
 import { HybridIntentEngine } from './intentEngine';
@@ -172,9 +174,11 @@ export class VoiceCommandService {
   private async initStt(): Promise<SttEngine | null> {
     try {
       this.d(setSttStatus('loading'));
+      // QNBS-v3: B5 — eco-mode overrides STT to lightweight WebSpeech to save power
+      const eco = ecoModeService.isEcoMode();
       const engine = await createSttEngine({
-        preferredEngine: this.config.preferredSttEngine,
-        enableVoiceWasm: this.config.enableVoiceWasm,
+        preferredEngine: eco ? 'webSpeech' : this.config.preferredSttEngine,
+        enableVoiceWasm: this.config.enableVoiceWasm || eco,
       });
       this.d(setActiveSttEngine(engine.id));
       this.d(setSttStatus('ready'));
@@ -189,7 +193,11 @@ export class VoiceCommandService {
   private async initTts(): Promise<TtsEngine | null> {
     try {
       this.d(setTtsStatus('loading'));
-      const engine = await createTtsEngine({ preferredEngine: this.config.preferredTtsEngine });
+      // QNBS-v3: B5 — eco-mode overrides TTS to WebSpeech to avoid heavy Kokoro/Piper models
+      const eco = ecoModeService.isEcoMode();
+      const engine = await createTtsEngine({
+        preferredEngine: eco ? 'webSpeech' : this.config.preferredTtsEngine,
+      });
       this.d(setActiveTtsEngine(engine.id));
       this.d(setTtsStatus('ready'));
       return engine;

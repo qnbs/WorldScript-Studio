@@ -24,11 +24,10 @@ export function resolveProviderFallbackChain(opts: FallbackOpts): AIProvider[] {
     }
     return out;
   }
-  if (
-    (opts.provider === 'ollama' || opts.provider === 'webllm') &&
-    opts.fallbackProviders?.includes('gemini')
-  ) {
-    return opts.provider === 'webllm' ? ['webllm', 'gemini'] : ['ollama', 'gemini'];
+  // QNBS-v3: Local inference providers (ollama, webllm, onnx, transformers) can fallback to cloud (gemini).
+  const localProviders = new Set(['ollama', 'webllm', 'onnx', 'transformers']);
+  if (localProviders.has(opts.provider) && opts.fallbackProviders?.includes('gemini')) {
+    return [opts.provider, 'gemini'];
   }
   return [opts.provider];
 }
