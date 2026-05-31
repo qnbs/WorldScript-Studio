@@ -8,6 +8,23 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## v1.20.0 — CI Hardening + AI Core + Local AI Perfection (2026-06-01)
+
+- ✅ **pnpm lockfile sync** — `@xenova/transformers` → `@huggingface/transformers@^3.8.1`; `ERR_PNPM_OUTDATED_LOCKFILE` blocked all CI runs
+- ✅ **14 CodeAnt AI issues fixed** — webllm dispose on eviction, releaseWebLlm both variants, await releaseAllOnnxSessions, computeShaderFactory race condition, localAiDeviceProfiler backend recommendation, adaptiveAiEngine task field, telemetryService feature flag gate, window guards, AiSections conditional mount, AdaptiveAiHardwarePanel i18n (2160 keys × 5 locales)
+- ✅ **E2E stabilisation (24 → ~0 failures)** — VRT baselines, WelcomePortal contrast, waitForSpaReady theme-wait, seedGeminiApiKey role=switch fix, SceneBoard ARIA (toolbar/li), LoRA wizard skip, a11y locators, export localStorageOnly
+- ✅ **Local AI Perfection — Phase 1 + 2.1 complete** — IDB session lock + key rotation, Silero VAD + Kokoro TTS async, GPU diagnostics, real text-gen pipelines, AbortSignal
+- ✅ **Scorecard Pinned-Dependencies #72** — graphifyy pip install pinned by SHA256 hash
+- ✅ **prune-deployments.yml** — all-environment pruning (Production/Preview/github-pages); 156 records deleted; github-script v7→v9 (node24)
+- ✅ **Storybook cloud-first CI** — storybook-debug.yml (manual dispatch), Playwright browser cache v5 (node24)
+- ⬜ **Local AI Perfection Phase 2.2** — LoRA productionization: App.tsx route for LoRA view + sidebar nav (allows E2E lora-wizard.spec.ts re-enable)
+- ⬜ **Local AI Perfection Phase 2.3** — Performance hardening (WebLLM worker, LRU pipeline cache)
+- ⬜ **Local AI Perfection Phase 2.4** — Coverage: sileroVadEngine.ts, kokoroTtsEngine.ts (0 tests each), inferenceWorker.ts (LRU)
+- ⬜ **C-7** — Coverage L85%/B75%/F80%; Stryker break 75→80
+- ⬜ **C-6** — ar/he full translation (community translator required)
+
+---
+
 ## v1.19.0 — Phase 2: B-Series Sprint (RELEASED 2026-05-28)
 
 - ✅ **B-1** — `services/storage/storageEncryptionService.ts` — AES-256-GCM IDB at-rest encryption; PBKDF2 (310k iter), 32-byte random salt, `extractable: false`; `enableIdbAtRestEncryption` flag

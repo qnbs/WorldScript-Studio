@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **14 CodeAnt AI issues — AI core resource cleanup, race conditions, correctness** (2026-06-01, commit `827a512`):
+  - `webllmOptimizer.ts`: `engine.dispose()` called on cache eviction; `releaseWebLlm` now deletes both `high-performance` and `low-power` power-preference variants when preference is not specified
+  - `computeShaderFactory.ts`: promise-mutex (`deviceInitPromise`) prevents concurrent `requestDevice()` calls from creating duplicate GPU devices
+  - `listenerMiddleware.ts`: `await releaseAllOnnxSessions()` (was fire-and-forget on an async function); `typeof window !== 'undefined'` guards on window assignments; `initAdaptiveAiOnStartup()` sets the window gate on cold-start when `enableAdaptiveAiEngine` is already `true` from localStorage (listener only fires on flag toggle, not initial load)
+  - `localAiDeviceProfiler.ts`: `recommendBackend()` no longer returns `transformers-webgpu` when WebGPU is unavailable (code path is reached only after all GPU checks fail)
+  - `adaptiveAiEngine.ts`: `WarmedModelEntry` gains `task: AiTaskType` field for better telemetry and debugging
+  - `telemetryService.ts`: `recordInferenceTelemetry()` is a no-op until `setTelemetryEnabled(true)` is called; `App.tsx` syncs `enableDuckDbAnalytics` flag on every change — prevents recording telemetry when the user has not opted in
+  - `AiSections.tsx`: `AdaptiveAiHardwarePanel` conditionally mounted at parent level so `useAdaptiveAi` hook (device profiling, GPU queries) never runs when the feature flag is disabled
+  - `AdaptiveAiHardwarePanel.tsx`: replaced all 7 hardcoded strings (`'WebGPU shaders ✓'`, capability labels, `available`/`unavailable`) with `t()` calls; 7 new i18n keys × 5 locales (2160 keys total)
+
+- **E2E test suite stabilisation — 24 failures → ~0** (2026-06-01):
+  - `WelcomePortal.tsx`: language buttons' inactive state `bg-overlay/50 text-secondary` gave WCAG AA failure (2.91:1); active state `bg-indigo-600 text-white` resolved to non-standard values (1.55:1). Replaced with `bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]` / `bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)]`
+  - `helpers.ts waitForSpaReady`: waits for body theme class (`light-theme`/`dark-theme`/`sepia-theme`) before returning — CSS variables were resolving to mid-transition values (#848993) when axe ran before App `useEffect` applied the theme class
+  - `helpers.ts seedGeminiApiKey`: fixed `role="switch"` (was `role="checkbox"`) for the `ToggleSwitch` component; now also disables `localStorageOnly` so Gemini mock calls are not blocked by the cloud-AI gate
+  - `SceneBoardView.tsx`: `role="tablist"` → `role="toolbar"` for display-mode toggle group — `tablist` requires `role="tab"` children, not `button[aria-pressed]`
+  - `ActSwimlane.tsx`: wrapped `SceneCard` (DnD kit adds `role="button"` to the root `<div>`) in `<li>` elements — `<ul>` must only contain `<li>` children (axe `list` rule)
+  - `a11y.spec.ts`: tightened navigation patterns — `/World|Setting/i` (matched 2 items) → `/World Building/i`; `/Outline|Plot Board|Board/i` (matched 3 items) → `/Scene Board/i`
+  - `lora-wizard.spec.ts`: skipped for all projects (LoRA view not yet routed in `App.tsx` — Phase 2.2 pending); also fixed `getByRole('tab', ...)` → `getByRole('button', ...)` for "Early Access Features" Settings nav
+
+- **VRT baselines bootstrapped** (`tests/e2e/visual-regression.spec.ts-snapshots/*.png`): 4 Chromium 1280×720 baseline PNGs committed from CI artifact (home, writer, characters, settings)
+
+- **`pnpm-lock.yaml` out of sync** (commit `ec3889e`): the `@xenova/transformers@2.17.2` → `@huggingface/transformers@^3.8.1` migration in `packages/ai-core/package.json` was not accompanied by a lockfile regeneration, causing `ERR_PNPM_OUTDATED_LOCKFILE` on every CI run
+
+- **AI inference Layer-3 / Layer-2 model collision** (`packages/ai-core/src/index.ts`): when no GPU is available, both ONNX (Layer-2) and Transformers.js (Layer-3) were using `HuggingFaceTB/SmolLM2-135M-Instruct`; empty Layer-2 output caused Layer-3 to also return null → fell to heuristic. Layer-3 now always uses `ONNX_SUPPORTED_MODELS[1]` (`Xenova/distilgpt2`, 82 MB)
+
+- **ScoreCard transient failure**: `api.scorecard.dev` network timeout caused CI red; resolved by re-running the workflow
+
 - **Settings crash hardening** (`components/settings/*`):
   - `AdvancedEditorSection`, `AccessibilitySection`, `AppearanceSection` now read from defaults-merged local objects. Missing `advancedEditor`, `accessibility`, or `themeCustomization` nested objects (from pre-v1.8 persisted state) can no longer crash the page.
   - `normalizePersistedSettings` already backfilled these fields in IDB rehydration; the component-level guards are a second line of defense.
@@ -19,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CI: prune-deployments workflow** (`.github/workflows/prune-deployments.yml`): was filtering only `github-pages` environment; Vercel creates `Production` and `Preview` environments that accumulated 160+ un-cleaned deployment records. Script now paginates ALL environments and deletes all but the latest 3 per environment. First run: 156 deployments deleted, 0 failed. Upgraded `actions/github-script` from v7 (node20, deprecated June 2026) to v9.0.0 (node24)
+- **CI: `actions/cache` upgraded** (`storybook` job): `v4.2.3` (node20, deprecated) → `v5.0.5` (SHA: `27d5ce7f`, node24) before the forced June 16 2026 deadline
+- **GitHub App installation token format** (`ghs_`, up to 520 chars): audited all workflows — no hardcoded token length assumptions found; no code changes required
 - **CLAUDE.md — environment-aware shell rules**: Replaced the blanket "ONE Bash call per turn (LOW-END HARDWARE)" rule with environment-aware guidance. On GitHub Codespaces (8-core/16GB), parallel Bash calls and `run_in_background` are allowed. Sequential rules are retained for constrained local hardware. Added "Codespaces Modus Operandi" section with session-start checklist, daily workflow, and test failure triage patterns.
 - **Devcontainer re-enabled** (`.devcontainer/devcontainer.json`): Renamed from `.devcontainer.json.disabled` back to active. `hostRequirements: { cpus: 8, memory: "16gb", storage: "32gb" }` ensures correct Codespaces machine provisioning. Root `devcontainer.json` (empty schema redirect) deleted. `postAttachCommand` and `openFiles` updated to current sprint handoff doc.
 - **`.devcontainer/README.md`**: Added "Optimal Modus Operandi" section — session-start checklist, daily workflow pattern, full quality gate command, test failure triage table, and timeout-prevention guidance.

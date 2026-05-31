@@ -64,17 +64,17 @@ Each job that uses the composite must call `actions/checkout@v6` first (local co
 - `pull_request` to `main`
 - `workflow_dispatch`
 
-**Concurrency:** one run per workflow + branch/PR (`cancel-in-progress: true`).
+**Concurrency:** one run per workflow + branch/PR; `cancel-in-progress: true` **for PRs only** (main branch pushes are never cancelled — each push builds its own run so deploy history is clean).
 
 ---
 
 ## Job graph
 
 ```text
-security ──► quality ──┬──► build ──► lighthouse
-                       ├──► e2e
+security ──► quality ──┬──► build ──┬──► lighthouse
+                       ├──► e2e     └──► vrt
                        ├──► storybook
-                       └──► mutation (Stryker; optional score gate)
+                       └──► mutation (Stryker; informational score gate)
 
 build (main, non-PR) ──► upload-pages-artifact
 deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
@@ -83,12 +83,13 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 | Job | Needs | Purpose |
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
-| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
-| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation** (`actions/attest-build-provenance@v2`) |
-| `e2e` | `quality` | Playwright **Chromium** + **mobile emulation** (Pixel 5, same browser install), `CI=true`. Firefox and optional mobile locally — see [`playwright.config.ts`](../playwright.config.ts). |
-| `mutation` | `quality` | **`pnpm run mutation`** if `stryker.conf.json` exists — HTML report in-repo locally; **`continue-on-error: true`** so score does not block merges while targets grow |
-| `lighthouse` | `build` | LHCI against downloaded `dist` (hard-fail: `assert.exitCode=0`) |
-| `storybook` | `quality` | Static Storybook → artifact |
+| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run parity:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
+| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation** |
+| `e2e` | `quality` | Playwright **Chromium** + **Mobile Chrome** (Pixel 5) — `CI=true`, 2× retries, 50 min timeout; browser cache via `actions/cache@v5`. Firefox optional locally. `PLAYWRIGHT_SKIP_VRT=true` (VRT is its own job). |
+| `mutation` | `quality` | **`pnpm run mutation`** if `stryker.conf.json` exists; **`break: 75`** → score <75% fails the job (timeout at 20 min is expected on shared runners — not a blocker for deploy) |
+| `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
+| `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--max-workers=2 --retries=3 --screenshot-on-failure`; artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
+| `vrt` | `build` | Visual regression against production `dist`; `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium); artifacts uploaded always |
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.

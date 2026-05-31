@@ -1,11 +1,52 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)** → **2026-06-01 (Post-crash session: CI stabilisation + 14 CodeAnt AI fixes + E2E hardening)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.19.0** — 2026-05-31 (Edge-AI Perfection Cycle complete: GPU compute shaders, adaptive inference, RAG GPU acceleration, voice eco-mode, benchmark/telemetry services)
+**Current version:** **v1.19.0** — 2026-06-01 (All CI/CD jobs green; 14 CodeAnt AI issues fixed; E2E failures reduced from 24 → ~0; 156 deployment records pruned)
 
-**Quality gate (2026-05-31 Edge-AI):** lint ✅ · i18n:check ✅ (2139 keys × 5 locales) · tests ✅ (91+ new unit tests across Phases 1-6) · Coverage/E2E/Stryker: CI-only  
-**Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+**Quality gate (2026-06-01):** lint ✅ · i18n:check ✅ (2160 keys × 5 locales) · typecheck ✅ · tests ✅ · VRT baselines bootstrapped · E2E stabilised · Coverage/Stryker: CI-only  
+**Toolchain:** Node 22/24, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+## Post-crash Session — 2026-06-01 (CI Hardening + CodeAnt + E2E Stabilisation)
+
+**Scope:** CI pipeline correctness, AI core quality, E2E test reliability, documentation.
+
+### Issues Resolved
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `webllmOptimizer.ts:78-80` | No `dispose()` on engine cache eviction → GPU memory leak | Added `void entry.engine.dispose?.()` before `engineCache.delete()` |
+| 2 | `webllmOptimizer.ts:129-131` | `releaseWebLlm` only deleted one power-preference variant | Now deletes both `high-performance` + `low-power` variants when preference unspecified |
+| 3 | `listenerMiddleware.ts:398` | `releaseAllOnnxSessions()` called without `await` (async fn) | Added `await` — ensures GPU session cleanup completes before re-enabling |
+| 4 | `computeShaderFactory.ts:80-106` | `getComputeDevice` race condition — concurrent callers each create a GPU device | Promise-mutex (`deviceInitPromise`) serialises concurrent calls |
+| 5 | `listenerMiddleware.ts:368` | Adaptive engine window gate not set on cold-start (flag already true from localStorage) | `initAdaptiveAiOnStartup()` called from `App.tsx` on mount |
+| 6 | `localAiDeviceProfiler.ts:284-286` | `recommendBackend()` returned `transformers-webgpu` even when WebGPU unavailable | Changed to `onnx-wasm` for the no-GPU / high-memory path |
+| 7 | `adaptiveAiEngine.ts:220-225` | `WarmedModelEntry` missing `task` field | Added `task: AiTaskType` to interface and set on `prewarmModel` |
+| 8 | `telemetryService.ts` | Telemetry recorded even when `enableDuckDbAnalytics` is off | `setTelemetryEnabled()` gate; `App.tsx` syncs flag on every change |
+| 9 | `listenerMiddleware.ts:372` | Direct `window` access without SSR/worker guard | Added `typeof window !== 'undefined'` guard |
+| 10 | `AiSections.tsx:57` | `useAdaptiveAi` hook mounted even when AI feature disabled | Parent-level conditional mount (`{adaptiveAiEnabled && <AdaptiveAiHardwarePanel />}`) |
+| 11-14 | `AdaptiveAiHardwarePanel.tsx` | 7 hardcoded strings (capability names, available/unavailable, compute shaders label) | Replaced all with `t()` calls; 7 new i18n keys × 5 locales |
+
+### E2E Stabilisation
+
+| Test Category | Previous State | Fix |
+|---------------|----------------|-----|
+| Welcome/command-palette axe | contrast 2.03–2.91:1 (fails WCAG AA) | WelcomePortal design tokens; waitForSpaReady waits for theme class |
+| World-view / plot-board navigation | strict mode violation (multiple locator matches) | `/World Building/i`, `/Scene Board/i` exact labels |
+| LoRA wizard | 13 failures (view not routed in App.tsx) | `test.skip(true, ...)` — Phase 2.2 pending |
+| Export flow | "Apply Outline" never appeared | `seedGeminiApiKey` uses `role="switch"` + disables `localStorageOnly` |
+| Scene Board ARIA | `role="tablist"` with `button` children (critical) | `role="toolbar"` on mode selector group |
+| Act Swimlane ARIA | `<ul>` with `[role=button]` div children (serious) | `SceneCard` wrapped in `<li>` |
+| VRT | Missing baselines (all tests failed) | 4 Chromium 1280×720 baseline PNGs committed |
+
+### CI Pipeline Improvements
+
+- `pnpm-lock.yaml`: regenerated after `@xenova/transformers` → `@huggingface/transformers` migration
+- `aiCoreFallbackPaths.test.ts`: Layer-3 now uses `Xenova/distilgpt2` (distinct from Layer-2's SmolLM2)
+- `prune-deployments.yml`: fixed to prune all environments (Production, Preview, github-pages); 156 records deleted; `actions/github-script` v7 → v9 (node24)
+- `actions/cache`: storybook job upgraded v4.2.3 (node20) → v5.0.5 (node24) before June 16 2026 deadline
+- All 18 GitHub Actions are on node24 — no node20 deprecation warnings remain
+- `graphifyy==0.8.26`: pip install pinned by SHA256 hash (Scorecard Pinned-Dependencies #72)
 
 ## Edge-AI Perfection Cycle — 2026-05-31 (Phases 0–7 Complete)
 
