@@ -19,6 +19,7 @@ import {
   selectVoiceProcessing,
   selectVoiceTranscript,
 } from '../features/voice/voiceSlice';
+import { ecoModeService } from '../services/ai/ecoModeService';
 import { logger } from '../services/logger';
 import type { VoiceServiceConfig } from '../services/voice/voiceCommandService';
 import { getVoiceService } from '../services/voice/voiceCommandService';
@@ -29,12 +30,15 @@ export const useVoice = () => {
   const enableVoiceWasm = useAppSelector(selectEnableVoiceWasm);
   const serviceRef = useRef(getVoiceService());
 
-  // Sync service config with Redux settings whenever they change
+  // Sync service config with Redux settings whenever they change.
+  // QNBS-v3: B5 — eco-mode overrides engine selection when battery is low.
   useEffect(() => {
     const svc = serviceRef.current;
+    const eco = ecoModeService.isEcoMode();
     const config: Partial<VoiceServiceConfig> = {
-      preferredSttEngine: voiceSettings.sttEngine,
-      preferredTtsEngine: voiceSettings.ttsEngine,
+      // Eco-mode forces lightweight WebSpeech fallback to save power
+      preferredSttEngine: eco ? 'webSpeech' : voiceSettings.sttEngine,
+      preferredTtsEngine: eco ? 'webSpeech' : voiceSettings.ttsEngine,
       feedbackLevel: voiceSettings.feedbackLevel,
       speechRate: voiceSettings.speechRate,
       speechVolume: voiceSettings.speechVolume,
@@ -43,9 +47,21 @@ export const useVoice = () => {
       wakeWordPhrase: voiceSettings.wakeWordPhrase,
       ttsMuted: voiceSettings.ttsMuted,
       dictationAutoPunctuation: voiceSettings.dictationAutoPunctuation,
-      enableVoiceWasm,
+      enableVoiceWasm: enableVoiceWasm || eco,
     };
     svc.updateConfig(config);
+  }, [voiceSettings, enableVoiceWasm]);
+
+  // QNBS-v3: B5 — subscribe to eco-mode changes and immediately re-apply config.
+  useEffect(() => {
+    const svc = serviceRef.current;
+    return ecoModeService.onEcoModeChange((isEco) => {
+      svc.updateConfig({
+        preferredSttEngine: isEco ? 'webSpeech' : voiceSettings.sttEngine,
+        preferredTtsEngine: isEco ? 'webSpeech' : voiceSettings.ttsEngine,
+        enableVoiceWasm: enableVoiceWasm || isEco,
+      });
+    });
   }, [voiceSettings, enableVoiceWasm]);
 
   // Provide dispatch and getState to service once

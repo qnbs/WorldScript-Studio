@@ -17,19 +17,15 @@ const onnxState = vi.hoisted(() => ({ hasCreate: false }));
 
 // QNBS-v3: getter on mock object — evaluated at destructuring time in source, so flipping
 //          hasPipeline before calling runLocalTextGeneration controls the typeof check.
-const xenovaState = vi.hoisted(() => ({ hasPipeline: true }));
+const xenovaState = vi.hoisted(() => ({
+  hasPipeline: true,
+  pipelineResult: undefined as string | undefined,
+}));
 
 const tabLeaderState = vi.hoisted(() => ({ result: true }));
 
-// QNBS-v3: Relative path for onnxruntime-web — resolves same canonical path as the dynamic import in source.
-//          InferenceSession.create is undefined by default → ONNX layer falls through.
-vi.mock('../../packages/ai-core/node_modules/onnxruntime-web/dist/ort.node.min.mjs', () => ({
-  InferenceSession: {
-    get create() {
-      return onnxState.hasCreate ? () => Promise.resolve({}) : undefined;
-    },
-  },
-}));
+// QNBS-v3: ONNX Runtime Web is no longer directly imported; Transformers.js handles ONNX backend.
+//          Mock is kept for backward compatibility but not used in current implementation.
 
 // QNBS-v3: Relative path → local-file mock scope → vi.hoisted mlcState visible in factory.
 vi.mock('../../packages/ai-core/node_modules/@mlc-ai/web-llm/lib/index.js', () => ({
@@ -42,9 +38,18 @@ vi.mock('../../packages/ai-core/node_modules/@mlc-ai/web-llm/lib/index.js', () =
 }));
 
 // QNBS-v3: Relative path → local-file mock scope → getter reads xenovaState at destructuring time.
+//          Returns a mock pipeline that produces pipelineResult when called.
 vi.mock('../../packages/ai-core/node_modules/@xenova/transformers/src/transformers.js', () => ({
   get pipeline() {
-    return xenovaState.hasPipeline ? () => undefined : undefined;
+    if (!xenovaState.hasPipeline) return undefined;
+    return async () => {
+      return async (_input: string, _opts: unknown) => {
+        if (xenovaState.pipelineResult === undefined) {
+          throw new Error('Mock pipeline failed');
+        }
+        return [{ generated_text: xenovaState.pipelineResult }];
+      };
+    };
   },
 }));
 
@@ -79,6 +84,7 @@ describe('runLocalTextGeneration branches', () => {
     mlcState.engineFn = undefined;
     onnxState.hasCreate = false;
     xenovaState.hasPipeline = true;
+    xenovaState.pipelineResult = undefined;
     tabLeaderState.result = true;
     removeNavigatorGpu();
   });
@@ -93,27 +99,27 @@ describe('runLocalTextGeneration branches', () => {
     expect(result.text).toContain('Heuristic');
   });
 
-  it('no WebGPU + pipeline is a function → layer:transformers available message', async () => {
+  it('no WebGPU + pipeline returns text → layer:onnx (ONNX layer is tried first)', async () => {
+    xenovaState.pipelineResult = 'A long time ago in a galaxy far, far away…';
     const result = await runLocalTextGeneration('write a story');
-    expect(result.layer).toBe('transformers');
-    expect(result.text).toContain('Transformers.js pipeline available');
+    expect(result.layer).toBe('onnx');
+    expect(result.text).toBe('A long time ago in a galaxy far, far away…');
   });
 
-  it('no WebGPU + pipeline not a function → layer:heuristic (all inference unavailable)', async () => {
-    // QNBS-v3: Fixed bug — when pipeline is not a function AND onnx/webllm unavailable,
-    //          the correct fallback is 'heuristic', not 'transformers'.
-    xenovaState.hasPipeline = false;
+  it('no WebGPU + pipeline fails → falls back to heuristic', async () => {
+    // QNBS-v3: pipeline throws (pipelineResult = undefined) → both onnx and transformers layers fail → heuristic.
+    xenovaState.hasPipeline = true;
+    xenovaState.pipelineResult = undefined;
     const result = await runLocalTextGeneration('write a story');
     expect(result.layer).toBe('heuristic');
-    // Heuristic echoes the sanitized prompt (no longer says 'Transformers placeholder')
     expect(result.text).toContain('write a story');
   });
 
-  it('no WebGPU + ONNX InferenceSession.create available → layer:onnx', async () => {
-    onnxState.hasCreate = true;
+  it('no WebGPU + pipeline not a function → layer:heuristic (all inference unavailable)', async () => {
+    xenovaState.hasPipeline = false;
     const result = await runLocalTextGeneration('write a story');
-    expect(result.layer).toBe('onnx');
-    expect(result.text).toContain('ONNX Runtime Web');
+    expect(result.layer).toBe('heuristic');
+    expect(result.text).toContain('write a story');
   });
 
   it('WebGPU + not tab leader → tab-lock message', async () => {

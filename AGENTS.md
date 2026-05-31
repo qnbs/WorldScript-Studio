@@ -15,23 +15,44 @@
 
 ---
 
+## ⚠️ Critical Execution Environment Warning (Agent Must Follow)
+
+> **This local development environment runs on low-end / constrained hardware.**  
+> **All operations must be executed sequentially and with strict resource conservation.**
+
+### Rules for this Environment
+
+1. **No heavy local test suites** – Never run the full Vitest coverage suite, Playwright E2E tests, Stryker mutation testing, Lighthouse CI, or Storybook test-runner locally. These are CI-only by design and would overwhelm this machine.
+2. **CI-Cloud-First Workflow** – The canonical quality gate is GitHub Actions (cloud CI). After making changes, push to a branch and let the cloud runners execute the heavy tier.
+3. **Local quick tier only** – Locally, run only the lightweight sanity checks:
+   ```bash
+   pnpm run lint && pnpm run typecheck && pnpm run i18n:check
+   ```
+   Optional: `pnpm exec vitest run` **without** `--coverage` for a fast smoke test.
+4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
+5. **Sequential execution** – Do not parallelize builds, tests, or processes locally. Use single-threaded modes and avoid background tasks that compete for RAM/CPU.
+6. **Resource budget** – Avoid spinning up the dev server (`pnpm run dev`) for extended periods if not needed. Prefer one-off commands (`pnpm run build`, `pnpm run typecheck`) and stop the server when done.
+7. **No local E2E** – Playwright E2E requires `CI=true` and is CI-only by policy. Do not attempt to run `pnpm run test:e2e` locally.
+
+---
+
 ## Technology Stack
 
 | Layer | Technology |
 |-------|------------|
 | Runtime | Node.js `>=22.0.0` (`.nvmrc`), pnpm `>=10.0.0` (`packageManager: pnpm@10.33.0`) |
 | Framework | React `^19.2.6`, TypeScript `~6.0.3` (strict) |
-| Build tool | Vite `^8.0.13` (`vite.config.ts`) |
+| Build tool | Vite `^8.0.14` (`vite.config.ts`) |
 | Styling | Tailwind CSS `^4.3.0` via `@tailwindcss/vite` + semantic CSS custom properties (`index.css`) |
 | State | Redux Toolkit `^2.12.0` + `redux-undo` (project slice only); Zustand `^5.0.8` for transient UI (`app/transientUiStore.ts`) |
-| Testing | Vitest `^4.1.6` (jsdom, `maxWorkers: 1`), Playwright `^1.60.0` (E2E, CI-only), Stryker `^9.2.0` (mutation) |
+| Testing | Vitest `^4.1.7` (jsdom, `maxWorkers: 1`), Playwright `^1.60.0` (E2E, CI-only), Stryker `^9.2.0` (mutation) |
 | Lint/Format | Biome `^2.4.15` (`biome.json`) — single toolchain for JS/TS/CSS |
 | AI | Multi-provider: Google Gemini (`@google/genai`), OpenAI, Ollama, WebLLM, ONNX Runtime Web, Transformers.js |
 | Voice | Web Speech API (fallback); WASM engines prepared (Whisper.cpp, Kokoro, Piper, Silero VAD, Sherpa-ONNX) |
 | Storage | IndexedDB (`dbService.ts`) / Tauri filesystem (`fileSystemService.ts`); LZ-String compression; AES-256-GCM encryption for API keys |
 | PWA | `vite-plugin-pwa` with `injectManifest` strategy (`public/sw.js`) |
 | Desktop | Tauri 2 (`src-tauri/`) — Rust toolchain required |
-| Storybook | Storybook `^10.4.0` with `@storybook/react-vite` |
+| Storybook | Storybook `^10.4.1` with `@storybook/react-vite` |
 | Orchestration | Turborepo (`turbo.json`) for parallel task caching; pnpm workspaces (`packages/*`) |
 
 ---
@@ -56,12 +77,14 @@ StoryCraft-Studio/
 │   ├── status/             # App-wide status / loading flags
 │   ├── writer/             # Writer view state
 │   ├── versionControl/     # Snapshots and branches
-│   ├── featureFlags/       # 12 experimental flags (all off by default)
+│   ├── featureFlags/       # ~20 experimental flags (mostly off by default)
 │   ├── plotBoard/          # Ephemeral viewport/draw state (NOT undo-able; localStorage)
 │   ├── progressTracker/    # Writing sessions, streaks, goals
 │   ├── sceneComments/      # Per-scene comments (EntityAdapter)
 │   ├── analytics/          # DuckDB boot/migration status
 │   ├── mindMapUi/          # Mind-map viewport state
+│   ├── proForge/           # ProForge pipeline state
+│   ├── lora/               # LoRA adapter state
 │   └── voice/              # Voice command state
 ├── hooks/                  # View business logic hooks (use*View.ts naming)
 ├── services/               # External adapters and business logic
@@ -71,9 +94,15 @@ StoryCraft-Studio/
 │   ├── help/               # Help catalog, search, doc retrieval
 │   ├── keyboard/           # Shortcut normalization and conflict detection
 │   ├── voice/              # Voice engines and orchestration
+│   ├── storage/            # IDB stores, encryption, backend abstraction
+│   ├── fs/                 # Filesystem helpers
+│   ├── lora/               # LoRA adapter services
+│   ├── plugins/            # Plugin registry helpers
+│   └── proForge/           # ProForge pipeline services
 │   └── … (aiProviderService, geminiService, dbService, storageService, collaborationService, etc.)
 ├── packages/               # Internal pnpm workspace packages
 │   ├── ai-core/            # WebLLM + inference worker + tab-leader election (published as `@domain/ai-core`)
+│   ├── collab-transport/   # Vendor fork of y-webrtc 10.3.0 with E2E encryption
 │   └── ui/                 # Tailwind preset + design tokens (published as `@domain/ui`)
 ├── locales/                # i18n source JSON modules (de, en, fr, es, it)
 ├── public/                 # Static assets; runtime i18n bundles `public/locales/<lang>/bundle.json`
@@ -94,13 +123,13 @@ StoryCraft-Studio/
 
 - `package.json` — scripts, dependencies, pnpm overrides, `simple-git-hooks` + `lint-staged`
 - `vite.config.ts` — dev server (port 3000), PWA plugin, manual chunks, `@tauri-apps/*` externalized for web builds
-- `tsconfig.json` — `strict: true`, `exactOptionalPropertyTypes: true`, `noUnusedLocals: true`, `noUnusedParameters: true`, `noUncheckedIndexedAccess: true`
+- `tsconfig.json` — `strict: true`, `exactOptionalPropertyTypes: true`, `noUnusedLocals: true`, `noUnusedParameters: true`, `noUncheckedIndexedAccess: true`, `noPropertyAccessFromIndexSignature: true`
 - `biome.json` — lint + format rules; `a11y`, `security`, `correctness` rules enabled; line width 100; 2-space indent
-- `vitest.config.ts` — coverage thresholds (lines 63, branches 55, functions 54, statements 62), `maxWorkers: 1`
+- `vitest.config.ts` — coverage thresholds (lines 76, branches 61, functions 68, statements 74), `maxWorkers: 1`
 - `playwright.config.ts` — E2E projects: Chromium desktop + Pixel 5 mobile in CI; Firefox + optional mobile locally
-- `turbo.json` — task graph for `build`, `dev`, `lint`, `typecheck`, `test`
+- `turbo.json` — task graph for `build`, `dev`, `lint`, `typecheck`, `test`, `mutation`
 - `pnpm-workspace.yaml` — workspace packages + `onlyBuiltDependencies` allowlist
-- `stryker.conf.json` — 13 mutation targets (services + features), `break: null` (informational)
+- `stryker.conf.json` — ~40 mutation targets (services + features), `break: 75`
 - `.lighthouserc.cjs` — accessibility `error` ≥ 0.95, CLS `error` ≤ 0.1, performance/SEO `warn`
 - `src-tauri/tauri.conf.json` — desktop window config, CSP, updater endpoints
 
@@ -126,6 +155,7 @@ pnpm run lint:fix           # Biome check --write (lint + format)
 pnpm run format             # Biome format --write
 pnpm run typecheck          # tsc --noEmit
 pnpm run i18n:check         # Locale key parity vs English + rebuild bundles + content guard
+pnpm run parity:check       # Feature parity audit
 
 # Testing
 pnpm run test               # Vitest watch mode
@@ -166,7 +196,7 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n + unit tests with coverage
 
 - `strict: true` and `exactOptionalPropertyTypes: true` are enforced. Do not assign `undefined` to optional properties; omit the property instead.
 - Avoid `any`. Use proper types or `unknown`. Biome flags `noExplicitAny` as error.
-- `noUnusedLocals`, `noUnusedParameters`, `noUnusedImports`, `noImplicitReturns`, and `noUncheckedIndexedAccess` are all enabled.
+- `noUnusedLocals`, `noUnusedParameters`, `noUnusedImports`, `noImplicitReturns`, `noUncheckedIndexedAccess`, and `noPropertyAccessFromIndexSignature` are all enabled.
 - Event handler props use `onX` prefix. Boolean props use `is*` / `has*` prefix.
 - `useImportType` is enforced (Biome error).
 
@@ -188,7 +218,7 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n + unit tests with coverage
 - Use `React.memo()` for expensive renders; `React.forwardRef()` for `components/ui/` primitives.
 - Wrap view roots with `components/ui/ViewErrorBoundary.tsx`.
 - File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors.
-- All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`.
+- All 19 views are lazy-loaded in `App.tsx` via `React.lazy()`.
 
 ### Comments
 
@@ -222,7 +252,7 @@ Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks
 - Environment: `jsdom` (default); Node environment for IDB-heavy tests (`// @vitest-environment node`)
 - Setup: `tests/setup.ts` — mocks `localStorage`, `matchMedia`, `speechSynthesis`, `indexedDB`, silences `console.log`
 - **Concurrency:** `pool: threads`, `maxWorkers: 1` is mandatory. Tests run serially. Do not parallelize.
-- **Coverage thresholds:** lines ≥ 63, branches ≥ 55, functions ≥ 54, statements ≥ 62
+- **Coverage thresholds:** lines ≥ 76, branches ≥ 61, functions ≥ 68, statements ≥ 74
 - **Determinism:** Mock `Date.now()`, use fake timers, reset global state in `beforeEach`. Never depend on real network or test execution order.
 - **User interactions:** Use `@testing-library/user-event`, not `.click()` directly. Use `findBy*` / `waitFor` for async assertions.
 - **IDB tests:** Instantiate `new IDBFactory()` per test in `beforeEach` + call `_resetDbForTest()`.
@@ -240,9 +270,10 @@ Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks
 ### Mutation Testing (Stryker)
 
 - Config: `stryker.conf.json`
-- Targets: 13 files across `services/`, `features/`, `app/`
+- Targets: ~40 files across `services/`, `features/`, `app/`, `hooks/`
 - `ignoreStatic: true` drops runtime from ~90 min to ~10 min.
-- `break: null` — informational only. CI job uses `continue-on-error: true` (standalone `mutation.yml` runs weekly).
+- `break: 75` — score below 75 fails the mutation job.
+- Standalone `mutation.yml` runs weekly (Mon 03:00 UTC) with concurrency 6.
 
 ### Storybook
 
@@ -260,7 +291,7 @@ Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks
 security ──► quality ──┬──► build ──► lighthouse
                        ├──► e2e
                        ├──► storybook
-                       └──► mutation (informational)
+                       └──► mutation
 
 build (main, non-PR) ──► upload-pages-artifact
 deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
@@ -271,11 +302,11 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 | Job | Purpose |
 |-----|---------|
 | `security` | `pnpm audit --audit-level=high`, OSV scanner (npm + Rust lockfiles), gitleaks secrets scan, dependency review on PRs |
-| `quality` | Node 22 + 24 matrix → Biome lint, `i18n:check`, `tsc --noEmit`, Vitest + coverage, Codecov upload |
+| `quality` | Node 22 + 24 matrix → Biome lint, `i18n:check`, `parity:check`, `tsc --noEmit`, Vitest + coverage, Codecov upload |
 | `build` | Production build, bundle budget, analyze artifact; on `main`: SLSA build provenance attestation + Pages artifact |
 | `e2e` | Playwright Chromium desktop + mobile emulation (`CI=true`); JUnit artifact for PR annotations |
-| `mutation` | Stryker run (`continue-on-error: true`, 20 min timeout) |
-| `lighthouse` | LHCI against built `dist` (hard-fail on accessibility and CLS) |
+| `mutation` | Stryker run (20 min timeout) |
+| `lighthouse` | LHCI against built `dist` (mobile + desktop; hard-fail on accessibility and CLS) |
 | `storybook` | Static Storybook build + test-runner; artifact upload |
 | `vrt` | Visual regression (Chromium only); uploads baselines + diffs |
 | `deploy` | Only `main` push: GitHub Pages deploy |
@@ -336,14 +367,14 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 ### Feature Flags
 
-- `features/featureFlags/featureFlagsSlice.ts` gates 12 experimental flags + `enableVoiceSupport` (all off by default).
+- `features/featureFlags/featureFlagsSlice.ts` gates ~20 experimental flags + `enableVoiceSupport` (mostly off by default; a few like `enableCodexAutoTracking` and `enableCrossProjectSearch` are on).
 - UI: Settings → Experimental flags.
 - Do not use scattered `if (true)` hacks.
 
 ### Code Splitting
 
-- All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`.
-- Heavy libraries live in Vite manual chunks: `export-vendor-pdf`, `export-vendor-docx-ebook`, `collaboration-vendor`, `data-vendor`, `ai-vendor`, `ai-sdk-vendor`, `vendor-ai-onnx`, `vendor-duckdb`, `plot-board`.
+- All 19 views are lazy-loaded in `App.tsx` via `React.lazy()`.
+- Heavy libraries live in Vite manual chunks: `export-vendor-pdf`, `export-vendor-docx-ebook`, `collaboration-vendor`, `data-vendor`, `ai-vendor`, `ai-sdk-vendor`, `vendor-ai-onnx`, `vendor-duckdb`, `vendor-webllm`, `vendor-voice-wasm`, `lora-feature`, `plot-board`.
 - `listenerMiddleware.ts` and `aiApi.ts` use dynamic imports for DuckDB/RAG/provider init to keep cold-start fast.
 
 ---
@@ -378,13 +409,26 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 ### Local Inference
 
 - 4-layer stack: WebLLM → ONNX Runtime Web → Transformers.js → heuristics fallback.
-- `services/localAiFacade.ts` wraps WebLLM via `packages/ai-core` + `workers/inference.worker.ts`.
-- Tab-leader election via BroadcastChannel prevents multi-tab GPU contention.
+- `services/localAiFacade.ts` wraps WebLLM via `packages/ai-core` + `workers/inference.worker.ts`. Includes DuckDB telemetry recording (fire-and-forget, `services/ai/telemetryService.ts`).
+- Tab-leader election via BroadcastChannel prevents multi-tab GPU contention (also applied to Transformers.js WebGPU layer).
 - `workers/inference.worker.ts` runs `@xenova/transformers` off the main thread.
+- **Adaptive AI Engine** (`services/ai/adaptiveAiEngine.ts`) — runtime hardware-aware backend/model selection. Gated by `enableAdaptiveAiEngine` flag. Activated via `window.__storycraft_adaptive_ai__` + `listenerMiddleware`.
+- **Device Profiler** (`services/ai/localAiDeviceProfiler.ts`) — WebGPU/WebNN/NPU/battery detection, 30s TTL cache.
+- **Optimizers** (`packages/ai-core/src/`): `webllmOptimizer.ts`, `onnxRuntimeEngine.ts`, `webnnBridge.ts` — LRU-cached engine/session lifecycle.
+- **React hook**: `hooks/useAdaptiveAi.ts` — exposes `deviceProfile`, `warmedModels`, `isEco`, `getTaskConfig`, `prewarmModel`.
+- **Benchmarks**: `services/ai/benchmarkService.ts` — micro-benchmarks per task/backend, localStorage persist, feeds latency history.
+- **Telemetry**: `services/ai/telemetryService.ts` — local DuckDB primary + localStorage fallback. No cloud data.
+
+### WebGPU Compute Shaders
+
+- `services/ai/computeShaderFactory.ts` — WGSL pipeline factory. Shaders bundled inline via Vite `?raw` imports (not fetch).
+- `services/ai/shaders/`: `textProcessing.wgsl` (batchCosineSimilarity), `attention.wgsl` (attentionForwardSerial), `feedForward.wgsl` (mlpForward, max 4096 intermediate), `kvCache.wgsl` (appendKvCache, applyRopeToCache).
+- Gated by `enableComputeShaders` flag.
 
 ### Local RAG
 
 - `services/localRagIndex.ts` + `services/localRagService.ts` — hybrid retrieval (60% semantic MiniLM-L6-v2 + 30% lexical + 10% recency).
+- GPU batch cosine via `batchCosineGpu()` when `enableComputeShaders=true` and WebGPU available. CPU fallback when unavailable.
 - Lazy-loaded; never sends data to the cloud.
 - `services/ragPromptAssembly.ts` builds token-budgeted context blocks.
 - Prompt templates: `services/promptLibrary.ts`.

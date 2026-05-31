@@ -95,6 +95,9 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableCloudSync: false,
       enableIdbAtRestEncryption: false,
       enableVoiceWasm: false,
+      enableAdaptiveAiEngine: false,
+      enableWebnnInference: false,
+      enableComputeShaders: false,
     },
     ...overrides,
   };

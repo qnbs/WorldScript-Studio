@@ -78,7 +78,7 @@ export function getModelRecommendationForTask(
     vramTier === 'high'
       ? 'Xenova/Qwen2.5-1.5B-Instruct'
       : vramTier === 'medium'
-        ? 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
+        ? 'Xenova/Qwen2.5-0.5B-Instruct'
         : 'HuggingFaceTB/SmolLM2-135M-Instruct';
 
   return { webllm: webllmModel, onnx: onnxModel, transformers: onnxModel };

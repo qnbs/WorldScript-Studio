@@ -68,6 +68,26 @@ import mindMapUiReducer, {
 import versionControlReducer from '../features/versionControl/versionControlSlice';
 import voiceReducer from '../features/voice/voiceSlice';
 
+// QNBS-v3: State boundary documentation — which slices are undo-able vs not:
+//
+// UNDO-ABLE (redux-undo):
+//   project — core manuscript data (100-step limit, thunk actions filtered)
+//
+// NOT UNDO-ABLE (plain reducers):
+//   settings      — user preferences, API keys (encrypted IDB)
+//   status        — app-wide loading/error flags (ephemeral)
+//   writer        — writer view UI state (ephemeral)
+//   proForge      — pipeline stage state (ephemeral, stage output cached in IDB)
+//   versionControl — snapshots/branches (managed via explicit actions)
+//   featureFlags  — experimental toggles (localStorage-backed)
+//   plotBoard     — viewport/connection/draw state (localStorage-backed)
+//   progressTracker — session/streak/goals (localStorage-backed)
+//   sceneComments — per-scene annotations (IDB-backed via listenerMiddleware)
+//   analytics     — DuckDB boot/migration status (ephemeral)
+//   mindMapUi     — mind-map viewport/draw state (localStorage-backed)
+//   voice         — voice command mode, transcript, engine status (ephemeral)
+//   lora          — LoRA adapter state (localStorage-backed)
+//   [aiApi]       — RTK Query cache (managed by RTK Query)
 const combinedReducer = combineReducers({
   project: undoable(projectReducer, {
     limit: 100,
@@ -79,18 +99,12 @@ const combinedReducer = combineReducers({
   proForge: proForgeReducer,
   versionControl: versionControlReducer,
   featureFlags: featureFlagsReducer,
-  // QNBS-v3: plotBoard is viewport/connection state only — not undo-able, persisted to localStorage
   plotBoard: plotBoardReducer,
-  // QNBS-v3: progressTracker and sceneComments are ephemeral session + user data, localStorage-backed
   progressTracker: progressTrackerReducer,
   sceneComments: sceneCommentsReducer,
-  // QNBS-v3: analytics tracks DuckDB-WASM boot + migration status; ephemeral, not persisted
   analytics: analyticsReducer,
-  // QNBS-v3: mindMapUi is ephemeral viewport/draw state for MindMapCanvas; localStorage-backed.
   mindMapUi: mindMapUiReducer,
-  // Voice mode state for voice command and control
   voice: voiceReducer,
-  // QNBS-v3: lora slice for LoRA fine-tuning module (v2.0-alpha); persisted to localStorage
   lora: loraReducer,
   [aiApi.reducerPath]: aiApi.reducer,
 });

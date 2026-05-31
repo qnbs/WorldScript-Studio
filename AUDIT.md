@@ -1,11 +1,119 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
-**Current version:** **v1.19.0** — 2026-05-31 (i18n audit complete, community templates localized, settings hardened)
+**Current version:** **v1.19.0** — 2026-05-31 (Edge-AI Perfection Cycle complete: GPU compute shaders, adaptive inference, RAG GPU acceleration, voice eco-mode, benchmark/telemetry services)
 
-**Quality gate (2026-05-31):** lint ✅ · typecheck ✅ · i18n:check ✅ (2129 keys × 5 locales) · tests ✅ (12 new communityTemplateService tests) · CI pending (TS fixes pushed, awaiting Quality Gate + downstream jobs)  
+**Quality gate (2026-05-31 Edge-AI):** lint ✅ · i18n:check ✅ (2139 keys × 5 locales) · tests ✅ (91+ new unit tests across Phases 1-6) · Coverage/E2E/Stryker: CI-only  
 **Toolchain:** Node 22, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+## Edge-AI Perfection Cycle — 2026-05-31 (Phases 0–7 Complete)
+
+**Scope:** Edge-AI inference stack hardening, integration, benchmarks, telemetry.
+
+### Phase-by-Phase Summary
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 0 | Diagnostics & baseline | ✅ |
+| 1 | ONNX/Transformers.js real inference, feature flags, gateway | ✅ |
+| 2 | Device profiler + adaptive AI engine | ✅ |
+| 3 | WebLLM, ONNX, WebNN optimizers (cached, prewarmed) | ✅ |
+| 4 | WGSL compute shaders (textProcessing, attention, feedForward, kvCache) | ✅ |
+| 5 | Domain integration: RAG GPU cosine, useAdaptiveAi hook, hardware panel, listener, voice eco-mode, i18n | ✅ |
+| 6 | benchmarkService + telemetryService (local DuckDB, no cloud) | ✅ |
+| 7 | Final validation: lint, i18n parity, test suites, tsconfig fix, AUDIT/AGENTS update | ✅ |
+
+### Known-debt items resolved
+
+- `@domain/ai-core` missing from `tsconfig.json` paths → **fixed** (paths entry added)
+- WGSL shader fetch path broken in production → **fixed** (Vite `?raw` imports)
+- `attentionForward()` parallel kernel abandoned → **removed** (serial kernel retained)
+- ONNX Layer-2 no tab-leader guard → **fixed**
+- MLC→ONNX model ID mismatch → **fixed** (size-aware mapping table)
+- RAG CPU-only cosine → **fixed** (GPU batch path via computeShaderFactory)
+- Voice eco-mode not coupled to battery → **fixed** (ecoModeService subscriber)
+
+### New files (Edge-AI Cycle)
+
+- `services/ai/localAiDeviceProfiler.ts` — hardware detection, 30s TTL cache
+- `services/ai/adaptiveAiEngine.ts` — backend/model selection with LRU warmup
+- `services/ai/computeShaderFactory.ts` — WGSL pipeline factory (?raw)
+- `services/ai/benchmarkService.ts` — micro-benchmarks per task/backend
+- `services/ai/telemetryService.ts` — local DuckDB + localStorage telemetry
+- `packages/ai-core/src/webllmOptimizer.ts` — WebLLM engine cache
+- `packages/ai-core/src/onnxRuntimeEngine.ts` — ONNX session cache
+- `packages/ai-core/src/webnnBridge.ts` — WebNN detection + DirectML heuristic
+- `hooks/useAdaptiveAi.ts` — React hook for adaptive AI engine state
+- `components/settings/AdaptiveAiHardwarePanel.tsx` — device capability panel
+
+### WGSL shaders (all ?raw bundled)
+
+- `textProcessing.wgsl` — batchCosineSimilarity, vectorAdd, vectorScale
+- `attention.wgsl` — attentionForwardSerial (parallel kernel deferred: needs f32 atomic reduce)
+- `feedForward.wgsl` — mlpForward with GELU (max 4096 intermediate units, clamped by factory)
+- `kvCache.wgsl` — appendKvCache, applyRopeToCache
+
+---
+
+## Follow-up Audit — 2026-05-31 (Phase 0 — Edge-AI Performance Audit)
+
+**Scope:** AI stack (`packages/ai-core`, `services/ai/`, `services/voice/`, `workers/`), GPU/WebNN/compute infrastructure, Stryker coverage gaps, feature-flag readiness for v1.20+.
+
+### Environment Fix
+- `@xenova/transformers` and `@mlc-ai/web-llm` were missing from `packages/ai-core/node_modules` despite being in `pnpm-lock.yaml`. Cause: `optionalDependencies` in workspace package were not installed on the low-end dev machine (likely due to a previous `--no-optional` install or prune). Fix: `pnpm install --prefer-offline` restored both packages. Typecheck now passes cleanly.
+
+### Quality Gate Status (Phase 0 baseline)
+| Gate | Status | Detail |
+|------|--------|--------|
+| lint | ✅ | 1022 files, 0 errors, 21s |
+| typecheck | ✅ | 0 errors (after env fix) |
+| i18n:check | ✅ | 2129 keys × 5 locales (+ ar/he) |
+| localAiFacade tests | ✅ | 6/6 passed |
+| aiProviderService tests | ✅ | 46/46 passed |
+| fallbackChain tests | ✅ | 21/21 passed |
+
+### Critical Findings (P0 — must fix before v1.20)
+
+| ID | File | Finding | Proposed Fix |
+|----|------|---------|--------------|
+| P0-F1 | `packages/ai-core/src/index.ts` | ONNX Runtime Web is a **stub**: `runLocalTextGeneration()` detects `ort.InferenceSession.create` but returns a diagnostic string instead of running a model. | Implement real ONNX inference with execution provider selection (`webgpu` → `wasm` → `webnn`). Load model from `ONNX_SUPPORTED_MODELS`. |
+| P0-F2 | `packages/ai-core/src/index.ts` | Transformers.js main-thread path is a **stub**: detects `pipeline()` but returns a diagnostic string. | Implement real `pipeline('text-generation', …)` call with `device` auto-selection. |
+| P0-F3 | `services/ai/inferenceGateway.ts` | `modelList()` returns `[]`; `healthCheck()` returns `{status:'ok', provider:'unknown'}` with no latency probe. | Implement model enumeration (cloud + local) and latency probing. |
+| P0-F4 | `services/voice/sileroVadEngine.ts` | Completely inactive: `isAvailable()` returns `false`; `initialize()` throws; `processChunk()` returns `null`. | Refactor `VadEngine` interface to support async `processChunk()`, then wire Silero ONNX model. |
+| P0-F5 | `services/ai/webGpuDetectorService.ts` | Missing `requestAdapter` options: no `powerPreference` (`low-power`/`high-performance`), no `forceFallbackAdapter`, no feature inspection (`timestamp-query`, `maxComputeWorkgroupSize`). | Add adapter option probing and feature flag detection. |
+| P0-F6 | `services/ai/deviceHealthService.ts` | No WebNN detection (`navigator.ml`), no NPU detection, no compute shader capability check. | Add `localAiDeviceProfiler` (Phase 2) to supersede static heuristics. |
+| P0-F7 | `services/ai/modelRecommendations.ts` | `onnxModel` for `vramTier === 'medium'` is a **WebLLM model ID** (`Qwen2.5-0.5B-Instruct-q4f16_1-MLC`) instead of an ONNX model. | Fix to a valid ONNX model ID (e.g., `Xenova/Qwen2.5-0.5B-Instruct` or `HuggingFaceTB/SmolLM2-135M-Instruct`). |
+| P0-F8 | `services/ai/aiPolicy.ts` | `assertCloudAiAllowed` only exempts `ollama` and `webllm` as local providers. `onnx` and `transformers` are treated as cloud (will throw in `localStorageOnly` mode). | Add `onnx` and `transformers` to the local-provider exemption set. |
+| P0-F9 | `services/ai/hybridFallback.ts` | Fallback chain does not include `onnx` or `transformers` as fallback targets. | Extend chain to support all local inference providers. |
+
+### Important Findings (P1 — should fix in v1.20)
+
+| ID | File | Finding | Proposed Fix |
+|----|------|---------|--------------|
+| P1-F1 | `stryker.conf.json` | Missing mutation targets for AI/GPU/voice files: `webGpuDetectorService.ts`, `gpuResourceManager.ts`, `localAiFacade.ts`, `deviceHealthService.ts`, `localEmbeddingService.ts`, `inference.worker.ts`, `voiceCommandService.ts`, `vadEngine.ts`, `sttEngine.ts`. | Add targets to `mutate` array. |
+| P1-F2 | `features/featureFlags/featureFlagsSlice.ts` | Missing flags for upcoming v1.20 features: WebNN inference, compute shaders, adaptive AI engine. | Add `enableWebnnInference`, `enableComputeShaders`, `enableAdaptiveAiEngine`. |
+| P1-F3 | `services/ai/ecoModeService.ts` | Only battery-based eco detection; no thermal throttling, no CPU load detection, no memory-pressure eco mode. | Integrate with `deviceHealthService` memory pressure and `gpuResourceManager` queue depth. |
+| P1-F4 | `workers/inference.worker.ts` | No `AbortSignal` propagation into the actual `pipeline()` call; worker cancel only removes from `abortMap` but does not stop the running inference. | Pass `AbortSignal` into Xenova pipeline options if supported; else document limitation. |
+| P1-F5 | `services/ai/aiRetry.ts` | Linear backoff only; no exponential backoff, no jitter, no retry-after header parsing. | Keep linear for simplicity (local AI), add jitter for cloud paths. |
+| P1-F6 | `services/ai/fetchAdapter.ts` | No request timeout, no retry, no circuit-breaker for Tauri fetch failures. | Add `AbortSignal.timeout()` and fallback chain. |
+
+### Performance / Benchmark Gaps
+- **No benchmark infrastructure at all** — no Vitest `bench()`, no Playwright perf specs, no token/sec tracking.
+- **No GPU tracing** — no `timestamp-query` usage, no CDP trace collection.
+- **No model pre-warming** — every local inference cold-starts.
+- **No IO-Binding / Graph Capture** for ONNX — repeated inference pays full overhead.
+
+### Next Steps
+1. **Phase 1**: Fix P0-F1..P0-F9 (ONNX real inference, gateway stubs, Silero VAD, policy fixes, model recommendation bug).
+2. **Phase 2**: Build `localAiDeviceProfiler` + `adaptiveAiEngine` with WebNN/NPU detection.
+3. **Phase 3**: Production-ready WebLLM/ONNX/WebNN/DirectML with pre-warming and IO-Binding.
+4. **Phase 4**: Compute shader factory + WGSL shaders for RAG, plot-board, voice, manuscript.
+5. **Phase 5**: Domain-specific perfection (ProForge caching, plot-board GPU sim, voice pipeline, live manuscript features).
+6. **Phase 6**: Benchmarks, telemetry, DX scripts, documentation.
+7. **Phase 7**: Final validation, perfection score, ship-readiness.
+
+---
 
 ## Follow-up Audit — 2026-05-31 (i18n Audit + Settings + CI Stabilization)
 

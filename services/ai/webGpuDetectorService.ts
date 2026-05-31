@@ -8,6 +8,11 @@ export interface WebGpuAdapterInfo {
   adapterDescription?: string;
   architecture?: string;
   vramTier?: 'high' | 'medium' | 'low';
+  // QNBS-v3: Extended capability detection for compute shader and performance tuning.
+  powerPreference?: 'low-power' | 'high-performance';
+  supportsTimestampQuery?: boolean;
+  maxComputeWorkgroupSize?: [number, number, number];
+  isFallbackAdapter?: boolean;
 }
 
 // 8 GiB / 4 GiB thresholds for maxBufferSize heuristic
@@ -20,14 +25,19 @@ function classifyVram(maxBufferSize: number): 'high' | 'medium' | 'low' {
   return 'low';
 }
 
-export async function detectWebGpuDetails(): Promise<WebGpuAdapterInfo> {
+export async function detectWebGpuDetails(
+  opts: { powerPreference?: 'low-power' | 'high-performance'; forceFallbackAdapter?: boolean } = {},
+): Promise<WebGpuAdapterInfo> {
   if (!('gpu' in navigator)) {
     return { status: 'unavailable' };
   }
 
   let adapter: GPUAdapter | null = null;
   try {
-    adapter = await (navigator.gpu as GPU).requestAdapter();
+    adapter = await (navigator.gpu as GPU).requestAdapter({
+      powerPreference: opts.powerPreference,
+      forceFallbackAdapter: opts.forceFallbackAdapter,
+    });
   } catch {
     return { status: 'unknown' };
   }
@@ -39,7 +49,35 @@ export async function detectWebGpuDetails(): Promise<WebGpuAdapterInfo> {
   const info: WebGpuAdapterInfo = {
     status: 'available',
     vramTier: classifyVram(adapter.limits.maxBufferSize),
+    powerPreference: opts.powerPreference,
+    isFallbackAdapter: opts.forceFallbackAdapter ?? false,
   };
+
+  // QNBS-v3: Feature detection for compute shader support.
+  try {
+    const features = adapter.features as Set<string> | undefined;
+    if (features) {
+      info.supportsTimestampQuery = features.has('timestamp-query');
+    }
+    const limits = adapter.limits as {
+      maxComputeWorkgroupSizeX?: number;
+      maxComputeWorkgroupSizeY?: number;
+      maxComputeWorkgroupSizeZ?: number;
+    };
+    if (
+      limits.maxComputeWorkgroupSizeX !== undefined &&
+      limits.maxComputeWorkgroupSizeY !== undefined &&
+      limits.maxComputeWorkgroupSizeZ !== undefined
+    ) {
+      info.maxComputeWorkgroupSize = [
+        limits.maxComputeWorkgroupSizeX,
+        limits.maxComputeWorkgroupSizeY,
+        limits.maxComputeWorkgroupSizeZ,
+      ];
+    }
+  } catch {
+    // limits/features may not be fully implemented — not an error
+  }
 
   // requestAdapterInfo() is experimental — not present in all browsers
   try {

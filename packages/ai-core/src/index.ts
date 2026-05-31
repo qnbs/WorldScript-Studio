@@ -284,37 +284,68 @@ export async function runLocalTextGeneration(
     };
   }
 
-  // QNBS-v3: ONNX WASM Layer-2 — no GPU required; greift zwischen WebLLM und Transformers.js.
-  try {
-    const ort = await import('onnxruntime-web');
-    if (typeof ort.InferenceSession?.create === 'function') {
-      return {
-        layer: 'onnx',
-        text:
-          'ONNX Runtime Web WASM backend available. No default model is auto-loaded; select a model via Settings to enable local ONNX inference. Echo: ' +
-          sanitizedPrompt.slice(0, 160) +
-          '…',
-      };
+  // QNBS-v3: Size-aware MLC→ONNX model mapping — avoids always falling back to the smallest model.
+  //          Matching is on the base name portion of the MLC checkpoint ID.
+  const MLC_TO_ONNX_MAP: Readonly<Record<string, string>> = {
+    'Qwen2.5-0.5B': ONNX_SUPPORTED_MODELS[0]!.id, // SmolLM2-135M (closest tiny)
+    'Llama-3.2-1B': ONNX_SUPPORTED_MODELS[0]!.id,
+    'gemma-3-1b': ONNX_SUPPORTED_MODELS[0]!.id,
+    'Llama-3.2-3B': ONNX_SUPPORTED_MODELS[1]!.id, // DistilGPT-2
+    'Phi-4-mini': ONNX_SUPPORTED_MODELS[1]!.id,
+    'gemma-3-4b': ONNX_SUPPORTED_MODELS[1]!.id,
+  };
+  const resolvedOnnxModelId: string = (() => {
+    if (!resolvedModelId.includes('MLC')) return resolvedModelId;
+    for (const [key, onnxId] of Object.entries(MLC_TO_ONNX_MAP)) {
+      if (resolvedModelId.includes(key)) return onnxId;
     }
-  } catch {
-    /* optional onnxruntime-web not installed */
-  }
+    return ONNX_SUPPORTED_MODELS[0]!.id; // ultimate fallback
+  })();
 
-  // QNBS-v3: Transformers.js Layer-3 — uses WebGPU device when available for 3-5× speedup.
+  // QNBS-v3: ONNX Runtime Web Layer-2 — WASM backend, no GPU; no tab-leader guard needed.
   try {
     const { pipeline } = await import('@xenova/transformers');
     if (typeof pipeline === 'function') {
-      const deviceHint = hasWebGpu ? 'webgpu' : 'wasm';
-      return {
-        layer: 'transformers',
-        text:
-          `Transformers.js pipeline available (device: ${deviceHint}); no lightweight default model is forced in-app. Use WebLLM or Ollama for full local inference. Echo: ` +
-          sanitizedPrompt.slice(0, 160) +
-          '…',
-      };
+      const generator = await pipeline('text-generation', resolvedOnnxModelId, {
+        quantized: true,
+        device: 'wasm',
+      });
+      const result = (await generator(sanitizedPrompt, {
+        max_new_tokens: 128,
+        do_sample: true,
+        temperature: 0.7,
+      })) as Array<{ generated_text: string }>;
+      const text = result[0]?.generated_text?.trim() ?? '';
+      if (text) {
+        return { layer: 'onnx', text };
+      }
     }
   } catch {
-    /* optional */
+    /* optional onnxruntime-web or model weights unavailable */
+  }
+
+  // QNBS-v3: Transformers.js Layer-3 — WebGPU device when tab-leader; WASM otherwise.
+  //          Tab-leader guard prevents simultaneous GPU model loads across tabs (A4).
+  try {
+    const { pipeline } = await import('@xenova/transformers');
+    if (typeof pipeline === 'function') {
+      const useGpu = hasWebGpu && gpuTabLeader;
+      const generator = await pipeline('text-generation', resolvedOnnxModelId, {
+        quantized: true,
+        device: useGpu ? 'webgpu' : 'wasm',
+      });
+      const result = (await generator(sanitizedPrompt, {
+        max_new_tokens: 128,
+        do_sample: true,
+        temperature: 0.7,
+      })) as Array<{ generated_text: string }>;
+      const text = result[0]?.generated_text?.trim() ?? '';
+      if (text) {
+        return { layer: 'transformers', text };
+      }
+    }
+  } catch {
+    /* optional @xenova/transformers or model weights unavailable */
   }
 
   // QNBS-v3: Layer-4 heuristic — all inference layers unavailable; echo sanitized prompt as fallback.
@@ -323,3 +354,29 @@ export async function runLocalTextGeneration(
     text: `${sanitizedPrompt.slice(0, 280)}${sanitizedPrompt.length > 280 ? '…' : ''}`,
   };
 }
+
+export {
+  detectOnnxExecutionProviders,
+  getOnnxSession,
+  listCachedOnnxSessions,
+  releaseAllOnnxSessions,
+  releaseOnnxSession,
+  runOnnxInference,
+} from './onnxRuntimeEngine';
+// QNBS-v3: Re-export new optimizer modules for adaptive AI engine consumption.
+export {
+  getWebLlmEngine,
+  listCachedWebLlmEngines,
+  prewarmWebLlm,
+  releaseAllWebLlmEngines,
+  releaseWebLlm,
+  runWebLlmInference,
+} from './webllmOptimizer';
+export {
+  buildWebNNExecutionProviders,
+  detectWebNN,
+  hasWebNNSupport,
+  isDirectMLAvailable,
+  type WebNNContextInfo,
+  type WebNNDeviceType,
+} from './webnnBridge';

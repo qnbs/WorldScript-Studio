@@ -89,13 +89,48 @@ export class DefaultInferenceGateway implements InferenceGateway {
   }
 
   async modelList(): Promise<ModelInfo[]> {
-    // Stub — full provider model enumeration in Phase 3.
-    return [];
+    // QNBS-v3: Enumerate cloud + local models. Local models are resolved from ai-core catalogs.
+    const { WEBLLM_SUPPORTED_MODELS, ONNX_SUPPORTED_MODELS } = await import('@domain/ai-core');
+    const cloud: ModelInfo[] = [
+      {
+        id: 'gemini-2.0-flash',
+        provider: 'gemini',
+        displayName: 'Gemini 2.0 Flash',
+        isLocal: false,
+      },
+      { id: 'gpt-4o', provider: 'openai', displayName: 'GPT-4o', isLocal: false },
+    ];
+    const local: ModelInfo[] = [
+      ...WEBLLM_SUPPORTED_MODELS.map((m) => ({
+        id: m.id,
+        provider: 'webllm',
+        displayName: m.label,
+        isLocal: true,
+      })),
+      ...ONNX_SUPPORTED_MODELS.map((m) => ({
+        id: m.id,
+        provider: 'onnx',
+        displayName: m.label,
+        isLocal: true,
+      })),
+    ];
+    return [...cloud, ...local];
   }
 
   async healthCheck(): Promise<GatewayHealth> {
-    // Stub — latency probe in Phase 3.
-    return { status: 'ok', provider: 'unknown' };
+    // QNBS-v3: Lightweight latency probe — measure embedding inference time as proxy for health.
+    const start = performance.now();
+    try {
+      const { embedText } = await import('./localEmbeddingService');
+      await embedText('health-check-probe');
+      return {
+        status: 'ok',
+        provider: 'local-embedding',
+        latencyMs: Math.round(performance.now() - start),
+      };
+    } catch {
+      return { status: 'degraded', provider: 'local-embedding' };
+    }
   }
 }
 

@@ -49,6 +49,9 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableProForge: false,
   enableIdbAtRestEncryption: false,
   enableVoiceWasm: false,
+  enableAdaptiveAiEngine: false,
+  enableWebnnInference: false,
+  enableComputeShaders: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

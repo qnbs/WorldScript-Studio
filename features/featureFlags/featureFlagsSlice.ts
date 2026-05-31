@@ -45,6 +45,12 @@ export interface FeatureFlagsState {
   enableIdbAtRestEncryption: boolean;
   /** Voice WASM engines — local Whisper STT + Silero VAD via ONNX; no cloud audio routing (default: false). */
   enableVoiceWasm: boolean;
+  /** Adaptive AI Engine — runtime device profiler + automatic backend/model selection (default: false). */
+  enableAdaptiveAiEngine: boolean;
+  /** WebNN inference — NPU/GPU acceleration via ONNX Runtime Web WebNN execution provider (default: false). */
+  enableWebnnInference: boolean;
+  /** Compute Shaders — custom WGSL kernels for RAG, plot-board, voice preprocessing (default: false). */
+  enableComputeShaders: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -84,6 +90,12 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableIdbAtRestEncryption: false,
   // QNBS-v3: Voice WASM engines — off by default; ~40 MB Whisper model download on first use.
   enableVoiceWasm: false,
+  // QNBS-v3: Adaptive AI Engine — off by default; requires benchmark calibration before enabling.
+  enableAdaptiveAiEngine: false,
+  // QNBS-v3: WebNN inference — off by default; WebNN spec is still evolving (2026).
+  enableWebnnInference: false,
+  // QNBS-v3: Compute Shaders — off by default; WGSL kernels require GPU compatibility testing.
+  enableComputeShaders: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -185,6 +197,15 @@ const featureFlagsSlice = createSlice({
     setEnableVoiceWasm(state, action: PayloadAction<boolean>) {
       state.enableVoiceWasm = action.payload;
     },
+    setEnableAdaptiveAiEngine(state, action: PayloadAction<boolean>) {
+      state.enableAdaptiveAiEngine = action.payload;
+    },
+    setEnableWebnnInference(state, action: PayloadAction<boolean>) {
+      state.enableWebnnInference = action.payload;
+    },
+    setEnableComputeShaders(state, action: PayloadAction<boolean>) {
+      state.enableComputeShaders = action.payload;
+    },
   },
 });
 
@@ -231,6 +252,12 @@ export const selectEnableIdbAtRestEncryption = (state: { featureFlags: FeatureFl
   state.featureFlags.enableIdbAtRestEncryption;
 export const selectEnableVoiceWasm = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableVoiceWasm;
+export const selectEnableAdaptiveAiEngine = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableAdaptiveAiEngine;
+export const selectEnableWebnnInference = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableWebnnInference;
+export const selectEnableComputeShaders = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableComputeShaders;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

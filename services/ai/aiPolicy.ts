@@ -2,6 +2,7 @@ import type { AIProvider, PrivacySettings } from '../../types';
 import { storageService } from '../storageService';
 
 const LORA_LOCAL_PROVIDERS = new Set(['webllm', 'onnx', 'transformers', 'ollama']);
+const LOCAL_INFERENCE_PROVIDERS = new Set(['webllm', 'onnx', 'transformers', 'ollama']);
 
 /**
  * Throws if the given model/provider is cloud-hosted.
@@ -24,7 +25,7 @@ export function assertCloudAiAllowedSync(
   provider: AIProvider,
   privacy: PrivacySettings | undefined,
 ): void {
-  if (provider === 'ollama' || provider === 'webllm') return;
+  if (LOCAL_INFERENCE_PROVIDERS.has(provider)) return;
   if (!privacy) return;
   if (privacy.localStorageOnly) {
     throw new Error('Cloud provider blocked: local-only mode is active.');
@@ -36,7 +37,7 @@ export function assertCloudAiAllowedSync(
 
 /** Async-Pfad wie früher `enforceCloudPolicy` — lädt aktuelle Privacy-Einstellungen aus dem Speicher. */
 export async function assertCloudAiAllowed(provider: AIProvider): Promise<void> {
-  if (provider === 'ollama' || provider === 'webllm') return;
+  if (LOCAL_INFERENCE_PROVIDERS.has(provider)) return;
   const settings = await storageService.loadSettings();
   assertCloudAiAllowedSync(provider, settings?.privacy);
 }
