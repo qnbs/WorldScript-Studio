@@ -248,6 +248,16 @@ export const useSettingsView = () => {
         case 'enableVoiceWasm':
           dispatch(featureFlagsActions.setEnableVoiceWasm(Boolean(value)));
           break;
+        // QNBS-v3: Edge-AI Perfection Cycle flags
+        case 'enableAdaptiveAiEngine':
+          dispatch(featureFlagsActions.setEnableAdaptiveAiEngine(Boolean(value)));
+          break;
+        case 'enableWebnnInference':
+          dispatch(featureFlagsActions.setEnableWebnnInference(Boolean(value)));
+          break;
+        case 'enableComputeShaders':
+          dispatch(featureFlagsActions.setEnableComputeShaders(Boolean(value)));
+          break;
         // QNBS-v3: enableIdbAtRestEncryption intentionally absent — managed via handlePassphraseConfirm
         // in Settings > Privacy, not the experimental flags UI toggle.
         default:
