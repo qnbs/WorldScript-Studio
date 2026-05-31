@@ -5,7 +5,7 @@ import { storageService } from '../services/storageService';
 import type { BinderNode } from '../types';
 import { Button } from './ui/Button';
 
-/** QNBS-v3: Research-Dokument neben dem Editor — Scrivener-Split ohne Redux-Überfrachtung. */
+/** QNBS-v3: Research document alongside the editor — Scrivener split without Redux overload. */
 export const ManuscriptResearchSplit: FC<{
   projectId: string;
   node: BinderNode | undefined;

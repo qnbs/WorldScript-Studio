@@ -13,7 +13,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 // ────────────────────────────────────────────────────────────
 // OfflineIndicator
 // ────────────────────────────────────────────────────────────
-// QNBS-v3: Badge-Titel + Banner-ARIA über i18n — SR/Locale-Parität zur restlichen App.
+// QNBS-v3: Badge title + banner ARIA via i18n — screen reader/locale parity with the rest of the app.
 export const OfflineIndicator: FC = () => {
   const { isOffline } = usePWA();
   const { t } = useTranslation();

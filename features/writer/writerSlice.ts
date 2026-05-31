@@ -117,7 +117,7 @@ const writerSlice = createSlice({
       // Also reset selection when section changes
       state.selection = { start: 0, end: 0, text: '' };
     },
-    // Streaming Live-Preview: chunks werden inkrementell angehängt
+    // Streaming live preview: chunks are appended incrementally
     appendResultStream: (state, action: PayloadAction<string>) => {
       state.resultStream += action.payload;
     },

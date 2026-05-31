@@ -1,6 +1,6 @@
 /**
- * Tauri-seitiger Pandoc-Aufruf (Optional) — liefert EPUB-Bytes oder null.
- * QNBS-v3: Kein Shell vom Renderer; Binärpfad nur in Rust.
+ * Tauri-side Pandoc call (optional) — returns EPUB bytes or null.
+ * QNBS-v3: No shell from the renderer; binary path only in Rust.
  */
 
 export async function tryPandocMarkdownToEpub(markdown: string): Promise<Uint8Array | null> {

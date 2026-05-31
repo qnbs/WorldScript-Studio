@@ -295,7 +295,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
   }, [selectedIndex]);
 
-  // QNBS-v3: aria-live für Spracheingabe (Priorität) und Trefferzahl.
+  // QNBS-v3: aria-live for voice input (priority) and hit count.
   useEffect(() => {
     if (!isOpen) {
       setPaletteLiveStatus('');

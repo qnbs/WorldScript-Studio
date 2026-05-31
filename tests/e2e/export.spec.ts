@@ -110,7 +110,7 @@ test.describe('End-to-end project flow (CI-only)', () => {
       .getByRole('button', { name: /AI Configuration|KI-Konfiguration/i })
       .first()
       .click();
-    // QNBS-v3: Nach seedGeminiApiKey zeigt ApiKeySection nur „configured“ — Input fehlt; nur füllen wenn noch kein Key.
+    // QNBS-v3: After seedGeminiApiKey the ApiKeySection shows only “configured” — input is missing; only fill if no key yet.
     const geminiInput = page.locator('#gemini-api-key');
     if (await geminiInput.isVisible({ timeout: 2500 }).catch(() => false)) {
       await geminiInput.fill('AIzaTestKey12345');

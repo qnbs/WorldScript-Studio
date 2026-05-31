@@ -139,7 +139,7 @@ const WriterViewUI: FC = () => {
         >
           ✦ {t('writer.flowMode.enterLabel')}
         </button>
-        {/* QNBS-v3: Aria + Mindest-Touch-Ziel für VC-Toggle — axe/E2E und mobile Writer-Stabilität. */}
+        {/* QNBS-v3: ARIA + minimum touch target for VC toggle — axe/E2E and mobile Writer stability. */}
         <button
           type="button"
           data-testid="writer-version-control-btn"

@@ -1,44 +1,44 @@
 # Daily Driver — Low-End Local CI/CD
 
-Praktische Checkliste für Ubuntu 20.04 Mate (2–4 GB RAM). **Primär lokal**; GitHub = Backup.
+Practical checklist for Ubuntu 20.04 Mate (2–4 GB RAM). **Primarily local**; GitHub = backup.
 
 ---
 
-## Morgens / vor der Arbeit
+## Morning / before work
 
-- [ ] `sc-status` oder `ci-status.sh` — RAM/Swap prüfen
-- [ ] Forgejo **nur** wenn du push/pull zum lokalen Remote brauchst: `sc-eco-on`
-- [ ] Sonst Forgejo **aus**: `sc-eco-off`
+- [ ] `sc-status` or `ci-status.sh` — check RAM/swap
+- [ ] Forgejo **only** if you need push/pull to the local remote: `sc-eco-on`
+- [ ] Otherwise keep Forgejo **off**: `sc-eco-off`
 
 ---
 
-## Während der Entwicklung (Standard, **ohne Docker**)
+## During development (standard, **without Docker**)
 
 ```bash
 cd ~/githubcursor/StoryCraft-Studio
 pnpm run ci:quick              # lint + i18n + typecheck
-pnpm run ci:quick:unit         # + Vitest ohne Coverage
+pnpm run ci:quick:unit         # + Vitest without coverage
 ```
 
-Einzelne Tests:
+Individual tests:
 
 ```bash
 pnpm exec vitest run tests/unit/duckdbClient.test.ts
 ```
 
-**DuckDB-WASM** läuft in Vitest (jsdom, `maxWorkers: 1`) — nicht parallel zu `act` starten.
+**DuckDB-WASM** runs in Vitest (jsdom, `maxWorkers: 1`) — do not start in parallel with `act`.
 
 ---
 
-## Vor Commit / Push (Forgejo)
+## Before commit / push (Forgejo)
 
 ```bash
-pnpm run ci:quick:unit         # empfohlen
+pnpm run ci:quick:unit         # recommended
 git add … && git commit -m "…"
-git push forgejo main          # primäres Remote
+git push forgejo main          # primary remote
 ```
 
-Gelegentlich GitHub-Backup:
+Occasional GitHub backup:
 
 ```bash
 sc-mirror-gh                   # alias: push-to-github
@@ -46,22 +46,22 @@ sc-mirror-gh                   # alias: push-to-github
 
 ---
 
-## Volle CI-Nähe mit act (on-demand, **abends / vor Release**)
+## Close CI parity with act (on-demand, **evenings / before release**)
 
-Voraussetzungen:
+Prerequisites:
 
-- [ ] Swap aktiv (`free -h`)
-- [ ] `sc-eco-off` (Forgejo stoppen)
-- [ ] Kein anderes schweres Programm
+- [ ] Swap active (`free -h`)
+- [ ] `sc-eco-off` (stop Forgejo)
+- [ ] No other heavy programs running
 
 ```bash
 cd ~/githubcursor/StoryCraft-Studio
 pnpm run ci:act
-# oder schlanker E2E:
+# or leaner E2E:
 ci-act-sequential.sh pull_request --e2e-chromium-only
 ```
 
-### Einzelne Jobs manuell
+### Individual jobs manually
 
 ```bash
 act pull_request -j security -W .github/workflows/ci.yml
@@ -73,7 +73,7 @@ act pull_request -j lighthouse -W .github/workflows/ci.yml
 
 ### Secrets
 
-Datei: `~/storycraft-ci/act.secrets` (chmod 600)
+File: `~/storycraft-ci/act.secrets` (chmod 600)
 
 ```ini
 GITHUB_TOKEN=ghp_…       # Mirror / API
@@ -81,60 +81,60 @@ CODECOV_TOKEN=           # optional
 LHCI_GITHUB_APP_TOKEN=   # optional
 ```
 
-Einzelnes Secret:
+Single secret:
 
 ```bash
 act pull_request -j quality -s CODECOV_TOKEN="$CODECOV_TOKEN"
 ```
 
-### Jobs die lokal fehlen / anders sind
+### Jobs missing locally / different behavior
 
-| Job | Lokal |
-|-----|--------|
-| `deploy` | Übersprungen (GitHub Pages) |
-| `dependency-review` | Nur PR auf github.com |
-| SLSA attest | Übersprungen |
-| `gitleaks` / `osv-scanner` | Brauchen Netzwerk; bei OOM zuerst `security` einzeln testen |
-| `mutation` | Optional `--with-mutation` (lang) |
+| Job | Locally |
+|-----|---------|
+| `deploy` | Skipped (GitHub Pages) |
+| `dependency-review` | PR on github.com only |
+| SLSA attest | Skipped |
+| `gitleaks` / `osv-scanner` | Need network; test `security` job alone first on OOM |
+| `mutation` | Optional `--with-mutation` (slow) |
 
 ### Matrix
 
-Nur **eine** Node-Achse: `lts/*` (entspricht Node 22 im act-22.04-Image). Nicht beide Matrix-Zeilen parallel starten.
+Only **one** Node axis: `lts/*` (corresponds to Node 22 in act-22.04 image). Do not run both matrix rows in parallel.
 
 ### Caching
 
 - Host: `PNPM_STORE_DIR=~/storycraft-ci/cache/pnpm-store`
-- act: Bind-Mount via `--bind` in `~/.actrc`
-- Nach Lauf: `sc-eco-off` oder `low-end-optimization.sh --prune`
+- act: bind-mount via `--bind` in `~/.actrc`
+- After run: `sc-eco-off` or `low-end-optimization.sh --prune`
 
 ---
 
-## Wöchentlich
+## Weekly
 
-- [ ] `pnpm run ci:act` mit `--with-storybook` (optional)
+- [ ] `pnpm run ci:act` with `--with-storybook` (optional)
 - [ ] `sc-backup`
-- [ ] `systemctl --user start storycraft-ci-prune.timer` Status prüfen
-- [ ] `git fetch github && sc-mirror-up` — Backup von GitHub holen falls du dort noch arbeitest
+- [ ] Check `systemctl --user start storycraft-ci-prune.timer` status
+- [ ] `git fetch github && sc-mirror-up` — get backup from GitHub if you still work there
 
 ---
 
-## Aliase (aus `bashrc-aliases.snippet`)
+## Aliases (from `bashrc-aliases.snippet`)
 
-| Alias | Aktion |
+| Alias | Action |
 |-------|--------|
-| `sc-ci` | Quick-Tier |
+| `sc-ci` | Quick tier |
 | `sc-ci-unit` | Quick + Vitest |
-| `sc-ci-cov` | Quick + Coverage |
+| `sc-ci-cov` | Quick + coverage |
 | `sc-act` | act sequential (PR) |
-| `sc-act-full` | act + storybook + chromium-only E2E |
+| `sc-act-full` | act + storybook + Chromium-only E2E |
 | `sc-eco-on` / `sc-eco-off` | Forgejo start/stop + prune |
-| `sc-status` | RAM, Docker, letztes act-Log |
+| `sc-status` | RAM, Docker, last act log |
 | `sc-backup` | backup-ci.sh |
 | `sc-mirror-gh` | Push main → GitHub |
 
 ---
 
-## Monitoring (low-overhead)
+## Monitoring (low overhead)
 
 ```bash
 sc-status
@@ -157,35 +157,35 @@ restore-ci.sh ~/storycraft-ci/backups/<timestamp>
 
 ## Troubleshooting Ubuntu 20.04 low-end
 
-| Symptom | Ursache | Fix |
-|---------|---------|-----|
-| System friert ein | OOM | Swap 6G; `ci-eco-stop.sh --prune`; nur `ci:quick` tagsüber |
-| act sehr langsam | HDD + Docker | Nachts laufen lassen; `pnpm` native für daily |
-| `Cannot connect to Docker` | Daemon aus / Rechte | `sudo systemctl start docker`; in `docker` group |
-| Vitest OOM | Coverage + WASM | Ohne `--coverage`; `NODE_OPTIONS=--max-old-space-size=1536` |
-| Playwright OOM in act | 2 Browser-Projekte | `--e2e-chromium-only`; Swap |
-| Forgejo 502 | Container bootet | `docker logs storycraft-forgejo`; RAM freigeben |
-| act artifact fehlt lighthouse | Separater act-Lauf | Ein `act --sequential` mit build+e2e+lighthouse |
-| gitleaks false positive | History scan | Secret rotieren; lokal Job überspringen wenn nötig |
-| pnpm store korrupt | Abgebrochener install | `pnpm store prune` |
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| System freezes | OOM | Swap 6G; `ci-eco-stop.sh --prune`; only `ci:quick` during the day |
+| act very slow | HDD + Docker | Run overnight; `pnpm` native for daily |
+| `Cannot connect to Docker` | Daemon off / permissions | `sudo systemctl start docker`; in `docker` group |
+| Vitest OOM | Coverage + WASM | Without `--coverage`; `NODE_OPTIONS=--max-old-space-size=1536` |
+| Playwright OOM in act | 2 browser projects | `--e2e-chromium-only`; swap |
+| Forgejo 502 | Container booting | `docker logs storycraft-forgejo`; free RAM |
+| act artifact missing lighthouse | Separate act run | One `act --sequential` with build+e2e+lighthouse |
+| gitleaks false positive | History scan | Rotate secret; skip job locally if needed |
+| pnpm store corrupt | Aborted install | `pnpm store prune` |
 
-### Notfall-RAM freigeben
+### Emergency RAM release
 
 ```bash
 ci-eco-stop.sh --prune
-sync && echo 3 | sudo tee /proc/sys/vm/drop_caches   # kurz, Vorsicht
+sync && echo 3 | sudo tee /proc/sys/vm/drop_caches   # brief, use with caution
 ```
 
 ---
 
-## Workflow-Übersicht
+## Workflow overview
 
 ```text
 Daily:     pnpm ci:quick → commit → push forgejo
 Weekly:    pnpm ci:act → sc-backup → optional push github
-Eco:       Forgejo nur bei git push/pull
+Eco:       Forgejo only on git push/pull
 ```
 
 ---
 
-Siehe auch: [docs/CI.md](../../docs/CI.md) · [INSTALL.md](INSTALL.md)
+See also: [docs/CI.md](../../docs/CI.md) · [INSTALL.md](INSTALL.md)

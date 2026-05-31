@@ -243,7 +243,7 @@ export async function runLocalTextGeneration(
     };
     const m = mod as EngineModule;
     const CreateMLCEngine = m.CreateMLCEngine;
-    // QNBS-v3: Nur ein Tab lädt WebLLM — vermeidet GPU/RAM-Kollision bei mehreren StoryCraft-Tabs.
+    // QNBS-v3: Only one tab loads WebLLM — avoids GPU/RAM collision across multiple StoryCraft tabs.
     if (typeof CreateMLCEngine === 'function' && hasWebGpu && gpuTabLeader) {
       const engine = await CreateMLCEngine(resolvedModelId, {
         initProgressCallback: (p: unknown) => {

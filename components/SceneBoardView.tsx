@@ -92,7 +92,7 @@ const SceneBoardUI: FC = () => {
 
       if (!over || active.id === over.id) return;
 
-      // Wenn über einer anderen Karte, in denselben Akt verschieben
+      // When hovering over another card, move to the same act
       const overSection = sections.find((s) => s.id === over.id);
       const activeSection = sections.find((s) => s.id === active.id);
       if (overSection && activeSection && overSection.act !== activeSection.act) {
@@ -104,7 +104,7 @@ const SceneBoardUI: FC = () => {
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
-      // Akt-Wechsel beim Darüberfahren prüfen (Container-IDs: 'act-1', 'act-2', 'act-3')
+      // Check for act change when hovering (container IDs: 'act-1', 'act-2', 'act-3')
       const { over } = event;
       if (over?.id && String(over.id).startsWith('act-')) {
         const act = parseInt(String(over.id).replace('act-', ''), 10) as 1 | 2 | 3;
@@ -123,7 +123,7 @@ const SceneBoardUI: FC = () => {
   const handleAddForAct = useCallback(
     (act: 1 | 2 | 3) => {
       handleAddSection();
-      // Nach dem Hinzufügen den Akt setzen – via kurzes Timeout (nach Redux-Update)
+      // Set the act after adding — via short timeout (after Redux update)
       setTimeout(() => {
         const last = sections[sections.length - 1];
         if (last) handleUpdateSection(last.id, { act });

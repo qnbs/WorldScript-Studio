@@ -1,6 +1,6 @@
 /**
  * Serializable compile presets for the Export wizard (offline, no network).
- * QNBS-v3: MVP für Scrivener-ähnliche „Presets“ ohne neue Backend-Schicht.
+ * QNBS-v3: MVP for Scrivener-like “presets” without a new backend layer.
  */
 
 export type CompileExportFormat = 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt';

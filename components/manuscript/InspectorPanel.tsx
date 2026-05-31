@@ -49,7 +49,7 @@ export const InspectorPanel = React.memo(() => {
 
   return (
     <>
-      {/* QNBS-v3: Inspector-KI-Zustände für SR mit aria-busy + kurzer Live-Status (Abschluss nur bei verbose/normal über announce). */}
+      {/* QNBS-v3: Inspector AI states for screen readers with aria-busy + brief live status (completion only in verbose/normal via announce). */}
       <section
         className="space-y-4 p-4"
         aria-label={t('manuscript.inspector.regionAriaLabel')}

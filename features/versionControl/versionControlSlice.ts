@@ -114,7 +114,7 @@ export const versionControlSlice = createSlice({
       if (branch) branch.headSnapshotId = id;
     },
 
-    // QNBS-v3: VC aus Projekt-Payload rehydrieren — Snapshots überleben App-Neustart ohne zweiten Store.
+    // QNBS-v3: Rehydrate VC from project payload — snapshots survive app restart without a second store.
     hydrateFromPersisted(state, action: PayloadAction<PersistedVersionControlState>) {
       const { branches, snapshots, currentBranchId } = action.payload;
       if (!branches?.length) return;

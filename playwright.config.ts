@@ -6,7 +6,7 @@ const runMobileLocal = process.env['RUN_MOBILE_E2E'] === '1';
 const desktopChrome = { name: 'chromium', use: { ...devices['Desktop Chrome'] } };
 const mobileChrome = { name: 'Mobile Chrome', use: { ...devices['Pixel 5'] } };
 
-// QNBS-v3: CI = Desktop + Mobile Chromium (ein Browser-Install); lokal optional Mobile nur mit RUN_MOBILE_E2E=1 für Low-End-Rechner.
+// QNBS-v3: CI = Desktop + Mobile Chromium (one browser install); locally mobile is optional via RUN_MOBILE_E2E=1 for low-end machines.
 const e2eProjects = isCi
   ? [desktopChrome, mobileChrome]
   : [

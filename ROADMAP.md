@@ -2,19 +2,19 @@
 
 ## Vision
 
-StoryCraft Studio soll die führende Open-Source-Plattform für KI-gestütztes kreatives Schreiben werden — offline-first, datenschutzfreundlich und erweiterbar.
+StoryCraft Studio aims to become the leading open-source platform for AI-assisted creative writing — offline-first, privacy-friendly, and extensible.
 
 ### UX / PWA baseline audit (2026-05-11)
 
-Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku):
+Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs):
 
-- **Kernpfade:** Willkommen → Blank/Demo → Manuskript / Writer → Export → Settings — Orientierung über Sidebar, Command Palette und konsistente Glossar-Begriffe ([`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md)).
-- **Responsive:** Mobile-Shell-E2E [`tests/e2e/mobile-shell.spec.ts`](tests/e2e/mobile-shell.spec.ts); kleine Viewports manuell für Bottom-Sheet und Writer-Split.
-- **Design-Tokens:** Hotspots schrittweise auf `--sc-*` / `--ring-focus` ([`docs/Design-System.md`](docs/Design-System.md)); Legacy-Bridge in [`index.css`](index.css) bis Migration fertig.
-- **Deep Links:** `?view=` wird beim Start gegen gültige Views validiert ([`hooks/useApp.ts`](hooks/useApp.ts)); PWA-Shortcuts im Manifest zeigen auf dieselben Keys ([`public/manifest.json`](public/manifest.json)).
-- **Share Target:** GET-Parameter `share_title` / `share_text` / `share_url` → Toast + `sessionStorage` + URL-Bereinigung ([`App.tsx`](App.tsx)).
-- **Service Worker:** `APP_VERSION` folgt `package.json` via [`scripts/sync-sw-version.mjs`](scripts/sync-sw-version.mjs) (`predev`/`prebuild`); **Network-only** für KI- und Local-Inference-Hosts ([`public/sw.js`](public/sw.js)); Precache nur über `install` + injiziertes `__WB_MANIFEST` (kein zweites `precacheAndRoute`-Paralleltrack).
-- **HTML `lang`:** folgt der gewählten UI-Sprache ([`App.tsx`](App.tsx)).
+- **Core paths:** Welcome → Blank/Demo → Manuscript / Writer → Export → Settings — navigation via Sidebar, Command Palette and consistent glossary terms ([`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md)).
+- **Responsive:** Mobile-shell E2E [`tests/e2e/mobile-shell.spec.ts`](tests/e2e/mobile-shell.spec.ts); small viewports tested manually for Bottom Sheet and Writer split.
+- **Design tokens:** Hotspots migrated incrementally to `--sc-*` / `--ring-focus` ([`docs/Design-System.md`](docs/Design-System.md)); legacy bridge in [`index.css`](index.css) until migration is complete.
+- **Deep links:** `?view=` is validated against valid views on startup ([`hooks/useApp.ts`](hooks/useApp.ts)); PWA shortcuts in the manifest point to the same keys ([`public/manifest.json`](public/manifest.json)).
+- **Share target:** GET parameters `share_title` / `share_text` / `share_url` → Toast + `sessionStorage` + URL cleanup ([`App.tsx`](App.tsx)).
+- **Service Worker:** `APP_VERSION` follows `package.json` via [`scripts/sync-sw-version.mjs`](scripts/sync-sw-version.mjs) (`predev`/`prebuild`); **Network-only** for AI and local inference hosts ([`public/sw.js`](public/sw.js)); precache only via `install` + injected `__WB_MANIFEST` (no second parallel `precacheAndRoute` track).
+- **HTML `lang`:** follows the selected UI language ([`App.tsx`](App.tsx)).
 
 > Current sprint tasks → [`TODO.md`](TODO.md)
 > Completed items archive → [`docs/history/`](docs/history/)
@@ -140,154 +140,154 @@ Messlatten aus dem UI-/PWA-Deep-Dive (Umsetzung im Repo, keine neue Pflicht-Doku
 
 ---
 
-## v1.1 — Stabilisierung & Härtung
+## v1.1 — Stabilization & Hardening
 
-**Status:** ✅ Abgeschlossen (siehe [docs/history/completed-v1.1.md](docs/history/completed-v1.1.md) für Details)
+**Status:** ✅ Completed (see [docs/history/completed-v1.1.md](docs/history/completed-v1.1.md) for details)
 
 All critical, high, and most medium-priority items have been completed, including:
 
-- ManuscriptView Resize-Listener Cleanup (AbortController + throttle)
-- Feature-Flag-System (localStorage-basiert, UI in Settings)
-- DevContainer-Konfiguration
-- Request-Deduplizierung (abort-previous Pattern in aiThunkUtils.ts)
-- Self-hosted Fonts (kein CDN, kein Google Fonts)
+- ManuscriptView resize-listener cleanup (AbortController + throttle)
+- Feature-flag system (localStorage-based, UI in Settings)
+- DevContainer configuration
+- Request deduplication (abort-previous pattern in aiThunkUtils.ts)
+- Self-hosted fonts (no CDN, no Google Fonts)
 
 ---
 
-## v1.1.2 — Hotfix: Kritische Bugs
+## v1.1.2 — Hotfix: Critical Bugs
 
-**Status:** ✅ Abgeschlossen
+**Status:** ✅ Completed
 
-- codexService Infinite-Loop Fix (while+continue → for...of matchAll)
-- Modal Focus-Trap Cleanup konsolidiert (fragile 2-return → single cleanup)
-- FOUC Theme-Init behoben (inline script + localStorage mirror)
-- Unübersetzte Sprachen (FR/ES/IT) aus Selector entfernt
-- Dead Code entfernt (buildDeduplicationKey, persist/PERSIST)
+- codexService infinite-loop fix (while+continue → for...of matchAll)
+- Modal focus-trap cleanup consolidated (fragile 2-return → single cleanup)
+- FOUC theme-init fixed (inline script + localStorage mirror)
+- Untranslated languages (FR/ES/IT) removed from selector
+- Dead code removed (buildDeduplicationKey, persist/PERSIST)
 
 ---
 
 ## v1.3 — Dual persistence, Codex hardening, quality gates
 
-**Status:** ✅ Released as **v1.3.0** (2026-05-08) — siehe [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md) (Follow-up 2026-05-08).
+**Status:** ✅ Released as **v1.3.0** (2026-05-08) — see [`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md) (Follow-up 2026-05-08).
 
 - Legacy → dual IndexedDB migration, Story Bible / Codex feature flags, scene visualization, `@google/genai` v2, Stryker + Playwright visual/a11y harness, Biome `--error-on-warnings`.
-- **Documentation (2026-05-06):** Vollständige **15-Dateien**-Inventur + README Documentation Hub inkl. **`.github/ACTIONS-OPTIMIZATIONS.md`**; CI-/Copilot-Texte zu Dual-DB und E2E-Helfern — siehe [`AUDIT.md`](AUDIT.md) „Markdown corpus“ und [`CHANGELOG.md`](CHANGELOG.md) `[Unreleased]`.
+- **Documentation (2026-05-06):** Complete **15-file** inventory + README Documentation Hub incl. **`.github/ACTIONS-OPTIMIZATIONS.md`**; CI/Copilot texts on dual-DB and E2E helpers — see [`AUDIT.md`](AUDIT.md) “Markdown corpus” and [`CHANGELOG.md`](CHANGELOG.md) `[Unreleased]`.
 
 ---
 
 ## v1.2 — Security, Quality & Local AI
 
-**Status:** ✅ Abgeschlossen (Security-Härting, Tauri-Parität, i18n×5, Spotlight-Tour — siehe CHANGELOG **[1.2.0]**)
+**Status:** ✅ Completed (security hardening, Tauri parity, i18n×5, Spotlight tour — see CHANGELOG **[1.2.0]**)
 
-### Security Hardening ✅ abgeschlossen
+### Security Hardening ✅ completed
 
 - ✅ CryptoKey non-extractable (`crypto.subtle.generateKey()`)
 - ✅ CSP img-src hardening (`frame-ancestors 'none'`, `upgrade-insecure-requests`)
-- ✅ Import-JSON Schema-Validation mit Valibot
-- ✅ Collaboration Awareness-State Validation
-- ✅ communityTemplateService → lokaler Static-Asset-Pfad
-- ✅ OpenAI Stream Abort-Check, silent Model-Downgrade gestoppt
-- ✅ Gemini Connection Test (echter API-Call)
+- ✅ Import JSON schema validation with Valibot
+- ✅ Collaboration awareness-state validation
+- ✅ communityTemplateService → local static asset path
+- ✅ OpenAI stream abort-check, silent model-downgrade stopped
+- ✅ Gemini connection test (real API call)
 
-### Code Quality ✅ größtenteils abgeschlossen
+### Code Quality ✅ mostly completed
 
-- ✅ **Dokumentation 2026-05:** `docs/CI.md`, README „Documentation Hub“, CONTRIBUTING (Biome/Node 22/Vite 8), Copilot/CLAUDE/AUDIT mit aktuellem Workflow synchronisiert
-- ✅ Coverage-Config auf Glob-Patterns umgestellt
-- ✅ TypeScript 6.0 übernommen (`stableTypeOrdering`, native `RegExp.escape`)
-- ✅ Project/Settings-Save-Listener getrennt (Performance)
-- ✅ SettingsView.tsx in 8 Sektions-Komponenten aufgeteilt (2116 LOC → ~234 LOC)
-- ✅ constants.tsx in icons/defaults/index aufgeteilt
-- ✅ projectSlice.ts in 6 Thunk-Domain-Dateien aufgeteilt (777 → 248 LOC)
-- ✅ Lighthouse CI hard-fail aktiviert
-- ✅ Test-Suite auf 160+ Tests ausgebaut (CI grün auf Node LTS + Node 24)
-- ✅ StorageBackend-Interface — `storageBackend.ts`, strikte `StoryProject`-Typen am Proxy
+- ✅ **Documentation 2026-05:** `docs/CI.md`, README “Documentation Hub”, CONTRIBUTING (Biome/Node 22/Vite 8), Copilot/CLAUDE/AUDIT synchronized with current workflow
+- ✅ Coverage config migrated to glob patterns
+- ✅ TypeScript 6.0 adopted (`stableTypeOrdering`, native `RegExp.escape`)
+- ✅ Project/settings save listeners separated (performance)
+- ✅ SettingsView.tsx split into 8 section components (2116 LOC → ~234 LOC)
+- ✅ constants.tsx split into icons/defaults/index
+- ✅ projectSlice.ts split into 6 thunk domain files (777 → 248 LOC)
+- ✅ Lighthouse CI hard-fail enabled
+- ✅ Test suite expanded to 160+ tests (CI green on Node LTS + Node 24)
+- ✅ StorageBackend interface — `storageBackend.ts`, strict `StoryProject` types on proxy
 
-### Tauri Feature-Parität ✅ abgeschlossen
+### Tauri Feature Parity ✅ completed
 
-- ✅ fileSystemService: Retry-Logik, LZ-String-Kompression, numerische Snapshot-IDs, `deleteImage()`, `hasSavedData()`, Auto-Snapshot (5 min, max 20)
-- ✅ Story Codex + RAG-Vektoren: file-per-project Storage (`projects/{id}/codex/`)
-- ✅ `storageService` / `codexService` routen alles über `StorageBackend`-Interface
+- ✅ fileSystemService: retry logic, LZ-string compression, numeric snapshot IDs, `deleteImage()`, `hasSavedData()`, auto-snapshot (5 min, max 20)
+- ✅ Story Codex + RAG vectors: file-per-project storage (`projects/{id}/codex/`)
+- ✅ `storageService` / `codexService` route everything through the `StorageBackend` interface
 
-### Ollama / Local-AI Integration ✅ abgeschlossen
+### Ollama / Local-AI Integration ✅ completed
 
-**Architektur:** `aiProviderService.ts` → `ollamaService.ts` (HTTP-Client für localhost:11434)
+**Architecture:** `aiProviderService.ts` → `ollamaService.ts` (HTTP client for localhost:11434)
 
-| Modell                | Parameter | VRAM (min) | Stärken                    | Empfehlung    |
-| --------------------- | --------- | ---------- | -------------------------- | ------------- |
-| Qwen3 8B              | 8B        | 6 GB       | Multilingual, Reasoning    | ⭐ Primär     |
-| DeepSeek V3.2 7B      | 7B        | 6 GB       | Coding, Reasoning          | Alternativ    |
-| Llama 4 Scout 17B     | 17B       | 12 GB      | Multilingual, lang-context | Power-User    |
-| Gemma 3 4B            | 4B        | 4 GB       | Kompakt, schnell           | Low-End       |
-| Mistral Small 3.2 24B | 24B       | 16 GB      | Multilingual Instruction   | High-End      |
-| Phi-4 Mini 3.8B       | 3.8B      | 4 GB       | Reasoning, kompakt         | Low-End       |
-| GLM-4 9B              | 9B        | 8 GB       | Chinesisch+Englisch        | Nische        |
-| Kimi K2 Instruct      | 32B (MoE) | 16 GB+     | Agentic, Tool-Use          | Experimentell |
+| Model                 | Parameters | VRAM (min) | Strengths                  | Recommendation |
+| --------------------- | ---------- | ---------- | -------------------------- | -------------- |
+| Qwen3 8B              | 8B         | 6 GB       | Multilingual, Reasoning    | ⭐ Primary     |
+| DeepSeek V3.2 7B      | 7B         | 6 GB       | Coding, Reasoning          | Alternative    |
+| Llama 4 Scout 17B     | 17B        | 12 GB      | Multilingual, long-context | Power user     |
+| Gemma 3 4B            | 4B         | 4 GB       | Compact, fast              | Low-end        |
+| Mistral Small 3.2 24B | 24B        | 16 GB      | Multilingual Instruction   | High-end       |
+| Phi-4 Mini 3.8B       | 3.8B       | 4 GB       | Reasoning, compact         | Low-end        |
+| GLM-4 9B              | 9B         | 8 GB       | Chinese+English            | Niche          |
+| Kimi K2 Instruct      | 32B (MoE)  | 16 GB+     | Agentic, Tool-Use          | Experimental   |
 
-**Hardware-Matrix:**
+**Hardware matrix:**
 
-- **Minimum (4 GB VRAM):** Gemma 3 4B, Phi-4 Mini — Basis-Textgenerierung
-- **Empfohlen (8 GB VRAM):** Qwen3 8B, DeepSeek V3.2 — Vollständige Toolchain
-- **Optimal (16+ GB VRAM):** Llama 4 Scout, Mistral Small — Lange Manuskripte, komplexe Analyse
+- **Minimum (4 GB VRAM):** Gemma 3 4B, Phi-4 Mini — basic text generation
+- **Recommended (8 GB VRAM):** Qwen3 8B, DeepSeek V3.2 — complete toolchain
+- **Optimal (16+ GB VRAM):** Llama 4 Scout, Mistral Small — long manuscripts, complex analysis
 
-**UX-Spezifikation:**
+**UX specification:**
 
 ```
-Einstellungen → AI Provider → [Gemini Cloud | Ollama Local]
-  ↳ Wenn Ollama: Modell-Dropdown (auto-detect via GET /api/tags)
-  ↳ Server-URL: localhost:11434 (konfigurierbar)
-  ↳ Status-Indikator: 🟢 Verbunden / 🔴 Nicht erreichbar
+Settings → AI Provider → [Gemini Cloud | Ollama Local]
+  ↳ If Ollama: model dropdown (auto-detect via GET /api/tags)
+  ↳ Server URL: localhost:11434 (configurable)
+  ↳ Status indicator: 🟢 Connected / 🔴 Unreachable
 ```
 
-**Implementation-Schritte:** ✅ alle abgeschlossen
+**Implementation steps:** ✅ all completed
 
-1. ✅ `services/ollamaService.ts` — HTTP-Client (`/api/generate`, `/api/chat`, `/api/tags`)
-2. ✅ `aiProviderService.ts` — Provider-Registry mit Fallback-Chain (Gemini-Fallback bei Ollama-Fehler)
+1. ✅ `services/ollamaService.ts` — HTTP client (`/api/generate`, `/api/chat`, `/api/tags`)
+2. ✅ `aiProviderService.ts` — provider registry with fallback chain (Gemini fallback on Ollama error)
 3. ✅ `features/settings/settingsSlice.ts` — `advancedAi.provider`, `advancedAi.model`, `advancedAi.ollamaBaseUrl`
-4. ✅ `components/settings/AiProviderCard.tsx` + `AiSections.tsx` — Provider-Toggle, Modell-Auto-Detect, Status-Indikator
-5. ✅ Prompt-Adapter — `sanitizeOllamaPrompt` + `buildOllamaPrompt` in `ollamaService.ts`
-6. ✅ Default-Modell: Qwen3 8B (`ollama/qwen3:8b`)
+4. ✅ `components/settings/AiProviderCard.tsx` + `AiSections.tsx` — provider toggle, model auto-detect, status indicator
+5. ✅ Prompt adapter — `sanitizeOllamaPrompt` + `buildOllamaPrompt` in `ollamaService.ts`
+6. ✅ Default model: Qwen3 8B (`ollama/qwen3:8b`)
 
 ### Codex Auto-Tracking (Story Codex)
 
-Automatische Erfassung und Pflege einer „Story Bible" aus dem Manuskript:
+Automatic extraction and maintenance of a “Story Bible” from the manuscript:
 
-- **RAG-Enhancement:** Beim Schreiben werden Entitäten (Charaktere, Orte, Gegenstände) automatisch extrahiert
-- **Knowledge-Graph:** Beziehungen zwischen Entitäten visualisieren und pflegen
-- **Widerspruchserkennung:** Echtzeit-Konsistenzprüfung gegen den Codex
-- **Basis:** Existierender RAG-Vektoren-Store in IndexedDB v5
+- **RAG enhancement:** Entities (characters, locations, objects) are automatically extracted while writing
+- **Knowledge graph:** Visualize and maintain relationships between entities
+- **Contradiction detection:** Real-time consistency check against the Codex
+- **Foundation:** Existing RAG vector store in IndexedDB v5
 
 ### Story Bible Light
 
-Vereinfachte automatische Konsistenzprüfung:
+Simplified automatic consistency checking:
 
-- Charakter-Steckbriefe werden mit Manuskript-Erwähnungen abgeglichen
-- Warnungen bei Namensänderungen, Altersinkonsistenzen, Ortwechseln
-- Timeline-View für chronologische Konsistenz
+- Character profiles are matched against manuscript mentions
+- Warnings on name changes, age inconsistencies, location shifts
+- Timeline view for chronological consistency
 
-### Visualize-Button (Image-Gen)
+### Visualize Button (Image Gen)
 
-- Gemini Image Generation bereits implementiert (Charakter-Portraits, Welt-Ambiance)
-- Erweiterung: „Szene visualisieren"-Button im Writer-View
-- Optional: Stable Diffusion via Ollama/ComfyUI für lokale Bildgenerierung
+- Gemini image generation already implemented (character portraits, world ambiance)
+- Extension: “Visualize scene” button in Writer view
+- Optional: Stable Diffusion via Ollama/ComfyUI for local image generation
 
 ---
 
 ## v1.2.1 — Release Blockers
 
-**Status:** 📋 Geplant (vor erstem Tauri-Release erforderlich)
+**Status:** 📋 Planned (required before first Tauri release)
 
-- ✅ StorageBackend-Interface — `storageBackend.ts`, strikte `StoryProject`-Typen am Proxy
-- ✅ Geführte Tour (Spotlight mit `driver.js`, Dashboard + Hilfe als Einstieg)
-- ✅ Tauri Release-Pipeline: GitHub Release mit Installern bei `v*`-Tags — [`docs/TAURI-CI.md`](docs/TAURI-CI.md) / [`tauri-build.yml`](.github/workflows/tauri-build.yml)
-- ⬜ Tauri v2 Auto-Update (`tauri-plugin-updater`) + Code-Signing — deferred to dedicated PR
-- ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — qualitative Übersetzungen iterativ
-- ✅ Bundle-Size-Budgets + rollup-Analyse als CI (`pnpm run bundle:budget`, `analyze` Artifact — siehe [`docs/CI.md`](docs/CI.md)); optionales LHCI-Performance-Budget weiterhin roadmap-offen
+- ✅ StorageBackend interface — `storageBackend.ts`, strict `StoryProject` types on proxy
+- ✅ Guided tour (Spotlight with `driver.js`, Dashboard + Help as entry point)
+- ✅ Tauri release pipeline: GitHub Release with installers on `v*` tags — [`docs/TAURI-CI.md`](docs/TAURI-CI.md) / [`tauri-build.yml`](.github/workflows/tauri-build.yml)
+- ⬜ Tauri v2 auto-update (`tauri-plugin-updater`) + code signing — deferred to dedicated PR
+- ✅ FR/ES/IT key parity + CI gate (`pnpm run i18n:check`) — qualitative translations iterative
+- ✅ Bundle size budgets + rollup analysis as CI (`pnpm run bundle:budget`, `analyze` artifact — see [`docs/CI.md`](docs/CI.md)); optional LHCI performance budget still roadmap-open
 
 ---
 
 ## v1.4 — Command Center, Gold-Standard Pipeline & Security Hardening
 
-**Status:** ✅ Released as **v1.4.0** (2026-05-12) — siehe [`CHANGELOG.md`](CHANGELOG.md)
+**Status:** ✅ Released as **v1.4.0** (2026-05-12) — see [`CHANGELOG.md`](CHANGELOG.md)
 
 - **Command Center:** `services/commands/` registry + `CommandPalette.tsx` (fuzzy search, recent/pinned, AI suggestions); `CommandExecutorProvider`; global shortcuts (`services/keyboard/`, `useGlobalKeyboardShortcuts.ts`); Settings → Shortcuts
 - **Settings hub:** search over control hints; settings JSON import/export
@@ -298,38 +298,38 @@ Vereinfachte automatische Konsistenzprüfung:
 
 ---
 
-## v1.4.x — Qualitätssteigerung (Master Perfection Plan)
+## v1.4.x — Quality Enhancement (Master Perfection Plan)
 
-**Status:** ✅ Abgeschlossen (2026-05-16) — Teil-Release von v1.4.0-Zyklus; Details in [`CHANGELOG.md`](CHANGELOG.md) und [`TODO.md`](TODO.md).
+**Status:** ✅ Completed (2026-05-16) — partial release of v1.4.0 cycle; details in [`CHANGELOG.md`](CHANGELOG.md) and [`TODO.md`](TODO.md).
 
-### Unit-Test-Coverage: Phase 1–5
+### Unit Test Coverage: Phases 1–5
 
-- **178 Test-Dateien**, insgesamt **2 024 Tests** (v1.6.2); Vitest-Schwellen auf **63/62/48/54** (Lines/Statements/Branches/Functions)
-- Gemessene Coverage (2026-05-20, v1.6.2): **65.91 % Lines · 50.59 % Branches · 56.74 % Functions · 64.25 % Statements** — alle Schwellen grün
+- **178 test files**, totaling **2 024 tests** (v1.6.2); Vitest thresholds at **63/62/48/54** (Lines/Statements/Branches/Functions)
+- Measured coverage (2026-05-20, v1.6.2): **65.91 % Lines · 50.59 % Branches · 56.74 % Functions · 64.25 % Statements** — all thresholds green
 
-### Phase 3A — Cross-Project-Search Service ✅
+### Phase 3A — Cross-Project Search Service ✅
 
-- `services/crossProjectSearchService.ts`: `searchAcrossProjects()` via `fuzzyScore`, 5 Locales (8 Keys), `transientUiStore`-Integration (`isCrossProjectSearchOpen`), Command-Palette-Command
-- v1-Scope: Einzelprojekt (Multi-Projekt erfordert DB_VERSION-Bump)
+- `services/crossProjectSearchService.ts`: `searchAcrossProjects()` via `fuzzyScore`, 5 locales (8 keys), `transientUiStore` integration (`isCrossProjectSearchOpen`), command palette command
+- v1 scope: single project (multi-project requires DB_VERSION bump)
 
-### Phase 3B — WebLLM Modell-Selektor ✅
+### Phase 3B — WebLLM Model Selector ✅
 
-- `WEBLLM_SUPPORTED_MODELS` (4 MLC-Checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress`-Parameter, Settings-UI mit Dropdown + WCAG-Fortschrittsanzeige (`role="progressbar"`, `useRef`-Mounted-Guard)
-- Lokalisiert in allen 5 Sprachen (3 neue Keys je Locale in `settings.json`)
+- `WEBLLM_SUPPORTED_MODELS` (4 MLC checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress` parameters, Settings UI with dropdown + WCAG progress indicator (`role="progressbar"`, `useRef` mounted guard)
+- Localized in all 5 languages (3 new keys per locale in `settings.json`)
 
 ### Phase 3C — Collaboration Security Warning ✅
 
-- `CollaborationPanel.tsx`: Security-Warning-Banner (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) vor Verbindungsaufbau sichtbar
+- `CollaborationPanel.tsx`: security warning banner (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) visible before connection establishment
 
-### Phase 4 — Stryker-Erweiterung + E2E-Tests ✅
+### Phase 4 — Stryker Extension + E2E Tests ✅
 
-- `stryker.conf.json`: 3 weitere Mutations-Ziele (`fuzzyScore.ts`, `palettePreferences.ts`, `commandBuilder.ts`)
-- `tests/e2e/commands.spec.ts` (Palette Ctrl+K, „dashboard"-Suche, fuzzy „wrt", Enter-Navigate)
-- `tests/e2e/collaboration.spec.ts` (Security-Warning-Banner vor Verbindung)
+- `stryker.conf.json`: 3 additional mutation targets (`fuzzyScore.ts`, `palettePreferences.ts`, `commandBuilder.ts`)
+- `tests/e2e/commands.spec.ts` (palette Ctrl+K, "dashboard" search, fuzzy "wrt", Enter-navigate)
+- `tests/e2e/collaboration.spec.ts` (security warning banner before connection)
 
-### One-Click Library-Export ✅
+### One-Click Library Export ✅
 
-- `services/libraryBackupService.ts`: verschlüsselter ZIP-Export (AES-GCM, META.json + vault.bin) → Settings → Data
+- `services/libraryBackupService.ts`: encrypted ZIP export (AES-GCM, META.json + vault.bin) → Settings → Data
 
 ---
 
@@ -370,28 +370,28 @@ Vereinfachte automatische Konsistenzprüfung:
 
 **Status:** 💡 Vision (partial delivery in v1.19.0 Phase 2)
 
-- ~~Full E2E-Encryption für P2P-Collaboration (RTCDataChannel in-flight encryption)~~ ✅ Done in B-3 (`packages/collab-transport`)
-- Community-Model-Liste (kuratierte Ollama-Modelle für kreatives Schreiben)
+- ~~Full E2E encryption for P2P collaboration (RTCDataChannel in-flight encryption)~~ ✅ Done in B-3 (`packages/collab-transport`)
+- Community model list (curated Ollama models for creative writing)
 - RTL language support — ar/he stubs in B-5; full translation content + Persian still v2.0
-- Fine-Tuning/LoRA-Support für personalisierte Schreibstile
-- Cloud-Sync Option (optional, E2E-verschlüsselt)
-- Plugin-System für benutzerdefinierte AI-Tools (build on PluginRegistry)
-- AI-Creativity-Presets pro Projekt (nicht global)
-- Visual Regression Tests (Playwright Screenshots + Storybook chromatic)
+- Fine-tuning/LoRA support for personalized writing styles
+- Cloud sync option (optional, E2E-encrypted)
+- Plugin system for custom AI tools (build on PluginRegistry)
+- AI creativity presets per project (not global)
+- Visual regression tests (Playwright screenshots + Storybook Chromatic)
 
 ---
 
-## Architektur-Entscheidungen
+## Architecture Decisions
 
-### Warum Ollama statt OpenAI-kompatibel?
+### Why Ollama instead of OpenAI-compatible?
 
-- **Datenschutz:** Alle Daten bleiben lokal
-- **Keine Kosten:** Keine API-Gebühren nach Hardware-Investition
-- **Flexibilität:** Jedes GGUF-Modell nutzbar
-- **Offline:** Funktioniert ohne Internetverbindung
+- **Privacy:** All data stays local
+- **No costs:** No API fees after hardware investment
+- **Flexibility:** Any GGUF model usable
+- **Offline:** Works without internet connection
 
-### Warum nicht Full E2E in v1.x?
+### Why not full E2E in v1.x?
 
-- **Komplexität:** Yjs-Dokument-Verschlüsselung erfordert Key-Exchange-Protokoll
-- **Pragmatismus:** PSK-basierte Room-Isolation bietet bereits guten Schutz
-- **Scope:** Focus auf Schreib-UX statt Crypto-Infrastruktur
+- **Complexity:** Yjs document encryption requires a key-exchange protocol
+- **Pragmatism:** PSK-based room isolation already provides good protection
+- **Scope:** Focus on writing UX rather than crypto infrastructure

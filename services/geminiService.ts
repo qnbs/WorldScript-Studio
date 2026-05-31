@@ -23,12 +23,12 @@ import { getPrompt as libGetPrompt } from './promptLibrary';
 import { storageService } from './storageService';
 
 // === DYNAMIC API KEY MANAGEMENT ===
-// KRITISCH: Kein hardcoded API key mehr!
-// Der Key wird verschlüsselt in IndexedDB gespeichert und bei Bedarf geladen.
+// CRITICAL: No more hardcoded API key!
+// The key is stored encrypted in IndexedDB and loaded on demand.
 
 let cachedAiClient: GoogleGenAI | null = null;
 let cachedApiKeyHash: string | null = null;
-// Race-Condition-Schutz: nur ein Initialisierungs-Promise gleichzeitig
+// Race condition guard: only one initialization promise at a time
 let clientInitPromise: Promise<GoogleGenAI> | null = null;
 
 const hashApiKey = async (key: string): Promise<string> => {
@@ -43,7 +43,7 @@ const hashApiKey = async (key: string): Promise<string> => {
 };
 
 const getAiClient = async (): Promise<GoogleGenAI> => {
-  // Wenn bereits ein Init-Vorgang läuft, darauf warten (verhindert Race Conditions)
+  // If an init operation is already running, wait for it (prevents race conditions)
   if (clientInitPromise) return clientInitPromise;
 
   clientInitPromise = (async () => {
@@ -57,7 +57,7 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
         );
       }
 
-      // Cache invalidation bei Key-Änderung
+      // Cache invalidation on key change
       const currentHash = await hashApiKey(apiKey);
       if (cachedAiClient && cachedApiKeyHash === currentHash) {
         return cachedAiClient;
@@ -67,7 +67,7 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
       cachedApiKeyHash = currentHash;
       return cachedAiClient;
     } finally {
-      // Promise-Lock immer freigeben
+      // Always release the promise lock
       clientInitPromise = null;
     }
   })();
@@ -75,7 +75,7 @@ const getAiClient = async (): Promise<GoogleGenAI> => {
   return clientInitPromise;
 };
 
-// Wird bei 401 (ungültiger Key) aufgerufen – Key löschen, Cache leeren
+// Called on 401 (invalid key) — delete the key, clear the cache
 export const handleInvalidApiKey = async (): Promise<void> => {
   cachedAiClient = null;
   cachedApiKeyHash = null;
@@ -83,7 +83,7 @@ export const handleInvalidApiKey = async (): Promise<void> => {
   try {
     await storageService.clearGeminiApiKey();
   } catch {
-    // Ignorieren – Key ist sowieso ungültig
+    // Ignore — the key is invalid anyway
   }
 };
 
@@ -104,7 +104,7 @@ const getModelForText = (model?: string): string =>
   model?.startsWith('gemini-') ? model : 'gemini-3.5-flash';
 const getModelForImage = () => 'gemini-3.1-flash-image-preview';
 
-// --- Hilfsfunktion für Retry mit 401/429-Handling ---
+// --- Helper function for retry with 401/429 handling ---
 async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -113,7 +113,7 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
     } catch (err: unknown) {
       lastError = err;
 
-      // Sofortiger Abbruch + Cache-/Key-Reset bei ungültigem API-Key (401)
+      // Immediate abort + cache/key reset on invalid API key (401)
       const is401 =
         (err as Record<string, unknown>)?.['status'] === 401 ||
         (err instanceof Error && err.message?.includes('401')) ||
@@ -129,10 +129,10 @@ async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promi
         throw invalidApiKeyError;
       }
 
-      // Kein Retry bei AbortError
+      // No retry on AbortError
       if (err instanceof DOMException && err.name === 'AbortError') throw err;
 
-      // Bei Rate-Limit (429) längere Wartezeit
+      // Longer wait on rate limit (429)
       const is429 =
         (err as Record<string, unknown>)?.['status'] === 429 ||
         (err instanceof Error && err.message?.includes('429')) ||

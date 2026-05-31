@@ -1,5 +1,5 @@
 /**
- * Einheitliches Markdown für Pandoc (Tauri) — spiegelt grob compileProfile-Körper.
+ * Unified Markdown for Pandoc (Tauri) — broadly mirrors the compileProfile body.
  * QNBS-v3: Desktop-Export mit Fallback auf JS-EPUB im Browser.
  */
 

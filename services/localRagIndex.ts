@@ -1,6 +1,6 @@
 /**
- * Lokaler „RAG“-Index: Hashed Bag-of-Words-Vektoren + Speicher über StorageBackend.saveRagVectors.
- * QNBS-v3: Offline-Retrieval ohne Cloud — echte Embeddings können später die gleiche API nutzen.
+ * Local “RAG” index: hashed bag-of-words vectors + storage via StorageBackend.saveRagVectors.
+ * QNBS-v3: Offline retrieval without cloud — real embeddings can use the same API later.
  */
 
 import type { StorySection } from '../types';

@@ -15,7 +15,7 @@ interface LiveRegionContextValue {
 
 const LiveRegionContext = createContext<LiveRegionContextValue | undefined>(undefined);
 
-// QNBS-v3: Zentrale aria-live-Regionen statt dynamisch erzeugter Nodes — stabil für Screenreader.
+// QNBS-v3: Central aria-live regions instead of dynamically created nodes — stable for screen readers.
 export function LiveRegionProvider({ children }: { children: ReactNode }) {
   const liveRegionVerbosity = useAppSelector(
     (s) => s.settings?.accessibility?.liveRegionVerbosity ?? 'normal',

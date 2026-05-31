@@ -8,35 +8,35 @@ For the **current** documentation map (all `.md` guides), see [`README.md`](../R
 
 ## Critical (🔴) — All Completed
 
-- ✅ Tauri CSP setzen (`src-tauri/tauri.conf.json`)
-- ✅ Tauri Identifier korrigieren → `com.storycraft.studio`
-- ✅ Tauri Version synchronisieren → `1.1.1` (aligned with package.json, fixed build path + window config)
-- ✅ Tauri Capabilities granular einschränken
-- ✅ AbortController für alle 14+ AI-Thunks in projectSlice
-- ✅ AbortController für Hooks (ConsistencyChecker, Critic)
-- ✅ retry() in geminiService aktivieren (war definiert, nie aufgerufen)
-- ✅ Auto-Save State-Validation (null-check, 5MB-Warnung)
-- ✅ generationHistory FIFO-Limit (50 Einträge)
+- ✅ Set Tauri CSP (`src-tauri/tauri.conf.json`)
+- ✅ Correct Tauri identifier → `com.storycraft.studio`
+- ✅ Synchronize Tauri version → `1.1.1` (aligned with package.json, fixed build path + window config)
+- ✅ Restrict Tauri capabilities granularly
+- ✅ AbortController for all 14+ AI thunks in projectSlice
+- ✅ AbortController for hooks (ConsistencyChecker, Critic)
+- ✅ Activate retry() in geminiService (was defined, never called)
+- ✅ Auto-save state validation (null-check, 5MB warning)
+- ✅ generationHistory FIFO limit (50 entries)
 
 ## High (🟡) — All Completed
 
-- ✅ Per-View Error Boundaries mit Recovery
-- ✅ TypeScript `any`-Casts entfernen (hooks.ts, store.ts)
-- ✅ Redux Logger opt-in via localStorage
-- ✅ Decrypt-Fehler → expliziter Recovery-Flow + UI-Warnung
-- ✅ Collaboration PSK-basierte Room-Isolation
-- ✅ Unit-Tests für kritische Services (geminiService, dbService, projectSlice, writerSlice, settingsSlice, listenerMiddleware, collaborationService)
-- ✅ Coverage-Thresholds (50%) konfiguriert
-- ✅ CI: Lint (Biome) + Typecheck auf Hard-Fail
-- ✅ manualChunks erweitert (leaflet, konva, recharts)
+- ✅ Per-view error boundaries with recovery
+- ✅ Remove TypeScript `any` casts (hooks.ts, store.ts)
+- ✅ Redux logger opt-in via localStorage
+- ✅ Decrypt errors → explicit recovery flow + UI warning
+- ✅ Collaboration PSK-based room isolation
+- ✅ Unit tests for critical services (geminiService, dbService, projectSlice, writerSlice, settingsSlice, listenerMiddleware, collaborationService)
+- ✅ Coverage thresholds (50%) configured
+- ✅ CI: lint (Biome) + typecheck on hard-fail
+- ✅ manualChunks extended (leaflet, konva, recharts)
 
 ## Medium (🟠) — Completed Items
 
-- ✅ Performance Budgets (Lighthouse CI)
+- ✅ Performance budgets (Lighthouse CI)
 
 ## Low (🟢) — Completed Items
 
-- ✅ Storybook Stories erweitern (Modal, Toast, Spinner, Drawer, ErrorBoundary)
+- ✅ Extend Storybook stories (Modal, Toast, Spinner, Drawer, ErrorBoundary)
 
 ---
 

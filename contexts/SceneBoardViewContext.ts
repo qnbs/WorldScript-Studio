@@ -13,7 +13,7 @@ interface SceneBoardViewContextType {
   project: ProjectData;
   sections: (StorySection & { position: { x: number; y: number }; wordCount: number })[];
   characters: Character[];
-  /** Welt-Ort-IDs für Szenen-Metadaten (sceneLocationId). */
+  /** World location IDs for scene metadata (sceneLocationId). */
   locationOptions: { id: string; label: string }[];
   connections: PlotConnection[];
   subplots: Subplot[];

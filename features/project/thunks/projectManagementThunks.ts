@@ -82,7 +82,7 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     persistedVersionControl: projectDataJson.persistedVersionControl,
   };
 
-  // QNBS-v3: Zod-Inferenz nutzt | undefined für optionale Keys — ProjectData erwartet fehlende Keys (exactOptionalPropertyTypes).
+  // QNBS-v3: Zod inference uses | undefined for optional keys — ProjectData expects missing keys (exactOptionalPropertyTypes).
   return result as ProjectData;
 });
 

@@ -245,7 +245,7 @@ export interface StorySection {
   worldIds?: string[]; // Linked worlds
   wordCount?: number;
   status?: 'draft' | 'outline' | 'first-draft' | 'revised' | 'final';
-  act?: 1 | 2 | 3; // Akt-Zugehörigkeit für Swimlanes
+  act?: 1 | 2 | 3; // Act membership for swimlanes
   /** In-universe scene start (ISO-like or story-calendar string). */
   sceneStart?: string;
   /** Human-readable duration (e.g. PT2H, "3 days"). */
@@ -479,20 +479,20 @@ export interface AdvancedAiSettings {
   customPrompts: Record<string, string>;
   rateLimit: number; // requests per minute
   ollamaBaseUrl: string;
-  /** Preset für lokale /v1-Server; bei Wechsel wird typische Basis-URL gesetzt (custom = manuelle URL). */
+  /** Preset for local /v1 servers; switching sets the typical base URL (custom = manual URL). */
   localBackendPreset: LocalBackendPreset;
   /**
-   * OpenAI-kompatible Cloud- oder Proxy-API (OpenRouter, Groq, …): Root ohne Pfad, z. B. `https://openrouter.ai/api`.
-   * Leer = offizielle OpenAI-API (`api.openai.com`).
+   * OpenAI-compatible cloud or proxy API (OpenRouter, Groq, …): root without path, e.g. `https://openrouter.ai/api`.
+   * Empty = official OpenAI API (`api.openai.com`).
    */
   openAiCompatibleBaseUrl: string;
-  /** Optional für OpenRouter-Rankings / Attribution (Header HTTP-Referer). */
+  /** Optional for OpenRouter rankings / attribution (HTTP Referer header). */
   openAiSiteUrl: string;
-  /** Optional für OpenRouter (Header X-Title). */
+  /** Optional for OpenRouter (X-Title header). */
   openAiSiteTitle: string;
-  /** Nach Primär-Provider weitere Provider bei Fehler versuchen (Projekt-Thunks / Legacy-Streaming). */
+  /** Try additional providers after the primary provider on error (project thunks / legacy streaming). */
   hybridFallbackEnabled: boolean;
-  /** Reihenfolge der Fallback-Provider (ohne Duplikate; Primär kommt immer zuerst). */
+  /** Order of fallback providers (no duplicates; primary always comes first). */
   hybridFallbackChain: AIProvider[];
   // QNBS-v3: lexical = fast BoW only; hybrid = semantic MiniLM + lexical token-overlap + recency (default).
   ragMode: 'lexical' | 'hybrid';

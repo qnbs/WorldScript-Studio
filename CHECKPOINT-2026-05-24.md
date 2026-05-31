@@ -1,170 +1,170 @@
-# StoryCraft Studio — Zwischenstandsmarke (Checkpoint)
-**Datum:** 2026-05-24  
-**Sitzungsdauer:** ~3,5 Stunden kontinuierliche Arbeit  
-**Letzter Commit:** `33cb544`  
-**Git-Tag:** `v1.17.0` (gepusht)  
+# StoryCraft Studio — Checkpoint
+**Date:** 2026-05-24  
+**Session duration:** ~3.5 hours continuous work  
+**Last commit:** `33cb544`  
+**Git tag:** `v1.17.0` (pushed)  
 
 ---
 
-## ✅ Abgeschlossene P0-Items in dieser Sitzung
+## ✅ Completed P0 items in this session
 
-### P0 #5 — Versionierung & Release konsolidieren (VOLLSTÄNDIG)
+### P0 #5 — Versioning & release consolidation (COMPLETE)
 - `package.json` → `1.17.0`
 - `src-tauri/Cargo.toml` → `1.17.0`
-- `src-tauri/tauri.conf.json` → `1.17.0` (war seit 10 Releases bei 1.7.0 verwaist)
-- `CHANGELOG.md`: `[Unreleased]` → `## [1.17.0] — 2026-05-24` mit allen Sprint-Highlights
-- Vergleichs-Links im CHANGELOG aktualisiert (`[1.17.0]`, `[1.11.0]`, … `[1.0.0]`)
-- Git-Tag `v1.17.0` erstellt und gepusht
-- GitHub Release konnte nicht via API erstellt werden (Authentifizierung fehlte zu Sitzungsbeginn, wurde später behoben — Release muss manuell nachgeholt werden oder via `gh release create v1.17.0`)
+- `src-tauri/tauri.conf.json` → `1.17.0` (had been stuck at 1.7.0 for 10 releases)
+- `CHANGELOG.md`: `[Unreleased]` → `## [1.17.0] — 2026-05-24` with all sprint highlights
+- Comparison links in CHANGELOG updated (`[1.17.0]`, `[1.11.0]`, … `[1.0.0]`)
+- Git tag `v1.17.0` created and pushed
+- GitHub Release could not be created via API (authentication was missing at session start, fixed later — release must be created manually or via `gh release create v1.17.0`)
 
 **Commits:**
 - `da61b5a` — chore(release): consolidate versioning to v1.17.0 + y-webrtc patch
 - `12fda28` — fix(vercel): update pnpm-lock.yaml for y-webrtc patchedDependencies
 
-### P0 #1 — Full RTCDataChannel in-flight E2E encryption (VOLLSTÄNDIG)
-- `pnpm patch y-webrtc@10.3.0` erstellt und committet (`patches/y-webrtc@10.3.0.patch`)
-- Patch verschlüsselt alle drei kritischen Stellen in `y-webrtc.js`:
-  1. `sendWebrtcConn()` — verschlüsselt vor `peer.send()`
-  2. `broadcastWebrtcConn()` — verschlüsselt vor Broadcasting
-  3. `peer.on('data')` — entschlüsselt vor `readPeerMessage()`
-- Nutzt existierenden `room.key` (AES-256-GCM, PBKDF2 100k Iterationen)
-- Asynchrone Encrypt/Decrypt mit `cryptoutils.encrypt/decrypt`
-- Plaintext-Fallback wenn kein Passwort gesetzt (`room.key` absent)
-- **Smoke-Tests:** `tests/unit/yWebrtcPatch.test.ts` (5 Tests) verifiziert Patch-Anwendung
-- **i18n:** Alle 5 Locales aktualisiert — Badge zeigt jetzt "E2E Encrypted (AES-256-GCM) — signaling + data channel"
-- **CHANGELOG:** Eintrag für RTCDataChannel-Verschlüsselung hinzugefügt
+### P0 #1 — Full RTCDataChannel in-flight E2E encryption (COMPLETE)
+- `pnpm patch y-webrtc@10.3.0` created and committed (`patches/y-webrtc@10.3.0.patch`)
+- Patch encrypts all three critical sites in `y-webrtc.js`:
+  1. `sendWebrtcConn()` — encrypts before `peer.send()`
+  2. `broadcastWebrtcConn()` — encrypts before broadcasting
+  3. `peer.on('data')` — decrypts before `readPeerMessage()`
+- Uses existing `room.key` (AES-256-GCM, PBKDF2 100k iterations)
+- Async encrypt/decrypt with `cryptoutils.encrypt/decrypt`
+- Plaintext fallback when no password is set (`room.key` absent)
+- **Smoke tests:** `tests/unit/yWebrtcPatch.test.ts` (5 tests) verifies patch application
+- **i18n:** All 5 locales updated — badge now shows "E2E Encrypted (AES-256-GCM) — signaling + data channel"
+- **CHANGELOG:** Entry for RTCDataChannel encryption added
 
 **Commits:**
 - `e4fdac7` — feat(collab): full RTCDataChannel E2E encryption via y-webrtc patch + smoke tests + i18n
 
-### P0 #4 — DS-5: Legacy CSS Bridge-Block entfernen (ALS ERLEDIGT MARKIERT)
-- Nach Analyse der Sprint-Doku (`SPRINT-HANDOFF-2026-05-22.md`, `SPRINT-V1.16.md`):
-  - Bridge-Block wurde in vorherigen Sprints bereits entfernt
-  - Verbleibende Aliase (`--nav-*`, `--glass-*`, `--border-interactive`, `--ring-focus`) sind **bewusste semantische Tokens**, keine Legacy-Bridges
-- `TODO.md` aktualisiert: DS-5 als ✅ erledigt markiert
+### P0 #4 — DS-5: Remove legacy CSS bridge block (MARKED AS DONE)
+- After analysis of sprint docs (`SPRINT-HANDOFF-2026-05-22.md`, `SPRINT-V1.16.md`):
+  - Bridge block was already removed in previous sprints
+  - Remaining aliases (`--nav-*`, `--glass-*`, `--border-interactive`, `--ring-focus`) are **intentional semantic tokens**, not legacy bridges
+- `TODO.md` updated: DS-5 marked ✅ done
 
-**Kein separater Commit nötig** (Änderung in `TODO.md` erfolgte im `e4fdac7`-Commit mit enthalten)
+**No separate commit needed** (change in `TODO.md` was included in the `e4fdac7` commit)
 
-### P0 #2 — Storage Resilience & Recovery (SUBSTANTIELL ABGESCHLOSSEN)
-- **retryDb verbessert:**
-  - Exponentielles Backoff: 500ms → 1000ms → 2000ms
-  - Jitter: bis zu 200ms zufällige Verzögerung (verhindert Thundering Herd)
-- **retryDb auf weitere Methoden angewendet:**
-  - `loadState()` (kritischer App-Start-Pfad!)
+### P0 #2 — Storage resilience & recovery (SUBSTANTIALLY COMPLETE)
+- **retryDb improved:**
+  - Exponential backoff: 500ms → 1000ms → 2000ms
+  - Jitter: up to 200ms random delay (prevents thundering herd)
+- **retryDb applied to additional methods:**
+  - `loadState()` (critical app startup path!)
   - `createSnapshot()`, `listSnapshots()`, `getSnapshotData()`, `deleteSnapshot()`
   - `deleteProject()`
-- **Proaktive Low-Storage-Warnung:**
+- **Proactive low-storage warning:**
   - `checkStorageHealth()` in `services/dbInitialization.ts`
-  - Nutzt `navigator.storage.estimate()`
-  - Warnt bei ≥85% Quota-Nutzung
-  - Integriert in `listenerMiddleware.ts` Auto-Save-Pfad
-  - Dispatched `statusActions.addNotification()` mit Error-Toast
+  - Uses `navigator.storage.estimate()`
+  - Warns at ≥85% quota usage
+  - Integrated into `listenerMiddleware.ts` auto-save path
+  - Dispatches `statusActions.addNotification()` with error toast
 - **Tests:**
-  - `dbServiceRetry.test.ts`: +1 Test für exponentielles Backoff-Timing (8 Tests gesamt)
-  - `dbInitialization.test.ts`: +4 Tests für `checkStorageHealth` (12 Tests gesamt)
+  - `dbServiceRetry.test.ts`: +1 test for exponential backoff timing (8 tests total)
+  - `dbInitialization.test.ts`: +4 tests for `checkStorageHealth` (12 tests total)
 
 **Commits:**
 - `99d1ebb` — feat(storage): harden retryDb with exponential backoff + jitter; protect loadState & snapshots
 - `33cb544` — feat(storage): proactive low-storage warning via checkStorageHealth
 
-### Vercel-Deployment-Fix (BEHOBEN)
-- Problem: `pnpm-lock.yaml` enthielt keine `patchedDependencies`-Sektion für `y-webrtc@10.3.0`
-- Vercel brach mit `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` ab
-- Fix: `pnpm install --no-frozen-lockfile` lokal ausgeführt, Lockfile aktualisiert, gepusht
+### Vercel deployment fix (RESOLVED)
+- Problem: `pnpm-lock.yaml` did not contain a `patchedDependencies` section for `y-webrtc@10.3.0`
+- Vercel aborted with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`
+- Fix: ran `pnpm install --no-frozen-lockfile` locally, updated lockfile, pushed
 
 **Commit:** `12fda28`
 
 ---
 
-## ⏳ Offene P0-Items (für nächste Sitzung)
+## ⏳ Open P0 items (for next session)
 
-### P0 #3 — Voice E2E-Tests hinzufügen (NOCH OFFEN)
-**Status:** Analyse begonnen, aber keine Implementierung gestartet  
-**Was fehlt:**
-- Playwright-Spec für Voice-Flows erstellen (`tests/e2e/voice.spec.ts`)
-- Feature-Flag `enableVoiceSupport` in E2E aktivieren
-- Web Speech API mocken (SpeechRecognition / SpeechSynthesis)
-- Microphone-Permission simulieren
-- Tests für:
-  - VoiceSettingsSection-Rendering in Settings
-  - VoiceControlPanel-Interaktionen
-  - Push-to-Talk (Ctrl+Shift+V)
+### P0 #3 — Add voice E2E tests (STILL OPEN)
+**Status:** Analysis started, no implementation begun  
+**What is missing:**
+- Create Playwright spec for voice flows (`tests/e2e/voice.spec.ts`)
+- Enable feature flag `enableVoiceSupport` in E2E
+- Mock Web Speech API (SpeechRecognition / SpeechSynthesis)
+- Simulate microphone permission
+- Tests for:
+  - VoiceSettingsSection rendering in Settings
+  - VoiceControlPanel interactions
+  - Push-to-talk (Ctrl+Shift+V)
   - Dictation in ManuscriptEditor
-  - VoiceIndicator-Status-Overlay
-- **Kontext:** Voice Foundation wurde in v1.17 implementiert (83 Unit Tests), aber keine E2E-Abdeckung
+  - VoiceIndicator status overlay
+- **Context:** Voice foundation was implemented in v1.17 (83 unit tests), but no E2E coverage yet
 
-### P0 #1 Nacharbeit — RTCDataChannel-Test-Integration (OPTIONAL)
-- Aktuell nur Smoke-Tests (prüfen, dass Patch angewendet wurde)
-- Echte Integration-Tests (zwei Yjs-Dokumente syncen lassen) wären wünschenswert, aber aufwändig
-- WebRTC in jsdom/Playwright nicht nativ verfügbar → erfordert Mock-Provider oder echten Browser-Test
+### P0 #1 follow-up — RTCDataChannel test integration (OPTIONAL)
+- Currently only smoke tests (checking that the patch was applied)
+- Real integration tests (syncing two Yjs documents) would be desirable but costly
+- WebRTC not natively available in jsdom/Playwright → requires a mock provider or real browser test
 
 ---
 
-## 🔧 Technische Kontexte für Wiederaufnahme
+## 🔧 Technical context for resumption
 
-### y-webrtc Patch
-- Patch-Datei: `patches/y-webrtc@10.3.0.patch`
-- Registriert in `package.json` unter `pnpm.patchedDependencies`
-- Bei y-webrtc-Upgrade muss der Patch neu erstellt werden (`pnpm patch y-webrtc@<new>`)
-- Original-Quelle: `node_modules/y-webrtc/src/y-webrtc.js` (wird von pnpm automatisch gepatched)
+### y-webrtc patch
+- Patch file: `patches/y-webrtc@10.3.0.patch`
+- Registered in `package.json` under `pnpm.patchedDependencies`
+- When upgrading y-webrtc the patch must be recreated (`pnpm patch y-webrtc@<new>`)
+- Original source: `node_modules/y-webrtc/src/y-webrtc.js` (patched automatically by pnpm)
 
-### retryDb-Verbesserungen
-- Location: `services/dbService.ts` Zeile ~73
+### retryDb improvements
+- Location: `services/dbService.ts` line ~73
 - Signature: `retryDb<T>(fn: () => Promise<T>, retries = 2, baseDelayMs = 500)`
-- Formel: `delay = baseDelayMs * 2^attempt + jitter(0-200ms)`
-- Geschützte Methoden: `saveProject`, `saveSettings`, `saveApiKey`, `getApiKey`, `clearApiKey`, `saveGeminiApiKey`, `getGeminiApiKey`, `clearGeminiApiKey`, `saveBinderAsset`, `getBinderAsset`, `deleteBinderAsset`, `listBinderAssetIds`, `loadState`, `createSnapshot`, `listSnapshots`, `getSnapshotData`, `deleteSnapshot`, `deleteProject`
+- Formula: `delay = baseDelayMs * 2^attempt + jitter(0-200ms)`
+- Protected methods: `saveProject`, `saveSettings`, `saveApiKey`, `getApiKey`, `clearApiKey`, `saveGeminiApiKey`, `getGeminiApiKey`, `clearGeminiApiKey`, `saveBinderAsset`, `getBinderAsset`, `deleteBinderAsset`, `listBinderAssetIds`, `loadState`, `createSnapshot`, `listSnapshots`, `getSnapshotData`, `deleteSnapshot`, `deleteProject`
 
-### Storage Health Check
+### Storage health check
 - Location: `services/dbInitialization.ts`
-- Threshold: 85% Quota-Nutzung
-- Integration: `app/listenerMiddleware.ts` (Auto-Save-Listener, vor dem eigentlichen Speichern)
-- Fallback: Wenn `navigator.storage.estimate()` nicht verfügbar oder fehlerhaft → silently ok
+- Threshold: 85% quota usage
+- Integration: `app/listenerMiddleware.ts` (auto-save listener, before the actual save)
+- Fallback: if `navigator.storage.estimate()` is unavailable or fails → silently ok
 
-### Git-Status
+### Git status
 - Branch: `main`
-- Alle Änderungen gepusht zu `origin/main`
-- Tag `v1.17.0` gepusht
-- Keine uncommitteten Änderungen im Working Tree
+- All changes pushed to `origin/main`
+- Tag `v1.17.0` pushed
+- No uncommitted changes in working tree
 
 ---
 
-## 🚀 Nächste empfohlene Schritte (Priorisiert)
+## 🚀 Next recommended steps (prioritized)
 
-1. **P0 #3 Voice E2E-Tests** — Am kritischsten, da letztes offenes P0-Item
-   - `tests/e2e/voice.spec.ts` erstellen
-   - Web Speech API mocken in Playwright
-   - Voice-Settings, ControlPanel, Indicator testen
+1. **P0 #3 Voice E2E tests** — Most critical, as the last open P0 item
+   - Create `tests/e2e/voice.spec.ts`
+   - Mock Web Speech API in Playwright
+   - Test voice settings, ControlPanel, Indicator
 
-2. **GitHub Release v1.17.0 manuell erstellen** (falls nicht via `gh` CLI nachgeholt)
+2. **Create GitHub Release v1.17.0 manually** (if not followed up via `gh` CLI)
    - `gh release create v1.17.0 --title "v1.17.0 — Voice Full Support Foundation" --notes-file <changelog-excerpt>`
 
-3. **Vercel-Deployment verifizieren**
-   - Push auf `main` sollte automatisch triggern
-   - Prüfen, ob Build nach `12fda28` erfolgreich durchläuft
+3. **Verify Vercel deployment**
+   - Push to `main` should trigger automatically
+   - Check whether build after `12fda28` completes successfully
 
-4. **Weitere Storage-Härtung (optional)**
-   - retryDb auf `saveStoryCodex`, `saveRagVectors`, `saveImage` ausweiten
-   - Automatische Datenkomprimierung/Archivierung bei >90% Quota
+4. **Further storage hardening (optional)**
+   - Extend retryDb to `saveStoryCodex`, `saveRagVectors`, `saveImage`
+   - Automatic data compression/archiving at >90% quota
 
-5. **P1-Items aus Audit angehen**
-   - RTL-Support finalisieren
-   - Mobile/PWA-Polish
-   - Tauri Auto-Update + Code-Signing
+5. **Address P1 items from audit**
+   - Finalize RTL support
+   - Mobile/PWA polish
+   - Tauri auto-update + code signing
 
 ---
 
-## 📊 Sitzungs-Statistik
+## 📊 Session statistics
 - **Commits:** 5 (da61b5a, 12fda28, e4fdac7, 99d1ebb, 33cb544)
-- **Geänderte Dateien:** ~20 (inkl. Tests, i18n, Patches, Manifeste)
-- **Neue Tests:** 10 (5 yWebrtcPatch + 1 dbServiceRetry + 4 checkStorageHealth)
-- **P0-Items abgeschlossen:** 4 von 5
-- **Verbleibende P0-Items:** 1 (Voice E2E-Tests)
+- **Files changed:** ~20 (incl. tests, i18n, patches, manifests)
+- **New tests:** 10 (5 yWebrtcPatch + 1 dbServiceRetry + 4 checkStorageHealth)
+- **P0 items completed:** 4 of 5
+- **Remaining P0 items:** 1 (voice E2E tests)
 
 ---
 
-## ⚠️ Bekannte technische Einschränkungen
+## ⚠️ Known technical limitations
 
-- **Plan-Mode-Bug:** Während der Sitzung trat wiederholt ein Konflikt auf zwischen `system-reminder` ("Plan mode still active") und tatsächlichem Verhalten (`ExitPlanMode` warf "Not in plan mode"). Dies wurde umgangen durch direkte Implementierung nach Nutzerbestätigung.
-- **GitHub API:** Zu Sitzungsbeginn keine Authentifizierung → Release-API fehlgeschlagen. `gh auth login` wurde später durchgeführt.
-- **pnpm patch-commit:** Erster Versuch mit 60s Timeout fehlgeschlagen (Peer-Dependency-Issue). Gelöst durch manuelles `diff` + Lockfile-Update.
-- **Vercel:** `pnpm install --frozen-lockfile` brach wegen fehlender `patchedDependencies` im Lockfile ab. Behoben via `pnpm install --no-frozen-lockfile` + Commit.
+- **Plan-mode bug:** During the session a recurring conflict occurred between the `system-reminder` ("Plan mode still active") and actual behavior (`ExitPlanMode` threw "Not in plan mode"). Worked around by implementing directly after user confirmation.
+- **GitHub API:** No authentication at session start → Release API failed. `gh auth login` was run later.
+- **pnpm patch-commit:** First attempt with 60s timeout failed (peer-dependency issue). Resolved via manual `diff` + lockfile update.
+- **Vercel:** `pnpm install --frozen-lockfile` aborted due to missing `patchedDependencies` in the lockfile. Fixed via `pnpm install --no-frozen-lockfile` + commit.

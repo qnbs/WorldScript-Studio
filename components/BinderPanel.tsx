@@ -93,7 +93,7 @@ const BinderAssetPreview: FC<{
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-    // QNBS-v3: MIME aus Payload — kein node.mimeType in deps (vermeidet unnötige Re-Fetches).
+    // QNBS-v3: MIME from payload — no node.mimeType in deps (avoids unnecessary re-fetches).
   }, [projectId, assetId]);
 
   if (loading) {

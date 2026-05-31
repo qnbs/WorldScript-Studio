@@ -90,7 +90,7 @@ export const AiSection: FC = () => {
           })
         }
       />
-      {/* QNBS-v3: Hybrid-Fallback nur für Legacy-/Thunk-Pfad — Writer-Orchestrierung bleibt Primär-Provider (siehe README). */}
+      {/* QNBS-v3: Hybrid fallback for legacy/thunk path only — Writer orchestration remains the primary provider (see README). */}
       <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">

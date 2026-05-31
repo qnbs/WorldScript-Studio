@@ -622,28 +622,28 @@ Delivered: WorkerBus v2 (priority preemption, backpressure, transferables), GPU 
 
 ## Follow-up Audit — 2026-05-10 (Global Best-Practices & content program)
 
-- **App-Inhalte:** Community-Templates auf **englischen Master** vereinheitlicht (`community-templates/index.json` ↔ `public/`); `content-guard` + Zod-Validierung in `fetchCommunityTemplates`; Help-Artikel mit **`tryActionId`** für Palette-/Nav-Sprünge; Demo/Import-Feedback über **Toasts** statt `alert` (`WelcomePortal`, `useSettingsView`).
-- **UX/Diagnostik:** Experimentelles **App-Gesundheit**-Panel (`enableAppHealthPanel`) unter Settings → Info; About zeigt **package.json-Version** statt Platzhalter.
-- **Doku:** [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (Engineering + Content + CI); README Privacy-Bullet präzisiert (lokal vs. Cloud-KI).
-- **Tests:** Vitest-Coverage-Untergrenzen moderat angehoben; Community-Template-Tests inkl. Zod-Fallback-Pfad.
+- **App content:** Community templates unified to **English master** (`community-templates/index.json` ↔ `public/`); `content-guard` + Zod validation in `fetchCommunityTemplates`; help articles with **`tryActionId`** for palette/nav jumps; demo/import feedback via **toasts** instead of `alert` (`WelcomePortal`, `useSettingsView`).
+- **UX/diagnostics:** Experimental **App Health** panel (`enableAppHealthPanel`) under Settings → Info; About shows **package.json version** instead of placeholder.
+- **Docs:** [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) (Engineering + Content + CI); README privacy bullet clarified (local vs. cloud AI).
+- **Tests:** Vitest coverage thresholds moderately raised; community template tests incl. Zod fallback path.
 
 ## Follow-up Audit — 2026-05-10 (Accessibility & WCAG-oriented QA)
 
-- **Live regions:** [`contexts/LiveRegionContext.tsx`](contexts/LiveRegionContext.tsx) zentralisiert `announce()`; View-Wechsel mit übersetztem Titel ([`App.tsx`](App.tsx)); optional reduzierte Ansagen über `settings.accessibility.liveRegionVerbosity`.
-- **Settings-Hub:** Presets (Motor, Sehschwäche, Kognitiv, Screenreader), Vorschau, Hilfe-Link; Zod-Normalisierung persistenter Daten in [`features/settings/accessibilitySchema.ts`](features/settings/accessibilitySchema.ts).
-- **Globale Anzeige:** Body-/HTML-Klassen für große Schrift, Farbfilter (`data-colorblind`), komfortable Ziele, Fokus-Verstärkung ([`App.tsx`](App.tsx), [`index.css`](index.css)).
-- **Command Palette:** [`hooks/useFocusTrap.ts`](hooks/useFocusTrap.ts), APG-Gruppen im Listbox, `aria-live` für Trefferzahl/Spracheingabe ([`components/CommandPalette.tsx`](components/CommandPalette.tsx)).
-- **Modal:** Dialog-Rolle nur auf dem Panel; schließbarer Vollflächen-Backdrop als `button` mit `aria-label` ([`components/ui/Modal.tsx`](components/ui/Modal.tsx)).
-- **Feature-Views:** Character Graph mit Tabellen-Alternative; Scene Board Reihenfolge je Akt auch per Tastatur (`moveManuscriptSectionWithinAct` in [`features/project/projectSlice.ts`](features/project/projectSlice.ts)); Writer KI-Bereich mit `aria-busy` ([`components/WriterView.tsx`](components/WriterView.tsx)); Manuskript-Inspector-Region mit `aria-busy` + kurzem `aria-live`-Status während Logline-/Proofread-/Szenen-KI ([`components/ManuscriptView.tsx`](components/ManuscriptView.tsx)).
-- **CI / Qualität:** Lighthouse assert `categories:accessibility` (warn) in [`.lighthouserc.cjs`](.lighthouserc.cjs); Playwright [`tests/e2e/a11y.spec.ts`](tests/e2e/a11y.spec.ts) mit `@axe-core/playwright`; Storybook `@storybook/addon-a11y` für lokale Komponentenprüfung (`pnpm run storybook`).
-- **Maintainer-Doku:** [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
+- **Live regions:** [`contexts/LiveRegionContext.tsx`](contexts/LiveRegionContext.tsx) centralizes `announce()`; view transitions with translated title ([`App.tsx`](App.tsx)); optional reduced announcements via `settings.accessibility.liveRegionVerbosity`.
+- **Settings hub:** Presets (motor, visual impairment, cognitive, screen reader), preview, help link; Zod normalization of persisted data in [`features/settings/accessibilitySchema.ts`](features/settings/accessibilitySchema.ts).
+- **Global display:** Body/HTML classes for large text, color filters (`data-colorblind`), comfortable targets, focus enhancement ([`App.tsx`](App.tsx), [`index.css`](index.css)).
+- **Command palette:** [`hooks/useFocusTrap.ts`](hooks/useFocusTrap.ts), APG groups in listbox, `aria-live` for hit count/voice input ([`components/CommandPalette.tsx`](components/CommandPalette.tsx)).
+- **Modal:** Dialog role only on the panel; closable full-area backdrop as `button` with `aria-label` ([`components/ui/Modal.tsx`](components/ui/Modal.tsx)).
+- **Feature views:** Character graph with table alternative; Scene Board ordering per act also via keyboard (`moveManuscriptSectionWithinAct` in [`features/project/projectSlice.ts`](features/project/projectSlice.ts)); Writer AI area with `aria-busy` ([`components/WriterView.tsx`](components/WriterView.tsx)); manuscript inspector region with `aria-busy` + brief `aria-live` status during logline/proofread/scene AI ([`components/ManuscriptView.tsx`](components/ManuscriptView.tsx)).
+- **CI / quality:** Lighthouse assert `categories:accessibility` (warn) in [`.lighthouserc.cjs`](.lighthouserc.cjs); Playwright [`tests/e2e/a11y.spec.ts`](tests/e2e/a11y.spec.ts) with `@axe-core/playwright`; Storybook `@storybook/addon-a11y` for local component checking (`pnpm run storybook`).
+- **Maintainer docs:** [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
 
 ## Follow-up Audit — 2026-05-10 (Hybrid-AI, i18n runtime bundles, deployment docs)
 
-- **Hybrid-AI / OpenAI-kompatible Cloud:** `advancedAi` Presets (Ollama/LM Studio/vLLM), `openAiCompatibleBaseUrl` + optionale OpenRouter-Header, konfigurierbare **Fallback-Kette** in `aiProviderService` / Thunks; Writer-Orchestrierung unverändert primärer Provider; Tauri **CSP** `connect-src` erweitert.
-- **i18n:** `locales/*/*.json` ist die Quelle; **`public/locales/<lang>/bundle.json`** muss per **`node scripts/build-i18n.mjs`** (u. a. `predev` / nach `i18n:check`) mit Source synchron bleiben — sonst erscheinen **rohe Key-Strings** in der UI.
-- **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (GitHub Pages + Vercel, gleichwertig), Root [`vercel.json`](vercel.json) für SPA-Rewrites + Build/Output.
-- **Doku-Hub / README:** Vercel-Abschnitt + Link; [`services/ai/index.ts`](services/ai/index.ts) Architekturkommentar Hybrid.
+- **Hybrid AI / OpenAI-compatible cloud:** `advancedAi` presets (Ollama/LM Studio/vLLM), `openAiCompatibleBaseUrl` + optional OpenRouter headers, configurable **fallback chain** in `aiProviderService` / thunks; Writer orchestration unchanged as primary provider; Tauri **CSP** `connect-src` extended.
+- **i18n:** `locales/*/*.json` is the source; **`public/locales/<lang>/bundle.json`** must be kept in sync with source via **`node scripts/build-i18n.mjs`** (e.g. `predev` / after `i18n:check`) — otherwise **raw key strings** appear in the UI.
+- **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (GitHub Pages + Vercel, equivalent), root [`vercel.json`](vercel.json) for SPA rewrites + build/output.
+- **Docs hub / README:** Vercel section + link; [`services/ai/index.ts`](services/ai/index.ts) architecture comment for hybrid.
 
 ## Follow-up Audit — 2026-05-10 (Gold-Standard pipeline + strict lint/typecheck)
 

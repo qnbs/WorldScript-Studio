@@ -91,7 +91,7 @@ export function startSpotlightTour(t: Translate, tourId: SpotlightTourId = 'defa
     }
   }
 
-  // QNBS-v3: Outro verknüpft Tour mit Help/„Try it“-Pfad — konsistentes Lernen statt toter Endscreens.
+  // QNBS-v3: Outro links the tour to the Help/”Try it” path — consistent learning instead of dead end screens.
   steps.push({
     popover: {
       title: t('tour.outro.title'),

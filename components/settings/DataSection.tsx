@@ -195,7 +195,7 @@ export const DataSection: FC = () => {
         </CardContent>
       </Card>
 
-      {/* QNBS-v3: Vollständiger Library-Export AES-GCM im ZIP — Schlüssel nur als Nutzer-Passphrase. */}
+      {/* QNBS-v3: Full library export AES-GCM in ZIP — key only as user passphrase. */}
       <Modal
         isOpen={libraryModalOpen}
         onClose={() => {

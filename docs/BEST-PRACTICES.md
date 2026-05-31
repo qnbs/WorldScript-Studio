@@ -14,10 +14,10 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 
 - **Tone:** Supportive, precise; AI as co-pilot, not ghostwriter. Match formality to each locale (de/fr/es/it/en).
 - **Glossary (UI):** Use consistently across Settings, Help, and Command Palette:
-  - **Manuscript** — Haupttext / Kapitelansicht
-  - **Outline** — Handlungsgliederung / Plot-Skeleton (not mixed with “template structure” in user-facing text without context)
-  - **Template** — vorgegebene Erzählstruktur
-  - **Codex / Story Bible** — projektinterne Referenz (wie in App benannt)
+  - **Manuscript** — main text / chapter view
+  - **Outline** — plot structure / plot skeleton (not mixed with “template structure” in user-facing text without context)
+  - **Template** — predefined narrative structure
+  - **Codex / Story Bible** — project-internal reference (as named in the app)
   - **Snapshot** — zeitpunktbezogene Sicherung des Projekts (project-level; distinct from **Scene Revision** which is per-scene)
   - **Scene Revision** — per-scene snapshot (IDB, max 50 per scene, auto-saved on content change)
   - **Writing Session** — timed session tracked in Progress Tracker (start/stop via Ctrl+Shift+S)

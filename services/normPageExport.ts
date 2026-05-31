@@ -1,12 +1,12 @@
 /**
- * German publishing “Normseite”: 30 Zeilen à maximal 60 Zeichen (Courier-Zählung).
- * QNBS-v3: Rohtext ohne Layout der UI — rein rechnerischer Umbruch für Verlage/VG-Wort-Workflows.
+ * German publishing standard “Normseite”: 30 lines of at most 60 characters each (Courier counting).
+ * QNBS-v3: Plain text without UI layout — purely computational line-breaking for publisher/VG-Wort workflows.
  */
 
 export const NORM_PAGE_COLS = 60;
 export const NORM_PAGE_ROWS = 30;
 
-/** Entfernt minimale Markdown-Zierelemente für reinen Fließtext. */
+/** Removes minimal Markdown decoration elements for plain running text. */
 export function stripLightMarkdown(text: string): string {
   return text
     .replace(/\*\*(.*?)\*\*/g, '$1')
@@ -15,7 +15,7 @@ export function stripLightMarkdown(text: string): string {
     .trim();
 }
 
-/** Bricht einen Absatz in Zeilen à maximal `cols` Zeichen (Wortgrenzen). */
+/** Wraps a paragraph into lines of at most `cols` characters (word boundaries). */
 export function wrapParagraphToLines(paragraph: string, cols: number): string[] {
   const words = paragraph.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
@@ -44,7 +44,7 @@ export function wrapParagraphToLines(paragraph: string, cols: number): string[] 
   return lines;
 }
 
-/** Alle Absätze → flache Zeilenliste (Leerzeilen zwischen Absätzen). */
+/** All paragraphs → flat line list (blank lines between paragraphs). */
 export function wrapPlainTextToNormLines(body: string, cols: number): string[] {
   const paras = stripLightMarkdown(body).split(/\n+/);
   const out: string[] = [];

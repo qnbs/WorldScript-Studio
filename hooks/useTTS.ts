@@ -13,7 +13,7 @@ export const useTTS = () => {
     };
   }, [isSupported]);
 
-  // Workaround für Chrome: speechSynthesis stoppt nach ~15s ohne Interaktion
+  // Workaround for Chrome: speechSynthesis stops after ~15s without interaction
   useEffect(() => {
     if (!isSupported) return;
     const keepAlive = setInterval(() => {

@@ -8,7 +8,7 @@ export interface UseFocusTrapOptions {
 
 /**
  * Keeps Tab cycling inside `containerRef` while active (dialog / palette pattern).
- * QNBS-v3: Gemeinsame Fokus-Falle für Modal + Command Palette (APG).
+ * QNBS-v3: Shared focus trap for modal + command palette (APG).
  */
 export function useFocusTrap(
   containerRef: RefObject<HTMLElement | null>,

@@ -409,7 +409,7 @@ const projectSlice = createSlice({
         }
       }
     },
-    // QNBS-v3: Binder / Research-Knoten offline-first im Projekt — ergänzt klassische Autoren-Pipeline ohne Cloud.
+    // QNBS-v3: Binder / research nodes offline-first in the project — extends the classic author pipeline without cloud.
     setBinderNodes: (state, action: PayloadAction<BinderNode[]>) => {
       state.data.binderNodes = action.payload;
     },

@@ -6,17 +6,17 @@
 
 ## Executive Summary + Vision
 
-StoryCraft Studio erhält einen **vollständigen, opt-in Voice Full Support** als Premium-Zusatzfunktion. Die App bleibt primär maus- und tastaturgesteuert. Nach Aktivierung können Nutzer nahezu alle Funktionen (Navigation, Schreiben, Plot-Board, AI-Features, Settings, Export, Kollaboration) per Stimme steuern.
+StoryCraft Studio receives a **complete, opt-in Voice Full Support** as a premium add-on feature. The app remains primarily mouse and keyboard driven. When activated, users can control nearly all features (navigation, writing, Plot Board, AI features, settings, export, collaboration) by voice.
 
-**Vision:** Voice als gleichwertiges Eingabemedium neben Maus/Tastatur — mit höchster Privacy (lokal-first), Offline-Fähigkeit und WCAG 2.2 AAA-konformer Barrierefreiheit. Der Voice-Mode ist ein Kraftmultiplikator für Power-User und ein Türöffner für Accessibility-Nutzer.
+**Vision:** Voice as an equal input medium alongside mouse/keyboard — with maximum privacy (local-first), offline capability, and WCAG 2.2 AAA-compliant accessibility. Voice Mode is a force multiplier for power users and a gateway for accessibility users.
 
-**Status v1.0 Foundation:** Alle abstrakten Engine-Interfaces, Web Speech API Fallback-Implementierungen, Redux-State, UI-Komponenten, Intent-Engine, Command-Mappings und 83 Unit-Tests sind implementiert und grün.
+**Status v1.0 Foundation:** All abstract engine interfaces, Web Speech API fallback implementations, Redux state, UI components, intent engine, command mappings, and 83 unit tests are implemented and green.
 
 **Status v1.19.0 WASM Scaffold (B-2):** `WasmSttEngine` (Whisper.cpp WASM STT scaffold) und `SileroVadEngine` (Silero VAD v4 via ONNX Runtime Web) implementiert in `services/voice/wasmSttEngine.ts` + `sileroVadEngine.ts`. Beide implementieren die abstrakten Interfaces aus `voiceTypes.ts`. Aktivierung via `enableVoiceWasm` flag (off by default). Model-Download-UI ist Phase 3.
 
 ---
 
-## 1. Gesamtarchitektur
+## 1. Overall Architecture
 
 ### High-Level
 
@@ -58,38 +58,38 @@ StoryCraft Studio erhält einen **vollständigen, opt-in Voice Full Support** al
 
 ### Low-Level
 
-- **Abstract Engine Pattern:** `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine` als TypeScript-Interfaces mit multiplen Implementierungen
-- **Capability Detection:** Runtime-Prüfung welche Engines verfügbar (WASM-Support, WebGPU, Modell-Download-Status)
-- **Graceful Degradation:** Automatischer Fallback von lokal → Web Speech API → visuell-only
-- **Worker-Isolation:** Audio-Verarbeitung (VAD, STT-Chunking) in `workers/voiceAudio.worker.ts` (v1.1)
-- **Redux-State:** `features/voice/voiceSlice.ts` für persistente Voice-Preferences (in Settings gespeichert)
-- **Zustand-State:** `app/transientUiStore.ts` für ephemeral UI (Listening-Indikator, aktiver Modus)
+- **Abstract engine pattern:** `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine` as TypeScript interfaces with multiple implementations
+- **Capability detection:** Runtime check which engines are available (WASM support, WebGPU, model download status)
+- **Graceful degradation:** Automatic fallback from local → Web Speech API → visual-only
+- **Worker isolation:** Audio processing (VAD, STT chunking) in `workers/voiceAudio.worker.ts` (v1.1)
+- **Redux state:** `features/voice/voiceSlice.ts` for persistent voice preferences (stored in Settings)
+- **Zustand state:** `app/transientUiStore.ts` for ephemeral UI (listening indicator, active mode)
 
 ---
 
 ## 2. Wake-Word, VAD, Continuous Listening & Microphone Handling
 
 ### Wake-Word ✅ v1.0
-- **Default:** "Hey StoryCraft" oder "OK StoryCraft"
-- **Engine:** `EnergyThresholdWakeWordEngine` — Energie-Threshold + Phrase-Matching Fallback
-- **Future:** Sherpa-ONNX Wake-Word (WASM) mit kleinem ONNX-Modell (~50KB)
-- **Privacy:** Wake-Word läuft komplett lokal; kein Audio-Upload
+- **Default:** "Hey StoryCraft" or "OK StoryCraft"
+- **Engine:** `EnergyThresholdWakeWordEngine` — energy threshold + phrase-matching fallback
+- **Future:** Sherpa-ONNX wake-word (WASM) with small ONNX model (~50KB)
+- **Privacy:** Wake-word runs entirely locally; no audio upload
 
 ### VAD ✅ v1.0
-- **Primär:** `WebRtcVadEngine` — energy-based VAD in pure JavaScript (sofort verfügbar)
-- **Future:** Silero VAD v4 via ONNX Runtime Web (~2MB Modell, lazy-loaded)
-- **Konfiguration:** `threshold` (0.01), `minSilenceFrames` (5), `minSpeechFrames` (3)
+- **Primary:** `WebRtcVadEngine` — energy-based VAD in pure JavaScript (immediately available)
+- **Future:** Silero VAD v4 via ONNX Runtime Web (~2MB model, lazy-loaded)
+- **Configuration:** `threshold` (0.01), `minSilenceFrames` (5), `minSpeechFrames` (3)
 
 ### Continuous Listening ✅ v1.0
-- **Push-to-Talk (PTT):** Halte-Taste (konfigurierbar, Default: `Ctrl+Shift+V`) — empfohlen für Privacy
-- **Wake-Word Mode:** Continuous VAD-Wake-Word-Hybrid; nach Wake-Word aktives Listening
-- **Manual Mode:** Klick auf Voice-Button in Toolbar
-- **AudioWorklet:** Eigener `voice-processor.js` für 16kHz/16bit Mono-Stream mit minimaler Latenz (v1.1)
+- **Push-to-Talk (PTT):** hold key (configurable, default: `Ctrl+Shift+V`) — recommended for privacy
+- **Wake-Word Mode:** continuous VAD/wake-word hybrid; active listening after wake-word
+- **Manual Mode:** click the voice button in the toolbar
+- **AudioWorklet:** custom `voice-processor.js` for 16kHz/16bit mono stream with minimal latency (v1.1)
 
 ### Microphone Handling ✅ v1.0
-- **Permission:** Explizite Anfrage bei erstem Aktivieren mit Erklärung wofür
-- **Indicator:** Permanenter Mikrofon-Status in Status-Bar (nur wenn Voice aktiv)
-- **Muting:** Schnelles Muten via Tastatur oder Klick; Audio-Stream wird tatsächlich gestoppt
+- **Permission:** Explicit request on first activation with an explanation of its purpose
+- **Indicator:** Permanent microphone status in status bar (only when voice is active)
+- **Muting:** Fast mute via keyboard or click; audio stream is actually stopped
 
 ---
 
@@ -97,54 +97,54 @@ StoryCraft Studio erhält einen **vollständigen, opt-in Voice Full Support** al
 
 ### Vergleich
 
-| Engine | Typ | Größe | Qualität | Offline | Privacy | Sprachen | Status 2026 |
-|--------|-----|-------|----------|---------|---------|----------|-------------|
-| **Web Speech API** | Browser-nativ | 0KB | Mittel | Nein | Schlecht | Browser-abh. | ✅ v1.0 Fallback |
-| **Whisper.cpp WASM** | Lokales WASM | ~30-80MB | Sehr hoch | Ja | Exzellent | 99+ | v1.1 geplant |
-| **Faster-Whisper (ONNX)** | Lokales WASM | ~50MB | Sehr hoch | Ja | Exzellent | 99+ | v1.1 geplant |
-| **Sherpa-ONNX** | Lokales WASM | ~5-20MB | Hoch | Ja | Exzellent | 10+ | v1.1 geplant |
-| **Transformers.js Whisper** | Web-Transformer | ~30MB | Hoch | Ja | Exzellent | 99+ | v1.1 geplant |
-| **Parakeet (NVIDIA)** | Cloud/API | 0KB | Extrem hoch | Nein | Schlecht | En+ | Optional |
-| **Kokoro (ONNX)** | Lokale TTS | ~15MB | Sehr hoch | Ja | Exzellent | En+ | v1.1 geplant |
-| **Piper** | Lokale TTS | ~5-20MB | Hoch | Ja | Exzellent | 20+ | v1.1 geplant |
-| **Coqui XTTS** | Lokale TTS | ~400MB | Extrem hoch | Ja | Exzellent | Multi | Heavyweight |
+| Engine | Type | Size | Quality | Offline | Privacy | Languages | Status 2026 |
+|--------|------|------|---------|---------|---------|-----------|-------------|
+| **Web Speech API** | Browser-native | 0KB | Medium | No | Poor | Browser-dependent | ✅ v1.0 fallback |
+| **Whisper.cpp WASM** | Local WASM | ~30-80MB | Very high | Yes | Excellent | 99+ | v1.1 planned |
+| **Faster-Whisper (ONNX)** | Local WASM | ~50MB | Very high | Yes | Excellent | 99+ | v1.1 planned |
+| **Sherpa-ONNX** | Local WASM | ~5-20MB | High | Yes | Excellent | 10+ | v1.1 planned |
+| **Transformers.js Whisper** | Web Transformer | ~30MB | High | Yes | Excellent | 99+ | v1.1 planned |
+| **Parakeet (NVIDIA)** | Cloud/API | 0KB | Extremely high | No | Poor | En+ | Optional |
+| **Kokoro (ONNX)** | Local TTS | ~15MB | Very high | Yes | Excellent | En+ | v1.1 planned |
+| **Piper** | Local TTS | ~5-20MB | High | Yes | Excellent | 20+ | v1.1 planned |
+| **Coqui XTTS** | Local TTS | ~400MB | Extremely high | Yes | Excellent | Multi | Heavyweight |
 
-### Empfohlener Stack 2026
+### Recommended stack 2026
 
 **STT:**
-1. **Primär (v1.1):** Whisper.cpp WASM (tiny/base Modell, ~30-80MB)
-2. **Sekundär (v1.1):** Sherpa-ONNX (faster Streaming, niedrigere Latenz)
-3. **Fallback ✅ v1.0:** Web Speech API (sofort verfügbar, keine Downloads)
+1. **Primary (v1.1):** Whisper.cpp WASM (tiny/base model, ~30-80MB)
+2. **Secondary (v1.1):** Sherpa-ONNX (faster streaming, lower latency)
+3. **Fallback ✅ v1.0:** Web Speech API (immediately available, no downloads)
 
 **TTS:**
-1. **Primär (v1.1):** Kokoro (ONNX, ~15MB)
-2. **Sekundär (v1.1):** Piper (~5MB)
+1. **Primary (v1.1):** Kokoro (ONNX, ~15MB)
+2. **Secondary (v1.1):** Piper (~5MB)
 3. **Fallback ✅ v1.0:** Web Speech API `speechSynthesis`
 
 **VAD:**
-1. **Primär (v1.1):** Silero VAD v4 via ONNX Runtime Web
+1. **Primary (v1.1):** Silero VAD v4 via ONNX Runtime Web
 2. **Fallback ✅ v1.0:** WebRTC native VAD (energy-based)
 
 **Wake-Word:**
-1. **Primär (v1.1):** Sherpa-ONNX Wake-Word
-2. **Fallback ✅ v1.0:** Energy Threshold + Phrase Matching
+1. **Primary (v1.1):** Sherpa-ONNX wake-word
+2. **Fallback ✅ v1.0:** Energy threshold + phrase matching
 
 ---
 
 ## 4. Speech-to-Text (STT) ✅ v1.0
 
-### Lokale High-Quality Lösung
-- **Whisper.cpp WASM** mit Streaming-Support (chunk-basiert) — v1.1
-- **Modell-Tiers:**
-  - `tiny` (~30MB): Für schnelle Geräte, sehr gute Qualität
-  - `base` (~80MB): Für Desktop/High-End, beste Qualität
-  - Modell-Download on-demand mit Fortschrittsanzeige
-- **Spracherkennung:** Automatische Spracherkennung (Whisper unterstützt 99+ Sprachen)
-- **Prompting:** Kontext-Prompt mit aktuellem Projekt-Content für bessere Eigenname-Erkennung
+### Local high-quality solution
+- **Whisper.cpp WASM** with streaming support (chunk-based) — v1.1
+- **Model tiers:**
+  - `tiny` (~30MB): For fast devices, very good quality
+  - `base` (~80MB): For desktop/high-end, best quality
+  - Model download on-demand with progress indicator
+- **Language detection:** Automatic language recognition (Whisper supports 99+ languages)
+- **Prompting:** Context prompt with current project content for better proper-noun recognition
 
-### Hybrid-Modus ✅ v1.0
-- **Cloud-Fallback:** Wenn lokal nicht verfügbar UND Nutzer explizit zugestimmt hat, optional Cloud-STT (Gemini STT API)
-- **Toggle:** Einstellung "Allow cloud speech processing" (default: false)
+### Hybrid mode ✅ v1.0
+- **Cloud fallback:** When local is unavailable AND user has explicitly consented, optional cloud STT (Gemini STT API)
+- **Toggle:** Setting "Allow cloud speech processing" (default: false)
 
 ### Audio-Pipeline
 ```
@@ -160,131 +160,131 @@ Microphone (16kHz/16bit Mono)
 
 ## 5. Context-Aware Intent Recognition & Command Engine ✅ v1.0
 
-### Architektur
-- **Command Registry Reuse:** Bestehendes `services/commands/commandBuilder.ts` wird erweitert um `voiceKeywords` pro Command
-- **Intent Templates:** Jeder Command-Definition können natürliche Sprach-Templates zugeordnet werden
-  - Beispiel: `"navigate to {view}"`, `"open {view}"`, `"show {view}"` → `global-dashboard`
-- **Slot Extraction:** `{view}`, `{characterName}`, `{sectionTitle}` werden aus dem Transcript extrahiert
+### Architecture
+- **Command registry reuse:** Existing `services/commands/commandBuilder.ts` is extended with `voiceKeywords` per command
+- **Intent templates:** Natural language templates can be assigned to each command definition
+  - Example: `"navigate to {view}"`, `"open {view}"`, `"show {view}"` → `global-dashboard`
+- **Slot extraction:** `{view}`, `{characterName}`, `{sectionTitle}` are extracted from the transcript
 
-### Kontext-Awareness ✅ v1.0
-- **Aktueller View:** "next scene" bedeutet im Manuskript etwas anderes als im Plot-Board
-- **Selektion:** "delete this" löscht aktuelle Selektion
-- **Letzte Aktionen:** "do that again" wiederholt letzten Command
-- **Projekt-Kontext:** Charakternamen, Szenentitel, Orte sind bekannt und werden als Slots erkannt
-
----
-
-## 6. Natural Language Understanding (NLU) ✅ v1.0 (Regelbasiert)
-
-### Ansatz: Hybrides System
-1. **Regelbasiert (schnell) ✅ v1.0:** 80% der Commands über Template-Matching und Keyword-Scoring (Jaccard-Similarity)
-2. **Semantisch (präzise):** Lokale Embedding-Similarity (MiniLM via ONNX) für ähnliche Befehle — v1.2
-3. **LLM-Fallback (komplex):** Für komplexe, mehrteilige Befehle wird lokal ein kleines LLM (Phi-3.5 mini / Qwen 2.5 0.5B) via WebLLM genutzt — v1.2
-
-### Beispiele komplexer Befehle
-- "Erstelle eine neue Szene nach der aktuellen mit dem Titel 'Der Wald' und verlinke den Protagonisten"
-- "Ändere die Schriftgröße auf 18, aktiviere Zen-Modus und springe zum Manuskript"
-- "Exportiere das aktuelle Projekt als PDF mit dem Standard-Template"
+### Context awareness ✅ v1.0
+- **Current view:** "next scene" means something different in the manuscript vs. on the Plot Board
+- **Selection:** "delete this" deletes the current selection
+- **Last actions:** "do that again" repeats the last command
+- **Project context:** Character names, scene titles, and locations are known and recognized as slots
 
 ---
 
-## 7. Barrierefreie Audio-Navigation nach WCAG 2.2 ✅ v1.0
+## 6. Natural Language Understanding (NLU) ✅ v1.0 (rule-based)
 
-### Konformität
-- **WCAG 2.2 AA/AAA:** Alle Voice-Interaktionen sind vollständig tastaturbedienbar
-- **2.1.1 Keyboard:** Voice-Aktivierung per Tastatur möglich (PTT-Taste)
-- **2.1.4 Character Key Shortcuts:** Keine single-character Shortcuts für Voice
-- **2.2.1 Timing Adjustable:** Voice-Listening-Timeout konfigurierbar (5-30s)
-- **2.2.2 Pause, Stop, Hide:** TTS kann jederzeit gestoppt werden
-- **2.4.3 Focus Order:** Nach Voice-Command bleibt Focus logisch positioniert
-- **2.5.5 Target Size:** Voice-Buttons mindestens 44×44px
+### Approach: hybrid system
+1. **Rule-based (fast) ✅ v1.0:** 80% of commands via template matching and keyword scoring (Jaccard similarity)
+2. **Semantic (precise):** Local embedding similarity (MiniLM via ONNX) for similar commands — v1.2
+3. **LLM fallback (complex):** For complex multi-part commands a small local LLM (Phi-3.5 mini / Qwen 2.5 0.5B) is used via WebLLM — v1.2
 
-### Audio-Landmarks ✅ v1.0
-- `aria-live="polite"` Regions für Voice-Feedback
-- `aria-atomic="true"` für vollständige Ansagen
-- Unterscheidung: System-Feedback vs. Nutzer-Transkription
+### Examples of complex commands
+- "Create a new scene after the current one titled 'The Forest' and link the protagonist"
+- "Change the font size to 18, activate Zen Mode, and jump to the manuscript"
+- "Export the current project as PDF with the default template"
 
 ---
 
-## 8. ARIA-UI-Kompatibilität ✅ v1.0
+## 7. Accessible Audio Navigation per WCAG 2.2 ✅ v1.0
 
-### Semantische Struktur
-- Voice-Panel als `role="region"` mit `aria-label="Voice Control"`
-- Voice-Button als `role="button"` mit `aria-pressed` für Listening-Status
-- Transkriptions-Anzeige als `role="log"` mit `aria-live="polite"`
+### Conformance
+- **WCAG 2.2 AA/AAA:** All voice interactions are fully keyboard-operable
+- **2.1.1 Keyboard:** Voice activation possible via keyboard (PTT key)
+- **2.1.4 Character Key Shortcuts:** No single-character shortcuts for voice
+- **2.2.1 Timing Adjustable:** Voice listening timeout configurable (5-30s)
+- **2.2.2 Pause, Stop, Hide:** TTS can be stopped at any time
+- **2.4.3 Focus Order:** After a voice command focus remains logically positioned
+- **2.5.5 Target Size:** Voice buttons at least 44×44px
 
-### Dynamische Updates
-- Bei Command-Ausführung: `aria-live` Ansage des Ergebnisses
-- Bei Fehlern: `aria-live="assertive"` für sofortige Aufmerksamkeit
-- Bei Moduswechsel: Status-Änderung per `aria-live` mitteilen
-
-### Focus-Management ✅ v1.0
-- Nach Voice-Command wird Fokus auf das betroffene Element gesetzt
-- Bei Navigation: Fokus auf Hauptinhalt des neuen Views
-- Bei Diktat: Fokus im Editor, Cursor an Einfügeposition
+### Audio landmarks ✅ v1.0
+- `aria-live="polite"` regions for voice feedback
+- `aria-atomic="true"` for complete announcements
+- Distinction: system feedback vs. user transcription
 
 ---
 
-## 9. Voice-Feedback-Strategien ✅ v1.0
+## 8. ARIA UI Compatibility ✅ v1.0
 
-### Intelligentes Feedback
-- **Bestätigungs-Level konfigurierbar:**
-  - `minimal`: Nur Fehler und Unklarheiten
-  - `standard`: Bestätigung bei jeder Aktion
-  - `verbose`: Detaillierte Beschreibungen und Hilfe
-- **Kontextabhängig:**
-  - Navigation: Kurzbestätigung ("Dashboard")
-  - Destruktive Aktionen: Explizite Bestätigung ("Szenen löschen — sind Sie sicher?")
-  - AI-Generierung: Fortschritts-Ansagen ("Generiere Ideen... Fertig")
+### Semantic structure
+- Voice panel as `role="region"` with `aria-label="Voice Control"`
+- Voice button as `role="button"` with `aria-pressed` for listening status
+- Transcription display as `role="log"` with `aria-live="polite"`
 
-### Nicht aufdringlich
-- Visuelle Indikatoren haben Vorrang vor Audio
-- Audio-Feedback nur wenn App im Hintergrund oder explizit gewünscht
-- Stille-Modus: TTS komplett deaktivierbar
-- Nacht-Modus: Reduzierte Lautstärke, kein Wake-Word-Audio
+### Dynamic updates
+- On command execution: `aria-live` announcement of the result
+- On errors: `aria-live="assertive"` for immediate attention
+- On mode change: status change communicated via `aria-live`
+
+### Focus management ✅ v1.0
+- After a voice command focus is moved to the affected element
+- On navigation: focus on the main content of the new view
+- On dictation: focus in the editor, cursor at the insertion position
+
+---
+
+## 9. Voice Feedback Strategies ✅ v1.0
+
+### Intelligent feedback
+- **Confirmation level configurable:**
+  - `minimal`: Errors and ambiguities only
+  - `standard`: Confirmation on every action
+  - `verbose`: Detailed descriptions and help
+- **Context-dependent:**
+  - Navigation: brief confirmation ("Dashboard")
+  - Destructive actions: explicit confirmation ("Delete scenes — are you sure?")
+  - AI generation: progress announcements ("Generating ideas... Done")
+
+### Non-intrusive
+- Visual indicators take precedence over audio
+- Audio feedback only when app is in the background or explicitly requested
+- Silent mode: TTS completely disableable
+- Night mode: reduced volume, no wake-word audio
 
 ---
 
 ## 10. Text-to-Speech (TTS) ✅ v1.0
 
-### Moderne Alternativen
-- **Kokoro (v1.1):** ONNX-basiert, ~15MB, extrem natürlich, gut für längere Texte
-- **Piper (v1.1):** Schnell, klein (~5MB), gut für kurze Feedback-Ansagen
-- **Web Speech API ✅ v1.0:** Sofort verfügbar, aber qualitativ schwächer
+### Modern alternatives
+- **Kokoro (v1.1):** ONNX-based, ~15MB, extremely natural, good for longer texts
+- **Piper (v1.1):** Fast, small (~5MB), good for short feedback announcements
+- **Web Speech API ✅ v1.0:** Immediately available but lower quality
 
 ### Integration ✅ v1.0
-- **Lazy-Load:** TTS-Modell erst bei erster Nutzung downloaden
-- **Streaming:** Für längere Texte (Vorlesen des Manuskripts)
-- **Stimmen-Auswahl:** Pro Sprache verfügbar
-- **Parameter:** Rate (0.5-2.0), Pitch, Volume
+- **Lazy-load:** Download TTS model only on first use
+- **Streaming:** For longer texts (reading the manuscript aloud)
+- **Voice selection:** Available per language
+- **Parameters:** Rate (0.5-2.0), pitch, volume
 
 ---
 
-## 11. Vollständige Steuerung aller App-Bereiche per Voice ✅ v1.0
+## 11. Full Control of All App Areas by Voice ✅ v1.0
 
 ### Navigation
-- Alle 18 Views ansteuerbar
-- "Zurück", "Vorwärts" im Browser-Verlauf
-- "Hilfe für [View]"
+- All 18 views reachable
+- "Back", "Forward" in browser history
+- "Help for [view]"
 
-### Editor / Schreiben
-- **Diktat:** Kontinuierliches Einfügen von Transkription
-- **Formatierung:** "Fett", "Kursiv", "Überschrift", etc.
-- **Cursor:** "Anfang", "Ende", "vorwärts drei Wörter", "lösche Satz"
-- **Szenen:** "Neue Szene", "nächste Szene", "Szene löschen"
+### Editor / Writing
+- **Dictation:** Continuous insertion of transcription
+- **Formatting:** "Bold", "Italic", "Heading", etc.
+- **Cursor:** "Beginning", "End", "forward three words", "delete sentence"
+- **Scenes:** "New scene", "next scene", "delete scene"
 
-### Plot-Board
-- "Neue Szene hier", "Verschiebe Szene nach links"
-- "Verbinde Szene eins mit Szene zwei"
-- "Zoom heraus", "zentriere Board"
+### Plot Board
+- "New scene here", "move scene to the left"
+- "Connect scene one with scene two"
+- "Zoom out", "center board"
 
-### AI-Features
-- "Generiere Plot-Ideen", "Schreibe Dialog für [Charakter]"
-- "Prüfe Konsistenz", "Starte Charakter-Interview"
+### AI features
+- "Generate plot ideas", "write dialog for [character]"
+- "Check consistency", "start character interview"
 
 ### Settings
-- "Ändere Theme auf Dunkel", "Schriftgröße 18"
-- "Aktiviere Zen-Modus"
+- "Change theme to dark", "font size 18"
+- "Activate Zen Mode"
 
 ---
 
@@ -334,7 +334,7 @@ tests/unit/voice/
   Total: 83 tests / 9 files
 ```
 
-### Geänderte Dateien (v1.0)
+### Changed files (v1.0)
 ```
 types.ts                          — VoiceSettings, Voice* enums
 features/settings/settingsSlice.ts — VoiceSettings reducer
@@ -353,44 +353,44 @@ locales/*/settings.json            — 2025 keys × 5 locales (voice keys added)
 ## 13. Privacy, Security, Offline-First, Performance ✅ v1.0
 
 ### Privacy
-- **Lokal-First:** Alle Voice-Engines laufen lokal im Browser
-- **Kein Audio-Upload:** Mikrofon-Audio verlässt niemals das Gerät (außer bei explizitem Cloud-Opt-in)
-- **Cloud-Opt-in separat:** Extra Toggle für Cloud-STT, default: off
+- **Local-first:** All voice engines run locally in the browser
+- **No audio upload:** Microphone audio never leaves the device (except on explicit cloud opt-in)
+- **Cloud opt-in separate:** Extra toggle for cloud STT, default: off
 
 ### Security
-- **WASM-Sandbox:** Alle lokalen Modelle laufen in WASM-Sandbox
-- **CSP-Kompatibel:** Keine `eval()`, keine inline-Scripts
-- **Keine API-Keys in Voice:** Voice benötigt keine Cloud-Keys
+- **WASM sandbox:** All local models run in WASM sandbox
+- **CSP-compatible:** No `eval()`, no inline scripts
+- **No API keys in voice:** Voice needs no cloud keys
 
-### Offline-First ✅ v1.0
-- **Service Worker:** Voice-Modelle im Cache nach erstmaligem Download
-- **Progressive Download:** Modelle werden bei Aktivierung heruntergeladen
-- **Offline-Indikator:** Klare Anzeige wenn Voice offline verfügbar ist
+### Offline-first ✅ v1.0
+- **Service Worker:** Voice models cached after first download
+- **Progressive download:** Models are downloaded when activated
+- **Offline indicator:** Clear display when voice is available offline
 
 ### Performance ✅ v1.0
-- **Lazy Loading:** Voice-Module erst bei Aktivierung geladen
-- **Worker-Isolation:** Audio-Verarbeitung nicht auf Main Thread
-- **Modell-Caching:** IndexedDB für heruntergeladene Modelle
-- **Chunk-Größen:** STT in 5-10s Chunks für geringe Latenz
+- **Lazy loading:** Voice modules loaded only on activation
+- **Worker isolation:** Audio processing not on the main thread
+- **Model caching:** IndexedDB for downloaded models
+- **Chunk sizes:** STT in 5-10s chunks for low latency
 
 ---
 
 ## 14. Error Handling, Graceful Degradation & Fallback ✅ v1.0
 
-### Fehlerstrategie
+### Error strategy
 | Situation | Fallback | UX |
 |-----------|----------|-----|
-| WASM nicht unterstützt | Web Speech API | Info-Toast |
-| Modell-Download fehlgeschlagen | Web Speech API | Retry-Button |
-| Mikrofon nicht verfügbar | Visueller Modus (Typing) | Erklärender Dialog |
-| STT Engine Crashed | Auto-Restart einmal, dann Fallback | Stiller Fallback |
-| Intent nicht erkannt | "Das habe ich nicht verstanden" + Vorschläge | Höfliche Ansage |
-| TTS nicht verfügbar | Visuelles Feedback nur | Kein Fehler |
+| WASM not supported | Web Speech API | Info toast |
+| Model download failed | Web Speech API | Retry button |
+| Microphone unavailable | Visual mode (typing) | Explanatory dialog |
+| STT engine crashed | Auto-restart once, then fallback | Silent fallback |
+| Intent not recognized | "I didn't understand that" + suggestions | Polite announcement |
+| TTS unavailable | Visual feedback only | No error |
 
-### Graceful Degradation ✅ v1.0
-- Voice-Feature funktioniert immer in irgendeiner Form
-- Mindest-Feature-Set: Web Speech API + visuelles Feedback
-- Kein harter Fehler bei Nicht-Verfügbarkeit
+### Graceful degradation ✅ v1.0
+- Voice feature always works in some form
+- Minimum feature set: Web Speech API + visual feedback
+- No hard error on unavailability
 
 ---
 
@@ -410,68 +410,68 @@ locales/*/settings.json            — 2025 keys × 5 locales (voice keys added)
 **Total: 83 tests / 9 test files — all passing**
 
 ### Integration Tests (v1.1)
-- `voiceCommandService.test.ts` — End-to-end Command-Ausführung
-- `useVoice.test.ts` — Hook-Verhalten
+- `voiceCommandService.test.ts` — end-to-end command execution
+- `useVoice.test.ts` — hook behavior
 
 ### Accessibility Tests (v1.1)
-- axe-core auf Voice-Panel
-- Tastatur-Navigation Voice-UI
-- Screenreader-Kompatibilität
+- axe-core on voice panel
+- Keyboard navigation voice UI
+- Screen reader compatibility
 
 ### E2E Tests (Playwright) (v1.1)
-- Voice-Aktivierung Flow
-- Command-Ausführung per simuliertem Transcript
-- Graceful Degradation ohne Mikrofon
+- Voice activation flow
+- Command execution via simulated transcript
+- Graceful degradation without microphone
 
 ---
 
-## Implementierungs-Roadmap
+## Implementation Roadmap
 
 ### Phase 1: Foundation ✅ COMPLETED (2026-05-24)
 1. ✅ VoiceSettings in `types.ts`
 2. ✅ `featureFlags.enableVoiceSupport`
-3. ✅ Voice Slice erweitern (Modus, Engine-Status, Feedback-Level)
-4. ✅ Abstrakte Engine-Interfaces (`voiceTypes.ts`)
-5. ✅ Web Speech API Implementierungen (sofort nutzbar)
-6. ✅ Intent Engine (Template + Fuzzy Jaccard)
-7. ✅ Command Voice Mappings (25 commands)
-8. ✅ Feedback Service (3 verbosity levels)
-9. ✅ Audio Navigator (ARIA landmarks + focus)
-10. ✅ UI Components (VoiceControlPanel, VoiceIndicator, VoiceSettingsSection)
-11. ✅ React Hooks (useVoice, usePushToTalk, useVoiceDictation, useVoiceAccessibility)
-12. ✅ App Integration (App.tsx, Header.tsx, ManuscriptEditor.tsx)
-13. ✅ i18n für alle 5 Sprachen (2025 keys)
-14. ✅ 83 Unit Tests (9 files)
+3. ✅ Extend voice slice (mode, engine status, feedback level)
+4. ✅ Abstract engine interfaces (`voiceTypes.ts`)
+5. ✅ Web Speech API implementations (immediately usable)
+6. ✅ Intent engine (template + fuzzy Jaccard)
+7. ✅ Command voice mappings (25 commands)
+8. ✅ Feedback service (3 verbosity levels)
+9. ✅ Audio navigator (ARIA landmarks + focus)
+10. ✅ UI components (VoiceControlPanel, VoiceIndicator, VoiceSettingsSection)
+11. ✅ React hooks (useVoice, usePushToTalk, useVoiceDictation, useVoiceAccessibility)
+12. ✅ App integration (App.tsx, Header.tsx, ManuscriptEditor.tsx)
+13. ✅ i18n for all 5 languages (2025 keys)
+14. ✅ 83 unit tests (9 files)
 15. ✅ Quality gate: lint ✅ · i18n:check ✅ · typecheck ✅
 
 ### Phase 2: Core WASM Engines (v1.19.0 B-2 — partial) ✅ Scaffold complete
 16. ✅ VAD Engine (Silero via ONNX) — `sileroVadEngine.ts` scaffold done; model download UI Phase 3
 17. ⬜ Wake-Word Engine (Sherpa-ONNX) — Phase 3
-18. ✅ STT Engine (Whisper.cpp WASM) — `wasmSttEngine.ts` scaffold done; chunked inference; model download UI Phase 3
-19. ⬜ TTS Engine (Kokoro/Piper WASM) — Phase 3
-20. ⬜ AudioWorklet für Mikrofon-Processing — Phase 3
+18. ✅ STT engine (Whisper.cpp WASM) — `wasmSttEngine.ts` scaffold done; chunked inference; model download UI Phase 3
+19. ⬜ TTS engine (Kokoro/Piper WASM) — Phase 3
+20. ⬜ AudioWorklet for microphone processing — Phase 3
 
 ### Phase 3: Advanced NLU (v1.2)
-21. Semantic Intent Matching (MiniLM Embeddings)
-22. Local LLM Fallback (WebLLM Phi-3.5 mini)
+21. Semantic intent matching (MiniLM embeddings)
+22. Local LLM fallback (WebLLM Phi-3.5 mini)
 23. Complex multi-slot commands
 
 ### Phase 4: Deep App Integration (v1.2)
-24. Plot-Board Voice-Steuerung (Canvas-Modus)
-25. AI-Feature Voice-Integration
-26. Settings Voice-Shortcuts
-27. Collaboration Voice-Commands
+24. Plot Board voice control (canvas mode)
+25. AI feature voice integration
+26. Settings voice shortcuts
+27. Collaboration voice commands
 
 ### Phase 5: Polish & Testing (v1.2)
-28. Integration Tests (voiceCommandService, useVoice)
-29. E2E Tests (Playwright)
-30. Accessibility Audit (axe-core)
-31. Performance Optimierung
-32. Dokumentation Finalisierung
+28. Integration tests (voiceCommandService, useVoice)
+29. E2E tests (Playwright)
+30. Accessibility audit (axe-core)
+31. Performance optimization
+32. Documentation finalization
 
 ---
 
-## Anhang: Empfohlener npm-Stack 2026
+## Appendix: Recommended npm stack 2026
 
 ```json
 {
@@ -486,4 +486,4 @@ locales/*/settings.json            — 2025 keys × 5 locales (voice keys added)
 }
 ```
 
-> **Hinweis:** Da StoryCraft Studio strikt auf Privacy und Offline-First setzt, werden alle Voice-Engines als WASM/ONNX geladen und lokal ausgeführt. Keine Cloud-Abhängigkeit für den Basismodus.
+> **Note:** Since StoryCraft Studio strictly prioritizes privacy and offline-first, all voice engines are loaded as WASM/ONNX and executed locally. No cloud dependency for the base mode.

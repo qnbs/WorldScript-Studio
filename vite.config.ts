@@ -50,10 +50,10 @@ export default defineConfig({
       },
     },
     VitePWA({
-      // register-sw.ts übernimmt die manuelle Registrierung
+      // register-sw.ts handles manual registration
       injectRegister: false,
       registerType: 'prompt',
-      // public/sw.js bleibt erhalten; VitePWA injiziert nur die Precache-Manifest-Liste
+      // public/sw.js is preserved; VitePWA only injects the precache manifest list
       strategies: 'injectManifest',
       srcDir: 'public',
       filename: 'sw.js',
@@ -128,12 +128,12 @@ export default defineConfig({
         /^@tauri-apps\//,
       ],
       output: {
-        // Asset-Hashing für Cache-Busting
+        // Asset hashing for cache busting
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
 
-        // Code-Splitting für bessere Ladezeiten
+        // Code splitting for better load times
         manualChunks: (id) => {
           if (id.includes('components/scene-board/') || id.includes('SceneBoardView')) {
             return 'plot-board';
@@ -152,7 +152,7 @@ export default defineConfig({
           if (id.includes('@google/genai')) {
             return 'ai-vendor';
           }
-          // QNBS-v3: Vercel AI SDK + Provider-Packages gebündelt, analog zu @google/genai.
+          // QNBS-v3: Vercel AI SDK + provider packages bundled together, analogous to @google/genai.
           if (
             id.includes('node_modules/ai/') ||
             id.includes('/node_modules/ai/') ||

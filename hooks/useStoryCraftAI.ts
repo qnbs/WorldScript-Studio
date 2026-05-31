@@ -19,8 +19,8 @@ export interface UseStoryCraftAIOptions {
 }
 
 /**
- * Vercel AI SDK (`useCompletion`) + Client-seitiges `streamText` für Writer-Streaming.
- * Redux-Sync über `onIncremental` / `onFinish` — nicht direkt ins Manuskript (siehe `services/ai/index.ts`).
+ * Vercel AI SDK (`useCompletion`) + client-side `streamText` for Writer streaming.
+ * Redux sync via `onIncremental` / `onFinish` — not written directly into the manuscript (see `services/ai/index.ts`).
  */
 export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
   const provider = useAppSelector((s: RootState) => s.settings.advancedAi.provider);

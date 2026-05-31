@@ -31,7 +31,7 @@ import { Modal } from './ui/Modal';
 
 // ─── Helper Components ────────────────────────────────────────────────────────
 
-// QNBS-v3: Zeilen-Diff ohne externes Paket — ausreichend für Autoren-Snapshot-Review.
+// QNBS-v3: Line diff without an external package — sufficient for author snapshot review.
 function buildLineDiff(
   oldText: string,
   newText: string,
@@ -46,7 +46,7 @@ function buildLineDiff(
   });
 }
 
-// QNBS-v3: Wortgranularität bei geänderten Zeilen — ergänzt das Zeilen-Diff aus buildLineDiff.
+// QNBS-v3: Word granularity on changed lines — extends the line diff from buildLineDiff.
 function renderCompareLineWordCells(
   left: string,
   right: string,
@@ -58,7 +58,7 @@ function renderCompareLineWordCells(
       rightCell: right.length > 0 ? right : '\u00a0',
     };
   }
-  // QNBS-v3: Auf Low-End-Geräten keine O(n·m)-LCS auf Roman-Zeilen — Zeilen-Diff reicht.
+  // QNBS-v3: No O(n·m) LCS on novel lines on low-end devices — line diff is sufficient.
   if (left.length > MAX_CHARS_WORD_DIFF_LINE || right.length > MAX_CHARS_WORD_DIFF_LINE) {
     return {
       leftCell: left.length > 0 ? left : '\u00a0',

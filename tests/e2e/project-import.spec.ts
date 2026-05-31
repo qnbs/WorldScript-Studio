@@ -88,7 +88,7 @@ test.describe('Project Import (CI-only)', () => {
       timeout: 15000,
     });
 
-    // QNBS-v3: listenerMiddleware debounced save ~1000ms — Reload vor IndexedDB-Write lädt „My Untitled Story”.
+    // QNBS-v3: listenerMiddleware debounced save ~1000ms — reload before IndexedDB write loads “My Untitled Story”.
     // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
     await clickNavItem(page, /Dashboard/i);
     await expect(page.locator('#projectTitle')).toHaveValue('Imported Test Novel', {

@@ -1,7 +1,7 @@
 # StoryCraft Studio — TODO (Current Sprint)
 
-Priorisierter Task-Tracker für den aktuellen Sprint.
-Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
+Prioritized task tracker for the current sprint.
+Status: 🔄 in progress | ⬜ open | ✅ done
 
 > Completed items are archived in [`docs/history/`](docs/history/).
 > Long-term features and quarterly planning → [`ROADMAP.md`](ROADMAP.md).
@@ -88,17 +88,17 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 ## v1.17 — Voice Full Support Foundation (RELEASED 2026-05-24)
 
 - ✅ **Abstract Engine Interfaces** — `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine` in `services/voice/voiceTypes.ts`
-- ✅ **Web Speech API Fallbacks** — `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` (sofort verfügbar, 0 Downloads)
-- ✅ **Hybrid Intent Engine** — Template-Matching (exakt) → Jaccard fuzzy scoring → Slot-Extraction (Navigation); View-Context-Filtering; 25 statische Voice Commands
-- ✅ **VoiceCommandService** — Singleton-Orchestrator mit State Machine (idle → listening → processing → speaking → idle)
+- ✅ **Web Speech API Fallbacks** — `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` (immediately available, 0 downloads)
+- ✅ **Hybrid Intent Engine** — template matching (exact) → Jaccard fuzzy scoring → slot extraction (navigation); view-context filtering; 25 static voice commands
+- ✅ **VoiceCommandService** — singleton orchestrator with state machine (idle → listening → processing → speaking → idle)
 - ✅ **Redux State** — `voiceSlice` (mode, transcript, processing, dictation, engine status, microphone permission, onboarding); `VoiceSettings` in `settingsSlice`; `enableVoiceSupport` in `featureFlagsSlice`
-- ✅ **React Hooks** — `useVoice` (Service-Bridge), `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation` (Editor-Einfügung), `useVoiceAccessibility` (ARIA + Focus)
-- ✅ **UI Components** — `VoiceIndicator` (Status-Overlay), `VoiceControlPanel` (Command-Panel), `VoiceSettingsSection` (Settings-Tab mit Onboarding)
-- ✅ **App Integration** — `App.tsx` (conditional Rendering, `document.body.dataset['view']` für Intent-Engine), `Header.tsx` (Voice-Status), `ManuscriptEditor.tsx` (Dictation-Support)
-- ✅ **Audio Navigator** — `audioNavigator` Singleton: ARIA-Landmark-Scanning, Focus-Management, `aria-live` Regionen
-- ✅ **Feedback Service** — 3 Verbosity-Level (minimal/standard/verbose); TTS-Queue; Event-Listener für visuelles Feedback
-- ✅ **i18n** — 2025 keys × 5 locales (voice.* settings hinzugefügt)
-- ✅ **Tests** — 83 Unit Tests / 9 Test-Dateien (voiceSlice, intentEngine, feedbackService, sttEngine, ttsEngine, vadEngine, wakeWordEngine, audioNavigator, commandVoiceMappings)
+- ✅ **React Hooks** — `useVoice` (service bridge), `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation` (editor insertion), `useVoiceAccessibility` (ARIA + focus)
+- ✅ **UI Components** — `VoiceIndicator` (status overlay), `VoiceControlPanel` (command panel), `VoiceSettingsSection` (settings tab with onboarding)
+- ✅ **App Integration** — `App.tsx` (conditional rendering, `document.body.dataset['view']` for intent engine), `Header.tsx` (voice status), `ManuscriptEditor.tsx` (dictation support)
+- ✅ **Audio Navigator** — `audioNavigator` singleton: ARIA landmark scanning, focus management, `aria-live` regions
+- ✅ **Feedback Service** — 3 verbosity levels (minimal/standard/verbose); TTS queue; event listeners for visual feedback
+- ✅ **i18n** — 2025 keys × 5 locales (voice.* settings added)
+- ✅ **Tests** — 83 unit tests / 9 test files (voiceSlice, intentEngine, feedbackService, sttEngine, ttsEngine, vadEngine, wakeWordEngine, audioNavigator, commandVoiceMappings)
 - ✅ **Quality gate** — lint ✅ · i18n:check ✅ · typecheck ✅ · 83/83 voice tests ✅
 
 ### DevEx — Dual-Graph Integration (2026-05-24)
@@ -116,8 +116,8 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 - ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
 - ⬜ RTL language support (Arabic, Hebrew, Persian)
-- ⬜ Fine-Tuning / LoRA-Support für personalisierte Schreibstile
-- ⬜ Cloud-Sync (optional, E2E-verschlüsselt)
+- ⬜ Fine-tuning / LoRA support for personalized writing styles
+- ⬜ Cloud sync (optional, E2E-encrypted)
 - ✅ DS-5: Delete legacy bridge block from index.css (after DS-1 verified in production) — DONE: bridge block already removed in prior sprints; remaining aliases (`--nav-*`, `--glass-*`, `--border-interactive`, `--ring-focus`) are intentional semantic tokens, not legacy bridges.
 
 ---
@@ -167,8 +167,8 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 - ⬜ DuckDB `rag_chunks` schema migration: `FLOAT[64]` BoW → `FLOAT[384]` semantic vectors — **superseded by v1.8 embedding column** (verify on device)
 - ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
 - ⬜ RTL language support (Arabic, Hebrew, Persian)
-- ⬜ Fine-Tuning / LoRA-Support für personalisierte Schreibstile
-- ⬜ Cloud-Sync (optional, E2E-verschlüsselt)
+- ⬜ Fine-tuning / LoRA support for personalized writing styles
+- ⬜ Cloud sync (optional, E2E-encrypted)
 - ✅ **Branches coverage ≥ 55 %** (v1.10: Vitest gate 55 %, RAG/help/plot tests)
 
 ---
@@ -189,82 +189,82 @@ Status: 🔄 in Arbeit | ⬜ offen | ✅ erledigt
 
 - ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
 - ⬜ RTL language support (Arabic, Hebrew, Persian)
-- ⬜ Fine-Tuning / LoRA-Support für personalisierte Schreibstile
-- ⬜ Cloud-Sync (optional, E2E-verschlüsselt)
-- ⬜ AI-Creativity-Presets pro Projekt (nicht global)
+- ⬜ Fine-tuning / LoRA support for personalized writing styles
+- ⬜ Cloud sync (optional, E2E-encrypted)
+- ⬜ AI creativity presets per project (not global)
 - ✅ **Branches coverage ≥ 55 %** (v1.10: Vitest gate 55 %, RAG/help/plot tests)
 
 ---
 
-## v1.4.x — Qualitätssteigerung (Master Perfection Plan)
+## v1.4.x — Quality Enhancement (Master Perfection Plan)
 
-> Vollständige **`.md`-Inventur** (19 kuratierte Quellen): [`AUDIT.md`](AUDIT.md) § *Markdown corpus*; Navigation: [`README.md`](README.md#-documentation-hub). Schwere Tests **CI-first**: [`docs/CI.md`](docs/CI.md).
+> Complete **`.md` inventory** (19 curated sources): [`AUDIT.md`](AUDIT.md) § *Markdown corpus*; navigation: [`README.md`](README.md#-documentation-hub). Heavy tests **CI-first**: [`docs/CI.md`](docs/CI.md).
 
-### Hoch (🟡)
+### High (🟡)
 
-- ✅ Unit-Test-Coverage Zielkorridor **50–70 %** — v1.10: Vitest-Schwellen **63 Lines · 55 Branches · 54 Functions · 62 Statements**; Fokus-Tests RAG, Help-Index, Plot-Snap, AI-Streaming
-- ✅ **E2E mobile Selectors (2026-05-17)** — `clickNavItem()` Helper + ARIA-Tabs in WriterViewUI + `data-testid`-Anker in VersionControlPanel/ExportView; alle 4 Spec-Dateien auf 2026 Golden Hierarchy umgestellt (CI-Gate wieder grün)
-- ✅ **CI-Hardening (2026-05-17)** — Stryker `break: 30` erzwungen, Lighthouse Performance→error, OSV-Scanner in Security-Job, Concurrency-Fix (cancel-in-progress nur PRs), Artifact-Retention vereinheitlicht, JUnit-E2E-Upload
-- ✅ **WebLLM Modell-Selektor** — `WEBLLM_SUPPORTED_MODELS` (4 MLC-Checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress`-Parameter, Settings-UI mit Dropdown + Fortschrittsanzeige (WCAG 2.2 `role="progressbar"`, `useRef`-Mounted-Guard) — [`packages/ai-core`](packages/ai-core), [`services/localAiFacade.ts`](services/localAiFacade.ts), [`components/settings/AiSections.tsx`](components/settings/AiSections.tsx)
-- ✅ **Cross-Project-Search v2 (2026-05-18)** — DB_VERSION 8, `projects-index-store`, `crossProjectIndexService.ts` (privacy-preserving IDB index), `searchAcrossProjectIndex()`, two-phase CrossProjectSearchPanel; indexing on save via listenerMiddleware is the next step
-- ✅ **Cross-Project-Search Service v1** — `services/crossProjectSearchService.ts`, `searchAcrossProjects()` via fuzzyScore, transientUiStore-Integration (`isCrossProjectSearchOpen`), commandDefinitions-Command
-- ✅ **Collaboration Security Warning** — Sicherheitshinweis-Banner in CollaborationPanel (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) vor Verbindungsaufbau sichtbar; verschwindet nach Connect
-- ✅ **Phase 1+2 Unit Tests** — 17 neue Test-Dateien, 733 Tests gesamt; Vitest-Schwellen auf 35/30/22/33 erhöht (zuvor 25/21/17/24)
-- ✅ **Stryker Erweiterung (Phase 4)** — `fuzzyScore.ts`, `palettePreferences.ts`, `commandBuilder.ts` als zusätzliche Mutations-Ziele
-- ✅ **E2E-Tests (Phase 4)** — `commands.spec.ts` (Palette Ctrl+K, „dashboard"-Suche, fuzzy „wrt", Enter-Navigate), `collaboration.spec.ts` (Security-Warning-Banner sichtbar vor Verbindung)
-- ✅ **One-Click** verschlüsselter **Library-Export** (ZIP + AES-GCM, META.json + vault.bin) — [`services/libraryBackupService.ts`](services/libraryBackupService.ts), Settings → Data
-- ✅ **WebLLM** als wählbarer Provider (`webllm/browser`, Privacy wie Ollama) — [`services/aiProviderService.ts`](services/aiProviderService.ts), [`packages/ai-core`](packages/ai-core)
+- ✅ Unit test coverage target range **50–70 %** — v1.10: Vitest thresholds **63 Lines · 55 Branches · 54 Functions · 62 Statements**; focus tests: RAG, help index, plot snap, AI streaming
+- ✅ **E2E mobile selectors (2026-05-17)** — `clickNavItem()` helper + ARIA tabs in WriterViewUI + `data-testid` anchors in VersionControlPanel/ExportView; all 4 spec files migrated to 2026 golden hierarchy (CI gate green again)
+- ✅ **CI hardening (2026-05-17)** — Stryker `break: 30` enforced, Lighthouse performance→error, OSV scanner in security job, concurrency fix (cancel-in-progress for PRs only), artifact retention unified, JUnit E2E upload
+- ✅ **WebLLM model selector** — `WEBLLM_SUPPORTED_MODELS` (4 MLC checkpoints: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B), `modelId`/`onProgress` parameters, Settings UI with dropdown + progress indicator (WCAG 2.2 `role="progressbar"`, `useRef` mounted guard) — [`packages/ai-core`](packages/ai-core), [`services/localAiFacade.ts`](services/localAiFacade.ts), [`components/settings/AiSections.tsx`](components/settings/AiSections.tsx)
+- ✅ **Cross-project search v2 (2026-05-18)** — DB_VERSION 8, `projects-index-store`, `crossProjectIndexService.ts` (privacy-preserving IDB index), `searchAcrossProjectIndex()`, two-phase CrossProjectSearchPanel; indexing on save via listenerMiddleware is the next step
+- ✅ **Cross-project search service v1** — `services/crossProjectSearchService.ts`, `searchAcrossProjects()` via fuzzyScore, transientUiStore integration (`isCrossProjectSearchOpen`), commandDefinitions command
+- ✅ **Collaboration security warning** — security warning banner in CollaborationPanel (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) visible before connection establishment; disappears after connect
+- ✅ **Phase 1+2 unit tests** — 17 new test files, 733 tests total; Vitest thresholds raised to 35/30/22/33 (previously 25/21/17/24)
+- ✅ **Stryker extension (phase 4)** — `fuzzyScore.ts`, `palettePreferences.ts`, `commandBuilder.ts` as additional mutation targets
+- ✅ **E2E tests (phase 4)** — `commands.spec.ts` (palette Ctrl+K, "dashboard" search, fuzzy "wrt", Enter-navigate), `collaboration.spec.ts` (security warning banner visible before connection)
+- ✅ **One-click** encrypted **library export** (ZIP + AES-GCM, META.json + vault.bin) — [`services/libraryBackupService.ts`](services/libraryBackupService.ts), Settings → Data
+- ✅ **WebLLM** as selectable provider (`webllm/browser`, privacy same as Ollama) — [`services/aiProviderService.ts`](services/aiProviderService.ts), [`packages/ai-core`](packages/ai-core)
 
-### Niedrig (🟢)
+### Low (🟢)
 
-- ✅ **i18n Comprehensive Sweep (2026-05-18)** — alle hardcodierten Strings eliminiert; 1 440 Keys in 5 Locales (`help.tryTour`, `Chapter 1`, `manifest.resizer.*`, `export.pasteSection.heading`, `outline.result.body`, `templates.tabs.*`, `error.boundary.*` u. v. m.); ErrorBoundary mit `ErrorFallback`-Funktionskomponente für `useTranslation()` refaktoriert; TypeScript-6-Strict-Fixes (TS2322/TS2352/TS4111/TS2375); Testmocks für `ErrorBoundary.test.tsx` + `AdvancedImportExport.test.tsx` angepasst
-- ✅ Vollständige Markdown-Doku-Synchronisation (README Hub, CONTRIBUTING, docs/CI, AUDIT, Copilot, CLAUDE, SECURITY, TAURI/graphify, CHANGELOG/ROADMAP/TODO) — 2026-05-16
+- ✅ **i18n comprehensive sweep (2026-05-18)** — all hardcoded strings eliminated; 1 440 keys in 5 locales (`help.tryTour`, `Chapter 1`, `manifest.resizer.*`, `export.pasteSection.heading`, `outline.result.body`, `templates.tabs.*`, `error.boundary.*` and many more); ErrorBoundary refactored with `ErrorFallback` function component for `useTranslation()`; TypeScript 6 strict fixes (TS2322/TS2352/TS4111/TS2375); test mocks adjusted for `ErrorBoundary.test.tsx` + `AdvancedImportExport.test.tsx`
+- ✅ Complete markdown documentation sync (README Hub, CONTRIBUTING, docs/CI, AUDIT, Copilot, CLAUDE, SECURITY, TAURI/graphify, CHANGELOG/ROADMAP/TODO) — 2026-05-16
 
 ---
 
 ## v1.2.0 — Security & Quality
 
-### Hoch (🟡)
+### High (🟡)
 
-- ✅ E2E-Tests erweitern (Projekt-Import, Charakter-CRUD, Snapshot-Flow + Auto-Snapshot)
-- ✅ StorageBackend-Interface — `services/storageBackend.ts` als Kontrakt, `StorageManager.saveProject(StoryProject)`
-- ✅ Logger mit Ringbuffer + Sink für Crash-Diagnose
+- ✅ Expand E2E tests (project import, character CRUD, snapshot flow + auto-snapshot)
+- ✅ StorageBackend interface — `services/storageBackend.ts` as contract, `StorageManager.saveProject(StoryProject)`
+- ✅ Logger with ring buffer + sink for crash diagnostics
 
-### Mittel (🟠)
+### Medium (🟠)
 
-- ✅ Signaling-URL für Collaboration in Settings konfigurierbar machen (`webrtcSignalingUrls`, Einstellungen → Zusammenarbeit)
-- ✅ **Yjs AES-256-GCM Encryption Foundation (2026-05-18)** — `collaborationService.ts` gains `encryptUpdate/decryptUpdate/deriveEncryptionKey/getEncryptionStatus`; CollaborationPanel shows encryption badge; full RTCDataChannel in-flight encryption requires y-webrtc patching (v2.0)
+- ✅ Make signaling URL for collaboration configurable in Settings (`webrtcSignalingUrls`, Settings → Collaboration)
+- ✅ **Yjs AES-256-GCM encryption foundation (2026-05-18)** — `collaborationService.ts` gains `encryptUpdate/decryptUpdate/deriveEncryptionKey/getEncryptionStatus`; CollaborationPanel shows encryption badge; full RTCDataChannel in-flight encryption requires y-webrtc patching (v2.0)
 
-### Niedrig (🟢)
+### Low (🟢)
 
-- ✅ Dokumentations-Audit (CI.md, README Hub, CONTRIBUTING, AUDIT-Follow-up, Copilot/CLAUDE/SECURITY/Graphify) — 2026-05-02
-- ✅ Visual Regression (`tests/e2e/visual-regression.spec.ts`) — Chromium-Baseline unter `tests/e2e/*-snapshots/` (`snapshotPathTemplate` ohne OS-Suffix)
-- ✅ Bundle-Size-Budgets + rollup-Analyse in CI (`pnpm run bundle:budget`, `pnpm run analyze`, Artifact `bundle-analysis`)
-- ✅ FR/ES/IT Key-Parität + CI-Gate (`pnpm run i18n:check`) — inhaltliche Übersetzungen können iterativ verbessert werden
-- ✅ Renovate Auto-Merge für Patch-Updates ([`renovate.json`](renovate.json))
-- ✅ Onboarding-Spotlight-Tour (`driver.js`, Dashboard + Hilfe)
-- ✅ **Tauri v2 Release-Pipeline (2026-05-18)** — `tauri-build.yml` generates `latest.json` from signed `.sig` artifacts; `TAURI-UPDATER.md` has full secrets table; `TAURI-CI.md` has 7-step first-release checklist; macOS notarization + Windows Authenticode still require maintainer certificates
+- ✅ Documentation audit (CI.md, README Hub, CONTRIBUTING, AUDIT follow-up, Copilot/CLAUDE/SECURITY/Graphify) — 2026-05-02
+- ✅ Visual regression (`tests/e2e/visual-regression.spec.ts`) — Chromium baseline under `tests/e2e/*-snapshots/` (`snapshotPathTemplate` without OS suffix)
+- ✅ Bundle size budgets + rollup analysis in CI (`pnpm run bundle:budget`, `pnpm run analyze`, artifact `bundle-analysis`)
+- ✅ FR/ES/IT key parity + CI gate (`pnpm run i18n:check`) — translation content can be improved iteratively
+- ✅ Renovate auto-merge for patch updates ([`renovate.json`](renovate.json))
+- ✅ Onboarding spotlight tour (`driver.js`, Dashboard + Help)
+- ✅ **Tauri v2 release pipeline (2026-05-18)** — `tauri-build.yml` generates `latest.json` from signed `.sig` artifacts; `TAURI-UPDATER.md` has full secrets table; `TAURI-CI.md` has 7-step first-release checklist; macOS notarization + Windows Authenticode still require maintainer certificates
 
 ---
 
-## Archiviert (v1.2.0 Sprint — erledigt)
+## Archived (v1.2.0 sprint — done)
 
-- ✅ E2E-Tests erweitern: project-import.spec.ts (3 Tests), characters.spec.ts (4 Tests), snapshots.spec.ts (4 Tests)
-- ✅ Ollama / Local-AI Integration: ollamaService.ts + aiProviderService.ts + Settings-UI vollständig, Default-Modell auf Qwen3 8B
-- ✅ projectSlice.ts in Thunk-Module splitten (14 AI-Thunks → `features/project/thunks/`)
-- ✅ Tauri-Parität: 6 fehlende Features — fileSystemService Retry/Kompression/Snapshot-ID/deleteImage/hasSavedData/Auto-Snapshot + Story Codex & RAG vectors (Gap 3)
-- ✅ Test-Suite von ~80 auf ~160+ Tests ausgebaut (12 neue Test-Dateien)
-- ✅ Node 24 localStorage-Polyfill (CI grün auf Node LTS + current)
+- ✅ Expand E2E tests: project-import.spec.ts (3 tests), characters.spec.ts (4 tests), snapshots.spec.ts (4 tests)
+- ✅ Ollama / local AI integration: ollamaService.ts + aiProviderService.ts + Settings UI complete, default model set to Qwen3 8B
+- ✅ Split projectSlice.ts into thunk modules (14 AI thunks → `features/project/thunks/`)
+- ✅ Tauri parity: 6 missing features — fileSystemService retry/compression/snapshot-ID/deleteImage/hasSavedData/auto-snapshot + Story Codex & RAG vectors (gap 3)
+- ✅ Test suite expanded from ~80 to ~160+ tests (12 new test files)
+- ✅ Node 24 localStorage polyfill (CI green on Node LTS + current)
 
-## Archiviert (v1.1.2 Hotfix — erledigt)
+## Archived (v1.1.2 hotfix — done)
 
-- ✅ codexService Infinite-Loop Fix (CRIT-1)
-- ✅ Modal Focus-Trap Cleanup konsolidiert (BUG-1)
-- ✅ FOUC Theme-Init behoben (BUG-2)
-- ✅ Unübersetzte Sprachen aus Selector entfernt (CRIT-2)
-- ✅ Dead Code entfernt (buildDeduplicationKey, persist/PERSIST)
-- ✅ ManuscriptView Resize-Listener Cleanup (bereits gefixt, TODO war veraltet)
-- ✅ DevContainer-Konfiguration (bereits gefixt, TODO war veraltet)
-- ✅ Redundante deploy.yml (bereits gefixt, TODO war veraltet)
-- ✅ Feature-Flag-System (bereits gefixt, TODO war veraltet)
-- ✅ Request-Deduplizierung (abort-previous Pattern in aiThunkUtils.ts)
+- ✅ codexService infinite-loop fix (CRIT-1)
+- ✅ Modal focus-trap cleanup consolidated (BUG-1)
+- ✅ FOUC theme-init fixed (BUG-2)
+- ✅ Untranslated languages removed from selector (CRIT-2)
+- ✅ Dead code removed (buildDeduplicationKey, persist/PERSIST)
+- ✅ ManuscriptView resize-listener cleanup (already fixed, TODO was stale)
+- ✅ DevContainer configuration (already fixed, TODO was stale)
+- ✅ Redundant deploy.yml (already fixed, TODO was stale)
+- ✅ Feature-flag system (already fixed, TODO was stale)
+- ✅ Request deduplication (abort-previous pattern in aiThunkUtils.ts)

@@ -26,7 +26,7 @@ import '@fontsource/merriweather/400-italic.css';
 import './index.css';
 import './register-sw';
 
-// SPA Redirect Handler für GitHub Pages
+// SPA redirect handler for GitHub Pages
 (() => {
   const url = new URL(window.location.href);
   const redirectPath = url.searchParams.get('p');

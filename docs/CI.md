@@ -117,7 +117,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 - `build` job (main, non-PR): `attestations: write` + `id-token: write` for SLSA provenance signing.
 - `deploy` job: `pages: write`, `id-token: write` (OIDC for Pages)
 
-**Upload-Artefakte:** Coverage-, Playwright- und Lighthouse-Reports nutzen `if-no-files-found: warn`, sodass fehlende Ordner nach Abbrüchen den Workflow nicht zusätzlich rot färben — Logs der failing Steps bleiben die Quelle der Wahrheit.
+**Upload artifacts:** Coverage, Playwright, and Lighthouse reports use `if-no-files-found: warn`, so missing folders after aborts do not turn the workflow additionally red — logs of the failing steps remain the source of truth.
 
 ---
 

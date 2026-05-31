@@ -1,58 +1,58 @@
 # CI Audit — StoryCraft Studio
 
-**Stand:** 2026-05-21 · **Workflow-Dateien:** 2 (`ci.yml`, `tauri-build.yml`) + Renovate
+**As of:** 2026-05-21 · **Workflow files:** 2 (`ci.yml`, `tauri-build.yml`) + Renovate
 
-Dieses Dokument fasst die **Ist-Inventur** und die **Stabilisierungsmaßnahmen** der GitHub-Pipeline zusammen. Vollständige Job-Beschreibung: [`docs/CI.md`](../docs/CI.md).
-
----
-
-## Workflow-Inventur
-
-| Datei | Trigger | Kern-Jobs |
-|-------|---------|-----------|
-| [`workflows/ci.yml`](workflows/ci.yml) | `push`/`pull_request` **main**, Tags, `workflow_dispatch` | `security` → `quality` (Matrix) → `build` \| `e2e` \| `storybook` \| `mutation` → `lighthouse` → `deploy` (main) |
-| [`workflows/tauri-build.yml`](workflows/tauri-build.yml) | `workflow_dispatch`, Tags `v*` | Desktop-Bundles (Linux/Win/macOS) |
-
-**Nicht vorhanden (bewusst optional):** separate `codeql.yml`, `dependabot.yml` (stattdessen Renovate), MDC-Validierung in CI, Graphify-Doctor im Runner.
+This document summarizes the **current inventory** and **stabilization measures** for the GitHub pipeline. Full job descriptions: [`docs/CI.md`](../docs/CI.md).
 
 ---
 
-## Toolchain (Parität lokal ↔ CI)
+## Workflow inventory
 
-| Thema | Quelle | Wert |
-|-------|--------|------|
-| Node (empfohlen) | [`.nvmrc`](../.nvmrc) | **22** |
-| Node (CI-Matrix) | `ci.yml` `quality` | **22** und **24** (explizit, kein `node` = „current“) |
+| File | Trigger | Core jobs |
+|------|---------|-----------|
+| [`workflows/ci.yml`](workflows/ci.yml) | `push`/`pull_request` **main**, tags, `workflow_dispatch` | `security` → `quality` (matrix) → `build` \| `e2e` \| `storybook` \| `mutation` → `lighthouse` → `deploy` (main) |
+| [`workflows/tauri-build.yml`](workflows/tauri-build.yml) | `workflow_dispatch`, tags `v*` | Desktop bundles (Linux/Win/macOS) |
+
+**Not present (intentionally optional):** separate `codeql.yml`, `dependabot.yml` (Renovate instead), MDC validation in CI, Graphify Doctor in runner.
+
+---
+
+## Toolchain (local ↔ CI parity)
+
+| Topic | Source | Value |
+|-------|--------|-------|
+| Node (recommended) | [`.nvmrc`](../.nvmrc) | **22** |
+| Node (CI matrix) | `ci.yml` `quality` | **22** and **24** (explicit, no `node` = "current") |
 | pnpm | `package.json` `packageManager` | **10.33.0** |
 | Lint | Biome | `pnpm run lint` |
 | i18n | `scripts/check-i18n-keys.mjs` | `pnpm run i18n:check` |
 | Unit | Vitest + V8 | `pnpm exec vitest run --coverage` |
 | E2E | Playwright | `CI=true pnpm run test:e2e` |
-| Bundle | `scripts/check-bundle-budget.mjs` | max **7000 KB** pro Chunk, max **4500 KB** Entry (`index-*.js`) |
+| Bundle | `scripts/check-bundle-budget.mjs` | max **7000 KB** per chunk, max **4500 KB** entry (`index-*.js`) |
 | Lighthouse | `.lighthouserc.cjs` | Accessibility **error** ≥ 0.95; CLS **error** ≤ 0.1; Performance **warn** |
 
 ---
 
-## Durchgeführte Stabilisierungen (Audit 2026-05)
+## Stabilizations applied (Audit 2026-05)
 
 | Problem | Fix |
 |---------|-----|
-| Matrix `node-version: ['lts/*', 'node']` bricht bei neuem Node-Release ohne Codeänderung | Auf **`['22', '24']`** gepinnt |
-| Entry-Chunk wächst mit Plot-Board-Splits | Separates Budget **`--max-entry-kb 4500`** in `bundle:budget` |
-| Vendor-Chunks (ML, DuckDB) | `manualChunks` + PWA `resolveDependencies`-Filter für `plot-board`, `vendor-duckdb`, `vendor-ai-onnx` |
+| Matrix `node-version: ['lts/*', 'node']` breaks on new Node release without code changes | Pinned to **`['22', '24']`** |
+| Entry chunk grows with Plot-Board splits | Separate budget **`--max-entry-kb 4500`** in `bundle:budget` |
+| Vendor chunks (ML, DuckDB) | `manualChunks` + PWA `resolveDependencies` filter for `plot-board`, `vendor-duckdb`, `vendor-ai-onnx` |
 
 ---
 
-## Lokale Reproduktion (Quick vs Heavy)
+## Local reproduction (quick vs heavy)
 
-**Quick (Laptop, 2–4 GB RAM):**
+**Quick (laptop, 2–4 GB RAM):**
 
 ```bash
 pnpm run lint && pnpm run i18n:check && pnpm run typecheck
-# optional: pnpm exec vitest run   # ohne --coverage
+# optional: pnpm exec vitest run   # without --coverage
 ```
 
-**Heavy (CI-Parität):**
+**Heavy (CI parity):**
 
 ```bash
 pnpm install --frozen-lockfile
@@ -60,38 +60,38 @@ pnpm run lint && pnpm run i18n:check && pnpm run typecheck
 pnpm exec vitest run --coverage
 pnpm run build && pnpm run bundle:budget
 CI=true pnpm run test:e2e
-# optional nach build: pnpm exec lhci autorun
+# optional after build: pnpm exec lhci autorun
 ```
 
-**Low-End-Skripte:** [`infra/low-end-ci/`](../infra/low-end-ci/) (`pnpm run ci:quick`, `pnpm run ci:act`).
+**Low-end scripts:** [`infra/low-end-ci/`](../infra/low-end-ci/) (`pnpm run ci:quick`, `pnpm run ci:act`).
 
 ---
 
-## Risiko-Register (offen / beobachten)
+## Risk register (open / monitor)
 
-| Risiko | Mitigation |
-|--------|------------|
-| Lighthouse Performance `warn` — mobile Emulation instabil | Nur **warn**; CLS + A11y als **error** |
-| E2E Flakes (SPA + Mobile-Projekt) | Retries 2, 1 Worker; bei Flake: Spec/Helper fixen, nicht global skippen |
-| Tauri `ubuntu-22.04` vs 24.04 | Separater PR nach Paket-Check |
-| Dynamische Vite `base` für Custom Domains | Produktentscheidung — nicht Teil des Baseline-CI-Fixes |
+| Risk | Mitigation |
+|------|------------|
+| Lighthouse Performance `warn` — mobile emulation unstable | Only **warn**; CLS + a11y as **error** |
+| E2E flakes (SPA + mobile project) | Retries 2, 1 worker; on flake: fix spec/helper, do not globally skip |
+| Tauri `ubuntu-22.04` vs 24.04 | Separate PR after package check |
+| Dynamic Vite `base` for custom domains | Product decision — not part of baseline CI fix |
 
 ---
 
-## Security-Jobs (bereits in `ci.yml`)
+## Security jobs (already in `ci.yml`)
 
 - `pnpm audit --audit-level=high`
-- OSV-Scanner (`pnpm-lock.yaml` + `src-tauri/Cargo.lock`)
-- gitleaks (History-Scan, `fetch-depth: 0`)
+- OSV scanner (`pnpm-lock.yaml` + `src-tauri/Cargo.lock`)
+- gitleaks (history scan, `fetch-depth: 0`)
 - PR: dependency-review-action
-- OpenSSF Scorecard (eigener Job, weekly + main)
+- OpenSSF Scorecard (separate job, weekly + main)
 
-**Optional (nur auf explizite Anfrage):** dedizierter CodeQL-Workflow, SBOM-Attestation über Release-Tags.
+**Optional (on explicit request only):** dedicated CodeQL workflow, SBOM attestation via release tags.
 
 ---
 
-## Nächste Schritte (Maintainer)
+## Next steps (maintainer)
 
-1. Nach größeren Features: `pnpm run graphs:update` (Repo-Policy, nicht in CI). Aktualisiert Graphify + CodeGraph.
-2. Nach grünem CI-Lauf: README-Badges und `AUDIT.md` Metriken aus Codecov/Logs aktualisieren.
-3. Bei Bundle-Regression: `pnpm run analyze` → Artifact `bundle-analysis.html` in der CI-Run-Ansicht.
+1. After major features: `pnpm run graphs:update` (repo policy, not in CI). Updates Graphify + CodeGraph.
+2. After a green CI run: update README badges and `AUDIT.md` metrics from Codecov/logs.
+3. On bundle regression: `pnpm run analyze` → artifact `bundle-analysis.html` in the CI run view.

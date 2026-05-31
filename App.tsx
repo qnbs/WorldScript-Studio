@@ -205,11 +205,11 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     };
 
     if (settings.theme === 'auto') {
-      // System-Präferenz auslesen
+      // Read system preference
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
       applyTheme(mq.matches);
 
-      // Auf Änderungen der System-Einstellung reagieren
+      // React to changes in the system preference
       const handler = (e: MediaQueryListEvent) => applyTheme(e.matches);
       mq.addEventListener('change', handler);
       return () => mq.removeEventListener('change', handler);
@@ -348,7 +348,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     }
   }, [dispatch, isPortalActive, t]);
 
-  // QNBS-v3: Übersetzte View-Ansage statt Rohtext (WCAG 4.1.3 Statusmeldungen).
+  // QNBS-v3: Translated view announcement instead of raw text (WCAG 4.1.3 status messages).
   //          requestAnimationFrame focus ensures the new view is mounted before focus moves (WCAG 2.4.3).
   useEffect(() => {
     if (isInitialLoad || isPortalActive) return;
