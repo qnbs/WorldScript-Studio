@@ -506,7 +506,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                           </div>
                           {sug && !query ? (
                             <div
-                              className={`text-xs truncate ${isActive ? 'text-white/80' : 'text-[var(--sc-text-muted)]'}`}
+                              className={`text-xs truncate ${isActive ? 'text-white' : 'text-[var(--sc-text-muted)]'}`}
                             >
                               {t(sug.reasonKey)}
                             </div>
@@ -516,7 +516,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       <div className="flex items-center gap-2 shrink-0">
                         {prefs.pinnedIds.includes(cmd.id) ? (
                           <span
-                            className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-white/70' : 'text-[var(--sc-text-muted)]'}`}
+                            // QNBS-v3: text-white/70 fails WCAG AA contrast on --sc-accent background; use full-opacity white.
+                            className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-white' : 'text-[var(--sc-text-muted)]'}`}
                           >
                             {t('palette.pin.badge')}
                           </span>

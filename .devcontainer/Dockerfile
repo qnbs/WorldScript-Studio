@@ -3,7 +3,8 @@
 # Matches package.json engines: node >= 22, pnpm >= 10
 # ──────────────────────────────────────────────────────────────────────────────
 
-FROM mcr.microsoft.com/devcontainers/base:bookworm
+# QNBS-v3: SHA-pinned base image — prevents supply-chain attacks via mutable tags (Scorecard Pinned-Dependencies).
+FROM mcr.microsoft.com/devcontainers/base:bookworm@sha256:c6aa3f948aacd69663735292f922a1ee2c844d7cf3b1c1c86e34ecfd72ccac3e
 
 # ─── System packages ──────────────────────────────────────────────────────────
 # QNBS-v3: Playwright needs Chromium system deps; graphify needs Python 3 + pip;
@@ -25,9 +26,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # ─── Node.js 22 LTS ───────────────────────────────────────────────────────────
-# QNBS-v3: Install Node 22 LTS explicitly (not 24 which is not LTS yet).
-# Using nodesource to get a precise version matching package.json engines.
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+# QNBS-v3: NodeSource setup script download-then-verify pattern (Scorecard Pinned-Dependencies).
+# Avoids blind pipe-to-bash; SHA pinned to setup_22.x as of 2026-05-31. Update SHA on any NodeSource refresh.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh \
+  && echo "575583bbac2fccc0b5edd0dbc03e222d9f9dc8d724da996d22754d6411104fd1  /tmp/nodesource_setup.sh" | sha256sum -c - \
+  && bash /tmp/nodesource_setup.sh \
+  && rm /tmp/nodesource_setup.sh \
   && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/* \
   && node --version && npm --version
@@ -44,8 +48,12 @@ RUN corepack enable && corepack prepare pnpm@10.33.0 --activate \
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:${PATH}
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
-    --default-toolchain stable --profile minimal \
+# QNBS-v3: rustup download-then-verify — avoids blind pipe-to-sh (Scorecard Pinned-Dependencies).
+# SHA pinned to rustup installer as of 2026-05-31; update SHA when rustup releases a new installer.
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup-init.sh \
+  && echo "6c30b75a75b28a96fd913a037c8581b580080b6ee9b8169a3c0feb1af7fe8caf  /tmp/rustup-init.sh" | sha256sum -c - \
+  && sh /tmp/rustup-init.sh -y --default-toolchain stable --profile minimal \
+  && rm /tmp/rustup-init.sh \
   && rustup --version && cargo --version && rustc --version
 
 # ─── Playwright browsers ──────────────────────────────────────────────────────
@@ -57,7 +65,8 @@ RUN npx playwright install --with-deps chromium \
 
 # ─── Python packages (graphify) ──────────────────────────────────────────────
 # QNBS-v3: graphifyy is the PyPI package for the knowledge graph tool.
-RUN python3 -m pip install --break-system-packages graphifyy \
+# QNBS-v3: version-pinned to avoid unpinned dependency alert (Scorecard Pinned-Dependencies).
+RUN python3 -m pip install --break-system-packages graphifyy==0.8.26 \
   && graphify --version || true
 
 # ─── Non-root user setup ─────────────────────────────────────────────────────
@@ -66,8 +75,14 @@ RUN python3 -m pip install --break-system-packages graphifyy \
 RUN chown -R vscode:vscode ${RUSTUP_HOME} ${CARGO_HOME} ${PLAYWRIGHT_BROWSERS_PATH}
 
 # ─── Shell enhancements ──────────────────────────────────────────────────────
-# QNBS-v3: Starship prompt + fzf + zoxide for fast navigation in the container.
-RUN curl -fsSL https://starship.rs/install.sh | sh -s -- -y \
+# QNBS-v3: Starship v1.25.1 (SHA-verified), fzf 0.56.3, zoxide v0.9.6 — version-pinned for
+# supply-chain safety (Scorecard Pinned-Dependencies). Update by bumping version + sha256.
+RUN STARSHIP_SHA="4488c11ca632327d1f1f16fb2f102c0646094c35479cd5435991385da43c61ac" \
+  && curl -fsSL "https://github.com/starship/starship/releases/download/v1.25.1/starship-x86_64-unknown-linux-gnu.tar.gz" \
+    -o /tmp/starship.tar.gz \
+  && echo "${STARSHIP_SHA}  /tmp/starship.tar.gz" | sha256sum -c - \
+  && tar xz -C /usr/local/bin -f /tmp/starship.tar.gz \
+  && rm /tmp/starship.tar.gz \
   && curl -fsSL https://github.com/junegunn/fzf/releases/download/0.56.3/fzf-0.56.3-linux_amd64.tar.gz \
     | tar xz -C /usr/local/bin \
   && curl -fsSL https://github.com/ajeetdsouza/zoxide/releases/download/v0.9.6/zoxide-v0.9.6-x86_64-unknown-linux-musl.tar.gz \

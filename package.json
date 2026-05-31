@@ -58,7 +58,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "test:storybook": "test-storybook",
-    "test:vrt": "CI=true playwright test tests/e2e/visual-regression.spec.ts --project=chromium",
+    "test:vrt": "PLAYWRIGHT_REUSE_SERVER=true playwright test tests/e2e/visual-regression.spec.ts --project=chromium",
     "analyze": "ANALYZE=true vite build",
     "bundle:budget": "node scripts/check-bundle-budget.mjs --max-kb 7000 --max-entry-kb 4500",
     "dev:tauri": "tauri dev",

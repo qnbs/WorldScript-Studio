@@ -19,7 +19,9 @@ export const SaveStatusIndicator: React.FC = () => {
           <span>{t('common.saving')}</span>
         </>
       )}
-      {savingStatus === 'saved' && <span className="text-green-400">{t('common.saved')}</span>}
+      {savingStatus === 'saved' && (
+        <span className="text-[var(--sc-success-fg)]">{t('common.saved')}</span>
+      )}
     </div>
   );
 };

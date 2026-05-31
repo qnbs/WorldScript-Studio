@@ -105,7 +105,11 @@ test.describe('End-to-end project flow (CI-only)', () => {
     await expect(exportPreview).toContainText(/quiet village under a strange moon/i);
 
     await clickNavItem(page, /Settings|Einstellungen/i);
-    await page.getByRole('button', { name: /AI Configuration|KI-Konfiguration/i }).click();
+    // QNBS-v3: .first() — SettingsOverviewCard also has an AI Configuration button
+    await page
+      .getByRole('button', { name: /AI Configuration|KI-Konfiguration/i })
+      .first()
+      .click();
     // QNBS-v3: Nach seedGeminiApiKey zeigt ApiKeySection nur „configured“ — Input fehlt; nur füllen wenn noch kein Key.
     const geminiInput = page.locator('#gemini-api-key');
     if (await geminiInput.isVisible({ timeout: 2500 }).catch(() => false)) {

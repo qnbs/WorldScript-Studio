@@ -8,6 +8,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# QNBS-v3: top-level read-only; deployments:write scoped to deploy job only (Scorecard Token-Permissions).
+permissions:
+  contents: read
+
 concurrency:
   group: cloudflare-pages-${{ github.ref }}
   cancel-in-progress: true
@@ -18,9 +22,9 @@ jobs:
     if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # QNBS-v3: read-only — wrangler authenticates via CLOUDFLARE_API_TOKEN secret, not GitHub token.
     permissions:
       contents: read
-      deployments: write
     steps:
       # QNBS-v3: SHA-pinned to prevent supply-chain attacks via mutable tags
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

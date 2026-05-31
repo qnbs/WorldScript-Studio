@@ -52,7 +52,8 @@ export default defineConfig({
   webServer: {
     command: 'pnpm run dev -- --host 127.0.0.1 --port 3000',
     url: 'http://127.0.0.1:3000',
-    reuseExistingServer: !process.env['CI'],
+    // QNBS-v3: PLAYWRIGHT_REUSE_SERVER=true lets the VRT job pre-start http-server and reuse it
+    reuseExistingServer: !process.env['CI'] || process.env['PLAYWRIGHT_REUSE_SERVER'] === 'true',
     timeout: 120_000,
   },
 });

@@ -6,7 +6,7 @@
 
 import { expect, test } from '@playwright/test';
 
-import { clickNavItem, selectEnglish, waitForSpaReady } from './helpers';
+import { clickNavItem, ensureBlankProject, selectEnglish, waitForSpaReady } from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -16,6 +16,9 @@ test.describe('LoRA Wizard (CI-only)', () => {
     await page.goto('/');
     await waitForSpaReady(page);
     await selectEnglish(page);
+    // QNBS-v3: ensureBlankProject needed — without an open project #sidebar is not rendered,
+    // so clickNavItem times out trying to find the mobile "More" button
+    await ensureBlankProject(page);
 
     // Enable the LoRA feature flag via Settings → Experimental
     await clickNavItem(page, /Settings/i);

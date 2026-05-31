@@ -72,7 +72,11 @@ export async function flushWriterDebounce(page: Page): Promise<void> {
 export async function seedGeminiApiKey(page: Page): Promise<void> {
   // QNBS-v3: clickNavItem — sidebar(page) is hidden md:flex, fails on Mobile Chrome
   await clickNavItem(page, /Settings/i);
-  await page.getByRole('button', { name: /AI Configuration|KI-Konfiguration/i }).click();
+  // QNBS-v3: .first() — SettingsOverviewCard also renders an AI Configuration quick-access button
+  await page
+    .getByRole('button', { name: /AI Configuration|KI-Konfiguration/i })
+    .first()
+    .click();
   await page
     .getByLabel(/Enter your Gemini API Key|Geben Sie Ihren Gemini API-Schlüssel ein/i)
     .fill('AIzaTestKey123456789012345678901234');

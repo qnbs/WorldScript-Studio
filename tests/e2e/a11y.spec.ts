@@ -3,7 +3,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { clickNavItem, ensureBlankProject, selectEnglish } from './helpers';
+import { clickNavItem, ensureBlankProject, selectEnglish, waitForSpaReady } from './helpers';
 
 async function assertNoSeriousViolations(page: import('@playwright/test').Page, label: string) {
   const results = await new AxeBuilder({ page }).analyze();
@@ -16,7 +16,9 @@ async function assertNoSeriousViolations(page: import('@playwright/test').Page, 
 test.describe('Accessibility (axe)', () => {
   test('welcome / home has no serious axe violations', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
+    // QNBS-v3: waitForSpaReady instead of domcontentloaded — avoids "Execution context was
+    // destroyed" when axe runs while React / i18n init triggers an in-page navigation.
+    await waitForSpaReady(page);
     await assertNoSeriousViolations(page, 'welcome');
   });
 

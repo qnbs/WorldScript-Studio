@@ -267,7 +267,8 @@ export const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(
             if (!section) return null;
             const index = virtualRow.index;
             return (
-              <li
+              // QNBS-v3: div wrapper avoids <li> inside <li> (axe listitem violation) — NavigatorItem renders its own <li>
+              <div
                 key={section.id}
                 style={{
                   position: 'absolute',
@@ -296,7 +297,7 @@ export const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(
                   onDelete={handleDeleteSection}
                   t={t}
                 />
-              </li>
+              </div>
             );
           })}
         </ul>

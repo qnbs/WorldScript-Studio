@@ -21,8 +21,6 @@ Parallel Bash calls are safe. Use the full Claude Code parallel tooling model:
 - NO multiple Bash tool calls in the same response block.
 - Chain sequential steps inside ONE Bash call using `&&` if needed.
 
-This overrides the general "run tools in parallel" instruction on low-end hardware only — parallel shell execution has caused repeated VS Code crashes on constrained machines.
-
 ## Commands
 
 ```bash
@@ -55,8 +53,6 @@ pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 
 **CI pipeline order:** `security` → `quality` (Biome + tsc + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
-**Workflow on Codespaces (recommended):** Run the full quality gate locally before pushing — `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Codespaces has 16 GB RAM; the full gate takes ~10 min. Background builds are fine with `run_in_background`.
-
 **CI-cloud-first workflow (constrained local hardware only):** On low-end hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, E2E, Lighthouse, and Stryker are CI-gate jobs. After each push, update README.md badges and AUDIT.md quality-gate line with CI-reported numbers. Local CI simulation: `act pull_request --job quality` (Docker + `act`; see `infra/low-end-ci/DAILY-DRIVER.md`).
 
 **CI audit & housekeeping policy (ALL CI runs must be fully green):**
@@ -80,25 +76,11 @@ Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 3. `pnpm run lint && pnpm run typecheck` — 60-second smoke test
 4. `gh run list --limit 5` — review recent CI runs
 
-**Daily workflow (8-Core / 16 GB):**
-- Parallel Bash calls are safe — fire independent lint + typecheck simultaneously.
-- Background builds: `pnpm run build:edge` can run while fixing tests (`run_in_background=true`).
-- Before every push: `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run`
-- Before opening a PR: `pnpm exec vitest run --coverage` — record numbers in README badges.
-
-**Full quality gate (local, matches CI `quality` job):**
-```bash
-pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage
-```
-
 **Test failure triage:**
 ```bash
 pnpm exec vitest run 2>&1 | grep "^FAIL " | sort -u        # failing files
 pnpm exec vitest run tests/unit/FILENAME.test.ts             # single file
 ```
-Known root causes: featureFlags mock must include ALL 20 flags (TS strict); PBKDF2 assertions → 600_000; `registry.setEnabled(true)` before execute/executeAsync; mock context hooks via `vi.mock(...)` not real Provider.
-
-**Timeout prevention:** Keep a terminal running `pnpm run dev` (Vite HMR) during long planning phases. Codespace inactivity timeout: 240 min (configured in GitHub account settings).
 
 ## Architecture
 
@@ -233,11 +215,9 @@ log.error('Failed', new Error('...'));
 const scopedLog = log.withContext({ projectId: 'abc' });
 ```
 
-**GDPR sanitization:** `sanitizeLogContext(ctx)` redacts keys matching `/key|token|password|passphrase/i` → `'[REDACTED]'` on every `.withContext()` and all IDB/Tauri writes.
+**GDPR sanitization:** `sanitizeLogContext(ctx)` redacts `/key|token|password|passphrase/i` → `'[REDACTED]'` on every `.withContext()` and all IDB/Tauri writes.
 
-**Sinks:** IDB (`storycraft-logs-db`, 1 000-entry LRU) + Tauri JSONL (`$APPDATA/logs/storycraft-YYYY-MM-DD.jsonl`) + console (DEV-only). `getRecentLogs()` / `formatLogsForReport()` / `clearLogs()` — backward-compat ring-buffer API retained.
-
-**Backward-compat `logger` export** (legacy): `logger.warn('[module] message')`.
+**Sinks:** IDB (`storycraft-logs-db`, 1 000-entry LRU) + Tauri JSONL (`$APPDATA/logs/storycraft-YYYY-MM-DD.jsonl`) + console (DEV-only). `getRecentLogs()` / `clearLogs()` — backward-compat ring-buffer API retained.
 
 ### Environment Variables
 
@@ -306,7 +286,7 @@ Skip for pure formatting, lockfile updates, or generated artefacts.
 
 ## Documentation index
 
-All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility: [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md). Sprint handoffs: [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md) (Phase 2 B-series) · [`docs/SPRINT-HANDOFF-2026-05-28-phase3.md`](docs/SPRINT-HANDOFF-2026-05-28-phase3.md) (Phase 3 C-1..C-5). ProForge: [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md). Before large changes: read [`ROADMAP.md`](ROADMAP.md), [`AUDIT.md`](AUDIT.md), [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md).
+All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Documentation Hub**; **[`AUDIT.md`](AUDIT.md)** § *Markdown corpus* has the maintainer inventory. Accessibility: [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md). ProForge: [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md). Before large changes: read [`ROADMAP.md`](ROADMAP.md), [`AUDIT.md`](AUDIT.md), [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md).
 
 ## Key Constraints
 
@@ -432,9 +412,9 @@ Apply for any `use*ViewContext` hook.
 
 `services/pluginRegistry.ts` — `PluginRegistry` + singleton. Plugins declare `PluginDescriptor` (Zod-validated: `id`, `version`, `type`, `entrypoint`, `permissions`). `PluginSandboxedApi` gates every method behind declared permissions.
 
-**Execution API:** `pluginRegistry.execute(id, fn, rawApi)` (sync) · `executeAsync` (async) · `loadPlugin(descriptor, rawApi)` (dynamic import + `run(api)`).
+**Execution API:** `execute(id, fn, rawApi)` (sync) · `executeAsync` (async) · `loadPlugin(descriptor, rawApi)` (dynamic import + `run(api)`).
 
-Reference plugins: `wordCountOverlay.plugin.ts`, `sceneAppender.plugin.ts`. Gate: `enablePluginSystem` flag.
+Reference plugins: `wordCountOverlay.plugin.ts`, `sceneAppender.plugin.ts`. Gate: `enablePluginSystem`.
 
 ### Cloud Sync (Cloudflare R2)
 
@@ -444,7 +424,7 @@ Reference plugins: `wordCountOverlay.plugin.ts`, `sceneAppender.plugin.ts`. Gate
 
 **Wiring (C-3):** `AIRequestOptions.loraModelPath?: string` — when set and `provider === 'ollama'`, `streamProvider()` substitutes it as the Ollama model identifier. `selectActiveLoraOllamaTag` (`features/lora/loraSelectors.ts`) returns active adapter's `ollamaModelTag` or null.
 
-**Prerequisite:** User must run `ollama create <tag> -f Modelfile` before setting `ollamaModelTag`. Training is a Python sidecar.
+**Prerequisite:** `ollama create <tag> -f Modelfile` before setting `ollamaModelTag`. Training is a Python sidecar.
 
 **Gating:** `enableLoraAdapters` flag. UI: Settings → AI → Fine-Tuning.
 
@@ -462,8 +442,6 @@ See `AUDIT.md` and `TODO.md` for the full list. Key items:
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
 - **Voice WASM (B-2 scaffold ready):** `wasmSttEngine.ts` + `sileroVadEngine.ts` exist but model download UI not wired. Phase 3: connect to `WasmSttEngine.initialize()`.
 - **IDB at-rest encryption (B-1 complete):** Passphrase UX shipped — `IdbUnlockModal` (startup), `PassphraseModal` (set/change/disable in Settings › Privacy). Flag `enableIdbAtRestEncryption` may be enabled; actual IDB read/write integration for `idbProjectStore` etc. is a separate Phase 4 task (currently service-layer only).
-- **`vendor-voice-wasm` chunk:** If WASM engines import heavy deps directly, add to `vite.config.ts` `globIgnores`.
-
 ## graphify
 
 This project has a graphify knowledge graph at `graphify-out/`. See [`docs/graphify.md`](docs/graphify.md) for setup. Only `graphify-out/GRAPH_REPORT.md` is committed; `graph.html` and `graph.json` are gitignored.
