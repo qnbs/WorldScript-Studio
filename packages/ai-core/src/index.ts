@@ -376,10 +376,18 @@ export async function runLocalTextGeneration(
     warnAiCore('ONNX layer failed:', err);
   }
 
-  // Layer-3: Transformers.js — tab-leader gets GPU model; others use WASM fallback model
+  // QNBS-v3: Layer-3 must use a DIFFERENT model than Layer-2 (ONNX); otherwise an empty ONNX result
+  //          causes Layer-3 to also return null and fall through to heuristic with the same model.
+  //          distilgpt2 (82 MB) is the designated lighter Transformers.js fallback.
+  // Layer-3: Transformers.js — always uses distilgpt2 (distinct from SmolLM2 ONNX model)
   try {
-    const fallbackModelId = hasWebGpu && gpuTabLeader ? resolvedOnnxModelId : ONNX_SUPPORTED_MODELS[0]!.id;
-    const text = await runTransformersLayer(sanitizedPrompt, fallbackModelId, 128, 0.7, signal);
+    const text = await runTransformersLayer(
+      sanitizedPrompt,
+      ONNX_SUPPORTED_MODELS[1]!.id,
+      64,
+      0.7,
+      signal,
+    );
     if (text) return { layer: 'transformers', text };
   } catch (err) {
     if (isAbortError(err)) throw err;
