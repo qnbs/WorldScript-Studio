@@ -68,35 +68,40 @@ export const ActSwimlane: FC<ActSwimlaneProps> = ({
         className="flex-grow min-h-[200px] overflow-y-auto pr-1 space-y-0 list-none"
         aria-label={t('sceneboard.dragAriaLabel')}
       >
+        {/* QNBS-v3: <ul> must only contain <li> children (axe list rule); each SceneCard (div[role=button]
+            from DnD kit) is wrapped in a <li> so the semantic list structure is valid */}
         <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           {sections.map((section, indexInLane) => (
-            <SceneCard
-              key={section.id}
-              section={section}
-              characters={characters}
-              locationOptions={locationOptions}
-              t={t}
-              onUpdate={onUpdate}
-              onDelete={onDelete}
-              sceneIndexInAct={indexInLane}
-              actLaneLength={sections.length}
-              onReorderInAct={onReorderInAct}
-            />
+            <li key={section.id} style={{ listStyle: 'none' }}>
+              <SceneCard
+                section={section}
+                characters={characters}
+                locationOptions={locationOptions}
+                t={t}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+                sceneIndexInAct={indexInLane}
+                actLaneLength={sections.length}
+                onReorderInAct={onReorderInAct}
+              />
+            </li>
           ))}
           {sections.length === 0 && (
-            <div className="text-center py-6 text-xs text-[var(--sc-text-muted)] border-2 border-dashed border-[var(--sc-border-subtle)] rounded-lg transition-colors">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-5 h-5 mx-auto mb-1 opacity-40"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              {t('sceneboard.dragEmptyHint')}
-            </div>
+            <li style={{ listStyle: 'none' }}>
+              <div className="text-center py-6 text-xs text-[var(--sc-text-muted)] border-2 border-dashed border-[var(--sc-border-subtle)] rounded-lg transition-colors">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-5 h-5 mx-auto mb-1 opacity-40"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                {t('sceneboard.dragEmptyHint')}
+              </div>
+            </li>
           )}
         </SortableContext>
       </ul>
