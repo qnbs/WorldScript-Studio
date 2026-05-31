@@ -302,11 +302,22 @@ function recommendBackend(
  *          Call once on app init, then refresh every 30s or on visibilitychange.
  */
 export async function generateDeviceProfile(): Promise<DeviceCapabilityProfile> {
-  const [webgpu, webnn, battery] = await Promise.all([
+  const [webgpuRaw, webnn, battery] = await Promise.all([
     detectWebGpuDetails(),
     detectWebnn(),
     detectBattery(),
   ]);
+
+  // QNBS-v3: Convert WebGpuAdapterInfo (status field) to profile shape (available bool)
+  const webgpu: DeviceCapabilityProfile['webgpu'] = {
+    available: webgpuRaw.status === 'available',
+    adapterDescription: webgpuRaw.adapterDescription,
+    architecture: webgpuRaw.architecture,
+    vramTier: webgpuRaw.vramTier,
+    supportsTimestampQuery: webgpuRaw.supportsTimestampQuery,
+    maxComputeWorkgroupSize: webgpuRaw.maxComputeWorkgroupSize,
+    isFallbackAdapter: webgpuRaw.isFallbackAdapter,
+  };
 
   const directml = detectDirectML(webnn);
   const memoryTier = detectMemoryTier();

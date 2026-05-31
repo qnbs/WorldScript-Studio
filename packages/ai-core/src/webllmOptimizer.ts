@@ -169,10 +169,14 @@ export async function runWebLlmInference(
     powerPreference?: PowerPreference;
   } = {},
 ): Promise<string | null> {
-  const engine = await getWebLlmEngine(modelId, {
-    onProgress: opts.onProgress,
-    powerPreference: opts.powerPreference,
-  });
+  // QNBS-v3: exactOptionalPropertyTypes — only include optional properties when they are defined
+  const engineOpts: {
+    onProgress?: (report: { progress: number; text: string }) => void;
+    powerPreference?: PowerPreference;
+  } = {};
+  if (opts.onProgress !== undefined) engineOpts.onProgress = opts.onProgress;
+  if (opts.powerPreference !== undefined) engineOpts.powerPreference = opts.powerPreference;
+  const engine = await getWebLlmEngine(modelId, engineOpts);
   if (!engine) return null;
 
   const reply = await engine.chat.completions.create({

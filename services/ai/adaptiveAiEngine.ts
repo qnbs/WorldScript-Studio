@@ -178,7 +178,7 @@ class AdaptiveAiEngine {
   isBackendAvailable(backend: ComputeBackend, profile: DeviceCapabilityProfile): boolean {
     switch (backend) {
       case 'webllm-webgpu':
-        return profile.webgpu.available && profile.webgpu.vramTier !== 'none';
+        return profile.webgpu.available && profile.webgpu.vramTier !== undefined;
       case 'onnx-directml':
         return profile.directml.available;
       case 'onnx-webnn':

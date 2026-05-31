@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { WebLlmModelId } from '../../packages/ai-core/src/index';
 import {
   listCachedWebLlmEngines,
   releaseAllWebLlmEngines,
@@ -21,6 +22,6 @@ describe('webllmOptimizer', () => {
   });
 
   it('release of non-existent engine is safe', () => {
-    expect(() => releaseWebLlm('non-existent-model')).not.toThrow();
+    expect(() => releaseWebLlm('non-existent-model' as unknown as WebLlmModelId)).not.toThrow();
   });
 });
