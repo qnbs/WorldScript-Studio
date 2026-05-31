@@ -61,9 +61,6 @@ import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
 
-// New: LitLive Assistant
-import LitLiveAssistant from './components/LitLiveAssistant';
-
 // ── Lazy-geladene Views (Code-Splitting → separate JS-Chunks) ─────────────────
 const Dashboard = lazy(() =>
   import('./components/Dashboard').then((m) => ({ default: m.Dashboard })),
@@ -626,8 +623,6 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   onForgotPassphrase={() => void handleForgotPassphrase()}
                 />
               )}
-              {/* New immersive LitLive Assistant - app-wide global inline integration */}
-              <LitLiveAssistant />
             </div>
           </AppContext.Provider>
         </ToastProvider>
