@@ -30,6 +30,7 @@ import {
   clearTelemetry,
   getRecentTelemetry,
   recordInferenceTelemetry,
+  setTelemetryEnabled,
 } from '../../../../services/ai/telemetryService';
 
 const SAMPLE_ENTRY = {
@@ -54,9 +55,18 @@ describe('telemetryService', () => {
     // Reset table-ensured state by re-importing (vi.resetModules not needed because mock resets)
     mockExec.mockResolvedValue({ rows: [] });
     mockQuery.mockResolvedValue({ rows: [] });
+    // QNBS-v3: enable telemetry in tests so writes are exercised; production default is false
+    setTelemetryEnabled(true);
   });
 
   describe('recordInferenceTelemetry', () => {
+    it('is a no-op when telemetry is disabled', async () => {
+      setTelemetryEnabled(false);
+      await recordInferenceTelemetry(SAMPLE_ENTRY);
+      expect(mockExec).not.toHaveBeenCalled();
+      expect(localStorageData['storycraft-ai-telemetry']).toBeUndefined();
+    });
+
     it('calls duckdbClient.exec when DuckDB is available', async () => {
       await recordInferenceTelemetry(SAMPLE_ENTRY);
       // First call creates table, second inserts

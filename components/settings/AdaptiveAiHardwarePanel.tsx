@@ -106,29 +106,47 @@ export const AdaptiveAiHardwarePanel: FC = () => {
             </span>
             {computeShadersEnabled && (
               <span className="text-xs px-2 py-0.5 rounded-sc-lg bg-[var(--sc-info-bg)] text-[var(--sc-info-fg)]">
-                WebGPU shaders ✓
+                {t('settings.ai.adaptive.computeShadersEnabled')}
               </span>
             )}
           </div>
 
           {/* Capability badges */}
           <div className="flex flex-wrap gap-1.5">
-            {[
-              { label: 'WebGPU', ok: profile.webgpu.available },
-              { label: 'WebNN', ok: profile.webnn.available },
-              { label: 'DirectML', ok: profile.directml.available },
-              { label: 'Compute Shaders', ok: profile.computeShaders.available },
-            ].map(({ label, ok }) => (
+            {(
+              [
+                {
+                  key: 'webgpu',
+                  labelKey: 'settings.ai.adaptive.capabilities.webgpu',
+                  ok: profile.webgpu.available,
+                },
+                {
+                  key: 'webnn',
+                  labelKey: 'settings.ai.adaptive.capabilities.webnn',
+                  ok: profile.webnn.available,
+                },
+                {
+                  key: 'directml',
+                  labelKey: 'settings.ai.adaptive.capabilities.directml',
+                  ok: profile.directml.available,
+                },
+                {
+                  key: 'computeShaders',
+                  labelKey: 'settings.ai.adaptive.capabilities.computeShaders',
+                  ok: profile.computeShaders.available,
+                },
+              ] as const
+            ).map(({ key, labelKey, ok }) => (
               <span
-                key={label}
-                title={`${label}: ${ok ? 'available' : 'unavailable'}`}
+                key={key}
+                title={`${t(labelKey)}: ${ok ? t('settings.ai.adaptive.capabilityAvailable') : t('settings.ai.adaptive.capabilityUnavailable')}`}
                 className={`text-xs px-1.5 py-0.5 rounded-sc-lg ${
                   ok
                     ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
                     : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-tertiary)] line-through'
                 }`}
               >
-                {label}
+                {t(labelKey)}
               </span>
             ))}
           </div>

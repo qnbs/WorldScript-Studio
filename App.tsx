@@ -18,6 +18,7 @@ const CrossProjectSearchPanelConnected = lazy(() =>
   })),
 );
 
+import { initAdaptiveAiOnStartup } from './app/listenerMiddleware';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
@@ -295,6 +296,21 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   useEffect(() => {
     pluginRegistry.setEnabled(featureFlags.enablePluginSystem);
   }, [featureFlags.enablePluginSystem]);
+
+  // QNBS-v3: Sync enableDuckDbAnalytics into telemetryService — the service cannot import
+  // the Redux store without a circular dep, so App.tsx acts as the bridge.
+  useEffect(() => {
+    void import('./services/ai/telemetryService').then(({ setTelemetryEnabled }) => {
+      setTelemetryEnabled(featureFlags.enableDuckDbAnalytics);
+    });
+  }, [featureFlags.enableDuckDbAnalytics]);
+
+  // QNBS-v3: Issue 5 — set the window adaptive-AI gate on cold start if the flag is already on
+  //          (listener only fires on OFF→ON transitions, not on initial true state from localStorage)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional one-shot on mount only; flag changes handled by listenerMiddleware
+  useEffect(() => {
+    initAdaptiveAiOnStartup(featureFlags.enableAdaptiveAiEngine);
+  }, []);
 
   // QNBS-v3: B-1 sentinel guard — async because IDB sentinel read is async.
   // Three cases: flag off → skip; key already in session → skip; sentinel missing →
