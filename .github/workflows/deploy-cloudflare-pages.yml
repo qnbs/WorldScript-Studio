@@ -1,11 +1,9 @@
-# Optional Cloudflare Pages deploy — enable secrets to run on release tags.
-# Day-to-day: use Cloudflare Dashboard Git → Pages (empty deploy command, build:edge).
+# Cloudflare Pages deploy — PAUSED (manual trigger only).
+# Re-enable: restore `push: tags: ['v*']` to deploy on release tags.
+# Day-to-day: Vercel (primary) + GitHub Pages cover all deployments.
 name: Deploy Cloudflare Pages
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 # QNBS-v3: top-level read-only; deployments:write scoped to deploy job only (Scorecard Token-Permissions).
