@@ -13,8 +13,8 @@
     "types": ["vite/client", "react", "react-dom"],
     "typeRoots": ["./types", "./node_modules/@types"],
     "paths": {
-      "@xenova/transformers": [
-        "./packages/ai-core/node_modules/@xenova/transformers/types/transformers.d.ts"
+      "@huggingface/transformers": [
+        "./packages/ai-core/node_modules/@huggingface/transformers/types/transformers.d.ts"
       ],
       "@domain/collab-transport": ["./packages/collab-transport/src/index.ts"],
       "@domain/ai-core": ["./packages/ai-core/src/index.ts"]

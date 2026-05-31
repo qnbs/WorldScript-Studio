@@ -9,8 +9,8 @@ export default defineConfig({
   // QNBS-v3: Map optional ai-core peer deps so workers/ and services/ can import them in tests.
   resolve: {
     alias: {
-      '@xenova/transformers': path.resolve(
-        './packages/ai-core/node_modules/@xenova/transformers/src/transformers.js',
+      '@huggingface/transformers': path.resolve(
+        './packages/ai-core/node_modules/@huggingface/transformers/dist/transformers.web.js',
       ),
       // QNBS-v3: B-3 vendor fork — resolve workspace package in tests
       '@domain/collab-transport': path.resolve('./packages/collab-transport/src/index.ts'),
