@@ -1,0 +1,70 @@
+name: 🔍 Storybook Debug
+
+# QNBS-v3: Cloud-first debug workflow — manually triggered so low-end local hardware never needs
+# to run Storybook builds. Provides configurable workers + extra verbosity to diagnose CI failures.
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_workers:
+        description: 'Test-runner max workers (fewer = more stable on CI runners)'
+        default: '1'
+        type: choice
+        options: ['1', '2', '3', '4']
+      debug_mode:
+        description: 'Extra verbose Playwright + test-runner output'
+        default: true
+        type: boolean
+      retries:
+        description: 'Number of test-runner retries per story'
+        default: '3'
+        type: choice
+        options: ['0', '1', '2', '3', '5']
+
+permissions:
+  contents: read
+
+jobs:
+  storybook-debug:
+    name: 📖 Storybook Debug (workers=${{ inputs.max_workers }}, debug=${{ inputs.debug_mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: ./.github/actions/setup
+
+      - name: Build Storybook
+        run: pnpm exec storybook build --output-dir storybook-static
+
+      - name: Install Playwright (Chromium only)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Serve Storybook + run test-runner
+        env:
+          CI: true
+          # QNBS-v3: Full Playwright debug output when debug_mode is true
+          DEBUG: ${{ inputs.debug_mode == 'true' && 'pw:browser*,pw:api' || '' }}
+          PWDEBUG: ${{ inputs.debug_mode == 'true' && 'console' || '' }}
+        run: |
+          npx http-server storybook-static -p 6006 -s &
+          npx wait-on http://localhost:6006 --timeout 120000
+          echo "Storybook ready — starting test-runner"
+          pnpm exec test-storybook --url http://localhost:6006 \
+            --max-workers=${{ inputs.max_workers }} \
+            --retries=${{ inputs.retries }} \
+            --junit \
+            --screenshot-on-failure
+
+      - name: Upload all artifacts (always — even on failure)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: storybook-debug-${{ github.run_number }}
+          path: |
+            storybook-static/
+            test-results/
+            **/screenshots/
+            **/*.log
+          retention-days: 14
+          if-no-files-found: warn

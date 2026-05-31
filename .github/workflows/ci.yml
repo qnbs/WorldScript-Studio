@@ -330,12 +330,21 @@ jobs:
   storybook:
     name: 📖 Storybook
     runs-on: ubuntu-latest
-    # QNBS-v3: raised to 25 min — test-runner with retries + screenshot-on-failure needs extra time
+    # QNBS-v3: Cloud-first — Storybook build + test-runner runs only in CI (not local).
+    #          25 min = build (~8 min) + server start + test-runner retries + screenshot upload.
     timeout-minutes: 25
     needs: [quality]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup
+
+      # QNBS-v3: Cache Playwright browsers between runs — saves ~60 s install time.
+      - name: Cache Playwright browsers
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-chromium-${{ runner.os }}-
 
       - name: Build Storybook
         run: pnpm exec storybook build --output-dir storybook-static
@@ -347,7 +356,7 @@ jobs:
       - name: Serve Storybook + Run test-runner (cloud-optimised)
         # QNBS-v3: || true — test failures produce artifacts and annotation but do NOT block the job;
         # flaky a11y stories should not cascade into a full pipeline block on every PR.
-        # Remove || true once baseline is stable.
+        # Remove || true once baseline is stable and no flaky a11y stories remain.
         env:
           CI: true
           DEBUG: pw:browser*
@@ -360,7 +369,9 @@ jobs:
             --junit \
             --screenshot-on-failure || true
 
-      # QNBS-v3: always() — upload even on failure so CI gives downloadable evidence
+      # QNBS-v3: always() — upload even on failure; artifacts are the primary debug tool on low-end
+      #          local hardware where storybook cannot run. Use the Storybook Debug workflow for
+      #          interactive investigation (see .github/workflows/storybook-debug.yml).
       - name: Upload Storybook build + test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -369,6 +380,7 @@ jobs:
           path: |
             storybook-static/
             test-results/
+            **/screenshots/
           retention-days: 7
 
   # ----------------------------------------------------------
