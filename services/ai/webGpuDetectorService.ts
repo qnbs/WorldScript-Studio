@@ -48,11 +48,12 @@ export async function detectWebGpuDetails(
     return { status: 'unknown' };
   }
 
+  // QNBS-v3: exactOptionalPropertyTypes — only include powerPreference when caller specified it
   const info: WebGpuAdapterInfo = {
     status: 'available',
     vramTier: classifyVram(adapter.limits.maxBufferSize),
-    powerPreference: opts.powerPreference,
     isFallbackAdapter: opts.forceFallbackAdapter ?? false,
+    ...(opts.powerPreference !== undefined && { powerPreference: opts.powerPreference }),
   };
 
   // QNBS-v3: Feature detection for compute shader support.

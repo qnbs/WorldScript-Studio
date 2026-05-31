@@ -308,15 +308,24 @@ export async function generateDeviceProfile(): Promise<DeviceCapabilityProfile> 
     detectBattery(),
   ]);
 
-  // QNBS-v3: Convert WebGpuAdapterInfo (status field) to profile shape (available bool)
+  // QNBS-v3: Convert WebGpuAdapterInfo (status field) to profile shape (available bool).
+  // Use conditional spread to satisfy exactOptionalPropertyTypes — never pass undefined explicitly.
   const webgpu: DeviceCapabilityProfile['webgpu'] = {
     available: webgpuRaw.status === 'available',
-    adapterDescription: webgpuRaw.adapterDescription,
-    architecture: webgpuRaw.architecture,
-    vramTier: webgpuRaw.vramTier,
-    supportsTimestampQuery: webgpuRaw.supportsTimestampQuery,
-    maxComputeWorkgroupSize: webgpuRaw.maxComputeWorkgroupSize,
-    isFallbackAdapter: webgpuRaw.isFallbackAdapter,
+    ...(webgpuRaw.adapterDescription !== undefined && {
+      adapterDescription: webgpuRaw.adapterDescription,
+    }),
+    ...(webgpuRaw.architecture !== undefined && { architecture: webgpuRaw.architecture }),
+    ...(webgpuRaw.vramTier !== undefined && { vramTier: webgpuRaw.vramTier }),
+    ...(webgpuRaw.supportsTimestampQuery !== undefined && {
+      supportsTimestampQuery: webgpuRaw.supportsTimestampQuery,
+    }),
+    ...(webgpuRaw.maxComputeWorkgroupSize !== undefined && {
+      maxComputeWorkgroupSize: webgpuRaw.maxComputeWorkgroupSize,
+    }),
+    ...(webgpuRaw.isFallbackAdapter !== undefined && {
+      isFallbackAdapter: webgpuRaw.isFallbackAdapter,
+    }),
   };
 
   const directml = detectDirectML(webnn);
@@ -327,7 +336,9 @@ export async function generateDeviceProfile(): Promise<DeviceCapabilityProfile> 
 
   const computeShaders: DeviceCapabilityProfile['computeShaders'] = {
     available: webgpu.available && webgpu.supportsTimestampQuery === true,
-    workgroupSize: webgpu.maxComputeWorkgroupSize,
+    ...(webgpu.maxComputeWorkgroupSize !== undefined && {
+      workgroupSize: webgpu.maxComputeWorkgroupSize,
+    }),
   };
 
   const base = {
