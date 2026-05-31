@@ -210,10 +210,108 @@ export function sanitizeForPrompt(input: string): string {
   return out;
 }
 
+// QNBS-v3: 'Aborted' is the sentinel thrown across layers; callers rethrow it to short-circuit.
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.message === 'Aborted';
+}
+
+function warnAiCore(message: string, err: unknown): void {
+  if (typeof console !== 'undefined' && 'warn' in console) {
+    console.warn(`[ai-core] ${message}`, err);
+  }
+}
+
+// QNBS-v3: Layer-1 WebLLM (WebGPU). Returns generated text, or null when WebLLM can't/shouldn't run
+//          (no GPU, not tab leader, package absent, or empty completion). Throws 'Aborted' on signal.
+//          Extracted from runLocalTextGeneration to keep that orchestrator under the complexity budget.
+async function runWebLlmLayer(
+  sanitizedPrompt: string,
+  resolvedModelId: string,
+  hasWebGpu: boolean,
+  gpuTabLeader: boolean,
+  onProgress?: (report: WebLlmProgressReport) => void,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  if (signal?.aborted) throw new Error('Aborted');
+  // QNBS-v3: Only one tab loads WebLLM — avoids GPU/RAM collision across multiple StoryCraft tabs.
+  if (!hasWebGpu || !gpuTabLeader) return null;
+  const mod = await import('@mlc-ai/web-llm');
+  type EngineModule = typeof mod & {
+    CreateMLCEngine?: (
+      model: string,
+      init?: { initProgressCallback?: (p: unknown) => void },
+    ) => Promise<{
+      chat: {
+        completions: {
+          create: (req: {
+            messages: { role: string; content: string }[];
+          }) => Promise<{ choices: { message?: { content?: string } }[] }>;
+        };
+      };
+    }>;
+  };
+  const CreateMLCEngine = (mod as EngineModule).CreateMLCEngine;
+  if (typeof CreateMLCEngine !== 'function') return null;
+  const engine = await CreateMLCEngine(resolvedModelId, {
+    initProgressCallback: (p: unknown) => {
+      if (signal?.aborted) return;
+      if (onProgress && typeof p === 'object' && p !== null) {
+        const r = p as { progress?: number; text?: string };
+        onProgress({ progress: r.progress ?? 0, text: r.text ?? '' });
+      }
+    },
+  });
+  if (signal?.aborted) throw new Error('Aborted');
+  const reply = await engine.chat.completions.create({
+    messages: [{ role: 'user', content: sanitizedPrompt }],
+  });
+  return reply.choices[0]?.message?.content?.trim() || null;
+}
+
+// QNBS-v3: Shared ONNX (Layer-2) + Transformers.js (Layer-3) text-generation path via
+//          @huggingface/transformers. Returns generated text (echoed prompt stripped), or null when
+//          the pipeline is unavailable/empty. Throws 'Aborted' on signal.
+async function runTransformersLayer(
+  sanitizedPrompt: string,
+  model: string,
+  maxNewTokens: number,
+  temperature: number,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  if (signal?.aborted) throw new Error('Aborted');
+  const { pipeline, env } = await import('@huggingface/transformers');
+  if (typeof pipeline !== 'function') return null;
+  interface XenovaEnv {
+    backends?: { onnx?: { wasm?: { proxy?: boolean } } };
+  }
+  const typedEnv = env as unknown as XenovaEnv;
+  if (typedEnv.backends?.onnx?.wasm) {
+    typedEnv.backends.onnx.wasm.proxy = false;
+  }
+  const generator = await pipeline('text-generation', model, { dtype: 'q8' });
+  if (signal?.aborted) throw new Error('Aborted');
+  const result = (await generator(sanitizedPrompt, {
+    max_new_tokens: maxNewTokens,
+    temperature,
+    do_sample: true,
+  })) as Array<{ generated_text: string }>;
+  const generated = result[0]?.generated_text?.trim() ?? '';
+  // QNBS-v3: strip the echoed prompt that causal LMs prepend to their completion.
+  const text = generated.startsWith(sanitizedPrompt)
+    ? generated.slice(sanitizedPrompt.length).trim()
+    : generated;
+  return text || null;
+}
+
+/**
+ * Multi-layer local text generation: WebLLM (WebGPU) → ONNX WASM → Transformers.js → heuristic.
+ * Each layer logs and falls through on failure; an aborted signal short-circuits with 'Aborted'.
+ */
 export async function runLocalTextGeneration(
   prompt: string,
   modelId?: string,
   onProgress?: (report: WebLlmProgressReport) => void,
+  signal?: AbortSignal,
 ): Promise<LocalAiResponse> {
   const sanitizedPrompt = sanitizeForPrompt(prompt);
   if (!sanitizedPrompt.trim()) {
@@ -225,96 +323,55 @@ export async function runLocalTextGeneration(
   // QNBS-v3: fall back to first supported model when caller omits modelId (keeps backward compat)
   const resolvedModelId = modelId ?? WEBLLM_SUPPORTED_MODELS[0].id;
 
+  // Layer-1: WebLLM (WebGPU, highest quality)
   try {
-    const mod = await import('@mlc-ai/web-llm');
-    type EngineModule = typeof mod & {
-      CreateMLCEngine?: (
-        model: string,
-        init?: { initProgressCallback?: (p: unknown) => void },
-      ) => Promise<{
-        chat: {
-          completions: {
-            create: (req: {
-              messages: { role: string; content: string }[];
-            }) => Promise<{ choices: { message?: { content?: string } }[] }>;
-          };
-        };
-      }>;
-    };
-    const m = mod as EngineModule;
-    const CreateMLCEngine = m.CreateMLCEngine;
-    // QNBS-v3: Only one tab loads WebLLM — avoids GPU/RAM collision across multiple StoryCraft tabs.
-    if (typeof CreateMLCEngine === 'function' && hasWebGpu && gpuTabLeader) {
-      const engine = await CreateMLCEngine(resolvedModelId, {
-        initProgressCallback: (p: unknown) => {
-          if (onProgress && typeof p === 'object' && p !== null) {
-            const r = p as { progress?: number; text?: string };
-            onProgress({ progress: r.progress ?? 0, text: r.text ?? '' });
-          }
-        },
-      });
-      const reply = await engine.chat.completions.create({
-        messages: [{ role: 'user', content: sanitizedPrompt }],
-      });
-      const text = reply.choices[0]?.message?.content?.trim();
-      if (text) {
-        return { layer: 'webllm', text };
-      }
-    }
-  } catch {
-    /* optional @mlc-ai/web-llm not installed, WebGPU, or model fetch blocked */
+    const text = await runWebLlmLayer(
+      sanitizedPrompt,
+      resolvedModelId,
+      hasWebGpu,
+      gpuTabLeader,
+      onProgress,
+      signal,
+    );
+    if (text) return { layer: 'webllm', text };
+  } catch (err) {
+    if (isAbortError(err)) throw err;
+    warnAiCore('WebLLM layer failed:', err);
   }
 
-  if (hasWebGpu) {
-    if (!gpuTabLeader) {
-      return {
-        layer: 'webllm',
-        text:
-          'WebLLM: Another StoryCraft tab holds the local inference lock. Close extra tabs or use Ollama. Preview: ' +
-          sanitizedPrompt.slice(0, 160) +
-          (sanitizedPrompt.length > 160 ? '…' : ''),
-      };
-    }
+  // QNBS-v3: another tab owns the GPU lock — surface an actionable message, not a silent downgrade.
+  if (hasWebGpu && !gpuTabLeader) {
     return {
       layer: 'webllm',
       text:
-        'WebLLM: optional @mlc-ai/web-llm package or model weights unavailable in this environment. Use Ollama or Gemini. Sanitized prompt preview: ' +
-        sanitizedPrompt.slice(0, 200) +
-        (sanitizedPrompt.length > 200 ? '…' : ''),
+        'WebLLM: Another StoryCraft tab holds the local inference lock. Close extra tabs or use Ollama. Preview: ' +
+        sanitizedPrompt.slice(0, 160) +
+        (sanitizedPrompt.length > 160 ? '…' : ''),
     };
   }
 
-  // QNBS-v3: ONNX WASM Layer-2 — no GPU required; greift zwischen WebLLM und Transformers.js.
+  // Layer-2: ONNX WASM (no GPU required)
   try {
-    const ort = await import('onnxruntime-web');
-    if (typeof ort.InferenceSession?.create === 'function') {
-      return {
-        layer: 'onnx',
-        text:
-          'ONNX Runtime Web WASM backend available. No default model is auto-loaded; select a model via Settings to enable local ONNX inference. Echo: ' +
-          sanitizedPrompt.slice(0, 160) +
-          '…',
-      };
-    }
-  } catch {
-    /* optional onnxruntime-web not installed */
+    const text = await runTransformersLayer(
+      sanitizedPrompt,
+      ONNX_SUPPORTED_MODELS[0].id,
+      128,
+      0.7,
+      signal,
+    );
+    if (text) return { layer: 'onnx', text };
+  } catch (err) {
+    if (isAbortError(err)) throw err;
+    warnAiCore('ONNX layer failed:', err);
   }
 
-  // QNBS-v3: Transformers.js Layer-3 — uses WebGPU device when available for 3-5× speedup.
+  // Layer-3: Transformers.js (distilgpt2)
   try {
-    const { pipeline } = await import('@xenova/transformers');
-    if (typeof pipeline === 'function') {
-      const deviceHint = hasWebGpu ? 'webgpu' : 'wasm';
-      return {
-        layer: 'transformers',
-        text:
-          `Transformers.js pipeline available (device: ${deviceHint}); no lightweight default model is forced in-app. Use WebLLM or Ollama for full local inference. Echo: ` +
-          sanitizedPrompt.slice(0, 160) +
-          '…',
-      };
-    }
-  } catch {
-    /* optional */
+    const text = await runTransformersLayer(sanitizedPrompt, 'Xenova/distilgpt2', 64, 0.8, signal);
+    if (text) return { layer: 'transformers', text };
+  } catch (err) {
+    if (isAbortError(err)) throw err;
+    warnAiCore('Transformers.js layer failed:', err);
   }
 
   // QNBS-v3: Layer-4 heuristic — all inference layers unavailable; echo sanitized prompt as fallback.

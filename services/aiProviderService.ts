@@ -69,6 +69,18 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
   return { ...opts, signal };
 }
 
+// ─── Fallback reason tracking ────────────────────────────────────────────────
+// QNBS-v3: Records why the last fallback occurred so the UI can explain it to the user.
+let _lastFallbackReason = '';
+
+export function getLastAiFallbackReason(): string {
+  return _lastFallbackReason;
+}
+
+export function clearLastAiFallbackReason(): void {
+  _lastFallbackReason = '';
+}
+
 // ─── Service-level request deduplication ─────────────────────────────────────
 // QNBS-v3: prevents duplicate cloud/local calls when components call the service
 // directly (complementary to thunk-level dedup in aiThunkUtils).
@@ -351,7 +363,7 @@ export async function generateText(
       if (nextProvider === undefined) continue;
       try {
         const { withTransientRetry } = await import('./ai/aiRetry');
-        return await withTransientRetry(
+        const result = await withTransientRetry(
           () =>
             generateTextSingleProvider(prompt, creativity, {
               ...o,
@@ -359,13 +371,23 @@ export async function generateText(
             }),
           { attempts: 2 },
         );
+        // QNBS-v3: Clear fallback reason on success — the chain worked.
+        if (i > 0) {
+          _lastFallbackReason = `Primary provider ${o.provider} failed; fell back to ${nextProvider}.`;
+        } else {
+          _lastFallbackReason = '';
+        }
+        return result;
       } catch (err) {
         lastError = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        _lastFallbackReason = `Provider ${nextProvider ?? 'unknown'} failed: ${msg}`;
         if (i === chain.length - 1) break;
       }
     }
     try {
       const local = await generateLocalText(prompt);
+      _lastFallbackReason = `All providers in chain failed (${chain.join(' → ')}). Using local heuristic fallback.`;
       return providerTextSchema.parse({ text: local.text }).text;
     } catch {
       throw lastError instanceof Error ? lastError : new Error(String(lastError));

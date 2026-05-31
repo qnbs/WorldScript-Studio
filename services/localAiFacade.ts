@@ -16,6 +16,7 @@ export async function generateLocalText(
   modelId?: string,
   onProgress?: (report: WebLlmProgressReport) => void,
   loraAdapterId?: string,
+  signal?: AbortSignal,
 ): Promise<LocalAiResponse> {
   const taskId =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -48,10 +49,12 @@ export async function generateLocalText(
 
   const startedAt = performance.now();
   try {
-    const result = await runLocalTextGeneration(prompt, modelId, onProgress);
+    const result = await runLocalTextGeneration(prompt, modelId, onProgress, signal);
     localWorkerBus.recordResult(performance.now() - startedAt, true);
     return result;
-  } catch {
+  } catch (err) {
+    // QNBS-v3: Log the actual error so telemetry and bug reports are useful.
+    logger.warn('Local text generation failed:', err);
     localWorkerBus.recordResult(performance.now() - startedAt, false);
     return { layer: 'heuristic', text: 'Heuristic fallback response' };
   } finally {

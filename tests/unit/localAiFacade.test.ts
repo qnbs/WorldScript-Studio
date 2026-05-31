@@ -45,6 +45,19 @@ describe('localAiFacade', () => {
     expect(typeof result.layer).toBe('string');
   });
 
+  it('passes AbortSignal to runLocalTextGeneration', async () => {
+    mockRunLocalTextGeneration.mockResolvedValue({ layer: 'local', text: 'ok' });
+    const { generateLocalText } = await import('../../services/localAiFacade');
+    const controller = new AbortController();
+    await generateLocalText('prompt', 'model', undefined, undefined, controller.signal);
+    expect(mockRunLocalTextGeneration).toHaveBeenCalledWith(
+      'prompt',
+      'model',
+      undefined,
+      controller.signal,
+    );
+  });
+
   it('returns heuristic fallback when runLocalTextGeneration throws', async () => {
     mockRunLocalTextGeneration.mockRejectedValue(new Error('WebLLM failed'));
     const { generateLocalText } = await import('../../services/localAiFacade');
@@ -58,6 +71,37 @@ describe('localAiFacade', () => {
     const tele = getLocalWorkerBusTelemetry();
     expect(tele).toBeTruthy();
     expect(typeof tele).toBe('object');
+  });
+
+  it('includes loraAdapterId in the enqueued task payload', async () => {
+    // QNBS-v3: loraAdapterId is wired into the WorkerBus task payload (for future worker-side LoRA),
+    //          NOT forwarded to runLocalTextGeneration. Spy on the real bus to assert the payload,
+    //          and confirm loraAdapterId never leaks into runLocalTextGeneration's signal slot.
+    // QNBS-v3: dynamic import — a top-level @domain/ai-core import would make the hoisted vi.mock
+    //          factory run before the mock consts initialize (TDZ). The mock spreads the real
+    //          WorkerBus, so its prototype is shared with the module's internal localWorkerBus.
+    const { WorkerBus } = await import('@domain/ai-core');
+    const enqueueSpy = vi.spyOn(WorkerBus.prototype, 'enqueue');
+    mockRunLocalTextGeneration.mockResolvedValue({ layer: 'local', text: 'ok' });
+    const { generateLocalText } = await import('../../services/localAiFacade');
+    await generateLocalText('prompt', 'model', undefined, 'my-lora');
+    expect(enqueueSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'local.text.generate',
+        payload: expect.objectContaining({
+          prompt: 'prompt',
+          modelId: 'model',
+          loraAdapterId: 'my-lora',
+        }),
+      }),
+    );
+    expect(mockRunLocalTextGeneration).toHaveBeenCalledWith(
+      'prompt',
+      'model',
+      undefined,
+      undefined,
+    );
+    enqueueSpy.mockRestore();
   });
 
   it('acquires and releases GPU mutex when WebGPU is available', async () => {
