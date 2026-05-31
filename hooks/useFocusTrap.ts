@@ -27,7 +27,7 @@ export function useFocusTrap(
     if (container) {
       const focusableElements = Array.from(
         container.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          'button:not([tabindex="-1"]), [href]:not([tabindex="-1"]), input:not([tabindex="-1"]), select:not([tabindex="-1"]), textarea:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])',
         ),
       ).filter((element) => !element.hasAttribute('disabled'));
       const firstElement = focusableElements[0];
@@ -43,7 +43,7 @@ export function useFocusTrap(
         if (e.key !== 'Tab') return;
         const live = Array.from(
           container.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+            'button:not([tabindex="-1"]), [href]:not([tabindex="-1"]), input:not([tabindex="-1"]), select:not([tabindex="-1"]), textarea:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])',
           ),
         ).filter((el) => !el.hasAttribute('disabled'));
         if (live.length === 0) {

@@ -66,6 +66,15 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
     setIsInitialLoad(false);
   }, [isNewUser]);
 
+  // QNBS-v3: Allow settings to re-open the welcome portal from any view.
+  useEffect(() => {
+    function onOpenPortal() {
+      setIsPortalActive(true);
+    }
+    window.addEventListener('storycraft:openPortal', onOpenPortal);
+    return () => window.removeEventListener('storycraft:openPortal', onOpenPortal);
+  }, []);
+
   // QNBS-v3: web+storycraft protocol placeholder — manifest passes ?protocol= for future routing hooks.
   useEffect(() => {
     try {
