@@ -4,11 +4,9 @@
  *          Gated by enableAdaptiveAiEngine feature flag; results feed adaptiveAiEngine latency history.
  */
 
-import { createLogger } from '../logger';
+import { logger as log } from '../logger';
 import { type AiTaskType, adaptiveAiEngine } from './adaptiveAiEngine';
 import type { ComputeBackend } from './localAiDeviceProfiler';
-
-const log = createLogger('benchmarkService');
 
 const BENCHMARK_STORAGE_KEY = 'storycraft-benchmarks';
 const MAX_STORED_RESULTS = 50;

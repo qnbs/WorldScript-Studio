@@ -5,9 +5,7 @@
  */
 
 import { duckdbClient } from '../duckdb/duckdbClient';
-import { createLogger } from '../logger';
-
-const log = createLogger('telemetryService');
+import { logger as log } from '../logger';
 
 const TELEMETRY_STORAGE_KEY = 'storycraft-ai-telemetry';
 const MAX_LOCAL_ENTRIES = 200;

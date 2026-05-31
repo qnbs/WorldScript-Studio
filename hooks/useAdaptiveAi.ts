@@ -22,9 +22,7 @@ import {
   type DeviceCapabilityProfile,
   generateDeviceProfile,
 } from '../services/ai/localAiDeviceProfiler';
-import { createLogger } from '../services/logger';
-
-const log = createLogger('useAdaptiveAi');
+import { logger as log } from '../services/logger';
 
 // QNBS-v3: device profile is refreshed every 30s while the feature is active
 const PROFILE_REFRESH_INTERVAL_MS = 30_000;
