@@ -65,8 +65,12 @@ RUN npx playwright install --with-deps chromium \
 
 # ─── Python packages (graphify) ──────────────────────────────────────────────
 # QNBS-v3: graphifyy is the PyPI package for the knowledge graph tool.
-# QNBS-v3: version-pinned to avoid unpinned dependency alert (Scorecard Pinned-Dependencies).
-RUN python3 -m pip install --break-system-packages graphifyy==0.8.26 \
+# QNBS-v3: pinned by SHA256 hash to satisfy Scorecard Pinned-Dependencies (pipCommand check).
+#          Hashes sourced from https://pypi.org/pypi/graphifyy/0.8.26/json
+RUN python3 -m pip install --break-system-packages \
+    "graphifyy==0.8.26" \
+    --hash=sha256:b8115d9783fe6ec4dc608ac544e3cd581d9ec420cbbd8d873524f26ab24c2286 \
+    --hash=sha256:1d6813e2f299abcbcf10879fddf977bf59820f597e42fe276f81b9b9e985e367 \
   && graphify --version || true
 
 # ─── Non-root user setup ─────────────────────────────────────────────────────
