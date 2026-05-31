@@ -33,6 +33,7 @@ const makeCtx = (overrides?: Record<string, unknown>) => ({
   setPassphraseModal: mockSetPassphraseModal,
   handlePassphraseConfirm: vi.fn(),
   handleSettingChange: mockHandleSettingChange,
+  handleLockSession: vi.fn(),
   ...overrides,
 });
 
@@ -122,6 +123,28 @@ describe('PrivacySection', () => {
     expect(mockSetPassphraseModal).toHaveBeenCalledWith('set');
   });
 
+  it('dataEncryption toggle opens set modal when turned on', async () => {
+    const user = userEvent.setup();
+    render(<PrivacySection />);
+    const toggle = screen.getByRole('switch', { name: 'settings.privacy.dataEncryption' });
+    await user.click(toggle);
+    expect(mockSetPassphraseModal).toHaveBeenCalledWith('set');
+  });
+
+  it('dataEncryption toggle opens disable modal when turned off and encryption is active', async () => {
+    const user = userEvent.setup();
+    mockCtx.mockReturnValue(
+      makeCtx({
+        featureFlags: { enableIdbAtRestEncryption: true },
+        encryptionReady: true,
+      }) as unknown as ReturnType<typeof useSettingsViewContext>,
+    );
+    render(<PrivacySection />);
+    const toggle = screen.getByRole('switch', { name: 'settings.privacy.dataEncryption' });
+    await user.click(toggle);
+    expect(mockSetPassphraseModal).toHaveBeenCalledWith('disable');
+  });
+
   it('shows active status and change/disable buttons when encryption is on and ready', () => {
     mockCtx.mockReturnValue(
       makeCtx({
@@ -170,5 +193,31 @@ describe('PrivacySection', () => {
     render(<PrivacySection />);
     await user.click(screen.getByText('settings.privacy.encryptionDisableAction'));
     expect(mockSetPassphraseModal).toHaveBeenCalledWith('disable');
+  });
+
+  it('shows lock session button when encryption is active', () => {
+    mockCtx.mockReturnValue(
+      makeCtx({
+        featureFlags: { enableIdbAtRestEncryption: true },
+        encryptionReady: true,
+      }) as unknown as ReturnType<typeof useSettingsViewContext>,
+    );
+    render(<PrivacySection />);
+    expect(screen.getByText('settings.privacy.encryptionLockAction')).toBeInTheDocument();
+  });
+
+  it('calls handleLockSession when lock session button is clicked', async () => {
+    const user = userEvent.setup();
+    const mockLock = vi.fn();
+    mockCtx.mockReturnValue(
+      makeCtx({
+        featureFlags: { enableIdbAtRestEncryption: true },
+        encryptionReady: true,
+        handleLockSession: mockLock,
+      }) as unknown as ReturnType<typeof useSettingsViewContext>,
+    );
+    render(<PrivacySection />);
+    await user.click(screen.getByText('settings.privacy.encryptionLockAction'));
+    expect(mockLock).toHaveBeenCalledTimes(1);
   });
 });

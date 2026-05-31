@@ -9,14 +9,23 @@ import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
 import { makeBinderAssetIdsPrefix, makeBinderAssetStorageKey } from '../storageBackend';
 import { getUserFriendlyDbError, retryDb } from './idbCore';
 import { IdbSnapshotStore } from './idbSnapshotStore';
+import {
+  idbDecrypt,
+  idbEncrypt,
+  isEncryptedBlob,
+  isIdbEncryptionReady,
+} from './storageEncryptionService';
 
 export class IdbAssetStore extends IdbSnapshotStore {
   // --- Image Store Methods ---
 
   async saveImage(id: string, base64: string): Promise<void> {
+    // QNBS-v3: Encrypt BEFORE opening the transaction — `await idbEncrypt` yields the event loop,
+    //          which auto-commits an already-open IDB transaction (TransactionInactiveError on put).
+    const payload = isIdbEncryptionReady() ? await idbEncrypt(base64) : base64;
     const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
-      const request = store.put(base64, id);
+      const request = store.put(payload, id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
@@ -26,7 +35,19 @@ export class IdbAssetStore extends IdbSnapshotStore {
     const store = await this.getObjectStore(IMAGES_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.get(id);
-      request.onsuccess = () => resolve(request.result ?? null);
+      request.onsuccess = async () => {
+        const raw = request.result;
+        if (raw == null) {
+          resolve(null);
+          return;
+        }
+        // QNBS-v3: Decrypt encrypted image payload; legacy plaintext falls through.
+        if (raw instanceof Uint8Array && isEncryptedBlob(raw) && isIdbEncryptionReady()) {
+          resolve(await idbDecrypt<string>(raw));
+          return;
+        }
+        resolve(raw as string);
+      };
       request.onerror = () => reject(request.error);
     });
   }
@@ -50,11 +71,18 @@ export class IdbAssetStore extends IdbSnapshotStore {
   ): Promise<void> {
     return retryDb(async () => {
       const key = makeBinderAssetStorageKey(projectId, assetId);
-      const blob = new Blob([data], { type: meta.mimeType || 'application/octet-stream' });
-      const record = { meta: { ...meta, byteSize: data.byteLength }, blob };
+      const fullMeta = { ...meta, byteSize: data.byteLength };
+      // QNBS-v3: idbEncrypt serialises via JSON.stringify, which silently drops a Blob ({} → no data).
+      //          When encrypting, persist the raw bytes; otherwise store a structured-clone-friendly Blob.
+      const payload = isIdbEncryptionReady()
+        ? await idbEncrypt({ meta: fullMeta, bytes: Array.from(new Uint8Array(data)) })
+        : {
+            meta: fullMeta,
+            blob: new Blob([data], { type: meta.mimeType || 'application/octet-stream' }),
+          };
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
       return new Promise<void>((resolve, reject) => {
-        const req = store.put(record, key);
+        const req = store.put(payload, key);
         req.onsuccess = () => resolve();
         req.onerror = () => reject(getUserFriendlyDbError(req.error));
       });
@@ -65,16 +93,22 @@ export class IdbAssetStore extends IdbSnapshotStore {
     return retryDb(async () => {
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');
-      const raw = await new Promise<{ meta: BinderAssetMeta; blob: Blob } | undefined>(
-        (resolve, reject) => {
-          const req = store.get(key);
-          req.onsuccess = () => resolve(req.result as { meta: BinderAssetMeta; blob: Blob });
-          req.onerror = () => reject(getUserFriendlyDbError(req.error));
-        },
-      );
-      if (!raw?.blob) return null;
-      const data = await raw.blob.arrayBuffer();
-      return { data, meta: raw.meta };
+      const raw = await new Promise<unknown>((resolve, reject) => {
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(getUserFriendlyDbError(req.error));
+      });
+      if (!raw) return null;
+      // QNBS-v3: Encrypted payloads carry raw bytes (Blobs aren't JSON-serialisable); plaintext
+      //          payloads carry a Blob. Reconstruct an ArrayBuffer from whichever shape is present.
+      if (raw instanceof Uint8Array && isEncryptedBlob(raw) && isIdbEncryptionReady()) {
+        const dec = await idbDecrypt<{ meta: BinderAssetMeta; bytes: number[] }>(raw);
+        return { data: new Uint8Array(dec.bytes).buffer, meta: dec.meta };
+      }
+      const record = raw as { meta: BinderAssetMeta; blob: Blob };
+      if (!record?.blob) return null;
+      const data = await record.blob.arrayBuffer();
+      return { data, meta: record.meta };
     });
   }
 
