@@ -1,7 +1,7 @@
 # IndexedDB At-Rest Encryption — Implementation
 
-**Status:** ✅ Implemented — `services/storage/storageEncryptionService.ts` (v1.19.0, B-1)
-**Feature flag:** `enableIdbAtRestEncryption` (off by default — passphrase UX is Phase 3)
+**Status:** ✅ Implemented + Phase 1.1 UX complete — `services/storage/storageEncryptionService.ts` (v1.19.0 B-1 + 2026-05-31 Local AI Perfection Phase 1.1)
+**Feature flag:** `enableIdbAtRestEncryption` (off by default — enable via Settings → Privacy)
 **Tracking:** SEC-3 (Master Plan Phase 2 delivery)
 
 ---
@@ -10,7 +10,13 @@
 
 StoryCraft Studio stores all project data in IndexedDB. API keys were already encrypted at rest via `dbService.ts` using AES-256-GCM with a locally-generated `CryptoKey`. As of v1.19.0 (B-1), `services/storage/storageEncryptionService.ts` extends at-rest encryption to all IDB stores using a passphrase-derived key, protecting data against offline extraction (e.g. from a shared or compromised browser profile).
 
-The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` (off by default). The passphrase unlock UX (modal, forgot-passphrase export, key rotation) is a Phase 3 deliverable. **Do not enable this flag in production until the UX is complete.**
+The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` (off by default — enable in Settings → Privacy → "Encrypt project data at rest"). **Passphrase UX is complete as of 2026-05-31 (Phase 1.1):**
+- `IdbUnlockModal` — prompts for passphrase on cold start when flag is on; rate-limiting: 3 failures → 5 s lockout, 6 failures → 30 s lockout
+- **Session lock** — `lockSession()` clears the in-memory key; "Lock Session" button in Settings → Privacy
+- **Key rotation** — `rotateKey(old, new)` re-encrypts all 5 IDB stores atomically via `reEncryptAllAppData()` + `reEncryptAllSnapshots()`; Settings → Privacy → Change Passphrase
+- `PassphraseModal` in Settings handles set / change / disable flows
+
+**Remaining Phase 4:** actual IDB read/write integration for `idbProjectStore`, `idbSnapshotStore`, etc. — the service layer is complete; the store-layer call sites are stubbed for a final integration pass.
 
 ---
 
