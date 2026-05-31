@@ -45,8 +45,6 @@ export interface FeatureFlagsState {
   enableIdbAtRestEncryption: boolean;
   /** Voice WASM engines — local Whisper STT + Silero VAD via ONNX; no cloud audio routing (default: false). */
   enableVoiceWasm: boolean;
-  /** Literatur-Live-Assistent – opt-in immersive inline AI co-pilot for beginners, newbies and full-scale workflow pipeline assistance (local & global AI). App-wide, global, inline, immersive integration (default: false). */
-  enableLiveLiteratureAssistant: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -86,7 +84,6 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableIdbAtRestEncryption: false,
   // QNBS-v3: Voice WASM engines — off by default; ~40 MB Whisper model download on first use.
   enableVoiceWasm: false,
-  enableLiveLiteratureAssistant: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -188,9 +185,6 @@ const featureFlagsSlice = createSlice({
     setEnableVoiceWasm(state, action: PayloadAction<boolean>) {
       state.enableVoiceWasm = action.payload;
     },
-    setEnableLiveLiteratureAssistant(state, action: PayloadAction<boolean>) {
-      state.enableLiveLiteratureAssistant = action.payload;
-    },
   },
 });
 
@@ -237,8 +231,6 @@ export const selectEnableIdbAtRestEncryption = (state: { featureFlags: FeatureFl
   state.featureFlags.enableIdbAtRestEncryption;
 export const selectEnableVoiceWasm = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableVoiceWasm;
-export const selectEnableLiveLiteratureAssistant = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enableLiveLiteratureAssistant;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {
