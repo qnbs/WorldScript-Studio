@@ -17,9 +17,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # QNBS-v3: gate job ensures at least one job always runs so GitHub shows success (not failure) on branch pushes.
+  gate:
+    name: Check deployment conditions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      deploy: ${{ steps.check.outputs.deploy }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
     name: Cloudflare Pages (edge build)
-    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true' && secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != ''
     runs-on: ubuntu-latest
     timeout-minutes: 25
     # QNBS-v3: read-only — wrangler authenticates via CLOUDFLARE_API_TOKEN secret, not GitHub token.
