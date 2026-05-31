@@ -98,12 +98,29 @@ export class WebSpeechTtsEngine implements TtsEngine {
 
 export interface TtsEngineFactoryOptions {
   preferredEngine?: VoiceTtsEngine;
+  /** QNBS-v3: When true, prefers Kokoro ONNX over Web Speech API. */
+  enableVoiceWasm?: boolean;
 }
 
 export async function createTtsEngine(options: TtsEngineFactoryOptions = {}): Promise<TtsEngine> {
-  const { preferredEngine = 'auto' } = options;
+  const { preferredEngine = 'auto', enableVoiceWasm = false } = options;
 
   const engines: TtsEngine[] = [new WebSpeechTtsEngine()];
+
+  // QNBS-v3: Try Kokoro first when WASM voice is enabled and preference is auto/kokoro.
+  if (enableVoiceWasm && (preferredEngine === 'auto' || preferredEngine === 'kokoro')) {
+    try {
+      const { KokoroTtsEngine } = await import('./kokoroTtsEngine');
+      const kokoro = new KokoroTtsEngine();
+      if (await kokoro.isAvailable()) {
+        await kokoro.initialize();
+        logger.info(`TTS engine selected: ${kokoro.name}`);
+        return kokoro;
+      }
+    } catch (err) {
+      logger.warn('[createTtsEngine] Kokoro unavailable, falling back:', err);
+    }
+  }
 
   if (preferredEngine !== 'auto') {
     const preferred = engines.find((e) => e.id === preferredEngine);

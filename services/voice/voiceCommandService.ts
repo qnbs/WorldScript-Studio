@@ -197,6 +197,7 @@ export class VoiceCommandService {
       const eco = ecoModeService.isEcoMode();
       const engine = await createTtsEngine({
         preferredEngine: eco ? 'webSpeech' : this.config.preferredTtsEngine,
+        enableVoiceWasm: this.config.enableVoiceWasm,
       });
       this.d(setActiveTtsEngine(engine.id));
       this.d(setTtsStatus('ready'));

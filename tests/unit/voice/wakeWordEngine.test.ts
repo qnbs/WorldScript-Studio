@@ -53,14 +53,14 @@ describe('EnergyThresholdWakeWordEngine', () => {
     expect(engine.checkTranscript('hey storycraft')).toBe(true);
   });
 
-  it('processChunk returns false (audio not processed in fallback)', () => {
+  it('processChunk returns false (audio not processed in fallback)', async () => {
     const chunk: AudioChunk = {
       buffer: new Int16Array(100),
       durationMs: 100,
       hasSpeech: false,
       capturedAt: Date.now(),
     };
-    expect(engine.processChunk(chunk)).toBe(false);
+    expect(await engine.processChunk(chunk)).toBe(false);
   });
 
   it('disposes cleanly', async () => {

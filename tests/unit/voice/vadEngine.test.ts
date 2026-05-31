@@ -29,28 +29,28 @@ describe('WebRtcVadEngine', () => {
     const silentChunk = makeChunk(new Array(100).fill(0));
     // Silent chunks should not trigger speech
     for (let i = 0; i < 10; i++) {
-      const result = engine.processChunk(silentChunk);
+      const result = await engine.processChunk(silentChunk);
       expect(result).toBeNull();
     }
   });
 
-  it('detects speech after threshold frames', () => {
+  it('detects speech after threshold frames', async () => {
     engine = new WebRtcVadEngine();
     // High amplitude samples (> threshold)
     const loudSamples = new Array(100).fill(10000);
     const loudChunk = makeChunk(loudSamples);
 
     // First 2 frames below minSpeechFrames should not trigger
-    expect(engine.processChunk(loudChunk)).toBeNull();
-    expect(engine.processChunk(loudChunk)).toBeNull();
+    expect(await engine.processChunk(loudChunk)).toBeNull();
+    expect(await engine.processChunk(loudChunk)).toBeNull();
 
     // Third frame should trigger speech start (minSpeechFrames = 3)
-    const result = engine.processChunk(loudChunk);
+    const result = await engine.processChunk(loudChunk);
     expect(result).not.toBeNull();
     expect(result!.isSpeech).toBe(true);
   });
 
-  it('detects silence end after threshold frames', () => {
+  it('detects silence end after threshold frames', async () => {
     engine = new WebRtcVadEngine();
     const loudSamples = new Array(100).fill(10000);
     const silentSamples = new Array(100).fill(0);
@@ -58,36 +58,36 @@ describe('WebRtcVadEngine', () => {
     // Establish speech
     const loudChunk = makeChunk(loudSamples);
     for (let i = 0; i < 3; i++) {
-      engine.processChunk(loudChunk);
+      await engine.processChunk(loudChunk);
     }
 
     // Now send silent chunks
     const silentChunk = makeChunk(silentSamples);
-    engine.processChunk(silentChunk);
-    engine.processChunk(silentChunk);
-    engine.processChunk(silentChunk);
-    engine.processChunk(silentChunk);
+    await engine.processChunk(silentChunk);
+    await engine.processChunk(silentChunk);
+    await engine.processChunk(silentChunk);
+    await engine.processChunk(silentChunk);
 
     // Fifth silent frame should trigger end (minSilenceFrames = 5)
-    const endResult = engine.processChunk(silentChunk);
+    const endResult = await engine.processChunk(silentChunk);
     expect(endResult).not.toBeNull();
     expect(endResult!.isSpeech).toBe(false);
   });
 
-  it('returns null during ongoing speech without state change', () => {
+  it('returns null during ongoing speech without state change', async () => {
     engine = new WebRtcVadEngine();
     const loudSamples = new Array(100).fill(10000);
     const loudChunk = makeChunk(loudSamples);
 
     // Trigger speech start
-    engine.processChunk(loudChunk);
-    engine.processChunk(loudChunk);
-    const start = engine.processChunk(loudChunk);
+    await engine.processChunk(loudChunk);
+    await engine.processChunk(loudChunk);
+    const start = await engine.processChunk(loudChunk);
     expect(start).not.toBeNull();
 
     // Additional loud chunks should return null (no state change)
-    expect(engine.processChunk(loudChunk)).toBeNull();
-    expect(engine.processChunk(loudChunk)).toBeNull();
+    expect(await engine.processChunk(loudChunk)).toBeNull();
+    expect(await engine.processChunk(loudChunk)).toBeNull();
   });
 
   it('disposes cleanly', async () => {
