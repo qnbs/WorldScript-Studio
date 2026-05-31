@@ -27,6 +27,7 @@ export const DataSection: FC = () => {
     projectSize,
     snapshots,
     setSnapshotName,
+    handleRepeatOnboarding,
   } = useSettingsViewContext();
   const dispatch = useAppDispatch();
   const settingsImportRef = useRef<HTMLInputElement>(null);
@@ -350,6 +351,61 @@ export const DataSection: FC = () => {
                 </p>
               </div>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Danger Zone */}
+      <Card className="border border-[var(--sc-danger-border)]">
+        <CardHeader>
+          <h2 className="text-xl font-semibold text-[var(--sc-danger-fg)]">
+            {t('settings.data.dangerZone.title')}
+          </h2>
+          <p className="text-sm text-[var(--sc-text-secondary)] mt-1">
+            {t('settings.data.dangerZone.description')}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Repeat Onboarding */}
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)]">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[var(--sc-text-primary)]">
+                  {t('settings.data.repeatOnboarding.label')}
+                </p>
+                <p className="text-xs text-[var(--sc-text-muted)] mt-0.5">
+                  {t('settings.data.repeatOnboarding.hint')}
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRepeatOnboarding}
+                className="shrink-0"
+              >
+                {t('settings.data.repeatOnboarding.button')}
+              </Button>
+            </div>
+
+            {/* Factory Reset */}
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-[var(--sc-danger-bg)]/50 border border-[var(--sc-danger-border)]">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[var(--sc-danger-fg)]">
+                  {t('settings.data.dangerZone.factoryReset.label')}
+                </p>
+                <p className="text-xs text-[var(--sc-text-muted)] mt-0.5">
+                  {t('settings.data.dangerZone.factoryReset.hint')}
+                </p>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setModal({ state: 'factoryReset', payload: {} })}
+                className="shrink-0"
+              >
+                {t('settings.data.dangerZone.factoryReset.button')}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

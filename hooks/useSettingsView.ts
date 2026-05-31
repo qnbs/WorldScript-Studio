@@ -14,6 +14,7 @@ import {
 import { settingsActions } from '../features/settings/settingsSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
+import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
 import {
   clearIdbPassphrase,
@@ -46,7 +47,7 @@ import type {
   WritingGoal,
 } from '../types';
 
-type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create';
+type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create' | 'factoryReset';
 type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: number };
 
 export const useSettingsView = () => {
@@ -323,6 +324,17 @@ export const useSettingsView = () => {
     setModal({ state: 'closed', payload: {} });
   }, [dispatch, t]);
 
+  const handleFactoryReset = useCallback(async () => {
+    setModal({ state: 'closed', payload: {} });
+    // QNBS-v3: wipes all IDB databases, localStorage, SW caches, then reloads.
+    await wipeAllAppData();
+  }, []);
+
+  const handleRepeatOnboarding = useCallback(() => {
+    // QNBS-v3: useApp.ts listens for this event and re-opens the WelcomePortal.
+    window.dispatchEvent(new CustomEvent('storycraft:openPortal'));
+  }, []);
+
   const handleCreateSnapshot = useCallback(async () => {
     await storageService.saveSnapshot(snapshotName, project);
     setSnapshotName('');
@@ -392,6 +404,8 @@ export const useSettingsView = () => {
     handleExport,
     handleImport,
     handleResetProject,
+    handleFactoryReset,
+    handleRepeatOnboarding,
     handleCreateSnapshot,
     handleRestoreSnapshot,
     handleDeleteSnapshot,

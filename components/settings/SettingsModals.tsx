@@ -10,6 +10,7 @@ export const SettingsModals: FC = () => {
     modal,
     setModal,
     handleResetProject,
+    handleFactoryReset,
     snapshotName,
     setSnapshotName,
     handleCreateSnapshot,
@@ -113,6 +114,33 @@ export const SettingsModals: FC = () => {
             </Button>
             <Button variant="danger" onClick={handleDeleteSnapshot}>
               {t('settings.deleteModal.confirm')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+
+  if (modal.state === 'factoryReset')
+    return (
+      <Modal
+        isOpen={true}
+        onClose={() => setModal({ state: 'closed', payload: {} })}
+        title={t('settings.data.dangerZone.factoryReset.modalTitle')}
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-[var(--sc-text-secondary)]">
+            {t('settings.data.dangerZone.factoryReset.modalDescription')}
+          </p>
+          <p className="text-sm font-semibold text-[var(--sc-danger-fg)] bg-[var(--sc-danger-bg)] border border-[var(--sc-danger-border)] rounded-lg p-3">
+            {t('settings.data.dangerZone.factoryReset.modalWarning')}
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="danger" onClick={() => void handleFactoryReset()}>
+              {t('settings.data.dangerZone.factoryReset.modalConfirm')}
             </Button>
           </div>
         </div>
