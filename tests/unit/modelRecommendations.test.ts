@@ -77,10 +77,11 @@ describe('getModelRecommendationForTask', () => {
   });
 
   describe('text-gen task — medium VRAM', () => {
-    it('returns Llama-3.2-3B webllm and Qwen2.5-0.5B ONNX', () => {
+    // QNBS-v3: P0-F7 fixed — onnxModel for medium VRAM is now a valid ONNX model ID
+    it('returns Llama-3.2-3B webllm and Xenova/Qwen2.5-0.5B ONNX', () => {
       const result = getModelRecommendationForTask('text-gen', baseReport('medium'));
       expect(result.webllm).toBe('Llama-3.2-3B-Instruct-q4f16_1-MLC');
-      expect(result.onnx).toBe('Qwen2.5-0.5B-Instruct-q4f16_1-MLC');
+      expect(result.onnx).toBe('Xenova/Qwen2.5-0.5B-Instruct');
     });
   });
 

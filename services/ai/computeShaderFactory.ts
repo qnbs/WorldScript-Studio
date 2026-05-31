@@ -4,14 +4,14 @@
  * so pipelines work identically in dev, production, and edge/SSR builds.
  */
 
-import { createLogger } from '../logger';
+// QNBS-v3: Use logger singleton (not createLogger) so tests that mock services/logger
+//          don't need to also mock createLogger for transitive callers.
+import { logger } from '../logger';
 import attentionWgslSrc from './shaders/attention.wgsl?raw';
 import feedForwardWgslSrc from './shaders/feedForward.wgsl?raw';
 import kvCacheWgslSrc from './shaders/kvCache.wgsl?raw';
 // QNBS-v3: ?raw imports bundle WGSL as strings at build time — no runtime fetch needed
 import textProcessingWgslSrc from './shaders/textProcessing.wgsl?raw';
-
-const logger = createLogger('computeShaderFactory');
 
 // ------------------------------------------------------------------
 // Types
