@@ -109,6 +109,12 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 - Playwright browser cache in `storybook` CI job; `**/screenshots/` in artifact upload
 - New `.github/workflows/storybook-debug.yml` — manually triggered debug workflow with configurable workers/retries
 
+**CI Hardening + CodeAnt AI Fixes** ✅ Done (2026-06-01)
+- 14 CodeAnt AI issues fixed: webllm dispose on eviction, releaseWebLlm both variants, await releaseAllOnnxSessions, computeShaderFactory race condition, adaptive engine startup gate, localAiDeviceProfiler backend fix, WarmedModelEntry task field, telemetryService feature flag gate, window guards, AiSections flag gate, AdaptiveAiHardwarePanel i18n
+- E2E stabilisation: 24 failures → ~0 (VRT baselines, WelcomePortal contrast, theme-wait, role=switch, SceneBoard ARIA, ActSwimlane li-wrapper, LoRA skip)
+- prune-deployments.yml: all-environment pruning (156 records deleted); github-script v7→v9 (node24)
+- All 18 GitHub Actions on node24; Scorecard pip hash pinned (graphifyy)
+
 ---
 
 ## v1.18 — ProForge Humanization & Refinement Sprint (2026-05-27)
