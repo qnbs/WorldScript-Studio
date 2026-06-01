@@ -25,16 +25,20 @@ Parallel Bash calls are safe. Use the full Claude Code parallel tooling model:
 
 ```bash
 pnpm run dev           # Vite dev server on http://localhost:3000
+pnpm run dev:turbo     # Turbo parallel dev (all packages)
 pnpm run build         # Production build to dist/
 pnpm run build:edge    # Edge/SSR-compatible build (Vercel, Cloudflare Workers)
 pnpm run build:pages   # Cloudflare Pages build
 pnpm run preview       # Preview production build locally
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
+pnpm run format        # Biome format --write (format only)
 pnpm run typecheck     # TypeScript type check (tsc --noEmit)
+pnpm run parity:check  # Feature flag parity audit (must report 0 drifts)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
-pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 73%, branches 58%, functions 65%, statements 71%)
+pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 72%, branches 58%, functions 64%, statements 70%)
+pnpm run test:vrt      # Visual regression tests (Chromium only; CI-only by policy)
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
 pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
@@ -49,12 +53,16 @@ pnpm run graphify:update    # Rebuild AST-only knowledge graph (no API cost)
 pnpm run graphify:bootstrap # First-time graph setup
 pnpm run codegraph:update   # Force-reindex CodeGraph
 pnpm run codegraph:affected # List files/tests affected by current diff
+pnpm run graphs:update      # Update both graphify + CodeGraph in one shot
+pnpm run ci:quick           # lint + typecheck + i18n:check + unit tests (no coverage) — low-end hardware shortcut
+pnpm run ci:quick:unit      # lint + typecheck + i18n:check only
+pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with coverage
 ```
 
 **Run a single test file:** `pnpm exec vitest run tests/unit/serviceName.test.ts`
 **Run tests matching a name pattern:** `pnpm exec vitest run -t "pattern"`
 
-**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md).
+**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 72, branches 58, functions 64, statements 70 (see `vitest.config.ts`).
 
 **CI pipeline order:** `security` → `quality` (Biome + tsc + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
@@ -91,7 +99,7 @@ pnpm exec vitest run tests/unit/FILENAME.test.ts             # single file
 
 StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
 
-**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Three internal workspace packages (`@domain/ai-core`, `@domain/ui`, `collab-transport` in `packages/`) are consumed as `workspace:*` deps.
+**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Four internal workspace packages (`@domain/ai-core`, `@domain/ui`, `collab-transport`, `@domain/worker-bus` in `packages/`) are consumed as `workspace:*` deps.
 
 **Live:** `https://storycraft-studio-indol.vercel.app/` (Vercel, primary) · GitHub Pages: `https://qnbs.github.io/StoryCraft-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
 
@@ -119,7 +127,8 @@ services/         → External adapters; key sub-dirs:
                      voice/       (voiceCommandService, voiceTypes, stt/tts/vad/wakeWord/intent engines,
                                    wasmSttEngine + sileroVadEngine — B-2 scaffolds)
 packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui,
-                     collab-transport (vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption)
+                     collab-transport (vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption),
+                     worker-bus (typed worker pool, circuit breakers, dead-letter queue — see § WorkerBus below)
 locales/          → i18n source JSON (de/en/es/fr/it/ar/he × 15 modules); runtime: public/locales/<lang>/bundle.json
                      ar/ + he/ — locale stubs added in B-5 (RTL beta); full translation content is v2.0
 tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
@@ -132,7 +141,7 @@ scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, g
 
 ### State Management
 
-Redux Toolkit with feature-sliced slices: `features/project/`, `features/settings/`, `features/status/`, `features/writer/`, `features/versionControl/`, `features/featureFlags/`, `features/proForge/`. The `project` slice is wrapped with `redux-undo` (100-step history). Side effects (auto-save, Codex extraction, DuckDB dual-write) run in `app/listenerMiddleware.ts`, not in components or hooks.
+Redux Toolkit with feature-sliced slices: `features/project/`, `features/settings/`, `features/status/`, `features/writer/`, `features/versionControl/`, `features/featureFlags/`, `features/proForge/`, `features/plotBoard/`, `features/sceneComments/`, `features/progressTracker/`, `features/analytics/`, `features/mindMap/` (mind-map viewport, NOT undo-able), `features/lora/` (LoRA adapter state), `features/voice/` (voice command runtime state). The `project` slice is wrapped with `redux-undo` (100-step history). Side effects (auto-save, Codex extraction, DuckDB dual-write) run in `app/listenerMiddleware.ts`, not in components or hooks.
 
 **`addDebouncedListener` factory** (`listenerMiddleware.ts`): use this helper instead of writing raw `startListening` calls with delay. **Critical RTK constraint:** `listenerApi.getOriginalState()` can only be called synchronously before the first `await`. Always capture it as `const originalState = listenerApi.getOriginalState() as RootState` at the top before any `await listenerApi.delay(...)`.
 
@@ -244,9 +253,36 @@ Real-time P2P via Yjs + `packages/collab-transport` (`collaborationService.ts`).
 
 **Fork maintenance:** All files imported by `y-webrtc.js` must exist in `src/` — missing relative imports cause `UNRESOLVED_IMPORT` on Vercel builds. Security audit checklist: [issue #60](https://github.com/qnbs/StoryCraft-Studio/issues/60).
 
+### WorkerBus v2 (`packages/worker-bus`)
+
+`@domain/worker-bus` is the central orchestration layer for all background worker tasks. It replaces the ad-hoc worker wiring in `packages/ai-core` with a production-grade runtime.
+
+**Key components:**
+- `WorkerBus` (`workerBus.ts`) — top-level orchestrator; routes tasks to the right pool via priority queue and circuit breakers.
+- `WorkerPool` (`workerPool.ts`) — lifecycle-managed pool of `PooledWorker` instances; auto-scales between `MIN_WORKERS` and `MAX_WORKERS_INFERENCE`; idle workers time out after `WORKER_IDLE_TIMEOUT_MS`.
+- `PriorityTaskQueue` (`taskQueue.ts`) — heap-ordered by `TaskPriority` (`critical > high > normal > low > background`); bounded by `MAX_QUEUE_SIZE`.
+- `CircuitBreaker` (`circuitBreaker.ts`) — per-worker health gate; opens after `CIRCUIT_BREAKER_THRESHOLD` consecutive failures within `CIRCUIT_BREAKER_WINDOW_MS`; auto-resets after `CIRCUIT_BREAKER_RECOVERY_MS`.
+- `DeadLetterQueue` (`deadLetterQueue.ts`) — captures undeliverable tasks (capacity `DEAD_LETTER_CAPACITY`); inspect via `WorkerBusTelemetry`.
+- `ProtocolHandler` (`protocolHandler.ts`) — typed `postMessage` with version negotiation (`PROTOCOL_VERSION`) and ping/pong health-check.
+- `WorkerRegistry` (`workerRegistry.ts`) — maps `WorkerCapability` tags to pool instances.
+- `workerBootstrap.ts` — `registerTaskHandler` / `deregisterTaskHandler` for use inside worker scripts; provides `WorkerHandlerContext` with `ProgressEmitter`.
+
+**Usage pattern in workers:**
+```ts
+import { registerTaskHandler, postMessageFromWorker } from '@domain/worker-bus';
+registerTaskHandler('inference', async (task, ctx) => {
+  ctx.progress.emit(0.5);
+  return result;
+});
+```
+
+**All constants** are re-exported from `constants.ts` — never hardcode timeouts or thresholds. **Schemas** (Zod) in `schemas.ts` gate all cross-thread messages; `validateWorkerMessage` throws on protocol mismatch.
+
+After any modification to `packages/worker-bus`, run `pnpm exec vitest run tests/unit/workerBus` to verify the runtime contracts.
+
 ### Code Splitting
 
-All 14 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (export: `docx`, `jszip`, `jsPDF`; collaboration: Yjs; graphs: `react-force-graph-2d`) live in separate Vite manual chunks. `listenerMiddleware.ts` and `aiApi.ts` use dynamic imports for DuckDB/RAG/provider init. Keep export/collaboration dependencies lazy.
+All 22 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (export: `docx`, `jszip`, `jsPDF`; collaboration: Yjs; graphs: `react-force-graph-2d`) live in separate Vite manual chunks. `listenerMiddleware.ts` and `aiApi.ts` use dynamic imports for DuckDB/RAG/provider init. Keep export/collaboration dependencies lazy.
 
 **SW-excluded chunks** (in `vite.config.ts` `globIgnores` — never precache): `vendor-duckdb` (~2 MB gzip), `vendor-ai-onnx` (ONNX + @xenova/transformers), `vendor-webllm` (~6 MB). When adding a new heavy optional chunk, add it to both `manualChunks` and `globIgnores`.
 

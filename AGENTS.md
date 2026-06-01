@@ -434,6 +434,22 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 - `services/ragPromptAssembly.ts` builds token-budgeted context blocks.
 - Prompt templates: `services/promptLibrary.ts`.
 
+### WorkerBus v2 (`packages/worker-bus` / `@domain/worker-bus`)
+
+Central orchestration layer for all background worker tasks. Messages use short kind literals (`TASK`, `CANCEL`, `PING`, `PONG`, `PROGRESS`, `RESULT`) validated by Zod (`schemas.ts`).
+
+- **WorkerBus** — top-level orchestrator: `enqueue(taskType, payload, opts?)` → priority queue → pool → circuit breaker → `TaskHandle<T>`
+- **WorkerPool** — lifecycle-managed thread pool; auto-scales `MIN_WORKERS`..`MAX_WORKERS_INFERENCE`; PING/PONG health checks; crash auto-restart
+- **PriorityTaskQueue** — heap-ordered (`critical > high > normal > low`); starvation prevention after `MAX_PREEMPTIONS` requeues
+- **CircuitBreaker** — per-task-type; trips after `CIRCUIT_BREAKER_THRESHOLD` failures in `CIRCUIT_BREAKER_WINDOW_MS`; auto-resets after `CIRCUIT_BREAKER_RECOVERY_MS`
+- **DeadLetterQueue** — captures undeliverable tasks; best-effort IDB persistence (never blocks hot path)
+- **ProtocolHandler** — single-port typed request/response; per-task timeout; cleans up on `dispose()`
+- **workerBootstrap** — worker-side entry: call `workerBootstrap(port)` in tests, or let the `INIT_PORT` self-listener handle it in production; use `registerTaskHandler(taskType, handler)` inside workers
+- **v2 workers:** `workers/v2/inference.worker.ts` and `workers/v2/duckdb.worker.ts` — complete implementations gated behind `enableWorkerBusV2` (Phase 2 wiring in `services/workerBusManager.ts`)
+- **Feature flags:** `enableWorkerBusV2` (Phase 2 main-thread init), `enableRustCompute` (Phase 2 HybridRouter → Tauri TaskSupervisor) — both off by default
+- **All constants** re-exported from `constants.ts` — never hardcode timeouts or thresholds
+- **Run tests:** `pnpm exec vitest run packages/worker-bus/tests/` (12 suites, 123 tests)
+
 ### DuckDB Analytics
 
 - `workers/duckdbWorker.ts` runs DuckDB-WASM off main thread (OPFS persistence → in-memory fallback).
