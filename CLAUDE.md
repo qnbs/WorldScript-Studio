@@ -44,6 +44,11 @@ pnpm run bundle:budget # Check vendor chunk sizes (max 7000 KB; entry max 4500 K
 pnpm run storybook     # Storybook on port 6006
 pnpm run test:storybook # Storybook test-runner (CI; needs Storybook running or built)
 pnpm run tauri:dev     # Tauri desktop app (requires Rust)
+pnpm run i18n:bundle   # Rebuild public/locales/<lang>/bundle.json from source JSON
+pnpm run graphify:update    # Rebuild AST-only knowledge graph (no API cost)
+pnpm run graphify:bootstrap # First-time graph setup
+pnpm run codegraph:update   # Force-reindex CodeGraph
+pnpm run codegraph:affected # List files/tests affected by current diff
 ```
 
 **Run a single test file:** `pnpm exec vitest run tests/unit/serviceName.test.ts`
@@ -120,7 +125,7 @@ locales/          → i18n source JSON (de/en/es/fr/it/ar/he × 15 modules); run
 tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
 types/            → Supplemental TypeScript definitions (duckdb-wasm-worker.d.ts, tauri-plugins.d.ts)
 types.ts          → Core shared interfaces and types (root level)
-workers/          → inference.worker.ts (@xenova/transformers), duckdbWorker.ts (DuckDB-WASM)
+workers/          → inference.worker.ts (@huggingface/transformers v3), duckdbWorker.ts (DuckDB-WASM)
 infra/low-end-ci/ → Local CI stack: Forgejo + act + systemd units + bash scripts
 scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, graphify-update, etc.)
 ```
@@ -438,10 +443,11 @@ See `AUDIT.md` and `TODO.md` for the full list. Key items:
 
 - **`StorageBackend` + `SaveProjectInput`** — contract in `services/storageBackend.ts`; use `storageService` in app code.
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries.
-- `workers/inference.worker.ts` — `@xenova/transformers` resolved via `tsconfig.json` `paths` alias; if alias breaks, restore `@ts-expect-error`.
+- `workers/inference.worker.ts` — `@huggingface/transformers` v3 (migrated from `@xenova` 2026-05-31); resolved via `tsconfig.json` `paths` alias; if alias breaks, restore `@ts-expect-error`.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
 - **Voice WASM (B-2 scaffold ready):** `wasmSttEngine.ts` + `sileroVadEngine.ts` exist but model download UI not wired. Phase 3: connect to `WasmSttEngine.initialize()`.
 - **IDB at-rest encryption (B-1 complete):** Passphrase UX shipped — `IdbUnlockModal` (startup), `PassphraseModal` (set/change/disable in Settings › Privacy). Flag `enableIdbAtRestEncryption` may be enabled; actual IDB read/write integration for `idbProjectStore` etc. is a separate Phase 4 task (currently service-layer only).
+
 ## graphify
 
 This project has a graphify knowledge graph at `graphify-out/`. See [`docs/graphify.md`](docs/graphify.md) for setup. Only `graphify-out/GRAPH_REPORT.md` is committed; `graph.html` and `graph.json` are gitignored.
