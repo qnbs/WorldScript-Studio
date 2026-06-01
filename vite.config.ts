@@ -103,6 +103,8 @@ export default defineConfig({
         __dirname,
         './packages/collab-transport/src/index.ts',
       ),
+      // QNBS-v3: WorkerBus v2 — resolve workspace package for production builds (mirrors vitest alias)
+      '@domain/worker-bus': path.resolve(__dirname, './packages/worker-bus/src/index.ts'),
     },
   },
 

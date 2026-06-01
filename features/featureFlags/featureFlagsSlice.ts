@@ -100,9 +100,9 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableWebnnInference: false,
   // QNBS-v3: Compute Shaders — off by default; WGSL kernels require GPU compatibility testing.
   enableComputeShaders: false,
-  // QNBS-v3: WorkerBus v2 — off by default; staged rollout until v1.20+ validation complete.
+  // QNBS-v3: WorkerBus v2 — off by default; Phase 2 runtime wiring lands in services/workerBusManager.ts.
   enableWorkerBusV2: false,
-  // QNBS-v3: Rust Compute — off by default in web (no Tauri); on by default in desktop via runtime detection.
+  // QNBS-v3: Rust Compute — off by default; Phase 2 HybridRouter routes to Tauri TaskSupervisor when true.
   enableRustCompute: false,
 };
 

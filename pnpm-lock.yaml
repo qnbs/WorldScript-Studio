@@ -50,6 +50,9 @@ importers:
       '@domain/ui':
         specifier: workspace:*
         version: link:packages/ui
+      '@domain/worker-bus':
+        specifier: workspace:*
+        version: link:packages/worker-bus
       '@duckdb/duckdb-wasm':
         specifier: ^1.32.0
         version: 1.32.0
@@ -302,6 +305,12 @@ importers:
         version: 13.6.30
 
   packages/ui: {}
+
+  packages/worker-bus:
+    dependencies:
+      zod:
+        specifier: ^4.1.5
+        version: 4.4.3
 
 packages:
 

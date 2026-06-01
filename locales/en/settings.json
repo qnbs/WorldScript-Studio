@@ -391,6 +391,8 @@
   "settings.featureFlags.enableAdaptiveAiEngine": "Adaptive AI engine (hardware-aware backend selection)",
   "settings.featureFlags.enableWebnnInference": "WebNN inference (NPU / DirectML acceleration)",
   "settings.featureFlags.enableComputeShaders": "WebGPU compute shaders (GPU-accelerated RAG & attention)",
+  "settings.featureFlags.enableWorkerBusV2": "WorkerBus v2 (typed worker orchestration — Phase 2)",
+  "settings.featureFlags.enableRustCompute": "Rust Compute (Tauri TaskSupervisor offloading — Phase 2)",
   "settings.featureFlags.title": "Early Access Features",
   "settings.font.custom": "Custom Font",
   "settings.font.mono": "Monospace",
