@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **WorkerBus v2 — `@domain/worker-bus` package** (2026-06-01):
+  - Core runtime: `WorkerBus`, `WorkerPool`, `WorkerRegistry`, `ProtocolHandler`
+  - Messaging: typed `MessagePort` protocol with Zod validation (`schemas.ts`, `messageBus.ts`)
+  - Resilience: `CircuitBreaker`, `DeadLetterQueue`, `PriorityTaskQueue`, `CancellationToken`
+  - Progress: `ProgressEmitter` with `AsyncIterable<TaskProgress>` support
+  - Worker bootstrap: `workerBootstrap()`, `registerTaskHandler()`, `deregisterTaskHandler()`
+  - Feature flags: `enableWorkerBusV2`, `enableRustCompute`
+  - Tests: 109 tests across 11 test files, 84.5% line coverage
+  - v2 worker stubs: `workers/v2/inference.worker.ts`, `workers/v2/duckdb.worker.ts`
+
 ### Fixed
 
 - **14 CodeAnt AI issues — AI core resource cleanup, race conditions, correctness** (2026-06-01, commit `827a512`):

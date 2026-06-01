@@ -103,7 +103,8 @@ StoryCraft-Studio/
 ├── packages/               # Internal pnpm workspace packages
 │   ├── ai-core/            # WebLLM + inference worker + tab-leader election (published as `@domain/ai-core`)
 │   ├── collab-transport/   # Vendor fork of y-webrtc 10.3.0 with E2E encryption
-│   └── ui/                 # Tailwind preset + design tokens (published as `@domain/ui`)
+│   ├── ui/                 # Tailwind preset + design tokens (published as `@domain/ui`)
+│   └── worker-bus/         # Typed worker pool, circuit breakers, dead-letter queue (published as `@domain/worker-bus`)
 ├── locales/                # i18n source JSON modules (de, en, fr, es, it)
 ├── public/                 # Static assets; runtime i18n bundles `public/locales/<lang>/bundle.json`
 ├── tests/

@@ -20,6 +20,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ⬜ **Local AI Perfection Phase 2.2** — LoRA productionization: App.tsx route for LoRA view + sidebar nav (allows E2E lora-wizard.spec.ts re-enable)
 - ⬜ **Local AI Perfection Phase 2.3** — Performance hardening (WebLLM worker, LRU pipeline cache)
 - ⬜ **Local AI Perfection Phase 2.4** — Coverage: sileroVadEngine.ts, kokoroTtsEngine.ts (0 tests each), inferenceWorker.ts (LRU)
+- ✅ **WorkerBus v2** — `@domain/worker-bus` package: typed worker pool, circuit breakers, dead-letter queue, priority task queue, progress emitter, protocol handler, 109 tests, 84.5% coverage
 - ⬜ **C-7** — Coverage L85%/B75%/F80%; Stryker break 75→80
 - ⬜ **C-6** — ar/he full translation (community translator required)
 
