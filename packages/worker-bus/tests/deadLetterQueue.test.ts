@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeadLetterQueue } from '../src/deadLetterQueue';
-import type { TaskQueueEntry, TaskResult } from '../src/types';
+import type { TaskResult } from '../src/types';
 
 function createMockIDB(entries: unknown[] = []) {
   const mockStore = {
@@ -65,13 +65,7 @@ function createMockIDB(entries: unknown[] = []) {
 
 function makeEntry(taskId: string, deadAt: number) {
   const workerTask = { taskId } as unknown as import('../src/types').WorkerTask;
-  const taskQueueEntry = {
-    task: workerTask,
-    handler: {} as import('../src/types').TaskHandler,
-    retryCount: 0,
-    enqueuedAt: 0,
-  } as TaskQueueEntry;
-  return { task: taskQueueEntry, result: { success: false } as TaskResult, retryCount: 2, deadAt };
+  return { task: workerTask, result: { success: false } as TaskResult, retryCount: 2, deadAt };
 }
 
 describe('DeadLetterQueue', () => {
@@ -93,7 +87,7 @@ describe('DeadLetterQueue', () => {
     dlq.add(makeEntry('d', 4));
     dlq.add(makeEntry('e', 5));
     expect(dlq.count()).toBe(4);
-    const ids = dlq.list().map((e) => e.task.task.taskId);
+    const ids = dlq.list().map((e) => e.task.taskId);
     expect(ids).toEqual(['b', 'c', 'd', 'e']);
   });
 
@@ -114,7 +108,7 @@ describe('DeadLetterQueue', () => {
     dlq.add(makeEntry('a', 1));
     const list = dlq.list();
     expect(list).toHaveLength(1);
-    expect(list[0]?.task.task.taskId).toBe('a');
+    expect(list[0]?.task.taskId).toBe('a');
   });
 
   it('persist and load with mock indexedDB', async () => {

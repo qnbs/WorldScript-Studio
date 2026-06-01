@@ -44,7 +44,7 @@ export class WorkerPool {
     const idle = this.entries.find((e) => e.instance.state === 'idle');
     if (idle) {
       this.setBusy(idle.instance.workerId);
-      this.clearIdleTimer(idle);
+      this.clearIdleTimer(idle.instance);
       return idle.instance;
     }
 

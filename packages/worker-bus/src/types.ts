@@ -60,12 +60,12 @@ export interface WorkerTask<TPayload = unknown> {
   readonly priority: TaskPriority;
   readonly target: TaskTarget;
   readonly capabilities: readonly WorkerCapability[];
-  readonly transferables: readonly Transferable[] | undefined;
+  readonly transferables?: readonly Transferable[] | undefined;
   readonly createdAt: number;
   readonly timeoutMs: number;
   readonly retryPolicy: RetryPolicy;
   readonly traceId: string;
-  readonly parentTaskId: string | undefined;
+  readonly parentTaskId?: string | undefined;
 }
 
 // --- Task Error -------------------------------------------------------------
@@ -94,11 +94,11 @@ export class TaskError extends Error {
 export interface TaskResult<TResult = unknown> {
   readonly taskId: string;
   readonly success: boolean;
-  readonly result: TResult | undefined;
-  readonly error: TaskErrorInfo | undefined;
+  readonly result?: TResult | undefined;
+  readonly error?: TaskErrorInfo | undefined;
   readonly latencyMs: number;
   readonly queueTimeMs: number;
-  readonly workerId: string | undefined;
+  readonly workerId?: string | undefined;
   readonly layer: 'web' | 'rust' | 'main';
 }
 
@@ -108,7 +108,7 @@ export interface TaskProgress {
   readonly taskType: string;
   readonly stage: string;
   readonly progress: number;
-  readonly message: string | undefined;
+  readonly message?: string | undefined;
   readonly timestamp: number;
 }
 
