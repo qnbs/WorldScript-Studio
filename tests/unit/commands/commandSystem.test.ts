@@ -52,6 +52,8 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableAdaptiveAiEngine: false,
   enableWebnnInference: false,
   enableComputeShaders: false,
+  enableWorkerBusV2: false,
+  enableRustCompute: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

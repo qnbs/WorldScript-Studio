@@ -44,6 +44,8 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableAdaptiveAiEngine: false,
   enableWebnnInference: false,
   enableComputeShaders: false,
+  enableWorkerBusV2: false,
+  enableRustCompute: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -142,6 +144,8 @@ afterEach(() => {
     enableAdaptiveAiEngine: false,
     enableWebnnInference: false,
     enableComputeShaders: false,
+    enableWorkerBusV2: false,
+    enableRustCompute: false,
   };
 });
 

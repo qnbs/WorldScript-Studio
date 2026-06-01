@@ -53,6 +53,8 @@ const initialState: FeatureFlagsState = {
   enableAdaptiveAiEngine: false,
   enableWebnnInference: false,
   enableComputeShaders: false,
+  enableWorkerBusV2: false,
+  enableRustCompute: false,
 };
 
 // ---------------------------------------------------------------------------

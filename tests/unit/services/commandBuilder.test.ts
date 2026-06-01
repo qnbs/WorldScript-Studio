@@ -98,6 +98,8 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableAdaptiveAiEngine: false,
       enableWebnnInference: false,
       enableComputeShaders: false,
+      enableWorkerBusV2: false,
+      enableRustCompute: false,
     },
     ...overrides,
   };

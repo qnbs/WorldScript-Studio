@@ -79,6 +79,7 @@
     "@domain/ai-core": "workspace:*",
     "@domain/collab-transport": "workspace:*",
     "@domain/ui": "workspace:*",
+    "@domain/worker-bus": "workspace:*",
     "@duckdb/duckdb-wasm": "^1.32.0",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",

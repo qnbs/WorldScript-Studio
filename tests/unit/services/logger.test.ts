@@ -72,9 +72,7 @@ describe('createLogger', () => {
   });
 
   it('nests withContext calls', () => {
-    const log = createLogger('ctx-mod')
-      .withContext({ a: 1 })
-      .withContext({ b: 2 });
+    const log = createLogger('ctx-mod').withContext({ a: 1 }).withContext({ b: 2 });
     log.info('nested');
     const entry = getRecentLogs(1)[0];
     expect(entry?.context).toEqual({ a: 1, b: 2 });

@@ -51,6 +51,10 @@ export interface FeatureFlagsState {
   enableWebnnInference: boolean;
   /** Compute Shaders — custom WGSL kernels for RAG, plot-board, voice preprocessing (default: false). */
   enableComputeShaders: boolean;
+  /** WorkerBus v2 — unified worker orchestration backbone (default: false). */
+  enableWorkerBusV2: boolean;
+  /** Rust Compute — offload heavy tasks to Tauri Rust TaskSupervisor (default: true in Tauri, false in web). */
+  enableRustCompute: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -96,6 +100,10 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableWebnnInference: false,
   // QNBS-v3: Compute Shaders — off by default; WGSL kernels require GPU compatibility testing.
   enableComputeShaders: false,
+  // QNBS-v3: WorkerBus v2 — off by default; staged rollout until v1.20+ validation complete.
+  enableWorkerBusV2: false,
+  // QNBS-v3: Rust Compute — off by default in web (no Tauri); on by default in desktop via runtime detection.
+  enableRustCompute: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -206,6 +214,12 @@ const featureFlagsSlice = createSlice({
     setEnableComputeShaders(state, action: PayloadAction<boolean>) {
       state.enableComputeShaders = action.payload;
     },
+    setEnableWorkerBusV2(state, action: PayloadAction<boolean>) {
+      state.enableWorkerBusV2 = action.payload;
+    },
+    setEnableRustCompute(state, action: PayloadAction<boolean>) {
+      state.enableRustCompute = action.payload;
+    },
   },
 });
 
@@ -258,6 +272,10 @@ export const selectEnableWebnnInference = (state: { featureFlags: FeatureFlagsSt
   state.featureFlags.enableWebnnInference;
 export const selectEnableComputeShaders = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableComputeShaders;
+export const selectEnableWorkerBusV2 = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableWorkerBusV2;
+export const selectEnableRustCompute = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableRustCompute;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

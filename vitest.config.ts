@@ -14,6 +14,7 @@ export default defineConfig({
       ),
       // QNBS-v3: B-3 vendor fork — resolve workspace package in tests
       '@domain/collab-transport': path.resolve('./packages/collab-transport/src/index.ts'),
+      '@domain/worker-bus': path.resolve('./packages/worker-bus/src/index.ts'),
     },
   },
   test: {
@@ -26,7 +27,11 @@ export default defineConfig({
     //          heavy commands.  isolate:true (default) keeps module state clean between files.
     pool: 'threads',
     maxWorkers: 1,
-    include: ['tests/**/*.{test,spec}.{ts,tsx}', 'components/**/*.{test,spec}.{ts,tsx}'],
+    include: [
+      'tests/**/*.{test,spec}.{ts,tsx}',
+      'components/**/*.{test,spec}.{ts,tsx}',
+      'packages/*/tests/**/*.{test,spec}.{ts,tsx}',
+    ],
     exclude: ['tests/e2e/**'],
     reporters: ['default', ['junit', { outputFile: 'reports/junit.xml' }]],
     coverage: {
