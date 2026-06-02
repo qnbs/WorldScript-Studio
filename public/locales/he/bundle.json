@@ -536,6 +536,7 @@
   "sidebar.objects": "Story Objects",
   "sidebar.mindmap": "Mind Maps",
   "sidebar.characterInterviews": "Character Interviews",
+  "sidebar.lora": "Fine-Tuning",
   "portal.language.groupLabel": "Welcome screen language",
   "portal.welcome.title": "Welcome to StoryCraft Studio",
   "portal.welcome.subtitle": "Your AI-powered creative partner for writing.",

@@ -23,7 +23,8 @@ export type View =
   | 'progress'
   | 'objects'
   | 'mindmap'
-  | 'characterInterviews';
+  | 'characterInterviews'
+  | 'lora';
 
 export interface Character {
   id: string;

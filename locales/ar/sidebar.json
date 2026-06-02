@@ -20,5 +20,6 @@
   "sidebar.help": "Help",
   "sidebar.objects": "Story Objects",
   "sidebar.mindmap": "Mind Maps",
-  "sidebar.characterInterviews": "Character Interviews"
+  "sidebar.characterInterviews": "Character Interviews",
+  "sidebar.lora": "Fine-Tuning"
 }

@@ -13,9 +13,7 @@ const isCI = process.env['CI'] === 'true';
 test.describe('LoRA Wizard (CI-only)', () => {
   test.beforeEach(async ({ page }, _testInfo) => {
     test.skip(!isCI, 'CI-only E2E suite');
-    // QNBS-v3: LoRA view is not in App.tsx routing or sidebar nav (Phase 2.2 pending)
-    //          The wizard tests were written speculatively; re-enable after the route is wired.
-    test.skip(true, 'LoRA view not yet routed in App.tsx — Phase 2.2 pending');
+    // QNBS-v3: v1.20 Phase 2.2 — LoRA view is now routed in App.tsx + sidebar nav (enableLoraAdapters).
     await page.goto('/');
     await waitForSpaReady(page);
     await selectEnglish(page);

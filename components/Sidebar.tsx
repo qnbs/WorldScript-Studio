@@ -9,6 +9,8 @@ interface SidebarProps {
   onNavigate: (view: View) => void;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isOpen: boolean) => void;
+  /** QNBS-v3: v1.20 — show the LoRA Fine-Tuning nav entry only when the flag is on. */
+  enableLora?: boolean;
 }
 
 const NavItem: React.FC<{
@@ -123,6 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigate,
   isSidebarOpen,
   setIsSidebarOpen,
+  enableLora = false,
 }) => {
   const { t } = useTranslation();
 
@@ -159,6 +162,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     { id: 'critic', label: t('sidebar.critic'), icon: ICONS.CRITIC },
     { id: 'export', label: t('sidebar.export'), icon: ICONS.EXPORT },
+    // QNBS-v3: v1.20 — LoRA Fine-Tuning entry surfaces only when enableLoraAdapters is on.
+    ...(enableLora ? [{ id: 'lora', label: t('sidebar.lora'), icon: ICONS.LORA }] : []),
     { id: 'settings', label: t('sidebar.settings'), icon: ICONS.SETTINGS },
     { id: 'help', label: t('sidebar.help'), icon: ICONS.HELP },
   ];
