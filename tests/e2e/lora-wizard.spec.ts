@@ -1,7 +1,8 @@
 /**
- * E2E: LoRA Training Wizard flow.
- * QNBS-v3: CI-only; exercises the 5-step wizard with feature flag enabled.
- *          Training step uses the web fallback (no Tauri) so no Python is required.
+ * E2E: LoRA Fine-Tuning view + training wizard.
+ * QNBS-v3: CI-only. v1.20 Phase 2.2 — the view is routed in App.tsx + sidebar nav behind
+ *          `enableLoraAdapters`. The flag is seeded via localStorage (robust) instead of
+ *          clicking through Settings. Training uses the web fallback (no Tauri / Python).
  */
 
 import { expect, test } from '@playwright/test';
@@ -10,167 +11,99 @@ import { clickNavItem, ensureBlankProject, selectEnglish, waitForSpaReady } from
 
 const isCI = process.env['CI'] === 'true';
 
+/** Open the LoRA view and dismiss the first-visit onboarding panel so CTAs are reachable. */
+async function openLora(page: import('@playwright/test').Page): Promise<void> {
+  await clickNavItem(page, /LoRA|Fine.?Tun/i);
+  const getStarted = page.getByRole('button', { name: /Get Started/i });
+  if (await getStarted.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await getStarted.click();
+  }
+}
+
 test.describe('LoRA Wizard (CI-only)', () => {
-  test.beforeEach(async ({ page }, _testInfo) => {
+  test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
-    // QNBS-v3: LoRA view is not in App.tsx routing or sidebar nav (Phase 2.2 pending)
-    //          The wizard tests were written speculatively; re-enable after the route is wired.
-    test.skip(true, 'LoRA view not yet routed in App.tsx — Phase 2.2 pending');
+    // QNBS-v3: seed the feature flag before app scripts run — loadFeatureFlagsState() merges this
+    //          partial over defaults, so the LoRA route + sidebar entry are active on first render.
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem(
+          'storycraft-feature-flags',
+          JSON.stringify({ enableLoraAdapters: true }),
+        );
+      } catch {
+        /* storage unavailable */
+      }
+    });
     await page.goto('/');
     await waitForSpaReady(page);
     await selectEnglish(page);
-    // QNBS-v3: ensureBlankProject needed — without an open project #sidebar is not rendered,
-    // so clickNavItem times out trying to find the mobile "More" button
+    // Without an open project #sidebar is not rendered, so nav would be unreachable.
     await ensureBlankProject(page);
-
-    // Enable the LoRA feature flag via Settings → Early Access Features
-    // QNBS-v3: Settings uses NavButton (role=button), not tabs — use button role + exact label
-    await clickNavItem(page, /Settings/i);
-    await page.getByRole('button', { name: /Early Access Features|Experimental/i }).click();
-    const loraToggle = page
-      .locator('[data-testid="flag-enableLoraAdapters"], label')
-      .filter({
-        hasText: /LoRA|Adapter/i,
-      })
-      .first();
-    if (await loraToggle.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const checked = await loraToggle.getAttribute('aria-checked');
-      if (checked !== 'true') await loraToggle.click();
-    }
   });
 
-  test('LoRA tab appears in navigation when flag is enabled', async ({ page }) => {
-    const loraNav = page.getByRole('button', { name: /LoRA|Fine.?Tun/i }).first();
-    await expect(loraNav).toBeVisible({ timeout: 8000 });
-  });
-
-  test('Adapter Library shows empty state with Train CTA on first visit', async ({ page }) => {
+  test('LoRA entry is reachable from navigation when the flag is enabled', async ({ page }) => {
+    // QNBS-v3: viewport-agnostic — clickNavItem resolves desktop sidebar OR mobile overflow sheet.
     await clickNavItem(page, /LoRA|Fine.?Tun/i);
-    // Library view should be the default (no adapters yet)
-    await expect(page.getByText(/no adapters|train your first|Train New Adapter/i)).toBeVisible({
+    await expect(page.getByRole('heading', { name: /LoRA Fine-Tuning/i })).toBeVisible({
       timeout: 8000,
     });
   });
 
-  test('Wizard opens and shows Model step', async ({ page }) => {
-    await clickNavItem(page, /LoRA|Fine.?Tun/i);
-
-    const trainBtn = page
-      .getByRole('button', { name: /Train New Adapter|Start Training/i })
-      .first();
-    await expect(trainBtn).toBeVisible({ timeout: 8000 });
-    await trainBtn.click();
-
-    // Step indicator should show "Model" as first step
-    await expect(page.getByText(/Model Selection|Select Model|Base Model/i)).toBeVisible({
-      timeout: 5000,
+  test('Adapter Library shows the empty state with a Train CTA on first visit', async ({
+    page,
+  }) => {
+    await openLora(page);
+    await expect(page.getByRole('heading', { name: /LoRA Fine-Tuning/i })).toBeVisible({
+      timeout: 8000,
     });
-    // Step 1 of 5
-    await expect(page.getByText(/1.*5|Step 1/i)).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText(/no adapters yet/i)).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole('button', { name: /Train Your First Adapter/i })).toBeVisible();
   });
 
-  test('Wizard: model step → next → dataset step', async ({ page }) => {
+  test('Onboarding shows the environment check on first open', async ({ page }) => {
     await clickNavItem(page, /LoRA|Fine.?Tun/i);
-    const trainBtn = page
-      .getByRole('button', { name: /Train New Adapter|Start Training/i })
-      .first();
-    await trainBtn.click();
+    await expect(
+      page.getByText(/System Requirements|Train Your Writing Style/i).first(),
+    ).toBeVisible({ timeout: 8000 });
+  });
 
-    // Select first available model radio
-    const firstModelOption = page.getByRole('radio').first();
-    if (await firstModelOption.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await firstModelOption.click();
-    }
+  test('Wizard opens and shows the Model step', async ({ page }) => {
+    await openLora(page);
+    await page.getByRole('button', { name: /Train Your First Adapter|Train New Adapter/i }).click();
+    // Step indicator (nav aria-label = "Training steps") + at least one model radio.
+    await expect(page.getByRole('navigation', { name: /Training steps/i })).toBeVisible({
+      timeout: 8000,
+    });
+    await expect(page.getByRole('radio').first()).toBeVisible();
+  });
 
-    // Advance to Dataset step
-    const nextBtn = page.getByRole('button', { name: /Next|Continue/i }).first();
+  test('Wizard advances model → dataset and back', async ({ page }) => {
+    await openLora(page);
+    await page.getByRole('button', { name: /Train Your First Adapter|Train New Adapter/i }).click();
+
+    // Model step: select a base model via its label (user-realistic; reliably fires the
+    // controlled radio's onChange), then wait for Next to become enabled before clicking.
+    await page.getByText(/Llama 3\.2 7B/i).click();
+    const nextBtn = page.getByRole('button', { name: /^Next$/i });
+    await expect(nextBtn).toBeEnabled({ timeout: 8000 });
     await nextBtn.click();
 
-    // Should now show Dataset step
-    await expect(page.getByText(/Dataset|Extract.*Manuscript|Scene Pairs/i)).toBeVisible({
-      timeout: 5000,
+    // Dataset step shows the extract instruction.
+    await expect(page.getByText(/Extract your manuscript|training data/i)).toBeVisible({
+      timeout: 8000,
     });
+
+    // Back returns to the Model step (model options visible again).
+    await page.getByRole('button', { name: /^Back$/i }).click();
+    await expect(page.getByText(/Llama 3\.2 7B/i)).toBeVisible();
   });
 
-  test('Wizard: dataset step shows Extract button', async ({ page }) => {
-    await clickNavItem(page, /LoRA|Fine.?Tun/i);
-    const trainBtn = page
-      .getByRole('button', { name: /Train New Adapter|Start Training/i })
-      .first();
-    await trainBtn.click();
-
-    // Skip past model step
-    const firstModelOption = page.getByRole('radio').first();
-    if (await firstModelOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await firstModelOption.click();
-    }
-    await page
-      .getByRole('button', { name: /Next|Continue/i })
-      .first()
-      .click();
-
-    // Extract button should be present in dataset step
+  test('Sub-nav switches to the Dataset Builder', async ({ page }) => {
+    await openLora(page);
+    await page.getByRole('button', { name: /^Dataset Builder$/i }).click();
     await expect(page.getByRole('button', { name: /Extract|Build Dataset/i })).toBeVisible({
-      timeout: 5000,
+      timeout: 8000,
     });
-  });
-
-  test('Wizard: navigating back from dataset step returns to model step', async ({ page }) => {
-    await clickNavItem(page, /LoRA|Fine.?Tun/i);
-    const trainBtn = page
-      .getByRole('button', { name: /Train New Adapter|Start Training/i })
-      .first();
-    await trainBtn.click();
-
-    const firstModelOption = page.getByRole('radio').first();
-    if (await firstModelOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await firstModelOption.click();
-    }
-    await page
-      .getByRole('button', { name: /Next|Continue/i })
-      .first()
-      .click();
-    await page
-      .getByRole('button', { name: /Back|Previous/i })
-      .first()
-      .click();
-
-    await expect(page.getByText(/Model Selection|Base Model/i)).toBeVisible({ timeout: 5000 });
-  });
-
-  test('Wizard: params step shows preset cards', async ({ page }) => {
-    await clickNavItem(page, /LoRA|Fine.?Tun/i);
-    const trainBtn = page
-      .getByRole('button', { name: /Train New Adapter|Start Training/i })
-      .first();
-    await trainBtn.click();
-
-    const firstModelOption = page.getByRole('radio').first();
-    if (await firstModelOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await firstModelOption.click();
-    }
-    // Step 1 → 2 (Dataset)
-    await page
-      .getByRole('button', { name: /Next|Continue/i })
-      .first()
-      .click();
-    // Step 2 → 3 (Params) — skip dataset requirement if no entries
-    const nextBtn = page.getByRole('button', { name: /Next|Continue/i }).first();
-    if (await nextBtn.isEnabled({ timeout: 2000 }).catch(() => false)) {
-      await nextBtn.click();
-      // Preset cards for Writer Style Light should appear
-      await expect(page.getByText(/Writer Style Light|Deep Narrative/i)).toBeVisible({
-        timeout: 5000,
-      });
-    }
-  });
-
-  test('Onboarding shows environment check on first open', async ({ page }) => {
-    await clickNavItem(page, /LoRA|Fine.?Tun/i);
-    // Onboarding may show system requirements section
-    const envSection = page.getByText(/Python|Environment|System Requirements|desktop app/i);
-    if (await envSection.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await expect(envSection).toBeVisible();
-    }
   });
 });

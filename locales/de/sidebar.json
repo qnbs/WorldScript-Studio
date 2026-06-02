@@ -20,5 +20,6 @@
   "sidebar.settings": "Einstellungen",
   "sidebar.templates": "Vorlagen",
   "sidebar.world": "Weltenbau",
-  "sidebar.writer": "KI-Schreibstudio"
+  "sidebar.writer": "KI-Schreibstudio",
+  "sidebar.lora": "Feinabstimmung"
 }

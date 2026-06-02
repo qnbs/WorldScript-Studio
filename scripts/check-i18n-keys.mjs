@@ -31,6 +31,7 @@ const MODULES = [
   'objects',
   'mindmap',
   'characterInterviews',
+  'lora',
 ];
 
 const REF = 'en';

@@ -375,8 +375,8 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 055 keys × 5 locales; EN fallback; `localStorage` persistence      |
-| **Testing**          | Vitest 4.x (2 500+ tests / 392 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation gate          |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 234 keys × 5 locales; EN fallback; `localStorage` persistence      |
+| **Testing**          | Vitest 4.x (2 500+ tests / 392 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -562,7 +562,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 - **4 200+ unit tests** across **390+ test files** — all passing (2026-06-01 CI run)
 - Coverage: **73 % lines · 58 % branches · 65 % functions · 71 % statements** (CI-reported; see Codecov badge)
 - Vitest thresholds: lines ≥ 73 · statements ≥ 71 · branches ≥ 58 · functions ≥ 65 — all green
-- i18n: **2160 keys × 5 locales** (en/de/fr/es/it); ar/he stubs (2074 keys)
+- i18n: **2234 keys × 5 locales** (en/de/fr/es/it); ar/he stubs (2150 keys)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

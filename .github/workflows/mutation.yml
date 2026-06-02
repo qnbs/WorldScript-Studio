@@ -1,9 +1,9 @@
 # ============================================================
 # StoryCraft Studio – Mutation Testing (Stryker)
-# Runs weekly (Monday 03:00 UTC) and on manual dispatch.
+# QNBS-v3: MANUAL ONLY (workflow_dispatch) as of 2026-06-02 — weekly cron removed and the job
+#          dropped from the PR/CI pipeline to stop noisy, flaky, non-gating failures. Run on demand;
+#          break threshold enforced here as a standalone gate. Re-automate in a later iteration.
 # Cloud run: concurrency 6 + TypeScript-Checker for full power.
-# Informational on main CI pipeline (continue-on-error:true);
-# break threshold enforced here as a standalone gate.
 # ============================================================
 
 name: 🧬 Mutation Tests (Stryker)
@@ -19,9 +19,6 @@ on:
         description: 'Concurrent mutant runners (default: 6)'
         required: false
         default: '6'
-  schedule:
-    # QNBS-v3: weekly Monday 03:00 UTC — off-hours to avoid runner contention
-    - cron: '0 3 * * 1'
 
 # QNBS-v3: top-level read-only; write permissions scoped to job level
 permissions:

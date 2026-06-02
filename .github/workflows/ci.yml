@@ -123,34 +123,10 @@ jobs:
           fail_ci_if_error: false
 
   # ----------------------------------------------------------
-  # 2. MUTATION: Stryker (informational, does not gate deploy)
-  # ----------------------------------------------------------
-  mutation:
-    name: 🧬 Mutation Tests (Stryker)
-    runs-on: ubuntu-latest
-    # QNBS-v3: curated pure/sync mutate scope (stryker.conf.json) completes in a few minutes;
-    # 20 min is ample headroom. The prior full 9303-mutant run stalled the vitest runner at 0/N
-    # (hang-prone worker/GPU/IDB files) and hit this timeout — those files are now excluded.
-    timeout-minutes: 20
-    needs: [quality]
-    # QNBS-v3: informational gate — continue-on-error keeps a sub-75 score (or any Stryker hiccup)
-    # from blocking the pipeline; deploy never depends on this job. The weekly mutation.yml covers
-    # the broader surface. break:75 in stryker.conf.json still surfaces regressions in the logs.
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: ./.github/actions/setup
-
-      - name: Run Stryker if configured
-        run: |
-          if [ -f "stryker.config.json" ] || [ -f "stryker.conf.json" ]; then
-            pnpm run mutation
-          else
-            echo "No Stryker config found, skipping mutation testing."
-          fi
-
-  # ----------------------------------------------------------
-  # 3. BUILD: Production build + Pages artifact upload
+  # 2. BUILD: Production build + Pages artifact upload
+  # QNBS-v3: Stryker mutation removed from the PR/CI pipeline (2026-06-02) — it added noise as a
+  #          flaky, non-gating check. Mutation now runs ONLY via the manual `.github/workflows/
+  #          mutation.yml` (workflow_dispatch). To be re-integrated in a later iteration.
   # ----------------------------------------------------------
   build:
     name: 🏗️ Build

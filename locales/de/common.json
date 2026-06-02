@@ -68,6 +68,8 @@
   "common.add": "Hinzufügen",
   "common.appLoading": "Anwendung wird geladen",
   "common.cancel": "Abbrechen",
+  "common.next": "Weiter",
+  "common.back": "Zurück",
   "common.close": "Schließen",
   "common.copyToClipboard": "Kopieren",
   "common.delete": "Löschen",

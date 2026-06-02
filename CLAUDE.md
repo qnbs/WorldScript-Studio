@@ -75,6 +75,13 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with co
 - **OSV vulnerabilities**: Run `pnpm audit` or check the security CI job. Add `pnpm.overrides` with pinned exact versions.
 - Correction loop: fix → commit → verify CI → fix until all jobs green.
 
+**PR review-comment policy (proactive, exhaustive, immediate — every PR, always):**
+- On every open PR, treat **all** inline review comments, suggestions, issues, bug reports, and notes — from **CodeAnt AI and any other reviewer/bot** (human or automated) — as actionable work to be addressed **proactively and immediately**, without waiting to be asked.
+- Fetch them all: inline via `gh api repos/qnbs/StoryCraft-Studio/pulls/<N>/comments --paginate`; issue-level via `.../issues/<N>/comments`; thread/resolution state via the GraphQL `reviewThreads` query.
+- For **each** comment: (1) **validate** the finding against the *current* code — never trust a comment's line/anchor, which may be stale (CodeAnt pins to the old commit); (2) if valid, **implement the real fix directly** (root cause, fully worked out — code + tests + i18n + docs, everything that belongs to it), not a suppression or a partial patch; (3) if already fixed or a false positive, say so explicitly with evidence.
+- After fixing, **reply** to each thread (`POST .../pulls/<N>/comments/<id>/replies`) citing the resolving commit + what changed, then **resolve** the thread (GraphQL `resolveReviewThread`). Leave **0 unresolved threads**.
+- Then commit (Conventional Commits), push, and verify CI goes green per the correction loop above. This is a standing rule: do it now and on every future PR.
+
 **E2E notes:** Do NOT use `networkidle` waits (HMR keeps WebSocket open). Scope sidebar navigation via `#sidebar`. Shared helpers: `tests/e2e/helpers.ts`. Mobile E2E: set `RUN_MOBILE_E2E=1` locally (off by default).
 
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.

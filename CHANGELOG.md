@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **LoRA Fine-Tuning view productionized — Local AI Perfection Phase 2.2** (2026-06-02):
+  - `components/lora/LoraView.tsx` — new container assembling the existing `LoraAdapterLibrary` / `LoraDatasetBuilder` / `LoraEvaluationPanel` / `LoraTrainingWizard` behind `LoraViewContext`, with first-visit onboarding and library/dataset/evaluation sub-nav
+  - `App.tsx` — gated `lora` route (lazy-loaded; falls back to Dashboard when `enableLoraAdapters` is off, mirroring `objects`/`mindmap`)
+  - `components/Sidebar.tsx` — conditional "Fine-Tuning" nav entry behind `enableLoraAdapters` (new `enableLora` prop)
+  - `View` type, `APP_SECTIONS`, `viewNavigationLabels`, new `ICONS.LORA` (cpu-chip), `sidebar.lora` i18n key across all 7 locales
+  - **Fixed pre-existing i18n bug:** the `lora` module was orphaned from the i18n build (missing from `scripts/build-i18n.mjs` + `check-i18n-keys.mjs`) and `lora.json` was nested instead of flat-dotted — so `lora.*` keys never reached the runtime bundle and rendered as raw keys once the view went live. Registered the module and flattened `lora.json` in all 7 locales (bundle 2159 → 2234 keys)
+  - `tests/e2e/lora-wizard.spec.ts` re-enabled (flag seeded via localStorage; selectors aligned to the shipped DOM); `tests/unit/lora/LoraView.test.tsx` (6 tests)
+
 - **WorkerBus v2 Phase 2 — runtime wiring, hybrid routing, legacy adapter** (2026-06-02):
   - `services/workerBusManager.ts` — singleton lifecycle: `initWorkerBus()`, `shutdownWorkerBus()`, `initWorkerBusOnStartup()`, `getWorkerBus()`, `getLegacyAdapter()`; registers `inference` (text + embed) and `duckdb` pools via `WorkerRegistry`
   - `services/hybridRouter.ts` — `routeTask(taskType, payload, opts)`: routes to v2 Web Worker pool (default) or Rust TaskSupervisor (when `rustComputeEnabled` + `target:'rust'` + Tauri context); transparent fallback to web on Rust failure
@@ -30,7 +38,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tests: 123 tests across 12 test files (incl. `workerBootstrap.test.ts` — Phase 1 hardening); 84.5% line coverage
   - v2 worker implementations: `workers/v2/inference.worker.ts` (text + embed), `workers/v2/duckdb.worker.ts` (init/query/exec/shutdown)
 
+### Changed
+
+- **CI: Stryker mutation dropped from the PR/CI pipeline** (2026-06-02): the mutation job was a noisy, flaky, non-gating check (recurrent 20-min timeouts). Removed from `ci.yml`; `mutation.yml` is now manual-only (`workflow_dispatch`, weekly cron removed). To be re-integrated in a later iteration.
+- **CI: branch-protection required-check names realigned** (2026-06-02): updated `main` required status checks from the stale `Quality Gate (Node lts/*)` / `(Node node)` to the current matrix names `(Node 22)` / `(Node 24)` so PRs can satisfy required checks again.
+
 ### Fixed
+
+- **AI transient-retry + fetch hardening** (2026-06-02):
+  - `services/ai/aiRetry.ts` (P1-F5) — replaced linear backoff with capped exponential backoff + full jitter; honors a server `Retry-After` (seconds / HTTP-date / `retryAfterMs`) over the computed delay, clamped to 30 s. Pure `computeRetryDelayMs` / `parseRetryAfterMs` helpers + injectable rng; 13 unit tests
+  - `services/ai/fetchAdapter.ts` (P1-F6) — opt-in `timeoutMs` (DEFAULT OFF, streaming-safe) composing `AbortSignal.timeout` with the caller signal via `AbortSignal.any`; existing no-arg callers unchanged; 5 unit tests
+- **Documentation truth-up** (2026-06-02): reconciled stale P0/P1 markers in `AUDIT.md` against the current tree (P0-F3/F5/F7/F8/F9 + P1-F1..F4 were already fixed in code) and marked IDB at-rest encryption UX complete in `TODO.md`.
 
 - **14 CodeAnt AI issues — AI core resource cleanup, race conditions, correctness** (2026-06-01, commit `827a512`):
   - `webllmOptimizer.ts`: `engine.dispose()` called on cache eviction; `releaseWebLlm` now deletes both `high-performance` and `low-power` power-preference variants when preference is not specified

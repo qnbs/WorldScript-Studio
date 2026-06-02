@@ -20,5 +20,6 @@
   "sidebar.settings": "Paramètres",
   "sidebar.templates": "Modèles",
   "sidebar.world": "Univers",
-  "sidebar.writer": "Studio d’écriture IA"
+  "sidebar.writer": "Studio d’écriture IA",
+  "sidebar.lora": "Réglage fin"
 }

@@ -131,6 +131,13 @@ export const APP_SECTIONS: Record<View, SectionConfig> = {
     textColor: 'text-stone-500',
     accentColor: '#78716c',
   },
+  // QNBS-v3: v1.20 LoRA Fine-Tuning — on-device adapter training (flag enableLoraAdapters).
+  lora: {
+    icon: ICONS.LORA,
+    colorClass: 'text-teal-500 bg-teal-500/10',
+    textColor: 'text-teal-500',
+    accentColor: '#14b8a6',
+  },
   // QNBS-v3: preview + progress views added in v1.6 — stub icons reuse nearest thematic icon.
   preview: {
     icon: ICONS.WRITER,

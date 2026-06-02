@@ -17,7 +17,8 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **Scorecard Pinned-Dependencies #72** — graphifyy pip install pinned by SHA256 hash
 - ✅ **prune-deployments.yml** — all-environment pruning (Production/Preview/github-pages); 156 records deleted; github-script v7→v9 (node24)
 - ✅ **Storybook cloud-first CI** — storybook-debug.yml (manual dispatch), Playwright browser cache v5 (node24)
-- ⬜ **Local AI Perfection Phase 2.2** — LoRA productionization: App.tsx route for LoRA view + sidebar nav (allows E2E lora-wizard.spec.ts re-enable)
+- ✅ **Local AI Perfection Phase 2.2** — LoRA productionization (2026-06-02): `LoraView` container assembles library/dataset/evaluation/wizard behind `LoraViewContext`; gated `lora` route in App.tsx; conditional sidebar nav (`enableLoraAdapters`); `View`/`APP_SECTIONS`/`viewNavigationLabels`/`LORA` icon/`sidebar.lora` (7 locales); `lora-wizard.spec.ts` re-enabled; LoraView unit test
+- ✅ **AI retry/fetch hardening** (2026-06-02) — `aiRetry` exponential backoff + jitter + Retry-After (P1-F5); `fetchAdapter` opt-in streaming-safe timeout (P1-F6)
 - ⬜ **Local AI Perfection Phase 2.3** — Performance hardening (WebLLM worker, LRU pipeline cache)
 - ⬜ **Local AI Perfection Phase 2.4** — Coverage: sileroVadEngine.ts, kokoroTtsEngine.ts (0 tests each), inferenceWorker.ts (LRU)
 - ✅ **WorkerBus v2 Phase 1** — `@domain/worker-bus` package: typed worker pool, circuit breakers, dead-letter queue, priority task queue, progress emitter, protocol handler; 123 tests / 12 suites; 84.5% coverage
@@ -56,7 +57,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **Vercel blank screen fix** (2026-05-30) — `index.html` `%BASE_URL%` for manifest/favicon/og; `index.tsx` error safety net; 382 test files / 4567 tests all green
 - ⬜ **C-6** — Full ar/he translation content — requires native translator review (stubs exist in `locales/ar/`, `locales/he/`)
 - 🔄 **C-7 remainder** — Coverage → L85%/B75%/F80%; Stryker break 75→80 (current thresholds: L73/F65/B58)
-- ⬜ IDB at-rest encryption UX (passphrase unlock modal, forgot-passphrase flow, key rotation) — `enableIdbAtRestEncryption` flag now in UI with ⚠ warning
+- ✅ IDB at-rest encryption UX (2026-06-02 reconciliation) — `IdbUnlockModal` (startup unlock + 2-step forgot-passphrase escape hatch, `App.tsx:182-188,638-643`), `PassphraseModal` (set/change/disable), real read/write gating `idbProjectStore.ts:209-265`, session lock + key rotation (Phase 1). `enableIdbAtRestEncryption` flag in Settings › Privacy with ⚠ warning
 - ⬜ Complete Whisper WASM STT model download + inference pipeline (B-2 continuation)
 - ⬜ Kokoro/Piper TTS WASM engines
 - ⬜ PLANbib v1.7 features (Objects → MindMap → Interviews → Timeline → Wizard → Analysis → ReadMode → Guide → Desktop) — 9 phases, go-ahead from user required

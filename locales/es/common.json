@@ -66,6 +66,8 @@
   "common.add": "Añadir",
   "common.appLoading": "La aplicación se está cargando",
   "common.cancel": "Cancelar",
+  "common.next": "Siguiente",
+  "common.back": "Atrás",
   "common.close": "Cerrar",
   "common.copyToClipboard": "Copiar al portapapeles",
   "common.delete": "Eliminar",

@@ -21,6 +21,7 @@ export const VIEW_NAVIGATION_LABEL_KEYS: Partial<Record<View, string>> = {
   objects: 'sidebar.objects',
   mindmap: 'sidebar.mindmap',
   characterInterviews: 'sidebar.characterInterviews',
+  lora: 'sidebar.lora',
 };
 
 export function viewNavigationLabelKey(view: View): string {

@@ -4,7 +4,7 @@
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
 **Current version:** **v1.19.0** — 2026-06-01 (All CI/CD jobs green; 14 CodeAnt AI issues fixed; E2E failures reduced from 24 → ~0; 156 deployment records pruned)
 
-**Quality gate (2026-06-01):** lint ✅ · i18n:check ✅ (2160 keys × 5 locales) · typecheck ✅ · tests ✅ · VRT baselines bootstrapped · E2E stabilised · Coverage/Stryker: CI-only  
+**Quality gate (2026-06-02):** lint ✅ · i18n:check ✅ (2234 keys × 5 locales; `lora` module un-orphaned) · typecheck ✅ · tests ✅ · feature-parity 0 criticals · LoRA view routed (Phase 2.2) · Stryker now manual-only (dropped from PR/CI) · Coverage/E2E: CI-only  
 **Toolchain:** Node 22/24, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
 
 ## Post-crash Session — 2026-06-01 (CI Hardening + CodeAnt + E2E Stabilisation)
@@ -138,6 +138,28 @@
 | P1-F4 | `workers/inference.worker.ts` | No `AbortSignal` propagation into the actual `pipeline()` call; worker cancel only removes from `abortMap` but does not stop the running inference. | Pass `AbortSignal` into Xenova pipeline options if supported; else document limitation. |
 | P1-F5 | `services/ai/aiRetry.ts` | Linear backoff only; no exponential backoff, no jitter, no retry-after header parsing. | Keep linear for simplicity (local AI), add jitter for cloud paths. |
 | P1-F6 | `services/ai/fetchAdapter.ts` | No request timeout, no retry, no circuit-breaker for Tauri fetch failures. | Add `AbortSignal.timeout()` and fallback chain. |
+
+### Status Reconciliation — verified in code 2026-06-02
+
+The P0/P1 tables above were authored against the pre-Phase-2.1 tree. A line-by-line re-verification against the **current** code shows most are already resolved; only `aiRetry` and `fetchAdapter` remain open.
+
+| ID | Status | Evidence (current code) |
+|----|--------|-------------------------|
+| P0-F1 | ✅ FIXED | Real ONNX text-generation pipelines (Phase 2.1). |
+| P0-F2 | ✅ FIXED | Real `pipeline('text-generation', …)` via `@huggingface/transformers@3.8.1` (Phase 2.1). |
+| P0-F3 | ✅ FIXED | `services/ai/inferenceGateway.ts:91-134` — real `modelList()` enumerates cloud + WebLLM + ONNX catalogs; `healthCheck()` runs a latency probe via `embedText`. |
+| P0-F4 | ✅ FIXED | Silero VAD v4 ONNX implementation (Phase 1.2). |
+| P0-F5 | ✅ FIXED | `services/ai/webGpuDetectorService.ts:28-102` — `powerPreference` + `forceFallbackAdapter` options, `timestamp-query` + `maxComputeWorkgroupSize` feature inspection, `requestAdapterInfo`. |
+| P0-F6 | ✅ FIXED | Superseded by `localAiDeviceProfiler` (WebGPU/WebNN/DirectML + memory/battery detection). |
+| P0-F7 | ✅ FIXED | `services/ai/modelRecommendations.ts:77-82` — ONNX tiers use valid `Xenova/Qwen2.5-1.5B/0.5B-Instruct` + `SmolLM2-135M` IDs. |
+| P0-F8 | ✅ FIXED | `services/ai/aiPolicy.ts:5` — `LOCAL_INFERENCE_PROVIDERS` includes `onnx` + `transformers`. |
+| P0-F9 | ✅ FIXED | `services/ai/hybridFallback.ts:28` — local-provider set includes `onnx` + `transformers`; cloud fallback wired. |
+| P1-F1 | ✅ FIXED | Stryker `mutate` expanded 34→40 (B-8). |
+| P1-F2 | ✅ FIXED | `enableAdaptiveAiEngine` + compute/WebNN gates added (Phase 1.3). |
+| P1-F3 | ✅ FIXED | RAM-pressure eco-mode added (Phase 1.3). |
+| P1-F4 | ✅ FIXED | `AbortSignal` propagated end-to-end into the worker (Phase 2.1). |
+| P1-F5 | ✅ FIXED (v1.20) | `services/ai/aiRetry.ts` — capped exponential backoff + full jitter; honors server `Retry-After` (seconds / HTTP-date / `retryAfterMs`) over the computed delay, clamped to 30s. Pure `computeRetryDelayMs`/`parseRetryAfterMs` helpers + injectable rng; 13 unit tests. |
+| P1-F6 | ✅ FIXED (v1.20) | `services/ai/fetchAdapter.ts` — opt-in `timeoutMs` (DEFAULT OFF, streaming-safe) composing `AbortSignal.timeout` with the caller signal via `AbortSignal.any`. Existing no-arg callers unchanged; 5 unit tests. |
 
 ### Performance / Benchmark Gaps
 - **No benchmark infrastructure at all** — no Vitest `bench()`, no Playwright perf specs, no token/sec tracking.

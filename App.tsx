@@ -137,6 +137,10 @@ const ObjectsView = lazy(() =>
 );
 const MindMapView = lazy(() => import('./components/MindMapView'));
 const CharacterInterviewsView = lazy(() => import('./components/CharacterInterviewsView'));
+// QNBS-v3: v1.20 Phase 2.2 — LoRA Fine-Tuning view lazy-loaded (heavy adapter/training UI).
+const LoraView = lazy(() =>
+  import('./components/lora/LoraView').then((m) => ({ default: m.LoraView })),
+);
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
@@ -532,6 +536,10 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         if (!featureFlags.enableCharacterInterviews)
           return <Dashboard onNavigate={handleNavigate} />;
         return <CharacterInterviewsView />;
+      case 'lora':
+        // QNBS-v3: gated like other flag-only views — falls back to Dashboard when off.
+        if (!featureFlags.enableLoraAdapters) return <Dashboard onNavigate={handleNavigate} />;
+        return <LoraView />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }
@@ -586,6 +594,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                 onNavigate={handleNavigate}
                 isSidebarOpen={appState.isSidebarOpen}
                 setIsSidebarOpen={appState.setIsSidebarOpen}
+                enableLora={featureFlags.enableLoraAdapters}
               />
               <div className="app-column-mobile flex-1 flex flex-col h-full overflow-hidden pt-16 transition-all duration-300 ease-in-out md:ml-64">
                 <Header
