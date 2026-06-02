@@ -139,6 +139,28 @@
 | P1-F5 | `services/ai/aiRetry.ts` | Linear backoff only; no exponential backoff, no jitter, no retry-after header parsing. | Keep linear for simplicity (local AI), add jitter for cloud paths. |
 | P1-F6 | `services/ai/fetchAdapter.ts` | No request timeout, no retry, no circuit-breaker for Tauri fetch failures. | Add `AbortSignal.timeout()` and fallback chain. |
 
+### Status Reconciliation — verified in code 2026-06-02
+
+The P0/P1 tables above were authored against the pre-Phase-2.1 tree. A line-by-line re-verification against the **current** code shows most are already resolved; only `aiRetry` and `fetchAdapter` remain open.
+
+| ID | Status | Evidence (current code) |
+|----|--------|-------------------------|
+| P0-F1 | ✅ FIXED | Real ONNX text-generation pipelines (Phase 2.1). |
+| P0-F2 | ✅ FIXED | Real `pipeline('text-generation', …)` via `@huggingface/transformers@3.8.1` (Phase 2.1). |
+| P0-F3 | ✅ FIXED | `services/ai/inferenceGateway.ts:91-134` — real `modelList()` enumerates cloud + WebLLM + ONNX catalogs; `healthCheck()` runs a latency probe via `embedText`. |
+| P0-F4 | ✅ FIXED | Silero VAD v4 ONNX implementation (Phase 1.2). |
+| P0-F5 | ✅ FIXED | `services/ai/webGpuDetectorService.ts:28-102` — `powerPreference` + `forceFallbackAdapter` options, `timestamp-query` + `maxComputeWorkgroupSize` feature inspection, `requestAdapterInfo`. |
+| P0-F6 | ✅ FIXED | Superseded by `localAiDeviceProfiler` (WebGPU/WebNN/DirectML + memory/battery detection). |
+| P0-F7 | ✅ FIXED | `services/ai/modelRecommendations.ts:77-82` — ONNX tiers use valid `Xenova/Qwen2.5-1.5B/0.5B-Instruct` + `SmolLM2-135M` IDs. |
+| P0-F8 | ✅ FIXED | `services/ai/aiPolicy.ts:5` — `LOCAL_INFERENCE_PROVIDERS` includes `onnx` + `transformers`. |
+| P0-F9 | ✅ FIXED | `services/ai/hybridFallback.ts:28` — local-provider set includes `onnx` + `transformers`; cloud fallback wired. |
+| P1-F1 | ✅ FIXED | Stryker `mutate` expanded 34→40 (B-8). |
+| P1-F2 | ✅ FIXED | `enableAdaptiveAiEngine` + compute/WebNN gates added (Phase 1.3). |
+| P1-F3 | ✅ FIXED | RAM-pressure eco-mode added (Phase 1.3). |
+| P1-F4 | ✅ FIXED | `AbortSignal` propagated end-to-end into the worker (Phase 2.1). |
+| **P1-F5** | ⬜ **OPEN** | `services/ai/aiRetry.ts:21` — still linear `baseDelayMs * (i+1)`; no jitter, no `Retry-After` parsing. *(Addressed in this sprint.)* |
+| **P1-F6** | ⬜ **OPEN** | `services/ai/fetchAdapter.ts` — thin Tauri/browser selector; no timeout. *(Opt-in connection timeout under evaluation; deferred if it risks streaming.)* |
+
 ### Performance / Benchmark Gaps
 - **No benchmark infrastructure at all** — no Vitest `bench()`, no Playwright perf specs, no token/sec tracking.
 - **No GPU tracing** — no `timestamp-query` usage, no CDP trace collection.
