@@ -16,8 +16,8 @@ vi.mock('../../../hooks/useTranslation', () => ({
 }));
 vi.mock('../../../contexts/LoraViewContext', () => ({ useLoraViewContext: vi.fn() }));
 
-const estimateDatasetQuality = vi.fn();
-const exportAsJsonl = vi.fn(() => 'JSONL');
+const estimateDatasetQuality = vi.fn<(...a: unknown[]) => unknown>();
+const exportAsJsonl = vi.fn<(...a: unknown[]) => string>(() => 'JSONL');
 vi.mock('../../../services/lora/loraDatasetBuilder', () => ({
   estimateDatasetQuality: (...a: unknown[]) => estimateDatasetQuality(...a),
   exportAsJsonl: (...a: unknown[]) => exportAsJsonl(...a),

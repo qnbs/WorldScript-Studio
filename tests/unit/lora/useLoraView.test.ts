@@ -110,9 +110,9 @@ describe('useLoraView', () => {
   it('selectBaseModel and selectPreset dispatch their setters', () => {
     const { result } = renderHook(() => useLoraView('p1'));
     act(() => result.current.selectBaseModel('unsloth/llama-3.2-7b'));
-    act(() => result.current.selectPreset('writer-style-deep'));
+    act(() => result.current.selectPreset('deep-narrative'));
     expect(dispatchedAction('lora/setSelectedBaseModel')?.['payload']).toBe('unsloth/llama-3.2-7b');
-    expect(dispatchedAction('lora/setSelectedPreset')?.['payload']).toBe('writer-style-deep');
+    expect(dispatchedAction('lora/setSelectedPreset')?.['payload']).toBe('deep-narrative');
   });
 
   it('dismissError and dismissOnboarding dispatch their actions', () => {
