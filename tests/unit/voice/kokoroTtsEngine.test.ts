@@ -93,4 +93,65 @@ describe('KokoroTtsEngine', () => {
     expect(engine.id).toBe('kokoro');
     expect(engine.isLocal).toBe(true);
   });
+
+  it('isAvailable() false when WebAssembly is unavailable', async () => {
+    vi.stubGlobal('WebAssembly', undefined);
+    expect(await new KokoroTtsEngine().isAvailable()).toBe(false);
+  });
+
+  it('cancel() is a no-op when nothing is playing', () => {
+    expect(() => new KokoroTtsEngine().cancel()).not.toThrow();
+  });
+
+  it('cancel() stops an in-flight source', async () => {
+    // QNBS-v3: a source whose start() does NOT auto-end, so currentSource stays live for cancel().
+    const sources: MockBufferSource[] = [];
+    class NonEndingSource extends MockBufferSource {
+      override start = vi.fn();
+    }
+    class TrackingContext extends MockAudioContext {
+      override createBufferSource = vi.fn(() => {
+        const s = new NonEndingSource();
+        sources.push(s);
+        return s;
+      });
+    }
+    vi.stubGlobal('AudioContext', TrackingContext);
+    mockPipelineFactory.mockResolvedValue(
+      vi.fn().mockResolvedValue({ audio: new Float32Array(8), sampling_rate: 24000 }),
+    );
+    const engine = new KokoroTtsEngine();
+    await engine.initialize();
+    void engine.speak({ text: 'hi' }); // never resolves (no onended) — intentionally not awaited
+    await new Promise((r) => setTimeout(r, 0));
+    engine.cancel();
+    expect(sources.at(-1)?.stop).toHaveBeenCalled();
+  });
+
+  it('pause()/resume() and dispose() delegate to the AudioContext', async () => {
+    const contexts: MockAudioContext[] = [];
+    class TrackingContext extends MockAudioContext {
+      constructor() {
+        super();
+        contexts.push(this);
+      }
+    }
+    vi.stubGlobal('AudioContext', TrackingContext);
+    mockPipelineFactory.mockResolvedValue(
+      vi.fn().mockResolvedValue({ audio: new Float32Array(8), sampling_rate: 24000 }),
+    );
+    const engine = new KokoroTtsEngine();
+    await engine.initialize();
+    await engine.speak({ text: 'hi' });
+    const ctx = contexts.at(-1);
+    engine.pause();
+    engine.resume();
+    expect(ctx?.suspend).toHaveBeenCalled();
+    expect(ctx?.resume).toHaveBeenCalled();
+
+    await engine.dispose();
+    expect(ctx?.close).toHaveBeenCalled();
+    // pipeline cleared on dispose → speak throws again
+    await expect(engine.speak({ text: 'again' })).rejects.toThrow(/not initialized/i);
+  });
 });
