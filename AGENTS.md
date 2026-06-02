@@ -436,8 +436,9 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 ### WorkerBus v2 (`packages/worker-bus` / `@domain/worker-bus`)
 
-Central orchestration layer for all background worker tasks. Messages use short kind literals (`TASK`, `CANCEL`, `PING`, `PONG`, `PROGRESS`, `RESULT`) validated by Zod (`schemas.ts`).
+Central orchestration layer for all background worker tasks. Messages use short kind literals (`TASK`, `CANCEL`, `PING`, `PONG`, `PROGRESS`, `RESULT`) validated by Zod (`schemas.ts`). Phase 2 is complete — see below for runtime wiring.
 
+**Package core** (`packages/worker-bus/src/`):
 - **WorkerBus** — top-level orchestrator: `enqueue(taskType, payload, opts?)` → priority queue → pool → circuit breaker → `TaskHandle<T>`
 - **WorkerPool** — lifecycle-managed thread pool; auto-scales `MIN_WORKERS`..`MAX_WORKERS_INFERENCE`; PING/PONG health checks; crash auto-restart
 - **PriorityTaskQueue** — heap-ordered (`critical > high > normal > low`); starvation prevention after `MAX_PREEMPTIONS` requeues
@@ -445,10 +446,29 @@ Central orchestration layer for all background worker tasks. Messages use short 
 - **DeadLetterQueue** — captures undeliverable tasks; best-effort IDB persistence (never blocks hot path)
 - **ProtocolHandler** — single-port typed request/response; per-task timeout; cleans up on `dispose()`
 - **workerBootstrap** — worker-side entry: call `workerBootstrap(port)` in tests, or let the `INIT_PORT` self-listener handle it in production; use `registerTaskHandler(taskType, handler)` inside workers
-- **v2 workers:** `workers/v2/inference.worker.ts` and `workers/v2/duckdb.worker.ts` — complete implementations gated behind `enableWorkerBusV2` (Phase 2 wiring in `services/workerBusManager.ts`)
-- **Feature flags:** `enableWorkerBusV2` (Phase 2 main-thread init), `enableRustCompute` (Phase 2 HybridRouter → Tauri TaskSupervisor) — both off by default
 - **All constants** re-exported from `constants.ts` — never hardcode timeouts or thresholds
-- **Run tests:** `pnpm exec vitest run packages/worker-bus/tests/` (12 suites, 123 tests)
+- **Run package tests:** `pnpm exec vitest run packages/worker-bus/tests/` (12 suites, 123 tests)
+
+**Phase 2 runtime services** (`services/`):
+- `workerBusManager.ts` — singleton lifecycle (`initWorkerBus`, `shutdownWorkerBus`, `initWorkerBusOnStartup`, `getWorkerBus`, `getLegacyAdapter`); registers `inference` (text + embed) and `duckdb` pools
+- `hybridRouter.ts` — `routeTask(taskType, payload, opts?)` routes to Web Worker pool (default) or Rust TaskSupervisor (when `rustComputeEnabled && target:'rust'` and Tauri available); transparent fallback to web on any Rust failure
+- `legacyWorkerBusAdapter.ts` — `LegacyWorkerBusAdapter` shims old `@domain/ai-core` WorkerBus API onto v2; old callers keep working during gradual migration (remove when fully migrated)
+- `tauriTaskBridge.ts` — `invokeRustTask()`, `isRustComputeAvailable()` (60 s TTL ping cache); requires Rust command `storycraft_task_supervisor_submit/ping` in `src-tauri/src/commands/`
+
+**Wiring points** (`app/listenerMiddleware.ts`, `App.tsx`):
+- Flag `enableWorkerBusV2` ON → `initWorkerBus()` via listener; cold-start: `initWorkerBusOnStartup()` in `App.tsx` mount effect
+- Flag `enableWorkerBusV2` OFF → `shutdownWorkerBus()` via listener
+- Flag `enableRustCompute` any → invalidate Rust availability cache so next `routeTask` re-pings Tauri
+
+**Feature flags** (Settings → Experimental — both off by default):
+- `enableWorkerBusV2` — activates v2 worker pools for inference and DuckDB tasks
+- `enableRustCompute` — enables Rust TaskSupervisor routing via `HybridRouter` (Tauri desktop only)
+
+**v2 workers** (active when `enableWorkerBusV2` is on):
+- `workers/v2/inference.worker.ts` — `inference.text` + `inference.embed` via @huggingface/transformers pipeline cache
+- `workers/v2/duckdb.worker.ts` — `db.duckdb.init/query/exec/shutdown`
+
+**Rust backend stub** (Phase 3 — not yet implemented): Add Tauri commands `storycraft_task_supervisor_submit` and `storycraft_task_supervisor_ping` to `src-tauri/src/commands/task_supervisor.rs`. Until then, `enableRustCompute` is safe to toggle (falls back to web).
 
 ### DuckDB Analytics
 

@@ -9,15 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **WorkerBus v2 — `@domain/worker-bus` package** (2026-06-01):
+- **WorkerBus v2 Phase 2 — runtime wiring, hybrid routing, legacy adapter** (2026-06-02):
+  - `services/workerBusManager.ts` — singleton lifecycle: `initWorkerBus()`, `shutdownWorkerBus()`, `initWorkerBusOnStartup()`, `getWorkerBus()`, `getLegacyAdapter()`; registers `inference` (text + embed) and `duckdb` pools via `WorkerRegistry`
+  - `services/hybridRouter.ts` — `routeTask(taskType, payload, opts)`: routes to v2 Web Worker pool (default) or Rust TaskSupervisor (when `rustComputeEnabled` + `target:'rust'` + Tauri context); transparent fallback to web on Rust failure
+  - `services/legacyWorkerBusAdapter.ts` — `LegacyWorkerBusAdapter`: shims old `@domain/ai-core` WorkerBus API (`enqueue/cancel/dequeue/getTelemetry`) onto v2 bus for gradual migration; old callers keep working unchanged
+  - `services/tauriTaskBridge.ts` — `invokeRustTask()`, `isRustComputeAvailable()` (ping with 60 s TTL cache): typed Tauri bridge for Rust `storycraft_task_supervisor_submit/ping` commands
+  - `app/listenerMiddleware.ts` — ON/OFF listeners for `enableWorkerBusV2` (init/shutdown pools) and `enableRustCompute` (invalidate Rust availability cache); `initWorkerBusOnStartup()` export for cold-start parity with `initAdaptiveAiOnStartup` pattern
+  - `App.tsx` — `void initWorkerBusOnStartup(featureFlags.enableWorkerBusV2)` in mount `useEffect`
+  - `components/settings/FeatureFlagsSection.tsx` — `enableWorkerBusV2` and `enableRustCompute` toggles now visible in Settings → Experimental
+  - i18n keys for both flags across DE/EN/ES/FR/IT (2162 keys total); parity audit 0 criticals
+  - Tests: +31 unit tests (`tauriTaskBridge`, `legacyWorkerBusAdapter`, `workerBusManager`, `hybridRouter`) — all passing; `vi.hoisted` constructor mock pattern for WorkerBus
+
+- **WorkerBus v2 Phase 1 — `@domain/worker-bus` package** (2026-06-01):
   - Core runtime: `WorkerBus`, `WorkerPool`, `WorkerRegistry`, `ProtocolHandler`
-  - Messaging: typed `MessagePort` protocol with Zod validation (`schemas.ts`, `messageBus.ts`)
+  - Messaging: typed `MessagePort` protocol with Zod validation (`schemas.ts`, `messageBus.ts`); kind literals: `TASK`, `CANCEL`, `PING`, `PONG`, `PROGRESS`, `RESULT`
   - Resilience: `CircuitBreaker`, `DeadLetterQueue`, `PriorityTaskQueue`, `CancellationToken`
   - Progress: `ProgressEmitter` with `AsyncIterable<TaskProgress>` support
   - Worker bootstrap: `workerBootstrap()`, `registerTaskHandler()`, `deregisterTaskHandler()`
   - Feature flags: `enableWorkerBusV2`, `enableRustCompute`
-  - Tests: 109 tests across 11 test files, 84.5% line coverage
-  - v2 worker stubs: `workers/v2/inference.worker.ts`, `workers/v2/duckdb.worker.ts`
+  - Tests: 123 tests across 12 test files (incl. `workerBootstrap.test.ts` — Phase 1 hardening); 84.5% line coverage
+  - v2 worker implementations: `workers/v2/inference.worker.ts` (text + embed), `workers/v2/duckdb.worker.ts` (init/query/exec/shutdown)
 
 ### Fixed
 

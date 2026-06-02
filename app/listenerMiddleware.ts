@@ -31,6 +31,8 @@ export const listenerMiddleware = createListenerMiddleware();
 //   4. DuckDB Dual-Write — analytics tables updated on save (when enableDuckDbAnalytics)
 //   5. Storage Health   — quota check before every save
 //   6. Cross-Project    — search index updated on save (when enableCrossProjectSearch)
+//   7. WorkerBus v2     — init/shutdown pools on enableWorkerBusV2 flag change (Phase 2)
+//   8. Rust Compute     — invalidate Rust availability cache on enableRustCompute toggle (Phase 2)
 //
 // All AI inference side effects (local/cloud) are intentionally NOT in this middleware —
 // they belong in service-layer thunks (aiProviderService, localAiFacade) to keep the
@@ -425,6 +427,79 @@ export function initAdaptiveAiOnStartup(enabled: boolean): void {
   }
   // Profile generation is handled by useAdaptiveAi on first mount
   logger.info('Adaptive AI engine: window gate set on cold start');
+}
+
+// QNBS-v3: Phase 2 — WorkerBus v2 activation listener.
+// ON: lazily initialize WorkerBus and register worker pools.
+// OFF: terminate all pools and free worker threads.
+listenerMiddleware.startListening({
+  predicate: (_action, currentState, previousState) => {
+    const curr = (currentState as RootState).featureFlags;
+    const prev = (previousState as RootState).featureFlags;
+    return curr?.enableWorkerBusV2 === true && prev?.enableWorkerBusV2 !== true;
+  },
+  effect: async () => {
+    try {
+      const { initWorkerBus } = await import('../services/workerBusManager');
+      await initWorkerBus();
+      logger.info('WorkerBus v2 enabled via feature flag');
+    } catch (err) {
+      logger.warn('WorkerBus v2 init on flag enable failed', err);
+    }
+  },
+});
+
+listenerMiddleware.startListening({
+  predicate: (_action, currentState, previousState) => {
+    const curr = (currentState as RootState).featureFlags;
+    const prev = (previousState as RootState).featureFlags;
+    return curr?.enableWorkerBusV2 !== true && prev?.enableWorkerBusV2 === true;
+  },
+  effect: async () => {
+    try {
+      const { shutdownWorkerBus } = await import('../services/workerBusManager');
+      await shutdownWorkerBus();
+      logger.info('WorkerBus v2 shut down via feature flag');
+    } catch (err) {
+      logger.warn('WorkerBus v2 shutdown on flag disable failed', err);
+    }
+  },
+});
+
+// QNBS-v3: Phase 2 — Rust Compute flag listener.
+// Invalidates the Rust availability cache so the next routeTask() call re-pings the
+// Rust TaskSupervisor instead of serving a stale cached result.
+listenerMiddleware.startListening({
+  predicate: (_action, currentState, previousState) => {
+    const curr = (currentState as RootState).featureFlags;
+    const prev = (previousState as RootState).featureFlags;
+    return curr?.enableRustCompute !== prev?.enableRustCompute;
+  },
+  effect: async () => {
+    try {
+      const { invalidateRustAvailabilityCache } = await import('../services/hybridRouter');
+      invalidateRustAvailabilityCache();
+      logger.info('Rust compute flag changed — availability cache invalidated');
+    } catch (err) {
+      logger.warn('Rust availability cache invalidation failed', err);
+    }
+  },
+});
+
+/**
+ * QNBS-v3: Phase 2 — Cold-start WorkerBus v2 init. Mirrors initAdaptiveAiOnStartup:
+ * listeners only fire on transitions, so if the flag was already true in persisted state
+ * we must initialize synchronously on startup before the first task can be enqueued.
+ */
+export async function initWorkerBusOnStartup(enabled: boolean): Promise<void> {
+  if (!enabled) return;
+  try {
+    const { initWorkerBus } = await import('../services/workerBusManager');
+    await initWorkerBus();
+    logger.info('WorkerBus v2: pools initialized on cold start');
+  } catch (err) {
+    logger.warn('WorkerBus v2 cold-start init failed', err);
+  }
 }
 
 export const startAppListening = listenerMiddleware.startListening as TypedStartListening<

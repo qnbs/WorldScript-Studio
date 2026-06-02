@@ -36,6 +36,9 @@ export const FeatureFlagsSection: FC = () => {
     { key: 'enableAdaptiveAiEngine', labelKey: 'settings.featureFlags.enableAdaptiveAiEngine' },
     { key: 'enableWebnnInference', labelKey: 'settings.featureFlags.enableWebnnInference' },
     { key: 'enableComputeShaders', labelKey: 'settings.featureFlags.enableComputeShaders' },
+    // QNBS-v3: Phase 2 — WorkerBus v2 + Rust Compute (wired in services/workerBusManager.ts)
+    { key: 'enableWorkerBusV2', labelKey: 'settings.featureFlags.enableWorkerBusV2' },
+    { key: 'enableRustCompute', labelKey: 'settings.featureFlags.enableRustCompute' },
     // QNBS-v3: enableIdbAtRestEncryption removed — toggling without passphrase setup blocks all users.
     // Dedicated UI lives in Settings → Privacy (PrivacySection.tsx).
   ];
