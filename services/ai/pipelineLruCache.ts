@@ -18,8 +18,12 @@ export interface PipelineLruOptions<T> {
   maxSize?: number;
   /** Injectable clock for LRU recency. Default `Date.now`. */
   now?: () => number;
-  /** Called with each evicted/cleared value so backends can release GPU/WASM memory. */
-  dispose?: (value: T) => void;
+  /**
+   * Called with each evicted/replaced/cleared value so backends can release GPU/WASM memory.
+   * May be sync or async; the cache swallows sync throws and async rejections (best-effort),
+   * so callers never need to wrap it in a catch.
+   */
+  dispose?: (value: T) => void | Promise<void>;
 }
 
 interface Entry<T> {
@@ -32,7 +36,7 @@ export class PipelineLruCache<T> {
   private readonly pending = new Map<string, Promise<T>>();
   private readonly maxSize: number;
   private readonly now: () => number;
-  private readonly disposeFn: ((value: T) => void) | undefined;
+  private readonly disposeFn: ((value: T) => void | Promise<void>) | undefined;
 
   constructor(opts?: PipelineLruOptions<T>) {
     this.maxSize = Math.max(1, opts?.maxSize ?? MAX_PIPELINE_CACHE);
@@ -58,7 +62,13 @@ export class PipelineLruCache<T> {
 
   /** Insert/replace a value, evicting the LRU entry first if at capacity. */
   set(key: string, value: T): void {
-    if (!this.entries.has(key)) this.evictIfNeeded();
+    const existing = this.entries.get(key);
+    if (existing) {
+      // QNBS-v3: replacing a live key must release the previous value or it leaks (CodeAnt PR #69).
+      if (existing.value !== value) this.safeDispose(existing.value);
+    } else {
+      this.evictIfNeeded();
+    }
     this.entries.set(key, { value, lastUsedAt: this.now() });
   }
 
@@ -89,9 +99,7 @@ export class PipelineLruCache<T> {
 
   /** Drop every entry, disposing each value. In-flight loads are left to settle on their own. */
   clear(): void {
-    if (this.disposeFn) {
-      for (const entry of this.entries.values()) this.disposeFn(entry.value);
-    }
+    for (const entry of this.entries.values()) this.safeDispose(entry.value);
     this.entries.clear();
   }
 
@@ -109,7 +117,27 @@ export class PipelineLruCache<T> {
       if (oldestKey === undefined) break;
       const evicted = this.entries.get(oldestKey);
       this.entries.delete(oldestKey);
-      if (evicted) this.disposeFn?.(evicted.value);
+      if (evicted) this.safeDispose(evicted.value);
+    }
+  }
+
+  /**
+   * Invoke the dispose callback defensively: swallow synchronous throws and async rejections so a
+   * failing backend disposal can never surface as an unhandled rejection in worker/main contexts
+   * (CodeAnt PR #69). Centralising it here keeps caller-supplied `dispose` callbacks trivial.
+   */
+  private safeDispose(value: T): void {
+    const fn = this.disposeFn;
+    if (!fn) return;
+    try {
+      const result = fn(value) as unknown;
+      if (result && typeof (result as { then?: unknown }).then === 'function') {
+        (result as Promise<unknown>).then(undefined, () => {
+          /* best-effort disposal — ignore async failure */
+        });
+      }
+    } catch {
+      /* best-effort disposal — ignore synchronous failure */
     }
   }
 }

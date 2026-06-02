@@ -22,9 +22,8 @@ async function getTransformers() {
 // QNBS-v3: Phase 2.3 — shared LRU (dispose-on-evict + in-flight dedup), same instance contract
 //          as the legacy worker. Was a duplicated Map+eviction loop with no dispose.
 const pipelineCache = new PipelineLruCache<unknown>({
-  dispose: (pipe) => {
-    void (pipe as { dispose?: () => void | Promise<void> }).dispose?.();
-  },
+  // QNBS-v3: return the (possibly async) dispose result; PipelineLruCache catches sync/async failure.
+  dispose: (pipe) => (pipe as { dispose?: () => void | Promise<void> }).dispose?.(),
 });
 
 async function loadPipeline(task: string, modelId: string, quantized = true) {

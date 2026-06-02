@@ -44,6 +44,52 @@ describe('pipelineLruCache', () => {
     expect(dispose).toHaveBeenCalledWith('A');
   });
 
+  it('disposes the previous value when a live key is replaced', () => {
+    const dispose = vi.fn();
+    const cache = new PipelineLruCache<string>({ maxSize: 4, now: makeClock(), dispose });
+    cache.set('a', 'A1');
+    cache.set('a', 'A2'); // replace → old value released
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(dispose).toHaveBeenCalledWith('A1');
+    expect(cache.get('a')).toBe('A2');
+    expect(cache.size).toBe(1);
+  });
+
+  it('does not dispose when set is called with the identical value', () => {
+    const dispose = vi.fn();
+    const cache = new PipelineLruCache<string>({ now: makeClock(), dispose });
+    cache.set('a', 'A');
+    cache.set('a', 'A'); // idempotent touch — no dispose
+    expect(dispose).not.toHaveBeenCalled();
+  });
+
+  it('swallows a synchronous dispose throw without breaking eviction', () => {
+    const cache = new PipelineLruCache<string>({
+      maxSize: 1,
+      now: makeClock(),
+      dispose: () => {
+        throw new Error('sync dispose boom');
+      },
+    });
+    cache.set('a', 'A');
+    expect(() => cache.set('b', 'B')).not.toThrow();
+    expect(cache.has('b')).toBe(true);
+    expect(cache.has('a')).toBe(false);
+  });
+
+  it('swallows an async dispose rejection (no unhandled rejection on evict)', async () => {
+    const cache = new PipelineLruCache<string>({
+      maxSize: 1,
+      now: makeClock(),
+      dispose: () => Promise.reject(new Error('async dispose boom')),
+    });
+    cache.set('a', 'A');
+    expect(() => cache.set('b', 'B')).not.toThrow();
+    // Let the rejected disposal microtask settle; the test fails loudly if it goes unhandled.
+    await Promise.resolve();
+    expect(cache.has('b')).toBe(true);
+  });
+
   it('disposes every value on clear()', () => {
     const dispose = vi.fn();
     const cache = new PipelineLruCache<string>({ maxSize: 4, now: makeClock(), dispose });

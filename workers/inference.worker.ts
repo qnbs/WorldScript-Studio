@@ -36,9 +36,8 @@ export interface InferenceResponse {
 // QNBS-v3: Phase 2.3 — shared LRU now disposes evicted pipelines (closes a VRAM leak) and dedups
 //          concurrent same-model loads. `dispose()` is best-effort; absent on some backends.
 const pipelineCache = new PipelineLruCache<unknown>({
-  dispose: (pipe) => {
-    void (pipe as { dispose?: () => void | Promise<void> }).dispose?.();
-  },
+  // QNBS-v3: return the (possibly async) dispose result; PipelineLruCache catches sync/async failure.
+  dispose: (pipe) => (pipe as { dispose?: () => void | Promise<void> }).dispose?.(),
 });
 
 let transformersModule: { pipeline: (...args: unknown[]) => Promise<unknown> } | null = null;
