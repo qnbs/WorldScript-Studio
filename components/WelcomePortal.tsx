@@ -378,6 +378,14 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
             .animate-fade-in {
                 animation: fade-in 0.5s ease-in-out;
             }
+            /* QNBS-v3: respect reduced-motion — disabling the fade keeps the portal at full
+               opacity so axe never samples blended mid-animation colors (WCAG 2.3.3 + stable a11y). */
+            @media (prefers-reduced-motion: reduce) {
+                .animate-fade-in {
+                    animation: none;
+                    opacity: 1;
+                }
+            }
         `}</style>
     </div>
   );
