@@ -187,7 +187,8 @@ describe('workerBootstrap', () => {
       dispatch(createTaskMessage('t-5', 'slow.task', {}, 'trace-t5', 5_000));
       // capturedSignal is set synchronously during handler invocation
       dispatch(createCancelMessage('t-5'));
-      expect(capturedSignal?.aborted).toBe(true);
+      // QNBS-v3: cast needed — tsc narrows closure-assigned let to never in strict mode
+      expect((capturedSignal as AbortSignal | null)?.aborted).toBe(true);
     });
 
     it('posts WORKER_RESULT error after handler rejects on abort', async () => {

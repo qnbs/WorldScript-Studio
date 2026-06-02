@@ -11,12 +11,13 @@ const { mockShutdown, mockRegisterPool, mockInstall, MockWorkBus, MockRegistry }
     const mockInstall = vi.fn();
 
     // QNBS-v3: Regular function (not arrow) so new MockWorkBus() works as a constructor.
+    //          Bracket notation required — noPropertyAccessFromIndexSignature is enabled.
     const MockWorkBus = vi.fn(function (this: Record<string, unknown>) {
-      this.shutdown = mockShutdown;
-      this.registerPool = mockRegisterPool;
-      this.enqueue = vi.fn();
-      this.cancel = vi.fn(() => true);
-      this.getTelemetry = vi.fn(() => ({
+      this['shutdown'] = mockShutdown;
+      this['registerPool'] = mockRegisterPool;
+      this['enqueue'] = vi.fn();
+      this['cancel'] = vi.fn(() => true);
+      this['getTelemetry'] = vi.fn(() => ({
         queueDepth: { critical: 0, high: 0, normal: 0, low: 0 },
         activeWorkers: 0,
         idleWorkers: 0,
@@ -30,12 +31,12 @@ const { mockShutdown, mockRegisterPool, mockInstall, MockWorkBus, MockRegistry }
         circuitBreakerStates: {},
         lastSuccessAt: null,
       }));
-      this.subscribe = vi.fn();
+      this['subscribe'] = vi.fn();
     });
 
     const MockRegistry = vi.fn(function (this: Record<string, unknown>) {
-      this.register = vi.fn();
-      this.install = mockInstall;
+      this['register'] = vi.fn();
+      this['install'] = mockInstall;
     });
 
     return { mockShutdown, mockRegisterPool, mockInstall, MockWorkBus, MockRegistry };
@@ -57,7 +58,7 @@ vi.mock('@domain/worker-bus', () => ({
 
 vi.mock('../../services/legacyWorkerBusAdapter', () => ({
   LegacyWorkerBusAdapter: vi.fn(function (this: Record<string, unknown>) {
-    this.getTelemetry = vi.fn();
+    this['getTelemetry'] = vi.fn();
   }),
 }));
 
