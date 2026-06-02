@@ -16,9 +16,12 @@ async function assertNoSeriousViolations(page: import('@playwright/test').Page, 
 test.describe('Accessibility (axe)', () => {
   // QNBS-v3: emulate prefers-reduced-motion so component animations (e.g. WelcomePortal's
   // fade-in) settle instantly. Without this, axe samples blended mid-animation colors and
-  // reports phantom color-contrast failures. Scoped to this spec to leave VRT baselines
-  // (which were captured without reduced motion) untouched.
-  test.use({ reducedMotion: 'reduce' });
+  // reports phantom color-contrast failures. page.emulateMedia is well-typed (test.use()
+  // rejects reducedMotion in this Playwright version). Scoped here so VRT baselines (captured
+  // without reduced motion) stay untouched.
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+  });
 
   test('welcome / home has no serious axe violations', async ({ page }) => {
     await page.goto('/');
