@@ -3,7 +3,7 @@
  * QNBS-v3: Selectors + dispatch + navigation, no rendering logic.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useAppDispatch, useAppSelectorShallow } from '../app/hooks';
 import { selectEnableLoraAdapters } from '../features/featureFlags/featureFlagsSlice';
 import {
@@ -43,7 +43,17 @@ import {
   mergeAdapterThunk,
   startTrainingThunk,
 } from '../features/lora/loraThunks';
-import type { LoraActiveView, LoraWizardStep, PresetId } from '../features/lora/types';
+import type {
+  DatasetEntry,
+  LoraActiveView,
+  LoraWizardStep,
+  PresetId,
+} from '../features/lora/types';
+
+// QNBS-v3: Module-level stable refs so the no-project path doesn't recreate a selector each
+//          render (createSelector(...) returns a fresh memoized selector per call, defeating memo).
+const EMPTY_DATASET: DatasetEntry[] = [];
+const selectEmptyDataset = () => EMPTY_DATASET;
 
 export function useLoraView(projectId?: string) {
   const dispatch = useAppDispatch();
@@ -66,10 +76,12 @@ export function useLoraView(projectId?: string) {
   const lastEvaluation = useAppSelectorShallow(selectLastEvaluation);
   const onboardingDismissed = useAppSelectorShallow(selectLoraOnboardingDismissed);
 
-  // Project-scoped dataset
-  const datasetEntries = useAppSelectorShallow(
-    projectId ? selectDatasetForProject(projectId) : () => [],
+  // Project-scoped dataset — memoize the selector so it's stable across renders for a given project.
+  const datasetSelector = useMemo(
+    () => (projectId ? selectDatasetForProject(projectId) : selectEmptyDataset),
+    [projectId],
   );
+  const datasetEntries = useAppSelectorShallow(datasetSelector);
 
   // Load adapters on mount
   useEffect(() => {

@@ -9,6 +9,28 @@
 **Production hotfix (2026-06-02):** Live blank screen (`init_locales is not defined`) root-caused to rolldown production DCE dropping zod's lazy `__esm` init wrappers — zod declares `"sideEffects": false`, so its side-effect-only modules (`locales`, `from-json-schema`) were stripped while their init calls survived. Fixed via `patches/zod@4.4.3.patch` (`sideEffects: true`); `rollupOptions.treeshake` is ignored by rolldown-vite. **Systemic gap closed:** the E2E suite runs `vite dev`, so the production rolldown bundle was never exercised — added `pnpm run smoke:prod` (headless-browser mount check on the built `dist/`) to the CI build job, plus an `unhandledrejection` startup-error handler in `index.tsx`.  
 **Toolchain:** Node 22/24, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
 
+## Perf Hardening — 2026-06-02 (Phase 2.3 — Pipeline-cache unification + self-review)
+
+**Scope:** Local-AI inference pipeline caching; meta-review of the same day's Claude-co-authored commits.
+
+### Findings & fixes
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `workers/inference.worker.ts:34-98` + `workers/v2/inference.worker.ts:21-56` | Byte-identical pipeline-LRU logic duplicated across both workers; **neither disposed the evicted pipeline** → VRAM/RAM leak (same bug-class as WebLLM eviction, 2026-06-01 #1) | Extracted `services/ai/pipelineLruCache.ts` (`PipelineLruCache<T>`): dispose-on-evict, **in-flight load dedup**, injectable clock for deterministic tests. Both workers now consume it; duplication removed. |
+| 2 | `services/ai/aiRetry.ts` (self-review) | Sound (exp-backoff + full jitter + `Retry-After` precedence + hostile-value clamp + injectable RNG). Gap: no property-based invariant tests | ✅ Added invariant tests for `computeRetryDelayMs` (exponential, non-decreasing, cap, jitter∈[0,capped)) + `parseRetryAfterMs` (ms/seconds/string/header/clamp) + a Retry-After-beats-backoff integration test. 19 tests total. |
+| 3 | `hooks/useLoraView.ts:70-72` (self-review) | `projectId ? selectDatasetForProject(projectId) : () => []` recreates the memoized selector each render | ✅ `useMemo`-wrapped selector keyed on `projectId`; module-level stable empty selector. 12 existing tests still green (behavior-preserving). |
+
+**Non-finding:** latency telemetry is already recorded at the facade (`localAiFacade.ts` → `localWorkerBus.recordResult(elapsedMs, …)`), so no new worker→main telemetry hop was needed.
+
+**Verification:** lint ✅ (1095 files, 0 warnings) · typecheck ✅ · `pipelineLruCache.test.ts` (13) + `inferenceWorker.test.ts` (7) ✅ — existing worker tests unchanged ⇒ behavior-preserving. Coverage/E2E/smoke:prod: CI.
+
+**CodeAnt PR #69 review (3/3 resolved at root):** (1) `set()` now disposes the previous value when a live key is replaced; (2/3) `PipelineLruCache.safeDispose()` centrally swallows sync throws + async rejections so a failing `dispose()` can't surface as an unhandled rejection in either worker. +4 tests.
+
+**Phase 2.4 (coverage) follow-on:** correction — `sileroVadEngine.ts` (5 tests) + `kokoroTtsEngine.ts` already had tests since 2026-05-31 (TODO "0 tests" was stale). Real gap filled: Kokoro `cancel()`/`pause()`/`resume()`/`dispose()` + no-WebAssembly branch (+4 → 10 tests). Inference-worker LRU covered via `pipelineLruCache.test.ts`. **CI-measured coverage 75.15 L / 61.23 B / 67.84 F / 73.14 S** (PR #69, both Node 22/24) → `vitest.config.ts` thresholds ratcheted L72→74 / F64→66 / B58→60 / S70→72 (~1 pt margin under measured). C-7 target stays L85/B75/F80.
+
+**Phase 4 (ADRs + onboarding):** `docs/adr/0001-state-management-boundaries.md` (Redux vs Zustand — demotes the recurring "P0 dual-state" audit flag to a settled decision, not a consolidation) + `docs/adr/0002-local-ai-stack-layering.md` (fallback chain + shared infra + honest-degradation contract); README `⚡ Quick Start (60 seconds)`. Docs-only.
+
 ## Post-crash Session — 2026-06-01 (CI Hardening + CodeAnt + E2E Stabilisation)
 
 **Scope:** CI pipeline correctness, AI core quality, E2E test reliability, documentation.

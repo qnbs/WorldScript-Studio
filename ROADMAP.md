@@ -104,7 +104,8 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 - **Phase 1.3:** GPU fallback reason tracking; worker restart cap (MAX=5); RAM-pressure eco-mode; AdaptiveAiHardwarePanel
 - **Phase 2.1:** Real `text-generation` pipelines (WebLLM: SmolLM2-135M; Transformers.js: distilgpt2); AbortSignal end-to-end
 - **Phase 2.2:** ✅ Done (2026-06-02) — LoRA view productionized: `LoraView` container + gated `lora` route + conditional sidebar nav (`enableLoraAdapters`); `lora-wizard.spec.ts` re-enabled. Also `aiRetry` exponential backoff/jitter/Retry-After (P1-F5) + `fetchAdapter` opt-in timeout (P1-F6).
-- **Remaining:** Phase 2.3 (perf hardening), 2.4 (coverage), Phase 3 (final QA)
+- **Phase 2.3** 🔄 (2026-06-02) — Pipeline LRU cache unified into `services/ai/pipelineLruCache.ts` (dispose-on-evict closes a VRAM leak; in-flight load dedup); duplication across the two inference workers removed. Remaining: WebLLM worker offload.
+- **Remaining:** Phase 2.3 stretch (WebLLM worker), 2.4 (coverage), Phase 3 (final QA)
 
 **CI: Cloud-first Storybook** ✅ Done (2026-05-31)
 - Playwright browser cache in `storybook` CI job; `**/screenshots/` in artifact upload

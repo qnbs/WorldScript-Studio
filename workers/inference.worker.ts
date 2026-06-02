@@ -3,6 +3,8 @@
 //          Uses WorkerBus request/response protocol with messageId correlation.
 //          Adapted from CannaGuide-2025 inference.worker.ts patterns for creative-writing tasks.
 
+import { PipelineLruCache } from '../services/ai/pipelineLruCache';
+
 export type WorkerTaskType =
   | 'text-generation'
   | 'feature-extraction'
@@ -31,15 +33,12 @@ export interface InferenceResponse {
   latencyMs?: number;
 }
 
-interface PipelineEntry {
-  pipeline: unknown;
-  lastUsedAt: number;
-}
-
-// QNBS-v3: Cap pipeline cache to avoid VRAM/RAM pressure from too many loaded models.
-const MAX_PIPELINE_CACHE = 8;
-
-const pipelineCache = new Map<string, PipelineEntry>();
+// QNBS-v3: Phase 2.3 — shared LRU now disposes evicted pipelines (closes a VRAM leak) and dedups
+//          concurrent same-model loads. `dispose()` is best-effort; absent on some backends.
+const pipelineCache = new PipelineLruCache<unknown>({
+  // QNBS-v3: return the (possibly async) dispose result; PipelineLruCache catches sync/async failure.
+  dispose: (pipe) => (pipe as { dispose?: () => void | Promise<void> }).dispose?.(),
+});
 
 let transformersModule: { pipeline: (...args: unknown[]) => Promise<unknown> } | null = null;
 
@@ -62,39 +61,20 @@ function isTrustedWorkerMessage(event: MessageEvent): boolean {
 
 async function loadPipeline(task: WorkerTaskType, modelId: string, quantized = true) {
   const cacheKey = `${task}::${modelId}`;
-  const cached = pipelineCache.get(cacheKey);
-  if (cached) {
-    cached.lastUsedAt = Date.now();
-    return cached.pipeline;
-  }
-
-  // Evict LRU entry if at capacity
-  if (pipelineCache.size >= MAX_PIPELINE_CACHE) {
-    let oldestKey = '';
-    let oldestTs = Number.POSITIVE_INFINITY;
-    for (const [key, entry] of pipelineCache) {
-      if (entry.lastUsedAt < oldestTs) {
-        oldestTs = entry.lastUsedAt;
-        oldestKey = key;
-      }
-    }
-    if (oldestKey) pipelineCache.delete(oldestKey);
-  }
-
-  const { pipeline } = await getTransformers();
-  // QNBS-v3: Device auto-selection — webgpu if available, else wasm.
-  const device =
-    typeof globalThis.navigator !== 'undefined' && 'gpu' in globalThis.navigator
-      ? 'webgpu'
-      : 'wasm';
-  const pipe = await (pipeline as (task: string, model: string, opts: unknown) => Promise<unknown>)(
-    task,
-    modelId,
-    // QNBS-v3: transformers.js v3 replaced `quantized: boolean` with `dtype`; q8 ≈ the old quantized=true.
-    { dtype: quantized ? 'q8' : 'fp32', device },
-  );
-  pipelineCache.set(cacheKey, { pipeline: pipe, lastUsedAt: Date.now() });
-  return pipe;
+  return pipelineCache.getOrLoad(cacheKey, async () => {
+    const { pipeline } = await getTransformers();
+    // QNBS-v3: Device auto-selection — webgpu if available, else wasm.
+    const device =
+      typeof globalThis.navigator !== 'undefined' && 'gpu' in globalThis.navigator
+        ? 'webgpu'
+        : 'wasm';
+    // QNBS-v3: transformers.js v3 replaced `quantized: boolean` with `dtype`; q8 ≈ old quantized=true.
+    return (pipeline as (task: string, model: string, opts: unknown) => Promise<unknown>)(
+      task,
+      modelId,
+      { dtype: quantized ? 'q8' : 'fp32', device },
+    );
+  });
 }
 
 async function runInference(

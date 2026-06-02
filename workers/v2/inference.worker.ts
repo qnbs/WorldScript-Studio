@@ -6,6 +6,7 @@ import {
   registerTaskHandler,
   type WorkerHandlerContext,
 } from '../../packages/worker-bus/src/workerBootstrap';
+import { PipelineLruCache } from '../../services/ai/pipelineLruCache';
 
 // QNBS-v3: Lazy import transformers.js to keep worker spawn fast.
 let transformersModule: { pipeline: (...args: unknown[]) => Promise<unknown> } | null = null;
@@ -18,41 +19,27 @@ async function getTransformers() {
   return transformersModule!;
 }
 
-const pipelineCache = new Map<string, { pipeline: unknown; lastUsedAt: number }>();
-const MAX_PIPELINE_CACHE = 8;
+// QNBS-v3: Phase 2.3 — shared LRU (dispose-on-evict + in-flight dedup), same instance contract
+//          as the legacy worker. Was a duplicated Map+eviction loop with no dispose.
+const pipelineCache = new PipelineLruCache<unknown>({
+  // QNBS-v3: return the (possibly async) dispose result; PipelineLruCache catches sync/async failure.
+  dispose: (pipe) => (pipe as { dispose?: () => void | Promise<void> }).dispose?.(),
+});
 
 async function loadPipeline(task: string, modelId: string, quantized = true) {
   const cacheKey = `${task}::${modelId}`;
-  const cached = pipelineCache.get(cacheKey);
-  if (cached) {
-    cached.lastUsedAt = Date.now();
-    return cached.pipeline;
-  }
-
-  if (pipelineCache.size >= MAX_PIPELINE_CACHE) {
-    let oldestKey = '';
-    let oldestTs = Number.POSITIVE_INFINITY;
-    for (const [key, entry] of pipelineCache) {
-      if (entry.lastUsedAt < oldestTs) {
-        oldestTs = entry.lastUsedAt;
-        oldestKey = key;
-      }
-    }
-    if (oldestKey) pipelineCache.delete(oldestKey);
-  }
-
-  const { pipeline } = await getTransformers();
-  const device =
-    typeof globalThis.navigator !== 'undefined' && 'gpu' in globalThis.navigator
-      ? 'webgpu'
-      : 'wasm';
-  const pipe = await (pipeline as (task: string, model: string, opts: unknown) => Promise<unknown>)(
-    task,
-    modelId,
-    { dtype: quantized ? 'q8' : 'fp32', device },
-  );
-  pipelineCache.set(cacheKey, { pipeline: pipe, lastUsedAt: Date.now() });
-  return pipe;
+  return pipelineCache.getOrLoad(cacheKey, async () => {
+    const { pipeline } = await getTransformers();
+    const device =
+      typeof globalThis.navigator !== 'undefined' && 'gpu' in globalThis.navigator
+        ? 'webgpu'
+        : 'wasm';
+    return (pipeline as (task: string, model: string, opts: unknown) => Promise<unknown>)(
+      task,
+      modelId,
+      { dtype: quantized ? 'q8' : 'fp32', device },
+    );
+  });
 }
 
 async function handleInference(ctx: WorkerHandlerContext): Promise<unknown> {

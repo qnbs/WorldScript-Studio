@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2236_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2236 keys">
   <img src="https://img.shields.io/badge/Tests-4567_%2F_382_files-22C55E" alt="4567 tests / 382 files">
-  <img src="https://img.shields.io/badge/Coverage-L_73%25_%7C_B_59%25_%7C_F_65%25-22C55E" alt="Coverage: Lines 73% / Branches 59% / Functions 65%">
+  <img src="https://img.shields.io/badge/Coverage-L_75%25_%7C_B_61%25_%7C_F_68%25-22C55E" alt="Coverage: Lines 75% / Branches 61% / Functions 68%">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
@@ -46,8 +46,23 @@
 
 ---
 
+## ⚡ Quick Start (60 seconds)
+
+**The fastest path to value — no install, no account, no API key:**
+
+1. **[Open the Live Demo](https://storycraft-studio-indol.vercel.app/)** → click **"Try Demo Project"** on the Welcome screen to load a populated story instantly.
+2. Open the **Manuscript** view (sidebar) and start typing. Press **`⌘K` / `Ctrl-K`** anytime for the Command Palette — every action is reachable from there.
+3. Want AI without a cloud key? **Settings → AI Provider → WebLLM** runs a model entirely in your browser (WebGPU; auto-falls back to ONNX/WASM on any device). Prefer cloud? Paste a Gemini/OpenAI key — it's encrypted at rest in your browser and only ever sent to that provider.
+
+> Everything is saved locally in IndexedDB and works offline (PWA). Nothing leaves your device unless you choose a cloud provider.
+
+**Running it yourself?** `pnpm install && pnpm run dev` (Node ≥ 22, pnpm 10) → <http://localhost:3000>. Full setup, deployment, and AI-provider options are in [Getting Started](#getting-started).
+
+---
+
 ## 📖 Table of Contents
 
+- [Quick Start (60 seconds)](#-quick-start-60-seconds)
 - [Why StoryCraft Studio?](#-why-storycraft-studio)
 - [Features: A Comprehensive Creative Suite](#-features-a-comprehensive-creative-suite)
 - [AI Provider Stack](#-ai-provider-stack)
@@ -621,6 +636,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`TODO.md`](TODO.md) | Current sprint tasks and status |
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
+| [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering |
 | [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
 | [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
 | [`docs/Design-System.md`](docs/Design-System.md) | Tokens, Tailwind preset, UI primitives under `components/ui` |
