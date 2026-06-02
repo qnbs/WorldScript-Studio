@@ -49,6 +49,8 @@
   "collab.encryptionAriaLabel": "Stato della crittografia",
   "common.appLoading": "L'applicazione è in caricamento",
   "common.cancel": "Annulla",
+  "common.next": "Avanti",
+  "common.back": "Indietro",
   "common.add": "Aggiungi",
   "common.close": "Chiudi",
   "common.copyToClipboard": "Copia negli appunti",

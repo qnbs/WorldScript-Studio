@@ -1,5 +1,7 @@
 {
   "common.cancel": "Cancel",
+  "common.next": "Next",
+  "common.back": "Back",
   "common.add": "Add",
   "common.saveCharacter": "Save Character",
   "common.saveWorld": "Save World",

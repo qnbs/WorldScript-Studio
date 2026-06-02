@@ -66,6 +66,8 @@
   "common.add": "Ajouter",
   "common.appLoading": "L'application se charge",
   "common.cancel": "Annuler",
+  "common.next": "Suivant",
+  "common.back": "Retour",
   "common.close": "Fermer",
   "common.copyToClipboard": "Copier dans le presse-papiers",
   "common.delete": "Supprimer",
