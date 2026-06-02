@@ -4,7 +4,7 @@
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
 **Current version:** **v1.19.0** — 2026-06-01 (All CI/CD jobs green; 14 CodeAnt AI issues fixed; E2E failures reduced from 24 → ~0; 156 deployment records pruned)
 
-**Quality gate (2026-06-01):** lint ✅ · i18n:check ✅ (2160 keys × 5 locales) · typecheck ✅ · tests ✅ · VRT baselines bootstrapped · E2E stabilised · Coverage/Stryker: CI-only  
+**Quality gate (2026-06-02):** lint ✅ · i18n:check ✅ (2159 keys × 5 locales) · typecheck ✅ · tests ✅ · feature-parity 0 criticals · LoRA view routed (Phase 2.2) · Stryker now manual-only (dropped from PR/CI) · Coverage/E2E: CI-only  
 **Toolchain:** Node 22/24, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
 
 ## Post-crash Session — 2026-06-01 (CI Hardening + CodeAnt + E2E Stabilisation)
