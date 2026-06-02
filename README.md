@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Version-v1.19.0-6366F1" alt="v1.19.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2078_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2078 keys">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2236_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2236 keys">
   <img src="https://img.shields.io/badge/Tests-4567_%2F_382_files-22C55E" alt="4567 tests / 382 files">
   <img src="https://img.shields.io/badge/Coverage-L_73%25_%7C_B_59%25_%7C_F_65%25-22C55E" alt="Coverage: Lines 73% / Branches 59% / Functions 65%">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
@@ -562,7 +562,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 - **4 200+ unit tests** across **390+ test files** — all passing (2026-06-01 CI run)
 - Coverage: **73 % lines · 58 % branches · 65 % functions · 71 % statements** (CI-reported; see Codecov badge)
 - Vitest thresholds: lines ≥ 73 · statements ≥ 71 · branches ≥ 58 · functions ≥ 65 — all green
-- i18n: **2234 keys × 5 locales** (en/de/fr/es/it); ar/he stubs (2150 keys)
+- i18n: **2236 keys × 5 locales** (en/de/fr/es/it); ar/he stubs (2152 keys)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

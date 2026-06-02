@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Production-build smoke guard + startup error handling** (2026-06-02):
+  - `scripts/smoke-prod-build.mjs` (+ `smoke:prod`) — serves the built `dist/` via `vite preview`, loads it in headless Chromium, and fails if `#root` never mounts or any pageerror fires; wired into the CI build job (installs `chromium-headless-shell`). Closes the gap where prod-only rolldown bundling crashes shipped green because the E2E suite runs `vite dev` (no DCE / no minify)
+  - `index.tsx` — `renderStartupError()` helper + a `unhandledrejection` listener (HTML-escaped) so async-bootstrap rejections render the recovery screen instead of a silent blank `#root` (previously only synchronous `error` events were caught)
+- **LoRA module test coverage — Phase 3 (C-7 climb)** (2026-06-02):
+  - `tests/unit/lora/useLoraView.test.ts` (12) · `LoraTrainingWizard.test.tsx` (10) · `loraPanels.test.tsx` (11) — 33 tests covering the previously-0% hook, training wizard, and library/dataset/evaluation panels
 - **LoRA Fine-Tuning view productionized — Local AI Perfection Phase 2.2** (2026-06-02):
   - `components/lora/LoraView.tsx` — new container assembling the existing `LoraAdapterLibrary` / `LoraDatasetBuilder` / `LoraEvaluationPanel` / `LoraTrainingWizard` behind `LoraViewContext`, with first-visit onboarding and library/dataset/evaluation sub-nav
   - `App.tsx` — gated `lora` route (lazy-loaded; falls back to Dashboard when `enableLoraAdapters` is off, mirroring `objects`/`mindmap`)
@@ -45,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Production blank screen — zod tree-shaking (rolldown DCE)** (2026-06-02):
+  - `patches/zod@4.4.3.patch` flips zod's `"sideEffects": false` → `true`. zod v4 (inlined inside `@ai-sdk/*`) declared no side effects, so rolldown's production DCE dropped its lazy `__esm` init wrappers (`init_locales`, `init_from_json_schema`) while keeping the `init_*()` calls → `init_locales is not defined` at bootstrap → blank `#root` for **all** users (Vercel + GitHub Pages). `rollupOptions.treeshake` is ignored by rolldown-vite, so the fix is the dependency-level patch. Verified end-to-end with a headless-browser load of the prod build; guarded going forward by `smoke:prod`
+- **`common.next` / `common.back` i18n keys were orphaned** (2026-06-02) — the LoRA wizard's nav buttons referenced `t('common.next')` / `t('common.back')`, but neither key existed in any locale, so they rendered the raw key string (breaking the wizard E2E). Added to all 7 locales (bundle 2234 → 2236 keys)
 - **AI transient-retry + fetch hardening** (2026-06-02):
   - `services/ai/aiRetry.ts` (P1-F5) — replaced linear backoff with capped exponential backoff + full jitter; honors a server `Retry-After` (seconds / HTTP-date / `retryAfterMs`) over the computed delay, clamped to 30 s. Pure `computeRetryDelayMs` / `parseRetryAfterMs` helpers + injectable rng; 13 unit tests
   - `services/ai/fetchAdapter.ts` (P1-F6) — opt-in `timeoutMs` (DEFAULT OFF, streaming-safe) composing `AbortSignal.timeout` with the caller signal via `AbortSignal.any`; existing no-arg callers unchanged; 5 unit tests

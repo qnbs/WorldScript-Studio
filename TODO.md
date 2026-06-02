@@ -55,8 +55,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **C-7 partial** (2026-05-28) — +130 tests; thresholds raised L73/F65/B58/S71; 4 192 tests / 392 files
 - ✅ **Codespace Uplift** (2026-05-30) — CLAUDE.md environment-aware shell rules; devcontainer re-activated (8-core/16GB); `.devcontainer/README.md` Modus Operandi section
 - ✅ **Vercel blank screen fix** (2026-05-30) — `index.html` `%BASE_URL%` for manifest/favicon/og; `index.tsx` error safety net; 382 test files / 4567 tests all green
+- ✅ **Production blank screen — zod/rolldown DCE** (2026-06-02) — `init_locales is not defined`: rolldown's prod DCE dropped zod's `__esm` init wrappers (zod `sideEffects:false`). Fixed via `patches/zod@4.4.3.patch` (`sideEffects:true`). Added `smoke:prod` (headless mount check on built `dist/`) to CI build job + `unhandledrejection` startup handler — closes the dev-mode-E2E blind spot
 - ⬜ **C-6** — Full ar/he translation content — requires native translator review (stubs exist in `locales/ar/`, `locales/he/`)
-- 🔄 **C-7 remainder** — Coverage → L85%/B75%/F80%; Stryker break 75→80 (current thresholds: L73/F65/B58)
+- 🔄 **C-7 remainder** — Coverage → L85%/B75%/F80%; Stryker break 75→80 (current thresholds: L73/F65/B58). **Phase 3 started (2026-06-02):** +33 LoRA tests (useLoraView, training wizard, sub-panels — were 0%)
 - ✅ IDB at-rest encryption UX (2026-06-02 reconciliation) — `IdbUnlockModal` (startup unlock + 2-step forgot-passphrase escape hatch, `App.tsx:182-188,638-643`), `PassphraseModal` (set/change/disable), real read/write gating `idbProjectStore.ts:209-265`, session lock + key rotation (Phase 1). `enableIdbAtRestEncryption` flag in Settings › Privacy with ⚠ warning
 - ⬜ Complete Whisper WASM STT model download + inference pipeline (B-2 continuation)
 - ⬜ Kokoro/Piper TTS WASM engines

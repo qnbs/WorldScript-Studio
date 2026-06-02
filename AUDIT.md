@@ -4,7 +4,9 @@
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
 **Current version:** **v1.19.0** — 2026-06-01 (All CI/CD jobs green; 14 CodeAnt AI issues fixed; E2E failures reduced from 24 → ~0; 156 deployment records pruned)
 
-**Quality gate (2026-06-02):** lint ✅ · i18n:check ✅ (2234 keys × 5 locales; `lora` module un-orphaned) · typecheck ✅ · tests ✅ · feature-parity 0 criticals · LoRA view routed (Phase 2.2) · Stryker now manual-only (dropped from PR/CI) · Coverage/E2E: CI-only  
+**Quality gate (2026-06-02):** lint ✅ · i18n:check ✅ (2236 keys × 5 locales; `lora` + `common.next/back` un-orphaned) · typecheck ✅ · tests ✅ · feature-parity 0 criticals · LoRA view routed (Phase 2.2) + Phase 3 coverage tests (33) · Stryker now manual-only · Coverage/E2E: CI-only  
+
+**Production hotfix (2026-06-02):** Live blank screen (`init_locales is not defined`) root-caused to rolldown production DCE dropping zod's lazy `__esm` init wrappers — zod declares `"sideEffects": false`, so its side-effect-only modules (`locales`, `from-json-schema`) were stripped while their init calls survived. Fixed via `patches/zod@4.4.3.patch` (`sideEffects: true`); `rollupOptions.treeshake` is ignored by rolldown-vite. **Systemic gap closed:** the E2E suite runs `vite dev`, so the production rolldown bundle was never exercised — added `pnpm run smoke:prod` (headless-browser mount check on the built `dist/`) to the CI build job, plus an `unhandledrejection` startup-error handler in `index.tsx`.  
 **Toolchain:** Node 22/24, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
 
 ## Post-crash Session — 2026-06-01 (CI Hardening + CodeAnt + E2E Stabilisation)
