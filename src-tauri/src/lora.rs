@@ -26,7 +26,10 @@ pub struct LoraTrainPayload {
     pub max_seq_len: Option<u16>,
 }
 
-#[derive(Debug, Serialize, Clone)]
+// QNBS-v3: Deserialize required — check_lora_environment parses the Python sidecar's
+//          JSON stdout into this struct via serde_json::from_str (lora.rs:209). Missing
+//          derive broke the whole crate compile (tauri-build red since 2026-05-30).
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LoraEnvReport {
     pub python_available: bool,
     pub unsloth_available: bool,

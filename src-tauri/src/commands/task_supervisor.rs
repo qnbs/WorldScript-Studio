@@ -17,7 +17,7 @@
 //! TS `RustTaskResultEvent` honest-failure convention.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::time::Instant;
 
 /// Bumped when the wire contract or task registry changes; surfaced via `ping`.
@@ -207,6 +207,7 @@ fn count_syllables(word: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn empty_text_is_all_zero() {
