@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockEnqueue = vi.fn();
-const mockGetWorkerBus = vi.fn(() => null);
+// biome-ignore lint/suspicious/noExplicitAny: mock returns null or partial bus shape
+const mockGetWorkerBus = vi.fn<[], any>(() => null);
 
 vi.mock('../../services/workerBusManager', () => ({
   getWorkerBus: mockGetWorkerBus,

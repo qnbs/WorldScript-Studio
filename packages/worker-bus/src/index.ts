@@ -63,6 +63,7 @@ export type {
   RustTaskRequest,
   RustTaskResultEvent,
   TaskErrorInfo,
+  TaskHandle,
   TaskHandler,
   TaskPriority,
   TaskProgress,
