@@ -82,18 +82,21 @@ test.describe('LoRA Wizard (CI-only)', () => {
     await openLora(page);
     await page.getByRole('button', { name: /Train Your First Adapter|Train New Adapter/i }).click();
 
-    // Model step: pick a base model so Next is enabled.
-    await page.getByRole('radio').first().check();
-    await page.getByRole('button', { name: /^Next$/i }).click();
+    // Model step: select a base model via its label (user-realistic; reliably fires the
+    // controlled radio's onChange), then wait for Next to become enabled before clicking.
+    await page.getByText(/Llama 3\.2 7B/i).click();
+    const nextBtn = page.getByRole('button', { name: /^Next$/i });
+    await expect(nextBtn).toBeEnabled({ timeout: 8000 });
+    await nextBtn.click();
 
     // Dataset step shows the extract instruction.
     await expect(page.getByText(/Extract your manuscript|training data/i)).toBeVisible({
       timeout: 8000,
     });
 
-    // Back returns to the Model step (radios visible again).
+    // Back returns to the Model step (model options visible again).
     await page.getByRole('button', { name: /^Back$/i }).click();
-    await expect(page.getByRole('radio').first()).toBeVisible();
+    await expect(page.getByText(/Llama 3\.2 7B/i)).toBeVisible();
   });
 
   test('Sub-nav switches to the Dataset Builder', async ({ page }) => {
