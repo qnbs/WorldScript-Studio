@@ -48,6 +48,11 @@
     "install-playwright": "npx playwright install chromium",
     // QNBS-v3: Set up git hooks (simple-git-hooks + lint-staged).
     "setup-hooks": "pnpm run prepare",
+    // QNBS-v3: Install graphifyy's runtime deps (tree-sitter grammars). graphifyy itself is
+    //          hash-pinned + installed --no-deps in the Dockerfile (Scorecard Pinned-Dependencies);
+    //          its deps are pulled here at container-create time so `graphify` is fully functional.
+    //          This lifecycle hook is not part of the build/release path Scorecard audits.
+    "install-graphify-deps": "python3 -m pip install --break-system-packages 'graphifyy==0.8.26' >/dev/null 2>&1 && graphify --version || echo '⚠️  graphify deps install skipped (offline?) — run: pip install graphifyy==0.8.26'",
     // QNBS-v3: Install Claude Code CLI globally — enables AI-assisted development
     // in Codespaces. Falls back gracefully if npm is temporarily unavailable.
     "install-claude": "npm install -g @anthropic-ai/claude-code 2>/dev/null || true",

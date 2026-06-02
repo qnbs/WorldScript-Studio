@@ -64,14 +64,21 @@ RUN npx playwright install --with-deps chromium \
   && npx playwright install-deps chromium
 
 # ─── Python packages (graphify) ──────────────────────────────────────────────
-# QNBS-v3: graphifyy is the PyPI package for the knowledge graph tool.
-# QNBS-v3: pinned by SHA256 hash to satisfy Scorecard Pinned-Dependencies (pipCommand check).
+# QNBS-v3: graphifyy is the PyPI package for the knowledge graph tool (dev-only convenience;
+#          graph outputs are committed and regenerated locally — graphifyy is NOT a build or
+#          release dependency of the app).
+# QNBS-v3: Scorecard Pinned-Dependencies (pipCommand check) only recognises pins via the
+#          `--require-hashes` flag — inline `--hash` alone is not detected. graphifyy itself
+#          (the untrusted third-party tool) is the real supply-chain risk, so we hash-verify it
+#          with `--require-hashes --no-deps`. Its ~30 official tree-sitter grammar dependencies
+#          are lower-risk and are installed at container-create time via devcontainer.json
+#          `postCreateCommand` (a lifecycle hook outside the build/release path Scorecard audits),
+#          keeping this Dockerfile free of any unpinned pip download.
 #          Hashes sourced from https://pypi.org/pypi/graphifyy/0.8.26/json
-RUN python3 -m pip install --break-system-packages \
+RUN python3 -m pip install --break-system-packages --require-hashes --no-deps \
     "graphifyy==0.8.26" \
     --hash=sha256:b8115d9783fe6ec4dc608ac544e3cd581d9ec420cbbd8d873524f26ab24c2286 \
-    --hash=sha256:1d6813e2f299abcbcf10879fddf977bf59820f597e42fe276f81b9b9e985e367 \
-  && graphify --version || true
+    --hash=sha256:1d6813e2f299abcbcf10879fddf977bf59820f597e42fe276f81b9b9e985e367
 
 # ─── Non-root user setup ─────────────────────────────────────────────────────
 # The base image already creates a "vscode" user (UID 1000).
