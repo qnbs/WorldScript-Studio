@@ -69,20 +69,16 @@ const baseDeps: CommandRuntimeDeps = {
   currentView: 'dashboard',
   wordCountApprox: 0,
   featureFlags: {
-    enableCodexAutoTracking: true,
     enableStoryBibleAdvanced: false,
     enableBinderResearch: false,
     enableCompileWizard: false,
     enableProjectHealthScore: false,
-    enableCrossProjectSearch: true,
     enableAppHealthPanel: false,
-    enablePlotBoardV2: true,
     enableDuckDbAnalytics: false,
     enableObjectsGroups: false,
     enableMindMaps: false,
     enableCharacterInterviews: false,
     enableRtlLayout: false,
-    enableCloudSync: false,
     enableLoraAdapters: false,
     enablePluginSystem: false,
     enableVoiceSupport: false,
@@ -195,21 +191,11 @@ describe('getStaticCommandDefinitions', () => {
     expect(mockSetCommandPaletteOpen).toHaveBeenCalledWith(true);
   });
 
-  it('labs-cross-project-search is only shown when flag enabled', () => {
+  // QNBS-v3: enableCrossProjectSearch promoted to permanent core — command has no when guard.
+  it('labs-cross-project-search has no feature-flag when guard (always available)', () => {
     const cmds = getStaticCommandDefinitions();
     const cmd = cmds.find((c) => c.id === 'labs-cross-project-search');
-    expect(
-      cmd?.when?.({
-        ...baseDeps,
-        featureFlags: { ...baseDeps.featureFlags, enableCrossProjectSearch: false },
-      }),
-    ).toBe(false);
-    expect(
-      cmd?.when?.({
-        ...baseDeps,
-        featureFlags: { ...baseDeps.featureFlags, enableCrossProjectSearch: true },
-      }),
-    ).toBe(true);
+    expect(cmd?.when).toBeUndefined();
   });
 
   it('labs-cross-project-search calls setCrossProjectSearchOpen(true)', () => {

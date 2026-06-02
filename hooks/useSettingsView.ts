@@ -194,9 +194,6 @@ export const useSettingsView = () => {
         case 'enableVoiceSupport':
           dispatch(featureFlagsActions.setEnableVoiceSupport(Boolean(value)));
           break;
-        case 'enableCodexAutoTracking':
-          dispatch(featureFlagsActions.setEnableCodexAutoTracking(Boolean(value)));
-          break;
         case 'enableStoryBibleAdvanced':
           dispatch(featureFlagsActions.setEnableStoryBibleAdvanced(Boolean(value)));
           break;
@@ -209,13 +206,9 @@ export const useSettingsView = () => {
         case 'enableProjectHealthScore':
           dispatch(featureFlagsActions.setEnableProjectHealthScore(Boolean(value)));
           break;
-        case 'enableCrossProjectSearch':
-          dispatch(featureFlagsActions.setEnableCrossProjectSearch(Boolean(value)));
-          break;
         case 'enableAppHealthPanel':
           dispatch(featureFlagsActions.setEnableAppHealthPanel(Boolean(value)));
           break;
-        // QNBS-v3: enablePlotBoardV2 deprecated (v1 board removed in v1.6); no UI toggle.
         case 'enableDuckDbAnalytics':
           dispatch(featureFlagsActions.setEnableDuckDbAnalytics(Boolean(value)));
           break;
@@ -230,9 +223,6 @@ export const useSettingsView = () => {
           break;
         case 'enableRtlLayout':
           dispatch(featureFlagsActions.setEnableRtlLayout(Boolean(value)));
-          break;
-        case 'enableCloudSync':
-          dispatch(featureFlagsActions.setEnableCloudSync(Boolean(value)));
           break;
         case 'enableLoraAdapters':
           dispatch(featureFlagsActions.setEnableLoraAdapters(Boolean(value)));

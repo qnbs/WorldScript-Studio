@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
-import { selectFeatureFlags } from '../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { useTranslation } from '../hooks/useTranslation';
@@ -59,7 +58,6 @@ interface CrossProjectSearchPanelProps {
 export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = React.memo(
   ({ projectData }) => {
     const { t } = useTranslation();
-    const featureFlags = useAppSelector(selectFeatureFlags);
     const isOpen = useTransientUiStore((s) => s.isCrossProjectSearchOpen);
     const setOpen = useTransientUiStore((s) => s.setCrossProjectSearchOpen);
 
@@ -130,7 +128,8 @@ export const CrossProjectSearchPanel: React.FC<CrossProjectSearchPanelProps> = R
       return merged.sort((a, b) => b.score - a.score);
     }, [debouncedQuery, projectData, indexes]);
 
-    if (!featureFlags.enableCrossProjectSearch || !isOpen) return null;
+    // QNBS-v3: enableCrossProjectSearch promoted to permanent core — panel always renders when open.
+    if (!isOpen) return null;
 
     return (
       // QNBS-v3: fixed overlay + role="dialog" satisfies WCAG 2.2 modal pattern; aria-modal signals SR to ignore background

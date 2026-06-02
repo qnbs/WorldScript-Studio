@@ -26,7 +26,7 @@ const HELP_DOC_CHUNKS: HelpDocChunk[] = [
   {
     id: 'plot-board',
     title: 'Plot Board / Scene Board',
-    body: 'Canvas mode with pan, zoom, pinch, minimap, SVG connections (44px touch targets). Swimlanes and timeline modes. AI suggest next beat. Flag: enablePlotBoardV2.',
+    body: 'Canvas mode with pan, zoom, pinch, minimap, SVG connections (44px touch targets). Swimlanes and timeline modes. AI suggest next beat.',
   },
   {
     id: 'snapshots',

@@ -62,15 +62,16 @@ function makeBackend(): CloudSyncBackend {
 // Tests
 // ---------------------------------------------------------------------------
 
-// QNBS-v3: Feature flag gate tests — guard throws before any service calls.
-describe('CloudSyncBackend.create() feature flag gate', () => {
-  it('throws when featureFlagEnabled is false (default, no arg)', async () => {
+// QNBS-v3: Explicit-consent gate tests — guard throws before any service calls.
+// enableCloudSync flag was retired in v1.20; the boolean consent param replaces it.
+describe('CloudSyncBackend.create() explicit-consent gate', () => {
+  it('throws when explicitConsent is false (default, no arg)', async () => {
     await expect(
       CloudSyncBackend.create({ endpoint: 'https://sync.example.com', token: 't' }, 'pass', 'u'),
-    ).rejects.toThrow(/enableCloudSync feature flag is off/);
+    ).rejects.toThrow(/explicit user consent required/);
   });
 
-  it('throws when featureFlagEnabled is explicitly false', async () => {
+  it('throws when explicitConsent is explicitly false', async () => {
     await expect(
       CloudSyncBackend.create(
         { endpoint: 'https://sync.example.com', token: 't' },
@@ -78,7 +79,7 @@ describe('CloudSyncBackend.create() feature flag gate', () => {
         'u',
         false,
       ),
-    ).rejects.toThrow(/enableCloudSync feature flag is off/);
+    ).rejects.toThrow(/explicit user consent required/);
   });
 });
 

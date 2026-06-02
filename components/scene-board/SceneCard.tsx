@@ -91,6 +91,12 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
         style={style}
         className="bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] rounded-sc-lg p-3 mb-2 shadow-sc-sm cursor-grab active:cursor-grabbing hover:shadow-sc-md transition-[box-shadow] duration-sc-normal ease-sc-standard"
         {...attributes}
+        // QNBS-v3: override DnD kit role="button"/tabIndex=0 — they make the card an interactive
+        //          container, causing axe nested-interactive when the edit button is inside.
+        //          role="group" + tabIndex={-1} keeps drag-on-mouse while removing the
+        //          focusable-container that triggers the violation.
+        role="group"
+        tabIndex={-1}
         {...listeners}
       >
         {isEditing ? (

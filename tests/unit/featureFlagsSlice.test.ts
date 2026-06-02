@@ -5,16 +5,12 @@ import featureFlagsReducer, {
   selectEnableAppHealthPanel,
   selectEnableBinderResearch,
   selectEnableCharacterInterviews,
-  selectEnableCloudSync,
-  selectEnableCodexAutoTracking,
   selectEnableCompileWizard,
-  selectEnableCrossProjectSearch,
   selectEnableDuckDbAnalytics,
   selectEnableIdbAtRestEncryption,
   selectEnableLoraAdapters,
   selectEnableMindMaps,
   selectEnableObjectsGroups,
-  selectEnablePlotBoardV2,
   selectEnablePluginSystem,
   selectEnableProForge,
   selectEnableProjectHealthScore,
@@ -30,20 +26,16 @@ import featureFlagsReducer, {
 // ---------------------------------------------------------------------------
 
 const initialState: FeatureFlagsState = {
-  enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
-  enablePlotBoardV2: true,
   enableDuckDbAnalytics: false,
   enableObjectsGroups: false,
   enableMindMaps: false,
   enableCharacterInterviews: false,
   enableRtlLayout: false,
-  enableCloudSync: false,
   enableLoraAdapters: false,
   enablePluginSystem: false,
   enableVoiceSupport: false,
@@ -70,9 +62,9 @@ describe('featureFlagsSlice', () => {
   it('should toggle individual feature flags', () => {
     const state = featureFlagsReducer(
       undefined,
-      featureFlagsActions.setEnableCodexAutoTracking(false),
+      featureFlagsActions.setEnableStoryBibleAdvanced(true),
     );
-    expect(state.enableCodexAutoTracking).toBe(false);
+    expect(state.enableStoryBibleAdvanced).toBe(true);
   });
 
   it('setFeatureFlags replaces entire state', () => {
@@ -88,10 +80,10 @@ describe('featureFlagsSlice', () => {
   it('disabling a flag sets it back to false', () => {
     let state = featureFlagsReducer(
       undefined,
-      featureFlagsActions.setEnableCodexAutoTracking(false),
+      featureFlagsActions.setEnableStoryBibleAdvanced(true),
     );
-    state = featureFlagsReducer(state, featureFlagsActions.setEnableCodexAutoTracking(true));
-    expect(state.enableCodexAutoTracking).toBe(true);
+    state = featureFlagsReducer(state, featureFlagsActions.setEnableStoryBibleAdvanced(false));
+    expect(state.enableStoryBibleAdvanced).toBe(false);
   });
 });
 
@@ -107,11 +99,6 @@ describe('featureFlagsSlice — individual setters', () => {
     action: (v: boolean) => { payload: boolean; type: string };
     defaultOn: boolean;
   }> = [
-    {
-      flag: 'enableCodexAutoTracking',
-      action: featureFlagsActions.setEnableCodexAutoTracking,
-      defaultOn: true,
-    },
     {
       flag: 'enableStoryBibleAdvanced',
       action: featureFlagsActions.setEnableStoryBibleAdvanced,
@@ -133,19 +120,9 @@ describe('featureFlagsSlice — individual setters', () => {
       defaultOn: false,
     },
     {
-      flag: 'enableCrossProjectSearch',
-      action: featureFlagsActions.setEnableCrossProjectSearch,
-      defaultOn: true,
-    },
-    {
       flag: 'enableAppHealthPanel',
       action: featureFlagsActions.setEnableAppHealthPanel,
       defaultOn: false,
-    },
-    {
-      flag: 'enablePlotBoardV2',
-      action: featureFlagsActions.setEnablePlotBoardV2,
-      defaultOn: true,
     },
     {
       flag: 'enableDuckDbAnalytics',
@@ -170,11 +147,6 @@ describe('featureFlagsSlice — individual setters', () => {
     {
       flag: 'enableRtlLayout',
       action: featureFlagsActions.setEnableRtlLayout,
-      defaultOn: false,
-    },
-    {
-      flag: 'enableCloudSync',
-      action: featureFlagsActions.setEnableCloudSync,
       defaultOn: false,
     },
     {
@@ -240,20 +212,16 @@ describe('featureFlagsSlice — selectors', () => {
   });
 
   it.each([
-    { selector: selectEnableCodexAutoTracking, flag: 'enableCodexAutoTracking' as const },
     { selector: selectEnableStoryBibleAdvanced, flag: 'enableStoryBibleAdvanced' as const },
     { selector: selectEnableBinderResearch, flag: 'enableBinderResearch' as const },
     { selector: selectEnableCompileWizard, flag: 'enableCompileWizard' as const },
     { selector: selectEnableProjectHealthScore, flag: 'enableProjectHealthScore' as const },
-    { selector: selectEnableCrossProjectSearch, flag: 'enableCrossProjectSearch' as const },
     { selector: selectEnableAppHealthPanel, flag: 'enableAppHealthPanel' as const },
-    { selector: selectEnablePlotBoardV2, flag: 'enablePlotBoardV2' as const },
     { selector: selectEnableDuckDbAnalytics, flag: 'enableDuckDbAnalytics' as const },
     { selector: selectEnableObjectsGroups, flag: 'enableObjectsGroups' as const },
     { selector: selectEnableMindMaps, flag: 'enableMindMaps' as const },
     { selector: selectEnableCharacterInterviews, flag: 'enableCharacterInterviews' as const },
     { selector: selectEnableRtlLayout, flag: 'enableRtlLayout' as const },
-    { selector: selectEnableCloudSync, flag: 'enableCloudSync' as const },
     { selector: selectEnableLoraAdapters, flag: 'enableLoraAdapters' as const },
     { selector: selectEnablePluginSystem, flag: 'enablePluginSystem' as const },
     { selector: selectEnableVoiceSupport, flag: 'enableVoiceSupport' as const },
@@ -266,20 +234,16 @@ describe('featureFlagsSlice — selectors', () => {
   });
 
   it.each([
-    { selector: selectEnableCodexAutoTracking, flag: 'enableCodexAutoTracking' as const },
     { selector: selectEnableStoryBibleAdvanced, flag: 'enableStoryBibleAdvanced' as const },
     { selector: selectEnableBinderResearch, flag: 'enableBinderResearch' as const },
     { selector: selectEnableCompileWizard, flag: 'enableCompileWizard' as const },
     { selector: selectEnableProjectHealthScore, flag: 'enableProjectHealthScore' as const },
-    { selector: selectEnableCrossProjectSearch, flag: 'enableCrossProjectSearch' as const },
     { selector: selectEnableAppHealthPanel, flag: 'enableAppHealthPanel' as const },
-    { selector: selectEnablePlotBoardV2, flag: 'enablePlotBoardV2' as const },
     { selector: selectEnableDuckDbAnalytics, flag: 'enableDuckDbAnalytics' as const },
     { selector: selectEnableObjectsGroups, flag: 'enableObjectsGroups' as const },
     { selector: selectEnableMindMaps, flag: 'enableMindMaps' as const },
     { selector: selectEnableCharacterInterviews, flag: 'enableCharacterInterviews' as const },
     { selector: selectEnableRtlLayout, flag: 'enableRtlLayout' as const },
-    { selector: selectEnableCloudSync, flag: 'enableCloudSync' as const },
     { selector: selectEnableLoraAdapters, flag: 'enableLoraAdapters' as const },
     { selector: selectEnablePluginSystem, flag: 'enablePluginSystem' as const },
     { selector: selectEnableVoiceSupport, flag: 'enableVoiceSupport' as const },

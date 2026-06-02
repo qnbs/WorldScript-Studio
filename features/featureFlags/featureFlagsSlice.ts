@@ -1,8 +1,10 @@
 import { createSlice, type Middleware, type PayloadAction } from '@reduxjs/toolkit';
 
 export interface FeatureFlagsState {
-  /** When false, manuscript Codex extraction listener is skipped (default: true). */
-  enableCodexAutoTracking: boolean;
+  // QNBS-v3: enableCodexAutoTracking promoted to permanent core behaviour (v1.20).
+  // QNBS-v3: enableCrossProjectSearch promoted to permanent core behaviour (v1.8).
+  // QNBS-v3: enablePlotBoardV2 retired — v1 board removed in v1.6; flag had no effect.
+  // QNBS-v3: enableCloudSync retired — Cloud Sync UI is not yet built; the toggle was a no-op.
   /** Story Bible Light: graph edges + consistency hints in Codex (default: false). */
   enableStoryBibleAdvanced: boolean;
   /** Research binder sidebar in Manuscript (default: false). */
@@ -11,16 +13,8 @@ export interface FeatureFlagsState {
   enableCompileWizard: boolean;
   /** Experimental: Project health insights from dashboard (default: false). */
   enableProjectHealthScore: boolean;
-  /** Experimental: Search across projects (default: false). */
-  enableCrossProjectSearch: boolean;
   /** Experimental: About-page runtime diagnostics (default: false). */
   enableAppHealthPanel: boolean;
-  /**
-   * @deprecated v1 Plot Board was removed in v1.6; the flag has no effect.
-   * Kept in state to avoid breaking serialized localStorage values.
-   * Will be removed in v2.0 after a 2-version deprecation period.
-   */
-  enablePlotBoardV2: boolean;
   /** DuckDB-WASM analytics side-car: OPFS-backed query engine for dashboards (default: false). */
   enableDuckDbAnalytics: boolean;
   /** Story Objects & Groups inventory view — v1.7 Bibisco-depth feature (default: false). */
@@ -31,8 +25,6 @@ export interface FeatureFlagsState {
   enableCharacterInterviews: boolean;
   /** RTL layout foundation — sets html[dir]=rtl for manual testing; gated until RTL locales land (default: false). */
   enableRtlLayout: boolean;
-  /** E2E-encrypted Cloud-Sync opt-in — Cloudflare R2 adapter (Stub; default: false). */
-  enableCloudSync: boolean;
   /** LoRA adapter inference — load .safetensors adapters for local WebLLM models (default: false). */
   enableLoraAdapters: boolean;
   /** Plugin system v0.1 — ESM-based extensions with sandboxed capability API (default: false). */
@@ -60,16 +52,11 @@ export interface FeatureFlagsState {
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
 
 const defaultFeatureFlagsState: FeatureFlagsState = {
-  enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  // QNBS-v3: v1 panel ready; promote from experimental to default-on
-  enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
-  // QNBS-v3: Plot-Board v2 is the new default scene board mode in v1.6
-  enablePlotBoardV2: true,
   // QNBS-v3: DuckDB-WASM analytics is experimental; off by default until P1 analytics features land
   enableDuckDbAnalytics: false,
   // QNBS-v3: v1.7 Objects inventory — off by default; feature-flagged for staged rollout.
@@ -80,8 +67,6 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableCharacterInterviews: false,
   // QNBS-v3: RTL foundation — off by default; flip to test mirrored layout before RTL locales ship.
   enableRtlLayout: false,
-  // QNBS-v3: Cloud-Sync stub — off by default; exposes R2 adapter interface before backend is wired.
-  enableCloudSync: false,
   // QNBS-v3: LoRA adapter inference — off by default; browser LoRA is experimental (no training, inference only).
   enableLoraAdapters: false,
   // QNBS-v3: Plugin system v0.1 — off by default; sandboxed API contract is stable, loader is not yet wired.
@@ -145,9 +130,6 @@ const featureFlagsSlice = createSlice({
     setFeatureFlags(_state, action: PayloadAction<FeatureFlagsState>) {
       return action.payload;
     },
-    setEnableCodexAutoTracking(state, action: PayloadAction<boolean>) {
-      state.enableCodexAutoTracking = action.payload;
-    },
     setEnableStoryBibleAdvanced(state, action: PayloadAction<boolean>) {
       state.enableStoryBibleAdvanced = action.payload;
     },
@@ -160,14 +142,8 @@ const featureFlagsSlice = createSlice({
     setEnableProjectHealthScore(state, action: PayloadAction<boolean>) {
       state.enableProjectHealthScore = action.payload;
     },
-    setEnableCrossProjectSearch(state, action: PayloadAction<boolean>) {
-      state.enableCrossProjectSearch = action.payload;
-    },
     setEnableAppHealthPanel(state, action: PayloadAction<boolean>) {
       state.enableAppHealthPanel = action.payload;
-    },
-    setEnablePlotBoardV2(state, action: PayloadAction<boolean>) {
-      state.enablePlotBoardV2 = action.payload;
     },
     setEnableDuckDbAnalytics(state, action: PayloadAction<boolean>) {
       state.enableDuckDbAnalytics = action.payload;
@@ -183,9 +159,6 @@ const featureFlagsSlice = createSlice({
     },
     setEnableRtlLayout(state, action: PayloadAction<boolean>) {
       state.enableRtlLayout = action.payload;
-    },
-    setEnableCloudSync(state, action: PayloadAction<boolean>) {
-      state.enableCloudSync = action.payload;
     },
     setEnableLoraAdapters(state, action: PayloadAction<boolean>) {
       state.enableLoraAdapters = action.payload;
@@ -226,8 +199,6 @@ const featureFlagsSlice = createSlice({
 export const featureFlagsActions = featureFlagsSlice.actions;
 export const selectFeatureFlags = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags;
-export const selectEnableCodexAutoTracking = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enableCodexAutoTracking;
 export const selectEnableStoryBibleAdvanced = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableStoryBibleAdvanced;
 export const selectEnableBinderResearch = (state: { featureFlags: FeatureFlagsState }) =>
@@ -236,12 +207,8 @@ export const selectEnableCompileWizard = (state: { featureFlags: FeatureFlagsSta
   state.featureFlags.enableCompileWizard;
 export const selectEnableProjectHealthScore = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableProjectHealthScore;
-export const selectEnableCrossProjectSearch = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enableCrossProjectSearch;
 export const selectEnableAppHealthPanel = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableAppHealthPanel;
-export const selectEnablePlotBoardV2 = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enablePlotBoardV2;
 export const selectEnableDuckDbAnalytics = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableDuckDbAnalytics;
 export const selectEnableObjectsGroups = (state: { featureFlags: FeatureFlagsState }) =>
@@ -252,8 +219,6 @@ export const selectEnableCharacterInterviews = (state: { featureFlags: FeatureFl
   state.featureFlags.enableCharacterInterviews;
 export const selectEnableRtlLayout = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableRtlLayout;
-export const selectEnableCloudSync = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enableCloudSync;
 export const selectEnableLoraAdapters = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableLoraAdapters;
 export const selectEnablePluginSystem = (state: { featureFlags: FeatureFlagsState }) =>

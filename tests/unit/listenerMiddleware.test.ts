@@ -310,22 +310,14 @@ describe('auto-save settings listener', () => {
 // ---------------------------------------------------------------------------
 // Codex auto-tracking listener (1c) — debounced on manuscript change
 // ---------------------------------------------------------------------------
+// QNBS-v3: enableCodexAutoTracking promoted to permanent core — always runs, no flag needed.
 describe('codex auto-tracking listener', () => {
-  it('calls extractStoryCodex after manuscript changes when feature enabled', async () => {
+  it('calls extractStoryCodex after manuscript changes (always-on)', async () => {
     const store = makeFullStore();
-    // enableCodexAutoTracking defaults to true in featureFlagsSlice
     store.dispatch(projectActions.addManuscriptSection({ title: 'New Chapter' }));
     await vi.advanceTimersByTimeAsync(1500);
     expect(mockExtractStoryCodex).toHaveBeenCalled();
     expect(mockSaveStoryCodex).toHaveBeenCalled();
-  });
-
-  it('skips codex extraction when feature flag is disabled', async () => {
-    const store = makeFullStore();
-    store.dispatch({ type: 'featureFlags/setEnableCodexAutoTracking', payload: false });
-    store.dispatch(projectActions.addManuscriptSection({ title: 'Skipped Chapter' }));
-    await vi.advanceTimersByTimeAsync(1500);
-    expect(mockExtractStoryCodex).not.toHaveBeenCalled();
   });
 
   it('logs warning when extractStoryCodex throws', async () => {

@@ -26,11 +26,11 @@ export const listenerMiddleware = createListenerMiddleware();
 
 // QNBS-v3: Listener categories in this file:
 //   1. Auto-Save        — project data + version control → IDB (debounced 1s)
-//   2. Auto-Track       — Codex extraction from manuscript changes (debounced 2s)
+//   2. Auto-Track       — Codex extraction (always-on; promoted from enableCodexAutoTracking flag)
 //   3. RAG Index        — incremental re-embedding on manuscript edits (debounced 3s)
 //   4. DuckDB Dual-Write — analytics tables updated on save (when enableDuckDbAnalytics)
 //   5. Storage Health   — quota check before every save
-//   6. Cross-Project    — search index updated on save (when enableCrossProjectSearch)
+//   6. Cross-Project    — search index updated on save (always-on; promoted from enableCrossProjectSearch flag)
 //   7. WorkerBus v2     — init/shutdown pools on enableWorkerBusV2 flag change (Phase 2)
 //   8. Rust Compute     — invalidate Rust availability cache on enableRustCompute toggle (Phase 2)
 //
@@ -144,7 +144,8 @@ addDebouncedListener(
 
       await storageService.saveProject(projectDataToSave);
 
-      if (api.getState().featureFlags?.enableCrossProjectSearch && presentData.id) {
+      // QNBS-v3: enableCrossProjectSearch promoted to permanent core — always index on save.
+      if (presentData.id) {
         const duckDbOn = api.getState().featureFlags?.enableDuckDbAnalytics ?? false;
         const { indexProject } = await import('../services/crossProjectIndexService');
         indexProject(presentData.id, enriched, duckDbOn).catch((err: unknown) =>
@@ -230,8 +231,7 @@ addDebouncedListener(
   1200,
   async (api) => {
     const state = api.getState();
-    if (!state.featureFlags?.enableCodexAutoTracking) return;
-
+    // QNBS-v3: enableCodexAutoTracking promoted to permanent core — Codex always auto-tracks.
     const project = state.project.present?.data;
     if (!project) return;
 

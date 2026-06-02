@@ -16,26 +16,27 @@ const { mockHandleSettingChange } = vi.hoisted(() => ({
 }));
 
 const mockFeatureFlags = {
-  enableCodexAutoTracking: false,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: false,
   enableAppHealthPanel: false,
-  enablePlotBoardV2: false,
   enableDuckDbAnalytics: false,
   enableObjectsGroups: false,
   enableMindMaps: false,
   enableCharacterInterviews: false,
   enableRtlLayout: false,
-  enableCloudSync: false,
   enableLoraAdapters: false,
   enablePluginSystem: false,
   enableVoiceSupport: false,
   enableVoiceWasm: false,
   enableProForge: false,
   enableIdbAtRestEncryption: false,
+  enableAdaptiveAiEngine: false,
+  enableWebnnInference: false,
+  enableComputeShaders: false,
+  enableWorkerBusV2: false,
+  enableRustCompute: false,
 };
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
@@ -71,11 +72,13 @@ describe('FeatureFlagsSection', () => {
     expect(screen.getByText('settings.featureFlags.description')).toBeInTheDocument();
   });
 
-  // QNBS-v3: 18 original + 3 Edge-AI flags + 2 WorkerBus v2 Phase 2 flags = 23
-  it('renders 23 feature flag toggles (enablePlotBoardV2 deprecated, enableIdbAtRestEncryption moved to Privacy)', () => {
+  // QNBS-v3: 21 flags remained after housekeeping - 4 retired/promoted + 3 Edge-AI + 2 Phase 2 = 20 toggles.
+  // Retired: enableCodexAutoTracking, enableCrossProjectSearch (promoted), enablePlotBoardV2 (deprecated), enableCloudSync (stub).
+  // Excluded (not a toggle here): enableIdbAtRestEncryption (managed in Settings → Privacy).
+  it('renders 20 feature flag toggles', () => {
     render(<FeatureFlagsSection />);
     const switches = screen.getAllByRole('switch');
-    expect(switches.length).toBe(23);
+    expect(switches.length).toBe(20);
   });
 
   it('does not render the IDB at-rest encryption toggle (managed in Privacy settings)', () => {

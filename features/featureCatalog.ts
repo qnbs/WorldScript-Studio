@@ -82,24 +82,8 @@ export interface FeatureCatalogEntry {
 
 export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
   // ── Core Features ─────────────────────────────────────────────────────────
-
-  {
-    flagKey: 'enableCodexAutoTracking',
-    name: 'Codex Auto-Tracking',
-    description:
-      'Automatically extracts character names, world details, and story objects from the manuscript into the Codex on save.',
-    maturity: 'stable',
-    tier: 'core',
-    defaultOn: true,
-    gateLocations: [
-      {
-        file: 'app/listenerMiddleware.ts:219',
-        description: 'Skip Codex extraction listener when off',
-      },
-    ],
-    implementedIn: ['app/listenerMiddleware.ts', 'services/codexService.ts'],
-    drifts: [],
-  },
+  // QNBS-v3: enableCodexAutoTracking + enableCrossProjectSearch promoted to permanent core
+  //          (v1.20 housekeeping); enablePlotBoardV2 + enableCloudSync retired. No longer flags.
 
   {
     flagKey: 'enableStoryBibleAdvanced',
@@ -179,33 +163,6 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
   },
 
   {
-    flagKey: 'enableCrossProjectSearch',
-    name: 'Cross-Project Search',
-    description:
-      'Search panel and fuzzy-rank index that spans all saved projects, enabling concept retrieval across your library.',
-    maturity: 'stable',
-    tier: 'core',
-    defaultOn: true,
-    gateLocations: [
-      { file: 'components/CrossProjectSearchPanel.tsx:133', description: 'Hides panel when off' },
-      {
-        file: 'app/listenerMiddleware.ts:133',
-        description: 'Skips cross-project index update on save',
-      },
-      {
-        file: 'services/commands/commandDefinitions.tsx:287',
-        description: 'Command palette entry conditional',
-      },
-    ],
-    implementedIn: [
-      'services/crossProjectIndexService.ts',
-      'services/crossProjectSearchService.ts',
-      'components/CrossProjectSearchPanel.tsx',
-    ],
-    drifts: [],
-  },
-
-  {
     flagKey: 'enableAppHealthPanel',
     name: 'App Health Panel',
     description:
@@ -221,28 +178,6 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     ],
     implementedIn: ['components/settings/GpuMetricsPanel.tsx'],
     drifts: [],
-  },
-
-  {
-    flagKey: 'enablePlotBoardV2',
-    // QNBS-v3: @deprecated — v1 board removed in v1.6; flag retained in slice for localStorage
-    // compat until v2.0 cleanup. Hidden from FeatureFlagsSection UI since df185c7.
-    name: 'Plot Board v2 (deprecated)',
-    description:
-      'Full canvas plot board with free-form pan/zoom, SVG tension curve, subplot swimlanes, and minimap. v1 board was removed in v1.6 — this flag is a no-op retained for localStorage compat.',
-    maturity: 'stable',
-    tier: 'core',
-    defaultOn: true,
-    gateLocations: [],
-    implementedIn: ['components/SceneBoardView.tsx', 'features/plotBoard/plotBoardSlice.ts'],
-    drifts: [
-      {
-        severity: 'info',
-        description:
-          'Flag is deprecated. No runtime code reads it. Hidden from UI. Remove in v2.0 after localStorage migration is safe.',
-        fix: 'Delete from FeatureFlagsState + slice after localStorage entries are considered legacy-safe (v2.0 cleanup)',
-      },
-    ],
   },
 
   {
@@ -355,37 +290,6 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     implementedIn: ['App.tsx', 'locales/ar/', 'locales/he/'],
     drifts: [],
     roadmapTarget: 'v2.0 — requires community translation',
-  },
-
-  {
-    flagKey: 'enableCloudSync',
-    name: 'Cloud Sync (Cloudflare R2)',
-    description:
-      'AES-256-GCM E2E-encrypted project sync to a user-controlled Cloudflare R2 bucket.',
-    maturity: 'stub',
-    tier: 'sync',
-    defaultOn: false,
-    gateLocations: [
-      {
-        file: 'services/cloudSync/cloudSyncBackend.ts:41',
-        description:
-          'CloudSyncBackend.create() throws if featureFlagEnabled=false — structural param guard added in parity audit (df185c7)',
-      },
-    ],
-    implementedIn: [
-      'services/cloudSync/cloudSyncBackend.ts',
-      'services/cloudSync/cloudSyncClient.ts',
-      'services/cloudSync/cloudSyncEncryption.ts',
-    ],
-    drifts: [
-      {
-        severity: 'warning',
-        description:
-          'No CloudSyncSection UI exists — enabling the flag produces no visible UX change. The backend is never instantiated from Redux state.',
-        fix: 'Create components/settings/CloudSyncSection.tsx; add nav entry in SettingsView.tsx NAV_GROUPS; instantiate backend from featureFlags.enableCloudSync in Redux state',
-      },
-    ],
-    roadmapTarget: 'v2.0',
   },
 
   {

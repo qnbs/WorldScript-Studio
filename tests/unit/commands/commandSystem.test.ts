@@ -29,20 +29,16 @@ import { getEffectiveTheme } from '../../../services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from '../../../services/commands/wordCountApprox';
 
 const defaultFeatureFlags: FeatureFlagsState = {
-  enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
-  enablePlotBoardV2: true,
   enableDuckDbAnalytics: false,
   enableObjectsGroups: false,
   enableMindMaps: false,
   enableCharacterInterviews: false,
   enableRtlLayout: false,
-  enableCloudSync: false,
   enableLoraAdapters: false,
   enablePluginSystem: false,
   enableVoiceSupport: false,
@@ -233,19 +229,12 @@ describe('getStaticCommandDefinitions', () => {
     expect(toggle!.when!(makeDeps({ theme: 'light' }))).toBe(false);
   });
 
-  it('labs-cross-project-search is gated by enableCrossProjectSearch flag', () => {
+  // QNBS-v3: enableCrossProjectSearch promoted to permanent core — command is always available.
+  it('labs-cross-project-search has no feature-flag when guard', () => {
     const defs = getStaticCommandDefinitions();
     const def = defs.find((d) => d.id === 'labs-cross-project-search');
-    expect(
-      def!.when!(
-        makeDeps({ featureFlags: { ...defaultFeatureFlags, enableCrossProjectSearch: false } }),
-      ),
-    ).toBe(false);
-    expect(
-      def!.when!(
-        makeDeps({ featureFlags: { ...defaultFeatureFlags, enableCrossProjectSearch: true } }),
-      ),
-    ).toBe(true);
+    expect(def).toBeDefined();
+    expect(def!.when).toBeUndefined();
   });
 });
 

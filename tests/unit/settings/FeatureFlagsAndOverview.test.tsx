@@ -15,20 +15,16 @@ const mockHandleSettingChange = vi.fn();
 const mockSetActiveCategory = vi.fn();
 
 const defaultFeatureFlags = {
-  enableCodexAutoTracking: false,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: true,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: false,
   enableAppHealthPanel: false,
-  enablePlotBoardV2: false,
   enableDuckDbAnalytics: false,
   enableObjectsGroups: false,
   enableMindMaps: false,
   enableCharacterInterviews: false,
   enableRtlLayout: false,
-  enableCloudSync: false,
   enableLoraAdapters: false,
   enablePluginSystem: false,
 };

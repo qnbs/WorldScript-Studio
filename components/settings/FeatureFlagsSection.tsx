@@ -7,16 +7,17 @@ import { ToggleSwitch } from './SettingsShared';
 export const FeatureFlagsSection: FC = () => {
   const { t, featureFlags, handleSettingChange } = useSettingsViewContext();
 
+  // QNBS-v3: Flags retired from UI (not user-toggleable):
+  //   enableCodexAutoTracking — promoted to permanent core (always on)
+  //   enableCrossProjectSearch — promoted to permanent core (always on)
+  //   enablePlotBoardV2 — deprecated (v1 board removed in v1.6; flag had no effect)
+  //   enableCloudSync — retired (Cloud Sync UI not yet built; toggle was a no-op)
   const flags: { key: keyof typeof featureFlags; labelKey: string }[] = [
-    { key: 'enableCodexAutoTracking', labelKey: 'settings.featureFlags.enableCodexAutoTracking' },
     { key: 'enableStoryBibleAdvanced', labelKey: 'settings.featureFlags.enableStoryBibleAdvanced' },
     { key: 'enableBinderResearch', labelKey: 'settings.featureFlags.enableBinderResearch' },
     { key: 'enableCompileWizard', labelKey: 'settings.featureFlags.enableCompileWizard' },
     { key: 'enableProjectHealthScore', labelKey: 'settings.featureFlags.enableProjectHealthScore' },
-    { key: 'enableCrossProjectSearch', labelKey: 'settings.featureFlags.enableCrossProjectSearch' },
     { key: 'enableAppHealthPanel', labelKey: 'settings.featureFlags.enableAppHealthPanel' },
-    // QNBS-v3: enablePlotBoardV2 deprecated — v1 board removed in v1.6; toggle has no effect.
-    // Removed from UI to avoid confusion; retained in slice for localStorage compat until v2.0.
     { key: 'enableDuckDbAnalytics', labelKey: 'settings.featureFlags.enableDuckDbAnalytics' },
     { key: 'enableObjectsGroups', labelKey: 'settings.featureFlags.enableObjectsGroups' },
     { key: 'enableMindMaps', labelKey: 'settings.featureFlags.enableMindMaps' },
@@ -25,7 +26,6 @@ export const FeatureFlagsSection: FC = () => {
       labelKey: 'settings.featureFlags.enableCharacterInterviews',
     },
     { key: 'enableRtlLayout', labelKey: 'settings.featureFlags.enableRtlLayout' },
-    { key: 'enableCloudSync', labelKey: 'settings.featureFlags.enableCloudSync' },
     { key: 'enableLoraAdapters', labelKey: 'settings.featureFlags.enableLoraAdapters' },
     { key: 'enablePluginSystem', labelKey: 'settings.featureFlags.enablePluginSystem' },
     // QNBS-v3: Voice + ProForge were in featureFlagsSlice but missing from the UI toggle list.

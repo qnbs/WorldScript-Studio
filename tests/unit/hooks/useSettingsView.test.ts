@@ -41,14 +41,11 @@ let mockProject = {
 };
 
 const mockFeatureFlags = {
-  enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
-  enablePlotBoardV2: true,
 };
 
 vi.mock('../../../app/hooks', () => ({
@@ -122,10 +119,6 @@ vi.mock('../../../features/settings/settingsSlice', () => ({
 
 vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
   featureFlagsActions: {
-    setEnableCodexAutoTracking: (v: unknown) => ({
-      type: 'featureFlags/setEnableCodexAutoTracking',
-      payload: v,
-    }),
     setEnableStoryBibleAdvanced: (v: unknown) => ({
       type: 'featureFlags/setEnableStoryBibleAdvanced',
       payload: v,
@@ -140,10 +133,6 @@ vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
     }),
     setEnableProjectHealthScore: (v: unknown) => ({
       type: 'featureFlags/setEnableProjectHealthScore',
-      payload: v,
-    }),
-    setEnableCrossProjectSearch: (v: unknown) => ({
-      type: 'featureFlags/setEnableCrossProjectSearch',
       payload: v,
     }),
     setEnableAppHealthPanel: (v: unknown) => ({
@@ -289,13 +278,7 @@ describe('handleSettingChange', () => {
     );
   });
 
-  it('dispatches setEnableCrossProjectSearch feature flag', () => {
-    const { result } = renderHook(() => useSettingsView());
-    act(() => result.current.handleSettingChange('enableCrossProjectSearch', true));
-    expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'featureFlags/setEnableCrossProjectSearch', payload: true }),
-    );
-  });
+  // QNBS-v3: enableCrossProjectSearch promoted to permanent core — no dispatch case exists.
 
   it('dispatches setEnableProForge when enableProForge flag toggled on', () => {
     const { result } = renderHook(() => useSettingsView());

@@ -23,7 +23,6 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableDuckDbAnalytics: false,
       enableVoiceSupport: false,
       enableProForge: false,
-      enableCrossProjectSearch: false,
       enableCharacterInterviews: false,
       enableTimeline: false,
       enableWizard: false,

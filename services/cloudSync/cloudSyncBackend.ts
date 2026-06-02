@@ -1,6 +1,7 @@
 // QNBS-v3: Cloud-Sync StorageBackend stub — implements the contract, delegates projects/settings
 // to the R2 client. Sensitive keys (API keys) are NEVER sent to cloud; delegation throws.
-// Feature-gated behind enableCloudSync; not wired into storageService until flag is on.
+// Future feature (v2.0): not wired into storageService. The enableCloudSync flag was retired in
+// v1.20 housekeeping (no UI ever shipped); create() keeps an explicit-consent boolean guard instead.
 
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../../types';
 import type {
@@ -33,14 +34,14 @@ export class CloudSyncBackend implements StorageBackend {
     config: CloudSyncConfig,
     passphrase: string,
     userId: string,
-    /** Must pass featureFlags.enableCloudSync — prevents accidental activation without user consent. */
-    featureFlagEnabled = false,
+    /** Explicit-consent gate — caller must pass true to confirm the user opted into cloud sync. */
+    explicitConsent = false,
   ): Promise<CloudSyncBackend> {
-    // QNBS-v3: Feature flag guard — featureCatalog drift P2 fix. Cloud sync must never activate
-    // without explicit user opt-in; this makes the check structural rather than relying on callers.
-    if (!featureFlagEnabled) {
+    // QNBS-v3: Structural consent guard — Cloud Sync must never activate without explicit opt-in.
+    // The enableCloudSync flag was retired in v1.20 (no UI shipped); this boolean replaces it.
+    if (!explicitConsent) {
       throw new Error(
-        'CloudSyncBackend.create(): enableCloudSync feature flag is off. Enable it in Settings → Experimental Flags first.',
+        'CloudSyncBackend.create(): explicit user consent required. Cloud Sync is not yet user-facing (v2.0 feature).',
       );
     }
     const { deriveCloudSyncKey } = await import('./cloudSyncEncryption');

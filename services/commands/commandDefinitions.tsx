@@ -284,7 +284,7 @@ export function getStaticCommandDefinitions(): CommandDefinition[] {
       titleKey: 'palette.labs.crossProjectSearch',
       keywords: ['search', 'projects', 'all'],
       icon: iconBtn(ICONS.DASHBOARD),
-      when: (deps) => deps.featureFlags.enableCrossProjectSearch,
+      // QNBS-v3: enableCrossProjectSearch promoted to permanent core — command always available.
       // QNBS-v3: opens cross-project search panel via Zustand transient state, not Redux (avoids re-renders)
       run: () => {
         useTransientUiStore.getState().setCrossProjectSearchOpen(true);

@@ -21,20 +21,16 @@ const mockSetOpen = vi.fn((v: boolean) => {
 });
 
 let mockFeatureFlags: FeatureFlagsState = {
-  enableCodexAutoTracking: true,
   enableStoryBibleAdvanced: false,
   enableBinderResearch: false,
   enableCompileWizard: false,
   enableProjectHealthScore: false,
-  enableCrossProjectSearch: true,
   enableAppHealthPanel: false,
-  enablePlotBoardV2: true,
   enableDuckDbAnalytics: false,
   enableObjectsGroups: false,
   enableMindMaps: false,
   enableCharacterInterviews: false,
   enableRtlLayout: false,
-  enableCloudSync: false,
   enableLoraAdapters: false,
   enablePluginSystem: false,
   enableVoiceSupport: false,
@@ -121,20 +117,16 @@ afterEach(() => {
   mockIsOpen = false;
   mockSearchResults = [];
   mockFeatureFlags = {
-    enableCodexAutoTracking: true,
     enableStoryBibleAdvanced: false,
     enableBinderResearch: false,
     enableCompileWizard: false,
     enableProjectHealthScore: false,
-    enableCrossProjectSearch: true,
     enableAppHealthPanel: false,
-    enablePlotBoardV2: true,
     enableDuckDbAnalytics: false,
     enableObjectsGroups: false,
     enableMindMaps: false,
     enableCharacterInterviews: false,
     enableRtlLayout: false,
-    enableCloudSync: false,
     enableLoraAdapters: false,
     enablePluginSystem: false,
     enableVoiceSupport: false,
@@ -150,20 +142,9 @@ afterEach(() => {
 });
 
 describe('CrossProjectSearchPanel', () => {
+  // QNBS-v3: enableCrossProjectSearch promoted to permanent core — no flag-off test needed.
   describe('visibility gating', () => {
-    it('renders nothing when feature flag is off', async () => {
-      mockFeatureFlags = { ...mockFeatureFlags, enableCrossProjectSearch: false };
-      mockIsOpen = true;
-      let container!: HTMLElement;
-      await act(async () => {
-        ({ container } = render(
-          <CrossProjectSearchPanel projectData={mockProjectData as never} />,
-        ));
-      });
-      expect(container.firstChild).toBeNull();
-    });
-
-    it('renders nothing when panel is closed even if flag is on', () => {
+    it('renders nothing when panel is closed', () => {
       mockIsOpen = false;
       const { container } = render(
         <CrossProjectSearchPanel projectData={mockProjectData as never} />,
