@@ -71,11 +71,11 @@ describe('FeatureFlagsSection', () => {
     expect(screen.getByText('settings.featureFlags.description')).toBeInTheDocument();
   });
 
-  // QNBS-v3: 18 original + 3 Edge-AI flags (AdaptiveAiEngine, WebnnInference, ComputeShaders)
-  it('renders 21 feature flag toggles (enablePlotBoardV2 deprecated, enableIdbAtRestEncryption moved to Privacy)', () => {
+  // QNBS-v3: 18 original + 3 Edge-AI flags + 2 WorkerBus v2 Phase 2 flags = 23
+  it('renders 23 feature flag toggles (enablePlotBoardV2 deprecated, enableIdbAtRestEncryption moved to Privacy)', () => {
     render(<FeatureFlagsSection />);
     const switches = screen.getAllByRole('switch');
-    expect(switches.length).toBe(21);
+    expect(switches.length).toBe(23);
   });
 
   it('does not render the IDB at-rest encryption toggle (managed in Privacy settings)', () => {
@@ -104,6 +104,12 @@ describe('FeatureFlagsSection', () => {
   it('renders character interviews toggle', () => {
     render(<FeatureFlagsSection />);
     expect(screen.getByText('settings.featureFlags.enableCharacterInterviews')).toBeInTheDocument();
+  });
+
+  it('renders WorkerBus v2 and Rust Compute toggles (Phase 2)', () => {
+    render(<FeatureFlagsSection />);
+    expect(screen.getByText('settings.featureFlags.enableWorkerBusV2')).toBeInTheDocument();
+    expect(screen.getByText('settings.featureFlags.enableRustCompute')).toBeInTheDocument();
   });
 
   it('calls handleSettingChange when a flag is toggled', async () => {
