@@ -98,11 +98,19 @@ test.describe('End-to-end project flow (CI-only)', () => {
       }
     }
 
-    const previewHeading = page.getByRole('heading', { name: /Live Preview/i }).first();
-    await expect(previewHeading).toBeVisible();
-    // QNBS-v3: getByTestId — multiple <pre> elements on page; positional first() is fragile
-    const exportPreview = page.getByTestId('export-preview');
-    await expect(exportPreview).toContainText(/quiet village under a strange moon/i);
+    // QNBS-v3: Live Preview is desktop/tablet-only — hidden below the `sm` breakpoint (640px) via
+    // ExportView's `hidden sm:block` (on mobile users export via the download button). Pixel 5
+    // (Mobile Chrome, 393px) is below `sm`, so assert the always-visible export controls there
+    // instead of the intentionally-absent preview.
+    if ((page.viewportSize()?.width ?? 1280) >= 640) {
+      const previewHeading = page.getByRole('heading', { name: /Live Preview/i }).first();
+      await expect(previewHeading).toBeVisible();
+      // QNBS-v3: getByTestId — multiple <pre> elements on page; positional first() is fragile
+      const exportPreview = page.getByTestId('export-preview');
+      await expect(exportPreview).toContainText(/quiet village under a strange moon/i);
+    } else {
+      await expect(page.getByRole('heading', { name: /Export Controls/i }).first()).toBeVisible();
+    }
 
     await clickNavItem(page, /Settings|Einstellungen/i);
     // QNBS-v3: .first() — SettingsOverviewCard also has an AI Configuration button
