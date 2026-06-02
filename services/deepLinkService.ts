@@ -25,6 +25,11 @@ const HASH_TO_VIEW: Record<string, View> = {
   // QNBS-v3: analytics and zen were missing — external share targets could not navigate to these.
   analytics: 'analytics',
   zen: 'zen',
+  // QNBS-v3: flag-gated views — enable hash deep-links + back/forward restoration for them too.
+  objects: 'objects',
+  mindmap: 'mindmap',
+  characterInterviews: 'characterInterviews',
+  lora: 'lora',
 };
 
 export interface ParsedDeepLink {

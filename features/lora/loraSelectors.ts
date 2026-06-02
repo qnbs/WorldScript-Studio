@@ -32,6 +32,10 @@ export const selectIsMerging = createSelector(selectLoraSlice, (s) => s.isMergin
 export const selectIsEvaluating = createSelector(selectLoraSlice, (s) => s.isEvaluating);
 
 export const selectLoraActiveView = createSelector(selectLoraSlice, (s) => s.activeView);
+export const selectLoraOnboardingDismissed = createSelector(
+  selectLoraSlice,
+  (s) => s.onboardingDismissed,
+);
 export const selectWizardStep = createSelector(selectLoraSlice, (s) => s.wizardStep);
 
 export const selectSelectedPresetId = createSelector(selectLoraSlice, (s) => s.selectedPresetId);

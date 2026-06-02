@@ -6,7 +6,6 @@
  */
 
 import type React from 'react';
-import { useCallback, useState } from 'react';
 import { useAppSelector } from '../../app/hooks';
 import { LoraViewContext } from '../../contexts/LoraViewContext';
 import type { LoraActiveView } from '../../features/lora/types';
@@ -19,8 +18,6 @@ import LoraEvaluationPanel from './LoraEvaluationPanel';
 import LoraOnboarding from './LoraOnboarding';
 import LoraTrainingWizard from './LoraTrainingWizard';
 
-const ONBOARDED_KEY = 'storycraft-lora-onboarded';
-
 // QNBS-v3: sub-nav tabs reuse existing per-section titles — no new i18n keys needed.
 const TABS: Array<{ view: LoraActiveView; labelKey: string }> = [
   { view: 'library', labelKey: 'lora.library.title' },
@@ -28,29 +25,21 @@ const TABS: Array<{ view: LoraActiveView; labelKey: string }> = [
   { view: 'evaluation', labelKey: 'lora.evaluation.title' },
 ];
 
-function readOnboarded(): boolean {
-  try {
-    return localStorage.getItem(ONBOARDED_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 export const LoraView: React.FC = () => {
   const { t } = useTranslation();
   const project = useAppSelector(selectProjectData);
   const lora = useLoraView(project?.id);
-  const { activeView, navigateTo, adapters, isEnabled, error, dismissError } = lora;
-
-  const [onboarded, setOnboarded] = useState<boolean>(readOnboarded);
-  const dismissOnboarding = useCallback(() => {
-    setOnboarded(true);
-    try {
-      localStorage.setItem(ONBOARDED_KEY, '1');
-    } catch {
-      // localStorage unavailable (private mode / quota) — onboarding simply reappears next mount
-    }
-  }, []);
+  // QNBS-v3: onboarding-seen state lives in loraSlice (persisted) — no component-level localStorage.
+  const {
+    activeView,
+    navigateTo,
+    adapters,
+    isEnabled,
+    error,
+    dismissError,
+    onboardingDismissed,
+    dismissOnboarding,
+  } = lora;
 
   // QNBS-v3: defensive gate — App.tsx already falls back to Dashboard when the flag is off,
   // but rendering a clear message keeps the view self-contained and unit-testable.
@@ -63,7 +52,7 @@ export const LoraView: React.FC = () => {
   }
 
   const inWizard = activeView === 'wizard';
-  const showOnboarding = !onboarded && !inWizard && adapters.length === 0;
+  const showOnboarding = !onboardingDismissed && !inWizard && adapters.length === 0;
 
   const renderActiveView = () => {
     switch (activeView) {

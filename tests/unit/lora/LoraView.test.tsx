@@ -56,8 +56,10 @@ function vm(overrides: Partial<LoraVm>): LoraVm {
     adapters: [],
     activeView: 'library',
     error: null,
+    onboardingDismissed: false,
     navigateTo: vi.fn(),
     dismissError: vi.fn(),
+    dismissOnboarding: vi.fn(),
     ...overrides,
   } as unknown as LoraVm;
 }
@@ -86,6 +88,12 @@ describe('LoraView', () => {
     mockUseLoraView.mockReturnValue(
       vm({ activeView: 'library', adapters: [{ id: 'a1' }] as unknown as LoraVm['adapters'] }),
     );
+    render(<LoraView />);
+    expect(screen.queryByTestId('onboarding')).not.toBeInTheDocument();
+  });
+
+  it('hides onboarding when it has been dismissed (persisted state)', () => {
+    mockUseLoraView.mockReturnValue(vm({ activeView: 'library', onboardingDismissed: true }));
     render(<LoraView />);
     expect(screen.queryByTestId('onboarding')).not.toBeInTheDocument();
   });

@@ -68,13 +68,17 @@ export function parseRetryAfterMs(err: unknown): number | null {
     return clampRetryAfter(direct * 1000);
   }
 
-  // 3) Header accessor on the error or its response.
+  // 3) `retryAfter` string (if any), then a Retry-After header on the error or its response.
+  //    QNBS-v3: try each in order — an unparseable direct string must still fall back to a
+  //    valid header rather than skipping server-directed backoff entirely.
   const headerVal =
     e.headers?.get?.('retry-after') ?? e.response?.headers?.get?.('retry-after') ?? null;
-  const candidate = typeof direct === 'string' ? direct : headerVal;
-  if (typeof candidate === 'string' && candidate.length > 0) {
-    const ms = retryAfterStringToMs(candidate);
-    if (ms !== null) return clampRetryAfter(ms);
+  const candidates = [typeof direct === 'string' ? direct : null, headerVal];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.length > 0) {
+      const ms = retryAfterStringToMs(candidate);
+      if (ms !== null) return clampRetryAfter(ms);
+    }
   }
 
   return null;

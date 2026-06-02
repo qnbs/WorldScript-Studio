@@ -68,4 +68,37 @@ describe('createStoryCraftFetch', () => {
     expect(init?.signal).toBeInstanceOf(AbortSignal);
     vi.unstubAllGlobals();
   });
+
+  it('falls back to AbortController when AbortSignal.timeout is unavailable', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', mockFetch);
+    const originalTimeout = AbortSignal.timeout;
+    // Simulate a runtime where AbortSignal exists but the static timeout helper does not.
+    (AbortSignal as unknown as { timeout?: unknown }).timeout = undefined;
+    try {
+      const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
+      await createStoryCraftFetch({ timeoutMs: 1000 })('https://api.example.com/tags');
+      const init = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    } finally {
+      (AbortSignal as unknown as { timeout: typeof originalTimeout }).timeout = originalTimeout;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('composes the timeout with a caller-provided signal', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
+    const caller = new AbortController();
+    await createStoryCraftFetch({ timeoutMs: 5000 })('https://api.example.com/tags', {
+      signal: caller.signal,
+    });
+
+    const init = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    expect(init?.signal?.aborted).toBe(false);
+    vi.unstubAllGlobals();
+  });
 });

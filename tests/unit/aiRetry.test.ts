@@ -59,6 +59,11 @@ describe('parseRetryAfterMs', () => {
     expect(parseRetryAfterMs(err)).toBe(2000);
   });
 
+  it('falls back to a valid header when the direct retryAfter string is unparseable', () => {
+    const err = { retryAfter: 'bogus', headers: { get: () => '5' } };
+    expect(parseRetryAfterMs(err)).toBe(5000);
+  });
+
   it('clamps to the max Retry-After ceiling', () => {
     expect(parseRetryAfterMs({ retryAfterMs: 10 * 60 * 1000 })).toBe(AI_RETRY_MAX_RETRY_AFTER_MS);
   });

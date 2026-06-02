@@ -17,6 +17,7 @@ import {
   selectLoraActiveView,
   selectLoraAdapters,
   selectLoraError,
+  selectLoraOnboardingDismissed,
   selectRunHistory,
   selectSelectedBaseModel,
   selectSelectedPreset,
@@ -25,6 +26,7 @@ import {
 } from '../features/lora/loraSelectors';
 import {
   clearError,
+  dismissOnboarding as dismissOnboardingAction,
   setActiveView,
   setSelectedBaseModel,
   setSelectedPreset,
@@ -62,6 +64,7 @@ export function useLoraView(projectId?: string) {
   const isEvaluating = useAppSelectorShallow(selectIsEvaluating);
   const error = useAppSelectorShallow(selectLoraError);
   const lastEvaluation = useAppSelectorShallow(selectLastEvaluation);
+  const onboardingDismissed = useAppSelectorShallow(selectLoraOnboardingDismissed);
 
   // Project-scoped dataset
   const datasetEntries = useAppSelectorShallow(
@@ -150,6 +153,7 @@ export function useLoraView(projectId?: string) {
   );
 
   const dismissError = useCallback(() => dispatch(clearError()), [dispatch]);
+  const dismissOnboarding = useCallback(() => dispatch(dismissOnboardingAction()), [dispatch]);
 
   return {
     // State
@@ -169,6 +173,7 @@ export function useLoraView(projectId?: string) {
     isEvaluating,
     error,
     lastEvaluation,
+    onboardingDismissed,
     // Actions
     navigateTo,
     goToWizardStep,
@@ -184,5 +189,6 @@ export function useLoraView(projectId?: string) {
     selectPreset,
     selectBaseModel,
     dismissError,
+    dismissOnboarding,
   };
 }

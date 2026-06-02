@@ -4,7 +4,9 @@ import { logger } from '../services/logger';
 import type { View } from '../types';
 
 // QNBS-v3: All View values listed here — kept in sync with the View union in types.ts.
-//          Previously missing: analytics, zen, preview, progress.
+//          Previously missing: analytics, zen, preview, progress; then the flag-gated views
+//          (objects/mindmap/characterInterviews/lora) — without these, a refresh/bookmark on a
+//          flag-gated view failed to restore and silently fell back to 'dashboard'.
 const VALID_VIEWS = new Set<View>([
   'dashboard',
   'manuscript',
@@ -24,6 +26,10 @@ const VALID_VIEWS = new Set<View>([
   'critic',
   'preview',
   'progress',
+  'objects',
+  'mindmap',
+  'characterInterviews',
+  'lora',
 ]);
 
 function isValidView(value: string): value is View {

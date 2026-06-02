@@ -211,4 +211,6 @@ export interface LoraState {
   selectedBaseModel: string;
   error: string | null;
   lastEvaluation: StyleConsistencyReport | null;
+  /** QNBS-v3: first-visit onboarding dismissed — persisted via loraPersistenceMiddleware. */
+  onboardingDismissed: boolean;
 }

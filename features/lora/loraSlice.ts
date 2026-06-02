@@ -37,6 +37,7 @@ const initialState: LoraState = {
   selectedBaseModel: '',
   error: null,
   lastEvaluation: null,
+  onboardingDismissed: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,11 @@ const loraSlice = createSlice({
 
     clearError(state) {
       state.error = null;
+    },
+
+    // QNBS-v3: centralized onboarding-seen state (was component-level localStorage) — persisted.
+    dismissOnboarding(state) {
+      state.onboardingDismissed = true;
     },
 
     // -----------------------------------------------------------------------
@@ -242,6 +248,7 @@ export const {
   setSelectedBaseModel,
   setError,
   clearError,
+  dismissOnboarding,
   adaptersLoaded,
   adapterSaved,
   adapterDeleted,
@@ -290,6 +297,7 @@ export const loraPersistenceMiddleware: Middleware<Record<string, never>, unknow
           runHistory: state.lora.runHistory,
           selectedPresetId: state.lora.selectedPresetId,
           selectedBaseModel: state.lora.selectedBaseModel,
+          onboardingDismissed: state.lora.onboardingDismissed,
         };
         localStorage.setItem(LORA_STORAGE_KEY, JSON.stringify(toPersist));
       } catch {
