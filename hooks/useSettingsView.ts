@@ -260,6 +260,13 @@ export const useSettingsView = () => {
         case 'enableComputeShaders':
           dispatch(featureFlagsActions.setEnableComputeShaders(Boolean(value)));
           break;
+        // QNBS-v3: Phase 2 WorkerBus v2 flags — wired to listenerMiddleware init/shutdown
+        case 'enableWorkerBusV2':
+          dispatch(featureFlagsActions.setEnableWorkerBusV2(Boolean(value)));
+          break;
+        case 'enableRustCompute':
+          dispatch(featureFlagsActions.setEnableRustCompute(Boolean(value)));
+          break;
         // QNBS-v3: enableIdbAtRestEncryption intentionally absent — managed via handlePassphraseConfirm
         // in Settings > Privacy, not the experimental flags UI toggle.
         default:
