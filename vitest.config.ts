@@ -63,12 +63,14 @@ export default defineConfig({
       // vs 76/68/74/61 target). Reset to slightly below observed values; increment as new
       // test coverage is added.
       // History: L71/F63/B57/S69 → L73/F65/B58/S71 (C-7) → L76/F68/B61/S74 (C-7 target,
-      // never actually met on CI) → L72/F64/B58/S70 (corrected, 2026-05-31).
+      // never actually met on CI) → L72/F64/B58/S70 (corrected, 2026-05-31)
+      // → L74/F66/B60/S72 (2026-06-03: ratchet to ~1pt below CI-measured 75.15/67.84/61.23/73.14
+      //   after Phase 2.3/2.4 tests; margin absorbs Node 22/24 variance). C-7 target stays L85/B75/F80.
       thresholds: {
-        lines: 72,
-        functions: 64,
-        branches: 58,
-        statements: 70,
+        lines: 74,
+        functions: 66,
+        branches: 60,
+        statements: 72,
         perFile: false,
       },
     },
