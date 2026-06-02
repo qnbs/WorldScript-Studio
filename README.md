@@ -46,8 +46,23 @@
 
 ---
 
+## ⚡ Quick Start (60 seconds)
+
+**The fastest path to value — no install, no account, no API key:**
+
+1. **[Open the Live Demo](https://storycraft-studio-indol.vercel.app/)** → click **"Try Demo Project"** on the Welcome screen to load a populated story instantly.
+2. Open the **Manuscript** view (sidebar) and start typing. Press **`⌘K` / `Ctrl-K`** anytime for the Command Palette — every action is reachable from there.
+3. Want AI without a cloud key? **Settings → AI Provider → WebLLM** runs a model entirely in your browser (WebGPU; auto-falls back to ONNX/WASM on any device). Prefer cloud? Paste a Gemini/OpenAI key — it's encrypted at rest in your browser and only ever sent to that provider.
+
+> Everything is saved locally in IndexedDB and works offline (PWA). Nothing leaves your device unless you choose a cloud provider.
+
+**Running it yourself?** `pnpm install && pnpm run dev` (Node ≥ 22, pnpm 10) → <http://localhost:3000>. Full setup, deployment, and AI-provider options are in [Getting Started](#getting-started).
+
+---
+
 ## 📖 Table of Contents
 
+- [Quick Start (60 seconds)](#-quick-start-60-seconds)
 - [Why StoryCraft Studio?](#-why-storycraft-studio)
 - [Features: A Comprehensive Creative Suite](#-features-a-comprehensive-creative-suite)
 - [AI Provider Stack](#-ai-provider-stack)
@@ -621,6 +636,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`TODO.md`](TODO.md) | Current sprint tasks and status |
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
+| [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering |
 | [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
 | [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
 | [`docs/Design-System.md`](docs/Design-System.md) | Tokens, Tailwind preset, UI primitives under `components/ui` |
