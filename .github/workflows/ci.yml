@@ -147,6 +147,14 @@ jobs:
         env:
           NODE_ENV: production
 
+      # QNBS-v3: The E2E suite runs `vite dev`, so prod-only rolldown bundling crashes (e.g. the
+      # zod DCE "init_locales is not defined" blank screen) never surface there. This guard loads
+      # the real production bundle in headless Chromium and fails if React does not mount.
+      - name: Smoke-test production build (mounts, no runtime crash)
+        run: |
+          pnpm exec playwright install --with-deps chromium-headless-shell
+          pnpm run smoke:prod
+
       - name: Bundle chunk size budget
         run: pnpm run bundle:budget
 

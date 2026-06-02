@@ -47,13 +47,28 @@ if (!rootElement) {
 }
 const root = ReactDOM.createRoot(rootElement);
 
-// QNBS-v3: Catches JS module-evaluation errors that occur before the async IIFE runs —
-// prevents a silent blank screen when React never mounts due to bundle/import errors.
-window.addEventListener('error', (event) => {
+// QNBS-v3: Render a last-resort recovery screen when React never mounts (#root still empty).
+// Covers both synchronous module-evaluation errors AND unhandled promise rejections from the
+// async bootstrap IIFE — the latter was previously uncaught, so a rejecting initializeStorage()
+// or a prod-only bundle ReferenceError (e.g. zod DCE) produced a *silent* blank screen.
+function renderStartupError(message: string) {
   const rootEl = document.getElementById('root');
-  if (rootEl && rootEl.childElementCount === 0) {
-    rootEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#f1f5f9;text-align:center;padding:2rem;flex-direction:column;gap:1rem"><h1 style="font-size:1.5rem;font-weight:700">StoryCraft Studio</h1><p style="color:#94a3b8">A critical startup error occurred. Please reload the page.</p><pre style="background:#1e293b;border-radius:.5rem;padding:.75rem 1rem;font-size:.8rem;color:#fca5a5;max-width:36rem;overflow:auto;text-align:left">${event.message}</pre><button onclick="location.reload()" style="padding:.5rem 1.25rem;border-radius:.5rem;border:1px solid #334155;background:#1e293b;color:#f1f5f9;cursor:pointer;font-family:inherit">Reload</button></div>`;
-  }
+  if (!rootEl || rootEl.childElementCount > 0) return;
+  const safe = String(message).replace(/[<>&]/g, (c) => `&#${c.charCodeAt(0)};`);
+  rootEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#f1f5f9;text-align:center;padding:2rem;flex-direction:column;gap:1rem"><h1 style="font-size:1.5rem;font-weight:700">StoryCraft Studio</h1><p style="color:#94a3b8">A critical startup error occurred. Please reload the page.</p><pre style="background:#1e293b;border-radius:.5rem;padding:.75rem 1rem;font-size:.8rem;color:#fca5a5;max-width:36rem;overflow:auto;text-align:left">${safe}</pre><button onclick="location.reload()" style="padding:.5rem 1.25rem;border-radius:.5rem;border:1px solid #334155;background:#1e293b;color:#f1f5f9;cursor:pointer;font-family:inherit">Reload</button></div>`;
+}
+
+window.addEventListener('error', (event) => {
+  renderStartupError(event.message);
+});
+
+// QNBS-v3: async-bootstrap rejections fire 'unhandledrejection', NOT 'error' — without this a
+// rejected initializeStorage()/loadState() or any prod bundle crash blanks the page silently.
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  const message =
+    reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : String(reason);
+  renderStartupError(message);
 });
 
 /** Recovery UI shown when IndexedDB initialisation fails. Intentionally no i18n dependency. */
