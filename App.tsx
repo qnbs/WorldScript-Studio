@@ -18,7 +18,7 @@ const CrossProjectSearchPanelConnected = lazy(() =>
   })),
 );
 
-import { initAdaptiveAiOnStartup } from './app/listenerMiddleware';
+import { initAdaptiveAiOnStartup, initWorkerBusOnStartup } from './app/listenerMiddleware';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
@@ -310,6 +310,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional one-shot on mount only; flag changes handled by listenerMiddleware
   useEffect(() => {
     initAdaptiveAiOnStartup(featureFlags.enableAdaptiveAiEngine);
+    // QNBS-v3: Phase 2 — init WorkerBus v2 on cold start if already enabled in persisted state
+    void initWorkerBusOnStartup(featureFlags.enableWorkerBusV2);
   }, []);
 
   // QNBS-v3: B-1 sentinel guard — async because IDB sentinel read is async.
