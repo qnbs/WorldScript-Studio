@@ -30,6 +30,7 @@ pnpm run build         # Production build to dist/
 pnpm run build:edge    # Edge/SSR-compatible build (Vercel, Cloudflare Workers)
 pnpm run build:pages   # Cloudflare Pages build
 pnpm run preview       # Preview production build locally
+pnpm run smoke:prod    # Headless-browser mount check on the built dist/ (run AFTER build; catches prod-only crashes)
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run format        # Biome format --write (format only)
@@ -292,6 +293,17 @@ After any modification to `packages/worker-bus`, run `pnpm exec vitest run tests
 All 22 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (export: `docx`, `jszip`, `jsPDF`; collaboration: Yjs; graphs: `react-force-graph-2d`) live in separate Vite manual chunks. `listenerMiddleware.ts` and `aiApi.ts` use dynamic imports for DuckDB/RAG/provider init. Keep export/collaboration dependencies lazy.
 
 **SW-excluded chunks** (in `vite.config.ts` `globIgnores` — never precache): `vendor-duckdb` (~2 MB gzip), `vendor-ai-onnx` (ONNX + @xenova/transformers), `vendor-webllm` (~6 MB). When adding a new heavy optional chunk, add it to both `manualChunks` and `globIgnores`.
+
+### Build & bundler gotchas (Vite 8 + rolldown)
+
+The production build uses **rolldown** (not esbuild/rollup), and its behavior differs from dev. These bit hard once (2026-06-02 production blank screen) — read before touching deps, `vite.config.ts`, or debugging a prod-only failure:
+
+- **CI E2E runs `vite dev`** (`playwright.config.ts` `webServer.command`), so the **production rolldown bundle is never exercised by E2E or Lighthouse** — a prod-only crash ships green. `pnpm run smoke:prod` (build → `vite preview` → headless mount check) is the guard; it runs in the CI **build** job. Run it locally after any change to `vite.config.ts`, the bundler, or a vendor dep.
+- **rolldown ignores `rollupOptions.treeshake`** (incl. `moduleSideEffects`) in this Vite version — confirmed via canary. Tree-shaking is controlled by each package's `package.json` `"sideEffects"`. A dep with `"sideEffects": false` whose side-effect-only modules are needed at runtime can have its lazy `__esm` init wrappers **dropped while the `init_*()` calls survive** → `init_<name> is not defined` ReferenceError at bootstrap → blank screen. Fix at the dependency level with `pnpm patch <dep>` → `"sideEffects": true` (see `patches/zod@4.4.3.patch`).
+- **`pnpm patch-commit` re-resolves** and can trip the pre-existing peer-dep strictness (`vite-plugin-pwa` wants `workbox@^7.4.1`). Apply with `pnpm install --no-strict-peer-dependencies`; CI/Vercel use `--frozen-lockfile` and are unaffected.
+- **Canary test "is my `vite.config.ts` even read?"**: rename a `manualChunks` return string, rebuild, check the output filename changed. Chunk hashes are content-derived, so an unchanged `[hash]` means the option had **no effect on content** (not that the config was skipped).
+- **`tsc` incremental cache can mask new type errors locally** while CI (clean checkout) fails. Before trusting a local `typecheck`, delete `*.tsbuildinfo`. `vitest` uses esbuild and does **not** type-check, so a green test run says nothing about types.
+- **Diagnose blank/white screens by loading the built/live bundle in a real browser**, not by theorizing: `pnpm exec playwright install chromium-headless-shell`, then `import { chromium } from '@playwright/test'` from inside the repo and capture `pageerror`. `index.tsx` renders a recovery screen on `error` **and** `unhandledrejection` — a pure blank `#root` with a `pageerror` is a hard module-eval/bundler crash.
 
 ### Feature Flags
 
