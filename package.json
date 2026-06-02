@@ -187,7 +187,9 @@
       "sharp",
       "workerd"
     ],
-    "patchedDependencies": {}
+    "patchedDependencies": {
+      "zod@4.4.3": "patches/zod@4.4.3.patch"
+    }
   },
   "simple-git-hooks": {
     "pre-commit": "npm exec -- lint-staged"
