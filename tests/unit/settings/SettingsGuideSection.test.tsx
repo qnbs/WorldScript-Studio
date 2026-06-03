@@ -16,6 +16,14 @@ describe('SettingsGuideSection', () => {
     expect(screen.getAllByText('settings.guide.openCategory').length).toBeGreaterThan(10);
   });
 
+  it('documents every live settings category, incl. Fine-Tuning, Community, and Plugins', () => {
+    // QNBS-v3: these three categories exist in the nav but were missing from the guide — regression guard.
+    render(<SettingsGuideSection />);
+    expect(screen.getByText('settings.guide.loraAdapters.title')).toBeInTheDocument();
+    expect(screen.getByText('settings.guide.community.title')).toBeInTheDocument();
+    expect(screen.getByText('settings.guide.plugins.title')).toBeInTheDocument();
+  });
+
   it('calls setActiveCategory when open clicked', () => {
     const setActiveCategory = vi.fn();
     vi.doMock('../../../contexts/SettingsViewContext', () => ({

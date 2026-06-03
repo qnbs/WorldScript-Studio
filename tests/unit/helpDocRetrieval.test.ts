@@ -56,6 +56,24 @@ describe('retrieveHelpDocContext', () => {
     expect(result).toMatch(/^## /);
   });
 
+  it('retrieves the RTL/languages chunk for a "right-to-left" query', () => {
+    // QNBS-v3: guards the languages-rtl chunk added with the ar/he RTL Beta
+    const result = retrieveHelpDocContext('arabic hebrew right-to-left');
+    expect(result).toContain('Languages & RTL');
+  });
+
+  it('retrieves the privacy/encryption chunk for an "encryption" query', () => {
+    // QNBS-v3: guards the privacy-local-ai chunk
+    const result = retrieveHelpDocContext('at-rest encryption passphrase');
+    expect(result).toContain('Privacy, encryption');
+  });
+
+  it('retrieves the LoRA/ProForge chunk for a "fine-tuning" query', () => {
+    // QNBS-v3: guards the advanced-editing chunk
+    const result = retrieveHelpDocContext('lora fine-tuning proforge');
+    expect(result).toContain('LoRA fine-tuning');
+  });
+
   it('returns best match first (highest-scoring chunk leads)', () => {
     // Ctrl+K is in the palette body — should score higher and appear first
     const result = retrieveHelpDocContext('Ctrl');

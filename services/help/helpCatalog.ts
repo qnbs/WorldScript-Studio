@@ -256,6 +256,55 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
     ],
   },
   {
+    // QNBS-v3: Advanced/power features that span Settings + AI — RTL, LoRA, ProForge, Voice,
+    // encryption, cloud sync, plugins, adaptive AI. Discoverable in one place for power users.
+    id: 'advanced',
+    titleKey: 'help.category.advanced',
+    icon: 'LIGHTNING_BOLT',
+    articles: [
+      {
+        titleKey: 'help.advanced.languages.title',
+        contentKey: 'help.advanced.languages.content',
+        tryActionId: 'nav-settings',
+      },
+      {
+        titleKey: 'help.advanced.lora.title',
+        contentKey: 'help.advanced.lora.content',
+        tryActionId: 'nav-settings',
+      },
+      {
+        titleKey: 'help.advanced.proforge.title',
+        contentKey: 'help.advanced.proforge.content',
+        tryActionId: 'nav-writer',
+      },
+      {
+        titleKey: 'help.advanced.voice.title',
+        contentKey: 'help.advanced.voice.content',
+        tryActionId: 'nav-settings',
+      },
+      {
+        titleKey: 'help.advanced.encryption.title',
+        contentKey: 'help.advanced.encryption.content',
+        tryActionId: 'nav-settings',
+      },
+      {
+        titleKey: 'help.advanced.cloudSync.title',
+        contentKey: 'help.advanced.cloudSync.content',
+        tryActionId: 'nav-settings',
+      },
+      {
+        titleKey: 'help.advanced.plugins.title',
+        contentKey: 'help.advanced.plugins.content',
+        tryActionId: 'nav-settings',
+      },
+      {
+        titleKey: 'help.advanced.adaptiveAi.title',
+        contentKey: 'help.advanced.adaptiveAi.content',
+        tryActionId: 'nav-settings',
+      },
+    ],
+  },
+  {
     id: 'documentation',
     titleKey: 'help.category.documentation',
     icon: 'HELP',
