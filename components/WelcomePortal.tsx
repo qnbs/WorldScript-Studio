@@ -17,12 +17,16 @@ interface WelcomePortalProps {
 
 type PortalView = 'main' | 'new_project' | 'open_project';
 
-const WELCOME_LANGS: { code: Language; label: string }[] = [
+const WELCOME_LANGS: { code: Language; label: string; isBeta?: boolean }[] = [
   { code: 'de', label: 'DE' },
   { code: 'en', label: 'EN' },
   { code: 'fr', label: 'FR' },
   { code: 'es', label: 'ES' },
   { code: 'it', label: 'IT' },
+  // QNBS-v3: RTL beta (C-6) — Arabic/Hebrew selectable from first launch; native glyph labels +
+  // isBeta surfaces the "(Beta)" qualifier here too, matching the Settings/Command-Palette pickers.
+  { code: 'ar', label: 'ع', isBeta: true },
+  { code: 'he', label: 'א', isBeta: true },
 ];
 
 const LanguageSelector = () => {
@@ -35,15 +39,24 @@ const LanguageSelector = () => {
         role="group"
         aria-label={t('portal.language.groupLabel')}
       >
-        {WELCOME_LANGS.map(({ code, label }) => (
+        {WELCOME_LANGS.map(({ code, label, isBeta }) => (
           <button
             key={code}
             type="button"
             onClick={() => setLanguage(code)}
+            // QNBS-v3: Beta langs carry the "(Beta)" qualifier via title + a visible β marker so the
+            // RTL Beta status is conveyed at this entry point too (matches Settings language names).
+            title={isBeta ? `${label} (Beta)` : undefined}
+            aria-label={isBeta ? `${label} (Beta)` : undefined}
             // QNBS-v3: design tokens ensure contrast in all themes; bg-indigo-600/text-secondary failed WCAG AA (2.91:1/2.03:1)
             className={`px-2.5 py-1 text-xs sm:text-sm rounded-md transition-colors ${language === code ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]' : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
           >
             {label}
+            {isBeta && (
+              <sup className="ms-0.5 text-[0.6em] opacity-70" aria-hidden="true">
+                β
+              </sup>
+            )}
           </button>
         ))}
       </div>

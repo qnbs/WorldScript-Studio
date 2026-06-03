@@ -27,6 +27,12 @@ const GUIDE_CATEGORIES: { id: string; titleKey: string; descKey: string }[] = [
     titleKey: 'settings.guide.advancedAi.title',
     descKey: 'settings.guide.advancedAi.desc',
   },
+  // QNBS-v3: Fine-Tuning is a live AI-Models nav category — was undocumented in the guide.
+  {
+    id: 'lora-adapters',
+    titleKey: 'settings.guide.loraAdapters.title',
+    descKey: 'settings.guide.loraAdapters.desc',
+  },
   {
     id: 'project-ai',
     titleKey: 'settings.guide.projectAi.title',
@@ -62,8 +68,20 @@ const GUIDE_CATEGORIES: { id: string; titleKey: string; descKey: string }[] = [
     titleKey: 'settings.guide.integrations.title',
     descKey: 'settings.guide.integrations.desc',
   },
+  // QNBS-v3: Community is a live Connections nav category — was undocumented in the guide.
+  {
+    id: 'community',
+    titleKey: 'settings.guide.community.title',
+    descKey: 'settings.guide.community.desc',
+  },
   { id: 'backup', titleKey: 'settings.guide.backup.title', descKey: 'settings.guide.backup.desc' },
   { id: 'data', titleKey: 'settings.guide.data.title', descKey: 'settings.guide.data.desc' },
+  // QNBS-v3: Plugins is a live System nav category — was undocumented in the guide.
+  {
+    id: 'plugins',
+    titleKey: 'settings.guide.plugins.title',
+    descKey: 'settings.guide.plugins.desc',
+  },
   {
     id: 'experimental',
     titleKey: 'settings.guide.experimental.title',
