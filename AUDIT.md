@@ -1,6 +1,6 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)** → **2026-06-01 (Post-crash session: CI stabilisation + 14 CodeAnt AI fixes + E2E hardening)**  
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)** → **2026-06-01 (Post-crash session: CI stabilisation + 14 CodeAnt AI fixes + E2E hardening)** → **2026-06-02 (Perf Phase 2.3 — pipeline-LRU unification + PR #69 CodeAnt fixes)** → **2026-06-03 (WorkerBus v2 Phase 3 — Rust TaskSupervisor + Tauri-build unblock)**  
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation  
 **Current version:** **v1.19.0** — 2026-06-01 (All CI/CD jobs green; 14 CodeAnt AI issues fixed; E2E failures reduced from 24 → ~0; 156 deployment records pruned)
 
@@ -8,6 +8,24 @@
 
 **Production hotfix (2026-06-02):** Live blank screen (`init_locales is not defined`) root-caused to rolldown production DCE dropping zod's lazy `__esm` init wrappers — zod declares `"sideEffects": false`, so its side-effect-only modules (`locales`, `from-json-schema`) were stripped while their init calls survived. Fixed via `patches/zod@4.4.3.patch` (`sideEffects: true`); `rollupOptions.treeshake` is ignored by rolldown-vite. **Systemic gap closed:** the E2E suite runs `vite dev`, so the production rolldown bundle was never exercised — added `pnpm run smoke:prod` (headless-browser mount check on the built `dist/`) to the CI build job, plus an `unhandledrejection` startup-error handler in `index.tsx`.  
 **Toolchain:** Node 22/24, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+## WorkerBus v2 Phase 3 + Tauri-Build Unblock — 2026-06-03
+
+**Scope:** Complete the WorkerBus v2 Rust half (TODO.md line 26) and verify it natively. Branch `feat/workerbus-v2-phase3-rust` (PR #70).
+
+**Phase 3 delivered:** `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs` — `storycraft_task_supervisor_ping` (version) + `storycraft_task_supervisor_submit` (taskType dispatcher; unknown/bad-payload → `{success:false,error}`, never a hard `Err`, matching the `RustTaskResultEvent` honest-failure contract). First native task `text.analyze` (word/char/sentence/syllable + Flesch Reading Ease, pure Rust, 8 `#[cfg(test)]` tests). TS front-end `services/rustTaskSupervisor.ts` `analyzeTextViaRust()` probes `isRustComputeAvailable()` before routing (Rust-only task never hits the web pool; null → JS fallback), 5 unit tests. Verified locally: biome + tsc + 5 TS tests ✅.
+
+**Verification method — Rust has no PR-CI gate.** `tauri-build.yml` runs only on `workflow_dispatch` / `v*` tags, and the crate cannot be compiled on the dev host. Verified by dispatching `tauri-build.yml` on the branch: the crate now **compiles clean** (`Finished release` in ~4m18s) and bundles **`.deb` / `.rpm` / `.AppImage`** on ubuntu.
+
+**Root-caused 3 pre-existing build blockers (tauri-build red since 2026-05-30, never diagnosed):**
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `src-tauri/Cargo.toml` | `specta = "2"` / `tauri-specta = "2"` unused (no `.rs` ref) and unresolvable (`"2"`=^2 stable, only `2.0.0-rc.*` exist) → resolution fails before any compile | Removed both dead deps |
+| 2 | `src-tauri/src/lora.rs` | `LoraEnvReport` deserialized via `serde_json::from_str` (lora.rs:209) but derived only `Serialize` → E0277 broke whole-crate compile | Added `Deserialize` |
+| 3 | `task_supervisor.rs` | `json` import test-only; `RustTaskRequest` wire-contract fields not read by dispatcher | `json` → test mod; `#[allow(dead_code)]` with note |
+
+**Remaining (not code):** `tauri-build` still exits non-zero at the very end on the updater signing step (`incorrect updater private key password: Missing comment in secret key`) — a malformed `TAURI_SIGNING_PRIVATE_KEY` repo secret; the app + all 3 bundles build fine. The Windows runner separately fails in the `./.github/actions/setup` composite (self-installer `3221226505`) — env/infra, not Rust. Both are maintainer secrets/infra tasks, tracked for follow-up.
 
 ## Perf Hardening — 2026-06-02 (Phase 2.3 — Pipeline-cache unification + self-review)
 

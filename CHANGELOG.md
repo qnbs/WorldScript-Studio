@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **WorkerBus v2 Phase 3 — Rust TaskSupervisor + native `text.analyze`** (2026-06-03):
+  - `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs` — the native half of the hybrid router. `storycraft_task_supervisor_ping` (returns supervisor version) and `storycraft_task_supervisor_submit` (taskType dispatcher) registered in `lib.rs` `generate_handler!`. Unknown / bad-payload tasks resolve as `{ success: false, error }` (never a hard `Err`), matching the `RustTaskResultEvent` honest-failure convention so the router's fallback is driven by `result.success`
+  - First native task **`text.analyze`** — word/char/sentence/syllable counts + Flesch Reading Ease, pure Rust, no new deps; 8 `#[cfg(test)]` unit tests
+  - `services/rustTaskSupervisor.ts` — `analyzeTextViaRust()` probes `isRustComputeAvailable()` before routing so a Rust-only task never lands on the web worker pool; returns `null` (→ JS fallback) when unavailable; 5 unit tests
+  - Verified by compiling on the `tauri-build` runners: the crate builds and produces `.deb` / `.rpm` / `.AppImage` bundles on ubuntu (the workflow's final updater-signing step is a separate repo-secret issue, unrelated to code)
+
+- **Local-AI Phase 2.3 perf hardening — unified pipeline LRU cache** (2026-06-03, merged via PR #69):
+  - `services/ai/pipelineLruCache.ts` (new) — one shared, disposing, unit-tested LRU pipeline cache replacing the byte-identical logic duplicated in `workers/inference.worker.ts` and `workers/v2/inference.worker.ts`. Adds **dispose-on-evict** and **dispose-on-replace** (closes a VRAM/RAM leak — evicted/replaced pipelines were dropped without releasing GPU/WASM resources), **in-flight load dedup** (no double-load of multi-MB models), and an injectable clock for deterministic tests; centralized `safeDispose()` swallows sync throws *and* async rejections so a failing backend disposal can never surface as an unhandled rejection in a worker (CodeAnt PR #69)
+  - `tests/unit/services/pipelineLruCache.test.ts` (new) + property/invariant tests for `aiRetry.ts` (delay monotonic in attempt index up to the cap; jitter ∈ `[0, capped)`; `Retry-After` always wins; clamp ≤ `AI_RETRY_MAX_RETRY_AFTER_MS`)
+  - `kokoroTtsEngine` coverage — `cancel()`/`pause()`/`resume()`/`dispose()` + no-WebAssembly branch
+  - `useLoraView` selector-recreation fix (module-level stable empty-dataset selector)
+  - **ADRs** — `docs/adr/0001-state-management-boundaries.md` (Redux persisted/undo vs Zustand `transientUiStore` ephemeral) + `docs/adr/0002-local-ai-stack-layering.md` (WebLLM → ONNX → Transformers.js → heuristic fallback) + `docs/adr/README.md`; README **Quick Start (60-second)** section
+  - Coverage thresholds ratcheted to the CI-measured floor: **L 74 / B 60 / F 66 / S 72**
+
+### Fixed
+
+- **Tauri desktop build unblocked** (2026-06-03) — `tauri-build.yml` had been red since 2026-05-30; CI dispatch on the Phase 3 branch surfaced two pre-existing root causes (never diagnosed):
+  - `src-tauri/Cargo.toml` — removed unused, unresolvable `specta = "2"` / `tauri-specta = "2"` (referenced in no `.rs` file; `build.rs` only calls `tauri_build::build()`; `"2"` matches nothing on crates.io — only `2.0.0-rc.*` exist — so `cargo build` failed at dependency resolution before compiling anything)
+  - `src-tauri/src/lora.rs` — `LoraEnvReport` is deserialized from the Python sidecar's JSON stdout (`serde_json::from_str::<LoraEnvReport>`) but derived only `Serialize` → `E0277` broke the whole-crate compile; added `Deserialize`
+  - With both fixed, the native build compiles cleanly and bundles `.deb`/`.rpm`/`.AppImage`
+
+### Added
+
 - **Production-build smoke guard + startup error handling** (2026-06-02):
   - `scripts/smoke-prod-build.mjs` (+ `smoke:prod`) — serves the built `dist/` via `vite preview`, loads it in headless Chromium, and fails if `#root` never mounts or any pageerror fires; wired into the CI build job (installs `chromium-headless-shell`). Closes the gap where prod-only rolldown bundling crashes shipped green because the E2E suite runs `vite dev` (no DCE / no minify)
   - `index.tsx` — `renderStartupError()` helper + a `unhandledrejection` listener (HTML-escaped) so async-bootstrap rejections render the recovery screen instead of a silent blank `#root` (previously only synchronous `error` events were caught)

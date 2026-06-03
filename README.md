@@ -636,7 +636,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`TODO.md`](TODO.md) | Current sprint tasks and status |
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
-| [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering |
+| [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering, WorkerBus v2 hybrid routing |
 | [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
 | [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
 | [`docs/Design-System.md`](docs/Design-System.md) | Tokens, Tailwind preset, UI primitives under `components/ui` |

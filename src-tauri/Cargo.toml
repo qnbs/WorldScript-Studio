@@ -31,8 +31,6 @@ tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
 tokio = { version = "1", features = ["sync", "time", "process", "rt-multi-thread"] }
-specta = "2"
-tauri-specta = { version = "2", features = ["javascript", "typescript"] }
 candle-core = { version = "0.8", optional = true }
 candle-nn = { version = "0.8", optional = true }
 
