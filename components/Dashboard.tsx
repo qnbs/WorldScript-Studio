@@ -3,19 +3,22 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ICONS } from '../constants';
 import { APP_SECTIONS } from '../constants/sections';
 import { DashboardContext, useDashboardContext } from '../contexts/DashboardContext';
-import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useDashboard } from '../hooks/useDashboard';
 import { useTranslation } from '../hooks/useTranslation';
 import { startSpotlightTour } from '../services/spotlightTour';
 import type { View } from '../types';
 import { BackupQuickActionsCard } from './dashboard/BackupQuickActionsCard';
+import { DashboardHeader } from './dashboard/DashboardHeader';
+import { GoalTrackerCard } from './dashboard/GoalTrackerCard';
+import { ManuscriptCompositionCard } from './dashboard/ManuscriptCompositionCard';
+import { ProjectHealthCard } from './dashboard/ProjectHealthCard';
+import { WritingMomentumCard } from './dashboard/WritingMomentumCard';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
-import { Progress } from './ui/Progress';
 import { SectionIcon } from './ui/SectionIcon';
 import { Skeleton } from './ui/Skeleton';
 import { Spinner } from './ui/Spinner';
@@ -54,8 +57,10 @@ const StatCard: FC<{
           {icon}
         </svg>
       </div>
-      <div>
-        <p className="text-xs text-[var(--sc-text-muted)] uppercase tracking-wider font-bold mb-1">
+      {/* QNBS-v3: min-w-0 lets the text column shrink inside the flex row; break-words + hyphens
+          wrap long German compounds (e.g. "Gliederungsabschnitte") instead of overflowing the card */}
+      <div className="min-w-0">
+        <p className="text-xs text-[var(--sc-text-muted)] uppercase tracking-wider font-bold mb-1 break-words hyphens-auto">
           {title}
         </p>
         <p className="text-3xl font-black text-[var(--sc-text-primary)] tracking-tight tabular-nums">
@@ -265,85 +270,6 @@ const ProjectDetails: FC = () => {
   );
 };
 
-const GoalTracker: FC = () => {
-  const { t, project, wordCount, wordCountProgress, daysLeft, openGoalModal } =
-    useDashboardContext();
-
-  const renderDaysLeft = () => {
-    if (daysLeft === null)
-      return (
-        <p className="text-xl font-bold text-[var(--sc-text-muted)]">
-          {t('dashboard.goals.noDeadline')}
-        </p>
-      );
-    let color = 'text-[var(--sc-text-primary)]';
-    if (daysLeft < 0) color = 'text-red-500';
-    else if (daysLeft < 7) color = 'text-amber-500';
-
-    const count = Math.abs(daysLeft);
-
-    return (
-      <div className="flex items-baseline gap-2">
-        <span className={`text-4xl font-black ${color}`}>{count}</span>
-        <span className="text-sm font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wide">
-          {daysLeft < 0
-            ? t('dashboard.goals.overdue')
-            : t('dashboard.goals.daysLeft', { count: '' }).replace(/\d+/, '').trim()}
-        </span>
-      </div>
-    );
-  };
-
-  return (
-    <Card
-      className="animate-in h-full flex flex-col"
-      style={{ '--index': 1 } as React.CSSProperties}
-    >
-      <CardHeader className="flex justify-between items-center border-b-0 pb-0 pt-6">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--sc-text-muted)]">
-          {t('dashboard.goals.title')}
-        </h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={openGoalModal}
-          className="rounded-full hover:bg-[var(--sc-surface-overlay)] w-8 h-8 p-0"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-5 h-5"
-          >
-            {ICONS.TARGET}
-          </svg>
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-8 flex-grow flex flex-col justify-center">
-        <div>
-          <div className="flex justify-between items-end mb-3">
-            <span className="text-4xl font-black text-[var(--sc-text-primary)] tracking-tight tabular-nums">
-              {wordCount.toLocaleString()}
-            </span>
-            <span className="text-sm font-medium text-[var(--sc-text-muted)] mb-1">
-              / {project.projectGoals?.totalWordCount.toLocaleString()} {t('common.words')}
-            </span>
-          </div>
-          <Progress value={wordCountProgress} className="h-4" />
-        </div>
-        <div className="bg-[var(--sc-surface-base)]/40 p-5 rounded-2xl border border-[var(--sc-border-subtle)] backdrop-blur-sm">
-          <span className="text-xs uppercase tracking-wider font-bold text-[var(--sc-text-muted)] mb-1 block">
-            {t('dashboard.goals.deadline')}
-          </span>
-          {renderDaysLeft()}
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
 const StatsGrid: FC = () => {
   const { t, wordCount, characters, worlds, project } = useDashboardContext();
   // QNBS-v3: one-frame delay shows skeleton cards so hydration flash is prevented
@@ -395,38 +321,6 @@ const StatsGrid: FC = () => {
         colorClass={APP_SECTIONS.outline.colorClass}
       />
     </div>
-  );
-};
-
-const ProjectHealthCard: FC = () => {
-  const { enableProjectHealthScore } = useFeatureFlags();
-  const { t, wordCount, characters, worlds, project } = useDashboardContext();
-
-  if (!enableProjectHealthScore) return null;
-
-  const goal = project.projectGoals?.totalWordCount ?? 0;
-  const writingPct =
-    goal > 0 ? Math.min(100, (wordCount / goal) * 100) : Math.min(100, (wordCount / 2500) * 100);
-  const castPct = Math.min(100, characters.length * 10);
-  const worldPct = Math.min(100, worlds.length * 15);
-  const score = Math.round(writingPct * 0.55 + castPct * 0.225 + worldPct * 0.225);
-
-  return (
-    <Card
-      className="animate-in border-[var(--sc-border-subtle)]"
-      style={{ '--index': 2 } as React.CSSProperties}
-    >
-      <CardHeader className="border-b border-[var(--sc-border-subtle)] pb-4">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--sc-text-muted)]">
-          {t('dashboard.healthScore.title')}
-        </h2>
-      </CardHeader>
-      <CardContent className="pt-4 space-y-3">
-        <p className="text-5xl font-black tabular-nums text-[var(--sc-text-primary)]">{score}</p>
-        <p className="text-sm text-[var(--sc-text-secondary)]">{t('dashboard.healthScore.body')}</p>
-        <Progress value={score} className="h-2" />
-      </CardContent>
-    </Card>
   );
 };
 
@@ -660,16 +554,21 @@ const OnboardingTipsBanner: FC = () => {
 const DashboardUI: FC = () => {
   const { onNavigate } = useDashboardContext();
   return (
-    <div className="space-y-10 pb-16 max-w-7xl mx-auto">
+    <div className="space-y-8 pb-16 max-w-7xl mx-auto">
+      <DashboardHeader />
       <OnboardingTipsBanner />
-      <BackupQuickActionsCard onNavigate={onNavigate} />
+      <StatsGrid />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-[minmax(340px,auto)]">
         <ProjectDetails />
-        <GoalTracker />
+        <WritingMomentumCard />
       </div>
-      <StatsGrid />
-      <ProjectHealthCard />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <GoalTrackerCard />
+        <ProjectHealthCard />
+        <ManuscriptCompositionCard />
+      </div>
       <AuthorInsightsCard />
+      <BackupQuickActionsCard onNavigate={onNavigate} />
       <QuickActions />
       <DashboardModals />
     </div>

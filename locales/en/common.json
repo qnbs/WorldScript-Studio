@@ -498,5 +498,14 @@
   "duckdb.migration.running": "Upgrading analytics database…",
   "duckdb.migration.complete": "Analytics database ready",
   "duckdb.migration.failed": "Analytics database upgrade failed — will retry on next launch",
-  "duckdb.migration.dismiss": "Dismiss"
+  "duckdb.migration.dismiss": "Dismiss",
+  "roster.completeness": "Profile {{percent}}% complete",
+  "roster.sortAriaLabel": "Sort order",
+  "roster.sort.nameAsc": "Name (A–Z)",
+  "roster.sort.nameDesc": "Name (Z–A)",
+  "roster.sort.completeDesc": "Most complete",
+  "roster.sort.completeAsc": "Least complete",
+  "roster.resultCount": "{{count}} of {{total}}",
+  "roster.noResults.title": "No matches",
+  "roster.noResults.description": "Nothing matches “{{query}}”. Try a different search."
 }

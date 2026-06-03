@@ -28,5 +28,14 @@
   "portal.open.title": "Open an Existing Project",
   "portal.open.description": "Load a previously saved project from a backup file (.json) to continue your work.",
   "portal.open.button": "Import Project File",
-  "portal.back": "Back"
+  "portal.back": "Back",
+  "portal.welcome.privacyBadge": "100% offline-first — your story stays on this device; API keys are encrypted at rest.",
+  "portal.features.ai.title": "AI Co-Pilot",
+  "portal.features.ai.description": "Draft, brainstorm, and break through blocks with cloud or fully local models.",
+  "portal.features.plot.title": "Visual Plot Board",
+  "portal.features.plot.description": "Plan structure on a canvas with tension curves and beat sheets.",
+  "portal.features.worldbuilding.title": "Characters & Worlds",
+  "portal.features.worldbuilding.description": "Rich dossiers, atlases, AI portraits, and relationship maps.",
+  "portal.features.export.title": "Pro Export",
+  "portal.features.export.description": "Compile to DOCX, PDF, EPUB, and Markdown — entirely offline."
 }

@@ -63,5 +63,11 @@
   "characters.deleteLabel": "Delete {{name}}",
   "characters.deleteConfirm": "Are you sure you want to permanently delete this character? This action cannot be undone.",
   "characters.uploadImage": "Upload Image",
-  "characters.editorTabsAriaLabel": "Character editor tabs"
+  "characters.editorTabsAriaLabel": "Character editor tabs",
+  "characters.stats.total": "Total",
+  "characters.stats.developed": "Developed",
+  "characters.stats.withPortrait": "With portrait",
+  "characters.stats.avgCompleteness": "Avg. complete",
+  "characters.searchPlaceholder": "Search characters…",
+  "characters.searchAriaLabel": "Search characters by name"
 }

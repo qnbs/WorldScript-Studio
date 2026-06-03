@@ -19,6 +19,7 @@
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/Lighthouse-90%2B-brightgreen" alt="Lighthouse Score">
+  <a href="https://qnbs.github.io/StoryCraft-Studio/"><img src="https://img.shields.io/badge/▶_Launch_Live-GitHub_Pages-22C55E?logo=github&logoColor=white" alt="Launch live on GitHub Pages"></a>
 </p>
 
 ---
@@ -31,7 +32,14 @@
 
 ## 🌐 Live Demo
 
-**🚀 [Launch StoryCraft Studio in your Browser!](https://storycraft-studio-indol.vercel.app/) 🚀**
+Two always-on hosted builds — open whichever you prefer (identical app, both auto-deployed from `main`):
+
+| | Host | Link |
+|---|---|---|
+| 🟢 | **GitHub Pages** _(always-on mirror — auto-deployed from `main` on every green build)_ | **🚀 <https://qnbs.github.io/StoryCraft-Studio/> 🚀** |
+| ▲ | **Vercel** _(primary)_ | <https://storycraft-studio-indol.vercel.app/> |
+
+> **Tip:** If the Vercel build is ever rate-limited, the **[GitHub Pages mirror](https://qnbs.github.io/StoryCraft-Studio/)** is always live and current.
 
 ✨ _Try it right now — no installation, no account required. All data is saved securely in your browser's IndexedDB._ ✨
 
@@ -50,7 +58,7 @@
 
 **The fastest path to value — no install, no account, no API key:**
 
-1. **[Open the Live Demo](https://storycraft-studio-indol.vercel.app/)** → click **"Try Demo Project"** on the Welcome screen to load a populated story instantly.
+1. **Open the Live Demo** — [GitHub Pages (always-on)](https://qnbs.github.io/StoryCraft-Studio/) or [Vercel](https://storycraft-studio-indol.vercel.app/) → click **"Try Demo Project"** on the Welcome screen to load a populated story instantly.
 2. Open the **Manuscript** view (sidebar) and start typing. Press **`⌘K` / `Ctrl-K`** anytime for the Command Palette — every action is reachable from there.
 3. Want AI without a cloud key? **Settings → AI Provider → WebLLM** runs a model entirely in your browser (WebGPU; auto-falls back to ONNX/WASM on any device). Prefer cloud? Paste a Gemini/OpenAI key — it's encrypted at rest in your browser and only ever sent to that provider.
 
@@ -93,7 +101,15 @@ In a world of generic text editors and bloated writing software, StoryCraft Stud
 
 ### 📊 Dynamic Project Dashboard
 
-Your mission control. Track word counts against custom goals, visualize project statistics, manage your title and logline with AI assistance, and access all views from a single hub. Includes **readability sampling** (Flesch-style heuristic), **scene-timeline rule hints**, and the optional **Project Health Score** card — all computed locally without sending manuscript text to the cloud.
+Your mission control. Track word counts against custom goals, visualize project statistics, manage your title and logline with AI assistance, and access all views from a single hub. The dashboard opens with a **personalized, time-aware greeting header** and a one-click **Continue Writing** jump-back into your last-edited scene. Surfaced cards include:
+
+- **Writing Momentum** — current/longest streak, today-vs-daily-goal and week-vs-weekly-goal progress, and a 14-day activity sparkline (wired to the progress tracker).
+- **Project Goals + Pace Projection** — words remaining and the required words/day to hit your deadline, with an on-track / behind verdict.
+- **Project Health Score** (optional, `enableProjectHealthScore`) — a radial gauge plus per-dimension breakdown bars (writing progress, cast depth, worldbuilding).
+- **Manuscript Composition** — scene-status distribution segmented bar, reading-time estimate, scene count, and average words/scene.
+- **Author insights** — **readability sampling** (Flesch-style heuristic) and **scene-timeline rule hints**.
+
+Everything is computed locally without sending manuscript text to the cloud.
 
 ### ✍️ Three-Panel Manuscript Editor
 
@@ -168,11 +184,11 @@ The ultimate cure for the blank page. Provide a concept and let the AI architect
 
 ### 👥 Advanced Character Dossiers
 
-Breathe life into your cast. Use the **AI Profile Generator** to create compelling backstories, motivations, and personality traits from a single concept. Generate a unique **AI character portrait** in a choice of styles (realistic, anime, cartoon, comic book). Manage relationships and character arcs with dedicated fields.
+Breathe life into your cast. Use the **AI Profile Generator** to create compelling backstories, motivations, and personality traits from a single concept. Generate a unique **AI character portrait** in a choice of styles (realistic, anime, cartoon, comic book). Manage relationships and character arcs with dedicated fields. A **roster toolbar** adds live search, sort (name / completeness), and at-a-glance cast stats (total, developed, with-portrait, average completeness), while each card shows a **completeness ring** signalling how fully developed that character is — so gaps in a large cast are obvious at a glance.
 
 ### 🌍 Expansive World-Building Atlas
 
-Construct the universe of your story. Define your world's history and lore, create interactive timelines and location lists, and let the **AI World Generation** feature write rich, consistent world-building content. Generate an atmospheric **ambiance image** to capture your world's visual identity.
+Construct the universe of your story. Define your world's history and lore, create interactive timelines and location lists, and let the **AI World Generation** feature write rich, consistent world-building content. Generate an atmospheric **ambiance image** to capture your world's visual identity. The same **roster toolbar** (search, sort, stats — total, developed, locations, average completeness) and per-world **completeness ring** keep large atlases navigable and surface under-developed worlds.
 
 ### ✨ AI Writing Studio _(10 Specialized AI Tools)_
 
@@ -605,7 +621,7 @@ Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, `clickNavIte
 
 ## 🚀 A Creative Workflow
 
-1. **Conceive** — Start in the **Welcome Portal** with a Template, the AI Outline Generator, or a blank manuscript.
+1. **Conceive** — Start in the **Welcome Portal** — a first-launch onboarding gate that orients you with feature highlights (AI Co-Pilot, Visual Plot Board, Characters & Worlds, Pro Export), an offline-first/privacy assurance, and a one-click demo project — then begin with a Template, the AI Outline Generator, or a blank manuscript.
 2. **Build** — Create **Characters** and **Worlds** with AI. Visualize your cast in the **Character Relationship Graph**.
 3. **Structure** — Refine your plot in the **Outline Generator** or arrange scenes visually on the **Scene Board**.
 4. **Write** — Immerse yourself in the **Manuscript** editor. `@mentions` link characters and worlds. Progress is saved automatically.

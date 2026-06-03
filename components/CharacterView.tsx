@@ -1,12 +1,20 @@
 import type { FC } from 'react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
 import { CharacterViewContext, useCharacterViewContext } from '../contexts/CharacterViewContext';
 import { uploadCharacterImageThunk } from '../features/project/thunks/characterThunks';
 import { useCharacterView } from '../hooks/useCharacterView';
 import { dbService } from '../services/dbService';
+import {
+  characterCompleteness,
+  filterByQuery,
+  type RosterSort,
+  sortByMode,
+} from '../services/rosterMetrics';
 import type { Character } from '../types';
+import { CompletenessRing } from './roster/CompletenessRing';
+import { RosterToolbar } from './roster/RosterToolbar';
 import { AddNewCard } from './ui/AddNewCard';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
@@ -548,8 +556,9 @@ const DeleteConfirmationModal: FC = () => {
 
 const CharacterCard: FC<{ character: Character; animationIndex: number }> = React.memo(
   ({ character, animationIndex }) => {
-    const { handleSelect } = useCharacterViewContext();
+    const { t, handleSelect } = useCharacterViewContext();
     const imageUrl = useStoredImage(character.id, character.hasAvatar);
+    const completeness = characterCompleteness(character);
 
     return (
       <Card
@@ -558,6 +567,13 @@ const CharacterCard: FC<{ character: Character; animationIndex: number }> = Reac
         className="group text-left relative overflow-hidden transition-all duration-300 hover:-translate-y-1 animate-in"
         style={{ '--index': animationIndex } as React.CSSProperties}
       >
+        {/* QNBS-v3: dossier-completeness ring — at-a-glance signal of how developed a character is */}
+        <div className="absolute right-2 top-2 z-10 rounded-full bg-[var(--sc-surface-base)]/70 p-0.5 backdrop-blur-sm">
+          <CompletenessRing
+            value={completeness}
+            label={t('roster.completeness', { percent: String(completeness) })}
+          />
+        </div>
         <div className="aspect-square w-full bg-[var(--sc-surface-overlay)]/50 flex items-center justify-center overflow-hidden">
           {character.hasAvatar && imageUrl ? (
             <img
@@ -595,6 +611,33 @@ CharacterCard.displayName = 'CharacterCard';
 const CharacterViewUI: FC = () => {
   const { t, handleAddNewManually, handleAddNewWithAI, characters, isDossierOpen } =
     useCharacterViewContext();
+
+  // QNBS-v3: ephemeral roster UI state (search/sort) — kept local, not in Redux/the view hook.
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<RosterSort>('name-asc');
+
+  const displayed = useMemo(() => {
+    const filtered = filterByQuery(characters, searchQuery, (c) => c.name);
+    return sortByMode(filtered, sortBy, (c) => c.name, characterCompleteness);
+  }, [characters, searchQuery, sortBy]);
+
+  const stats = useMemo(() => {
+    const withPortrait = characters.filter((c) => c.hasAvatar).length;
+    const developed = characters.filter((c) => characterCompleteness(c) >= 75).length;
+    const avg =
+      characters.length === 0
+        ? 0
+        : Math.round(
+            characters.reduce((sum, c) => sum + characterCompleteness(c), 0) / characters.length,
+          );
+    return [
+      { label: t('characters.stats.total'), value: characters.length },
+      { label: t('characters.stats.developed'), value: developed },
+      { label: t('characters.stats.withPortrait'), value: withPortrait },
+      { label: t('characters.stats.avgCompleteness'), value: `${avg}%` },
+    ];
+  }, [characters, t]);
+
   return (
     <div>
       {/* QNBS-v3: view-level section header with colored SSOT icon */}
@@ -604,6 +647,21 @@ const CharacterViewUI: FC = () => {
           {t('sidebar.characters')}
         </h1>
       </div>
+      {characters.length > 0 && (
+        <RosterToolbar
+          t={t}
+          stats={stats}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          sort={sortBy}
+          onSortChange={setSortBy}
+          resultCount={displayed.length}
+          totalCount={characters.length}
+          searchPlaceholder={t('characters.searchPlaceholder')}
+          searchAriaLabel={t('characters.searchAriaLabel')}
+          sortAriaLabel={t('roster.sortAriaLabel')}
+        />
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
         <div className="animate-in" style={{ '--index': 0 } as React.CSSProperties}>
           <AddNewCard
@@ -633,7 +691,17 @@ const CharacterViewUI: FC = () => {
             />
           </div>
         )}
-        {characters.map((char, index) => (
+        {characters.length > 0 && displayed.length === 0 && (
+          // QNBS-v3: search yielded nothing — distinct from the cast-empty state above
+          <div className="col-span-full mt-4">
+            <EmptyState
+              title={t('roster.noResults.title')}
+              description={t('roster.noResults.description', { query: searchQuery })}
+              compact
+            />
+          </div>
+        )}
+        {displayed.map((char, index) => (
           // QNBS-v3: content-visibility skips rendering off-screen cards — no-op for short lists, measurable win for 50+ characters.
           <div key={char.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 160px' }}>
             <CharacterCard character={char} animationIndex={index + 2} />

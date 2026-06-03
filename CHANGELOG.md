@@ -9,11 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **World Building "Add Manually" now opens the atlas editor** (2026-06-03): `useWorldView.handleAddNewManually` only dispatched `addWorld` and left the user on the grid with a silent "New World" card and no editor — inconsistent with Characters, whose manual-add was deliberately fixed to open the dossier. Now mirrors that flow (create → select → open atlas) with fully-formed defaults (`timeline`/`locations` as `[]`). Adds real-browser `tests/e2e/world.spec.ts` (was none) + a hook-level regression assertion.
 - **CI unblock — OSV `paste` advisory + Vercel rate-limit noise** (2026-06-03):
   - `src-tauri/osv-scanner.toml` — ignore `RUSTSEC-2024-0436` (`paste` 1.0.15 *unmaintained*; build-time proc-macro helper, no runtime exposure, no fix release). The advisory was newly published and was failing the required **Security Audit** check on every branch (e.g. Dependabot PR #78).
   - `vercel.json` — `"github": { "silent": true }` so Vercel still deploys but no longer posts commit statuses; the free-tier **"Deployment rate limited — retry in 24 hours"** preview failure can no longer show as a hard fail on PRs. (Vercel was never a *required* status check, so this is purely cosmetic-noise removal.)
 
 ### Added
+
+- **Characters & World Building roster overhaul** (2026-06-03):
+  - New shared, framework-free roster layer: `services/rosterMetrics.ts` (completeness scoring + `filterByQuery` + `sortByMode`, 17 unit tests), `components/roster/RosterToolbar.tsx` (stat chips + live search + sort), and `components/roster/CompletenessRing.tsx` (band-colored SVG ring, sr-only labelled).
+  - **CharacterView** + **WorldView** now show a roster toolbar (search by name, sort by name/completeness, live result count) and at-a-glance stats — Characters: total / developed / with-portrait / avg completeness; Worlds: total / developed / locations / avg completeness. Each card carries a completeness ring; a dedicated "no matches" empty state distinguishes an empty search from an empty roster. Search/sort is ephemeral component state (not Redux) so the existing view hooks + their tests are untouched.
+- **Welcome / onboarding gate elaboration** (2026-06-03):
+  - `WelcomePortal` main view gains a feature-highlights grid (AI Co-Pilot, Visual Plot Board, Characters & Worlds, Pro Export) and an **offline-first privacy badge** (data stays on device; API keys encrypted at rest) — orienting first-time users before they choose a path. All existing flows/labels preserved; +1 test.
+  - i18n: 30 new keys (`characters.*`, `worlds.*`, shared `roster.*` in `common`, `portal.*`) translated across all 7 locales (en/de/es/fr/it + ar/he stubs).
+  - **Mobile portal fix**: the welcome shell is now `overflow-y-auto` with `min-h-full` centering (was a non-scrolling `fixed flex items-center`), the feature grid is 2-up on mobile (`grid-cols-2`), and the language selector is `fixed` + reserves top padding. Without this, the taller main view overflowed the Pixel 5 viewport and clipped the bottom action buttons off-screen — which timed out the `click` in every Mobile-Chrome E2E that bootstraps via the portal.
+
+- **Dashboard mission-control overhaul** (2026-06-03):
+  - **`DashboardHeader`** (`components/dashboard/DashboardHeader.tsx`) — personalized, time-aware greeting (morning/afternoon/evening/night), prominent project title + logline, a primary **Continue Writing** CTA that navigates to the manuscript (targeting the last scene with prose), and at-a-glance chips (streak, word count, reading time).
+  - **`WritingMomentumCard`** — wires the previously-unsurfaced `progressTracker` data onto the dashboard: current/longest streak (derived locally via `computeStreak`, accurate even when the Progress view never ran the sync), today-vs-daily-goal and week-vs-weekly-goal progress bars, and a 14-day gap-filled activity sparkline (pure SVG, no chart dep).
+  - **`GoalTrackerCard`** (extracted from `Dashboard.tsx`) — adds a **pace projection**: words remaining + required words/day to hit the deadline, with an on-track / behind / done badge using `--sc-success/warning` tokens.
+  - **`ProjectHealthCard`** (extracted + enhanced) — radial SVG gauge (band-colored by score) plus per-dimension breakdown bars for writing progress, cast depth, and worldbuilding.
+  - **`ManuscriptCompositionCard`** — scene-status distribution segmented bar (outline → final + untracked), reading-time estimate (238 WPM), scene count, and average words/scene.
+  - `hooks/useDashboard.ts` extended with all derived selectors (greeting, continue-section, momentum, composition, pace, health breakdown); 12 new unit assertions across `Dashboard.test.tsx` + `useDashboard.test.ts`; 37 new i18n keys translated across all 7 locales (en/de/es/fr/it + ar/he stubs).
 
 - **WorkerBus v2 Phase 3 — Rust TaskSupervisor + native `text.analyze`** (2026-06-03):
   - `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs` — the native half of the hybrid router. `storycraft_task_supervisor_ping` (returns supervisor version) and `storycraft_task_supervisor_submit` (taskType dispatcher) registered in `lib.rs` `generate_handler!`. Unknown / bad-payload tasks resolve as `{ success: false, error }` (never a hard `Err`), matching the `RustTaskResultEvent` honest-failure convention so the router's fallback is driven by `result.success`

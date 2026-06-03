@@ -95,6 +95,14 @@ describe('WelcomePortal', () => {
     expect(screen.getByRole('button', { name: 'portal.welcome.openProject' })).toBeTruthy();
   });
 
+  it('shows feature highlights and the offline-first privacy badge on main view', () => {
+    render(<WelcomePortal onExit={vi.fn()} />);
+    expect(screen.getByText('portal.features.ai.title')).toBeTruthy();
+    expect(screen.getByText('portal.features.plot.title')).toBeTruthy();
+    expect(screen.getByText('portal.features.export.title')).toBeTruthy();
+    expect(screen.getByText('portal.welcome.privacyBadge')).toBeTruthy();
+  });
+
   it('navigates to new project view on newProject button click', () => {
     render(<WelcomePortal onExit={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'portal.welcome.newProject' }));

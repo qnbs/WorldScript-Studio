@@ -1,12 +1,12 @@
 # Graph Report - StoryCraft-Studio  (2026-06-03)
 
 ## Corpus Check
-- 936 files · ~577,030 words
+- 947 files · ~583,486 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2908 nodes · 3870 edges · 58 communities detected
-- Extraction: 68% EXTRACTED · 32% INFERRED · 0% AMBIGUOUS · INFERRED: 1227 edges (avg confidence: 0.8)
+- 2941 nodes · 3893 edges · 59 communities detected
+- Extraction: 68% EXTRACTED · 32% INFERRED · 0% AMBIGUOUS · INFERRED: 1228 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -38,36 +38,37 @@
 - [[_COMMUNITY_Community 25|Community 25]]
 - [[_COMMUNITY_Community 26|Community 26]]
 - [[_COMMUNITY_Community 27|Community 27]]
-- [[_COMMUNITY_Community 28|Community 28]]
-- [[_COMMUNITY_Community 29|Community 29]]
+- [[_COMMUNITY_Community 30|Community 30]]
+- [[_COMMUNITY_Community 31|Community 31]]
 - [[_COMMUNITY_Community 32|Community 32]]
 - [[_COMMUNITY_Community 33|Community 33]]
 - [[_COMMUNITY_Community 35|Community 35]]
-- [[_COMMUNITY_Community 36|Community 36]]
 - [[_COMMUNITY_Community 37|Community 37]]
 - [[_COMMUNITY_Community 38|Community 38]]
-- [[_COMMUNITY_Community 41|Community 41]]
-- [[_COMMUNITY_Community 42|Community 42]]
+- [[_COMMUNITY_Community 39|Community 39]]
 - [[_COMMUNITY_Community 43|Community 43]]
 - [[_COMMUNITY_Community 44|Community 44]]
+- [[_COMMUNITY_Community 46|Community 46]]
 - [[_COMMUNITY_Community 47|Community 47]]
-- [[_COMMUNITY_Community 55|Community 55]]
-- [[_COMMUNITY_Community 56|Community 56]]
-- [[_COMMUNITY_Community 63|Community 63]]
-- [[_COMMUNITY_Community 68|Community 68]]
-- [[_COMMUNITY_Community 69|Community 69]]
-- [[_COMMUNITY_Community 77|Community 77]]
-- [[_COMMUNITY_Community 82|Community 82]]
-- [[_COMMUNITY_Community 85|Community 85]]
-- [[_COMMUNITY_Community 87|Community 87]]
-- [[_COMMUNITY_Community 98|Community 98]]
-- [[_COMMUNITY_Community 127|Community 127]]
-- [[_COMMUNITY_Community 140|Community 140]]
-- [[_COMMUNITY_Community 145|Community 145]]
-- [[_COMMUNITY_Community 176|Community 176]]
-- [[_COMMUNITY_Community 219|Community 219]]
-- [[_COMMUNITY_Community 250|Community 250]]
-- [[_COMMUNITY_Community 255|Community 255]]
+- [[_COMMUNITY_Community 48|Community 48]]
+- [[_COMMUNITY_Community 51|Community 51]]
+- [[_COMMUNITY_Community 59|Community 59]]
+- [[_COMMUNITY_Community 60|Community 60]]
+- [[_COMMUNITY_Community 67|Community 67]]
+- [[_COMMUNITY_Community 72|Community 72]]
+- [[_COMMUNITY_Community 73|Community 73]]
+- [[_COMMUNITY_Community 81|Community 81]]
+- [[_COMMUNITY_Community 86|Community 86]]
+- [[_COMMUNITY_Community 89|Community 89]]
+- [[_COMMUNITY_Community 91|Community 91]]
+- [[_COMMUNITY_Community 102|Community 102]]
+- [[_COMMUNITY_Community 133|Community 133]]
+- [[_COMMUNITY_Community 146|Community 146]]
+- [[_COMMUNITY_Community 151|Community 151]]
+- [[_COMMUNITY_Community 182|Community 182]]
+- [[_COMMUNITY_Community 224|Community 224]]
+- [[_COMMUNITY_Community 257|Community 257]]
+- [[_COMMUNITY_Community 262|Community 262]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `fn()` - 47 edges
@@ -97,123 +98,123 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.02
-Nodes (70): AiInferenceCacheService, hashKey(), assertCloudAiAllowed(), assertCloudAiAllowedSync(), assertLoraLocalOnly(), _cleanupPendingRequest(), _deduplicateRequest(), generateText() (+62 more)
+Nodes (68): AiInferenceCacheService, hashKey(), assertCloudAiAllowed(), assertCloudAiAllowedSync(), assertLoraLocalOnly(), _cleanupPendingRequest(), _deduplicateRequest(), generateText() (+60 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.02
-Nodes (60): clampRetryAfter(), computeRetryDelayMs(), delay(), parseRetryAfterMs(), retryAfterStringToMs(), withTransientRetry(), makeContext(), makeContext() (+52 more)
+Nodes (35): pipeline(), EcoModeService, FeedbackService, handleEcoToggle(), routeTask(), addDebouncedListener(), initAdaptiveAiOnStartup(), initWorkerBusOnStartup() (+27 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.02
-Nodes (51): AnalyticsBootstrap(), App(), ViewLoader(), Header(), useAppDispatch(), useAppSelectorShallow(), IdbUnlockModal(), useAnnounce() (+43 more)
+Nodes (60): clampRetryAfter(), computeRetryDelayMs(), delay(), parseRetryAfterMs(), retryAfterStringToMs(), withTransientRetry(), makeContext(), makeContext() (+52 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.04
-Nodes (47): generateJson(), attachCause(), cleanPrompt(), sanitizePromptBlock(), stripControlChars(), stripJsonFences(), AnalyticsAgent, buildAiOpts() (+39 more)
+Cohesion: 0.03
+Nodes (48): decryptCloudPayload(), deriveCloudSyncKey(), encryptCloudPayload(), loadStoryCodex(), IdbAssetStore, IdbCodexStore, compressData(), IdbConnectionManager (+40 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.04
-Nodes (18): EcoModeService, FeedbackService, handleEcoToggle(), sendMessage(), LoraEnvReport, LoraTrainPayload, train_lora(), listener() (+10 more)
+Cohesion: 0.02
+Nodes (49): AnalyticsBootstrap(), App(), ViewLoader(), Header(), useAppDispatch(), useAppSelectorShallow(), IdbUnlockModal(), useAnnounce() (+41 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.03
-Nodes (42): handleCopyForNotion(), handleDocxImport(), handleExport(), handlePasteImport(), handleBuildLocalRag(), handleWebllmDownload(), isCustomOllamaModel(), handleAddFolder() (+34 more)
+Cohesion: 0.02
+Nodes (27): buildKeyModuleMap(), loadBundleKeys(), loadModuleData(), getLocalUser(), getRandomColor(), sanitizeRoomInput(), stripControlChars(), loadFeatureFlagsState() (+19 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.04
-Nodes (33): handleRemoveKey(), handleSaveKey(), handleTestConnection(), decryptCloudPayload(), deriveCloudSyncKey(), encryptCloudPayload(), loadStoryCodex(), handleInvalidApiKey() (+25 more)
+Cohesion: 0.03
+Nodes (45): handleCopyForNotion(), handleDocxImport(), handleExport(), handlePasteImport(), handleRemoveKey(), handleSaveKey(), handleTestConnection(), handleAddFolder() (+37 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.03
-Nodes (30): buildKeyModuleMap(), loadBundleKeys(), loadModuleData(), getLocalUser(), getRandomColor(), sanitizeRoomInput(), stripControlChars(), HybridIntentEngine (+22 more)
+Nodes (34): createCancellationToken(), createAttentionPipeline(), createComputePipeline(), createKvCachePipeline(), createMlpPipeline(), createSimilarityBuffers(), createSimilarityPipeline(), encodeSimilarityUniforms() (+26 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.03
-Nodes (22): CircuitBreaker, translate(), flushOnHidden(), minimalProject(), getNotifications(), eventMatchesShortcutKeys(), loadAgent(), ProForgeOrchestrator (+14 more)
+Cohesion: 0.05
+Nodes (39): generateJson(), attachCause(), cleanPrompt(), sanitizePromptBlock(), stripControlChars(), stripJsonFences(), AnalyticsAgent, buildAiOpts() (+31 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.04
-Nodes (37): createCancellationToken(), assertCommunityTemplates(), loadJson(), main(), decrypt(), decryptJson(), encrypt(), encryptJson() (+29 more)
+Nodes (46): pipeline(), applyPreset(), async(), close(), countWords(), enrichProjectIndex(), extractCharacterNames(), getDb() (+38 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.04
-Nodes (37): deleteIdb(), formatStorageError(), initializeStorage(), resetAllDatabases(), routeTask(), addDebouncedListener(), initAdaptiveAiOnStartup(), initWorkerBusOnStartup() (+29 more)
+Nodes (35): handler(), generateMessageId(), getWorker(), send(), getDuckDb(), initDuckDb(), isOPFSSupported(), MockWorker (+27 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.04
-Nodes (45): createAttentionPipeline(), createComputePipeline(), createKvCachePipeline(), createMlpPipeline(), createSimilarityBuffers(), createSimilarityPipeline(), encodeSimilarityUniforms(), getComputeDevice() (+37 more)
+Cohesion: 0.08
+Nodes (20): FsAssetStore, FsCodexStore, deleteIdb(), formatStorageError(), initializeStorage(), resetAllDatabases(), countProjectWords(), decompressData() (+12 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.09
-Nodes (16): FsAssetStore, FsCodexStore, countProjectWords(), decompressData(), decryptText(), deriveFileSystemCryptoKey(), encryptText(), FsCore (+8 more)
+Cohesion: 0.05
+Nodes (42): handleBuildLocalRag(), handleWebllmDownload(), isCustomOllamaModel(), duckdbCodexWrite(), duckdbCrossProjectWrite(), duckdbDualWrite(), duckdbRagWrite(), esc() (+34 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.05
-Nodes (27): AdaptiveAiEngine, estimateLatency(), recordLatency(), selectModelForBackend(), start(), getLastBenchmarkResults(), loadResults(), runAllBenchmarks() (+19 more)
+Nodes (28): AdaptiveAiEngine, _clearLatencyHistory(), estimateLatency(), recordLatency(), selectModelForBackend(), start(), getLastBenchmarkResults(), loadResults() (+20 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.05
-Nodes (40): countWords(), enrichProjectIndex(), extractCharacterNames(), getDb(), indexProject(), listIndexedProjects(), removeProjectIndex(), semanticSearchProjects() (+32 more)
+Cohesion: 0.04
+Nodes (22): CircuitBreaker, translate(), getNotifications(), createOllamaModelFromAdapter(), deleteOllamaModel(), generateModelfile(), getOllamaUrl(), listOllamaAdapterModels() (+14 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.06
-Nodes (18): _clearLatencyHistory(), _clearPendingRequestsForTest(), clearCommunityTemplateCache(), clearServiceWorkerCaches(), deleteAllIndexedDBDatabases(), wipeAllAppData(), clearEmbeddingCache(), createTaskMessage() (+10 more)
+Cohesion: 0.05
+Nodes (37): generateTextSingleProvider(), _pendingKey(), streamAiHelpResponse(), streamAnthropic(), streamGrok(), streamOpenAI(), streamProvider(), streamText() (+29 more)
 
 ### Community 16 - "Community 16"
 Cohesion: 0.06
-Nodes (28): accessibilityPresetDefaults(), normalizeAccessibilitySettings(), applyPreset(), IdbProjectStore, normalizePersistedSettings(), getDefaultKeyboardShortcuts(), baseSettings(), computeCentroid() (+20 more)
+Nodes (27): _clearPendingRequestsForTest(), clearServiceWorkerCaches(), deleteAllIndexedDBDatabases(), wipeAllAppData(), clearEmbeddingCache(), detectOnnxExecutionProviders(), getCacheKey(), getOnnxSession() (+19 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.06
-Nodes (23): handler(), getDuckDb(), initDuckDb(), isOPFSSupported(), MockWorker, resolveWorkerMessage(), createCancelMessage(), createPongMessage() (+15 more)
-
-### Community 18 - "Community 18"
-Cohesion: 0.06
-Nodes (14): pipeline(), pipeline(), applyPreset(), async(), close(), openDb(), openDualDatabases(), seedLegacyDatabase() (+6 more)
-
-### Community 19 - "Community 19"
-Cohesion: 0.08
-Nodes (27): generateTextSingleProvider(), _pendingKey(), streamAiHelpResponse(), streamAnthropic(), streamGrok(), streamOpenAI(), streamProvider(), testAIConnection() (+19 more)
-
-### Community 20 - "Community 20"
-Cohesion: 0.07
-Nodes (25): check(), green(), grep(), hasRuntimeConsumption(), read(), red(), formatArgs(), formatLogsForReport() (+17 more)
-
-### Community 21 - "Community 21"
 Cohesion: 0.1
 Nodes (1): StorageManager
 
-### Community 22 - "Community 22"
+### Community 18 - "Community 18"
+Cohesion: 0.08
+Nodes (21): assertCommunityTemplates(), loadJson(), main(), DeadLetterQueue, openDlqDb(), storeClear(), storeGetAll(), analyze_text() (+13 more)
+
+### Community 19 - "Community 19"
 Cohesion: 0.09
 Nodes (5): CollabEncryptionRequiredError, CollaborationService, resolveWebRtcSignalingUrls(), MockDoc, MockWebrtcProvider
 
-### Community 23 - "Community 23"
+### Community 20 - "Community 20"
 Cohesion: 0.11
 Nodes (19): classifyDevice(), detectIsMobile(), getBatteryLevel(), getHealthReport(), getMemoryInfo(), getStorageQuotaMb(), detectBattery(), detectCpuCores() (+11 more)
 
-### Community 24 - "Community 24"
+### Community 21 - "Community 21"
 Cohesion: 0.14
 Nodes (21): handleToggle(), handleDelete(), handleFileChange(), activateAdapter(), clearDatasetEntries(), deactivateAdapter(), deleteAdapter(), exportAdapter() (+13 more)
 
-### Community 25 - "Community 25"
-Cohesion: 0.08
-Nodes (1): loadFeatureFlagsState()
-
-### Community 26 - "Community 26"
-Cohesion: 0.13
+### Community 22 - "Community 22"
+Cohesion: 0.12
 Nodes (8): esc(), exportEpub(), exportEpubViaApi(), toParagraphs(), handleEpubExport(), applyInitialTheme(), getSystemThemePreference(), PriorityTaskQueue
 
-### Community 27 - "Community 27"
+### Community 23 - "Community 23"
 Cohesion: 0.16
 Nodes (14): buildExcerpt(), extractCharacters(), extractManuscriptSections(), searchAcrossProjectIndex(), searchAcrossProjects(), normalizeSearch(), scoreAgainstQuery(), subsequenceScore() (+6 more)
 
-### Community 28 - "Community 28"
+### Community 24 - "Community 24"
+Cohesion: 0.11
+Nodes (6): minimalProject(), buildState(), createTestStore(), loadState(), minimalProjectData(), getInitialState()
+
+### Community 25 - "Community 25"
 Cohesion: 0.14
 Nodes (12): navigateToCollaborationSettings(), clickNavItem(), ensureBlankProject(), flushWriterDebounce(), seedGeminiApiKey(), selectFirstEnabledWriterSection(), waitForMainChrome(), waitForSpaReady() (+4 more)
 
-### Community 29 - "Community 29"
+### Community 26 - "Community 26"
+Cohesion: 0.19
+Nodes (10): formatArgs(), formatLogsForReport(), getRecentLogs(), loadTauriSink(), openLogDb(), sanitizeLogContext(), write(), writeToConsole() (+2 more)
+
+### Community 27 - "Community 27"
 Cohesion: 0.19
 Nodes (6): buildNormManuscriptExport(), paginateNormLines(), stripLightMarkdown(), wrapParagraphToLines(), wrapPlainTextToNormLines(), UsageAnalyticsService
+
+### Community 30 - "Community 30"
+Cohesion: 0.22
+Nodes (4): accessibilityPresetDefaults(), normalizeAccessibilitySettings(), applyPreset(), baseSettings()
+
+### Community 31 - "Community 31"
+Cohesion: 0.53
+Nodes (8): abortTraining(), checkTrainingEnvironment(), generateOllamaModelfile(), isTauri(), mergeAdapter(), startTraining(), tauriInvoke(), tauriListen()
 
 ### Community 32 - "Community 32"
 Cohesion: 0.33
@@ -227,165 +228,169 @@ Nodes (6): emit(), main(), merge(), ProgressCallback, Emits JSON progress events
 Cohesion: 0.29
 Nodes (5): MockAudioContext, MockBufferSource, MockGain, NonEndingSource, TrackingContext
 
-### Community 36 - "Community 36"
+### Community 37 - "Community 37"
 Cohesion: 0.53
 Nodes (4): buildWebNNExecutionProviders(), detectWebNN(), isDirectMLAvailable(), isDirectMLHeuristic()
 
-### Community 37 - "Community 37"
+### Community 38 - "Community 38"
 Cohesion: 0.4
 Nodes (2): getFocusable(), onKeyDown()
 
-### Community 38 - "Community 38"
+### Community 39 - "Community 39"
 Cohesion: 0.7
 Nodes (4): check_cuda_and_vram(), check_package(), check_python_version(), main()
 
-### Community 41 - "Community 41"
+### Community 43 - "Community 43"
+Cohesion: 0.4
+Nodes (2): useDashboardContext(), DashboardHeader()
+
+### Community 44 - "Community 44"
 Cohesion: 0.4
 Nodes (4): Room, SignalingConn, WebrtcConn, WebrtcProvider
 
-### Community 42 - "Community 42"
+### Community 46 - "Community 46"
 Cohesion: 0.6
 Nodes (4): applyFormula(), computeReadabilitySnapshot(), estimateSyllables(), getSyllablePattern()
 
-### Community 43 - "Community 43"
+### Community 47 - "Community 47"
 Cohesion: 0.67
 Nodes (2): sanitizeSpeechTranscript(), stripControlChars()
 
-### Community 44 - "Community 44"
+### Community 48 - "Community 48"
 Cohesion: 0.5
 Nodes (1): SpeechSynthesisUtteranceMock
 
-### Community 47 - "Community 47"
+### Community 51 - "Community 51"
 Cohesion: 0.67
 Nodes (2): makeConfig(), startPipelinePayload()
 
-### Community 55 - "Community 55"
+### Community 59 - "Community 59"
 Cohesion: 0.67
 Nodes (2): defaultProject(), setProjectData()
 
-### Community 56 - "Community 56"
+### Community 60 - "Community 60"
 Cohesion: 0.5
 Nodes (3): AsyncDuckDB, AsyncDuckDBConnection, ConsoleLogger
 
-### Community 63 - "Community 63"
+### Community 67 - "Community 67"
 Cohesion: 0.67
 Nodes (2): getFocusable(), handleTabKey()
 
-### Community 68 - "Community 68"
+### Community 72 - "Community 72"
 Cohesion: 0.67
 Nodes (2): getQuestionsForArchetype(), getTemplateForArchetype()
 
-### Community 69 - "Community 69"
+### Community 73 - "Community 73"
 Cohesion: 0.67
 Nodes (2): buildLcsTable(), diffTokensToOps()
 
-### Community 77 - "Community 77"
+### Community 81 - "Community 81"
 Cohesion: 0.67
 Nodes (1): makeSection()
 
-### Community 82 - "Community 82"
+### Community 86 - "Community 86"
 Cohesion: 0.67
 Nodes (1): MockGoogleGenAI
 
-### Community 85 - "Community 85"
+### Community 89 - "Community 89"
 Cohesion: 0.67
 Nodes (1): makeDeps()
 
-### Community 87 - "Community 87"
+### Community 91 - "Community 91"
 Cohesion: 1.0
 Nodes (2): fireSwipe(), makePointerEvent()
 
-### Community 98 - "Community 98"
+### Community 102 - "Community 102"
 Cohesion: 0.67
 Nodes (1): TaskError
 
-### Community 127 - "Community 127"
+### Community 133 - "Community 133"
 Cohesion: 1.0
 Nodes (1): MockIntersectionObserver
 
-### Community 140 - "Community 140"
+### Community 146 - "Community 146"
 Cohesion: 1.0
 Nodes (1): MockWorker
 
-### Community 145 - "Community 145"
+### Community 151 - "Community 151"
 Cohesion: 1.0
 Nodes (1): MockBroadcastChannel
 
-### Community 176 - "Community 176"
+### Community 182 - "Community 182"
 Cohesion: 1.0
 Nodes (1): MockIntersectionObserver
 
-### Community 219 - "Community 219"
+### Community 224 - "Community 224"
 Cohesion: 1.0
 Nodes (1): MockWorker
 
-### Community 250 - "Community 250"
+### Community 257 - "Community 257"
 Cohesion: 1.0
 Nodes (1): FileSystemService
 
-### Community 255 - "Community 255"
+### Community 262 - "Community 262"
 Cohesion: 1.0
 Nodes (1): IndexedDBService
 
 ## Knowledge Gaps
 - **26 isolated node(s):** `Emits JSON progress events on each training log step.`, `MockIntersectionObserver`, `MockWorker`, `MockGoogleGenAI`, `MockBroadcastChannel` (+21 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 21`** (37 nodes): `.initialize()`, `storageService.ts`, `StorageManager`, `.clearApiKey()`, `.clearGeminiApiKey()`, `.constructor()`, `.deleteAllBinderAssetsForProject()`, `.deleteBinderAsset()`, `.deleteImage()`, `.deleteProject()`, `.deleteRagVectors()`, `.deleteSnapshot()`, `.deleteStoryCodex()`, `.getApiKey()`, `.getBackend()`, `.getBinderAsset()`, `.getGeminiApiKey()`, `.getImage()`, `.getRagVectors()`, `.getSnapshotData()`, `.getStoryCodex()`, `.hasSavedData()`, `.initializeBackend()`, `.listBinderAssetIds()`, `.listProjects()`, `.listSnapshots()`, `.loadProject()`, `.loadSettings()`, `.saveApiKey()`, `.saveBinderAsset()`, `.saveGeminiApiKey()`, `.saveImage()`, `.saveProject()`, `.saveRagVectors()`, `.saveSettings()`, `.saveSnapshot()`, `.saveStoryCodex()`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 25`** (26 nodes): `featureFlagsPersistenceMiddleware()`, `loadFeatureFlagsState()`, `saveFeatureFlagsState()`, `selectEnableAdaptiveAiEngine()`, `selectEnableAppHealthPanel()`, `selectEnableBinderResearch()`, `selectEnableCharacterInterviews()`, `selectEnableCompileWizard()`, `selectEnableComputeShaders()`, `selectEnableDuckDbAnalytics()`, `selectEnableIdbAtRestEncryption()`, `selectEnableLoraAdapters()`, `selectEnableMindMaps()`, `selectEnableObjectsGroups()`, `selectEnablePluginSystem()`, `selectEnableProForge()`, `selectEnableProjectHealthScore()`, `selectEnableRtlLayout()`, `selectEnableRustCompute()`, `selectEnableStoryBibleAdvanced()`, `selectEnableVoiceSupport()`, `selectEnableVoiceWasm()`, `selectEnableWebnnInference()`, `selectEnableWorkerBusV2()`, `selectFeatureFlags()`, `featureFlagsSlice.ts`
+- **Thin community `Community 17`** (37 nodes): `.initialize()`, `storageService.ts`, `StorageManager`, `.clearApiKey()`, `.clearGeminiApiKey()`, `.constructor()`, `.deleteAllBinderAssetsForProject()`, `.deleteBinderAsset()`, `.deleteImage()`, `.deleteProject()`, `.deleteRagVectors()`, `.deleteSnapshot()`, `.deleteStoryCodex()`, `.getApiKey()`, `.getBackend()`, `.getBinderAsset()`, `.getGeminiApiKey()`, `.getImage()`, `.getRagVectors()`, `.getSnapshotData()`, `.getStoryCodex()`, `.hasSavedData()`, `.initializeBackend()`, `.listBinderAssetIds()`, `.listProjects()`, `.listSnapshots()`, `.loadProject()`, `.loadSettings()`, `.saveApiKey()`, `.saveBinderAsset()`, `.saveGeminiApiKey()`, `.saveImage()`, `.saveProject()`, `.saveRagVectors()`, `.saveSettings()`, `.saveSnapshot()`, `.saveStoryCodex()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 32`** (9 nodes): `AudioNavigator`, `.announce()`, `.focusElement()`, `.focusFirstIn()`, `.getFocusedLabel()`, `.nextLandmark()`, `.previousLandmark()`, `.scanLandmarks()`, `audioNavigator.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 37`** (6 nodes): `getFocusable()`, `onKeyDown()`, `onPointerDown()`, `onPointerMove()`, `onPointerUp()`, `BottomSheet.tsx`
+- **Thin community `Community 38`** (6 nodes): `getFocusable()`, `onKeyDown()`, `onPointerDown()`, `onPointerMove()`, `onPointerUp()`, `BottomSheet.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 43`** (4 nodes): `useSpeechRecognition.ts`, `sanitizeSpeechTranscript()`, `stripControlChars()`, `useSpeechRecognition()`
+- **Thin community `Community 43`** (5 nodes): `DashboardHeader.tsx`, `DashboardContext.ts`, `useDashboardContext()`, `Chip()`, `DashboardHeader()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 44`** (4 nodes): `makeStorageMock()`, `SpeechSynthesisUtteranceMock`, `.constructor()`, `setup.ts`
+- **Thin community `Community 47`** (4 nodes): `useSpeechRecognition.ts`, `sanitizeSpeechTranscript()`, `stripControlChars()`, `useSpeechRecognition()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 47`** (4 nodes): `makeConfig()`, `makeReviewItem()`, `startPipelinePayload()`, `proForgeSlice.test.ts`
+- **Thin community `Community 48`** (4 nodes): `makeStorageMock()`, `SpeechSynthesisUtteranceMock`, `.constructor()`, `setup.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 55`** (4 nodes): `useDashboard.test.ts`, `defaultProject()`, `defaultSection()`, `setProjectData()`
+- **Thin community `Community 51`** (4 nodes): `makeConfig()`, `makeReviewItem()`, `startPipelinePayload()`, `proForgeSlice.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 63`** (4 nodes): `Drawer.tsx`, `getFocusable()`, `handleEsc()`, `handleTabKey()`
+- **Thin community `Community 59`** (4 nodes): `useDashboard.test.ts`, `defaultProject()`, `defaultSection()`, `setProjectData()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 68`** (4 nodes): `getAllTemplates()`, `getQuestionsForArchetype()`, `getTemplateForArchetype()`, `characterInterviewTemplates.ts`
+- **Thin community `Community 67`** (4 nodes): `Drawer.tsx`, `getFocusable()`, `handleEsc()`, `handleTabKey()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 69`** (4 nodes): `wordDiff.ts`, `buildLcsTable()`, `diffTokensToOps()`, `tokenizeWordsAndSpaces()`
+- **Thin community `Community 72`** (4 nodes): `getAllTemplates()`, `getQuestionsForArchetype()`, `getTemplateForArchetype()`, `characterInterviewTemplates.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 77`** (3 nodes): `makeSection()`, `plotBoardService.test.ts`, `plotBoardService.test.ts`
+- **Thin community `Community 73`** (4 nodes): `wordDiff.ts`, `buildLcsTable()`, `diffTokensToOps()`, `tokenizeWordsAndSpaces()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 82`** (3 nodes): `makeStream()`, `MockGoogleGenAI`, `geminiService.test.ts`
+- **Thin community `Community 81`** (3 nodes): `makeSection()`, `plotBoardService.test.ts`, `plotBoardService.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 85`** (3 nodes): `makeDeps()`, `aiSuggestions.test.ts`, `aiSuggestions.test.ts`
+- **Thin community `Community 86`** (3 nodes): `makeStream()`, `MockGoogleGenAI`, `geminiService.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 87`** (3 nodes): `useSwipeGesture.test.ts`, `fireSwipe()`, `makePointerEvent()`
+- **Thin community `Community 89`** (3 nodes): `makeDeps()`, `aiSuggestions.test.ts`, `aiSuggestions.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 98`** (3 nodes): `types.ts`, `TaskError`, `.constructor()`
+- **Thin community `Community 91`** (3 nodes): `useSwipeGesture.test.ts`, `fireSwipe()`, `makePointerEvent()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 127`** (2 nodes): `MockIntersectionObserver`, `BookPreviewView.test.tsx`
+- **Thin community `Community 102`** (3 nodes): `types.ts`, `TaskError`, `.constructor()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 140`** (2 nodes): `MockWorker`, `duckdbClient.test.ts`
+- **Thin community `Community 133`** (2 nodes): `MockIntersectionObserver`, `BookPreviewView.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 145`** (2 nodes): `MockBroadcastChannel`, `tabLeaderElection.test.ts`
+- **Thin community `Community 146`** (2 nodes): `MockWorker`, `duckdbClient.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 176`** (2 nodes): `useBookPreviewView.test.ts`, `MockIntersectionObserver`
+- **Thin community `Community 151`** (2 nodes): `MockBroadcastChannel`, `tabLeaderElection.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 219`** (2 nodes): `workerPool.test.ts`, `MockWorker`
+- **Thin community `Community 182`** (2 nodes): `useBookPreviewView.test.ts`, `MockIntersectionObserver`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 250`** (2 nodes): `FileSystemService`, `index.ts`
+- **Thin community `Community 224`** (2 nodes): `workerPool.test.ts`, `MockWorker`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 255`** (2 nodes): `IndexedDBService`, `index.ts`
+- **Thin community `Community 257`** (2 nodes): `FileSystemService`, `index.ts`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 262`** (2 nodes): `IndexedDBService`, `index.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `fn()` connect `Community 1` to `Community 0`, `Community 3`, `Community 12`, `Community 6`?**
-  _High betweenness centrality (0.050) - this node is a cross-community bridge._
-- **Why does `t()` connect `Community 5` to `Community 24`, `Community 2`, `Community 26`, `Community 6`?**
-  _High betweenness centrality (0.043) - this node is a cross-community bridge._
-- **Why does `embedText()` connect `Community 14` to `Community 0`, `Community 11`?**
-  _High betweenness centrality (0.033) - this node is a cross-community bridge._
+- **Why does `fn()` connect `Community 2` to `Community 0`, `Community 8`, `Community 11`, `Community 3`?**
+  _High betweenness centrality (0.068) - this node is a cross-community bridge._
+- **Why does `t()` connect `Community 6` to `Community 21`, `Community 4`, `Community 12`, `Community 22`?**
+  _High betweenness centrality (0.041) - this node is a cross-community bridge._
+- **Why does `useTranslation()` connect `Community 4` to `Community 6`?**
+  _High betweenness centrality (0.024) - this node is a cross-community bridge._
 - **Are the 46 inferred relationships involving `fn()` (e.g. with `makeMediaQuery()` and `MockSpeechRecognition()`) actually correct?**
   _`fn()` has 46 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 30 inferred relationships involving `retryFs()` (e.g. with `.saveProject()` and `.loadProject()`) actually correct?**
