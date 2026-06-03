@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI unblock — OSV `paste` advisory + Vercel rate-limit noise** (2026-06-03):
+  - `src-tauri/osv-scanner.toml` — ignore `RUSTSEC-2024-0436` (`paste` 1.0.15 *unmaintained*; build-time proc-macro helper, no runtime exposure, no fix release). The advisory was newly published and was failing the required **Security Audit** check on every branch (e.g. Dependabot PR #78).
+  - `vercel.json` — `"github": { "silent": true }` so Vercel still deploys but no longer posts commit statuses; the free-tier **"Deployment rate limited — retry in 24 hours"** preview failure can no longer show as a hard fail on PRs. (Vercel was never a *required* status check, so this is purely cosmetic-noise removal.)
+
 ### Added
 
 - **WorkerBus v2 Phase 3 — Rust TaskSupervisor + native `text.analyze`** (2026-06-03):

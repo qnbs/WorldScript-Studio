@@ -75,6 +75,17 @@ id = "RUSTSEC-2024-0370"
 ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "proc-macro-error 1.0.4: unmaintained build-time proc-macro helper; no runtime exposure; no newer version exists"
 
+# ─── paste ───────────────────────────────────────────────────────────────────
+# Build-time declarative-macro helper (token pasting) pulled in transitively by
+# the Tauri/Rust macro stack. Advisory classification is "unmaintained" — no CVE,
+# no CVSS score, no fixed version (1.0.15 is the final release; crate is archived).
+# Compile-time only; there is no runtime footprint or exploitable attack surface.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "paste 1.0.15: unmaintained build-time proc-macro helper; no runtime exposure; final version, no fix available"
+
 # ─── unic-* Unicode data crates ──────────────────────────────────────────────
 # unic-* 0.9.0 is the final version of this crate series (archived).
 # Advisory classification is "unmaintained" — no CVE, no CVSS score.
