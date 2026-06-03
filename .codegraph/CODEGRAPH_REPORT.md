@@ -1,6 +1,6 @@
 # CodeGraph Report
 
-**Generated:** 2026-05-24T12:11:50.958Z
+**Generated:** 2026-06-03T08:20:11.251Z
 
 ## Status
 
@@ -11,33 +11,34 @@ CodeGraph Status
 [36mProject:[0m /home/pc/StoryCraft-Studio
 
 [1mIndex Statistics:[0m
-  Files:     632
-  Nodes:     6.126
-  Edges:     13.822
-  DB Size:   11.07 MB
+  Files:     959
+  Nodes:     9.358
+  Edges:     20.132
+  DB Size:   17.29 MB
   Backend:   [32mnode:sqlite — built-in (full WAL)[0m
   Journal:   [32mwal[0m
 
 [1mNodes by Kind:[0m
-  import          2.455
-  function        1.072
-  constant        988
-  file            618
-  method          441
-  interface       275
-  type_alias      188
-  variable        55
-  class           31
+  import          3.564
+  constant        1.571
+  function        1.527
+  file            942
+  method          795
+  interface       403
+  type_alias      257
+  variable        198
+  class           93
+  struct          6
   enum            1
   enum_member     1
-  struct          1
 
 [1mFiles by Language:[0m
-  typescript      383
-  tsx             213
-  javascript      17
-  yaml            14
-  rust            5
+  typescript      605
+  tsx             304
+  javascript      23
+  yaml            17
+  rust            8
+  python          2
 
 [32m✓[0m Index is up to date
 
@@ -46,14 +47,15 @@ CodeGraph Status
 
 ## Files by Extension
 
-- **.ts**: 383
-- **.tsx**: 213
-- **.mjs**: 15
-- **.yml**: 12
-- **.rs**: 5
+- **.ts**: 605
+- **.tsx**: 304
+- **.mjs**: 17
+- **.yml**: 15
+- **.rs**: 8
+- **.js**: 4
+- **.cjs**: 2
 - **.yaml**: 2
-- **.cjs**: 1
-- **.js**: 1
+- **.py**: 2
 
 ---
 

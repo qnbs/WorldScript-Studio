@@ -117,7 +117,7 @@ const ToastItem: FC<{
               {ICONS[message.type]}
             </svg>
           </div>
-          <div className="ml-3 w-0 flex-1 pt-0.5">
+          <div className="ms-3 w-0 flex-1 pt-0.5">
             <p className="text-sm font-bold text-[var(--sc-text-primary)]">{message.title}</p>
             {message.description && (
               <p className="mt-1 text-sm text-[var(--sc-text-secondary)]">{message.description}</p>
@@ -135,7 +135,7 @@ const ToastItem: FC<{
               </button>
             ) : null}
           </div>
-          <div className="ml-4 flex-shrink-0 flex">
+          <div className="ms-4 flex-shrink-0 flex">
             <button
               type="button"
               onClick={() => onDismiss(message.id)}

@@ -27,16 +27,16 @@ export const I18N_BOOTSTRAP: Record<Language, Record<string, string>> = {
     'initialProject.logline': 'Un viaggio di mille miglia inizia con un solo passo...',
     'initialProject.chapter1': 'Capitolo 1',
   },
-  // QNBS-v3: RTL beta stubs — fall back to English if bundles not loaded
+  // QNBS-v3: RTL beta — cold-start values translated to match the ar/he bundles (no English flash on first paint).
   ar: {
-    'initialProject.title': 'My Untitled Story',
-    'initialProject.logline': 'A journey of a thousand miles begins with a single step...',
-    'initialProject.chapter1': 'Chapter 1',
+    'initialProject.title': 'قصتي بلا عنوان',
+    'initialProject.logline': 'رحلة الألف ميل تبدأ بخطوة واحدة...',
+    'initialProject.chapter1': 'الفصل 1',
   },
   he: {
-    'initialProject.title': 'My Untitled Story',
-    'initialProject.logline': 'A journey of a thousand miles begins with a single step...',
-    'initialProject.chapter1': 'Chapter 1',
+    'initialProject.title': 'הסיפור חסר הכותרת שלי',
+    'initialProject.logline': 'מסע של אלף מילין מתחיל בצעד אחד...',
+    'initialProject.chapter1': 'פרק 1',
   },
 };
 

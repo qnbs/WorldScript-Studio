@@ -78,12 +78,19 @@ const CanvasCard: FC<CanvasCardProps> = React.memo(
             className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ backgroundColor: section.color || '#3b82f6' }}
           />
-          <h4 className="text-sm font-semibold text-[var(--sc-text-primary)] line-clamp-1">
+          {/* QNBS-v3: RTL beta — board wrapper is .rtl-keep-ltr for pointer geometry, but user
+              text must read per its own script; dir="auto" restores RTL/BiDi for Arabic/Hebrew. */}
+          <h4
+            dir="auto"
+            className="text-sm font-semibold text-[var(--sc-text-primary)] line-clamp-1"
+          >
             {section.title}
           </h4>
         </div>
         {section.summary && (
-          <p className="text-xs text-[var(--sc-text-muted)] line-clamp-2 mb-2">{section.summary}</p>
+          <p dir="auto" className="text-xs text-[var(--sc-text-muted)] line-clamp-2 mb-2">
+            {section.summary}
+          </p>
         )}
         <div className="flex items-center gap-1">
           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusColor }} />
@@ -345,7 +352,8 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({
     // QNBS-v3: overflow hidden + touch-action:none prevents browser scroll from hijacking canvas pan.
     <div
       ref={wrapperRef}
-      className="relative w-full h-full overflow-hidden bg-[var(--sc-surface-base)] rounded-xl border border-[var(--sc-border-subtle)]"
+      // QNBS-v3: RTL beta — keep the board LTR; pointer/pan math uses getBoundingClientRect and breaks if mirrored.
+      className="rtl-keep-ltr relative w-full h-full overflow-hidden bg-[var(--sc-surface-base)] rounded-xl border border-[var(--sc-border-subtle)]"
       style={{ touchAction: 'none', cursor: isDrawing ? 'crosshair' : 'default' }}
       role="application"
       aria-label={t('sceneboard.canvas.ariaLabel')}

@@ -73,6 +73,21 @@ const HELP_DOC_CHUNKS: HelpDocChunk[] = [
     title: 'Analysis tools',
     body: 'Consistency checker, AI Critic, project health on dashboard, cross-project search, progress tracker, book preview.',
   },
+  {
+    id: 'languages-rtl',
+    title: 'Languages & RTL',
+    body: 'Seven interface languages: de, en, fr, es, it, plus Arabic and Hebrew as a right-to-left (RTL) Beta. Switch in Settings → General, Welcome Portal, or Command Palette. RTL loads Noto Sans Arabic/Hebrew + Naskh fonts and flips layout; manuscript text follows its own script via dir="auto". Help articles stay English in Beta.',
+  },
+  {
+    id: 'privacy-local-ai',
+    title: 'Privacy, encryption & local AI',
+    body: 'At-rest encryption: AES-256-GCM from a passphrase (PBKDF2 600k) under Settings → Privacy. Voice and LoRA training run on-device; cloud sync (Cloudflare R2) is end-to-end encrypted and opt-in. API keys never leave the device. Offline-first by default.',
+  },
+  {
+    id: 'advanced-editing',
+    title: 'LoRA fine-tuning & ProForge',
+    body: 'LoRA adapters teach a local WebLLM/Ollama model your writing voice (Settings → AI → Fine-Tuning, .safetensors, scale α). ProForge is an eight-stage agentic editor launched from the Writer tools panel; every stage pauses for review and is reversible. Both gated behind Early Access Features.',
+  },
 ];
 
 function scoreChunk(queryNorm: string, chunk: HelpDocChunk): number {

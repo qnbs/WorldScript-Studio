@@ -22,12 +22,12 @@ describe('bootstrapTranslation', () => {
     expect(bootstrapTranslation('it', 'initialProject.title')).toBe('La mia storia senza titolo');
   });
 
-  it('returns English for ar locale (RTL stub falls back to en)', () => {
-    expect(bootstrapTranslation('ar', 'initialProject.title')).toBe('My Untitled Story');
+  it('returns translated Arabic cold-start value for ar locale', () => {
+    expect(bootstrapTranslation('ar', 'initialProject.title')).toBe('قصتي بلا عنوان');
   });
 
-  it('returns English for he locale (RTL stub falls back to en)', () => {
-    expect(bootstrapTranslation('he', 'initialProject.chapter1')).toBe('Chapter 1');
+  it('returns translated Hebrew cold-start value for he locale', () => {
+    expect(bootstrapTranslation('he', 'initialProject.chapter1')).toBe('פרק 1');
   });
 
   it('falls back to English for an unknown key in any locale', () => {
@@ -83,7 +83,7 @@ describe('resolveTranslation', () => {
 
   it('returns ar bootstrap fallback for RTL locale', () => {
     expect(resolveTranslation('ar', 'initialProject.title', undefined, undefined)).toBe(
-      'My Untitled Story',
+      'قصتي بلا عنوان',
     );
   });
 });

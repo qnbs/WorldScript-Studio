@@ -22,6 +22,16 @@ import '@fontsource/merriweather/300.css';
 import '@fontsource/merriweather/400.css';
 import '@fontsource/merriweather/700.css';
 import '@fontsource/merriweather/400-italic.css';
+/* QNBS-v3: RTL beta fonts — Inter/Merriweather lack Arabic/Hebrew glyphs; Noto provides them.
+   Naskh is the traditional Arabic book face, used for the manuscript editor surface in RTL. */
+import '@fontsource/noto-sans-arabic/400.css';
+import '@fontsource/noto-sans-arabic/500.css';
+import '@fontsource/noto-sans-arabic/700.css';
+import '@fontsource/noto-sans-hebrew/400.css';
+import '@fontsource/noto-sans-hebrew/500.css';
+import '@fontsource/noto-sans-hebrew/700.css';
+import '@fontsource/noto-naskh-arabic/400.css';
+import '@fontsource/noto-naskh-arabic/500.css';
 
 import './index.css';
 import './register-sw';
