@@ -46,4 +46,11 @@ describe('service worker — locale bundle caching strategy', () => {
     const block = localeHandlerBlock(swSource);
     expect(block).toMatch(/catch[\s\S]*cache\.match\(request\)/);
   });
+
+  it('falls back to cache on a non-OK response (transient 5xx/404 must not break translations)', () => {
+    // QNBS-v3: 5xx/404 do not throw — after the `response.ok` check the handler must prefer the
+    // cached bundle, otherwise a transient backend/CDN error returns a broken bundle.
+    const block = localeHandlerBlock(swSource);
+    expect(block).toMatch(/response\.ok[\s\S]*cache\.match\(request\)\s*\)\s*\|\|\s*response/);
+  });
 });

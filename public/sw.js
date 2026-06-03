@@ -220,8 +220,13 @@ self.addEventListener('fetch', (event) => {
       caches.open(CACHE_DYNAMIC).then(async (cache) => {
         try {
           const response = await fetch(request);
-          if (response.ok) cache.put(request, response.clone());
-          return response;
+          if (response.ok) {
+            cache.put(request, response.clone());
+            return response;
+          }
+          // QNBS-v3: HTTP 5xx/404 don't throw — prefer a valid cached bundle over a broken
+          // response so transient backend/CDN errors never wipe out translations.
+          return (await cache.match(request)) || response;
         } catch {
           return (await cache.match(request)) || offlineFallback(request);
         }
