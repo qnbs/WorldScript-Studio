@@ -113,9 +113,24 @@ describe('handleAddNewManually', () => {
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'project/addWorld',
-        payload: expect.objectContaining({ name: 'worlds.newWorldName' }),
+        payload: expect.objectContaining({ id: 'test-uuid-world', name: 'worlds.newWorldName' }),
       }),
     );
+  });
+
+  it('opens the atlas on the newly created world (parity with Characters)', () => {
+    const { result } = renderHook(() => useWorldView());
+    expect(result.current.isAtlasOpen).toBe(false);
+    act(() => {
+      result.current.handleAddNewManually();
+    });
+    // Editor opens immediately on the fresh world — no silent grid-only add
+    expect(result.current.isAtlasOpen).toBe(true);
+    expect(result.current.selectedWorld?.id).toBe('test-uuid-world');
+    expect(result.current.selectedWorld?.name).toBe('worlds.newWorldName');
+    // Fully-formed defaults so the atlas tabs (timeline/locations) render safely
+    expect(result.current.selectedWorld?.timeline).toEqual([]);
+    expect(result.current.selectedWorld?.locations).toEqual([]);
   });
 });
 
