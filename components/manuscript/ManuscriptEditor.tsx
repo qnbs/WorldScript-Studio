@@ -65,7 +65,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
     worlds,
   } = useManuscriptViewContext();
   const settings = useAppSelector((state) => state.settings);
-  const { language } = useTranslation();
+  const { language, dir } = useTranslation();
   const [spellCheckPopover, setSpellCheckPopover] = useState<{
     x: number;
     y: number;
@@ -88,8 +88,18 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
   const deferredContent = useDeferredValue(activeSection?.content ?? '');
   const isHighlightPending = deferredContent !== (activeSection?.content ?? '');
 
+  // QNBS-v3: RTL prose needs Noto glyphs — generic serif/sans/mono lack reliable Arabic/Hebrew
+  // coverage; prefer Naskh for serif (book face), Noto Sans otherwise. LTR keeps the user's choice.
+  const editorFontFamily =
+    dir === 'rtl'
+      ? settings.editorFont === 'sans-serif'
+        ? '"Noto Sans Arabic", "Noto Sans Hebrew", sans-serif'
+        : settings.editorFont === 'monospace'
+          ? '"Noto Sans Arabic", "Noto Sans Hebrew", monospace'
+          : '"Noto Naskh Arabic", "Noto Sans Hebrew", serif'
+      : settings.editorFont;
   const editorStyles: React.CSSProperties = {
-    fontFamily: settings.editorFont,
+    fontFamily: editorFontFamily,
     fontSize: `${settings.fontSize}px`,
     lineHeight: settings.lineSpacing,
     whiteSpace: 'pre-wrap',
@@ -272,7 +282,8 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           }
           style={{
             fontSize: `${settings.fontSize}px`,
-            fontFamily: settings.editorFont,
+            // QNBS-v3: must match the highlight overlay's editorFontFamily so glyphs align in RTL.
+            fontFamily: editorFontFamily,
             lineHeight: settings.lineSpacing,
           }}
           spellCheck={false}

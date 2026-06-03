@@ -23,6 +23,9 @@ const WELCOME_LANGS: { code: Language; label: string }[] = [
   { code: 'fr', label: 'FR' },
   { code: 'es', label: 'ES' },
   { code: 'it', label: 'IT' },
+  // QNBS-v3: RTL beta (C-6) — Arabic/Hebrew selectable from first launch; native glyph labels.
+  { code: 'ar', label: 'ع' },
+  { code: 'he', label: 'א' },
 ];
 
 const LanguageSelector = () => {

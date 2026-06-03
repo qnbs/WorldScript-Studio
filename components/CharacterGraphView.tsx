@@ -130,7 +130,8 @@ const CharacterForceGraph: FC = () => {
   return (
     <section
       ref={containerRef}
-      className="w-full h-full"
+      // QNBS-v3: RTL beta — force-graph canvas hit-testing assumes LTR coordinates; keep the surface LTR.
+      className="rtl-keep-ltr w-full h-full"
       style={{ minHeight: 400 }}
       aria-label={t('characterGraph.graphAriaLabel')}
     >

@@ -20,6 +20,10 @@
   --font-ui: "Inter", system-ui, -apple-system, sans-serif;
   --font-editor: "Merriweather", Georgia, "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* QNBS-v3: RTL beta — Noto stacks keep Latin glyphs (Inter/Merriweather) as final fallback so
+     mixed-script (BiDi) text stays consistent; [dir="rtl"] swaps the active token to these. */
+  --font-ui-rtl: "Noto Sans Arabic", "Noto Sans Hebrew", var(--font-ui);
+  --font-editor-rtl: "Noto Naskh Arabic", "Noto Sans Hebrew", var(--font-editor);
   --sc-prose-measure: 65ch;
 
   /* Icon size tokens — QNBS-v3: semantic names replace w-4/w-5/w-6/w-8 literals; map to 16/20/24/32px. */
@@ -592,10 +596,17 @@ select option {
   }
 }
 
-/* QNBS-v3: Phase 2 B-5 — RTL layout foundation. Basic direction flips for [dir="rtl"].
-   TODO-RTL: Manuscript editor Bidi, recharts labels, Plot Board SVG — tracked for post-beta. */
+/* QNBS-v3: RTL beta (B-5/C-6) — global safety net for [dir="rtl"]. The app shell and
+   primary views use logical Tailwind utilities (ms-/me-/ps-/pe-/start-/end-/text-start/end),
+   which flip automatically; this net catches the remaining physical utilities and shared
+   directional patterns so unconverted spots still read correctly in Arabic/Hebrew.
+   Canvas/SVG boards opt out via .rtl-keep-ltr (geometry math must stay LTR). */
 [dir="rtl"] {
-  /* Swap standard text-align utilities */
+  /* QNBS-v3: swap active font tokens to Noto Arabic/Hebrew stacks; body uses var(--font-ui). */
+  --font-ui: var(--font-ui-rtl);
+  --font-editor: var(--font-editor-rtl);
+
+  /* Swap physical text-align utilities that weren't migrated to text-start/text-end */
   .text-left {
     text-align: right;
   }
@@ -603,8 +614,30 @@ select option {
     text-align: left;
   }
 
-  /* Mirror chevron/arrow icons used in navigation */
+  /* Swap physical float utilities */
+  .float-left {
+    float: right;
+  }
+  .float-right {
+    float: left;
+  }
+
+  /* Mirror chevron/arrow icons used in navigation (opt-in per icon) */
   .rtl-mirror {
     transform: scaleX(-1);
   }
+}
+
+/* QNBS-v3: RTL beta — directional icons that should always mirror under RTL without a
+   per-instance class (back/forward carets, breadcrumb separators, disclosure chevrons). */
+[dir="rtl"] .rtl-auto-mirror {
+  transform: scaleX(-1);
+}
+
+/* QNBS-v3: RTL beta — coordinate-system islands. PlotCanvas/ConnectionLayer/PlotMinimap/
+   CharacterGraphView rely on getBoundingClientRect + pointer math that assumes LTR; force
+   LTR on the wrapper so the board geometry/hit-testing stays correct while the surrounding
+   chrome flips. Inner text labels can still opt back in with dir="auto". */
+.rtl-keep-ltr {
+  direction: ltr;
 }

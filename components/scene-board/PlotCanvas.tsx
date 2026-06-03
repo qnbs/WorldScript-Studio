@@ -345,7 +345,8 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({
     // QNBS-v3: overflow hidden + touch-action:none prevents browser scroll from hijacking canvas pan.
     <div
       ref={wrapperRef}
-      className="relative w-full h-full overflow-hidden bg-[var(--sc-surface-base)] rounded-xl border border-[var(--sc-border-subtle)]"
+      // QNBS-v3: RTL beta — keep the board LTR; pointer/pan math uses getBoundingClientRect and breaks if mirrored.
+      className="rtl-keep-ltr relative w-full h-full overflow-hidden bg-[var(--sc-surface-base)] rounded-xl border border-[var(--sc-border-subtle)]"
       style={{ touchAction: 'none', cursor: isDrawing ? 'crosshair' : 'default' }}
       role="application"
       aria-label={t('sceneboard.canvas.ariaLabel')}

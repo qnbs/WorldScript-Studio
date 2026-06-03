@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Version-v1.19.0-6366F1" alt="v1.19.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_2236_keys-0EA5E9" alt="i18n DE EN FR ES IT — 2236 keys">
+  <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_%7C_AR_%7C_HE_2236_keys-0EA5E9" alt="i18n DE EN FR ES IT AR HE — 2236 keys">
   <img src="https://img.shields.io/badge/Tests-4567_%2F_382_files-22C55E" alt="4567 tests / 382 files">
   <img src="https://img.shields.io/badge/Coverage-L_75%25_%7C_B_61%25_%7C_F_68%25-22C55E" alt="Coverage: Lines 75% / Branches 61% / Functions 68%">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
@@ -315,17 +315,19 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2 062 i18n keys** across all 5 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2 236 i18n keys** across all 7 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
 - 🇫🇷 **French** (Français)
 - 🇪🇸 **Spanish** (Español)
 - 🇮🇹 **Italian** (Italiano)
+- 🇸🇦 **Arabic** (العربية) — *Beta, RTL*
+- 🇮🇱 **Hebrew** (עברית) — *Beta, RTL*
 
-All five trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette.
+All seven trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette.
 
-**RTL Layout Beta** (`enableRtlLayout` flag, off by default): Arabic (ar) and Hebrew (he) locale stubs added in v1.19.0. When the flag is on, `html[dir="rtl"]` is set and a BiDi context provider mirrors layout. Full RTL translation content is a v2.0 milestone.
+**RTL Layout Beta** (Arabic / Hebrew): all 18 UI modules are fully translated; `help.json` long-form prose remains English fallback (community follow-up). Self-hosted **Noto Sans Arabic / Hebrew** + **Noto Naskh Arabic** (manuscript editor) provide proper glyph coverage. Switching to ar/he sets `html[dir="rtl"]`; a global `[dir="rtl"]` CSS net plus logical-property shell layout mirror the UI, while canvas/SVG boards (Plot Board, Character Graph) stay LTR to keep pointer/geometry math correct. The `enableRtlLayout` flag (off by default) additionally forces RTL for layout testing regardless of locale.
 
 **Spotlight tour:** After first launch, a short guided tour (driver.js) highlights navigation, command palette, and Settings; restart anytime from the Dashboard ("Guided tour") or Help.
 
@@ -390,7 +392,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 234 keys × 5 locales; EN fallback; `localStorage` persistence      |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 236 keys × 7 locales (incl. ar/he RTL Beta); EN fallback; `localStorage` persistence |
 | **Testing**          | Vitest 4.x (2 500+ tests / 392 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
@@ -577,7 +579,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 - **4 200+ unit tests** across **390+ test files** — all passing (2026-06-01 CI run)
 - Coverage: **73 % lines · 58 % branches · 65 % functions · 71 % statements** (CI-reported; see Codecov badge)
 - Vitest thresholds: lines ≥ 73 · statements ≥ 71 · branches ≥ 58 · functions ≥ 65 — all green
-- i18n: **2236 keys × 5 locales** (en/de/fr/es/it); ar/he stubs (2152 keys)
+- i18n: **2236 keys × 7 locales** (en/de/fr/es/it + ar/he RTL Beta — UI fully translated, help.json EN fallback)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

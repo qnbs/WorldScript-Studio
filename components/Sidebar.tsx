@@ -34,7 +34,7 @@ const NavItem: React.FC<{
       type="button"
       onClick={onClick}
       data-tour={dataTour}
-      className={`relative flex items-center w-full px-3 py-2.5 text-left rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] overflow-hidden ${
+      className={`relative flex items-center w-full px-3 py-2.5 text-start rounded-xl transition-all duration-300 group touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] overflow-hidden ${
         isActive
           ? 'bg-gradient-to-r from-[var(--nav-background-active)] to-transparent text-[var(--nav-text-active)] shadow-sm font-semibold'
           : 'text-[var(--sc-text-secondary)] hover:bg-[var(--nav-background-hover)] hover:text-[var(--sc-text-primary)] font-medium'

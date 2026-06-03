@@ -11,7 +11,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const root = join(__dirname, '..');
 
-const LANGS = ['en', 'de', 'fr', 'es', 'it'];
+// QNBS-v3: ar/he promoted into the parity gate (RTL Beta) — key coverage is now enforced.
+// Translation *quality* is still Beta (help.json bodies remain English fallback by design).
+const LANGS = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he'];
 const MODULES = [
   'common',
   'tour',
