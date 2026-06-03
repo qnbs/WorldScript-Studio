@@ -210,16 +210,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 4. Locale JSON — Stale-While-Revalidate (fast first paint, always fresh bg)
+  // 4. Locale JSON — Network-First (always-fresh translations; cache fallback when offline)
+  // QNBS-v3: SWR returned the *cached* bundle first, so returning users kept STALE translations
+  // after an i18n update (e.g. ar/he stub → full Beta) until a second reload — the cache name is
+  // pinned to APP_VERSION, which doesn't bump on content-only i18n changes. Network-first
+  // guarantees fresh strings whenever online while preserving offline support via cache fallback.
   if (url.pathname.includes('/locales/')) {
     event.respondWith(
       caches.open(CACHE_DYNAMIC).then(async (cache) => {
-        const cached  = await cache.match(request);
-        const fetchPr = fetch(request).then((response) => {
+        try {
+          const response = await fetch(request);
           if (response.ok) cache.put(request, response.clone());
           return response;
-        }).catch(() => null);
-        return cached || await fetchPr || offlineFallback(request);
+        } catch {
+          return (await cache.match(request)) || offlineFallback(request);
+        }
       })
     );
     return;
