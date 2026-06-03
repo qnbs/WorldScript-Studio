@@ -44,5 +44,11 @@
   "worlds.deleteLabel": "Delete {{name}}",
   "worlds.error.imageFailed": "Ambiance image generation failed. Please try adding more detail to the world description or check your connection.",
   "worlds.uploadImage": "Upload Image",
-  "worlds.editorTabsAriaLabel": "World editor tabs"
+  "worlds.editorTabsAriaLabel": "World editor tabs",
+  "worlds.stats.total": "Total",
+  "worlds.stats.developed": "Developed",
+  "worlds.stats.locations": "Locations",
+  "worlds.stats.avgCompleteness": "Avg. complete",
+  "worlds.searchPlaceholder": "Search worlds…",
+  "worlds.searchAriaLabel": "Search worlds by name"
 }

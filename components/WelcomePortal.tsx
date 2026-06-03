@@ -35,7 +35,7 @@ const LanguageSelector = () => {
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: role="group" on a div is appropriate for a toolbar of language-switch buttons; fieldset requires a legend child and adds default border/padding that breaks this absolutely-positioned layout. */}
       <div
-        className="absolute top-4 right-4 flex flex-wrap justify-end gap-1 max-w-[min(100%,14rem)]"
+        className="fixed top-4 right-4 z-10 flex flex-wrap justify-end gap-1 max-w-[min(100%,14rem)]"
         role="group"
         aria-label={t('portal.language.groupLabel')}
       >
@@ -95,6 +95,31 @@ const NewProjectOption: React.FC<{
     </button>
   );
 };
+
+// QNBS-v3: first-launch value-prop highlights — orient new users before they pick a path.
+const FeatureHighlight: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}> = ({ icon, title, description }) => (
+  <div className="rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/50 p-4 text-left">
+    <div className="mb-2 inline-flex rounded-lg bg-[var(--sc-accent-subtle)] p-2 text-[var(--sc-accent)]">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth={1.5}
+        stroke="currentColor"
+        className="h-5 w-5"
+        aria-hidden="true"
+      >
+        {icon}
+      </svg>
+    </div>
+    <h3 className="text-sm font-bold text-[var(--sc-text-primary)]">{title}</h3>
+    <p className="mt-0.5 text-xs leading-relaxed text-[var(--sc-text-muted)]">{description}</p>
+  </div>
+);
 
 export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   const { t } = useTranslation();
@@ -232,6 +257,48 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       </h1>
       <p className="text-lg text-[var(--sc-text-muted)] mt-2 mb-6">
         {t('portal.welcome.subtitle')}
+      </p>
+      {/* QNBS-v3: feature highlights orient first-time users; offline-first badge sets the privacy
+          expectation up front (no backend, keys encrypted at rest, data stays on device). */}
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <FeatureHighlight
+          icon={ICONS.SPARKLES}
+          title={t('portal.features.ai.title')}
+          description={t('portal.features.ai.description')}
+        />
+        <FeatureHighlight
+          icon={ICONS.SCENEBOARD}
+          title={t('portal.features.plot.title')}
+          description={t('portal.features.plot.description')}
+        />
+        <FeatureHighlight
+          icon={ICONS.CHARACTERS}
+          title={t('portal.features.worldbuilding.title')}
+          description={t('portal.features.worldbuilding.description')}
+        />
+        <FeatureHighlight
+          icon={ICONS.EXPORT}
+          title={t('portal.features.export.title')}
+          description={t('portal.features.export.description')}
+        />
+      </div>
+      <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/60 px-4 py-1.5 text-sm text-[var(--sc-text-secondary)]">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className="h-4 w-4 text-[var(--sc-success-fg)]"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+          />
+        </svg>
+        {t('portal.welcome.privacyBadge')}
       </p>
       {!hasExistingSession && (
         <section
@@ -380,9 +447,15 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-[var(--sc-surface-base)] z-50 flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-[var(--sc-surface-base)] animate-fade-in">
+      {/* QNBS-v3: shell is now scrollable (overflow-y-auto) with min-h-full centering — content
+          taller than the viewport (e.g. the feature grid on mobile) scrolls instead of being
+          clipped by the old fixed `flex items-center` shell. Fixes Mobile-Chrome E2E click
+          timeouts where the bottom action buttons were unreachable. */}
       <LanguageSelector />
-      <div className="w-full max-w-3xl">{renderView()}</div>
+      <div className="flex min-h-full items-center justify-center p-4 pt-16 sm:pt-4">
+        <div className="w-full max-w-3xl">{renderView()}</div>
+      </div>
       <style>{`
             @keyframes fade-in {
                 from { opacity: 0; }

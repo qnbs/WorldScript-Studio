@@ -33,6 +33,33 @@ const baseContextValue = {
   sceneTimelineHints: [],
   daysLeft: 10,
   onNavigate: mockOnNavigate,
+  // Header / greeting
+  greetingKey: 'dashboard.header.greetingMorning',
+  continueSection: { id: 'm2', title: 'Chapter 2' },
+  // Momentum
+  streakDays: 3,
+  longestStreak: 5,
+  dailyGoalWords: 500,
+  weeklyGoalWords: 2500,
+  wordsToday: 250,
+  wordsThisWeek: 1200,
+  dailyGoalProgress: 50,
+  weeklyGoalProgress: 48,
+  recentActivity: Array.from({ length: 14 }, (_, i) => ({
+    date: `2026-05-${String(i + 1).padStart(2, '0')}`,
+    words: i % 3 === 0 ? 300 : 0,
+    isToday: i === 13,
+  })),
+  // Composition
+  sceneCount: 2,
+  readingTimeMinutes: 4,
+  avgWordsPerScene: 450,
+  statusCounts: { draft: 1, final: 1 },
+  // Pace + health
+  wordsRemaining: 49100,
+  requiredPerDay: 4910,
+  paceStatus: 'behind' as const,
+  healthBreakdown: { writing: 30, cast: 10, world: 0, score: 19 },
   isGoalModalOpen: false,
   setIsGoalModalOpen: vi.fn(),
   goalWordCount: 50000,
@@ -141,5 +168,36 @@ describe('Dashboard', () => {
   it('shows logline field', () => {
     render(<Dashboard onNavigate={mockOnNavigate} />);
     expect(screen.getAllByText('dashboard.details.logline').length).toBeGreaterThan(0);
+  });
+
+  it('renders the personalized greeting header', () => {
+    render(<Dashboard onNavigate={mockOnNavigate} />);
+    expect(screen.getByText('dashboard.header.greetingMorning')).toBeTruthy();
+    // Project title appears prominently in the hero
+    expect(screen.getAllByText('Epic Adventure').length).toBeGreaterThan(0);
+  });
+
+  it('renders the writing momentum card with streak', () => {
+    render(<Dashboard onNavigate={mockOnNavigate} />);
+    expect(screen.getByText('dashboard.momentum.title')).toBeTruthy();
+    expect(screen.getAllByText('3').length).toBeGreaterThan(0); // streakDays (chip + card)
+  });
+
+  it('renders the manuscript composition card', () => {
+    render(<Dashboard onNavigate={mockOnNavigate} />);
+    expect(screen.getByText('dashboard.composition.title')).toBeTruthy();
+  });
+
+  it('renders the pace projection in the goal tracker', () => {
+    render(<Dashboard onNavigate={mockOnNavigate} />);
+    expect(screen.getByText('dashboard.goals.pace.title')).toBeTruthy();
+    // paceStatus 'behind' renders its badge
+    expect(screen.getByText('dashboard.goals.pace.behind')).toBeTruthy();
+  });
+
+  it('navigates to the manuscript when Continue Writing is clicked', () => {
+    render(<Dashboard onNavigate={mockOnNavigate} />);
+    screen.getByText('dashboard.continueWriting.button').click();
+    expect(mockOnNavigate).toHaveBeenCalledWith('manuscript');
   });
 });

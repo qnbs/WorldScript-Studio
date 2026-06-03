@@ -483,3 +483,101 @@ describe('handleLoglineChange', () => {
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.updateLogline('A new logline text'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Derived dashboard insights (greeting / continue / composition / pace / health)
+// ---------------------------------------------------------------------------
+describe('greetingKey', () => {
+  it('returns a valid greeting i18n key', () => {
+    setProjectData({});
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.greetingKey).toMatch(/^dashboard\.header\.greeting/);
+  });
+});
+
+describe('continueSection', () => {
+  it('is null for an empty manuscript', () => {
+    setProjectData({ manuscript: [] });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.continueSection).toBeNull();
+  });
+
+  it('points at the last section with content', () => {
+    setProjectData({
+      manuscript: [defaultSection('s1', 'one two three'), defaultSection('s2', 'four five')],
+    });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.continueSection).toEqual({ id: 's2', title: 'Section s2' });
+  });
+
+  it('falls back to the first section when none have content', () => {
+    setProjectData({ manuscript: [defaultSection('s1', ''), defaultSection('s2', '')] });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.continueSection).toEqual({ id: 's1', title: 'Section s1' });
+  });
+});
+
+describe('manuscript composition', () => {
+  it('counts scenes and computes averages and reading time', () => {
+    setProjectData({
+      manuscript: [defaultSection('s1', 'one two three'), defaultSection('s2', 'four five')],
+    });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.sceneCount).toBe(2);
+    expect(result.current.avgWordsPerScene).toBe(3); // 5 words / 2 scenes, rounded
+    expect(result.current.readingTimeMinutes).toBe(1); // floor below WPM clamps to 1
+  });
+
+  it('buckets sections without a status into "untracked"', () => {
+    setProjectData({
+      manuscript: [defaultSection('s1', 'a b'), defaultSection('s2', 'c d')],
+    });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.statusCounts).toEqual({ untracked: 2 });
+  });
+
+  it('buckets sections by their explicit status', () => {
+    setProjectData({
+      manuscript: [
+        { ...defaultSection('s1', 'a b'), status: 'final' },
+        { ...defaultSection('s2', 'c d'), status: 'draft' },
+        { ...defaultSection('s3', 'e f'), status: 'draft' },
+      ],
+    });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.statusCounts).toEqual({ final: 1, draft: 2 });
+  });
+});
+
+describe('pace + health', () => {
+  it('reports words remaining toward the goal', () => {
+    setProjectData({
+      manuscript: [defaultSection('s1', 'a b c')], // 3 words
+      projectGoals: { totalWordCount: 10, targetDate: null },
+    });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.wordsRemaining).toBe(7);
+  });
+
+  it('marks the goal done when the manuscript meets it', () => {
+    setProjectData({
+      manuscript: [defaultSection('s1', 'a b c')], // 3 words
+      projectGoals: { totalWordCount: 3, targetDate: null },
+    });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.wordsRemaining).toBe(0);
+    expect(result.current.paceStatus).toBe('done');
+  });
+
+  it('computes a health breakdown weighted toward writing progress', () => {
+    setProjectData({
+      manuscript: [defaultSection('s1', 'a b c d e')], // 5 words
+      projectGoals: { totalWordCount: 10, targetDate: null },
+    });
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+    expect(result.current.healthBreakdown.writing).toBe(50);
+    expect(result.current.healthBreakdown.cast).toBe(0);
+    expect(result.current.healthBreakdown.world).toBe(0);
+    expect(result.current.healthBreakdown.score).toBe(28); // round(50 * 0.55)
+  });
+});

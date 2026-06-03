@@ -32,8 +32,26 @@ export const useWorldView = () => {
 
   const [worldToDelete, setWorldToDelete] = useState<World | null>(null);
 
+  // QNBS-v3: Manual add must open the atlas immediately — dispatch-only left users on the grid
+  //          with a silent "New World" card and no editor (inconsistent with Characters, which
+  //          opens the dossier on manual add). Mirror that flow: create, select, open.
   const handleAddNewManually = useCallback(() => {
-    dispatch(projectActions.addWorld({ name: t('worlds.newWorldName') }));
+    const id = uuidv4();
+    const name = t('worlds.newWorldName');
+    dispatch(projectActions.addWorld({ id, name }));
+    setSelectedWorld({
+      id,
+      name,
+      description: '',
+      geography: '',
+      magicSystem: '',
+      culture: '',
+      notes: '',
+      hasAmbianceImage: false,
+      timeline: [],
+      locations: [],
+    });
+    setIsAtlasOpen(true);
   }, [dispatch, t]);
 
   const handleAddNewWithAI = useCallback(() => {

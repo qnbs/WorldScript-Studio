@@ -1,12 +1,20 @@
 import type { FC } from 'react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
 import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
 import { uploadWorldImageThunk } from '../features/project/thunks/worldThunks';
 import { useWorldView } from '../hooks/useWorldView';
 import { dbService } from '../services/dbService';
+import {
+  filterByQuery,
+  type RosterSort,
+  sortByMode,
+  worldCompleteness,
+} from '../services/rosterMetrics';
 import type { World } from '../types';
+import { CompletenessRing } from './roster/CompletenessRing';
+import { RosterToolbar } from './roster/RosterToolbar';
 import { AddNewCard } from './ui/AddNewCard';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
@@ -577,8 +585,9 @@ const DeleteConfirmationModal: FC = () => {
 
 const WorldCard: FC<{ world: World; animationIndex: number }> = React.memo(
   ({ world, animationIndex }) => {
-    const { handleSelect } = useWorldViewContext();
+    const { t, handleSelect } = useWorldViewContext();
     const imageUrl = useStoredImage(world.id, world.hasAmbianceImage);
+    const completeness = worldCompleteness(world);
 
     return (
       <Card
@@ -587,6 +596,13 @@ const WorldCard: FC<{ world: World; animationIndex: number }> = React.memo(
         className="group text-left relative overflow-hidden transition-all duration-300 hover:-translate-y-1 animate-in"
         style={{ '--index': animationIndex } as React.CSSProperties}
       >
+        {/* QNBS-v3: atlas-completeness ring — at-a-glance signal of how developed a world is */}
+        <div className="absolute right-2 top-2 z-10 rounded-full bg-[var(--sc-surface-base)]/70 p-0.5 backdrop-blur-sm">
+          <CompletenessRing
+            value={completeness}
+            label={t('roster.completeness', { percent: String(completeness) })}
+          />
+        </div>
         <div className="aspect-video w-full bg-[var(--sc-surface-overlay)]/50 flex items-center justify-center overflow-hidden">
           {world.hasAmbianceImage && imageUrl ? (
             <img
@@ -622,6 +638,31 @@ WorldCard.displayName = 'WorldCard';
 const WorldViewUI: FC = () => {
   const { t, handleAddNewManually, handleAddNewWithAI, worlds, isAtlasOpen } =
     useWorldViewContext();
+
+  // QNBS-v3: ephemeral roster UI state (search/sort) — kept local, not in Redux/the view hook.
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<RosterSort>('name-asc');
+
+  const displayed = useMemo(() => {
+    const filtered = filterByQuery(worlds, searchQuery, (w) => w.name);
+    return sortByMode(filtered, sortBy, (w) => w.name, worldCompleteness);
+  }, [worlds, searchQuery, sortBy]);
+
+  const stats = useMemo(() => {
+    const developed = worlds.filter((w) => worldCompleteness(w) >= 75).length;
+    const locations = worlds.reduce((sum, w) => sum + (w.locations?.length ?? 0), 0);
+    const avg =
+      worlds.length === 0
+        ? 0
+        : Math.round(worlds.reduce((sum, w) => sum + worldCompleteness(w), 0) / worlds.length);
+    return [
+      { label: t('worlds.stats.total'), value: worlds.length },
+      { label: t('worlds.stats.developed'), value: developed },
+      { label: t('worlds.stats.locations'), value: locations },
+      { label: t('worlds.stats.avgCompleteness'), value: `${avg}%` },
+    ];
+  }, [worlds, t]);
+
   return (
     <div>
       {/* QNBS-v3: view-level section header with colored SSOT icon */}
@@ -629,6 +670,21 @@ const WorldViewUI: FC = () => {
         <SectionIcon section="world" size="lg" />
         <h1 className="text-2xl font-bold text-[var(--sc-text-primary)]">{t('sidebar.world')}</h1>
       </div>
+      {worlds.length > 0 && (
+        <RosterToolbar
+          t={t}
+          stats={stats}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          sort={sortBy}
+          onSortChange={setSortBy}
+          resultCount={displayed.length}
+          totalCount={worlds.length}
+          searchPlaceholder={t('worlds.searchPlaceholder')}
+          searchAriaLabel={t('worlds.searchAriaLabel')}
+          sortAriaLabel={t('roster.sortAriaLabel')}
+        />
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
         <div className="animate-in" style={{ '--index': 0 } as React.CSSProperties}>
           <AddNewCard
@@ -658,7 +714,17 @@ const WorldViewUI: FC = () => {
             />
           </div>
         )}
-        {worlds.map((world, index) => (
+        {worlds.length > 0 && displayed.length === 0 && (
+          // QNBS-v3: search yielded nothing — distinct from the worlds-empty state above
+          <div className="col-span-full mt-4">
+            <EmptyState
+              title={t('roster.noResults.title')}
+              description={t('roster.noResults.description', { query: searchQuery })}
+              compact
+            />
+          </div>
+        )}
+        {displayed.map((world, index) => (
           // QNBS-v3: content-visibility skips rendering off-screen world cards — measurable win for large world collections.
           <div
             key={world.id}
