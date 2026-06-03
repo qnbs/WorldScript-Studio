@@ -29,6 +29,46 @@ pnpm exec tauri build
 
 Linux dev deps match the Ubuntu job (WebKitGTK 4.1, AppIndicator, librsvg, patchelf).
 
+## Verifying native (Rust) changes — there is no PR-CI gate
+
+The web `ci.yml` pipeline **never compiles `src-tauri/`**. This workflow only runs on
+`workflow_dispatch` / `v*` tags, and the full crate often will not build on constrained dev hardware
+(huge dep tree, WebKitGTK system libs, possible OOM). So a Rust change can merge through a green
+web-CI while never having been compiled.
+
+**The gate for any `src-tauri/` change is to dispatch this workflow on the branch:**
+
+```bash
+git push -u origin <branch>
+gh workflow run tauri-build.yml --ref <branch>
+gh run watch "$(gh run list --workflow=tauri-build.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+```
+
+A run that reaches `Finished release profile … target(s)` and `Finished N bundles at:` has compiled
+and packaged successfully. The **ubuntu** and **macOS** jobs are the meaningful Rust signal; the
+**Windows** job currently fails earlier in the `./.github/actions/setup` composite (self-installer
+exit `3221226505`) — an environment/infra issue, not Rust.
+
+## Build health & known blockers (2026-06-03)
+
+`tauri-build.yml` had been **red since 2026-05-30** until a Phase 3 dispatch traced and fixed two
+root causes that broke the build at the dependency-resolution / compile stage (so it never reached
+bundling — see [`AUDIT.md`](../AUDIT.md) § WorkerBus v2 Phase 3):
+
+| Issue | Status |
+|-------|--------|
+| `src-tauri/Cargo.toml` — unused, unresolvable `specta = "2"` / `tauri-specta = "2"` (only `2.0.0-rc.*` exist) failed `cargo` resolution | **Fixed** — both removed |
+| `src-tauri/src/lora.rs` — `LoraEnvReport` deserialized but derived only `Serialize` (`E0277`) | **Fixed** — `Deserialize` added |
+
+The crate now compiles cleanly and bundles `.deb` / `.rpm` / `.AppImage` on ubuntu. **Two
+non-code blockers remain** for a fully green run / signed release:
+
+- **Updater signing secret** — the run currently exits non-zero at the end with
+  `incorrect updater private key password: Missing comment in secret key`. The
+  `TAURI_SIGNING_PRIVATE_KEY` repo secret is malformed; regenerate per *First-release checklist*
+  below. Until then the app + bundles build, but the signing step fails.
+- **Windows `setup` composite** — see above; a runner/installer issue to revisit.
+
 ## Desktop UX (v1.9)
 
 | Feature | Implementation |

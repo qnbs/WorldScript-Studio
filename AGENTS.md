@@ -317,6 +317,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 - `tauri-build.yml` runs on `workflow_dispatch` or `v*` tags. `v*` tags publish installers on a GitHub Release.
 - Artifacts: `.appimage`, `.msi`, `.dmg` + `latest.json` updater manifest.
 - Signing: Optional `TAURI_SIGNING_PRIVATE_KEY` and password for updater signatures.
+- **No PR-CI gate for Rust:** the web `ci.yml` never compiles `src-tauri/`, and the crate may not build on constrained hardware. After **any** `src-tauri/` change, verify by dispatching the build on your branch — `gh workflow run tauri-build.yml --ref <branch>` — and confirm it reaches `Finished N bundles`. ubuntu/macOS are the meaningful Rust signal. See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) § *Verifying native (Rust) changes*.
 
 ### Deployment Targets
 

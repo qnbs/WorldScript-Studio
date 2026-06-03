@@ -97,15 +97,16 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 - 8 critical runtime-gate drifts fixed; `features/featureCatalog.ts` + `scripts/audit-feature-parity.ts` added
 - `enablePlotBoardV2` deprecated (v1 board removed in v1.6; toggle hidden, slice retained for localStorage compat)
 
-**Local AI Perfection Sprint** 🔄 Phase 1 + 2.1 complete (2026-05-31)
+**Local AI Perfection Sprint** 🔄 Phases 1–2.4 complete (2026-06-03)
 - **Build:** `@xenova/transformers@2.17.2` → `@huggingface/transformers@3.8.1` (v3 ESM); resolves vitest broken blocker
 - **Phase 1.1:** IDB session lock + atomic key rotation (`reEncryptAllAppData`/`reEncryptAllSnapshots`); brute-force rate limiting
 - **Phase 1.2:** All voice engines async; `SileroVadEngine` (ONNX LSTM); `KokoroTtsEngine` (ONNX PCM)
 - **Phase 1.3:** GPU fallback reason tracking; worker restart cap (MAX=5); RAM-pressure eco-mode; AdaptiveAiHardwarePanel
 - **Phase 2.1:** Real `text-generation` pipelines (WebLLM: SmolLM2-135M; Transformers.js: distilgpt2); AbortSignal end-to-end
 - **Phase 2.2:** ✅ Done (2026-06-02) — LoRA view productionized: `LoraView` container + gated `lora` route + conditional sidebar nav (`enableLoraAdapters`); `lora-wizard.spec.ts` re-enabled. Also `aiRetry` exponential backoff/jitter/Retry-After (P1-F5) + `fetchAdapter` opt-in timeout (P1-F6).
-- **Phase 2.3** 🔄 (2026-06-02) — Pipeline LRU cache unified into `services/ai/pipelineLruCache.ts` (dispose-on-evict closes a VRAM leak; in-flight load dedup); duplication across the two inference workers removed. Remaining: WebLLM worker offload.
-- **Remaining:** Phase 2.3 stretch (WebLLM worker), 2.4 (coverage), Phase 3 (final QA)
+- **Phase 2.3** ✅ Done (merged PR #69, 2026-06-03) — Pipeline LRU cache unified into `services/ai/pipelineLruCache.ts` (dispose-on-evict + dispose-on-replace close a VRAM/RAM leak; in-flight load dedup; centralized `safeDispose`); duplication across the two inference workers removed; + `aiRetry` property tests, `useLoraView` selector fix, ADR 0001/0002.
+- **Phase 2.4** ✅ Done (PR #69) — `kokoroTtsEngine` cancel/pause/resume/dispose + no-WASM coverage; thresholds ratcheted to CI-measured floor L74/B60/F66/S72.
+- **Remaining:** Phase 2.3 stretch (WebLLM full worker offload — own sprint, higher risk). _Separate track:_ **WorkerBus v2 Phase 3** (Rust TaskSupervisor + `text.analyze`) ✅ landed 2026-06-03 (PR #70) — see ADR 0003.
 
 **CI: Cloud-first Storybook** ✅ Done (2026-05-31)
 - Playwright browser cache in `storybook` CI job; `**/screenshots/` in artifact upload
