@@ -4,7 +4,7 @@
  *          section list, add/delete/move/select, drag-sort, large-manuscript notice.
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -166,5 +166,27 @@ describe('StoryNavigator', () => {
     render(<StoryNavigator onSectionSelect={onSectionSelect} />);
     await user.click(screen.getByText('Prologue'));
     expect(onSectionSelect).toHaveBeenCalled();
+  });
+
+  // QNBS-v3: Regression test for nested-button DOM/a11y violation fix
+  it('row select is not a <button>, so move/delete buttons are not nested in a button', () => {
+    render(<StoryNavigator />);
+    // outer row must be a role=button div, NOT a <button> element
+    const rows = screen.getAllByLabelText(/outline\.selectSection/);
+    expect(rows[0].tagName).toBe('DIV');
+    // and the move controls must be real, separately-focusable buttons
+    expect(within(rows[0]).getByLabelText(/outline\.moveUp/).tagName).toBe('BUTTON');
+  });
+
+  it('Enter and Space on the row trigger select', async () => {
+    const user = userEvent.setup();
+    render(<StoryNavigator />);
+    const rows = screen.getAllByLabelText(/outline\.selectSection/);
+    rows[0].focus();
+    await user.keyboard('{Enter}');
+    expect(mockSetActiveSectionId).toHaveBeenCalledWith('sec-1');
+    mockSetActiveSectionId.mockClear();
+    await user.keyboard(' ');
+    expect(mockSetActiveSectionId).toHaveBeenCalledWith('sec-1');
   });
 });

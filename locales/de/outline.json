@@ -29,6 +29,7 @@
   "outline.idea.title": "Ihre Idee",
   "outline.moveDown": "Abschnitt '{{title}}' nach unten verschieben",
   "outline.moveUp": "Abschnitt '{{title}}' nach oben verschieben",
+  "outline.selectSection": "Abschnitt '{{title}}' auswählen",
   "outline.overwriteConfirm": "Sie haben bereits eine Gliederung. Eine neue zu generieren wird die alte ersetzen. Möchten Sie fortfahren?",
   "outline.result.addTooltip": "Abschnitt darunter hinzufügen",
   "outline.result.applyButton": "Gliederung auf Manuskript anwenden",
