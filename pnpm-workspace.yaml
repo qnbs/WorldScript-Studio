@@ -3,6 +3,8 @@
 # All others are silently denied (pnpm v10 default since v9.15+ approve-builds model).
 # v11 upgrade path: rename to strictDepBuilds: true with an explicit allowlist, and add
 #   minimumReleaseAge, blockExoticSubdeps, trustPolicy here.
+# QNBS-v3: TS7 migration - disabled strictPeerDependencies for tsgo preview compatibility
+strictPeerDependencies: false
 onlyBuiltDependencies:
   - core-js        # generates polyfills at install time
   - esbuild        # downloads platform binary via postinstall
