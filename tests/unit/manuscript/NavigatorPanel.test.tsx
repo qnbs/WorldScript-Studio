@@ -173,16 +173,16 @@ describe('StoryNavigator', () => {
     render(<StoryNavigator />);
     // outer row must be a role=button div, NOT a <button> element
     const rows = screen.getAllByLabelText(/outline\.selectSection/);
-    expect(rows[0].tagName).toBe('DIV');
+    expect(rows[0]!.tagName).toBe('DIV');
     // and the move controls must be real, separately-focusable buttons
-    expect(within(rows[0]).getByLabelText(/outline\.moveUp/).tagName).toBe('BUTTON');
+    expect(within(rows[0]!).getByLabelText(/outline\.moveUp/).tagName).toBe('BUTTON');
   });
 
   it('Enter and Space on the row trigger select', async () => {
     const user = userEvent.setup();
     render(<StoryNavigator />);
     const rows = screen.getAllByLabelText(/outline\.selectSection/);
-    rows[0].focus();
+    rows[0]!.focus();
     await user.keyboard('{Enter}');
     expect(mockSetActiveSectionId).toHaveBeenCalledWith('sec-1');
     mockSetActiveSectionId.mockClear();
