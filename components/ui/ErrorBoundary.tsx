@@ -22,7 +22,7 @@ function ErrorFallback({ onReset }: { onReset?: () => void }) {
     <div className="flex h-full w-full items-center justify-center p-4">
       <Card className="max-w-lg w-full text-center animate-in">
         <CardHeader className="flex items-center justify-center space-x-2">
-          <div className="text-red-500">
+          <div className="text-[var(--sc-danger-fg)]">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -34,7 +34,9 @@ function ErrorFallback({ onReset }: { onReset?: () => void }) {
               {ICONS.LIGHTNING_BOLT}
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-red-500">{t('error.boundary.title')}</h1>
+          <h1 className="text-xl font-bold text-[var(--sc-danger-fg)]">
+            {t('error.boundary.title')}
+          </h1>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-[var(--sc-text-secondary)]">{t('error.boundary.description')}</p>

@@ -11,6 +11,7 @@
   "lora.onboarding.installCmd": "pip install unsloth trl peft",
   "lora.onboarding.cpuFallback": "CPU fallback (slower)",
   "lora.onboarding.getStarted": "Get Started",
+  "lora.onboarding.envError": "Environment check failed. Please ensure Python and required packages are installed.",
   "lora.library.title": "Adapter Library",
   "lora.library.empty": "No adapters yet. Train your first style model to get started.",
   "lora.wizard.title": "Training Wizard",

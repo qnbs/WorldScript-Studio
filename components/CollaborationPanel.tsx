@@ -266,8 +266,8 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
           </div>
           <div className="flex items-center gap-2">
             {isConnected && (
-              <span className="flex items-center gap-1.5 text-xs text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="flex items-center gap-1.5 text-xs text-[var(--sc-success-fg)]">
+                <span className="w-2 h-2 rounded-full bg-[var(--sc-success-fg)] animate-pulse" />
                 {t('collab.connected')}
               </span>
             )}
@@ -373,8 +373,8 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                 aria-live="polite"
                 className={`mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                   roomPassword.trim()
-                    ? 'bg-emerald-500/15 text-emerald-300'
-                    : 'bg-amber-500/15 text-amber-300'
+                    ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
+                    : 'bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]'
                 }`}
                 aria-label={t('collab.encryptionAriaLabel')}
               >
@@ -392,7 +392,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
             style={{ minHeight: connectionError ? undefined : 0, overflow: 'hidden' }}
           >
             {connectionError && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+              <div className="p-3 rounded-lg bg-[var(--sc-danger-bg)] border border-[var(--sc-danger-border)]">
                 {connectionError}
               </div>
             )}

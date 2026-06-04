@@ -285,7 +285,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           onKeyUp={handleSelectionEvents}
           onClick={handleSelectionEvents}
           onKeyDown={handleKeyDown}
-          className={`h-full w-full leading-relaxed resize-none p-4 sm:p-6 md:p-12 pt-2 bg-transparent border-0 focus:ring-0 flex-grow caret-[var(--sc-text-primary)] text-transparent max-w-3xl mx-auto selection:bg-indigo-500/30 transition-all duration-500 ${isFocusMode ? 'max-w-4xl pt-12' : ''}`}
+          className={`h-full w-full leading-relaxed resize-none p-4 sm:p-6 md:p-12 pt-2 bg-transparent border-0 focus:ring-0 flex-grow caret-[var(--sc-text-primary)] text-transparent max-w-3xl mx-auto selection:bg-[var(--sc-accent)]/30 transition-all duration-500 ${isFocusMode ? 'max-w-4xl pt-12' : ''}`}
           placeholder={
             activeSection.prompt ||
             t('manuscript.contentPlaceholder', { title: activeSection.title })
@@ -335,7 +335,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
                 >
                   {item.type === 'character' ? (
                     <div
-                      className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-[var(--glass-bg-hover)]' : 'bg-blue-500/20'}`}
+                      className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-[var(--glass-bg-hover)]' : 'bg-[var(--sc-info-bg)]'}`}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -343,14 +343,14 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
                         viewBox="0 0 24 24"
                         strokeWidth={1.5}
                         stroke="currentColor"
-                        className={`w-4 h-4 ${index === selectedMentionIndex ? 'text-white' : 'text-blue-400'}`}
+                        className={`w-4 h-4 ${index === selectedMentionIndex ? 'text-white' : 'text-[var(--sc-info-fg)]'}`}
                       >
                         {ICONS.CHARACTERS}
                       </svg>
                     </div>
                   ) : (
                     <div
-                      className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-[var(--glass-bg-hover)]' : 'bg-emerald-500/20'}`}
+                      className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-[var(--glass-bg-hover)]' : 'bg-[var(--sc-success-bg)]'}`}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -358,7 +358,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
                         viewBox="0 0 24 24"
                         strokeWidth={1.5}
                         stroke="currentColor"
-                        className={`w-4 h-4 ${index === selectedMentionIndex ? 'text-white' : 'text-emerald-400'}`}
+                        className={`w-4 h-4 ${index === selectedMentionIndex ? 'text-white' : 'text-[var(--sc-success-fg)]'}`}
                       >
                         {ICONS.WORLD}
                       </svg>

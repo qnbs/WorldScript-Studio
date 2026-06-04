@@ -4,7 +4,7 @@
  *          loraEvaluationService helpers are mocked so each panel is tested in isolation.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LoraAdapterLibrary from '../../../components/lora/LoraAdapterLibrary';
 import LoraDatasetBuilder from '../../../components/lora/LoraDatasetBuilder';
@@ -16,6 +16,7 @@ vi.mock('../../../hooks/useTranslation', () => ({
 }));
 vi.mock('../../../contexts/LoraViewContext', () => ({ useLoraViewContext: vi.fn() }));
 
+// QNBS-v3: Mock dynamic imports for code-splitting hooks
 const estimateDatasetQuality = vi.fn<(...a: unknown[]) => unknown>();
 const exportAsJsonl = vi.fn<(...a: unknown[]) => string>(() => 'JSONL');
 vi.mock('../../../services/lora/loraDatasetBuilder', () => ({
@@ -135,7 +136,7 @@ describe('LoraDatasetBuilder', () => {
     expect(screen.getByRole('button', { name: 'lora.dataset.extracting' })).toBeDisabled();
   });
 
-  it('renders the quality summary, the not-enough warning, and exports JSONL', () => {
+  it('renders the quality summary, the not-enough warning, and exports JSONL', async () => {
     estimateDatasetQuality.mockReturnValue({
       totalEntries: 3,
       acceptedEntries: 2,
@@ -171,7 +172,9 @@ describe('LoraDatasetBuilder', () => {
       }),
     );
     render(<LoraDatasetBuilder />);
-    expect(screen.getByText('lora.dataset.notEnough')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('lora.dataset.notEnough')).toBeInTheDocument();
+    });
     fireEvent.click(screen.getByRole('button', { name: /lora\.dataset\.export/ }));
     expect(exportAsJsonl).toHaveBeenCalledWith(expect.any(Array), 'alpaca');
     expect(createObjectURL).toHaveBeenCalled();
@@ -219,7 +222,7 @@ describe('LoraEvaluationPanel', () => {
     expect(screen.getByRole('button', { name: 'lora.evaluation.evaluating' })).toBeDisabled();
   });
 
-  it('renders the score gauge and side-by-side comparisons from the last evaluation', () => {
+  it('renders the score gauge and side-by-side comparisons from the last evaluation', async () => {
     mockCtx.mockReturnValue(
       ctx({
         activeAdapter: { id: 'a1', name: 'Voice' } as Ctx['activeAdapter'],
@@ -241,7 +244,9 @@ describe('LoraEvaluationPanel', () => {
       }),
     );
     render(<LoraEvaluationPanel />);
-    expect(screen.getByRole('img', { name: /Style score: 74%/ })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('img', { name: /Style score: 74%/ })).toBeInTheDocument();
+    });
     expect(screen.getByText('Continue the scene')).toBeInTheDocument();
     expect(screen.getByText('styled text')).toBeInTheDocument();
   });

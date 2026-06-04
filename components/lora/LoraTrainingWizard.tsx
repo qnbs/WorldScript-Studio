@@ -32,7 +32,7 @@ function StepIndicator({ current }: { current: LoraWizardStep }) {
                   active
                     ? 'bg-[var(--sc-interactive-primary)] text-white'
                     : done
-                      ? 'bg-green-500 text-white'
+                      ? 'bg-[var(--sc-success-fg)] text-white'
                       : 'bg-[var(--sc-surface-raised)] text-[var(--sc-text-secondary)]'
                 }`}
                 aria-current={active ? 'step' : undefined}

@@ -38,6 +38,7 @@
   "lora.onboarding.checking": "בודק את הסביבה שלכם…",
   "lora.onboarding.cpuFallback": "חלופת מעבד (איטי יותר)",
   "lora.onboarding.description": "צרו מודל AI מותאם אישית המאומן על כתבי היד שלכם. הנתונים שלכם לעולם אינם עוזבים את המכשיר.",
+  "lora.onboarding.envError": "בדיקת הסביבה נכשלה. אנא וודאו ש-Python והחבילות הנדרשות מותקנות.",
   "lora.onboarding.getStarted": "התחלה",
   "lora.onboarding.installCmd": "pip install unsloth trl peft",
   "lora.onboarding.installed": "מותקן",

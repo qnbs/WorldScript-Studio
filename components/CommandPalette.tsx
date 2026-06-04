@@ -396,7 +396,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             onClick={toggleListening}
             className={`me-2 p-2 rounded-lg transition-all duration-200 ${
               isListening
-                ? 'bg-red-500/20 text-red-400 animate-pulse ring-2 ring-red-500/50'
+                ? 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] animate-pulse ring-2 ring-[var(--sc-danger-fg)]/50'
                 : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-accent)]/20'
             }`}
             title={isListening ? t('palette.voice.stop') : t('palette.voice.start')}

@@ -22,7 +22,7 @@ export const Button = React.memo(
           'background-tertiary bg-[var(--sc-surface-overlay)] hover:bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] border border-[var(--sc-border-subtle)] shadow-sm hover:shadow-md hover:border-[var(--sc-text-muted)]/30',
         // QNBS-v3: --sc-danger-* tokens replace dark: prefix — color adapts to appearance presets correctly.
         danger:
-          'bg-[var(--sc-danger-bg)] hover:bg-red-500/20 text-[var(--sc-danger-fg)] border border-[var(--sc-danger-border)] hover:border-red-500/30 active:bg-red-500/30',
+          'bg-[var(--sc-danger-bg)] hover:bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] border border-[var(--sc-danger-border)] hover:border-[var(--sc-danger-fg)]/30 active:bg-[var(--sc-danger-bg)]',
         ghost:
           'text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)] hover:shadow-sm',
         outline:

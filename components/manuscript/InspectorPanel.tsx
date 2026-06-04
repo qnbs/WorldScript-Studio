@@ -281,10 +281,12 @@ export const InspectorPanel = React.memo(() => {
                     className="p-3 bg-[var(--sc-surface-raised)] rounded-md border border-[var(--sc-border-subtle)] text-sm"
                   >
                     <div className="flex justify-between items-start mb-1">
-                      <span className="text-red-400 line-through mr-2 opacity-70">
+                      <span className="text-[var(--sc-danger-fg)] line-through mr-2 opacity-70">
                         {suggestion.original}
                       </span>
-                      <span className="text-green-400 font-semibold">{suggestion.suggestion}</span>
+                      <span className="text-[var(--sc-success-fg)] font-semibold">
+                        {suggestion.suggestion}
+                      </span>
                     </div>
                     <p className="text-[var(--sc-text-muted)] text-xs mb-2">
                       {suggestion.explanation}
@@ -334,7 +336,7 @@ export const InspectorPanel = React.memo(() => {
           </div>
         )}
         {!isAiLoading && loglineSuggestions.length === 0 && (
-          <div className="text-center text-red-400 min-h-[200px] flex items-center justify-center">
+          <div className="text-center text-[var(--sc-danger-fg)] min-h-[200px] flex items-center justify-center">
             <p>{t('outline.error.generationFailed')}</p>
           </div>
         )}

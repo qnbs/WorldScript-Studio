@@ -169,15 +169,15 @@ export const PWAUpdateToast: FC = () => {
         flex items-start gap-3
         p-4
         rounded-2xl
-        bg-[var(--sc-surface-raised)]/95 border border-indigo-500/30
-        shadow-2xl shadow-indigo-500/10 backdrop-blur-md
+        bg-[var(--sc-surface-raised)]/95 border border-[var(--sc-accent)]/30
+        shadow-2xl shadow-[var(--sc-accent)]/10 backdrop-blur-md
         animate-fade-in-up
       "
     >
       {/* Update icon */}
-      <div className="shrink-0 w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mt-0.5">
+      <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--sc-accent)]/20 border border-[var(--sc-accent)]/30 flex items-center justify-center mt-0.5">
         <svg
-          className="w-4 h-4 text-indigo-400"
+          className="w-4 h-4 text-[var(--sc-accent)]"
           fill="none"
           viewBox="0 0 24 24"
           strokeWidth={2}
@@ -206,7 +206,7 @@ export const PWAUpdateToast: FC = () => {
             className="
               px-3 py-1.5
               rounded-lg
-              bg-indigo-600 hover:bg-indigo-500
+              bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)]
               text-white text-xs font-semibold
               transition-all active:scale-95
             "

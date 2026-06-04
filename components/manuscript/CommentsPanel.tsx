@@ -61,7 +61,7 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
               {new Date(comment.createdAt).toLocaleDateString()}
             </span>
             {comment.resolved && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+              <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]">
                 {t('comments.resolved')}
               </span>
             )}
@@ -134,7 +134,7 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
         <button
           type="button"
           onClick={handleDelete}
-          className="text-xs text-red-500 hover:text-red-600"
+          className="text-xs text-[var(--sc-danger-fg)] hover:text-[var(--sc-danger-fg)]/80"
           aria-label={t('comments.delete')}
         >
           {t('comments.delete')}

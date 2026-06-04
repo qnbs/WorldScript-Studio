@@ -358,7 +358,7 @@ const SceneBoardUI: FC = () => {
           </p>
         )}
         {plotAi.error && (
-          <p className="text-sm text-red-400 mb-2" role="alert">
+          <p className="text-sm text-[var(--sc-danger-fg)] mb-2" role="alert">
             {plotAi.error}
           </p>
         )}

@@ -46,7 +46,7 @@ describe('Button', () => {
   it('renders with danger variant', () => {
     render(<Button variant="danger">Löschen</Button>);
     const btn = screen.getByRole('button');
-    expect(btn.className).toMatch(/red/);
+    expect(btn.className).toMatch(/sc-danger/);
   });
 
   it('applies custom className', () => {

@@ -111,7 +111,7 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
                   </span>
                   <div className="relative flex-1 h-6 rounded-md bg-[var(--sc-surface-overlay)] overflow-hidden">
                     <div
-                      className="absolute top-1 bottom-1 rounded bg-indigo-500/55 border border-indigo-400/40"
+                      className="absolute top-1 bottom-1 rounded bg-[var(--sc-accent)]/55 border border-[var(--sc-accent)]/40"
                       style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                       title={section.sceneStart ?? ''}
                     />

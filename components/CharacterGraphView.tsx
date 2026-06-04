@@ -18,19 +18,20 @@ import { Card, CardContent, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';
 
+// QNBS-v3: Relationship colors map to --sc-data-* tokens for theme-aware data-viz.
 const RELATIONSHIP_COLORS: Record<string, string> = {
-  family: '#ef4444',
-  romantic: '#ec4899',
-  friend: '#3b82f6',
-  enemy: '#dc2626',
-  mentor: '#f59e0b',
-  rival: '#8b5cf6',
-  ally: '#10b981',
-  acquaintance: '#6b7280',
+  family: 'var(--sc-data-1)',
+  romantic: 'var(--sc-data-5)',
+  friend: 'var(--sc-data-2)',
+  enemy: 'var(--sc-data-1)',
+  mentor: 'var(--sc-data-4)',
+  rival: 'var(--sc-data-6)',
+  ally: 'var(--sc-data-3)',
+  acquaintance: 'var(--sc-data-8)',
 };
 
 function getRelationshipColor(type: string): string {
-  return RELATIONSHIP_COLORS[type] || '#6b7280';
+  return RELATIONSHIP_COLORS[type] || 'var(--sc-data-8)';
 }
 
 type GraphNode = NodeObject & { id: string; name: string; role: string };

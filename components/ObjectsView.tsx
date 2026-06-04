@@ -326,10 +326,10 @@ const ObjectCard: FC<{ obj: StoryObject }> = ({ obj }) => {
           type="button"
           onClick={onDelete}
           onBlur={() => setConfirmDelete(false)}
-          className={`text-xs px-2 py-2 min-h-[44px] flex items-center focus-visible:ring-2 focus-visible:ring-red-500 rounded ${
+          className={`text-xs px-2 py-2 min-h-[44px] flex items-center focus-visible:ring-2 focus-visible:ring-[var(--sc-danger-fg)] rounded ${
             confirmDelete
-              ? 'text-red-600 font-medium'
-              : 'text-[var(--sc-text-secondary)] hover:text-red-500'
+              ? 'text-[var(--sc-danger-fg)] font-medium'
+              : 'text-[var(--sc-text-secondary)] hover:text-[var(--sc-danger-fg)]'
           }`}
         >
           {confirmDelete ? t('objects.deleteObjectConfirm') : t('objects.deleteObject')}
@@ -388,10 +388,10 @@ const GroupCard: FC<{ group: ObjectGroup }> = ({ group }) => {
           type="button"
           onClick={onDelete}
           onBlur={() => setConfirmDelete(false)}
-          className={`text-xs px-2 py-2 min-h-[44px] flex items-center focus-visible:ring-2 focus-visible:ring-red-500 rounded ${
+          className={`text-xs px-2 py-2 min-h-[44px] flex items-center focus-visible:ring-2 focus-visible:ring-[var(--sc-danger-fg)] rounded ${
             confirmDelete
-              ? 'text-red-600 font-medium'
-              : 'text-[var(--sc-text-secondary)] hover:text-red-500'
+              ? 'text-[var(--sc-danger-fg)] font-medium'
+              : 'text-[var(--sc-text-secondary)] hover:text-[var(--sc-danger-fg)]'
           }`}
         >
           {confirmDelete ? t('objects.deleteGroupConfirm') : t('objects.deleteGroup')}

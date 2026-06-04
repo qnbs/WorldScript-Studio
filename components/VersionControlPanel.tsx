@@ -76,7 +76,7 @@ function renderCompareLineWordCells(
       rightParts.push(<span key={`eq-r-${tokSeq}`}>{op.token}</span>);
     } else if (op.type === 'delete') {
       leftParts.push(
-        <span key={`del-l-${tokSeq}`} className="bg-red-500/40 rounded px-0.5">
+        <span key={`del-l-${tokSeq}`} className="bg-[var(--sc-danger-bg)] rounded px-0.5">
           {op.token}
         </span>,
       );
@@ -96,7 +96,7 @@ function renderCompareLineWordCells(
         </span>,
       );
       rightParts.push(
-        <span key={`ins-r-${tokSeq}`} className="bg-green-500/40 rounded px-0.5">
+        <span key={`ins-r-${tokSeq}`} className="bg-[var(--sc-success-bg)] rounded px-0.5">
           {op.token}
         </span>,
       );
@@ -188,7 +188,7 @@ const SnapshotCard: FC<{
             size="sm"
             onClick={() => onDelete(snapshot.id)}
             aria-label={t('vc.deleteSnapshot', { label: snapshot.label })}
-            className="text-red-400 hover:bg-red-500/10"
+            className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
           >
             ✕
           </Button>
@@ -530,7 +530,7 @@ export const VersionControlPanel: FC = () => {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleDeleteBranch(branch.id)}
-                        className="text-red-400 hover:bg-red-500/10"
+                        className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
                         aria-label={t('vc.deleteBranch', { name: branch.name })}
                       >
                         ✕
@@ -705,7 +705,7 @@ export const VersionControlPanel: FC = () => {
               {compareRenderedLines.map((row) => (
                 <div
                   key={`${row.rowDomKey}-L`}
-                  className={row.changed ? 'bg-red-500/15 px-0.5 rounded-sm' : undefined}
+                  className={row.changed ? 'bg-[var(--sc-danger-bg)] px-0.5 rounded-sm' : undefined}
                 >
                   {row.leftCell}
                 </div>
@@ -720,7 +720,9 @@ export const VersionControlPanel: FC = () => {
               {compareRenderedLines.map((row) => (
                 <div
                   key={`${row.rowDomKey}-R`}
-                  className={row.changed ? 'bg-green-500/15 px-0.5 rounded-sm' : undefined}
+                  className={
+                    row.changed ? 'bg-[var(--sc-success-bg)] px-0.5 rounded-sm' : undefined
+                  }
                 >
                   {row.rightCell}
                 </div>

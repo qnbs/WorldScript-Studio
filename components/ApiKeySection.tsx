@@ -144,7 +144,9 @@ export const ApiKeySection: FC = () => {
         </h3>
         <span
           className={`px-2 py-1 text-xs rounded-full ${
-            hasKey ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+            hasKey
+              ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
+              : 'bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]'
           }`}
         >
           {hasKey ? t('settings.apiKey.statusActive') : t('settings.apiKey.statusInactive')}
@@ -152,15 +154,17 @@ export const ApiKeySection: FC = () => {
       </div>
 
       {/* Security Notice */}
-      <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+      <div className="p-4 rounded-lg bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-fg)]/30">
         <div className="flex items-start gap-3">
+          {/* QNBS-v3: Decorative icon - hidden from assistive tech */}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
             strokeWidth={1.5}
             stroke="currentColor"
-            className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5"
+            className="w-5 h-5 text-[var(--sc-warning-fg)] flex-shrink-0 mt-0.5"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"
@@ -168,9 +172,9 @@ export const ApiKeySection: FC = () => {
               d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
             />
           </svg>
-          <div className="text-sm text-amber-200">
+          <div className="text-sm text-[var(--sc-warning-fg)]">
             <p className="font-medium mb-1">{t('settings.apiKey.securityTitle')}</p>
-            <ul className="list-disc list-inside space-y-1 text-amber-200/80">
+            <ul className="list-disc list-inside space-y-1 text-[var(--sc-warning-fg)]/80">
               <li>{t('settings.apiKey.securityTip1')}</li>
               <li>{t('settings.apiKey.securityTip2')}</li>
               <li>{t('settings.apiKey.securityTip3')}</li>
@@ -181,15 +185,17 @@ export const ApiKeySection: FC = () => {
 
       {/* Decrypt Failed Warning */}
       {decryptFailed && (
-        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+        <div className="p-4 rounded-lg bg-[var(--sc-danger-bg)] border border-[var(--sc-danger-fg)]/30">
           <div className="flex items-start gap-3">
+            {/* QNBS-v3: Decorative icon - hidden from assistive tech */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
               strokeWidth={1.5}
               stroke="currentColor"
-              className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+              className="w-5 h-5 text-[var(--sc-danger-fg)] flex-shrink-0 mt-0.5"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -197,9 +203,9 @@ export const ApiKeySection: FC = () => {
                 d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
               />
             </svg>
-            <div className="text-sm text-red-300">
+            <div className="text-sm text-[var(--sc-danger-fg)]">
               <p className="font-medium mb-1">{t('apiKey.decryptFailed')}</p>
-              <p className="text-red-300/80">{t('apiKey.decryptFailedDetail')}</p>
+              <p className="text-[var(--sc-danger-fg)]/80">{t('apiKey.decryptFailedDetail')}</p>
             </div>
           </div>
         </div>
@@ -209,14 +215,16 @@ export const ApiKeySection: FC = () => {
       {hasKey ? (
         <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--sc-surface-overlay)] border border-[var(--sc-border-subtle)]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-[var(--sc-success-bg)] flex items-center justify-center">
+              {/* QNBS-v3: Decorative icon - hidden from assistive tech */}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
                 strokeWidth={1.5}
                 stroke="currentColor"
-                className="w-5 h-5 text-green-400"
+                className="w-5 h-5 text-[var(--sc-success-fg)]"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -348,7 +356,7 @@ export const ApiKeySection: FC = () => {
               href="https://aistudio.google.com/app/apikey"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-indigo-400 hover:text-indigo-300 underline"
+              className="text-[var(--sc-accent)] hover:text-[var(--sc-accent-hover)] underline"
             >
               Google AI Studio
             </a>
@@ -361,8 +369,8 @@ export const ApiKeySection: FC = () => {
         <div
           className={`p-3 rounded-lg text-sm flex items-start gap-2 ${
             testResult.ok
-              ? 'bg-green-500/10 text-green-400 border border-green-500/30'
-              : 'bg-red-500/10 text-red-400 border border-red-500/30'
+              ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)] border border-[var(--sc-success-fg)]/30'
+              : 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] border border-[var(--sc-danger-fg)]/30'
           }`}
         >
           {testResult.ok ? (
@@ -403,8 +411,8 @@ export const ApiKeySection: FC = () => {
         <div
           className={`p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-green-500/10 text-green-400 border border-green-500/30'
-              : 'bg-red-500/10 text-red-400 border border-red-500/30'
+              ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)] border border-[var(--sc-success-fg)]/30'
+              : 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] border border-[var(--sc-danger-fg)]/30'
           }`}
         >
           {message.text}

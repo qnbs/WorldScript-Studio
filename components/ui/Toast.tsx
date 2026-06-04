@@ -63,15 +63,16 @@ const ToastItem: FC<{
 
   // QNBS-v3: Alpha-bg pattern replaces dark: prefixes — semantic colors visible on all appearance presets.
   const typeClasses = {
-    success: 'bg-green-500/15 border-green-500/30 text-[var(--sc-success-fg)]',
-    error: 'bg-red-500/15 border-red-500/30 text-[var(--sc-danger-fg)]',
-    info: 'bg-blue-500/15 border-blue-500/30 text-[var(--sc-info-fg)]',
+    success:
+      'bg-[var(--sc-success-bg)] border-[var(--sc-success-fg)]/30 text-[var(--sc-success-fg)]',
+    error: 'bg-[var(--sc-danger-bg)] border-[var(--sc-danger-fg)]/30 text-[var(--sc-danger-fg)]',
+    info: 'bg-[var(--sc-info-bg)] border-[var(--sc-info-fg)]/30 text-[var(--sc-info-fg)]',
   };
 
   const progressClasses = {
-    success: 'bg-green-500',
-    error: 'bg-red-500',
-    info: 'bg-blue-500',
+    success: 'bg-[var(--sc-success-fg)]',
+    error: 'bg-[var(--sc-danger-fg)]',
+    info: 'bg-[var(--sc-info-fg)]',
   };
 
   const ICONS = {

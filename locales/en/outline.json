@@ -41,5 +41,6 @@
   "outline.confirm.deleteTitle": "Delete Section?",
   "outline.confirm.deleteAction": "Delete",
   "outline.moveUp": "Move section '{{title}}' up",
-  "outline.moveDown": "Move section '{{title}}' down"
+  "outline.moveDown": "Move section '{{title}}' down",
+  "outline.selectSection": "Select section '{{title}}'"
 }

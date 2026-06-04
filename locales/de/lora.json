@@ -11,6 +11,7 @@
   "lora.onboarding.installCmd": "pip install unsloth trl peft",
   "lora.onboarding.cpuFallback": "CPU-Fallback (langsamer)",
   "lora.onboarding.getStarted": "Loslegen",
+  "lora.onboarding.envError": "Umgebungsprüfung fehlgeschlagen. Bitte stelle sicher, dass Python und erforderliche Pakete installiert sind.",
   "lora.library.title": "Adapter-Bibliothek",
   "lora.library.empty": "Noch keine Adapter. Trainiere dein erstes Stilmodell, um loszulegen.",
   "lora.wizard.title": "Trainings-Assistent",
