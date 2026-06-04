@@ -188,7 +188,7 @@ const CharacterDossier: FC = () => {
       size="xl"
     >
       {errorMessage && (
-        <div className="mb-4 p-3 rounded bg-red-500/10 text-red-600 border border-red-500/30 text-sm">
+        <div className="mb-4 p-3 rounded bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] border border-[var(--sc-danger-border)] text-sm">
           {errorMessage}
         </div>
       )}

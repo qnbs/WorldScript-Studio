@@ -3,31 +3,65 @@
  * QNBS-v3: Extract, score, filter, and export training dataset from project manuscript.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useLoraViewContext } from '../../contexts/LoraViewContext';
-import type { DatasetFormat } from '../../features/lora/types';
+import type { DatasetEntry, DatasetFormat, DatasetQualityReport } from '../../features/lora/types';
 import { useTranslation } from '../../hooks/useTranslation';
-import { estimateDatasetQuality, exportAsJsonl } from '../../services/lora/loraDatasetBuilder';
+
+// QNBS-v3: Dynamic import to enable code-splitting — loraDatasetBuilder is also dynamically imported in thunks.
+const useLoraDatasetBuilder = () => {
+  const [api, setApi] = useState<{
+    estimateDatasetQuality: (entries: DatasetEntry[]) => DatasetQualityReport;
+    exportAsJsonl: (entries: DatasetEntry[], format: DatasetFormat) => string;
+  } | null>(null);
+
+  useEffect(() => {
+    void import('../../services/lora/loraDatasetBuilder')
+      .then((m) => {
+        setApi({
+          estimateDatasetQuality: m.estimateDatasetQuality,
+          exportAsJsonl: m.exportAsJsonl,
+        });
+      })
+      .catch(() => {
+        // QNBS-v3: Import failed — api stays null, component shows fallback UI
+      });
+  }, []);
+
+  return api;
+};
 
 function QualityBadge({ score }: { score: number }) {
+  // QNBS-v3: Alpha-bg pattern replaces hardcoded colors — semantic colors visible on all appearance presets.
   const color =
     score >= 0.6
-      ? 'text-green-600'
+      ? 'text-[var(--sc-success-fg)]'
       : score >= 0.4
-        ? 'text-yellow-600'
-        : 'text-[var(--sc-status-error)]';
+        ? 'text-[var(--sc-warning-fg)]'
+        : 'text-[var(--sc-danger-fg)]';
   return <span className={`text-xs font-mono ${color}`}>{(score * 100).toFixed(0)}%</span>;
 }
 
 export default React.memo(function LoraDatasetBuilder() {
   const { datasetEntries, buildDataset, isBuilding } = useLoraViewContext();
   const { t } = useTranslation();
+  const api = useLoraDatasetBuilder();
 
-  const quality = estimateDatasetQuality(datasetEntries);
+  const quality = api?.estimateDatasetQuality(datasetEntries) ?? {
+    totalEntries: 0,
+    acceptedEntries: 0,
+    rejectedEntries: 0,
+    flaggedEntries: 0,
+    averageQualityScore: 0,
+    averageWordCount: 0,
+    sourceBreakdown: { extracted: 0, synthetic: 0 },
+    readyToTrain: false,
+  };
 
   const handleExport = useCallback(
     (format: DatasetFormat) => {
-      const jsonl = exportAsJsonl(datasetEntries, format);
+      if (!api) return;
+      const jsonl = api.exportAsJsonl(datasetEntries, format);
       const blob = new Blob([jsonl], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -36,7 +70,7 @@ export default React.memo(function LoraDatasetBuilder() {
       a.click();
       URL.revokeObjectURL(url);
     },
-    [datasetEntries],
+    [datasetEntries, api],
   );
 
   return (
@@ -58,7 +92,8 @@ export default React.memo(function LoraDatasetBuilder() {
             <button
               type="button"
               onClick={() => handleExport('alpaca')}
-              className="rounded-sc-md border border-[var(--sc-border-default)] px-3 py-1.5 text-sm text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+              disabled={!api}
+              className="rounded-sc-md border border-[var(--sc-border-default)] px-3 py-1.5 text-sm text-[var(--sc-text-primary)] disabled:opacity-50 hover:bg-[var(--sc-surface-raised)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
             >
               {t('lora.dataset.export')} JSONL
             </button>
@@ -87,7 +122,7 @@ export default React.memo(function LoraDatasetBuilder() {
           </div>
 
           {!quality.readyToTrain && (
-            <p className="rounded-sc-md bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+            <p className="rounded-sc-md bg-[var(--sc-warning-bg)] px-3 py-2 text-xs text-[var(--sc-warning-fg)]">
               {t('lora.dataset.notEnough')}
             </p>
           )}

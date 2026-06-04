@@ -433,7 +433,7 @@ const ExportControls: FC = () => {
             )}
             {t('export.epubExport')}
           </Button>
-          {epubError && <p className="text-red-500 text-sm">{epubError}</p>}
+          {epubError && <p className="text-[var(--sc-danger-fg)] text-sm">{epubError}</p>}
         </div>
       </CardContent>
     </Card>

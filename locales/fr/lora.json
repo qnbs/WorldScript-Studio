@@ -11,6 +11,7 @@
   "lora.onboarding.installCmd": "pip install unsloth trl peft",
   "lora.onboarding.cpuFallback": "Repli CPU (plus lent)",
   "lora.onboarding.getStarted": "Commencer",
+  "lora.onboarding.envError": "Échec de la vérification de l'environnement. Veuillez vous assurer que Python et les paquets requis sont installés.",
   "lora.library.title": "Bibliothèque d'adaptateurs",
   "lora.library.empty": "Aucun adaptateur. Entraînez votre premier modèle de style pour commencer.",
   "lora.wizard.title": "Assistant d'entraînement",

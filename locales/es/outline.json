@@ -29,6 +29,7 @@
   "outline.idea.title": "Tu idea",
   "outline.moveDown": "Mover sección «{{title}}» hacia abajo",
   "outline.moveUp": "Mover sección «{{title}}» hacia arriba",
+  "outline.selectSection": "Seleccionar sección «{{title}}»",
   "outline.overwriteConfirm": "Ya tienes un esquema. Generar uno nuevo lo reemplazará. ¿Estás seguro?",
   "outline.result.addTooltip": "Añadir sección debajo",
   "outline.result.applyButton": "Aplicar esquema al manuscrito",

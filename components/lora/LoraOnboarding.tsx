@@ -5,7 +5,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
-import { checkTrainingEnvironment } from '../../services/lora/loraTrainingService';
 
 interface EnvStatus {
   loaded: boolean;
@@ -16,10 +15,26 @@ interface EnvStatus {
   message?: string;
 }
 
+// QNBS-v3: Dynamic import to enable code-splitting — loraTrainingService is also dynamically imported in thunks.
+const useLoraTrainingService = () => {
+  const [api, setApi] = useState<{
+    checkTrainingEnvironment: () => Promise<Omit<EnvStatus, 'loaded'>>;
+  } | null>(null);
+  useEffect(() => {
+    void import('../../services/lora/loraTrainingService').then((m) => {
+      setApi({ checkTrainingEnvironment: m.checkTrainingEnvironment });
+    });
+  }, []);
+  return api;
+};
+
 function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail?: string }) {
   return (
     <li className="flex items-center gap-2 text-sm">
-      <span className={ok ? 'text-green-500' : 'text-[var(--sc-status-error)]'} aria-hidden="true">
+      <span
+        className={ok ? 'text-[var(--sc-success-fg)]' : 'text-[var(--sc-danger-fg)]'}
+        aria-hidden="true"
+      >
         {ok ? '✓' : '✗'}
       </span>
       <span className="text-[var(--sc-text-primary)]">{label}</span>
@@ -37,12 +52,14 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
     cudaAvailable: false,
     vramGb: 0,
   });
+  const api = useLoraTrainingService();
 
   useEffect(() => {
-    checkTrainingEnvironment().then((result) => {
+    if (!api) return;
+    api.checkTrainingEnvironment().then((result) => {
       setEnv({ loaded: true, ...result });
     });
-  }, []);
+  }, [api]);
 
   return (
     <div className="flex flex-col gap-6 rounded-sc-xl border border-[var(--sc-border-default)] bg-[var(--sc-surface-base)] p-6 shadow-sm">
@@ -56,9 +73,13 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
       </div>
 
       {/* Privacy promise */}
-      <div className="rounded-sc-md bg-green-50 px-4 py-3">
-        <p className="text-sm font-medium text-green-800">{t('lora.onboarding.privacyPromise')}</p>
-        <p className="mt-0.5 text-xs text-green-700">{t('lora.onboarding.privacyDetail')}</p>
+      <div className="rounded-sc-md bg-[var(--sc-success-bg)] px-4 py-3">
+        <p className="text-sm font-medium text-[var(--sc-success-fg)]">
+          {t('lora.onboarding.privacyPromise')}
+        </p>
+        <p className="mt-0.5 text-xs text-[var(--sc-success-fg)]/80">
+          {t('lora.onboarding.privacyDetail')}
+        </p>
       </div>
 
       {/* System requirements */}
@@ -93,7 +114,9 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
             />
           </ul>
         )}
-        {env.message && <p className="text-xs text-[var(--sc-status-error)]">{env.message}</p>}
+        {env.message && (
+          <p className="text-xs text-[var(--sc-danger-fg)]">{t('lora.onboarding.envError')}</p>
+        )}
       </div>
 
       <button

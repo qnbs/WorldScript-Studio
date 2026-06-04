@@ -209,5 +209,11 @@ export default defineConfig({
         },
       },
     },
+    // QNBS-v3: Rolldown code splitting optimization for Vite 8
+    rolldownOptions: {
+      output: {
+        codeSplitting: true,
+      },
+    },
   },
 });

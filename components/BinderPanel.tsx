@@ -435,7 +435,7 @@ export const BinderPanel: FC = () => {
             type="button"
             variant="ghost"
             size="sm"
-            className="text-red-400 w-full"
+            className="text-[var(--sc-danger-fg)] w-full"
             onClick={handleDeleteSelected}
           >
             {t('manuscript.binder.deleteNode')}
@@ -465,7 +465,7 @@ export const BinderPanel: FC = () => {
             type="button"
             variant="ghost"
             size="sm"
-            className="text-red-400 w-full"
+            className="text-[var(--sc-danger-fg)] w-full"
             onClick={handleDeleteSelected}
           >
             {t('manuscript.binder.deleteNode')}
@@ -490,7 +490,7 @@ export const BinderPanel: FC = () => {
             type="button"
             variant="ghost"
             size="sm"
-            className="text-red-400 w-full"
+            className="text-[var(--sc-danger-fg)] w-full"
             onClick={handleDeleteSelected}
           >
             {t('manuscript.binder.deleteNode')}
@@ -503,7 +503,7 @@ export const BinderPanel: FC = () => {
             type="button"
             variant="ghost"
             size="sm"
-            className="text-red-400 w-full"
+            className="text-[var(--sc-danger-fg)] w-full"
             onClick={handleDeleteSelected}
           >
             {t('manuscript.binder.deleteFolder')}

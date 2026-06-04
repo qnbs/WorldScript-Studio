@@ -29,6 +29,7 @@
   "outline.idea.title": "فكرتك",
   "outline.moveDown": "نقل القسم '{{title}}' للأسفل",
   "outline.moveUp": "نقل القسم '{{title}}' للأعلى",
+  "outline.selectSection": "Select section '{{title}}'",
   "outline.overwriteConfirm": "لديك مخطط بالفعل. سيؤدي توليد مخطط جديد إلى استبداله. هل أنت متأكد من المتابعة؟",
   "outline.result.addTooltip": "إضافة قسم بالأسفل",
   "outline.result.applyButton": "تطبيق المخطط على المخطوطة",

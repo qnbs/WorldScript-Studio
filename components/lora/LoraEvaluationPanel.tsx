@@ -3,10 +3,9 @@
  * QNBS-v3: Uses loraEvaluationService for embedding-based scoring.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLoraViewContext } from '../../contexts/LoraViewContext';
 import { useTranslation } from '../../hooks/useTranslation';
-import { scoreLabel } from '../../services/lora/loraEvaluationService';
 
 const DEFAULT_PROMPTS = [
   'Continue this scene where the protagonist discovers a hidden letter:',
@@ -14,17 +13,39 @@ const DEFAULT_PROMPTS = [
   'Describe the atmosphere of a coastal town at dusk:',
 ];
 
-function ScoreGauge({ score }: { score: number }) {
+// QNBS-v3: Dynamic import to enable code-splitting — loraEvaluationService is also dynamically imported in thunks.
+const useLoraEvaluationService = () => {
+  const [api, setApi] = useState<{ scoreLabel: (score: number) => string } | null>(null);
+  useEffect(() => {
+    void import('../../services/lora/loraEvaluationService')
+      .then((m) => {
+        setApi({ scoreLabel: m.scoreLabel });
+      })
+      .catch(() => {
+        // QNBS-v3: Import failed — api stays null, component shows fallback UI
+      });
+  }, []);
+  return api;
+};
+
+function ScoreGauge({
+  score,
+  scoreLabelFn,
+}: {
+  score: number;
+  scoreLabelFn: (s: number) => string;
+}) {
   const pct = Math.round(score * 100);
-  const label = scoreLabel(score);
+  const label = scoreLabelFn(score);
+  // QNBS-v3: Semantic token colors replace hardcoded hex values for theme consistency.
   const color =
     label === 'excellent'
-      ? '#22c55e'
+      ? 'var(--sc-success-fg)'
       : label === 'good'
-        ? '#84cc16'
+        ? 'var(--sc-success-fg)'
         : label === 'partial'
-          ? '#f59e0b'
-          : '#ef4444';
+          ? 'var(--sc-warning-fg)'
+          : 'var(--sc-danger-fg)';
   return (
     <div
       className="flex flex-col items-center gap-2"
@@ -66,6 +87,7 @@ export default React.memo(function LoraEvaluationPanel() {
   const { activeAdapter, evaluate, isEvaluating, lastEvaluation } = useLoraViewContext();
   const { t } = useTranslation();
   const [prompts] = useState<string[]>(DEFAULT_PROMPTS);
+  const api = useLoraEvaluationService();
 
   const handleEvaluate = () => {
     if (!activeAdapter) return;
@@ -100,7 +122,13 @@ export default React.memo(function LoraEvaluationPanel() {
         <div className="space-y-6">
           {/* Score gauge */}
           <div className="flex flex-col items-center gap-2 rounded-sc-lg border border-[var(--sc-border-default)] bg-[var(--sc-surface-base)] p-6">
-            <ScoreGauge score={lastEvaluation.score} />
+            {api ? (
+              <ScoreGauge score={lastEvaluation.score} scoreLabelFn={api.scoreLabel} />
+            ) : (
+              <div className="text-sm text-[var(--sc-text-secondary)]">
+                {t('lora.evaluation.loading')}
+              </div>
+            )}
             <div className="flex gap-6 text-xs text-[var(--sc-text-secondary)]">
               <span>
                 {t('lora.evaluation.baseline')}: {Math.round(lastEvaluation.baseline * 100)}%
@@ -135,10 +163,10 @@ export default React.memo(function LoraEvaluationPanel() {
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-green-600">
+                    <p className="text-xs font-medium text-[var(--sc-success-fg)]">
                       {t('lora.evaluation.adapted')} ({Math.round(comparison.similarity * 100)}%)
                     </p>
-                    <p className="rounded-sc-md bg-green-50 p-2 text-xs text-[var(--sc-text-primary)] leading-relaxed">
+                    <p className="rounded-sc-md bg-[var(--sc-success-bg)] p-2 text-xs text-[var(--sc-text-primary)] leading-relaxed">
                       {comparison.adapted || '—'}
                     </p>
                   </div>

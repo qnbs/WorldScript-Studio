@@ -126,7 +126,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
       <button
         type="button"
         onClick={handleDelete}
-        className="text-xs text-red-400 hover:text-red-300 px-1"
+        className="text-xs text-[var(--sc-danger-fg)] hover:text-[var(--sc-danger-fg)]/80 px-1"
         aria-label={t('sceneboard.connectionToolbar.delete')}
         title={t('sceneboard.connectionToolbar.delete')}
       >

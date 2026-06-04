@@ -70,7 +70,7 @@ export const Textarea = React.memo(
             onClick={toggleListening}
             className={`absolute right-3 bottom-3 p-2 rounded-full transition-all duration-sc-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--sc-ring-focus)] z-10 ${
               isListening
-                ? 'text-red-500 bg-red-500/10 animate-pulse shadow-[0_0_0_4px_rgba(239,68,68,0.3)] scale-110'
+                ? 'text-[var(--sc-danger-fg)] bg-[var(--sc-danger-bg)] animate-pulse shadow-[0_0_0_4px_var(--sc-danger-fg)] scale-110'
                 : 'text-[var(--sc-text-muted)] bg-[var(--sc-surface-raised)]/80 hover:text-[var(--sc-text-primary)] hover:bg-[var(--glass-bg-hover)] shadow-sm border border-[var(--sc-border-subtle)]'
             }`}
             title={t('common.dictation.title')}

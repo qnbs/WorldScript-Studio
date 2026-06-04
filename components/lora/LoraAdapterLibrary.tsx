@@ -18,11 +18,12 @@ function formatBytes(bytes: number): string {
 function ScoreBadge({ score }: { score?: number }) {
   if (score === undefined) return null;
   const pct = Math.round(score * 100);
+  // QNBS-v3: Alpha-bg pattern replaces dark: prefixes — semantic colors visible on all appearance presets.
   const color =
     score >= 0.7
-      ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
       : score >= 0.5
-        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+        ? 'bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]'
         : 'bg-[var(--sc-surface-raised)] text-[var(--sc-text-secondary)]';
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>{pct}%</span>;
 }

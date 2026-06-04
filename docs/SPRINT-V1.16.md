@@ -37,8 +37,8 @@ Zero `dark:` prefix violations remain in any `className` string across the entir
 - `constants/sections.tsx` — 43 violations (section identity badge colors)
 
 **Pattern used:**
-- `dark:text-X-400` → `text-[var(--sc-text-*)]` or mid-range `text-X-500`
-- `dark:bg-X-900` → `bg-[var(--sc-surface-*)]` or `bg-X-500/15`
+- `dark:text-X-400` → `text-[var(--sc-text-primary)]` or mid-range `text-X-500`
+- `dark:bg-X-900` → `bg-[var(--sc-surface-base)]` or `bg-X-500/15`
 - Categorical colors: `bg-X-500/15 text-X-600` (alpha-bg pattern works on all themes)
 
 ### DS-1 — Undefined bridge variable sweep

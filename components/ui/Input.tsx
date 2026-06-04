@@ -53,7 +53,7 @@ export const Input = React.memo(
             onClick={toggleListening}
             className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-sc-md transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] z-10 ${
               isListening
-                ? 'text-red-500 bg-red-500/10 animate-pulse ring-1 ring-red-500/50'
+                ? 'text-[var(--sc-danger-fg)] bg-[var(--sc-danger-bg)] animate-pulse ring-1 ring-[var(--sc-danger-fg)]/50'
                 : 'text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--glass-bg-hover)]'
             }`}
             title={t('common.dictation.title')}

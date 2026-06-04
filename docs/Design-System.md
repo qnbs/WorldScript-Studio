@@ -18,6 +18,7 @@ Runtime styling is **CSS-first** (`index.css`); TypeScript mirrors live in `@dom
 | Accent | `--sc-accent`, `--sc-accent-hover`, `--sc-accent-subtle`, `--sc-accent-glow` |
 | Border / focus | `--sc-border-subtle`, `--sc-border-strong`, `--sc-ring-focus` |
 | Semantic status | `--sc-danger-{bg,fg,border}`, `--sc-success-{bg,fg}`, `--sc-warning-{bg,fg}`, `--sc-info-{bg,fg}` |
+| Data-viz | `--sc-data-1` … `--sc-data-8` (categorical), `--sc-heat-0` … `--sc-heat-4` (sequential) |
 | Elevation | `--sc-shadow-xs` … `--sc-shadow-xl` |
 | Motion | `--sc-duration-fast` (150ms), `--sc-duration-normal` (280ms), `--sc-ease-standard`, `--sc-ease-emphasized` |
 | Typography | `--font-ui`, `--font-editor`, `--font-mono`, `--sc-prose-measure` |
@@ -52,7 +53,7 @@ These aliases still exist in `index.css` but must not be used in new or modified
 | `var(--ring-focus)` | `var(--sc-ring-focus)` |
 | `var(--color-accent)` | `var(--sc-accent)` |
 
-> **Migration status (DS-1, DS-2, DS-3 — May 2026):** All 960 occurrences in `components/`, `hooks/`, `contexts/`, `services/`, `stories/` have been replaced. The bridge block in `index.css` will be removed in DS-5 after production verification.
+> **Migration status (DS-1, DS-2, DS-3 — June 2026):** All status-color occurrences in `components/` have been migrated to `--sc-*` tokens. Data-viz colors (`TYPE_COLORS`, `STATUS_META`) now use `--sc-data-*` and `--sc-heat-*` tokens. The bridge block in `index.css` will be removed in DS-5 after production verification.
 
 ## Theme mechanics
 
@@ -86,7 +87,7 @@ Stories live in `stories/`. Global decorators (`withTheme`, `withAppearance`) sw
 
 The `@storybook/addon-a11y` addon runs axe-core per story — all stories must pass with no serious violations.
 
-**Coverage status:** 9 of 23 UI atoms have stories (see SB-1 in the audit plan for the remaining 14).
+**Coverage status:** 23 of 24 UI atoms have stories (see SB-Phase 1 in the audit plan for the remaining 1).
 
 ## Helper UI primitives
 

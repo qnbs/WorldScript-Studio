@@ -174,10 +174,10 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             <span
               className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
                 testStatus === 'ok'
-                  ? 'bg-emerald-500/15 text-emerald-300'
+                  ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
                   : testStatus === 'error'
-                    ? 'bg-red-500/15 text-red-300'
-                    : 'bg-slate-400/10 text-slate-200'
+                    ? 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]'
+                    : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
               }`}
             >
               {testStatus === 'ok' && t('settings.ai.providerStatusConnected')}
@@ -186,7 +186,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             </span>
           </div>
           {testStatus === 'error' && testError && (
-            <p className="text-xs text-red-300">{testError}</p>
+            <p className="text-xs text-[var(--sc-danger-fg)]">{testError}</p>
           )}
         </div>
 
@@ -273,7 +273,9 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               </div>
             )}
             {isDesktop && (
-              <p className="text-xs text-emerald-400/90">{t('settings.ai.ollamaTauriBypass')}</p>
+              <p className="text-xs text-[var(--sc-success-fg)]/90">
+                {t('settings.ai.ollamaTauriBypass')}
+              </p>
             )}
             <div className="space-y-1">
               <label
@@ -345,7 +347,11 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                     {scanRows.map((row) => (
                       <li key={row.baseUrl}>
                         {t(row.labelKey)} — {row.baseUrl}{' '}
-                        <span className={row.ok ? 'text-emerald-400' : 'text-red-400'}>
+                        <span
+                          className={
+                            row.ok ? 'text-[var(--sc-success-fg)]' : 'text-[var(--sc-danger-fg)]'
+                          }
+                        >
                           {row.ok ? t('settings.ai.scanOk') : t('settings.ai.scanNo')}
                         </span>
                       </li>
@@ -390,10 +396,10 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 <span
                   className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                     gpuInfo.status === 'available'
-                      ? 'bg-emerald-500/15 text-emerald-300'
+                      ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
                       : gpuInfo.status === 'unavailable'
-                        ? 'bg-red-500/15 text-red-300'
-                        : 'bg-amber-500/15 text-amber-300'
+                        ? 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]'
+                        : 'bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]'
                   }`}
                   role="status"
                   aria-live="polite"
@@ -524,11 +530,13 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               )}
             </Button>
             {testStatus === 'ok' && (
-              <span className="text-sm text-emerald-400">
+              <span className="text-sm text-[var(--sc-success-fg)]">
                 ✓ {t('settings.ai.connectionSuccess')}
               </span>
             )}
-            {testStatus === 'error' && <span className="text-sm text-red-400">✗ {testError}</span>}
+            {testStatus === 'error' && (
+              <span className="text-sm text-[var(--sc-danger-fg)]">✗ {testError}</span>
+            )}
           </div>
         )}
       </CardContent>

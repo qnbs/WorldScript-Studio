@@ -436,7 +436,7 @@ export const AboutSection: FC = React.memo(() => {
             viewBox="0 0 24 24"
             strokeWidth={1.5}
             stroke="currentColor"
-            className="w-16 h-16 text-indigo-400 mx-auto"
+            className="w-16 h-16 text-[var(--sc-accent)] mx-auto"
             aria-hidden="true"
           >
             {ICONS.WRITER}

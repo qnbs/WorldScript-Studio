@@ -21,18 +21,20 @@ const DiffView: FC<{ oldText: string; newText: string }> = ({ oldText, newText }
         <span className="text-[var(--sc-text-secondary)]">{t('revisions.diff.identical')}</span>
       )}
       {ops.map((op, i) => {
-        // biome-ignore lint/suspicious/noArrayIndexKey: diff ops are ephemeral render artifacts with no reordering
-        if (op.type === 'equal') return <span key={i}>{op.token}</span>;
+        // QNBS-v3: Composite key from token+type ensures uniqueness for diff ops
+        const key = `${op.type}-${op.token}-${i}`;
+        if (op.type === 'equal') return <span key={key}>{op.token}</span>;
         if (op.type === 'delete')
           return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: diff ops are ephemeral render artifacts with no reordering
-            <span key={i} className="bg-red-100 text-red-700 line-through">
+            <span
+              key={key}
+              className="bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] line-through"
+            >
               {op.token}
             </span>
           );
         return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: diff ops are ephemeral render artifacts with no reordering
-          <span key={i} className="bg-green-100 text-green-700">
+          <span key={key} className="bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]">
             {op.token}
           </span>
         );
@@ -123,7 +125,7 @@ const RevisionItem: FC<{
           <button
             type="button"
             onClick={() => void handleDelete()}
-            className="text-xs px-2 py-1 rounded text-red-500 hover:text-red-600"
+            className="text-xs px-2 py-1 rounded text-[var(--sc-danger-fg)] hover:text-[var(--sc-danger-fg)]/80"
             aria-label={t('revisions.delete')}
           >
             ✕

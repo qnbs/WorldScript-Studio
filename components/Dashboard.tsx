@@ -433,7 +433,7 @@ const DashboardModals: FC = () => {
           </div>
         )}
         {!isAiLoading && loglineSuggestions.length === 0 && (
-          <div className="text-center text-red-400 min-h-[200px] flex items-center justify-center">
+          <div className="text-center text-[var(--sc-danger-fg)] min-h-[200px] flex items-center justify-center">
             <p>{t('outline.error.generationFailed')}</p>
           </div>
         )}

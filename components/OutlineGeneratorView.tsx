@@ -237,7 +237,7 @@ const OutlineResult: FC = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex justify-center items-center h-full min-h-[300px] text-red-400">
+          <div className="flex justify-center items-center h-full min-h-[300px] text-[var(--sc-danger-fg)]">
             <p>{error}</p>
           </div>
         </CardContent>

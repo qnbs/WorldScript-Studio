@@ -194,7 +194,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
         <button
           type="button"
           onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 text-[var(--sc-text-muted)] hover:text-red-400 text-xs px-0.5"
+          className="opacity-0 group-hover:opacity-100 text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)] text-xs px-0.5"
           aria-label={`${t('sceneboard.subplot.delete')} ${subplot.name}`}
         >
           ×

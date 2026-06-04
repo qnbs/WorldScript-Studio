@@ -38,6 +38,7 @@
   "lora.onboarding.checking": "جارٍ فحص بيئتك…",
   "lora.onboarding.cpuFallback": "الاحتياطي عبر المعالج (أبطأ)",
   "lora.onboarding.description": "أنشئ نموذج ذكاء اصطناعي مخصّصًا مُدرّبًا على مخطوطاتك. بياناتك لا تغادر جهازك أبدًا.",
+  "lora.onboarding.envError": "فشل التحقق من البيئة. يرجى التأكد من تثبيت Python والحزم المطلوبة.",
   "lora.onboarding.getStarted": "ابدأ الآن",
   "lora.onboarding.installCmd": "pip install unsloth trl peft",
   "lora.onboarding.installed": "مُثبَّت",

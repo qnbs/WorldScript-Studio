@@ -173,14 +173,14 @@ const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ 
   return (
     <div className={`flex items-start gap-3 ${isUser ? 'justify-end' : ''}`}>
       {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--sc-accent)]/20 flex items-center justify-center">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
             strokeWidth={1.5}
             stroke="currentColor"
-            className="w-5 h-5 text-indigo-400"
+            className="w-5 h-5 text-[var(--sc-accent)]"
           >
             {ICONS.SPARKLES}
           </svg>
@@ -233,14 +233,14 @@ const AiAssistant: FC = () => {
             chatHistory.length > 0 &&
             chatHistory[chatHistory.length - 1]?.text === '' && (
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--sc-accent)]/20 flex items-center justify-center">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
                     strokeWidth={1.5}
                     stroke="currentColor"
-                    className="w-5 h-5 text-indigo-400"
+                    className="w-5 h-5 text-[var(--sc-accent)]"
                   >
                     {ICONS.SPARKLES}
                   </svg>
@@ -249,15 +249,15 @@ const AiAssistant: FC = () => {
                   className={`max-w-xl p-3 rounded-lg bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] flex space-x-2 items-center`}
                 >
                   <div
-                    className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"
+                    className="w-2 h-2 bg-[var(--sc-accent)] rounded-full animate-pulse"
                     style={{ animationDelay: '0s' }}
                   ></div>
                   <div
-                    className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"
+                    className="w-2 h-2 bg-[var(--sc-accent)] rounded-full animate-pulse"
                     style={{ animationDelay: '0.2s' }}
                   ></div>
                   <div
-                    className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"
+                    className="w-2 h-2 bg-[var(--sc-accent)] rounded-full animate-pulse"
                     style={{ animationDelay: '0.4s' }}
                   ></div>
                 </div>

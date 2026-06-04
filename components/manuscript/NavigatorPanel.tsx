@@ -39,10 +39,20 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
   }) => {
     // QNBS-v3: <li> removed — the virtualizer wrapper <li> in NavigatorPanel is the real list item.
     //          Rendering <li> inside a virtualizer <div> caused axe `list`+`listitem` violations.
+    // QNBS-v3: Outer element is a div with role="button" to avoid nested <button> violation.
     return (
-      <button
-        type="button"
+      // biome-ignore lint/a11y/useSemanticElements: intentional div+role=button to prevent nested button DOM violation; move/delete buttons must be separate interactive elements
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => onSelect(section.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect(section.id);
+          }
+        }}
+        aria-label={t('outline.selectSection', { title: section.title })}
         className={`group relative rounded-md cursor-pointer py-1.5 pr-2 min-h-[44px] md:min-h-0 flex items-center justify-between text-left transition-all duration-200 w-full before:absolute before:left-0 before:inset-y-1 before:w-0.5 before:rounded-full before:bg-[var(--sc-accent)] before:transition-opacity before:duration-200 ${isActive ? 'pl-3 bg-[var(--nav-background-active)] text-[var(--nav-text-active)] before:opacity-100' : 'pl-2 hover:bg-[var(--nav-background-hover)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] before:opacity-0'} ${isDragging ? 'opacity-60 scale-[1.02] shadow-sc-xl' : ''}`}
       >
         <span
@@ -107,7 +117,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
                 e.stopPropagation();
                 onDelete(section.id);
               }}
-              className="p-2 md:p-1 rounded-md hover:bg-red-500/20 text-red-400 focus-visible:ring-2 focus-visible:ring-red-500"
+              className="p-2 md:p-1 rounded-md hover:bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)] focus-visible:ring-2 focus-visible:ring-[var(--sc-danger-fg)]"
               title={t('manuscript.deleteSection')}
               aria-label={t('manuscript.deleteSection')}
             >
@@ -129,7 +139,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
           )}
           <div
             aria-hidden="true"
-            className={`cursor-move p-1 ${isActive ? 'text-indigo-200 group-hover:text-white' : 'text-[var(--sc-text-muted)] group-hover:text-[var(--sc-text-primary)]'}`}
+            className={`cursor-move p-1 ${isActive ? 'text-[var(--sc-accent)] group-hover:text-white' : 'text-[var(--sc-text-muted)] group-hover:text-[var(--sc-text-primary)]'}`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -143,7 +153,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
             </svg>
           </div>
         </div>
-      </button>
+      </div>
     );
   },
 );
