@@ -37,7 +37,7 @@
     "build:turbo": "turbo run build",
     "preview": "vite preview",
     "typecheck": "tsgo --project tsconfig.tsgo.json --noEmit",
-    "typecheck:parallel": "tsgo --project tsconfig.tsgo.json --noEmit --checkers 4 --builders 4",
+    "typecheck:parallel": "tsgo --project tsconfig.tsgo.json --noEmit --checkers 4",
     "typecheck:turbo": "turbo run typecheck",
     "lhci:assert": "lhci autorun --upload.target=temporary-public-storage",
     "tauri": "tauri",

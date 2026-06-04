@@ -97,7 +97,7 @@ jobs:
         run: pnpm run parity:check
 
       - name: Typecheck (tsgo)
-        run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4 --builders 4
+        run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
 
       - name: Unit tests (Vitest)
         run: pnpm exec vitest run --coverage

@@ -48,7 +48,7 @@ package.json
 {
   "scripts": {
     "typecheck": "tsgo --project tsconfig.tsgo.json --noEmit",
-    "typecheck:parallel": "tsgo --project tsconfig.tsgo.json --noEmit --checkers 4 --builders 4"
+    "typecheck:parallel": "tsgo --project tsconfig.tsgo.json --noEmit --checkers 4"
   }
 }
 ```
