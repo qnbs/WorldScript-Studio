@@ -13,7 +13,29 @@
 **Quality gate (2026-06-02):** lint ✅ · i18n:check ✅ (2236 keys × 5 locales; `lora` + `common.next/back` un-orphaned) · typecheck ✅ · tests ✅ · feature-parity 0 criticals · LoRA view routed (Phase 2.2) + Phase 3 coverage tests (33) · Stryker now manual-only · Coverage/E2E: CI-only  
 
 **Production hotfix (2026-06-02):** Live blank screen (`init_locales is not defined`) root-caused to rolldown production DCE dropping zod's lazy `__esm` init wrappers — zod declares `"sideEffects": false`, so its side-effect-only modules (`locales`, `from-json-schema`) were stripped while their init calls survived. Fixed via `patches/zod@4.4.3.patch` (`sideEffects: true`); `rollupOptions.treeshake` is ignored by rolldown-vite. **Systemic gap closed:** the E2E suite runs `vite dev`, so the production rolldown bundle was never exercised — added `pnpm run smoke:prod` (headless-browser mount check on the built `dist/`) to the CI build job, plus an `unhandledrejection` startup-error handler in `index.tsx`.  
-**Toolchain:** Node 22/24, pnpm 10, Vite 8, TypeScript 6, Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+**Toolchain:** Node 22/24, pnpm 10, Vite 8, TypeScript 7 (tsgo), Biome 2, Vitest 4.1, Playwright 1.60, Tailwind CSS 4
+
+## TypeScript 7 Migration — 2026-06-04
+
+**Scope:** Migration from TypeScript 6.0.3 to TypeScript 7.0 (Go-based `tsgo`) for improved type-checking performance.
+
+### Changes
+
+| File | Change |
+|------|--------|
+| `package.json` | Added `@typescript/native-preview@beta` and `@typescript/typescript6` alias |
+| `tsconfig.tsgo.json` | New tsgo-specific config (excludes `vite/client` types) |
+| `.github/workflows/ci.yml` | Updated typecheck step to use tsgo |
+| `.npmrc` | Disabled `strict-peer-dependencies` for tsgo compatibility |
+| `pnpm-workspace.yaml` | Added `strictPeerDependencies: false` |
+| `docs/TS7-MIGRATION.md` | Migration guide created |
+
+### Verification
+
+- `npx tsgo --version` → `Version 7.0.0-dev.20260421.2`
+- `pnpm run typecheck` → ✅ No type errors
+- `pnpm run build` → ✅ Build successful (1m 27s)
+- `pnpm run lint` → ✅ 1111 files, 0 warnings
 
 ## WorkerBus v2 Phase 3 + Tauri-Build Unblock — 2026-06-03
 
@@ -324,7 +346,7 @@ Three security findings identified and fixed in the same session:
 | Generic `t<T>` function type cast | `useTranslation.test.tsx` | Double-cast `as unknown as <T>(k,opts?)=>T` |
 | `AsyncThunk.fulfilled.match` property | `BackupQuickActionsCard.test.tsx` | `Object.assign` + `as unknown as` cast |
 
-**Quality gate (2026-05-27 — v1.18.1):** lint ✅ (Biome — 0 errors) · typecheck ✅ (0 errors — tsc --noEmit) · i18n:check ✅ (2062 keys × 5 locales) · tests ✅
+**Quality gate (2026-05-27 — v1.18.1):** lint ✅ (Biome — 0 errors) · typecheck ✅ (0 errors — tsgo --noEmit) · i18n:check ✅ (2062 keys × 5 locales) · tests ✅
 
 ---
 

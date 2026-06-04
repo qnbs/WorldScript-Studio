@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["react", "react-dom"],
+    "typeRoots": ["./types", "./node_modules/@types"],
+    "rootDir": "./",
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "stableTypeOrdering": true,
+    "paths": {
+      "@huggingface/transformers": [
+        "./packages/ai-core/node_modules/@huggingface/transformers/types/transformers.d.ts"
+      ],
+      "@domain/collab-transport": ["./packages/collab-transport/src/index.ts"],
+      "@domain/ai-core": ["./packages/ai-core/src/index.ts"],
+      "@domain/worker-bus": ["./packages/worker-bus/src/index.ts"]
+    }
+  },
+  "include": ["."],
+  "exclude": ["node_modules", "dist", ".storybook"]
+}

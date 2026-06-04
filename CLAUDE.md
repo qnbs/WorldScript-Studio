@@ -34,7 +34,8 @@ pnpm run smoke:prod    # Headless-browser mount check on the built dist/ (run AF
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run format        # Biome format --write (format only)
-pnpm run typecheck     # TypeScript type check (tsc --noEmit)
+pnpm run typecheck     # TypeScript type check (tsgo --noEmit)
+pnpm run typecheck:parallel # TypeScript type check with parallel workers (tsgo --checkers 4 --builders 4)
 pnpm run parity:check  # Feature flag parity audit (must report 0 drifts)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
@@ -65,7 +66,7 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with co
 
 **Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 72, branches 58, functions 64, statements 70 (see `vitest.config.ts`).
 
-**CI pipeline order:** `security` → `quality` (Biome + tsc + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
+**CI pipeline order:** `security` → `quality` (Biome + tsgo + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
 **CI-cloud-first workflow (constrained local hardware only):** On low-end hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, E2E, Lighthouse, and Stryker are CI-gate jobs. After each push, update README.md badges and AUDIT.md quality-gate line with CI-reported numbers. Local CI simulation: `act pull_request --job quality` (Docker + `act`; see `infra/low-end-ci/DAILY-DRIVER.md`).
 

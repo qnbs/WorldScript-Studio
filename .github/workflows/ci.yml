@@ -1,6 +1,6 @@
 # ============================================================
 # StoryCraft Studio – CI/CD Pipeline
-# security → quality (lint, i18n, tsc, vitest+coverage) → build (+chunk budget, rollup analyze)
+# security → quality (lint, i18n, tsgo, vitest+coverage) → build (+chunk budget, rollup analyze)
 #   ├→ e2e | storybook (parallel) ; lighthouse after build
 # deploy (main): needs build + e2e → GitHub Pages
 # ============================================================
@@ -96,8 +96,8 @@ jobs:
       - name: Feature parity audit
         run: pnpm run parity:check
 
-      - name: Typecheck (tsc)
-        run: pnpm run typecheck
+      - name: Typecheck (tsgo)
+        run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4 --builders 4
 
       - name: Unit tests (Vitest)
         run: pnpm exec vitest run --coverage

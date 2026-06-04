@@ -36,7 +36,8 @@
     "build:pages": "vite build",
     "build:turbo": "turbo run build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --project tsconfig.tsgo.json --noEmit",
+    "typecheck:parallel": "tsgo --project tsconfig.tsgo.json --noEmit --checkers 4 --builders 4",
     "typecheck:turbo": "turbo run typecheck",
     "lhci:assert": "lhci autorun --upload.target=temporary-public-storage",
     "tauri": "tauri",
@@ -153,16 +154,18 @@
     "tailwindcss": "^4.3.0",
     "tsx": "^4.22.3",
     "turbo": "^2.9.14",
-    "typescript": "~6.0.3",
     "vite": "^8.0.14",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.8",
     "wait-on": "^9.0.10",
     "wrangler": "^4.94.0",
-    "y-protocols": "^1.0.7"
+    "y-protocols": "^1.0.7",
+    "@typescript/native-preview": "beta",
+    "@typescript/typescript6": "npm:typescript@~6.0.3"
   },
   "pnpm": {
     "overrides": {
+      "typescript": "npm:@typescript/typescript6@~6.0.3",
       "serialize-javascript": ">=7.0.3",
       "chrome-launcher": "^1.2.1",
       "tmp": "^0.2.6",
