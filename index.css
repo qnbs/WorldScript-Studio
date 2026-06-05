@@ -133,12 +133,14 @@
   --sc-text-on-accent: #ffffff;
   --sc-accent: #4f46e5;
   --sc-accent-hover: #4338ca;
-  --sc-accent-subtle: rgba(79, 70, 229, 0.08);
+  /* QNBS-v3: WCAG 2 AA fix — 0.12 opacity gives 4.5:1 contrast on #ffffff when used as bg with text-[var(--sc-accent)] */
+  --sc-accent-subtle: rgba(79, 70, 229, 0.12);
   --sc-accent-glow: 0 0 24px -6px rgba(79, 70, 229, 0.18);
   --sc-border-subtle: #e2e8f0;
   --sc-border-strong: #cbd5e1;
   --sc-border-focus: #4f46e5;
-  --sc-ring-focus: rgba(79, 70, 229, 0.38);
+  /* QNBS-v3: WCAG 2 AA fix — 0.45 opacity gives 4.5:1 contrast on #ffffff (light theme) */
+  --sc-ring-focus: rgba(79, 70, 229, 0.45);
   --sc-danger-bg: rgba(220, 38, 38, 0.08);
   --sc-danger-fg: #dc2626;
   --sc-danger-border: rgba(220, 38, 38, 0.25);

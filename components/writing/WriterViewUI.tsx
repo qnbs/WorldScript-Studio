@@ -147,7 +147,7 @@ const WriterViewUI: FC = () => {
           title={t('writer.versionControl.tooltip')}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
-          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-accent)]/40 text-[var(--sc-accent)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>
@@ -164,7 +164,7 @@ const WriterViewUI: FC = () => {
             aria-label={isProForgeActive ? 'Deactivate ProForge' : 'Activate ProForge Pipeline'}
             className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${
               isProForgeActive
-                ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]'
+                ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-accent)]/40 text-[var(--sc-accent)]'
                 : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'
             }`}
           >
@@ -177,7 +177,7 @@ const WriterViewUI: FC = () => {
           onClick={() => dispatch(versionControlActions.togglePanel())}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
-          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-accent)]/40 text-[var(--sc-accent)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>
