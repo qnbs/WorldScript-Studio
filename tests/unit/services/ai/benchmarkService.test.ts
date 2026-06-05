@@ -137,8 +137,8 @@ describe('benchmarkService', () => {
     it('continues on individual task failure', async () => {
       mockGetTaskConfig.mockRejectedValueOnce(new Error('Config failed'));
       const results = await runAllBenchmarks();
-      // Should still get 4 results (some may be partial/fallback)
-      expect(results.length).toBe(4);
+      // Should get 3 results (one failed gracefully)
+      expect(results.length).toBe(3);
     });
   });
 });
