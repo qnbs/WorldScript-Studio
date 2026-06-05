@@ -44,6 +44,12 @@ tests/e2e/results/
 # Storybook static build output
 storybook-static/
 
+# Storybook HTML story files (generated during build)
+components/**/*.html
+app/**/*.html
+hooks/**/*.html
+features/**/*.html
+
 # Graphify — solo policy: only GRAPH_REPORT.md is committed; regenerate locally via pnpm run graphify:update
 graphify-out/*
 !graphify-out/GRAPH_REPORT.md
