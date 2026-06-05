@@ -145,6 +145,8 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "@typescript/native-preview": "beta",
+    "@typescript/typescript6": "npm:typescript@~6.0.3",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.8",
     "fake-indexeddb": "^6.2.5",
@@ -162,9 +164,7 @@
     "vitest": "^4.1.8",
     "wait-on": "^9.0.10",
     "wrangler": "^4.94.0",
-    "y-protocols": "^1.0.7",
-    "@typescript/native-preview": "beta",
-    "@typescript/typescript6": "npm:typescript@~6.0.3"
+    "y-protocols": "^1.0.7"
   },
   "pnpm": {
     "overrides": {
@@ -199,7 +199,12 @@
     ],
     "patchedDependencies": {
       "zod@4.4.3": "patches/zod@4.4.3.patch"
-    }
+    },
+    "ignoredBuiltDependencies": [
+      "onnxruntime-node",
+      "simple-git-hooks",
+      "unrs-resolver"
+    ]
   },
   "simple-git-hooks": {
     "pre-commit": "npm exec -- lint-staged"
