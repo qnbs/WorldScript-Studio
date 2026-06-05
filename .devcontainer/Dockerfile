@@ -39,8 +39,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh
 # ─── pnpm via corepack ────────────────────────────────────────────────────────
 # QNBS-v3: corepack is the canonical way to activate pnpm matching packageManager.
 # The prepare step pins the exact version from package.json.
+# PNPM_STORE_PATH aligns with devcontainer.json mount for persistent caching.
+ENV PNPM_STORE_PATH=/home/vscode/.local/share/pnpm/store
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate \
-  && pnpm --version
+  && pnpm --version \
+  && mkdir -p ${PNPM_STORE_PATH}
 
 # ─── Rust toolchain (for Tauri) ───────────────────────────────────────────────
 # QNBS-v3: Install Rust via rustup — needed for `pnpm run tauri:dev` / `tauri build`.
@@ -82,7 +85,9 @@ RUN python3 -m pip install --break-system-packages --upgrade pip setuptools whee
 # ─── Non-root user setup ─────────────────────────────────────────────────────
 # The base image already creates a "vscode" user (UID 1000).
 # Ensure cargo & rustup dirs are owned by vscode for non-root builds.
-RUN chown -R vscode:vscode ${RUSTUP_HOME} ${CARGO_HOME} ${PLAYWRIGHT_BROWSERS_PATH}
+# Also ensure cargo registry cache dir exists for persistent volume mount.
+RUN mkdir -p ${RUSTUP_HOME} ${CARGO_HOME}/registry ${PNPM_STORE_PATH} \
+  && chown -R vscode:vscode ${RUSTUP_HOME} ${CARGO_HOME} ${PLAYWRIGHT_BROWSERS_PATH} ${PNPM_STORE_PATH}
 
 # ─── Shell enhancements ──────────────────────────────────────────────────────
 # QNBS-v3: Starship v1.25.1 (SHA-verified), fzf 0.56.3, zoxide v0.9.6 — version-pinned for
@@ -107,6 +112,11 @@ RUN STARSHIP_SHA="4488c11ca632327d1f1f16fb2f102c0646094c35479cd5435991385da43c61
 
 # ─── Final working directory ──────────────────────────────────────────────────
 WORKDIR /workspaces
+
+# ─── Environment template ─────────────────────────────────────────────────────
+# QNBS-v3: Copy .env.example to workspace root for reference (not auto-loaded).
+# Users can copy to .env and customize for local Docker runs.
+COPY .env.example /workspaces/.env.example
 
 # ─── Labels ───────────────────────────────────────────────────────────────────
 LABEL org.opencontainers.image.title="StoryCraft Studio Dev" \
