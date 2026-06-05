@@ -194,11 +194,11 @@ describe('adaptiveAiEngine', () => {
       const { getTaskConfig } = await import('../../../../services/ai/adaptiveAiEngine');
       const config = await getTaskConfig('text-gen-short');
 
-      // WASM backends always available
-      expect(config.backend).toBe('transformers-wasm');
+      // WASM backends always available - onnx-wasm comes before transformers-wasm in priority
+      expect(config.backend).toBe('onnx-wasm');
     });
 
-    it('returns true for heuristic backend', async () => {
+    it('returns onnx-wasm when webgpu unavailable but WASM works', async () => {
       const { getDeviceProfile } = await import('../../../../services/ai/localAiDeviceProfiler');
       vi.mocked(getDeviceProfile).mockResolvedValue({
         webgpu: { available: false },
@@ -218,7 +218,8 @@ describe('adaptiveAiEngine', () => {
       const { getTaskConfig } = await import('../../../../services/ai/adaptiveAiEngine');
       const config = await getTaskConfig('text-gen-short');
 
-      expect(config.backend).toBe('heuristic');
+      // onnx-wasm comes before heuristic in priority list and WASM always works
+      expect(config.backend).toBe('onnx-wasm');
     });
   });
 
@@ -320,7 +321,8 @@ describe('adaptiveAiEngine', () => {
       _clearLatencyHistory();
 
       const config1 = await getTaskConfig('text-gen-short');
-      expect(config1.backend).toBe('heuristic');
+      // onnx-wasm comes before heuristic in priority list and WASM always works
+      expect(config1.backend).toBe('onnx-wasm');
     });
   });
 });

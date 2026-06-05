@@ -273,3 +273,8 @@ export const adaptiveAiEngine = new AdaptiveAiEngine();
 
 // Re-export for testing
 export { AdaptiveAiEngine };
+
+// Convenience function for external use (wraps singleton)
+export async function getTaskConfig(task: AiTaskType): Promise<TaskConfig> {
+  return adaptiveAiEngine.getTaskConfig(task);
+}
