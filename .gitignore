@@ -37,6 +37,9 @@ test-results/
 # Playwright default output dir (when reporter dir differs from tests/e2e/html-report)
 playwright-report/
 
+# CI Analyzer artifacts (downloaded from GitHub Actions)
+artifacts/
+
 # Playwright HTML report / junit (generated locally or in CI artifacts)
 tests/e2e/html-report/
 tests/e2e/results/
