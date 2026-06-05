@@ -7,6 +7,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# pnpm store (should never be committed)
+.pnpm-store/
+
 node_modules
 dist
 dist-ssr
