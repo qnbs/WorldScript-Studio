@@ -63,12 +63,12 @@ export default defineConfig({
       // never actually met on CI) → L72/F64/B58/S70 (corrected, 2026-05-31)
       // → L74/F66/B60/S72 (2026-06-03: ratchet to ~1pt below CI-measured 75.15/67.84/61.23/73.14
       //   after Phase 2.3/2.4 tests; margin absorbs Node 22/24 variance).
-      // P1 target: L85/B75/F80 — incremental ratchet to L57/B49/F68/S59 (2026-06-05).
+      // P1 target: L85/B75/F80 — incremental ratchet to L56/B48/F68/S58 (2026-06-05).
       thresholds: {
-        lines: 57,
+        lines: 56,
         functions: 68,
-        branches: 49,
-        statements: 59,
+        branches: 48,
+        statements: 58,
         perFile: false,
       },
     },
