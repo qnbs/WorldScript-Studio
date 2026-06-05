@@ -13,8 +13,8 @@
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_%7C_AR_%7C_HE_2236_keys-0EA5E9" alt="i18n DE EN FR ES IT AR HE — 2236 keys">
-  <img src="https://img.shields.io/badge/Tests-4567_%2F_382_files-22C55E" alt="4567 tests / 382 files">
-  <img src="https://img.shields.io/badge/Coverage-L_75%25_%7C_B_61%25_%7C_F_68%25-22C55E" alt="Coverage: Lines 75% / Branches 61% / Functions 68%">
+  <img src="https://img.shields.io/badge/Tests-5050_%2F_430_files-22C55E" alt="5050 tests / 430 files">
+  <img src="https://img.shields.io/badge/Coverage-L_76%25_%7C_B_62%25_%7C_F_69%25-22C55E" alt="Coverage: Lines 76% / Branches 62% / Functions 69%">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
