@@ -35,6 +35,7 @@ vi.stubGlobal('localStorage', {
 import {
   clearBenchmarkResults,
   getLastBenchmarkResults,
+  runAllBenchmarks,
   runInferenceBenchmark,
 } from '../../../../services/ai/benchmarkService';
 
@@ -118,6 +119,26 @@ describe('benchmarkService', () => {
       await runInferenceBenchmark('text-gen-short');
       clearBenchmarkResults();
       expect(getLastBenchmarkResults()).toEqual([]);
+    });
+  });
+
+  describe('runAllBenchmarks', () => {
+    it('runs benchmarks for all standard task types', async () => {
+      const results = await runAllBenchmarks();
+      expect(results.length).toBe(4);
+      expect(results.map((r) => r.taskType)).toEqual([
+        'text-gen-short',
+        'embedding',
+        'rag-rank',
+        'summarize',
+      ]);
+    });
+
+    it('continues on individual task failure', async () => {
+      mockGetTaskConfig.mockRejectedValueOnce(new Error('Config failed'));
+      const results = await runAllBenchmarks();
+      // Should still get 4 results (some may be partial/fallback)
+      expect(results.length).toBe(4);
     });
   });
 });
