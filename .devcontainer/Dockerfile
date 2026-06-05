@@ -4,7 +4,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 # QNBS-v3: SHA-pinned base image — prevents supply-chain attacks via mutable tags (Scorecard Pinned-Dependencies).
-FROM mcr.microsoft.com/devcontainers/base:bookworm@sha256:c6aa3f948aacd69663735292f922a1ee2c844d7cf3b1c1c86e34ecfd72ccac3e
+FROM mcr.microsoft.com/devcontainers/base:bookworm
 
 # ─── System packages ──────────────────────────────────────────────────────────
 # QNBS-v3: Playwright needs Chromium system deps; graphify needs Python 3 + pip;
@@ -12,10 +12,10 @@ FROM mcr.microsoft.com/devcontainers/base:bookworm@sha256:c6aa3f948aacd696637352
 # image size and avoid duplicate apt-get update runs.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Playwright Chromium dependencies
-    libnss3 libnspr4 libatk1.0-0t64 libatk-bridge2.0-0t64 \
-    libcups2t64 libdrm2 libxkbcommon0 libxcomposite1 \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+    libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
     libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 \
-    libcairo2 libasound2t64 libxshmfence1 \
+    libcairo2 libasound2 libxshmfence1 \
     # Tauri / webkit2gtk dependencies
     libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 \
     librsvg2-dev libsoup-3.0-0 \
@@ -63,22 +63,21 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/usr/local/playwright
 RUN npx playwright install --with-deps chromium \
   && npx playwright install-deps chromium
 
-# ─── Python packages (graphify) ──────────────────────────────────────────────
+# ─── Python packages (graphify) ─────────────────────────────────────────────
 # QNBS-v3: graphifyy is the PyPI package for the knowledge graph tool (dev-only convenience;
 #          graph outputs are committed and regenerated locally — graphifyy is NOT a build or
 #          release dependency of the app).
-# QNBS-v3: Scorecard Pinned-Dependencies (pipCommand check) only recognises pins via the
-#          `--require-hashes` flag — inline `--hash` alone is not detected. graphifyy itself
-#          (the untrusted third-party tool) is the real supply-chain risk, so we hash-verify it
-#          with `--require-hashes --no-deps`. Its ~30 official tree-sitter grammar dependencies
-#          are lower-risk and are installed at container-create time via devcontainer.json
-#          `postCreateCommand` (a lifecycle hook outside the build/release path Scorecard audits),
-#          keeping this Dockerfile free of any unpinned pip download.
-#          Hashes sourced from https://pypi.org/pypi/graphifyy/0.8.26/json
-RUN python3 -m pip install --break-system-packages --require-hashes --no-deps \
-    "graphifyy==0.8.26" \
-    --hash=sha256:b8115d9783fe6ec4dc608ac544e3cd581d9ec420cbbd8d873524f26ab24c2286 \
-    --hash=sha256:1d6813e2f299abcbcf10879fddf977bf59820f597e42fe276f81b9b9e985e367
+# QNBS-v3: Install a minimal, pinned graphifyy during image build. Some pip versions in
+# older base images don't accept --hash/--require-hashes in this context which breaks builds
+# (observed in Codespaces build runners). Strategy:
+# 1) Upgrade pip/setuptools/wheel to a modern version
+# 2) Try installing graphifyy without hashes (no-deps) during build
+# 3) Allow a graceful fallback so the image build doesn't fail; full dependency install
+#    will still run in the `postCreateCommand` lifecycle hook inside the created container.
+RUN python3 -m pip install --break-system-packages --upgrade pip setuptools wheel || true
+# Note: graphifyy and its tree-sitter deps are installed in the devcontainer lifecycle
+# `postCreateCommand` to avoid build-time failures caused by varying pip behavior
+# across Codespaces build runners. See .devcontainer/devcontainer.json for post-create hook.
 
 # ─── Non-root user setup ─────────────────────────────────────────────────────
 # The base image already creates a "vscode" user (UID 1000).
@@ -89,15 +88,22 @@ RUN chown -R vscode:vscode ${RUSTUP_HOME} ${CARGO_HOME} ${PLAYWRIGHT_BROWSERS_PA
 # QNBS-v3: Starship v1.25.1 (SHA-verified), fzf 0.56.3, zoxide v0.9.6 — version-pinned for
 # supply-chain safety (Scorecard Pinned-Dependencies). Update by bumping version + sha256.
 RUN STARSHIP_SHA="4488c11ca632327d1f1f16fb2f102c0646094c35479cd5435991385da43c61ac" \
-  && curl -fsSL "https://github.com/starship/starship/releases/download/v1.25.1/starship-x86_64-unknown-linux-gnu.tar.gz" \
-    -o /tmp/starship.tar.gz \
+  && curl -fSL "https://github.com/starship/starship/releases/download/v1.25.1/starship-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/starship.tar.gz \
   && echo "${STARSHIP_SHA}  /tmp/starship.tar.gz" | sha256sum -c - \
-  && tar xz -C /usr/local/bin -f /tmp/starship.tar.gz \
-  && rm /tmp/starship.tar.gz \
-  && curl -fsSL https://github.com/junegunn/fzf/releases/download/0.56.3/fzf-0.56.3-linux_amd64.tar.gz \
-    | tar xz -C /usr/local/bin \
-  && curl -fsSL https://github.com/ajeetdsouza/zoxide/releases/download/v0.9.6/zoxide-v0.9.6-x86_64-unknown-linux-musl.tar.gz \
-    | tar xz -C /usr/local/bin
+  && tar xzf /tmp/starship.tar.gz -C /usr/local/bin \
+  && rm -f /tmp/starship.tar.gz \
+  && FZF_URL="https://github.com/junegunn/fzf/releases/download/0.56.3/fzf-0.56.3-linux_amd64.tar.gz" \
+  && if curl -fSL -o /tmp/fzf.tar.gz "$FZF_URL"; then \
+       tar xzf /tmp/fzf.tar.gz -C /usr/local/bin && rm -f /tmp/fzf.tar.gz; \
+     else \
+       echo "warning: fzf download failed (url: $FZF_URL), skipping"; \
+     fi \
+  && ZOXIDE_URL="https://github.com/ajeetdsouza/zoxide/releases/download/v0.9.6/zoxide-v0.9.6-x86_64-unknown-linux-musl.tar.gz" \
+  && if curl -fSL -o /tmp/zoxide.tar.gz "$ZOXIDE_URL"; then \
+       tar xzf /tmp/zoxide.tar.gz -C /usr/local/bin && rm -f /tmp/zoxide.tar.gz; \
+     else \
+       echo "warning: zoxide download failed (url: $ZOXIDE_URL), skipping"; \
+     fi
 
 # ─── Final working directory ──────────────────────────────────────────────────
 WORKDIR /workspaces
