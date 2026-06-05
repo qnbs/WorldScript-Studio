@@ -38,10 +38,16 @@ Phase 0 and Phase 2 hardening complete as of v1.19.0. Remaining open items:
 | --- | --- | --- | --- |
 | SEC-1 | Collaboration | Mandatory password enforcement — `CollabEncryptionRequiredError` thrown in `collaborationService.ts` when no password is provided in production | ✅ Complete (Phase 0) |
 | SEC-2 | Documentation | Updated security policy, version table, scope, and active-item tracking | ✅ Complete (Phase 0) |
-| SEC-3 | Storage | IDB at-rest encryption — `services/storage/storageEncryptionService.ts`, AES-256-GCM, PBKDF2 310k iter; `enableIdbAtRestEncryption` flag (off by default) | ✅ Implemented (Phase 2 / B-1) |
+| SEC-3 | Storage | IDB at-rest encryption — `services/storage/storageEncryptionService.ts`, AES-256-GCM, PBKDF2 600k iter; `enableIdbAtRestEncryption` flag (off by default) | ✅ Implemented (Phase 2 / B-1) |
 | SEC-4 | Voice | Web Speech API consent gate — GDPR Art. 13 disclosure and explicit opt-in before audio is routed to cloud STT providers | ✅ Complete (Phase 0) |
-| SEC-5 | Storage | IDB at-rest encryption UX — passphrase unlock modal, forgot-passphrase export flow, key rotation UI | ⬜ Phase 3 |
-| SEC-6 | Storage | DuckDB OPFS at-rest encryption — WAL and data files outside IDB; requires separate encryption layer | ⬜ Phase 3 (design) |
+| SEC-5 | Storage | IDB at-rest encryption UX — passphrase unlock modal, forgot-passphrase export flow, key rotation UI | ✅ Complete (2026-06-02) |
+| SEC-6 | Storage | DuckDB OPFS at-rest encryption — WAL and data files outside IDB; requires separate encryption layer | ⬜ Phase 3 (P0-4) |
+| SEC-7 | Plugin System | Worker isolation for plugin execution — prevent main-thread access, enforce timeouts | ⬜ Phase 3 (P0-2) |
+| SEC-8 | Voice | WASM model download UX — progress feedback, cancel/retry controls for Whisper/Kokoro models | ⬜ Phase 3 (P0-5) |
+
+## Threat Model
+
+A formal STRIDE threat analysis with attack trees and mitigation mappings is documented in [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md).
 
 ## Scope
 

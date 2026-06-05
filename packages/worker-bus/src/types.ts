@@ -35,7 +35,8 @@ export type WorkerCapability =
   | 'proforge.stage'
   | 'rag.search'
   | 'crypto.pbkdf2'
-  | 'plugin.sandbox';
+  | 'plugin.sandbox'
+  | 'plugin.execute';
 
 // --- Retry Policy -----------------------------------------------------------
 export interface RetryPolicy {

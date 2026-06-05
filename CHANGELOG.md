@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **P0 Security & Voice Foundation** (2026-06-05):
+  - **P0-2** — Plugin worker isolation (`workers/plugin.worker.ts`) — routes plugin execution to isolated worker context with timeout (30s default) and sandboxed API; `loadPlugin()` in `services/pluginRegistry.ts` now uses `routeTask('plugin.execute')` for worker isolation
+  - **P0-4** — DuckDB OPFS encryption (`services/duckdb/duckdbEncryption.ts`) — encrypts DuckDB analytics data at rest using shared passphrase-derived key from `storageEncryptionService`; provides `initDuckDbEncryption`, `encryptDuckDbData`, `decryptDuckDbData`, `reEncryptDuckDbFiles` functions
+  - **P0-5** — Voice WASM model download UI (`components/voice/VoiceModelDownloadModal.tsx`) — progress modal for Whisper/Kokoro model downloads with cancel/retry controls; integrated with `wasmModelDownloadProgress` and `wasmModelsReady` settings
+  - **Security Threat Model** (`docs/SECURITY-THREAT-MODEL.md`) — formal STRIDE analysis with attack trees for AI prompt injection, plugin sandbox escape, and collaboration MITM; updated mitigation mapping and checklist
 - **Characters & World Building roster overhaul** (2026-06-03):
   - New shared, framework-free roster layer: `services/rosterMetrics.ts` (completeness scoring + `filterByQuery` + `sortByMode`, 17 unit tests), `components/roster/RosterToolbar.tsx` (stat chips + live search + sort), and `components/roster/CompletenessRing.tsx` (band-colored SVG ring, sr-only labelled).
   - **CharacterView** + **WorldView** now show a roster toolbar (search by name, sort by name/completeness, live result count) and at-a-glance stats — Characters: total / developed / with-portrait / avg completeness; Worlds: total / developed / locations / avg completeness. Each card carries a completeness ring; a dedicated "no matches" empty state distinguishes an empty search from an empty roster. Search/sort is ephemeral component state (not Redux) so the existing view hooks + their tests are untouched.

@@ -95,6 +95,21 @@ export async function initWorkerBus(): Promise<void> {
       },
     });
 
+    // QNBS-v3: Plugin worker pool — isolated execution for sandboxed plugins (P0-2).
+    const pluginUrl = new URL('../workers/plugin.worker.ts', import.meta.url).href;
+    registry.register({
+      poolId: 'plugin',
+      capabilities: ['plugin.execute'],
+      options: {
+        maxWorkers: 1,
+        minWorkers: 0,
+        idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
+        workerScript: pluginUrl,
+        capabilities: ['plugin.execute'],
+        labels: { pool: 'plugin', version: 'v1' },
+      },
+    });
+
     registry.install(bus);
     _bus = bus;
     _adapter = new LegacyWorkerBusAdapter(bus);

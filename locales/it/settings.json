@@ -636,5 +636,11 @@
   "settings.voice.privacyNotice": "I dati vocali vengono elaborati localmente sul tuo dispositivo. Nessun audio viene inviato al cloud a meno che tu non abiliti esplicitamente il fallback cloud.",
   "settings.voice.title": "Controllo vocale",
   "settings.voice.ttsMuted": "Silenzia tutta l’uscita vocale",
-  "settings.voice.ttsMutedHint": "Disabilita il text-to-speech mantenendo gli indicatori visivi."
+  "settings.voice.ttsMutedHint": "Disabilita il text-to-speech mantenendo gli indicatori visivi.",
+  "voice.modelDownload.cancel": "Annulla",
+  "voice.modelDownload.description": "Download del modello {{model}} ({{size}} MB). Questo abilita l'elaborazione vocale locale senza instradamento cloud.",
+  "voice.modelDownload.error": "Download fallito: {{error}}",
+  "voice.modelDownload.progress": "{{percent}}% completato",
+  "voice.modelDownload.retry": "Riprova",
+  "voice.modelDownload.title": "Download modello vocale"
 }

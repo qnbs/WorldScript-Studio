@@ -205,6 +205,10 @@ export default defineConfig({
           ) {
             return 'lora-feature';
           }
+          // QNBS-v3: Plugin worker — isolated execution context for sandboxed plugins (P0-2).
+          if (id.includes('workers/plugin.worker')) {
+            return 'plugin-worker';
+          }
           return undefined;
         },
       },

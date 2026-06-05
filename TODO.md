@@ -59,6 +59,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - 🔄 **C-6** — ar/he UI translation **complete** (2026-06-03): 18 modules translated in `locales/{ar,he}/` (help.json English fallback), Noto fonts + RTL shell layout shipped as Beta. Remaining: native-speaker review + help-article prose — community task. See `docs/I18N-GLOSSARY-RTL.md`
 - 🔄 **C-7 remainder** — Coverage → L85%/B75%/F80%; Stryker break 75→80 (current thresholds: L73/F65/B58). **Phase 3 started (2026-06-02):** +33 LoRA tests (useLoraView, training wizard, sub-panels — were 0%)
 - ✅ IDB at-rest encryption UX (2026-06-02 reconciliation) — `IdbUnlockModal` (startup unlock + 2-step forgot-passphrase escape hatch, `App.tsx:182-188,638-643`), `PassphraseModal` (set/change/disable), real read/write gating `idbProjectStore.ts:209-265`, session lock + key rotation (Phase 1). `enableIdbAtRestEncryption` flag in Settings › Privacy with ⚠ warning
+- ✅ **P0-2** — Plugin worker isolation (`workers/plugin.worker.ts`) — routes plugin execution to isolated worker context with timeout and sandboxed API
+- ✅ **P0-4** — DuckDB OPFS encryption (`services/duckdb/duckdbEncryption.ts`) — encrypts DuckDB analytics data at rest using shared passphrase-derived key
+- ✅ **P0-5** — Voice WASM model download UI (`components/voice/VoiceModelDownloadModal.tsx`) — progress modal for Whisper/Kokoro model downloads with cancel/retry
 - ⬜ Complete Whisper WASM STT model download + inference pipeline (B-2 continuation)
 - ⬜ Kokoro/Piper TTS WASM engines
 - ⬜ PLANbib v1.7 features (Objects → MindMap → Interviews → Timeline → Wizard → Analysis → ReadMode → Guide → Desktop) — 9 phases, go-ahead from user required

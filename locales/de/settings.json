@@ -636,5 +636,11 @@
   "settings.voice.privacyNotice": "Sprachdaten werden lokal auf deinem Gerät verarbeitet. Es wird kein Audio in die Cloud gesendet, außer du aktivierst explizit den Cloud-Fallback unten.",
   "settings.voice.title": "Vollständige Sprachunterstützung",
   "settings.voice.ttsMuted": "Alle Sprachausgabe stummschalten",
-  "settings.voice.ttsMutedHint": "Text-zu-Sprache deaktivieren, während visuelle Indikatoren erhalten bleiben."
+  "settings.voice.ttsMutedHint": "Text-zu-Sprache deaktivieren, während visuelle Indikatoren erhalten bleiben.",
+  "voice.modelDownload.cancel": "Abbrechen",
+  "voice.modelDownload.description": "Lade {{model}}-Modell ({{size}} MB) herunter. Dies ermöglicht lokale Sprachverarbeitung ohne Cloud-Routing.",
+  "voice.modelDownload.error": "Download fehlgeschlagen: {{error}}",
+  "voice.modelDownload.progress": "{{percent}}% abgeschlossen",
+  "voice.modelDownload.retry": "Wiederholen",
+  "voice.modelDownload.title": "Sprachmodell-Download"
 }

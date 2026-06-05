@@ -630,6 +630,10 @@ export interface VoiceSettings {
   dictationAutoPunctuation: boolean;
   /** GDPR Art. 13 consent granted for Web Speech API (routes audio to cloud STT providers) */
   webSpeechConsentGranted?: boolean;
+  /** WASM voice models download progress (0-1) */
+  wasmModelDownloadProgress?: number;
+  /** WASM voice models ready for use */
+  wasmModelsReady?: boolean;
 }
 
 export interface Settings {

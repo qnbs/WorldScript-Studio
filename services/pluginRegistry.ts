@@ -1,7 +1,7 @@
 /**
  * Plugin registry — lightweight service for discovering and managing StoryCraft Studio extensions.
  * QNBS-v3: Plugins declare a capability manifest; execute() validates permissions before dispatch.
- *          v1: Permission gate only; Worker-scope isolation scheduled for v2 per ADR-06.
+ *          v2: Worker-scope isolation via routeTask to plugin.worker.ts (P0-2).
  */
 
 import { z } from 'zod';
@@ -244,25 +244,46 @@ export class PluginRegistry {
 
   /**
    * Dynamically load a plugin by entrypoint URL and execute its run() export.
-   * QNBS-v3: v1 loads in the main thread; v2 will spawn a Worker per ADR-06.
+   * QNBS-v3: P0-2 — Routes to plugin.worker.ts for isolated execution.
    * The entrypoint module must export `run(api: PluginSandboxedApi): Promise<void>`.
    */
   async loadPlugin(
     descriptor: PluginDescriptor,
-    rawApi: PluginSandboxedApi,
+    _rawApi: PluginSandboxedApi,
   ): Promise<PluginExecuteResult> {
-    if (!this._enabled)
+    if (!this._enabled) {
       return { ok: false, error: 'Plugin system is disabled (enablePluginSystem flag is off)' };
+    }
     this.register(descriptor);
     try {
-      // Dynamic import — entrypoint must export a `run` function.
-      const module = (await import(/* @vite-ignore */ descriptor.entrypoint)) as {
-        run?: (api: PluginSandboxedApi) => Promise<void>;
-      };
-      if (typeof module['run'] !== 'function') {
-        return { ok: false, error: `Plugin '${descriptor.id}' has no exported run() function` };
+      // Fetch plugin code for worker execution
+      const response = await fetch(descriptor.entrypoint);
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: `Failed to fetch plugin '${descriptor.id}': ${response.status}`,
+        };
       }
-      return this.executeAsync(descriptor.id, module['run'], rawApi);
+      const code = await response.text();
+
+      // Route to worker for isolated execution
+      const { routeTask } = await import('./hybridRouter');
+      const handle = await routeTask('plugin.execute', {
+        pluginId: descriptor.id,
+        code,
+        timeoutMs: 30000,
+      });
+
+      if (!handle) {
+        return { ok: false, error: 'WorkerBus not initialized' };
+      }
+
+      try {
+        await handle.result;
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

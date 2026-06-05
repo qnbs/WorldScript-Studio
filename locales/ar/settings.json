@@ -636,5 +636,11 @@
   "settings.voice.privacyNotice": "تُعالَج بيانات الصوت محليًا على جهازك. لا يُرسَل أي صوت إلى السحابة ما لم تفعّل الاحتياطي السحابي أدناه صراحة.",
   "settings.voice.title": "الدعم الصوتي الكامل",
   "settings.voice.ttsMuted": "كتم كل مخرجات الكلام",
-  "settings.voice.ttsMutedHint": "عطّل تحويل النص إلى كلام مع الإبقاء على المؤشّرات المرئية."
+  "settings.voice.ttsMutedHint": "عطّل تحويل النص إلى كلام مع الإبقاء على المؤشّرات المرئية.",
+  "voice.modelDownload.cancel": "إلغاء",
+  "voice.modelDownload.description": "جاري تحميل نموذج {{model}} ({{size}} ميغابايت). يُمكّن ذلك المعالجة الصوتية المحلية دون إرسال إلى السحابة.",
+  "voice.modelDownload.error": "فشل التحميل: {{error}}",
+  "voice.modelDownload.progress": "{{percent}}% مكتمل",
+  "voice.modelDownload.retry": "إعادة المحاولة",
+  "voice.modelDownload.title": "تحميل نموذج الصوت"
 }

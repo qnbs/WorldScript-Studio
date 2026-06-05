@@ -636,5 +636,11 @@
   "settings.voice.privacyNotice": "נתוני הקול מעובדים מקומית במכשיר שלכם. אף אודיו אינו נשלח לענן אלא אם תפעילו במפורש את חלופת הענן למטה.",
   "settings.voice.title": "תמיכה קולית מלאה",
   "settings.voice.ttsMuted": "השתקת כל פלט הדיבור",
-  "settings.voice.ttsMutedHint": "השביתו טקסט‑לדיבור תוך שמירה על מחוונים חזותיים."
+  "settings.voice.ttsMutedHint": "השביתו טקסט‑לדיבור תוך שמירה על מחוונים חזותיים.",
+  "voice.modelDownload.cancel": "ביטול",
+  "voice.modelDownload.description": "מוריד את מודל {{model}} ({{size}} מגהבייט). זה מאפשר עיבוד קול מקומי ללא ניתוב לענן.",
+  "voice.modelDownload.error": "ההורדה נכשלה: {{error}}",
+  "voice.modelDownload.progress": "{{percent}}% הושלם",
+  "voice.modelDownload.retry": "נסה שוב",
+  "voice.modelDownload.title": "הורדת מודל קול"
 }

@@ -636,5 +636,11 @@
   "settings.voice.privacyNotice": "Voice data is processed locally on your device. No audio is sent to the cloud unless you explicitly enable cloud fallback below.",
   "settings.voice.title": "Voice Full Support",
   "settings.voice.ttsMuted": "Mute All Speech Output",
-  "settings.voice.ttsMutedHint": "Disable text-to-speech while keeping visual indicators."
+  "settings.voice.ttsMutedHint": "Disable text-to-speech while keeping visual indicators.",
+  "voice.modelDownload.cancel": "Cancelar",
+  "voice.modelDownload.description": "Descargando modelo {{model}} ({{size}} MB). Esto habilita el procesamiento de voz local sin enrutamiento en la nube.",
+  "voice.modelDownload.error": "Descarga fallida: {{error}}",
+  "voice.modelDownload.progress": "{{percent}}% completado",
+  "voice.modelDownload.retry": "Reintentar",
+  "voice.modelDownload.title": "Descarga de modelo de voz"
 }
