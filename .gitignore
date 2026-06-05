@@ -18,6 +18,8 @@ reports/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/tasks.json
+!.vscode/settings.json
+!.vscode/problemMatchers.json
 .idea
 .DS_Store
 *.suo

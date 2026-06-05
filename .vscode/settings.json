@@ -1,0 +1,95 @@
+{
+  "chat.useClaudeHooks": true,
+  "kimi.executablePath": "/home/pc/.local/bin/kimi",
+
+  // ─── Copilot Configuration ────────────────────────────────────────────────
+  "github.copilot.advanced": {
+    "model": "poolside/laguna",
+    "endpoint": "https://openrouter.ai/api/v1"
+  },
+  "github.copilot.chat.enabled": true,
+  "github.copilot.chat.welcomeMessage": "openrouter",
+
+  // ─── Claude Code CLI Integration ───────────────────────────────────────────
+  "claude.code.enabled": true,
+  "claude.code.model": "claude-3-7-sonnet-20250219",
+  "claude.code.maxTokens": 8192,
+
+  // ─── Kimi Code Integration ─────────────────────────────────────────────────
+  "kimi.code.enabled": true,
+  "kimi.code.model": "kimi-k2",
+  "kimi.code.maxTokens": 4096,
+
+  // ─── AI Analyzer Configuration ─────────────────────────────────────────────
+  "aiAnalyzer.ciPollingInterval": 30,
+  "aiAnalyzer.artifactRetentionDays": 7,
+  "aiAnalyzer.enableLLMAnalysis": true,
+
+  // ─── Editor ────────────────────────────────────────────────────────────────
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll.biome": "explicit"
+  },
+  "editor.inlineSuggest.enabled": true,
+  "editor.tabSize": 2,
+  "editor.renderLineHighlight": "all",
+  "editor.rulers": [100],
+  "editor.wordWrap": "off",
+
+  // ─── Files ────────────────────────────────────────────────────────────────
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.turbo": true,
+    "**/coverage": true,
+    "**/storybook-static": true,
+    "**/test-results": true,
+    "**/artifacts": true
+  },
+
+  // ─── Search ───────────────────────────────────────────────────────────────
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/storybook-static": true,
+    "**/test-results": true,
+    "**/artifacts": true
+  },
+
+  // ─── TypeScript ───────────────────────────────────────────────────────────
+  "typescript.preferences.includePackageJsonAutoImports": "auto",
+  "typescript.suggest.autoImports": true,
+
+  // ─── Biome ───────────────────────────────────────────────────────────────
+  "[javascript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+
+  // ─── Terminal ─────────────────────────────────────────────────────────────
+  "terminal.integrated.scrollback": 10000,
+
+  // ─── Testing ─────────────────────────────────────────────────────────────
+  "testing.autoOpen": false,
+  "testing.autoRevealTestActivity": false,
+
+  // ─── Git ─────────────────────────────────────────────────────────────────
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "git.enableSmartCommit": true
+}

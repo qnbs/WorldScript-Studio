@@ -100,7 +100,16 @@ jobs:
         run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
 
       - name: Unit tests (Vitest)
-        run: pnpm exec vitest run --coverage
+        run: pnpm exec vitest run --coverage --reporter=json --outputFile=test-results.json
+
+      - name: Upload Vitest JSON results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vitest-results-node${{ matrix.node-version }}
+          path: test-results.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload coverage report
         # QNBS-v3: matrix value stays literal 'lts/*' — one upload per workflow suffices (Codecov optional).
