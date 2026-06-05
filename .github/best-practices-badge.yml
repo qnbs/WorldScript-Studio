@@ -1,0 +1,42 @@
+# CII Best Practices Badge Configuration
+# https://bestpractices.coreinfrastructure.org/
+# QNBS-v3: Added to satisfy Scorecard CII-Best-Practices check (#25)
+
+badge_level: passing
+
+# Criteria that this project meets
+criteria:
+  # Basic criteria
+  basic:
+    # The project website MUST be publicly available.
+    have_public_repo: true
+    # The project MUST have a public issue tracker.
+    have_issues: true
+    # The project MUST have a public roadmap.
+    have_roadmap: true
+  
+  # Licensing
+  licensing:
+    # The project MUST have a license.
+    license_osi: mit
+  
+  # Security
+  security:
+    # The project MUST have a security policy.
+    have_security_policy: true
+    # The project MUST have a security policy that is publicly available.
+    security_policy_url: https://github.com/qnbs/StoryCraft-Studio/security/policy
+  
+  # Code
+  code:
+    # The project MUST have a CONTRIBUTING file.
+    have_contributing: true
+    # The project MUST have a README file.
+    have_readme: true
+  
+  # Quality
+  quality:
+    # The project MUST run tests.
+    test: true
+    # The project MUST have continuous integration.
+    ci: true

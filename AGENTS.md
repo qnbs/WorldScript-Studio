@@ -524,6 +524,12 @@ Central orchestration layer for all background worker tasks. Messages use short 
 11. Run `pnpm run i18n:check` after adding any user-facing strings.
 12. After modifying code files, consider running `pnpm run graphify:update` to keep the knowledge graph current.
 
+### CI/CD Security Hardening (QNBS-v3)
+
+- **Token-Permissions**: All workflow files MUST have `permissions: contents: read` at top-level. Write permissions belong at job-level only.
+- **Pinned-Dependencies**: All GitHub Actions MUST be pinned to SHA hashes (e.g., `actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10`). Branch/tags are only acceptable when upstream does not provide SHA tags.
+- **Proactive Security Remediation**: On every PR and commit, treat ALL security alerts (OpenSSF Scorecard, CodeQL, Dependabot, Renovate, CodeAnt AI) as actionable work to be addressed immediately — never defer. Validate against current code, implement root-cause fixes, and verify via CI.
+
 ---
 
 ## Documentation Index

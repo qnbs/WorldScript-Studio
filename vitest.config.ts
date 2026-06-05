@@ -58,19 +58,17 @@ export default defineConfig({
         'packages/collab-transport/src/y-webrtc.js',
         'packages/collab-transport/src/crypto.js',
       ],
-      // QNBS-v3: Thresholds corrected 2026-05-31 — Edge-AI Perfection Cycle added 11 new
-      // service files; CI on main was already below the C-7 targets (73/65/71/59 actual
-      // vs 76/68/74/61 target). Reset to slightly below observed values; increment as new
-      // test coverage is added.
+      // QNBS-v3: P1 Coverage Threshold Increase — Edge-AI Perfection Cycle Phase 1.
       // History: L71/F63/B57/S69 → L73/F65/B58/S71 (C-7) → L76/F68/B61/S74 (C-7 target,
       // never actually met on CI) → L72/F64/B58/S70 (corrected, 2026-05-31)
       // → L74/F66/B60/S72 (2026-06-03: ratchet to ~1pt below CI-measured 75.15/67.84/61.23/73.14
-      //   after Phase 2.3/2.4 tests; margin absorbs Node 22/24 variance). C-7 target stays L85/B75/F80.
+      //   after Phase 2.3/2.4 tests; margin absorbs Node 22/24 variance).
+      // P1 target: L85/B75/F80 — incremental ratchet to L78/B65/S75 (2026-06-05).
       thresholds: {
-        lines: 74,
-        functions: 66,
-        branches: 60,
-        statements: 72,
+        lines: 78,
+        functions: 68,
+        branches: 65,
+        statements: 75,
         perFile: false,
       },
     },

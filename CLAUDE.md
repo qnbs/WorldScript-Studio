@@ -64,7 +64,7 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with co
 **Run a single test file:** `pnpm exec vitest run tests/unit/serviceName.test.ts`
 **Run tests matching a name pattern:** `pnpm exec vitest run -t "pattern"`
 
-**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 72, branches 58, functions 64, statements 70 (see `vitest.config.ts`).
+**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 78, branches 65, functions 68, statements 75 (P1 target, see `vitest.config.ts`).
 
 **CI pipeline order:** `security` → `quality` (Biome + tsgo + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 

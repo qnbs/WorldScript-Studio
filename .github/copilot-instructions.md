@@ -99,6 +99,12 @@ types.ts          → Core shared interfaces and types
 - AI API responses are text-only — never execute or `eval()` them
 - Gemini API calls must use `NetworkOnly` caching strategy (never cache AI responses)
 
+#### CI/CD Security Hardening (QNBS-v3)
+
+- **Token-Permissions**: All workflow files MUST have `permissions: contents: read` at top-level. Write permissions belong at job-level only.
+- **Pinned-Dependencies**: All GitHub Actions MUST be pinned to SHA hashes (e.g., `actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10`). Branch/tags are only acceptable when upstream does not provide SHA tags.
+- **Proactive Security Remediation**: On every PR and commit, treat ALL security alerts (OpenSSF Scorecard, CodeQL, Dependabot, Renovate, CodeAnt AI) as actionable work to be addressed immediately — never defer. Validate against current code, implement root-cause fixes, and verify via CI.
+
 ### Testing
 
 - Unit tests: Vitest + @testing-library/react in `tests/unit/` (see `tests/setup.ts`)
