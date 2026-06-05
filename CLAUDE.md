@@ -39,7 +39,7 @@ pnpm run typecheck:parallel # TypeScript type check with parallel workers (tsgo 
 pnpm run parity:check  # Feature flag parity audit (must report 0 drifts)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
-pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 63%, branches 54%, functions 68%, statements 65%)
+pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 57%, branches 49%, functions 68%, statements 59%)
 pnpm run test:vrt      # Visual regression tests (Chromium only; CI-only by policy)
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
@@ -64,7 +64,7 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with co
 **Run a single test file:** `pnpm exec vitest run tests/unit/serviceName.test.ts`
 **Run tests matching a name pattern:** `pnpm exec vitest run -t "pattern"`
 
-**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 63, branches 54, functions 68, statements 65 (P1 target, see `vitest.config.ts`).
+**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 57, branches 49, functions 68, statements 59 (P1 target, see `vitest.config.ts`).
 
 **CI pipeline order:** `security` → `quality` (Biome + tsgo + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
