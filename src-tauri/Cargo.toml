@@ -1,6 +1,6 @@
 [package]
 name = "storycraft-studio"
-version = "1.19.0"
+version = "1.20.0"
 description = "AI-powered creative writing application"
 authors = ["QNBS"]
 license = "MIT"
@@ -33,6 +33,14 @@ tauri-plugin-window-state = "2"
 tokio = { version = "1", features = ["sync", "time", "process", "rt-multi-thread"] }
 candle-core = { version = "0.8", optional = true }
 candle-nn = { version = "0.8", optional = true }
+
+[profile.release]
+# QNBS-v3: Aggressive size + speed optimizations for desktop bundles
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
 
 [features]
 default = []

@@ -51,11 +51,21 @@ jobs:
 
       - name: Build Tauri app
         env:
+          # Updater signing (minisign) — required for auto-update functionality
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS signing (Apple Developer ID) — optional until certificates are provisioned
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # Windows signing (Authenticode) — optional until certificate is provisioned
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           # QNBS-v3: Skip updater signing for workflow_dispatch test builds.
-          # Only sign on tagged releases (v*) where secrets must be valid.
+          # Tagged releases (v*) require valid secrets for both signing and updater.
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             unset TAURI_SIGNING_PRIVATE_KEY
             unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
@@ -121,6 +131,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # QNBS-v3: Tauri v2 update manifest — collect .sig files from signed bundles.
+          # If no .sig files exist (unsigned build), latest.json is still generated
+          # but platforms will be empty, preventing auto-updates for that release.
           VERSION="${GITHUB_REF_NAME}"
           REPO_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}"
           PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -138,6 +150,12 @@ jobs:
               *.dmg)               MAC_URL="${REPO_URL}/${FNAME}";   MAC_SIG="$SIG_CONTENT"   ;;
             esac
           done
+
+          # Only generate latest.json if at least one platform is signed
+          if [ -z "$LINUX_SIG" ] && [ -z "$WIN_SIG" ] && [ -z "$MAC_SIG" ]; then
+            echo "::warning::No signed bundles found. Skipping latest.json generation (auto-updater disabled for this release)."
+            exit 0
+          fi
 
           jq -n \
             --arg version "$VERSION" \
