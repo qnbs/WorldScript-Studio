@@ -8,6 +8,36 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## v1.20.0 — Deep Correction & Release Hardening (2026-06-06)
+
+> Master Plan: `docs/AUDIT-2026-06-06-Deep-Correction-Plan.md` (aus `.kimi/plans/obsidian-swamp-thing-tempest.md`)
+
+### P0 — Release Unblock
+- ⬜ **P0-1** — Tauri Desktop Pipeline: Windows-Runner fix + Updater-Signing-Secret rotation
+- ⬜ **P0-2** — Coverage C-7: L85/B75/F80/S82 (90 neue Tests in LoRA/Rust-Bridge/Voice/Plot/Plugin/AdaptiveAI)
+- ⬜ **P0-3** — Quality Gates stabil: lint/typecheck/i18n/parity/budget/smoke:prod 100% grün
+
+### P1 — AI Resilience & Core Reliability
+- 🔄 **P1-1** — WebLLM Worker Offload: Full GPU-Isolation in Dedicated Worker
+- ⬜ **P1-2** — Whisper WASM STT: Download → VAD → Inference → Transcript (end-to-end)
+- ⬜ **P1-3** — Rust TaskSupervisor UI: ManuscriptStatsPanel mit Flesch-Score
+
+### P2 — Global Readiness & i18n
+- 🔄 **P1-4** — Beta-Sprachen: ja/zh/pt/el ≤ 5% English-Placeholders
+- ⬜ **P1-5** — RTL Polish: PlotCanvas RTL-Layout, Noto-Font-Preload
+
+### P3 — Architektur-Hardening & Performance
+- ⬜ **P1-6** — Race-Condition Audit: Redux-Undo + Yjs + Zustand
+- ⬜ **P1-7** — Bundle Budget: Entry ≤ 4000 KB, Total ≤ 6500 KB
+- ⬜ **P2-1** — Error Boundaries + Logging: Alle 19 Views, Kein console.error
+
+### P4 — v2.0 Foundation
+- ⬜ **P2-2** — Cloud-Sync Conflict Resolution
+- ⬜ **P2-3** — Plugin Registry Beta
+- ⬜ **P2-4** — ADRs 0004/0005 + CLAUDE.md/AGENTS.md Update
+
+---
+
 ## v1.20.0 — CI Hardening + AI Core + Local AI Perfection (2026-06-01)
 
 - ✅ **pnpm lockfile sync** — `@xenova/transformers` → `@huggingface/transformers@^3.8.1`; `ERR_PNPM_OUTDATED_LOCKFILE` blocked all CI runs

@@ -6,6 +6,17 @@
 
 **Quality gate (2026-06-03 — RTL/i18n Beta, C-6):** lint ✅ (1097 files, 0 warnings) · typecheck ✅ · i18n:check ✅ (**2259 keys × 7 locales** — `ar`/`he` now in the parity gate, no longer English stubs) · build + smoke:prod (font/index.css change — verified). **ar/he UI fully translated** across all 18 modules (help.json English fallback for Beta); **Noto Sans Arabic/Hebrew + Naskh** fonts wired (`index.tsx`, `--font-ui-rtl`/`--font-editor-rtl` tokens); **RTL layout**: `[dir="rtl"]` CSS net (text-align/float flips, `.rtl-auto-mirror`, `.rtl-keep-ltr`), shell logical-property conversion (Sidebar/Modal/CommandPalette/Toast), canvas LTR islands (PlotCanvas/CharacterGraphView keep coordinate math LTR), WelcomePortal ar/he selectors. "(Beta)" labels retained in language pickers. Glossary: `docs/I18N-GLOSSARY-RTL.md`. Remaining (community): native-speaker review + help-prose translation.
 
+## Deep Correction Plan — 2026-06-06
+
+**Scope:** Tauri Release-Unblock, Coverage C-7, AI Resilience, i18n Finalization, v2.0 Foundation
+**Status:** Plan approved, execution started
+**Key Risks:** Tauri Windows-Runner, Coverage Gap (~90 Tests needed), Whisper WASM Integration
+**Success Metrics:**
+- Tauri: 3 OS bundles + signed updater manifest
+- Coverage: L85/B75/F80/S82
+- Bundle: Entry ≤ 4000 KB, Total ≤ 6500 KB
+- i18n: 11 Locales, ≤ 5% Beta placeholders
+
 **Quality gate (2026-06-06 — Phase 3 i18n Expansion):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2339 keys × 11 locales** — ja/zh/pt/el added) · build ✅ · tests ✅ (53 I18nContext tests including Intl APIs). **ja/zh/pt/el Beta languages** added with English placeholder text; **Noto Sans JP** fonts via Google Fonts CDN; **Intl APIs** integrated (PluralRules, NumberFormat, RelativeTimeFormat, Collator, ListFormat, DisplayNames) with caching; **SUPPORTED_LOCALES** metadata added; Documentation: `docs/I18N-PLURALS.md`, `docs/I18N-NUMBERS.md`, `docs/I18N-LOCALE.md`, `docs/I18N-RELATIVETIME.md`, `docs/I18N-COLLATION.md`, `docs/I18N-LISTFORMAT.md`, `docs/I18N-DISPLAYNAMES.md`, `docs/I18N-GLOSSARY.md`.
 
 **Help & Settings content augmentation (2026-06-03):** new Help category **"Advanced & Power Features"** (`helpCatalog.ts`) — 8 articles (Languages/RTL, LoRA fine-tuning, ProForge, Voice, At-rest encryption, Cloud Sync, Plugins, Adaptive AI/GPU/Eco) translated in en/de/fr/es/it (ar/he English fallback). Offline help-RAG (`helpDocRetrieval.ts`) grown 13 → **16 chunks** (`languages-rtl`, `privacy-local-ai`, `advanced-editing`). In-app **Settings Guide** (`SettingsGuideSection.tsx`) completed — the previously-undocumented live categories **Fine-Tuning (LoRA)**, **Community**, and **Plugins** now appear with title/desc + search hints in all 7 locales. +23 keys (help) +6 keys (settings) → **2259 keys × 7 locales**. Tests green (`helpCatalogIntegrity`, `helpDocRetrieval`, `helpSearchIndex`, `SettingsGuideSection`).

@@ -61,9 +61,33 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 
 ---
 
-## v1.20 — Phase 3: v2.0 Foundation (ACTIVE — 2026-05-28)
+## v1.20 — Phase 3: Release Hardening (ACTIVE — 2026-06-06)
 
-**Status:** 🔄 In Progress — C-1..C-7 all addressed; C-6 blocked on translator; Local AI Perfection Phase 1+2.1 complete (2026-05-31).
+**Status:** 🔄 In Progress — Deep Correction Plan aktiviert. Ziel-Release: 2026-06-20.
+
+**P0 (Release-Blocker):**
+- Tauri Desktop Pipeline vollständig repariert
+- Coverage C-7 erreicht (L85/B75/F80)
+- Alle Quality Gates 100% grün
+
+**P1 (AI Resilience + Global Readiness):**
+- WebLLM Worker Offload
+- Whisper WASM STT End-to-End
+- Rust TaskSupervisor UI-Consumer
+- Beta-Sprachen finalisiert
+- RTL Edge-Cases poliert
+
+**P2 (v2.0 Foundation):**
+- Cloud-Sync Conflict Resolution
+- Plugin Registry Beta
+- Bundle-Budget verschärft
+- Error Boundaries + Logging konsistent
+
+---
+
+## v1.20 — Phase 3: v2.0 Foundation (COMPLETED — 2026-05-28)
+
+**Status:** ✅ C-1..C-7 all addressed; C-6 blocked on translator; Local AI Perfection Phase 1+2.1 complete (2026-05-31).
 
 **C-1 — collab-transport security peer review** ✅ Done (2026-05-28)
 - 3 findings fixed in `packages/collab-transport/src/crypto.js`: PBKDF2 100k→600k, extractable:true→false, missing `return` on promise.reject(). Documented in AUDIT.md.
