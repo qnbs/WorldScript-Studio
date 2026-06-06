@@ -31,6 +31,11 @@ export const StorybookWrapper: React.FC<{ children: ReactNode }> = ({ children }
         getCollator: () => new Intl.Collator('en'),
         formatList: (items) => items.join(', '),
         formatDisplayName: (v) => v,
+        countWords: (text) =>
+          text
+            .trim()
+            .split(/\s+/)
+            .filter((w) => w.length > 0).length,
       }}
     >
       <ToastProvider>{children}</ToastProvider>
@@ -52,6 +57,11 @@ export const I18nMockProvider: React.FC<{ children: ReactNode }> = ({ children }
       getCollator: () => new Intl.Collator('en'),
       formatList: (items) => items.join(', '),
       formatDisplayName: (v) => v,
+      countWords: (text) =>
+        text
+          .trim()
+          .split(/\s+/)
+          .filter((w) => w.length > 0).length,
     }}
   >
     {children}

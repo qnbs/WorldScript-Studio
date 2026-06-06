@@ -545,3 +545,53 @@ describe('SUPPORTED_LOCALES', () => {
     expect(elLocale?.isBeta).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Intl.Segmenter - countWords
+// ---------------------------------------------------------------------------
+describe('countWords', () => {
+  it('counts words in English text', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.countWords('Hello world')).toBe(2);
+    expect(result.current.countWords('One two three four')).toBe(4);
+    expect(result.current.countWords('')).toBe(0);
+    expect(result.current.countWords('   ')).toBe(0);
+  });
+
+  it('counts words in Japanese text using Intl.Segmenter', async () => {
+    localStorage.setItem('storycraft-language', 'ja');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // Japanese: "こんにちは世界" (Hello world) - 2 words
+    expect(result.current.countWords('こんにちは世界')).toBe(2);
+    // Japanese: "これはテストです" (This is a test) - 4 words
+    expect(result.current.countWords('これはテストです')).toBe(4);
+  });
+
+  it('counts words in Chinese text using Intl.Segmenter', async () => {
+    localStorage.setItem('storycraft-language', 'zh');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // Chinese: "你好世界" (Hello world) - 2 words
+    expect(result.current.countWords('你好世界')).toBe(2);
+    // Chinese: "这是一个测试" (This is a test) - 4 words
+    expect(result.current.countWords('这是一个测试')).toBe(4);
+  });
+
+  it('counts words in Portuguese text', async () => {
+    localStorage.setItem('storycraft-language', 'pt');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.countWords('Olá mundo')).toBe(2);
+    expect(result.current.countWords('Esta é uma história')).toBe(4);
+  });
+
+  it('counts words in Greek text', async () => {
+    localStorage.setItem('storycraft-language', 'el');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.countWords('Γεια σου κόσμε')).toBe(3);
+    expect(result.current.countWords('Αυτή είναι μια ιστορία')).toBe(4);
+  });
+});
