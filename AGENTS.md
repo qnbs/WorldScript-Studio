@@ -41,8 +41,9 @@
 | Layer | Technology |
 |-------|------------|
 | Runtime | Node.js `>=22.0.0` (`.nvmrc`), pnpm `>=10.0.0` (`packageManager: pnpm@10.33.0`) |
-| Framework | React `^19.2.6`, TypeScript `~6.0.3` (strict) |
+| Framework | React `^19.2.7`, TypeScript `~6.0.3` (strict) |
 | Build tool | Vite `^8.0.14` (`vite.config.ts`) |
+| Type checker | `tsgo` (TypeScript Go port) via `tsconfig.tsgo.json` with 4 checkers |
 | Styling | Tailwind CSS `^4.3.0` via `@tailwindcss/vite` + semantic CSS custom properties (`index.css`) |
 | State | Redux Toolkit `^2.12.0` + `redux-undo` (project slice only); Zustand `^5.0.8` for transient UI (`app/transientUiStore.ts`) |
 | Testing | Vitest `^4.1.7` (jsdom, `maxWorkers: 1`), Playwright `^1.60.0` (E2E, CI-only), Stryker `^9.2.0` (mutation) |
@@ -62,7 +63,7 @@
 ```
 StoryCraft-Studio/
 ├── app/                    # Redux store setup, typed hooks, listener middleware, Zustand transient store
-├── components/             # React view components; components/ui/ = design-system primitives
+├── components/             # React view components; components/ui/ = design-system primitives (~52 atoms)
 │   ├── ui/                 # Atoms: Button, Modal, Toast, Input, etc.
 │   ├── manuscript/         # ManuscriptView sub-components
 │   ├── scene-board/        # Plot Board v2 (Swimlane, Canvas, Timeline)
@@ -70,7 +71,7 @@ StoryCraft-Studio/
 │   ├── settings/           # Settings sections
 │   ├── help/               # Help view sub-components
 │   └── …
-├── contexts/               # One React context per major view + I18nContext + CommandExecutorContext + LiveRegionContext
+├── contexts/               # One React context per major view + I18nContext + CommandExecutorContext + LiveRegionContext (~26 contexts)
 ├── features/               # Redux Toolkit slices
 │   ├── project/            # Core project state (undo-able via redux-undo)
 │   ├── settings/           # App settings (AI keys, appearance, accessibility, shortcuts)
@@ -86,7 +87,7 @@ StoryCraft-Studio/
 │   ├── proForge/           # ProForge pipeline state
 │   ├── lora/               # LoRA adapter state
 │   └── voice/              # Voice command state
-├── hooks/                  # View business logic hooks (use*View.ts naming)
+├── hooks/                  # View business logic hooks (use*View.ts naming; ~87 hooks)
 ├── services/               # External adapters and business logic
 │   ├── ai/                 # Vercel AI SDK orchestration layer (Strangler pattern)
 │   ├── commands/           # Command palette registry, fuzzy search, preferences
@@ -95,7 +96,7 @@ StoryCraft-Studio/
 │   ├── keyboard/           # Shortcut normalization and conflict detection
 │   ├── voice/              # Voice engines and orchestration
 │   ├── storage/            # IDB stores, encryption, backend abstraction
-│   ├── fs/                 # Filesystem helpers
+│   ├── fs/                 # Filesystem helpers (Tauri)
 │   ├── lora/               # LoRA adapter services
 │   ├── plugins/            # Plugin registry helpers
 │   └── proForge/           # ProForge pipeline services
@@ -105,16 +106,17 @@ StoryCraft-Studio/
 │   ├── collab-transport/   # Vendor fork of y-webrtc 10.3.0 with E2E encryption
 │   ├── ui/                 # Tailwind preset + design tokens (published as `@domain/ui`)
 │   └── worker-bus/         # Typed worker pool, circuit breakers, dead-letter queue (published as `@domain/worker-bus`)
-├── locales/                # i18n source JSON modules (de, en, fr, es, it)
+├── locales/                # i18n source JSON modules (11 locales: ar, de, el, en, es, fr, he, it, ja, pt, zh)
 ├── public/                 # Static assets; runtime i18n bundles `public/locales/<lang>/bundle.json`
 ├── tests/
-│   ├── unit/               # Vitest tests (co-located with source naming)
-│   ├── e2e/                # Playwright specs
+│   ├── unit/               # Vitest tests (~257 test files, co-located naming convention)
+│   ├── e2e/                # Playwright specs (CI-only)
 │   └── setup.ts            # Global Vitest setup (jsdom mocks, IDB mock, console silencing)
-├── workers/                # Web Workers: inference.worker.ts, duckdbWorker.ts
-├── scripts/                # Build/deploy helpers (i18n bundle, SW version sync, bundle budget, etc.)
+├── workers/                # Web Workers: inference.worker.ts, duckdbWorker.ts, plugin.worker.ts, v2/
+├── scripts/                # Build/deploy helpers (i18n bundle, SW version sync, bundle budget, edge build, etc.)
 ├── infra/low-end-ci/       # Local CI stack for constrained hardware (act + Forgejo)
 ├── src-tauri/              # Tauri 2 desktop app (Rust)
+│   └── src/                # commands/mod.rs, task_supervisor.rs, lib.rs, lora.rs, main.rs, pandoc.rs
 ├── docs/                   # Deep-dive docs: CI.md, DEPLOYMENT.md, ACCESSIBILITY.md, BEST-PRACTICES.md, etc.
 ├── types.ts                # Core shared TypeScript interfaces
 └── types/                  # Supplemental type declarations
@@ -125,8 +127,9 @@ StoryCraft-Studio/
 - `package.json` — scripts, dependencies, pnpm overrides, `simple-git-hooks` + `lint-staged`
 - `vite.config.ts` — dev server (port 3000), PWA plugin, manual chunks, `@tauri-apps/*` externalized for web builds
 - `tsconfig.json` — `strict: true`, `exactOptionalPropertyTypes: true`, `noUnusedLocals: true`, `noUnusedParameters: true`, `noUncheckedIndexedAccess: true`, `noPropertyAccessFromIndexSignature: true`
+- `tsconfig.tsgo.json` — TypeScript Go port configuration used by `pnpm run typecheck`
 - `biome.json` — lint + format rules; `a11y`, `security`, `correctness` rules enabled; line width 100; 2-space indent
-- `vitest.config.ts` — coverage thresholds (lines 73, branches 58, functions 65, statements 71), `maxWorkers: 1`
+- `vitest.config.ts` — coverage thresholds (lines 74, branches 60, functions 67, statements 72), `maxWorkers: 1`
 - `playwright.config.ts` — E2E projects: Chromium desktop + Pixel 5 mobile in CI; Firefox + optional mobile locally
 - `turbo.json` — task graph for `build`, `dev`, `lint`, `typecheck`, `test`, `mutation`
 - `pnpm-workspace.yaml` — workspace packages + `onlyBuiltDependencies` allowlist
@@ -141,7 +144,7 @@ StoryCraft-Studio/
 ```bash
 # Development
 pnpm run dev                # Vite dev server on http://localhost:3000
-pnpm run dev:turbo          # Turbo parallel dev
+pnpm run dev:turbo          # Turbo parallel dev across workspace
 pnpm run dev:tauri          # Tauri desktop app (requires Rust)
 
 # Build
@@ -154,7 +157,7 @@ pnpm run preview            # Preview production build locally (port 4173)
 pnpm run lint               # Biome lint (--error-on-warnings)
 pnpm run lint:fix           # Biome check --write (lint + format)
 pnpm run format             # Biome format --write
-pnpm run typecheck          # tsc --noEmit
+pnpm run typecheck          # tsgo --project tsconfig.tsgo.json --noEmit
 pnpm run i18n:check         # Locale key parity vs English + rebuild bundles + content guard
 pnpm run parity:check       # Feature parity audit
 
@@ -253,7 +256,7 @@ Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks
 - Environment: `jsdom` (default); Node environment for IDB-heavy tests (`// @vitest-environment node`)
 - Setup: `tests/setup.ts` — mocks `localStorage`, `matchMedia`, `speechSynthesis`, `indexedDB`, silences `console.log`
 - **Concurrency:** `pool: threads`, `maxWorkers: 1` is mandatory. Tests run serially. Do not parallelize.
-- **Coverage thresholds:** lines ≥ 76, branches ≥ 61, functions ≥ 68, statements ≥ 74
+- **Coverage thresholds:** lines ≥ 74, branches ≥ 60, functions ≥ 67, statements ≥ 72
 - **Determinism:** Mock `Date.now()`, use fake timers, reset global state in `beforeEach`. Never depend on real network or test execution order.
 - **User interactions:** Use `@testing-library/user-event`, not `.click()` directly. Use `findBy*` / `waitFor` for async assertions.
 - **IDB tests:** Instantiate `new IDBFactory()` per test in `beforeEach` + call `_resetDbForTest()`.
@@ -303,7 +306,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 | Job | Purpose |
 |-----|---------|
 | `security` | `pnpm audit --audit-level=high`, OSV scanner (npm + Rust lockfiles), gitleaks secrets scan, dependency review on PRs |
-| `quality` | Node 22 + 24 matrix → Biome lint, `i18n:check`, `parity:check`, `tsc --noEmit`, Vitest + coverage, Codecov upload |
+| `quality` | Node 22 + 24 matrix → Biome lint, `i18n:check`, `parity:check`, `tsgo --noEmit`, Vitest + coverage, Codecov upload |
 | `build` | Production build, bundle budget, analyze artifact; on `main`: SLSA build provenance attestation + Pages artifact |
 | `e2e` | Playwright Chromium desktop + mobile emulation (`CI=true`); JUnit artifact for PR annotations |
 | `mutation` | Stryker run (20 min timeout) |
@@ -340,7 +343,7 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 - **Service Worker:** AI hosts are network-only (`public/sw.js`). WASM/ONNX chunks are excluded from precache.
 - **Supply-chain:** SHA-pinned GitHub Actions, Dependabot weekly updates, OpenSSF Scorecard, CodeQL SAST, SLSA build provenance on `main`.
 - **Collaboration:** Yjs + `packages/collab-transport` (vendor fork of y-webrtc 10.3.0) with AES-256-GCM E2E encryption baked in (PBKDF2, 600k iterations, `extractable: false`). Signaling URLs are user-configurable.
-- **Tauri isolation:** `vite.config.ts` externalizes `/^@tauri-apps\//` so web builds never bundle Tauri APIs. Abstract Tauri calls through `services/tauriRuntime.ts`.
+- **Tauri isolation:** `vite.config.ts` externalizes `/^@tauri-apps//` so web builds never bundle Tauri APIs. Abstract Tauri calls through `services/tauriRuntime.ts`.
 - **Vulnerability reporting:** GitHub Private Vulnerability Reporting preferred. 90-day coordinated disclosure embargo.
 
 ---
@@ -484,10 +487,10 @@ Central orchestration layer for all background worker tasks. Messages use short 
 ## Internationalization (i18n)
 
 - **Custom React Context** (`contexts/I18nContext.tsx`) — not i18next.
-- Source modules: `locales/<lang>/*.json` for `de`, `en`, `fr`, `es`, `it`.
+- Source modules: `locales/<lang>/*.json` for **11 locales**: `ar`, `de`, `el`, `en`, `es`, `fr`, `he`, `it`, `ja`, `pt`, `zh`.
 - Runtime bundles: `public/locales/<lang>/bundle.json` (rebuilt by `pnpm run i18n:bundle` or automatically via `predev` / `prebuild`).
 - Hook: `useTranslation()` returns `t('key.path')`. **No hardcoded text** in UI.
-- Key parity is enforced in CI (`pnpm run i18n:check`). Add keys to **all five** locale trees.
+- Key parity is enforced in CI (`pnpm run i18n:check`). Add keys to **all eleven** locale trees.
 - Repair scripts: `services/i18nBootstrap.ts` (cold-start), `services/projectI18nRepair.ts` (project data repair).
 
 ---
@@ -552,7 +555,6 @@ Central orchestration layer for all background worker tasks. Messages use short 
 ## Documentation Index
 
 - `README.md` — Project overview, feature list, live demo links
-- `CLAUDE.md` — Detailed agent guidance (commands, architecture, current patterns, known debt)
 - `AUDIT.md` — Security audit, technical debt inventory, markdown corpus
 - `TODO.md` — Sprint-level task tracker
 - `CONTRIBUTING.md` — Contributor guide (setup, PR process, how to add AI providers/tools)
@@ -562,4 +564,5 @@ Central orchestration layer for all background worker tasks. Messages use short 
 - `docs/ACCESSIBILITY.md` — Live regions, focus traps, Lighthouse / axe / Storybook a11y
 - `docs/Design-System.md` — Token architecture, Tailwind preset, component patterns
 - `docs/VOICE_MASTER_PLAN.md` — Voice Full Support architecture, roadmap, engine specs
+- `docs/TAURI-CI.md` — Verifying native Rust changes, desktop build workflow
 - `infra/low-end-ci/DAILY-DRIVER.md` — Local CI workflow for constrained hardware

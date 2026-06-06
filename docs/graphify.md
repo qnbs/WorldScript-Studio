@@ -6,7 +6,7 @@ Graph output lives at `graphify-out/`. **Solo-repo policy (this project):** only
 **Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*; inventory of all maintainer `.md` files → [`AUDIT.md`](../AUDIT.md). **Dual-Graph master guide:** [`docs/dual-graph-setup.md`](dual-graph-setup.md) — how Graphify and CodeGraph work together.
 
 **Official PyPI name:** `graphifyy` (double **y**). The CLI is still `graphify`. `pip install graphify` can pull an **unrelated** package — always use `graphifyy`.  
-**Current pinned version:** `graphifyy==0.8.26` — the `.devcontainer/Dockerfile` pins by SHA256 hash for Scorecard compliance; install the same version locally for graph parity.
+**Current pinned version:** `graphifyy==0.8.26` — install the same version locally for graph parity.
 
 ---
 

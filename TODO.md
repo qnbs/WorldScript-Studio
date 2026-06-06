@@ -53,7 +53,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **C-5** — GitHub Issue Templates (`bug_report.yml`, `feature_request.yml`, `translation_pr.yml`) + AGENTS.md hardening
 - ✅ **Feature Parity Audit** (2026-05-29) — 8 critical drifts fixed; `docs/FEATURE-PARITY.md` + `features/featureCatalog.ts` + `scripts/audit-feature-parity.ts`
 - ✅ **C-7 partial** (2026-05-28) — +130 tests; thresholds raised L73/F65/B58/S71; 4 192 tests / 392 files
-- ✅ **Codespace Uplift** (2026-05-30) — CLAUDE.md environment-aware shell rules; devcontainer re-activated (8-core/16GB); `.devcontainer/README.md` Modus Operandi section
+- ~~✅ **Codespace Uplift** (2026-05-30) — CLAUDE.md environment-aware shell rules; devcontainer re-activated (8-core/16GB); `.devcontainer/README.md` Modus Operandi section~~ **REVERTED** — DevContainer/Codespaces config removed; local low-end hardware only
 - ✅ **Vercel blank screen fix** (2026-05-30) — `index.html` `%BASE_URL%` for manifest/favicon/og; `index.tsx` error safety net; 382 test files / 4567 tests all green
 - ✅ **Production blank screen — zod/rolldown DCE** (2026-06-02) — `init_locales is not defined`: rolldown's prod DCE dropped zod's `__esm` init wrappers (zod `sideEffects:false`). Fixed via `patches/zod@4.4.3.patch` (`sideEffects:true`). Added `smoke:prod` (headless mount check on built `dist/`) to CI build job + `unhandledrejection` startup handler — closes the dev-mode-E2E blind spot
 - 🔄 **C-6** — ar/he UI translation **complete** (2026-06-03): 18 modules translated in `locales/{ar,he}/` (help.json English fallback), Noto fonts + RTL shell layout shipped as Beta. Remaining: native-speaker review + help-article prose — community task. See `docs/I18N-GLOSSARY-RTL.md`

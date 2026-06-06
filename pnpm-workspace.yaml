@@ -6,11 +6,15 @@
 # QNBS-v3: TS7 migration - disabled strictPeerDependencies for tsgo preview compatibility
 strictPeerDependencies: false
 onlyBuiltDependencies:
-  - core-js        # generates polyfills at install time
-  - esbuild        # downloads platform binary via postinstall
-  - protobufjs     # builds native addon fallback
+  - core-js # generates polyfills at install time
+  - esbuild # downloads platform binary via postinstall
+  - protobufjs # builds native addon fallback
   - '@google/genai' # SDK postinstall (direct dep)
-  - sharp          # downloads platform binary (transitive via @xenova/transformers)
+  - sharp # downloads platform binary (transitive via @xenova/transformers)
 
 packages:
   - "packages/*"
+
+allowBuilds:
+  onnxruntime-node: true
+  unrs-resolver: true

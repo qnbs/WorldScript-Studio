@@ -4,22 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Shell Execution — Environment-Aware Rules
 
-### GitHub Codespaces (CODESPACES=true) — 8-Core / 16 GB RAM
+### Low-End Local Hardware (Current Environment)
 
-Parallel Bash calls are safe. Use the full Claude Code parallel tooling model:
-- **Multiple Bash tool calls in the same message are allowed** — run independent commands in parallel.
-- **`run_in_background` is allowed** for long builds (`pnpm run build`, `pnpm run build:edge`, `pnpm exec vitest run --coverage`).
-- Chain dependent steps with `&&` in a single call; fire independent reads/greps in parallel.
-- Full quality gate runs locally: `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`
-
-### On Low-End Local Hardware (< 4 GB RAM free)
-
-**ONE Bash tool call per turn.** This machine had ~3.7 GB RAM with < 500 MB free. Concurrent shells (vitest, biome, tsc, vite, pnpm build) cause OOM, VS Code force-closes, and pool-worker timeouts.
+**ONE Bash tool call per turn.** Concurrent shells (vitest, biome, tsc, vite, pnpm build) cause OOM and pool-worker timeouts.
 - ONE Bash tool call per turn. Wait for the result. Then proceed.
 - NO `run_in_background` for vitest, biome, tsc, vite, or any pnpm build command.
 - NO parallel Agent tool calls that each issue shell commands.
 - NO multiple Bash tool calls in the same response block.
 - Chain sequential steps inside ONE Bash call using `&&` if needed.
+- DevContainer / Codespaces configuration has been removed; this is a local-only development environment.
 
 ## Commands
 
@@ -89,21 +82,6 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with co
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
 Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
-
-## Codespaces Modus Operandi
-
-**Session-start checklist (every Codespace session):**
-1. `git pull origin main` — sync with remote
-2. `pnpm install --frozen-lockfile` — pick up lockfile changes (fast via volume cache)
-3. `pnpm run lint && pnpm run typecheck` — 60-second smoke test
-4. `gh run list --limit 5` — review recent CI runs
-
-**Test failure triage:**
-```bash
-pnpm exec vitest run 2>&1 | grep "^FAIL " | sort -u        # failing files
-pnpm exec vitest run tests/unit/FILENAME.test.ts             # single file
-```
-
 ## Architecture
 
 StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
