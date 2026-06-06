@@ -13,7 +13,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 > Master Plan: `docs/AUDIT-2026-06-06-Deep-Correction-Plan.md` (aus `.kimi/plans/obsidian-swamp-thing-tempest.md`)
 
 ### P0 — Release Unblock
-- ✅ **P0-1** — Tauri Desktop Pipeline: Migrated pnpm config from `package.json` to `pnpm-workspace.yaml` to fix `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` on all CI runners (Vercel, Tauri, GitHub Actions). Commit `946045e`.
+- ✅ **P0-1** — Tauri Desktop Pipeline: Migrated pnpm config from `package.json` to `pnpm-workspace.yaml` to fix `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Vercel deploys green; CI Quality Gate + Tauri builds running (monitoring). Commits `946045e`, `0d3d89c`.
 - ⬜ **P0-2** — Coverage C-7: L85/B75/F80/S82 (90 neue Tests in LoRA/Rust-Bridge/Voice/Plot/Plugin/AdaptiveAI)
 - ⬜ **P0-3** — Quality Gates stabil: lint/typecheck/i18n/parity/budget/smoke:prod 100% grün
 
