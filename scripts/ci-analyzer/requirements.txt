@@ -1,8 +1,9 @@
 # CI Analyzer Requirements
 # OpenRouter-compatible SDK for Poolside Laguna model
 # QNBS-v3: Pinned exact versions for Scorecard compliance and reproducible builds.
+# QNBS-v3: Bumped aiohttp 3.11.16 → 3.14.0 to resolve 21 Dependabot CVEs (GHSA high+medium+low).
 openai==1.76.0
-pydantic==2.11.4
-aiohttp==3.11.16
+pydantic==2.13.4
+aiohttp==3.14.0
 # Optional: for advanced JSON schema validation
-jsonschema==4.23.0
+jsonschema==4.26.0
