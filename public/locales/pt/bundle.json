@@ -550,6 +550,7 @@
   "sidebar.characterInterviews": "Character Interviews",
   "sidebar.lora": "Fine-Tuning",
   "portal.language.groupLabel": "Welcome screen language",
+  "portal.language.searchPlaceholder": "Pesquisar idiomas...",
   "portal.welcome.title": "Welcome to StoryCraft Studio",
   "portal.welcome.subtitle": "Your AI-powered creative partner for writing.",
   "portal.welcome.newProject": "Start a New Project",
