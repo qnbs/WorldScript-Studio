@@ -13,7 +13,11 @@ vi.mock('../../../../services/logger', () => ({
 }));
 
 vi.mock('../../../../services/geminiService', () => ({
-  generateText: vi.fn().mockResolvedValue('Generated synthetic output text for testing purposes.'),
+  generateText: vi
+    .fn()
+    .mockResolvedValue(
+      'Generated synthetic output text for testing purposes that is definitely long enough to pass the minimum character threshold of eighty characters required by the generateSyntheticPairs function in the loraDatasetBuilder module.',
+    ),
 }));
 
 vi.mock('../../../../services/storageService', () => ({
