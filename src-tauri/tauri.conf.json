@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "StoryCraft Studio",
-  "version": "1.19.0",
+  "version": "1.20.0",
   "identifier": "com.storycraft.studio",
   "build": {
     "frontendDist": "../dist",
@@ -30,21 +30,45 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "category": "Productivity",
+    "publisher": "QNBS",
+    "copyright": "© 2026 QNBS. Licensed under MIT.",
+    "shortDescription": "AI-powered creative writing application",
+    "longDescription": "StoryCraft Studio is an offline-first, AI-powered creative writing application with local LLM inference, plot boards, character management, and manuscript export.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-",
+      "entitlements": "Entitlements.plist",
+      "exceptionDomain": {
+        "domain": "localhost",
+        "value": true
+      }
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "displayLanguageSelector": true
+      }
+    }
   },
   "plugins": {
     "updater": {
       "active": true,
       "endpoints": [
-        "https://github.com/qnbs/StoryCraft-Studio/releases/latest/download/latest.json"
+        "https://github.com/qnbs/StoryCraft-Studio/releases/latest/download/latest.json",
+        "https://qnbs.github.io/StoryCraft-Studio/updater/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMzOTU1QjY2NkRBNUQwOTIKUldTUzBLVnRabHVWTS8yajhMaEd4TlF2MUlsRGNhQ1c2K3p2cHA1K2VLRzdqbStvV01GOHJsUi8K"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMzOTU1QjY2NkRBNUQwOTIKUldTUzBLVnRabHVWTS8yajhMaEd4TlF2MUlsRGNhQ1c2K3p2cHA1K2VLRzdqbStvV01GOHJsUi8K",
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
