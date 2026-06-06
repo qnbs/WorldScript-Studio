@@ -78,13 +78,15 @@ describe('extractScenePairs', () => {
   });
 
   it('splits content into input/output at 60%', async () => {
+    const content = 'word '.repeat(50).trim(); // 50 words, well within 30–600 range
     mockLoadProject.mockResolvedValue({
-      manuscript: [{ id: 's1', title: 'Scene', content: 'a'.repeat(100) }],
+      manuscript: [{ id: 's1', title: 'Scene', content }],
     } as never);
     const result = await extractScenePairs('p1');
     expect(result).toHaveLength(1);
-    expect(result[0]!.input).toBe('a'.repeat(60));
-    expect(result[0]!.output).toBe('a'.repeat(40));
+    const expectedInputLength = Math.floor(content.length * 0.6);
+    expect(result[0]!.input).toBe(content.slice(0, expectedInputLength));
+    expect(result[0]!.output).toBe(content.slice(expectedInputLength));
   });
 
   it('handles storage errors gracefully', async () => {
