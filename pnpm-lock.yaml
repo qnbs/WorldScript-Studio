@@ -21,9 +21,7 @@ overrides:
   qs: '>=6.15.2'
 
 patchedDependencies:
-  zod@4.4.3:
-    hash: 338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93
-    path: patches/zod@4.4.3.patch
+  zod@4.4.3: 338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93
 
 importers:
 
