@@ -530,6 +530,23 @@ Central orchestration layer for all background worker tasks. Messages use short 
 - **Pinned-Dependencies**: All GitHub Actions MUST be pinned to SHA hashes (e.g., `actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10`). Branch/tags are only acceptable when upstream does not provide SHA tags.
 - **Proactive Security Remediation**: On every PR and commit, treat ALL security alerts (OpenSSF Scorecard, CodeQL, Dependabot, Renovate, CodeAnt AI) as actionable work to be addressed immediately — never defer. Validate against current code, implement root-cause fixes, and verify via CI.
 
+### Pull Request Workflow (QNBS-v3)
+
+- **Branch-based development**: All changes MUST be made on feature branches (e.g., `fix/security-vulnerabilities-2026-06-06`). Never commit directly to `main`.
+- **CI verification**: Push to branch and wait for ALL CI jobs (security, quality, build, e2e, lighthouse) to pass before merging.
+- **PR merge**: Only merge to `main` when CI is fully green. Use "Squash and merge" for clean history.
+- **Inline comment handling**: Proactively address ALL inline PR review comments (CodeAnt AI, human reviewers) immediately:
+  1. Validate the finding against current code (comments may be stale)
+  2. Implement the real fix (root cause, not suppression)
+  3. If already fixed or false positive, reply with evidence
+  4. Resolve the thread after fixing
+  5. Push and verify CI passes
+
+### Test Stability Guidelines (QNBS-v3)
+
+- **ICU-dependent APIs**: Tests using `Intl.Segmenter`, `Intl.PluralRules`, or other ICU-dependent APIs MUST use relaxed assertions (non-zero counts, monotonic behavior, locale invariants) instead of exact counts to ensure cross-environment stability.
+- **Environment variance**: Node.js ICU versions and browser implementations can differ; tests should verify behavior, not exact output.
+
 ---
 
 ## Documentation Index

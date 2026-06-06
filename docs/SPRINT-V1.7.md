@@ -1,6 +1,6 @@
 # Sprint Reference — v1.7 DuckDB Analytics + Hybrid RAG + AI Extensions
 
-**Released:** 2026-05-20  
+**Released:** 2026-05-20
 **Commits since v1.6.0:** 21 (see `git log v1.6.0..v1.7.0`)
 
 ---

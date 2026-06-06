@@ -545,3 +545,69 @@ describe('SUPPORTED_LOCALES', () => {
     expect(elLocale?.isBeta).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Intl.Segmenter - countWords
+// QNBS-v3: CJK word counts are ICU/engine-dependent; tests verify non-zero counts
+// and monotonic behavior rather than exact token counts for cross-environment stability.
+// ---------------------------------------------------------------------------
+describe('countWords', () => {
+  it('counts words in English text', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.countWords('Hello world')).toBe(2);
+    expect(result.current.countWords('One two three four')).toBe(4);
+    expect(result.current.countWords('')).toBe(0);
+    expect(result.current.countWords('   ')).toBe(0);
+  });
+
+  it('counts words in Japanese text using Intl.Segmenter', async () => {
+    localStorage.setItem('storycraft-language', 'ja');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // QNBS-v3: Intl.Segmenter word boundaries are ICU-dependent; verify non-zero counts
+    // and monotonic behavior rather than exact counts for cross-environment stability.
+    const shortText = 'こんにちは世界';
+    const longText = 'これはテストです';
+    expect(result.current.countWords(shortText)).toBeGreaterThan(0);
+    expect(result.current.countWords(longText)).toBeGreaterThan(
+      result.current.countWords(shortText),
+    );
+    // Verify empty/blank handling
+    expect(result.current.countWords('')).toBe(0);
+    expect(result.current.countWords('　')).toBe(0); // full-width space
+  });
+
+  it('counts words in Chinese text using Intl.Segmenter', async () => {
+    localStorage.setItem('storycraft-language', 'zh');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // QNBS-v3: Intl.Segmenter word boundaries are ICU-dependent; verify non-zero counts
+    // and monotonic behavior rather than exact counts for cross-environment stability.
+    const shortText = '你好世界';
+    const longText = '这是一个测试';
+    expect(result.current.countWords(shortText)).toBeGreaterThan(0);
+    expect(result.current.countWords(longText)).toBeGreaterThan(
+      result.current.countWords(shortText),
+    );
+    // Verify empty/blank handling
+    expect(result.current.countWords('')).toBe(0);
+    expect(result.current.countWords('   ')).toBe(0);
+  });
+
+  it('counts words in Portuguese text', async () => {
+    localStorage.setItem('storycraft-language', 'pt');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.countWords('Olá mundo')).toBe(2);
+    expect(result.current.countWords('Esta é uma história')).toBe(4);
+  });
+
+  it('counts words in Greek text', async () => {
+    localStorage.setItem('storycraft-language', 'el');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.countWords('Γεια σου κόσμε')).toBe(3);
+    expect(result.current.countWords('Αυτή είναι μια ιστορία')).toBe(4);
+  });
+});

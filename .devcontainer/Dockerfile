@@ -4,7 +4,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 # QNBS-v3: SHA-pinned base image — prevents supply-chain attacks via mutable tags (Scorecard Pinned-Dependencies).
-FROM mcr.microsoft.com/devcontainers/base:bookworm
+FROM mcr.microsoft.com/devcontainers/base:bookworm@sha256:9e35ebf156350ba25b117da6869907034b6e2437b1891e3a43395af0b7d3eda4
 
 # ─── System packages ──────────────────────────────────────────────────────────
 # QNBS-v3: Playwright needs Chromium system deps; graphify needs Python 3 + pip;
@@ -70,17 +70,11 @@ RUN npx playwright install --with-deps chromium \
 # QNBS-v3: graphifyy is the PyPI package for the knowledge graph tool (dev-only convenience;
 #          graph outputs are committed and regenerated locally — graphifyy is NOT a build or
 #          release dependency of the app).
-# QNBS-v3: Install a minimal, pinned graphifyy during image build. Some pip versions in
-# older base images don't accept --hash/--require-hashes in this context which breaks builds
-# (observed in Codespaces build runners). Strategy:
-# 1) Upgrade pip/setuptools/wheel to a modern version
-# 2) Try installing graphifyy without hashes (no-deps) during build
-# 3) Allow a graceful fallback so the image build doesn't fail; full dependency install
-#    will still run in the `postCreateCommand` lifecycle hook inside the created container.
+# QNBS-v3: pip upgrade is for devcontainer lifecycle only; graphifyy itself is installed
+# in postCreateCommand via pnpm run graphify:install. This avoids build-time pip issues
+# across Codespaces runners. Scorecard Pinned-Dependencies warning is a False Positive
+# since pip packages are NOT used in production builds.
 RUN python3 -m pip install --break-system-packages --upgrade pip setuptools wheel || true
-# Note: graphifyy and its tree-sitter deps are installed in the devcontainer lifecycle
-# `postCreateCommand` to avoid build-time failures caused by varying pip behavior
-# across Codespaces build runners. See .devcontainer/devcontainer.json for post-create hook.
 
 # ─── Non-root user setup ─────────────────────────────────────────────────────
 # The base image already creates a "vscode" user (UID 1000).

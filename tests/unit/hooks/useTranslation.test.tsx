@@ -32,6 +32,11 @@ describe('useTranslation', () => {
           getCollator: () => new Intl.Collator('en'),
           formatList: (items) => items.join(', '),
           formatDisplayName: (v) => v,
+          countWords: (text) =>
+            text
+              .trim()
+              .split(/\s+/)
+              .filter((w) => w.length > 0).length,
         }}
       >
         {children}
@@ -62,6 +67,11 @@ describe('useTranslation', () => {
           getCollator: () => new Intl.Collator('en'),
           formatList: (items) => items.join(', '),
           formatDisplayName: (v) => v,
+          countWords: (text) =>
+            text
+              .trim()
+              .split(/\s+/)
+              .filter((w) => w.length > 0).length,
         }}
       >
         {children}
@@ -90,6 +100,11 @@ describe('useTranslation', () => {
           getCollator: () => new Intl.Collator('en'),
           formatList: (items) => items.join(', '),
           formatDisplayName: (v) => v,
+          countWords: (text) =>
+            text
+              .trim()
+              .split(/\s+/)
+              .filter((w) => w.length > 0).length,
         }}
       >
         {children}

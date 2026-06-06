@@ -58,6 +58,8 @@ interface I18nContextType {
   formatList: (items: string[], options?: Intl.ListFormatOptions) => string;
   /** Format display names (language, region, script) */
   formatDisplayName: (value: string, type: Intl.DisplayNamesType) => string;
+  /** QNBS-v3: Count words in text, using Intl.Segmenter for CJK languages */
+  countWords: (text: string) => number;
 }
 
 // QNBS-v3: Intl helper caches (per-language, per-options)
@@ -67,6 +69,10 @@ const relativeTimeFormatCache = new Map<Language, Intl.RelativeTimeFormat>();
 const collatorCache = new Map<string, Intl.Collator>();
 const listFormatCache = new Map<string, Intl.ListFormat>();
 const displayNamesCache = new Map<string, Intl.DisplayNames>();
+const segmenterCache = new Map<Language, Intl.Segmenter>();
+
+// QNBS-v3: CJK languages that need word-segmentation (no whitespace splitting)
+const CJK_LANGUAGES: ReadonlySet<Language> = new Set(['ja', 'zh']);
 
 // QNBS-v3: Get cached Intl.PluralRules for a language
 function getPluralRule(lang: Language): Intl.PluralRules {
@@ -137,6 +143,35 @@ function getDisplayNames(lang: Language, type: Intl.DisplayNamesType): Intl.Disp
   return dn;
 }
 
+// QNBS-v3: Get cached Intl.Segmenter for CJK word segmentation
+function getSegmenter(lang: Language): Intl.Segmenter {
+  let seg = segmenterCache.get(lang);
+  if (!seg) {
+    seg = new Intl.Segmenter(lang, { granularity: 'word' });
+    segmenterCache.set(lang, seg);
+  }
+  return seg;
+}
+
+// QNBS-v3: Count words using Intl.Segmenter for CJK, whitespace splitting for others
+function countWordsInText(text: string, lang: Language): number {
+  if (CJK_LANGUAGES.has(lang)) {
+    // CJK languages: use Intl.Segmenter with word granularity
+    const segmenter = getSegmenter(lang);
+    const segments = segmenter.segment(text);
+    let count = 0;
+    for (const segment of segments) {
+      if (segment.isWordLike) count++;
+    }
+    return count;
+  }
+  // Non-CJK: split on whitespace
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0).length;
+}
+
 // QNBS-v3: Clear all Intl caches when language changes (prevents stale formatters)
 function clearIntlCaches() {
   pluralRuleCache.clear();
@@ -145,6 +180,7 @@ function clearIntlCaches() {
   collatorCache.clear();
   listFormatCache.clear();
   displayNamesCache.clear();
+  segmenterCache.clear();
 }
 
 export const I18nContext = createContext<I18nContextType>({
@@ -159,6 +195,7 @@ export const I18nContext = createContext<I18nContextType>({
   getCollator: () => new Intl.Collator('en'),
   formatList: (items) => items.join(', '),
   formatDisplayName: (value) => value,
+  countWords: () => 0,
 });
 
 interface I18nProviderProps {
@@ -311,6 +348,12 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
     [language],
   );
 
+  // QNBS-v3: Word count using Intl.Segmenter for CJK languages
+  const countWords = useCallback(
+    (text: string): number => countWordsInText(text, language),
+    [language],
+  );
+
   return (
     <I18nContext.Provider
       value={{
@@ -325,6 +368,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
         getCollator,
         formatList,
         formatDisplayName,
+        countWords,
       }}
     >
       {children}
