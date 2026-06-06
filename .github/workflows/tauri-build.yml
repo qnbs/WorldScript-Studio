@@ -53,7 +53,14 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm exec tauri build
+        run: |
+          # QNBS-v3: Skip updater signing for workflow_dispatch test builds.
+          # Only sign on tagged releases (v*) where secrets must be valid.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            unset TAURI_SIGNING_PRIVATE_KEY
+            unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+          fi
+          pnpm exec tauri build
 
       - name: Upload bundle directory
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
