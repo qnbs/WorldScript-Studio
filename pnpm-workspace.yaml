@@ -46,5 +46,13 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  '@google/genai': true
+  '@swc/core': true
+  core-js: true
+  esbuild: true
   onnxruntime-node: true
+  protobufjs: true
+  sharp: true
+  simple-git-hooks: true
   unrs-resolver: true
+  workerd: true
