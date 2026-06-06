@@ -13,7 +13,8 @@ const root = join(__dirname, '..');
 
 // QNBS-v3: ar/he promoted into the parity gate (RTL Beta) — key coverage is now enforced.
 // Translation *quality* is still Beta (help.json bodies remain English fallback by design).
-const LANGS = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he'];
+// QNBS-v3: ja/zh/pt/el are Phase 3 beta stubs — English placeholders until human review completes.
+const LANGS = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he', 'ja', 'zh', 'pt', 'el'];
 const MODULES = [
   'common',
   'tour',

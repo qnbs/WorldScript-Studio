@@ -48,8 +48,8 @@
     <!--
       CSP-Strategie:
       - script-src: nur eigene Skripte (Vite ES modules, kein inline nötig)
-      - style-src: eigene + unsafe-inline (React inline-styles)
-      - font-src: self only (fonts self-hosted via @fontsource)
+      - style-src: eigene + unsafe-inline (React inline-styles) + fonts.googleapis.com für CJK/Greek
+      - font-src: self + fonts.gstatic.com für CJK/Greek (Google Fonts)
       - connect-src: Gemini API + OpenAI API + Collaboration WebSocket endpoints
       - img-src: data: URLs für Base64-Bilder erlaubt
       - Produktions-CSP wird über HTTP-Header des Hosts verschärft
@@ -58,8 +58,8 @@
           content="
             default-src 'self';
             script-src  'self';
-            style-src   'self' 'unsafe-inline';
-            font-src    'self' data:;
+            style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+            font-src    'self' https://fonts.gstatic.com data:;
             img-src     'self' data: blob:;
             connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev wss://*.workers.dev wss: ws:;
             worker-src  'self' blob:;
@@ -70,6 +70,11 @@
             frame-ancestors 'none';
             upgrade-insecure-requests;
           " />
+
+    <!-- QNBS-v3: Phase 3 — CJK/Greek fonts via Google Fonts CDN -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+GR:wght@400;500;700&display=swap" rel="stylesheet">
 
     <title>StoryCraft Studio</title>
 </head>

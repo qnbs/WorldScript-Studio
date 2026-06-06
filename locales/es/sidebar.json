@@ -7,6 +7,7 @@
   "sidebar.dashboard": "Panel",
   "sidebar.export": "Exportar",
   "sidebar.help": "Ayuda",
+  "sidebar.lora": "Ajuste fino",
   "sidebar.mainAria": "Barra lateral principal",
   "sidebar.manuscript": "Manuscrito",
   "sidebar.mindmap": "Mapas mentales",
@@ -20,6 +21,5 @@
   "sidebar.settings": "Ajustes",
   "sidebar.templates": "Plantillas",
   "sidebar.world": "Mundo",
-  "sidebar.writer": "Estudio de escritura IA",
-  "sidebar.lora": "Ajuste fino"
+  "sidebar.writer": "Estudio de escritura IA"
 }

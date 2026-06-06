@@ -29,12 +29,11 @@
   "outline.idea.title": "La tua idea",
   "outline.moveDown": "Sposta la sezione «{{title}}» verso il basso",
   "outline.moveUp": "Sposta la sezione «{{title}}» verso l'alto",
-  "outline.selectSection": "Seleziona la sezione «{{title}}»",
   "outline.overwriteConfirm": "Hai già uno schema. Generarne uno nuovo lo sostituirà. Sei sicuro?",
   "outline.result.addTooltip": "Aggiungi sezione sotto",
   "outline.result.applyButton": "Applica schema al manoscritto",
-  "outline.result.deleteTooltip": "Elimina sezione",
   "outline.result.body": "Compila il modulo a sinistra e clicca su Genera per vedere la struttura della tua storia prendere vita qui.",
+  "outline.result.deleteTooltip": "Elimina sezione",
   "outline.result.dragHandleTooltip": "Trascina per riordinare",
   "outline.result.loading": "Generazione del tuo schema di storia...",
   "outline.result.newSectionTitle": "Nuova sezione",
@@ -42,5 +41,6 @@
   "outline.result.regenerateTooltip": "Rigenera questa sezione",
   "outline.result.title": "Schema interattivo",
   "outline.result.twistTooltip": "Colpo di scena generato dall'IA",
+  "outline.selectSection": "Seleziona la sezione «{{title}}»",
   "outline.title": "Generatore di schema storia IA"
 }

@@ -7,6 +7,7 @@
   "sidebar.dashboard": "Tableau de bord",
   "sidebar.export": "Exporter",
   "sidebar.help": "Aide",
+  "sidebar.lora": "Réglage fin",
   "sidebar.mainAria": "Barre latérale principale",
   "sidebar.manuscript": "Manuscrit",
   "sidebar.mindmap": "Cartes mentales",
@@ -20,6 +21,5 @@
   "sidebar.settings": "Paramètres",
   "sidebar.templates": "Modèles",
   "sidebar.world": "Univers",
-  "sidebar.writer": "Studio d’écriture IA",
-  "sidebar.lora": "Réglage fin"
+  "sidebar.writer": "Studio d’écriture IA"
 }

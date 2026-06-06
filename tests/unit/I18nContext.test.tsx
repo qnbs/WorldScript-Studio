@@ -33,6 +33,12 @@ const bundles: Record<string, Record<string, string>> = {
   en: EN_BUNDLE,
   de: DE_BUNDLE,
   fr: FR_BUNDLE,
+  ar: EN_BUNDLE, // QNBS-v3: ar bundle uses EN for testing (Beta)
+  he: EN_BUNDLE, // QNBS-v3: he bundle uses EN for testing (Beta)
+  ja: EN_BUNDLE, // QNBS-v3: ja bundle uses EN for testing (Beta)
+  zh: EN_BUNDLE, // QNBS-v3: zh bundle uses EN for testing (Beta)
+  pt: EN_BUNDLE, // QNBS-v3: pt bundle uses EN for testing (Beta)
+  el: EN_BUNDLE, // QNBS-v3: el bundle uses EN for testing (Beta)
 };
 
 function makeOkResponse(data: Record<string, string>) {
@@ -195,5 +201,347 @@ describe('document lang attribute', () => {
       result.current.setLanguage('de');
     });
     expect(document.documentElement.lang).toBe('de');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.PluralRules
+// ---------------------------------------------------------------------------
+describe('Intl.PluralRules', () => {
+  it('returns plural category for count', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.getPluralCategory(1)).toBe('one');
+    expect(result.current.getPluralCategory(2)).toBe('other');
+    expect(result.current.getPluralCategory(0)).toBe('other');
+  });
+
+  it('returns correct plural category for Arabic zero', async () => {
+    localStorage.setItem('storycraft-language', 'ar');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.getPluralCategory(0)).toBe('zero');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.NumberFormat
+// ---------------------------------------------------------------------------
+describe('Intl.NumberFormat', () => {
+  it('formats numbers with locale-aware grouping', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatNumber(1234567)).toBe('1,234,567');
+  });
+
+  it('formats numbers with percent style', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatNumber(0.875, { style: 'percent' })).toBe('88%');
+  });
+
+  it('formats numbers with compact notation', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // QNBS-v3: Compact notation varies by locale; just verify it formats
+    const formatted = result.current.formatNumber(1500000, { notation: 'compact' });
+    expect(formatted).toMatch(/1\.5M|2M|1,5M|2 MD/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.RelativeTimeFormat
+// ---------------------------------------------------------------------------
+describe('Intl.RelativeTimeFormat', () => {
+  it('formats relative time with auto numeric', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatRelativeTime(-1, 'day')).toBe('yesterday');
+    expect(result.current.formatRelativeTime(1, 'day')).toBe('tomorrow');
+  });
+
+  it('formats relative time with numeric values', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatRelativeTime(-2, 'day')).toBe('2 days ago');
+    expect(result.current.formatRelativeTime(3, 'hour')).toBe('in 3 hours');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.Collator
+// ---------------------------------------------------------------------------
+describe('Intl.Collator', () => {
+  it('sorts strings with locale-aware comparison', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    const collator = result.current.getCollator();
+    expect(collator.compare('a', 'b')).toBeLessThan(0);
+    expect(collator.compare('b', 'a')).toBeGreaterThan(0);
+    expect(collator.compare('a', 'a')).toBe(0);
+  });
+
+  it('sorts numeric strings correctly', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    const collator = result.current.getCollator();
+    // Numeric: "Chapter 2" should come before "Chapter 10"
+    expect(collator.compare('Chapter 2', 'Chapter 10')).toBeLessThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.ListFormat
+// ---------------------------------------------------------------------------
+describe('Intl.ListFormat', () => {
+  it('formats list with conjunction', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatList(['A', 'B', 'C'])).toBe('A, B, and C');
+  });
+
+  it('formats list with disjunction', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatList(['Yes', 'No'], { type: 'disjunction' })).toBe('Yes or No');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.DisplayNames
+// ---------------------------------------------------------------------------
+describe('Intl.DisplayNames', () => {
+  it('formats language display names', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatDisplayName('en', 'language')).toBe('English');
+    expect(result.current.formatDisplayName('ja', 'language')).toBe('Japanese');
+  });
+
+  it('formats region display names', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatDisplayName('US', 'region')).toBe('United States');
+    expect(result.current.formatDisplayName('DE', 'region')).toBe('Germany');
+  });
+
+  it('formats script display names', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatDisplayName('Latn', 'script')).toBe('Latin');
+    expect(result.current.formatDisplayName('Cyrl', 'script')).toBe('Cyrillic');
+  });
+
+  it('falls back to input value when not found', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatDisplayName('xyz', 'language')).toBe('xyz');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.PluralRules - Extended coverage
+// ---------------------------------------------------------------------------
+describe('Intl.PluralRules - Extended', () => {
+  it('returns correct plural for Japanese', async () => {
+    localStorage.setItem('storycraft-language', 'ja');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // Japanese uses 'other' for all counts (no plural forms)
+    expect(result.current.getPluralCategory(1)).toBe('other');
+    expect(result.current.getPluralCategory(2)).toBe('other');
+    expect(result.current.getPluralCategory(100)).toBe('other');
+  });
+
+  it('returns correct plural for Chinese', async () => {
+    localStorage.setItem('storycraft-language', 'zh');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // Chinese uses 'other' for all counts
+    expect(result.current.getPluralCategory(0)).toBe('other');
+    expect(result.current.getPluralCategory(1)).toBe('other');
+  });
+
+  it('returns correct plural for Portuguese', async () => {
+    localStorage.setItem('storycraft-language', 'pt');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // Portuguese has 'one' and 'other'
+    expect(result.current.getPluralCategory(1)).toBe('one');
+    expect(result.current.getPluralCategory(2)).toBe('other');
+  });
+
+  it('returns correct plural for Greek', async () => {
+    localStorage.setItem('storycraft-language', 'el');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // Greek has 'one' and 'other'
+    expect(result.current.getPluralCategory(1)).toBe('one');
+    expect(result.current.getPluralCategory(2)).toBe('other');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.NumberFormat - Extended coverage
+// ---------------------------------------------------------------------------
+describe('Intl.NumberFormat - Extended', () => {
+  it('formats currency values', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    const formatted = result.current.formatNumber(1234.56, {
+      style: 'currency',
+      currency: 'USD',
+    });
+    // QNBS-v3: Currency format varies by locale; just verify it formats with $
+    expect(formatted).toMatch(/\$/);
+  });
+
+  it('formats with custom fraction digits', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatNumber(1234.567, { maximumFractionDigits: 2 })).toBe('1,234.57');
+  });
+
+  it('formats zero correctly', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatNumber(0)).toBe('0');
+  });
+
+  it('formats negative numbers', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatNumber(-1234)).toBe('-1,234');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.RelativeTimeFormat - Extended coverage
+// ---------------------------------------------------------------------------
+describe('Intl.RelativeTimeFormat - Extended', () => {
+  it('formats hours correctly', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatRelativeTime(-1, 'hour')).toBe('1 hour ago');
+    expect(result.current.formatRelativeTime(2, 'hour')).toBe('in 2 hours');
+  });
+
+  it('formats weeks correctly', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatRelativeTime(-1, 'week')).toBe('last week');
+    expect(result.current.formatRelativeTime(1, 'week')).toBe('next week');
+  });
+
+  it('formats months correctly', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatRelativeTime(-2, 'month')).toBe('2 months ago');
+    expect(result.current.formatRelativeTime(3, 'month')).toBe('in 3 months');
+  });
+
+  it('formats years correctly', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatRelativeTime(-1, 'year')).toBe('last year');
+    expect(result.current.formatRelativeTime(1, 'year')).toBe('next year');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.Collator - Extended coverage
+// ---------------------------------------------------------------------------
+describe('Intl.Collator - Extended', () => {
+  it('sorts strings case-insensitively', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    const collator = result.current.getCollator({ sensitivity: 'base' });
+    expect(collator.compare('a', 'A')).toBe(0);
+    expect(collator.compare('a', 'b')).toBeLessThan(0);
+  });
+
+  it('sorts with different locales', async () => {
+    localStorage.setItem('storycraft-language', 'de');
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    const collator = result.current.getCollator();
+    // German umlaut sorting
+    expect(collator.compare('ä', 'z')).toBeLessThan(0);
+  });
+
+  it('handles empty strings', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    const collator = result.current.getCollator();
+    expect(collator.compare('', '')).toBe(0);
+    expect(collator.compare('', 'a')).toBeLessThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intl.ListFormat - Extended coverage
+// ---------------------------------------------------------------------------
+describe('Intl.ListFormat - Extended', () => {
+  it('formats list with unit type', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatList(['kg', 'g', 'mg'], { type: 'unit' })).toMatch(
+      /kg, g, and mg|kg, g, mg/,
+    );
+  });
+
+  it('formats short style list', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    const formatted = result.current.formatList(['A', 'B', 'C'], { style: 'short' });
+    // QNBS-v3: Short style format varies by locale (e.g., "A, B, & C" in en)
+    expect(formatted).toMatch(/A.*B.*C/);
+  });
+
+  it('handles single item list', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatList(['Only one'])).toBe('Only one');
+  });
+
+  it('handles empty list', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    expect(result.current.formatList([])).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SUPPORTED_LOCALES metadata
+// ---------------------------------------------------------------------------
+describe('SUPPORTED_LOCALES', () => {
+  it('contains all 11 languages', async () => {
+    const { result } = renderHook(() => useContext(I18nContext), { wrapper });
+    await waitFor(() => expect(result.current.isReady).toBe(true));
+    // Import the constant directly for testing
+    const { SUPPORTED_LOCALES } = await import('../../contexts/I18nContext');
+    expect(SUPPORTED_LOCALES.length).toBe(11);
+  });
+
+  it('marks ar and he as RTL beta', async () => {
+    const { SUPPORTED_LOCALES } = await import('../../contexts/I18nContext');
+    const arLocale = SUPPORTED_LOCALES.find((l) => l.code === 'ar');
+    const heLocale = SUPPORTED_LOCALES.find((l) => l.code === 'he');
+    expect(arLocale?.dir).toBe('rtl');
+    expect(arLocale?.isBeta).toBe(true);
+    expect(heLocale?.dir).toBe('rtl');
+    expect(heLocale?.isBeta).toBe(true);
+  });
+
+  it('marks ja, zh, pt, el as beta', async () => {
+    const { SUPPORTED_LOCALES } = await import('../../contexts/I18nContext');
+    const jaLocale = SUPPORTED_LOCALES.find((l) => l.code === 'ja');
+    const zhLocale = SUPPORTED_LOCALES.find((l) => l.code === 'zh');
+    const ptLocale = SUPPORTED_LOCALES.find((l) => l.code === 'pt');
+    const elLocale = SUPPORTED_LOCALES.find((l) => l.code === 'el');
+    expect(jaLocale?.isBeta).toBe(true);
+    expect(zhLocale?.isBeta).toBe(true);
+    expect(ptLocale?.isBeta).toBe(true);
+    expect(elLocale?.isBeta).toBe(true);
   });
 });

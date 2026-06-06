@@ -27,6 +27,11 @@ const WELCOME_LANGS: { code: Language; label: string; isBeta?: boolean }[] = [
   // isBeta surfaces the "(Beta)" qualifier here too, matching the Settings/Command-Palette pickers.
   { code: 'ar', label: 'ع', isBeta: true },
   { code: 'he', label: 'א', isBeta: true },
+  // QNBS-v3: Phase 3 — ja/zh/pt/el Beta languages
+  { code: 'ja', label: '日本語', isBeta: true },
+  { code: 'zh', label: '简体中文', isBeta: true },
+  { code: 'pt', label: 'PT', isBeta: true },
+  { code: 'el', label: 'ΕΛ', isBeta: true },
 ];
 
 const LanguageSelector = () => {

@@ -29,6 +29,11 @@
     "Noto Sans Arabic", "Noto Sans Hebrew", "Inter", system-ui, -apple-system, sans-serif;
   --font-editor-rtl:
     "Noto Naskh Arabic", "Noto Sans Hebrew", "Merriweather", Georgia, "Times New Roman", serif;
+  /* QNBS-v3: Phase 3 — CJK/Greek font stacks for ja/zh/el Beta languages.
+     CJK: Noto Sans JP covers Hiragana, Katakana, and Kanji (loaded via Google Fonts).
+     Greek: Noto Sans GR covers monotonic and polytonic Greek (loaded via Google Fonts). */
+  --font-ui-cjk: "Noto Sans JP", "Inter", system-ui, -apple-system, sans-serif;
+  --font-ui-greek: "Noto Sans GR", "Inter", system-ui, -apple-system, sans-serif;
   --sc-prose-measure: 65ch;
 
   /* Icon size tokens — QNBS-v3: semantic names replace w-4/w-5/w-6/w-8 literals; map to 16/20/24/32px. */

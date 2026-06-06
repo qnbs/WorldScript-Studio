@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Phase 3 i18n Expansion — ja/zh/pt/el Beta languages + Intl APIs** (2026-06-06):
+  - Added Japanese (ja), Chinese Simplified (zh), Portuguese (pt), and Greek (el) as Beta languages with English placeholder text
+  - Extended `Language` type and `VALID_LANGS` array in `I18nContext.tsx`
+  - Added `SUPPORTED_LOCALES` metadata array with BCP47 codes, native names, direction, and font script hints
+  - Integrated native Intl APIs with caching: `Intl.PluralRules`, `Intl.NumberFormat`, `Intl.RelativeTimeFormat`, `Intl.Collator`, `Intl.ListFormat`, `Intl.DisplayNames`
+  - Added `getPluralCategory()`, `formatNumber()`, `formatRelativeTime()`, `getCollator()`, `formatList()`, `formatDisplayName()` to `I18nContextType`
+  - Auto-formatting of `{{count}}` placeholders in `t()` function
+  - Fonts: Noto Sans JP via Google Fonts CDN for Japanese/Chinese; Greek uses system fallback
+  - CSP updated to allow fonts.googleapis.com and fonts.gstatic.com
+  - Documentation: `docs/I18N-PLURALS.md`, `docs/I18N-NUMBERS.md`, `docs/I18N-LOCALE.md`, `docs/I18N-RELATIVETIME.md`, `docs/I18N-COLLATION.md`, `docs/I18N-LISTFORMAT.md`, `docs/I18N-DISPLAYNAMES.md`, `docs/I18N-GLOSSARY.md`
+  - 2339 keys × 11 locales (up from 2259 × 7)
+
 ### Fixed
 
 - **World Building "Add Manually" now opens the atlas editor** (2026-06-03): `useWorldView.handleAddNewManually` only dispatched `addWorld` and left the user on the grid with a silent "New World" card and no editor — inconsistent with Characters, whose manual-add was deliberately fixed to open the dossier. Now mirrors that flow (create → select → open atlas) with fully-formed defaults (`timeline`/`locations` as `[]`). Adds real-browser `tests/e2e/world.spec.ts` (was none) + a hook-level regression assertion.

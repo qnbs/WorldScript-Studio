@@ -29,7 +29,6 @@
   "outline.idea.title": "Votre idée",
   "outline.moveDown": "Déplacer la section « {{title}} » vers le bas",
   "outline.moveUp": "Déplacer la section « {{title}} » vers le haut",
-  "outline.selectSection": "Sélectionner la section « {{title}} »",
   "outline.overwriteConfirm": "Vous avez déjà un plan. Générer un nouveau plan le remplacera. Êtes-vous sûr ?",
   "outline.result.addTooltip": "Ajouter une section en dessous",
   "outline.result.applyButton": "Appliquer le plan au manuscrit",
@@ -42,5 +41,6 @@
   "outline.result.regenerateTooltip": "Régénérer cette section",
   "outline.result.title": "Plan interactif",
   "outline.result.twistTooltip": "Rebondissement généré par IA",
+  "outline.selectSection": "Sélectionner la section « {{title}} »",
   "outline.title": "Générateur de plan d'histoire IA"
 }

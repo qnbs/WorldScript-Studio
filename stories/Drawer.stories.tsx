@@ -39,6 +39,12 @@ const I18nMockProvider: React.FC<{ children: React.ReactNode }> = ({ children })
       t: defaultT,
       isReady: true,
       dir: 'ltr',
+      getPluralCategory: () => 'other',
+      formatNumber: (v) => v.toString(),
+      formatRelativeTime: (v, u) => `${v} ${u}`,
+      getCollator: () => new Intl.Collator('en'),
+      formatList: (items) => items.join(', '),
+      formatDisplayName: (v) => v,
     }}
   >
     {children}

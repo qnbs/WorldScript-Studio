@@ -29,7 +29,6 @@
   "outline.idea.title": "הרעיון שלכם",
   "outline.moveDown": "הזזת הסעיף '{{title}}' למטה",
   "outline.moveUp": "הזזת הסעיף '{{title}}' למעלה",
-  "outline.selectSection": "Select section '{{title}}'",
   "outline.overwriteConfirm": "כבר יש לכם מתווה. יצירת מתווה חדש תחליף אותו. האם להמשיך?",
   "outline.result.addTooltip": "הוספת סעיף למטה",
   "outline.result.applyButton": "החלת המתווה על כתב היד",
@@ -42,5 +41,6 @@
   "outline.result.regenerateTooltip": "יצירה מחדש של סעיף זה",
   "outline.result.title": "מתווה אינטראקטיבי",
   "outline.result.twistTooltip": "תפנית עלילתית שנוצרה ב‑AI",
+  "outline.selectSection": "Select section '{{title}}'",
   "outline.title": "מחולל מתווה סיפור ב‑AI"
 }

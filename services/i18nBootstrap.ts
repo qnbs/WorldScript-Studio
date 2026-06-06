@@ -38,6 +38,27 @@ export const I18N_BOOTSTRAP: Record<Language, Record<string, string>> = {
     'initialProject.logline': 'מסע של אלף מילין מתחיל בצעד אחד...',
     'initialProject.chapter1': 'פרק 1',
   },
+  // QNBS-v3: Phase 3 Beta — ja/zh/pt/el cold-start values (English placeholders until native review)
+  ja: {
+    'initialProject.title': 'タイトルなしの物語',
+    'initialProject.logline': '千里の道も一歩から...',
+    'initialProject.chapter1': '第1章',
+  },
+  zh: {
+    'initialProject.title': '无标题故事',
+    'initialProject.logline': '千里之行，始于足下...',
+    'initialProject.chapter1': '第1章',
+  },
+  pt: {
+    'initialProject.title': 'Minha História Sem Título',
+    'initialProject.logline': 'Uma jornada de mil milhas começa com um único passo...',
+    'initialProject.chapter1': 'Capítulo 1',
+  },
+  el: {
+    'initialProject.title': 'Η αφήγησή μου χωρίς τίτλο',
+    'initialProject.logline': 'Το ταξίδι αυτό εκατομμύριο μιλία ξεκινάει από ένα βήμα...',
+    'initialProject.chapter1': 'Κεφάλαιο 1',
+  },
 };
 
 const KNOWN_PERSISTED_KEYS = new Set([

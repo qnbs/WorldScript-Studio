@@ -136,6 +136,11 @@ export const GeneralSection: FC = () => {
             {/* QNBS-v3: Phase 2 B-5 — RTL beta stubs; English placeholder text until human review */}
             <option value="ar">{t('settings.language.arabic')}</option>
             <option value="he">{t('settings.language.hebrew')}</option>
+            {/* QNBS-v3: Phase 3 — ja/zh/pt/el Beta languages */}
+            <option value="ja">{t('settings.language.japanese')}</option>
+            <option value="zh">{t('settings.language.chinese')}</option>
+            <option value="pt">{t('settings.language.portuguese')}</option>
+            <option value="el">{t('settings.language.greek')}</option>
           </Select>
         </CardContent>
       </Card>

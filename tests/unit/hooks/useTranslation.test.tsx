@@ -23,9 +23,15 @@ describe('useTranslation', () => {
           isReady: true,
           t: ((k: string) => k) as unknown as <T = string>(
             key: string,
-            replacements?: Record<string, string>,
+            replacements?: Record<string, string | number>,
           ) => T,
           dir: 'ltr',
+          getPluralCategory: () => 'other',
+          formatNumber: (v) => v.toString(),
+          formatRelativeTime: (v, u) => `${v} ${u}`,
+          getCollator: () => new Intl.Collator('en'),
+          formatList: (items) => items.join(', '),
+          formatDisplayName: (v) => v,
         }}
       >
         {children}
@@ -47,9 +53,15 @@ describe('useTranslation', () => {
           isReady: true,
           t: ((k: string) => `translated:${k}`) as unknown as <T = string>(
             key: string,
-            replacements?: Record<string, string>,
+            replacements?: Record<string, string | number>,
           ) => T,
           dir: 'ltr',
+          getPluralCategory: () => 'other',
+          formatNumber: (v) => v.toString(),
+          formatRelativeTime: (v, u) => `${v} ${u}`,
+          getCollator: () => new Intl.Collator('en'),
+          formatList: (items) => items.join(', '),
+          formatDisplayName: (v) => v,
         }}
       >
         {children}
@@ -69,9 +81,15 @@ describe('useTranslation', () => {
           isReady: true,
           t: ((k: string) => k) as unknown as <T = string>(
             key: string,
-            replacements?: Record<string, string>,
+            replacements?: Record<string, string | number>,
           ) => T,
           dir: 'ltr',
+          getPluralCategory: () => 'other',
+          formatNumber: (v) => v.toString(),
+          formatRelativeTime: (v, u) => `${v} ${u}`,
+          getCollator: () => new Intl.Collator('en'),
+          formatList: (items) => items.join(', '),
+          formatDisplayName: (v) => v,
         }}
       >
         {children}

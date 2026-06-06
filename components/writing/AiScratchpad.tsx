@@ -18,6 +18,11 @@ const TTS_LOCALE: Record<Language, string> = {
   it: 'it-IT',
   ar: 'ar-SA',
   he: 'he-IL',
+  // QNBS-v3: Phase 3 Beta — ja/zh/pt/el TTS locales
+  ja: 'ja-JP',
+  zh: 'zh-CN',
+  pt: 'pt-BR',
+  el: 'el-GR',
 };
 
 const AiScratchpad: FC = React.memo(() => {

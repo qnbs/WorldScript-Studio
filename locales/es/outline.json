@@ -29,7 +29,6 @@
   "outline.idea.title": "Tu idea",
   "outline.moveDown": "Mover sección «{{title}}» hacia abajo",
   "outline.moveUp": "Mover sección «{{title}}» hacia arriba",
-  "outline.selectSection": "Seleccionar sección «{{title}}»",
   "outline.overwriteConfirm": "Ya tienes un esquema. Generar uno nuevo lo reemplazará. ¿Estás seguro?",
   "outline.result.addTooltip": "Añadir sección debajo",
   "outline.result.applyButton": "Aplicar esquema al manuscrito",
@@ -42,5 +41,6 @@
   "outline.result.regenerateTooltip": "Regenerar esta sección",
   "outline.result.title": "Esquema interactivo",
   "outline.result.twistTooltip": "Giro de trama generado por IA",
+  "outline.selectSection": "Seleccionar sección «{{title}}»",
   "outline.title": "Generador de esquema de historia IA"
 }

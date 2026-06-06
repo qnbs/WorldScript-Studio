@@ -23,7 +23,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
 // QNBS-v3: ar/he are Phase 2 beta stubs — English placeholders until human review completes.
-const langs = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he'];
+// QNBS-v3: ja/zh/pt/el are Phase 3 beta stubs — English placeholders until human review completes.
+const langs = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he', 'ja', 'zh', 'pt', 'el'];
 const modules = [
   'common',
   'tour',

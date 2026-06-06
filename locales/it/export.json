@@ -82,6 +82,7 @@
   "export.pasteSection.copyAsMarkdown": "Copia come Markdown per Notion / Google Docs",
   "export.pasteSection.defaultTitle": "Contenuto incollato",
   "export.pasteSection.expand": "Incolla testo",
+  "export.pasteSection.heading": "Google Docs / Notion",
   "export.pasteSection.importAsChapter": "Importa come capitolo",
   "export.pasteSection.textPlaceholder": "Incolla testo da Google Docs o Notion qui (Ctrl+V)...",
   "export.pasteSection.titlePlaceholder": "Titolo capitolo (opzionale)",
@@ -89,6 +90,5 @@
   "export.preview.title": "Anteprima in diretta",
   "export.title": "Suite di pubblicazione Export",
   "export.toggleSection": "Attiva/disattiva visibilità per {{title}}",
-  "export.worldsLabel": "Mondi",
-  "export.pasteSection.heading": "Google Docs / Notion"
+  "export.worldsLabel": "Mondi"
 }
