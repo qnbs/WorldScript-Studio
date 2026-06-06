@@ -80,3 +80,16 @@ public/locales/*/*.json
 .codegraph/codegraph.db-shm
 .codegraph/codegraph.db-wal
 voice-spike/
+
+# Signing keys, certificates, and secrets — NEVER commit
+*.key
+*.key.pub
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+.storycraft-*
+~/
+
