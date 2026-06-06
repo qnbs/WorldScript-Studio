@@ -91,5 +91,7 @@
   // ─── Git ─────────────────────────────────────────────────────────────────
   "git.autofetch": true,
   "git.confirmSync": false,
-  "git.enableSmartCommit": true
+  "git.enableSmartCommit": true,
+  "chat.utilitySmallModel": "openrouter/poolside/laguna-xs.2:free",
+  "chat.utilityModel": "openrouter/poolside/laguna-m.1:free"
 }

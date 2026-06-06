@@ -1,5 +1,6 @@
 {
   "portal.language.groupLabel": "Welcome screen language",
+  "portal.language.searchPlaceholder": "言語を検索...",
   "portal.welcome.title": "Welcome to StoryCraft Studio",
   "portal.welcome.subtitle": "Your AI-powered creative partner for writing.",
   "portal.welcome.newProject": "Start a New Project",

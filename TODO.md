@@ -147,6 +147,21 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## v1.20.0 — UI Modernization Phase 1 (IN PROGRESS)
+
+- ✅ **LanguageSelector** — Modern combobox with search, flag emojis, RTL support
+- ✅ **RadioGroup** — Accessible radio group component
+- ✅ **Tabs** — WAI-ARIA compliant tabs component
+- ✅ **ToggleSwitch** — RTL-aware with reduced-motion support
+- ✅ **WelcomePortal** — Updated to use new LanguageSelector
+- ⬜ **Select/Combobox** — Replace native `<select>` in Settings/AI sections
+- ⬜ **Dropdown Menu** — Action menus with icons and keyboard navigation
+- ⬜ **Unit tests** — Add tests for LanguageSelector, RadioGroup, Tabs
+- ⬜ **Storybook stories** — Add stories for new components
+- ⬜ **CI verification** — Wait for green CI before merge
+
+---
+
 ## v1.11 — Stabilization Sprint (RELEASED 2026-05-22)
 
 - ✅ **Cloudflare deploy fix (P0)** — `resolve-deploy-base.mjs` `base` → `deployBase`; `sync-deploy-base.mjs` error propagation

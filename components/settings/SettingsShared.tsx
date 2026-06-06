@@ -6,22 +6,37 @@ export const ToggleSwitch: FC<{
   checked: boolean;
   onChange: (checked: boolean) => void;
   ariaLabel?: string;
-}> = React.memo(({ label, checked, onChange, ariaLabel }) => (
-  <div className="flex items-center justify-between">
-    {label && <span className="text-sm font-medium text-[var(--sc-text-secondary)]">{label}</span>}
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={ariaLabel ?? label}
-      onClick={() => onChange(!checked)}
-      className={`${checked ? 'bg-[var(--sc-accent)] border-[var(--sc-accent)]' : 'bg-[var(--sc-surface-overlay)]/40 border-[var(--sc-border-subtle)]'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sc-surface-base)] hover:border-[var(--sc-border-strong)]`}
-    >
-      {/* QNBS-v3: --sc-surface-base adapts to all themes; bg-white breaks sepia/high-contrast */}
-      <span
-        className={`${checked ? 'translate-x-5' : 'translate-x-0'} inline-block h-5 w-5 transform rounded-full bg-[var(--sc-surface-base)] shadow ring-0 transition duration-200 ease-in-out`}
-      />
-    </button>
-  </div>
-));
+}> = React.memo(({ label, checked, onChange, ariaLabel }) => {
+  const labelId = React.useId();
+  // QNBS-v3: Ensure switch always has an accessible name (CodeAnt AI fix)
+  const accessibleName = ariaLabel ?? label ?? 'Toggle';
+  return (
+    <div className="flex items-center justify-between">
+      {label && (
+        <span id={labelId} className="text-sm font-medium text-[var(--sc-text-secondary)]">
+          {label}
+        </span>
+      )}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={accessibleName}
+        aria-labelledby={label ? labelId : undefined}
+        onClick={() => onChange(!checked)}
+        className={`${
+          checked
+            ? 'bg-[var(--sc-accent)] border-[var(--sc-accent)]'
+            : 'bg-[var(--sc-surface-overlay)]/40 border-[var(--sc-border-subtle)]'
+        } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border transition-colors duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sc-surface-base)] hover:border-[var(--sc-border-strong)]`}
+      >
+        {/* QNBS-v3: --sc-surface-base adapts to all themes; bg-white breaks sepia/high-contrast */}
+        {/* Reduced motion: disable transform transition */}
+        <span
+          className={`${checked ? '[dir:ltr]:translate-x-5 [dir:rtl]:-translate-x-5' : 'translate-x-0'} inline-block h-5 w-5 transform rounded-full bg-[var(--sc-surface-base)] shadow ring-0 transition-transform duration-sc-fast ease-in-out`}
+        />
+      </button>
+    </div>
+  );
+});
 ToggleSwitch.displayName = 'ToggleSwitch';

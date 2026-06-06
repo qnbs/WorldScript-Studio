@@ -2,7 +2,6 @@ import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { ICONS } from '../constants';
-import type { Language } from '../contexts/I18nContext';
 import { projectActions } from '../features/project/projectSlice';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../features/status/statusSlice';
@@ -10,6 +9,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { storageService } from '../services/storageService';
 import type { View } from '../types';
 import { Button } from './ui/Button';
+import { LanguageSelector } from './ui/LanguageSelector';
 
 interface WelcomePortalProps {
   onExit: (view?: View) => void;
@@ -17,57 +17,7 @@ interface WelcomePortalProps {
 
 type PortalView = 'main' | 'new_project' | 'open_project';
 
-const WELCOME_LANGS: { code: Language; label: string; isBeta?: boolean }[] = [
-  { code: 'de', label: 'DE' },
-  { code: 'en', label: 'EN' },
-  { code: 'fr', label: 'FR' },
-  { code: 'es', label: 'ES' },
-  { code: 'it', label: 'IT' },
-  // QNBS-v3: RTL beta (C-6) — Arabic/Hebrew selectable from first launch; native glyph labels +
-  // isBeta surfaces the "(Beta)" qualifier here too, matching the Settings/Command-Palette pickers.
-  { code: 'ar', label: 'ع', isBeta: true },
-  { code: 'he', label: 'א', isBeta: true },
-  // QNBS-v3: Phase 3 — ja/zh/pt/el Beta languages
-  { code: 'ja', label: '日本語', isBeta: true },
-  { code: 'zh', label: '简体中文', isBeta: true },
-  { code: 'pt', label: 'PT', isBeta: true },
-  { code: 'el', label: 'ΕΛ', isBeta: true },
-];
-
-const LanguageSelector = () => {
-  const { language, setLanguage, t } = useTranslation();
-  return (
-    <>
-      {/* biome-ignore lint/a11y/useSemanticElements: role="group" on a div is appropriate for a toolbar of language-switch buttons; fieldset requires a legend child and adds default border/padding that breaks this absolutely-positioned layout. */}
-      <div
-        className="fixed top-4 right-4 z-10 flex flex-wrap justify-end gap-1 max-w-[min(100%,14rem)]"
-        role="group"
-        aria-label={t('portal.language.groupLabel')}
-      >
-        {WELCOME_LANGS.map(({ code, label, isBeta }) => (
-          <button
-            key={code}
-            type="button"
-            onClick={() => setLanguage(code)}
-            // QNBS-v3: Beta langs carry the "(Beta)" qualifier via title + a visible β marker so the
-            // RTL Beta status is conveyed at this entry point too (matches Settings language names).
-            title={isBeta ? `${label} (Beta)` : undefined}
-            aria-label={isBeta ? `${label} (Beta)` : undefined}
-            // QNBS-v3: design tokens ensure contrast in all themes; bg-indigo-600/text-secondary failed WCAG AA (2.91:1/2.03:1)
-            className={`px-2.5 py-1 text-xs sm:text-sm rounded-md transition-colors ${language === code ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]' : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
-          >
-            {label}
-            {isBeta && (
-              <sup className="ms-0.5 text-[0.6em] opacity-70" aria-hidden="true">
-                β
-              </sup>
-            )}
-          </button>
-        ))}
-      </div>
-    </>
-  );
-};
+// QNBS-v3: LanguageSelector now imported from ui/LanguageSelector.tsx with search functionality
 
 const NewProjectOption: React.FC<{
   icon: React.ReactNode;
@@ -127,7 +77,7 @@ const FeatureHighlight: React.FC<{
 );
 
 export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
-  const { t } = useTranslation();
+  const { t, language, setLanguage } = useTranslation();
   const dispatch = useAppDispatch();
   const [view, setView] = useState<PortalView>('main');
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -457,7 +407,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
           taller than the viewport (e.g. the feature grid on mobile) scrolls instead of being
           clipped by the old fixed `flex items-center` shell. Fixes Mobile-Chrome E2E click
           timeouts where the bottom action buttons were unreachable. */}
-      <LanguageSelector />
+      {/* LanguageSelector now imported from ui/LanguageSelector.tsx with search functionality */}
+      <LanguageSelector value={language} onChange={setLanguage} />
       <div className="flex min-h-full items-center justify-center p-4 pt-16 sm:pt-4">
         <div className="w-full max-w-3xl">{renderView()}</div>
       </div>

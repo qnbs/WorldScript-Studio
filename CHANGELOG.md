@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **UI Modernization Phase 1 — LanguageSelector, RadioGroup, Tabs**:
+  - `LanguageSelector.tsx` — Modern combobox with search functionality, flag emojis, RTL support, and reduced-motion awareness. Replaces inline language buttons in WelcomePortal with a searchable dropdown.
+  - `RadioGroup.tsx` — Accessible radio group component with proper ARIA attributes (`role="radiogroup"`), individual option descriptions, and glassmorphism styling.
+  - `Tabs.tsx` — WAI-ARIA compliant tabs component with three variants: `default`, `pills`, and `underline`. Includes `TabPanel` component for content association.
+  - `SettingsShared.tsx` — ToggleSwitch optimized for RTL layouts with reduced-motion support.
+  - `docs/UI-MODERNIZATION.md` — Comprehensive guide for UI component usage, migration patterns, and design principles.
 - **Phase 3 i18n Expansion — ja/zh/pt/el Beta languages + Intl APIs**:
   - Added Japanese (ja), Chinese Simplified (zh), Portuguese (pt), and Greek (el) as Beta languages with English placeholder text
   - Extended `Language` type and `VALID_LANGS` array in `I18nContext.tsx`
