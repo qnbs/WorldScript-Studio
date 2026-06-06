@@ -1,7 +1,8 @@
 # CI Analyzer Requirements
 # OpenRouter-compatible SDK for Poolside Laguna model
-openai>=1.0.0
-pydantic>=2.0.0
-aiohttp>=3.3.0
+# QNBS-v3: Pinned exact versions for Scorecard compliance and reproducible builds.
+openai==1.76.0
+pydantic==2.11.4
+aiohttp==3.11.16
 # Optional: for advanced JSON schema validation
-jsonschema>=4.0.0
+jsonschema==4.23.0
