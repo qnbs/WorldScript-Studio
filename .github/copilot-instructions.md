@@ -174,7 +174,7 @@ pnpm run storybook    # Storybook on port 6006
 
 ## Collaboration
 
-Real-time P2P via Yjs + y-webrtc (`services/collaborationService.ts`). **RTCDataChannel in-flight E2E encryption** is shipped via `patches/y-webrtc@10.3.0.patch` (v1.17.0). Signaling-channel encryption: AES-256-GCM / PBKDF2 (310 000 iterations, SHA-256), deterministic salt from `projectId`.
+Real-time P2P via Yjs + y-webrtc (`services/collaborationService.ts`). **RTCDataChannel in-flight E2E encryption** is shipped via `patches/y-webrtc@10.3.0.patch` (v1.17.0). Signaling-channel encryption: AES-256-GCM / PBKDF2 (600 000 iterations, SHA-256), deterministic salt from `projectId`.
 
 ## graphify
 

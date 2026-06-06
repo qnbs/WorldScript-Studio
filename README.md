@@ -266,7 +266,7 @@ Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc
 
 - **RTCDataChannel in-flight E2E encryption** — all Yjs sync updates and awareness protocol messages over peer-to-peer WebRTC data channels are encrypted via AES-256-GCM using a room key. Shipped via `packages/collab-transport` (vendor fork with applied patch).
 - **Room isolation** — room IDs are derived from a SHA-256 hash of the room name.
-- **AES-256-GCM key derivation** — `collaborationService.ts` includes `deriveEncryptionKey()` (PBKDF2, 310 000 iterations, SHA-256), `encryptUpdate()` / `decryptUpdate()` (AES-256-GCM, 12-byte random IV), and `getEncryptionStatus()`.
+- **AES-256-GCM key derivation** — `collaborationService.ts` includes `deriveEncryptionKey()` (PBKDF2, 600 000 iterations, SHA-256), `encryptUpdate()` / `decryptUpdate()` (AES-256-GCM, 12-byte random IV), and `getEncryptionStatus()`.
 - **Encryption status badge** — CollaborationPanel shows green `E2E Key Derived (AES-256-GCM)` or amber `Room isolation only` based on whether a room password is set.
 - **Security warning banner** (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) visible before connecting explains that public signaling relays observe connection metadata; disappears after connect.
 - **Configurable signaling URLs** in Settings → Collaboration.
@@ -283,7 +283,7 @@ Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc
 
 All project data, snapshots, and settings stored in IndexedDB can be encrypted at rest via `services/storage/storageEncryptionService.ts`:
 
-- **AES-256-GCM** with a PBKDF2-derived key (310 000 iterations, SHA-256, 32-byte random salt).
+- **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
 - Gated behind `featureFlags.enableIdbAtRestEncryption` (off by default — no migration risk).
 - Web build: passphrase-entry unlock screen on cold start (session-scoped in-memory key).
 - Tauri build: transparent OS-keychain protection via `tauri-plugin-stronghold` (no user friction).
@@ -403,7 +403,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **Local Server AI**  | Ollama HTTP adapter                                       | Any locally served model; auto-detect via `/api/tags`                |
 | **AI Facade**        | `packages/ai-core` workspace package                     | Unified local inference interface; sanitizeForPrompt truncation      |
 | **Storage**          | Dual IndexedDB v8 (`StateDB` + `DataDB`)                 | Split state/asset persistence; LZ-String compression + AES-256-GCM  |
-| **Collaboration**    | Yjs + `packages/collab-transport` (y-webrtc vendor fork)  | P2P CRDT editing; RTCDataChannel E2E AES-256-GCM; PBKDF2 310 000 iter |
+| **Collaboration**    | Yjs + `packages/collab-transport` (y-webrtc vendor fork)  | P2P CRDT editing; RTCDataChannel E2E AES-256-GCM; PBKDF2 600 000 iter |
 | **Encryption**       | Web Crypto API (AES-256-GCM + PBKDF2)                    | API-key encryption at rest; IDB at-rest encryption; library backup vault |
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |

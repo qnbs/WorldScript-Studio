@@ -40,7 +40,7 @@ This design does **not** protect against an attacker who can execute arbitrary c
 passphrase (UTF-8)
     │
     ▼
-PBKDF2(SHA-256, salt=appSalt, iterations=310,000)
+PBKDF2(SHA-256, salt=appSalt, iterations=600,000)
     │
     ▼
 AES-256-GCM CryptoKey  { extractable: false, usages: ['encrypt','decrypt','wrapKey','unwrapKey'] }

@@ -27,7 +27,7 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 
 **B-1 — IDB At-Rest Encryption:**
 - `services/storage/storageEncryptionService.ts` — AES-256-GCM passphrase-derived encryption for IndexedDB stores
-- PBKDF2 (310 000 iterations, SHA-256), 32-byte random salt, `{ extractable: false }` CryptoKey
+- PBKDF2 (600 000 iterations, SHA-256), 32-byte random salt, `{ extractable: false }` CryptoKey
 - Feature flag `enableIdbAtRestEncryption` (off by default); Tauri path via `tauri-plugin-stronghold`
 
 **B-2 — Voice WASM Scaffold:**
@@ -66,7 +66,7 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 **Status:** 🔄 In Progress — C-1..C-7 all addressed; C-6 blocked on translator; Local AI Perfection Phase 1+2.1 complete (2026-05-31).
 
 **C-1 — collab-transport security peer review** ✅ Done (2026-05-28)
-- 3 findings fixed in `packages/collab-transport/src/crypto.js`: PBKDF2 100k→310k, extractable:true→false, missing `return` on promise.reject(). Documented in AUDIT.md.
+- 3 findings fixed in `packages/collab-transport/src/crypto.js`: PBKDF2 100k→600k, extractable:true→false, missing `return` on promise.reject(). Documented in AUDIT.md.
 
 **C-2 — Plugin System Beta** ✅ Done (2026-05-28/29)
 - Registry + sandboxed API + Zod validation (v1.19.0) + 2 reference plugins

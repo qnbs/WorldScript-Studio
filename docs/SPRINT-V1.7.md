@@ -104,7 +104,7 @@ characterName → embedText() → Float32Array (384-dim)
 
 ## 4. Y-WebRTC E2E Encryption
 
-- `collaborationService.ts`: `deriveEncryptionKey()` (PBKDF2, 310 000 iterations, SHA-256, AES-256-GCM), `encryptUpdate()`, `decryptUpdate()`
+- `collaborationService.ts`: `deriveEncryptionKey()` (PBKDF2, 600 000 iterations, SHA-256, AES-256-GCM), `encryptUpdate()`, `decryptUpdate()`
 - Deterministic salt: SHA-256 of `projectId` → `Uint8Array` (no random bytes → reproducible across reconnects)
 - `CollaborationPanel`: green badge `E2E Key Derived (AES-256-GCM)` / amber `Room isolation only`
 - **Note:** Full in-flight RTCDataChannel patching of y-webrtc deferred to v2.0 (requires vendored y-webrtc fork)

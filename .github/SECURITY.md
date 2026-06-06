@@ -54,7 +54,7 @@ A formal STRIDE threat analysis with attack trees and mitigation mappings is doc
 This includes vulnerabilities involving:
 
 - **API key handling and storage** — encrypted AES-256-GCM via IndexedDB (`dbService.ts`); never `localStorage` or `sessionStorage`
-- **Collaboration E2E encryption** — signaling-channel and RTCDataChannel in-flight encryption (`collaborationService.ts`, `packages/collab-transport` vendor fork); PBKDF2 310,000 iterations, SHA-256, deterministic salt from `projectId`
+- **Collaboration E2E encryption** — signaling-channel and RTCDataChannel in-flight encryption (`collaborationService.ts`, `packages/collab-transport` vendor fork); PBKDF2 600,000 iterations, SHA-256, deterministic salt from `projectId`
 - **IndexedDB at-rest privacy** — passphrase-derived AES-256-GCM encryption implemented in `services/storage/storageEncryptionService.ts` (v1.19.0, B-1); migration path via `dbMigration.ts`
 - **Voice STT routing** — Web Speech API routes raw audio to Google/Microsoft servers; GDPR Art. 13 consent required before first use
 - **WebCrypto correctness** — IV uniqueness per operation, GCM authentication tag verification, PBKDF2 iteration count, non-extractable `CryptoKey` handles

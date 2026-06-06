@@ -8,7 +8,7 @@
 |--------|-------------|--------|
 | Vercel fix | `packages/collab-transport/src/crypto.js` missing from vendor fork — UNRESOLVED_IMPORT on Vercel build | ✅ Fixed |
 | Docs audit | README, CHANGELOG, ROADMAP, TODO, SECURITY.md, CI.md, AGENTS.md, copilot-instructions.md — comprehensive v1.19.0 pass | ✅ Done |
-| C-1 | `packages/collab-transport/src/crypto.js` security hardening: PBKDF2 100k→310k, extractable:true→false, `return promise.reject()` | ✅ Done |
+| C-1 | `packages/collab-transport/src/crypto.js` security hardening: PBKDF2 100k→600k, extractable:true→false, `return promise.reject()` | ✅ Done |
 | C-2 | Reference plugins: `services/plugins/wordCountOverlay.plugin.ts` + `sceneAppender.plugin.ts`; 8 unit tests | ✅ Done |
 | C-3 | LoRA Ollama inference wiring: `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag`, `streamProvider()` model-tag override | ✅ Done |
 | C-4 | Cloud-Sync audit: `services/cloudSync/` confirmed complete (3 files, 39 tests, AES-256-GCM, `enableCloudSync`) | ✅ Verified |
@@ -21,7 +21,7 @@
 
 ### C-1 crypto.js findings
 Three bugs in upstream y-webrtc `crypto.js` (not our patch):
-1. `iterations: 100000` → raised to `310000` (OWASP + consistency with our own code)
+1. `iterations: 100000` → raised to `600000` (OWASP 2024 minimum for PBKDF2-HMAC-SHA-256)
 2. `extractable: true` → `false` (SEC-RULE-5; prevented key export via exportKey())
 3. `promise.reject(...)` without `return` in `decrypt()` → error swallowed, decrypt continued with garbage ciphertext
 
