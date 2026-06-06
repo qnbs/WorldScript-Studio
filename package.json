@@ -166,46 +166,6 @@
     "wrangler": "^4.94.0",
     "y-protocols": "^1.0.7"
   },
-  "pnpm": {
-    "overrides": {
-      "typescript": "npm:@typescript/typescript6@~6.0.3",
-      "serialize-javascript": ">=7.0.3",
-      "chrome-launcher": "^1.2.1",
-      "tmp": "^0.2.6",
-      "@xmldom/xmldom": ">=0.8.13",
-      "protobufjs": ">=7.5.6",
-      "axios": ">=1.15.2",
-      "basic-ftp": ">=5.3.1",
-      "fast-uri": ">=3.1.2",
-      "ip-address": ">=10.1.1",
-      "ws": ">=8.20.1",
-      "brace-expansion": ">=5.0.6",
-      "uuid": ">=11.1.1",
-      "qs": ">=6.15.2"
-    },
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "vite-plugin-pwa>vite": "8"
-      }
-    },
-    "onlyBuiltDependencies": [
-      "@google/genai",
-      "@swc/core",
-      "core-js",
-      "esbuild",
-      "protobufjs",
-      "sharp",
-      "workerd"
-    ],
-    "patchedDependencies": {
-      "zod@4.4.3": "patches/zod@4.4.3.patch"
-    },
-    "ignoredBuiltDependencies": [
-      "onnxruntime-node",
-      "simple-git-hooks",
-      "unrs-resolver"
-    ]
-  },
   "simple-git-hooks": {
     "pre-commit": "npm exec -- lint-staged"
   },

@@ -1,16 +1,46 @@
-# pnpm v10 workspace configuration
+# pnpm v10/v11 workspace configuration
 # Build-script allow-list: ONLY these packages may run postinstall/preinstall scripts.
 # All others are silently denied (pnpm v10 default since v9.15+ approve-builds model).
-# v11 upgrade path: rename to strictDepBuilds: true with an explicit allowlist, and add
-#   minimumReleaseAge, blockExoticSubdeps, trustPolicy here.
 # QNBS-v3: TS7 migration - disabled strictPeerDependencies for tsgo preview compatibility
 strictPeerDependencies: false
+
+# QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
+overrides:
+  typescript: "npm:@typescript/typescript6@~6.0.3"
+  serialize-javascript: ">=7.0.3"
+  chrome-launcher: "^1.2.1"
+  tmp: "^0.2.6"
+  "@xmldom/xmldom": ">=0.8.13"
+  protobufjs: ">=7.5.6"
+  axios: ">=1.15.2"
+  basic-ftp: ">=5.3.1"
+  fast-uri: ">=3.1.2"
+  ip-address: ">=10.1.1"
+  ws: ">=8.20.1"
+  brace-expansion: ">=5.0.6"
+  uuid: ">=11.1.1"
+  qs: ">=6.15.2"
+
+peerDependencyRules:
+  allowedVersions:
+    vite-plugin-pwa>vite: "8"
+
 onlyBuiltDependencies:
-  - core-js # generates polyfills at install time
-  - esbuild # downloads platform binary via postinstall
-  - protobufjs # builds native addon fallback
-  - '@google/genai' # SDK postinstall (direct dep)
-  - sharp # downloads platform binary (transitive via @xenova/transformers)
+  - "@google/genai"
+  - "@swc/core"
+  - core-js
+  - esbuild
+  - protobufjs
+  - sharp
+  - workerd
+
+ignoredBuiltDependencies:
+  - onnxruntime-node
+  - simple-git-hooks
+  - unrs-resolver
+
+patchedDependencies:
+  zod@4.4.3: patches/zod@4.4.3.patch
 
 packages:
   - "packages/*"
