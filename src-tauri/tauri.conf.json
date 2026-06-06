@@ -45,11 +45,7 @@
     "macOS": {
       "minimumSystemVersion": "11.0",
       "signingIdentity": "-",
-      "entitlements": "Entitlements.plist",
-      "exceptionDomain": {
-        "domain": "localhost",
-        "value": true
-      }
+      "entitlements": "Entitlements.plist"
     },
     "windows": {
       "nsis": {
