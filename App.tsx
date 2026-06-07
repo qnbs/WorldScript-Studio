@@ -559,19 +559,21 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
   if (isPortalActive) {
     return (
-      <Suspense
-        fallback={
-          <div
-            role="status"
-            aria-label={t('common.appLoading')}
-            className="flex h-[100dvh] w-screen items-center justify-center bg-[var(--sc-surface-base)]"
-          >
-            <Spinner className="w-16 h-16" label={t('common.appLoading')} />
-          </div>
-        }
-      >
-        <WelcomePortal onExit={appState.handlePortalExit} />
-      </Suspense>
+      <ErrorBoundary onReset={() => window.location.reload()}>
+        <Suspense
+          fallback={
+            <div
+              role="status"
+              aria-label={t('common.appLoading')}
+              className="flex h-[100dvh] w-screen items-center justify-center bg-[var(--sc-surface-base)]"
+            >
+              <Spinner className="w-16 h-16" label={t('common.appLoading')} />
+            </div>
+          }
+        >
+          <WelcomePortal onExit={appState.handlePortalExit} />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
