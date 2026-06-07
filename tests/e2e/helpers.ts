@@ -35,10 +35,11 @@ export function writerSectionSelect(page: Page) {
 }
 
 /**
- * Native `<option>` nodes are not Playwright-visible when the list is closed; use counts + selectOption.
+ * QNBS-v3: Select is now a custom dropdown (button + listbox), not native <select>.
+ * Click trigger to open dropdown, then click first enabled option.
  */
 export async function selectFirstEnabledWriterSection(page: Page): Promise<void> {
-  // QNBS-v3: Writer view is lazy-loaded; wait for writer-tab-context to attach before checking
+  // Writer view is lazy-loaded; wait for writer-tab-context to attach before checking
   // viewport visibility — 2s was too short for CI Mobile Chrome with a cold bundle load.
   const contextTab = page.getByTestId('writer-tab-context');
   await contextTab.waitFor({ state: 'attached', timeout: 20000 }).catch(() => {});
@@ -48,7 +49,7 @@ export async function selectFirstEnabledWriterSection(page: Page): Promise<void>
     if ((await contextTab.getAttribute('aria-selected')) !== 'true') {
       await contextTab.click();
     }
-    // QNBS-v3: After clicking context tab on mobile, ContextPanel renders in BOTH the mobile tab panel
+    // After clicking context tab on mobile, ContextPanel renders in BOTH the mobile tab panel
     // (#writer-panel-context, visible) and the always-rendered desktop grid (hidden md:grid, display:none).
     // Wait for the mobile panel to mount, then scope the select to it to avoid picking the hidden one.
     await page.locator('#writer-panel-context').waitFor({ state: 'visible' });
@@ -57,10 +58,15 @@ export async function selectFirstEnabledWriterSection(page: Page): Promise<void>
     sel = writerSectionSelect(page);
   }
   await expect(sel).toBeVisible();
-  const enabled = sel.locator('option:not([disabled])');
-  await expect.poll(async () => enabled.count()).toBeGreaterThan(0);
-  const value = await enabled.first().getAttribute('value');
-  if (value) await sel.selectOption(value);
+
+  // Click trigger to open dropdown, then click first enabled option.
+  await sel.click();
+  const container = sel.locator('xpath=..');
+  const listbox = container.locator('[role="listbox"]');
+  await expect(listbox).toBeVisible({ timeout: 5000 });
+  const options = listbox.locator('[role="option"]:not([disabled])');
+  await expect.poll(async () => options.count()).toBeGreaterThan(0);
+  await options.first().click();
 }
 
 /** Outline / AI flows call Gemini only when a key exists in encrypted storage — seed before mocked HTTP in CI. */
