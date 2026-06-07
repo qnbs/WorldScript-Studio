@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/TypeScript-7.x_(tsgo)-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7 (tsgo)">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · Ollama · WebLLM">
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
-  <img src="https://img.shields.io/badge/Version-v1.20.0-6366F1" alt="v1.19.0">
+  <img src="https://img.shields.io/badge/Version-v1.20.0-6366F1" alt="v1.20.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-DE_%7C_EN_%7C_FR_%7C_ES_%7C_IT_%7C_AR_%7C_HE_%7C_JA_%7C_ZH_%7C_PT_%7C_EL-2339_keys-0EA5E9" alt="i18n DE EN FR ES IT AR HE JA ZH PT EL — 2339 keys">
@@ -48,7 +48,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 ### PWA & Desktop
 
 - **Install as PWA:** In Chromium/Edge, open the Live Demo → use the install icon in the address bar (or browser menu) for an offline-capable app shortcut.
-- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — signed `.appimage`, `.msi`, and `.dmg` artifacts with an auto-generated `latest.json` update manifest. **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/SPRINT-V1.9.md`](docs/SPRINT-V1.9.md).
+- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — signed `.appimage`, `.msi`, and `.dmg` artifacts with an auto-generated `latest.json` update manifest. **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/SPRINT-V1.10.md`](docs/SPRINT-V1.10.md).
 
 ---
 
@@ -66,7 +66,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 > Everything is saved locally in IndexedDB and works offline (PWA). Nothing leaves your device unless you choose a cloud provider.
 
-**Running it yourself?** `pnpm install && pnpm run dev` (Node ≥ 22, pnpm 10) → <http://localhost:3000>. Full setup, deployment, and AI-provider options are in [Getting Started](#getting-started).
+**Running it yourself?** `pnpm install && pnpm run dev` (Node ≥ 22, pnpm 11) → <http://localhost:3000>. Full setup, deployment, and AI-provider options are in [Getting Started](#getting-started).
 
 ---
 
