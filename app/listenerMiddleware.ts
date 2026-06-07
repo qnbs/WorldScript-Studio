@@ -502,6 +502,33 @@ export async function initWorkerBusOnStartup(enabled: boolean): Promise<void> {
   }
 }
 
+// QNBS-v3: Reconcile transient UI state after project mutations/undo/redo.
+// When binderNodes change (e.g. section deleted then undone), the pinned node ID
+// in Zustand may point to a node that no longer exists. Clear it to avoid stale references.
+listenerMiddleware.startListening({
+  predicate: (_action, curr, prev) => {
+    const currNodes = (curr as RootState).project?.present?.data?.binderNodes;
+    const prevNodes = (prev as RootState).project?.present?.data?.binderNodes;
+    return currNodes !== prevNodes;
+  },
+  effect: async (_action, listenerApi) => {
+    const state = listenerApi.getState() as RootState;
+    const { manuscriptPinnedBinderNodeId, setManuscriptPinnedBinderNodeId } = (
+      await import('./transientUiStore')
+    ).useTransientUiStore.getState();
+    if (!manuscriptPinnedBinderNodeId) return;
+
+    const nodes = state.project?.present?.data?.binderNodes ?? [];
+    const stillExists = nodes.some((n) => n.id === manuscriptPinnedBinderNodeId);
+    if (!stillExists) {
+      setManuscriptPinnedBinderNodeId(null);
+      logger.info(
+        'Reconcile: cleared manuscriptPinnedBinderNodeId — node no longer exists after project change',
+      );
+    }
+  },
+});
+
 export const startAppListening = listenerMiddleware.startListening as TypedStartListening<
   RootState,
   AppDispatch
