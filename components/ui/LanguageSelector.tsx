@@ -25,12 +25,20 @@ interface LanguageSelectorProps {
   onChange: (language: Language) => void;
   /** Show as compact button (for header) or full dropdown (for settings) */
   variant?: 'compact' | 'full';
+  /** Show search input inside dropdown (default true) */
+  showSearch?: boolean;
   /** Optional className for styling */
   className?: string;
 }
 
 export const LanguageSelector = React.memo(
-  ({ value, onChange, variant = 'full', className = '' }: LanguageSelectorProps) => {
+  ({
+    value,
+    onChange,
+    variant = 'full',
+    showSearch = true,
+    className = '',
+  }: LanguageSelectorProps) => {
     const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -136,16 +144,18 @@ export const LanguageSelector = React.memo(
               aria-label={t('portal.language.groupLabel')}
               className="absolute top-full right-0 mt-2 w-64 max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[var(--sc-z-docked)]"
             >
-              <div className="p-2 border-b border-[var(--sc-border-subtle)]">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t('portal.language.searchPlaceholder')}
-                  className="w-full px-2.5 py-1.5 text-sm rounded-sc-md bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
-                />
-              </div>
+              {showSearch && (
+                <div className="p-2 border-b border-[var(--sc-border-subtle)]">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t('portal.language.searchPlaceholder')}
+                    className="w-full px-2.5 py-1.5 text-sm rounded-sc-md bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+                  />
+                </div>
+              )}
               <ul className="py-1">
                 {filteredLanguages.map((lang) => {
                   const meta = LANGUAGE_METADATA[lang];
@@ -242,16 +252,18 @@ export const LanguageSelector = React.memo(
             aria-label={t('portal.language.groupLabel')}
             className="absolute top-full left-0 mt-2 w-full max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[var(--sc-z-docked)]"
           >
-            <div className="p-2 border-b border-[var(--sc-border-subtle)]">
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('portal.language.searchPlaceholder')}
-                className="w-full px-3 py-2 text-sm rounded-sc-md bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
-              />
-            </div>
+            {showSearch && (
+              <div className="p-2 border-b border-[var(--sc-border-subtle)]">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t('portal.language.searchPlaceholder')}
+                  className="w-full px-3 py-2 text-sm rounded-sc-md bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+                />
+              </div>
+            )}
             <ul className="py-1 max-h-64 overflow-y-auto">
               {filteredLanguages.map((lang) => {
                 const meta = LANGUAGE_METADATA[lang];

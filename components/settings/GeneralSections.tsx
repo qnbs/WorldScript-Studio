@@ -127,7 +127,12 @@ export const GeneralSection: FC = () => {
           <p className="text-sm text-[var(--sc-text-secondary)] mb-2">
             {t('settings.language.description')}
           </p>
-          <LanguageSelector value={language} onChange={handleLanguageChange} variant="full" />
+          <LanguageSelector
+            value={language}
+            onChange={handleLanguageChange}
+            variant="full"
+            showSearch={false}
+          />
         </CardContent>
       </Card>
       <PWAInstallCard />
