@@ -19,6 +19,8 @@ Maintainer reference: where accessibility is anchored in the app and how we veri
 | Toast | `role="status"` or `role="alert"` depending on urgency |
 | Navigation tabs | `role="tablist"` / `role="tab"` / `role="tabpanel"` |
 | Skip link | `#main-content` anchor at top of `App.tsx` |
+| Select | `role="listbox"` on dropdown + `role="option"` on items + `aria-haspopup="listbox"` + `aria-expanded` on trigger button |
+| LanguageSelector | Same as Select + search input with `aria-label` for filtering |
 
 ### v1.6 Additions (Plot-Board v2, Reference Panel, Progress Tracker)
 | Component | Pattern |

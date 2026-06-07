@@ -175,6 +175,44 @@ vi.mock('../../../components/ApiKeySection', () => ({
   ApiKeySection: () => <div data-testid="api-key-section" />,
 }));
 
+vi.mock('../../../components/ui/Select', () => ({
+  Select: vi.fn(
+    ({
+      value,
+      onChange,
+      options,
+      groups,
+      ariaLabel,
+      ...rest
+    }: {
+      value: string;
+      onChange: (v: string) => void;
+      options?: Array<{ value: string; label: string; disabled?: boolean }>;
+      groups?: Array<{
+        label: string;
+        options: Array<{ value: string; label: string; disabled?: boolean }>;
+      }>;
+      ariaLabel?: string;
+      [key: string]: unknown;
+    }) => (
+      <select
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        aria-label={ariaLabel}
+        {...rest}
+      >
+        {(options ?? groups?.flatMap((g) => g.options) ?? []).map(
+          (opt: { value: string; label: string; disabled?: boolean }) => (
+            <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+              {opt.label}
+            </option>
+          ),
+        )}
+      </select>
+    ),
+  ),
+}));
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -189,10 +227,10 @@ describe('GeneralSection', () => {
     expect(screen.getByText('settings.language.title')).toBeTruthy();
   });
 
-  it('shows language select options', () => {
+  it('shows language selector', () => {
     render(<GeneralSection />);
-    expect(screen.getByText('settings.language.english')).toBeTruthy();
-    expect(screen.getByText('settings.language.german')).toBeTruthy();
+    // QNBS-v3: LanguageSelector is a custom dropdown with aria-label
+    expect(screen.getByLabelText('portal.language.groupLabel')).toBeTruthy();
   });
 });
 

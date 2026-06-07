@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { BookPreviewView } from '../../components/BookPreviewView';
 
@@ -114,11 +115,17 @@ describe('BookPreviewView', () => {
     expect(screen.getByText('15')).toBeDefined();
   });
 
-  it('changes font family via select', () => {
+  it('changes font family via select', async () => {
+    const user = userEvent.setup();
     render(<BookPreviewView />);
-    const select = screen.getByRole('combobox', { name: 'preview.controls.fontFamily' });
-    fireEvent.change(select, { target: { value: 'serif' } });
-    expect((select as HTMLSelectElement).value).toBe('serif');
+    const button = screen.getByLabelText('preview.controls.fontFamily');
+    await user.click(button);
+    // The Select component is a custom dropdown, not a native select
+    // Mock returns the key, not the translated value
+    const serifOption = screen.getByRole('option', { name: 'preview.controls.fontSerif' });
+    await user.click(serifOption);
+    // Verify the selection changed by checking the button text
+    expect(button.textContent).toContain('preview.controls.fontSerif');
   });
 
   it('exits fullscreen on Escape key', () => {
