@@ -35,7 +35,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 | Requirement | Source |
 |-------------|--------|
 | Node.js | [`.nvmrc`](../.nvmrc) (currently **22**) |
-| Package manager | **pnpm** 10.x ([`package.json`](../package.json) `packageManager`) |
+| Package manager | **pnpm** 11.x ([`package.json`](../package.json) `packageManager`) |
 | Lint / format | **Biome** (`pnpm run lint`, `lint:fix`) |
 | i18n parity | **`pnpm run i18n:check`** — every locale must expose the same keys as `locales/en/*.json` (see [`scripts/check-i18n-keys.mjs`](../scripts/check-i18n-keys.mjs); optional `--fix` copies missing strings from EN) |
 | Types | **TypeScript 7** (`tsgo`) `pnpm run typecheck` |
