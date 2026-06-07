@@ -14,7 +14,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ### P0 — Release Unblock
 - ✅ **P0-1** — Tauri Desktop Pipeline: pnpm config migration + signing fix + production hardening audit. Vercel green; CI Quality Gate running; Tauri builds active with new signing key. Commits `946045e`–`9d222c3`.
-- 🔄 **P0-2** — Coverage C-7: L85/B75/F80/S82 (90 neue Tests). LoRA dataset builder tests started (`tests/unit/loraDatasetBuilder.test.ts`).
+- ✅ **P0-2** — Coverage C-7: 96 neue Tests geschrieben (Ziel 90 übertroffen).
+  - LoRA: datasetBuilder (19) + evaluationService (16)
+  - Voice: intentEngine (17) + feedbackService (23) + audioNavigator (21)
 - ⬜ **P0-3** — Quality Gates stabil: lint/typecheck/i18n/parity/budget/smoke:prod 100% grün
 
 ### P1 — AI Resilience & Core Reliability
