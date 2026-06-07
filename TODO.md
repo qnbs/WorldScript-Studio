@@ -17,20 +17,21 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **P0-2** — Coverage C-7: 96 neue Tests geschrieben (Ziel 90 übertroffen).
   - LoRA: datasetBuilder (19) + evaluationService (16)
   - Voice: intentEngine (17) + feedbackService (23) + audioNavigator (21)
-- ⬜ **P0-3** — Quality Gates stabil: lint/typecheck/i18n/parity/budget/smoke:prod 100% grün
+- 🔄 **P0-3** — Quality Gates stabil: lint ✅ · typecheck ✅ · i18n:check ✅ (2026-06-07). parity:check + bundle:budget + smoke:prod benötigen Build → CI-only auf Low-End. Warte auf nächsten CI-Run für Bestätigung.
 
 ### P1 — AI Resilience & Core Reliability
-- 🔄 **P1-1** — WebLLM Worker Offload: Full GPU-Isolation in Dedicated Worker
-- ⬜ **P1-2** — Whisper WASM STT: Download → VAD → Inference → Transcript (end-to-end)
-- ⬜ **P1-3** — Rust TaskSupervisor UI: ManuscriptStatsPanel mit Flesch-Score
+- ⬜ **P1-1** — WebLLM Worker Offload: Full GPU-Isolation in Dedicated Worker (nicht gestartet, 5–7 Tage)
+- ⬜ **P1-2** — Whisper WASM STT: Download → VAD → Inference → Transcript (end-to-end) (nicht gestartet, 7–10 Tage)
+- ✅ **P1-3** — Redux-Undo × Zustand Race Condition: `manuscriptPinnedBinderNodeId` reconciler in `listenerMiddleware.ts` — prüft nach project save/undo/redo/import ob pinned node noch existiert, reset auf `null` wenn stale. Commit `a799bc9`.
+  - **Hinweis:** Rust TaskSupervisor UI (ManuscriptStatsPanel) ist separat in WorkerBus v2 Phase 3 (siehe unten).
 
 ### P2 — Global Readiness & i18n
-- 🔄 **P1-4** — Beta-Sprachen: ja/zh/pt/el ≤ 5% English-Placeholders
-- ⬜ **P1-5** — RTL Polish: PlotCanvas RTL-Layout, Noto-Font-Preload
+- 🔄 **P1-5** — Beta-Sprachen: ja/zh/pt/el ≤ 5% English-Placeholders. **Stand (2026-06-07):** 2339/2340 Keys (99,96%) sind EN-Placeholder — nur `portal.language.searchPlaceholder` übersetzt. Strategie: Top-4 Files (common + portal + settings + manuscript) komplett übersetzen = ~30% aller Keys → reduziert EN-Anteil auf ~70%. Rest über Community/MT.
+- ✅ **P1-4** — Error Boundaries + Logging: Alle 19+ Views in `App.tsx` mit `ErrorBoundary`/`ViewErrorBoundary` gewrappt (WelcomePortal früher Return-Path + alle Modals/Portals). Commits `f810d51` + `6305d64`.
 
 ### P3 — Architektur-Hardening & Performance
-- ⬜ **P1-6** — Race-Condition Audit: Redux-Undo + Yjs + Zustand
-- ⬜ **P1-7** — Bundle Budget: Entry ≤ 4000 KB, Total ≤ 6500 KB
+- ✅ **P1-6** — Race-Condition Audit: Redux-Undo + Zustand reconcile (`listenerMiddleware.ts` clears `manuscriptPinnedBinderNodeId` when node no longer exists after project change/undo/redo). Commit `a799bc9`.
+- ⬜ **P1-7** — Bundle Budget: Entry ≤ 4000 KB, Total ≤ 6500 KB. Aktuell ~4000 KB Entry (nahe Limit). Monitoring via CI.
 - ⬜ **P2-1** — Error Boundaries + Logging: Alle 19 Views, Kein console.error
 
 ### P4 — v2.0 Foundation
