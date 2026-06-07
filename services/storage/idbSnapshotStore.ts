@@ -9,10 +9,10 @@ import type { ProjectData } from '../../features/project/projectSlice';
 import type { ProjectSnapshot } from '../../types';
 import { SNAPSHOTS_STORE } from '../dbConstants';
 import { IdbCodexStore } from './idbCodexStore';
-import { compressData, decompressData, getUserFriendlyDbError, retryDb } from './idbCore';
+import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
-  idbDecrypt,
   idbEncrypt,
+  idbReadSecure,
   isEncryptedBlob,
   isIdbEncryptionReady,
   StorageEncryptionService,
@@ -82,10 +82,7 @@ export class IdbSnapshotStore extends IdbCodexStore {
         request.onsuccess = async () => {
           const raw: unknown = request.result?.data;
           // QNBS-v3: Decrypt encrypted snapshot payload; legacy plaintext falls through decompressData.
-          const result =
-            isEncryptedBlob(raw) && isIdbEncryptionReady()
-              ? await idbDecrypt<ProjectData>(raw)
-              : decompressData<ProjectData>(raw);
+          const result = await idbReadSecure<ProjectData>(raw);
           resolve(result);
         };
         request.onerror = () => reject(getUserFriendlyDbError(request.error));

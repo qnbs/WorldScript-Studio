@@ -14,10 +14,10 @@ import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
 import type { SaveProjectInput } from '../storageBackend';
 import { IdbAssetStore } from './idbAssetStore';
-import { compressData, decompressData, getUserFriendlyDbError, retryDb } from './idbCore';
+import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
-  idbDecrypt,
   idbEncrypt,
+  idbReadSecure,
   isEncryptedBlob,
   isIdbEncryptionReady,
   StorageEncryptionService,
@@ -257,18 +257,13 @@ export class IdbProjectStore extends IdbAssetStore {
         projectRequest.onsuccess = async () => {
           const raw = projectRequest.result;
           // QNBS-v3: Decrypt encrypted blobs; fall back to decompressData for legacy plaintext.
-          project =
-            isEncryptedBlob(raw) && isIdbEncryptionReady()
-              ? await idbDecrypt(raw)
-              : decompressData(raw);
+          //          idbReadSecure throws a clear error if encrypted data is found without a key.
+          project = await idbReadSecure(raw);
           onComplete();
         };
         settingsRequest.onsuccess = async () => {
           const raw = settingsRequest.result;
-          settings =
-            isEncryptedBlob(raw) && isIdbEncryptionReady()
-              ? await idbDecrypt(raw)
-              : decompressData(raw);
+          settings = await idbReadSecure(raw);
           onComplete();
         };
 

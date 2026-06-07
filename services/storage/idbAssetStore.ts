@@ -10,8 +10,8 @@ import { makeBinderAssetIdsPrefix, makeBinderAssetStorageKey } from '../storageB
 import { getUserFriendlyDbError, retryDb } from './idbCore';
 import { IdbSnapshotStore } from './idbSnapshotStore';
 import {
-  idbDecrypt,
   idbEncrypt,
+  idbReadSecure,
   isEncryptedBlob,
   isIdbEncryptionReady,
 } from './storageEncryptionService';
@@ -42,8 +42,8 @@ export class IdbAssetStore extends IdbSnapshotStore {
           return;
         }
         // QNBS-v3: Decrypt encrypted image payload; legacy plaintext falls through.
-        if (raw instanceof Uint8Array && isEncryptedBlob(raw) && isIdbEncryptionReady()) {
-          resolve(await idbDecrypt<string>(raw));
+        if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
+          resolve(await idbReadSecure<string>(raw));
           return;
         }
         resolve(raw as string);
@@ -101,8 +101,8 @@ export class IdbAssetStore extends IdbSnapshotStore {
       if (!raw) return null;
       // QNBS-v3: Encrypted payloads carry raw bytes (Blobs aren't JSON-serialisable); plaintext
       //          payloads carry a Blob. Reconstruct an ArrayBuffer from whichever shape is present.
-      if (raw instanceof Uint8Array && isEncryptedBlob(raw) && isIdbEncryptionReady()) {
-        const dec = await idbDecrypt<{ meta: BinderAssetMeta; bytes: number[] }>(raw);
+      if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
+        const dec = await idbReadSecure<{ meta: BinderAssetMeta; bytes: number[] }>(raw);
         return { data: new Uint8Array(dec.bytes).buffer, meta: dec.meta };
       }
       const record = raw as { meta: BinderAssetMeta; blob: Blob };

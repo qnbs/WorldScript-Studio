@@ -617,38 +617,60 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   </ErrorBoundary>
                 </main>
               </div>
-              <CommandPalette
-                isOpen={isPaletteOpen}
-                onClose={() => setCommandPaletteOpen(false)}
-                onNavigate={handleNavigate}
-                currentView={currentView}
-              />
-              <VersionControlPanel />
-              <Suspense fallback={null}>
-                <CollaborationPanel
-                  isOpen={isCollabPanelOpen}
-                  onClose={() => setIsCollabPanelOpen(false)}
-                  projectId={project?.id ?? 'default'}
+              <ErrorBoundary onReset={() => setCommandPaletteOpen(false)}>
+                <CommandPalette
+                  isOpen={isPaletteOpen}
+                  onClose={() => setCommandPaletteOpen(false)}
+                  onNavigate={handleNavigate}
+                  currentView={currentView}
                 />
-              </Suspense>
-              <Suspense fallback={null}>
-                <CrossProjectSearchPanelConnected />
-              </Suspense>
-              <PWAUpdateToast />
-              <PWAInstallBanner />
-              <OfflineIndicator />
-              <DuckDbMigrationBanner />
+              </ErrorBoundary>
+              <ErrorBoundary onReset={() => {}}>
+                <VersionControlPanel />
+              </ErrorBoundary>
+              <ErrorBoundary onReset={() => setIsCollabPanelOpen(false)}>
+                <Suspense fallback={null}>
+                  <CollaborationPanel
+                    isOpen={isCollabPanelOpen}
+                    onClose={() => setIsCollabPanelOpen(false)}
+                    projectId={project?.id ?? 'default'}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+              <ErrorBoundary onReset={() => {}}>
+                <Suspense fallback={null}>
+                  <CrossProjectSearchPanelConnected />
+                </Suspense>
+              </ErrorBoundary>
+              <ErrorBoundary onReset={() => {}}>
+                <PWAUpdateToast />
+              </ErrorBoundary>
+              <ErrorBoundary onReset={() => {}}>
+                <PWAInstallBanner />
+              </ErrorBoundary>
+              <ErrorBoundary onReset={() => {}}>
+                <OfflineIndicator />
+              </ErrorBoundary>
+              <ErrorBoundary onReset={() => {}}>
+                <DuckDbMigrationBanner />
+              </ErrorBoundary>
               {featureFlags.enableVoiceSupport && (
                 <>
-                  <VoiceIndicator />
-                  <VoiceControlPanel />
+                  <ErrorBoundary onReset={() => {}}>
+                    <VoiceIndicator />
+                  </ErrorBoundary>
+                  <ErrorBoundary onReset={() => {}}>
+                    <VoiceControlPanel />
+                  </ErrorBoundary>
                 </>
               )}
               {isIdbUnlockOpen && (
-                <IdbUnlockModal
-                  onUnlocked={() => setIdbUnlockOpen(false)}
-                  onForgotPassphrase={() => void handleForgotPassphrase()}
-                />
+                <ErrorBoundary onReset={() => setIdbUnlockOpen(false)}>
+                  <IdbUnlockModal
+                    onUnlocked={() => setIdbUnlockOpen(false)}
+                    onForgotPassphrase={() => void handleForgotPassphrase()}
+                  />
+                </ErrorBoundary>
               )}
             </div>
           </AppContext.Provider>

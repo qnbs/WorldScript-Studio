@@ -9,8 +9,8 @@ import { CODEX_STORE, RAG_VECTORS_STORE } from '../dbConstants';
 import { compressData, decompressData } from './idbCore';
 import { IdbKeyStore } from './idbKeyStore';
 import {
-  idbDecrypt,
   idbEncrypt,
+  idbReadSecure,
   isEncryptedBlob,
   isIdbEncryptionReady,
 } from './storageEncryptionService';
@@ -59,8 +59,8 @@ export class IdbCodexStore extends IdbKeyStore {
           Array.isArray((raw as { encrypted: unknown }).encrypted)
         ) {
           const bytes = new Uint8Array((raw as { encrypted: number[] }).encrypted);
-          if (isEncryptedBlob(bytes) && isIdbEncryptionReady()) {
-            resolve(await idbDecrypt<StoryCodex>(bytes));
+          if (isEncryptedBlob(bytes)) {
+            resolve(await idbReadSecure<StoryCodex>(bytes));
             return;
           }
         }
@@ -152,8 +152,8 @@ export class IdbCodexStore extends IdbKeyStore {
           const first = results[0] as { _enc?: boolean; encrypted?: number[] } | undefined;
           if (first?._enc && first.encrypted) {
             const bytes = new Uint8Array(first.encrypted);
-            if (isEncryptedBlob(bytes) && isIdbEncryptionReady()) {
-              const decrypted = await idbDecrypt<{ vectors: unknown[] }>(bytes);
+            if (isEncryptedBlob(bytes)) {
+              const decrypted = await idbReadSecure<{ vectors: unknown[] }>(bytes);
               resolve(decrypted.vectors);
               return;
             }

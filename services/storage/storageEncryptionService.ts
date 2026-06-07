@@ -11,6 +11,7 @@
  *   If no sentinel exists the feature flag is silently cleared (App.tsx startup guard).
  */
 
+import { decompressData } from './idbCore';
 import {
   deletePassphraseSentinel,
   getPassphraseSentinel,
@@ -166,6 +167,26 @@ export function isEncryptedBlob(value: unknown): value is Uint8Array {
     if (value[i] !== SENTINEL[i]) return false;
   }
   return true;
+}
+
+/**
+ * Unified read helper: decrypts encrypted blobs when the key is available,
+ * decompresses plaintext legacy data, and throws a clear user-facing error
+ * when encrypted data is encountered without an active key.
+ * QNBS-v3: Prevents silent data corruption when encryption is disabled
+ * after encrypted data already exists.
+ */
+export async function idbReadSecure<T>(raw: unknown): Promise<T> {
+  if (isEncryptedBlob(raw)) {
+    if (!isIdbEncryptionReady()) {
+      throw new Error(
+        'Data is encrypted but encryption key is not available. ' +
+          'Please re-enable encryption in Settings → Privacy to access your data.',
+      );
+    }
+    return idbDecrypt<T>(raw);
+  }
+  return decompressData<T>(raw);
 }
 
 // ─── Sentinel-backed API (correct opt-in behaviour) ─────────────────────────
