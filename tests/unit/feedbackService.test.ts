@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FeedbackService } from '../../services/voice/feedbackService';
-import type { FeedbackEvent, TtsEngine, TtsUtterance, VoiceEvent } from '../../services/voice/voiceTypes';
+import type { TtsEngine } from '../../services/voice/voiceTypes';
 
 function makeMockTts(): TtsEngine {
   return {
-    id: 'mock-tts',
+    id: 'webSpeech',
     name: 'Mock TTS',
     isLocal: true,
+    isAvailable: vi.fn().mockResolvedValue(true),
+    initialize: vi.fn().mockResolvedValue(undefined),
     speak: vi.fn().mockResolvedValue(undefined),
     cancel: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    dispose: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -113,17 +118,25 @@ describe('FeedbackService', () => {
   // ── Visual only ──────────────────────────────────────────────────────────
 
   it('skips TTS for visual-only events', async () => {
-    await service.feedback({ message: 'Visual', level: 'standard', priority: 'polite', visualOnly: true });
+    await service.feedback({
+      message: 'Visual',
+      level: 'standard',
+      priority: 'polite',
+      visualOnly: true,
+    });
     expect(mockTts.speak).not.toHaveBeenCalled();
   });
 
   it('still emits event for visual-only feedback', async () => {
     const listener = vi.fn();
     service.addEventListener(listener);
-    await service.feedback({ message: 'Visual', level: 'standard', priority: 'polite', visualOnly: true });
-    expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'feedback-spoken' }),
-    );
+    await service.feedback({
+      message: 'Visual',
+      level: 'standard',
+      priority: 'polite',
+      visualOnly: true,
+    });
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ type: 'feedback-spoken' }));
   });
 
   // ── Queue processing ─────────────────────────────────────────────────────
@@ -145,23 +158,17 @@ describe('FeedbackService', () => {
 
   it('confirm sends standard level feedback', async () => {
     await service.confirm('Saved');
-    expect(mockTts.speak).toHaveBeenCalledWith(
-      expect.objectContaining({ text: 'Saved' }),
-    );
+    expect(mockTts.speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Saved' }));
   });
 
   it('error sends minimal level feedback', async () => {
     await service.error('Failed');
-    expect(mockTts.speak).toHaveBeenCalledWith(
-      expect.objectContaining({ text: 'Failed' }),
-    );
+    expect(mockTts.speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Failed' }));
   });
 
   it('info sends verbose level feedback', async () => {
     await service.info('Details');
-    expect(mockTts.speak).toHaveBeenCalledWith(
-      expect.objectContaining({ text: 'Details' }),
-    );
+    expect(mockTts.speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Details' }));
   });
 
   // ── Cancel ───────────────────────────────────────────────────────────────
@@ -188,8 +195,6 @@ describe('FeedbackService', () => {
 
   it('handles empty message', async () => {
     await service.feedback({ message: '', level: 'standard', priority: 'polite' });
-    expect(mockTts.speak).toHaveBeenCalledWith(
-      expect.objectContaining({ text: '' }),
-    );
+    expect(mockTts.speak).toHaveBeenCalledWith(expect.objectContaining({ text: '' }));
   });
 });
