@@ -56,7 +56,7 @@
         "noExplicitAny": "error",
         "noArrayIndexKey": "error",
         "noConsole": {
-          "level": "warn",
+          "level": "error",
           "options": {
             "allow": ["warn", "error", "group", "groupEnd", "groupCollapsed"]
           }
