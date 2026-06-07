@@ -45,6 +45,7 @@
     "tauri:build": "tauri build",
     "lint": "biome lint --max-diagnostics=200 --error-on-warnings",
     "mutation": "stryker run",
+    "mutation:fast": "stryker run --mutate 'services/commands/fuzzyScore.ts' --reporters progress",
     "mutation:local": "stryker run --incremental --concurrency 1",
     "mutation:full": "stryker run --force --concurrency 6",
     "mutation:one": "stryker run --mutate",
