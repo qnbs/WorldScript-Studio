@@ -34,7 +34,7 @@
     "low": 70,
     "break": 75
   },
-  "reporters": ["progress", "clear-text", "html", "json"],
+  "reporters": ["progress", "json"],
   "htmlReporter": {
     "fileName": "reports/mutation/mutation.html"
   },
@@ -42,9 +42,11 @@
     "fileName": "reports/mutation/mutation.json"
   },
   "timeoutMS": 60000,
-  "concurrency": 2,
+  "timeoutFactor": 1.5,
+  "concurrency": 3,
+  "tempDirName": ".stryker-tmp",
   "warnings": {
-    "slow": false
+    "slow": true
   },
   "ignorePatterns": [
     "**/dist/**",

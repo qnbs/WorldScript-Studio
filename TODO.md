@@ -65,7 +65,14 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **WorkerBus v2 Phase 1** — `@domain/worker-bus` package: typed worker pool, circuit breakers, dead-letter queue, priority task queue, progress emitter, protocol handler; 123 tests / 12 suites; 84.5% coverage
 - ✅ **WorkerBus v2 Phase 2** — runtime wiring complete (2026-06-02): `workerBusManager` (singleton lifecycle), `hybridRouter` (web/Rust routing), `legacyWorkerBusAdapter` (ai-core shim), `tauriTaskBridge` (Tauri invoke); feature flag UI exposed; listenerMiddleware listeners; 154 combined tests; Rust backend stub deferred to Phase 3
 - 🔄 **WorkerBus v2 Phase 3** — Rust TaskSupervisor. ✅ (2026-06-03) `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs`; `storycraft_task_supervisor_ping` (version) + `storycraft_task_supervisor_submit` (taskType dispatcher, honest `success:false` on unknown/bad payload) registered in `lib.rs`. First real compute task `text.analyze` (word/char/sentence/syllable counts + Flesch Reading Ease, pure-Rust, 8 `#[cfg(test)]` tests). TS front-end `services/rustTaskSupervisor.ts` (`analyzeTextViaRust` — probes `isRustComputeAvailable` before routing so a Rust-only task never hits the web pool; null → JS fallback) + 5 unit tests. ⬜ Remaining: full `cargo build`/desktop verification (CI/Tauri — heavy locally); wire a real UI consumer (analytics/progress health); add more native tasks; `candle` `rust-compute` feature inference path
-- ⬜ **C-7** — Coverage L85%/B75%/F80%; Stryker break 75→80
+- 🔄 **C-7** — Coverage L85%/B75%/F80%; Stryker break 75→80
+  - ✅ Stryker Config: concurrency 3, timeoutFactor 1.5, reporters [progress,json], tempDirName, slow warnings
+  - ✅ Matrix-Parallelisierung: 5 Jobs (services-commands, services-core, services-ai, features-project, features-misc)
+  - ✅ Incremental Caching pro Modul (actions/cache) mit force/incremental Mode-Switch
+  - ✅ Timeout: 30 min pro Job (statt 45 min single job)
+  - ✅ Aggregate Job mit kombinierter Summary-Tabelle
+  - ⬜ Erste Test-Run auf GitHub Actions dispatchen und validieren
+  - ⬜ Neue Dateien zur mutate-Liste hinzufügen (nach lokalem Test)
 - 🔄 **C-6** — ar/he Beta shipped (2026-06-03): all 18 UI modules fully translated (ar + he), Noto Sans Arabic/Hebrew + Naskh fonts wired, `[dir="rtl"]` CSS net + shell logical-property conversion + canvas LTR islands, WelcomePortal ar/he selectors, "(Beta)" labels retained. `i18n:check` now validates ar/he parity (2259 keys × 7 locales). Help Center gained an **Advanced & Power Features** category (8 articles, en/de/fr/es/it; ar/he English fallback) + 3 offline RAG chunks; in-app **Settings Guide** now documents every live category (Fine-Tuning/LoRA, Community, Plugins). ⬜ Remaining: native-speaker review + `help.json` long-form prose (English fallback for Beta) — community follow-up
 
 ---
