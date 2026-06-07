@@ -7,6 +7,7 @@ import type { FC } from 'react';
 import { useId } from 'react';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { Card, CardContent, CardHeader } from '../ui/Card';
+import { Select } from '../ui/Select';
 import { ToggleSwitch } from './SettingsShared';
 
 export const VoiceSettingsSection: FC = () => {
@@ -65,18 +66,17 @@ export const VoiceSettingsSection: FC = () => {
                 >
                   {t('settings.voice.activationMode')}
                 </label>
-                <select
+                <Select
                   id={activationId}
-                  className="w-full rounded-md border border-[var(--sc-border)] bg-[var(--sc-surface-base)] px-3 py-2 text-sm text-[var(--sc-text-primary)]"
                   value={voice.activationMode}
-                  onChange={(e) =>
-                    patchVoice({ activationMode: e.target.value as typeof voice.activationMode })
-                  }
-                >
-                  <option value="manual">{t('settings.voice.mode.manual')}</option>
-                  <option value="pushToTalk">{t('settings.voice.mode.pushToTalk')}</option>
-                  <option value="wakeWord">{t('settings.voice.mode.wakeWord')}</option>
-                </select>
+                  onChange={(v) => patchVoice({ activationMode: v as typeof voice.activationMode })}
+                  options={[
+                    { value: 'manual', label: t('settings.voice.mode.manual') },
+                    { value: 'pushToTalk', label: t('settings.voice.mode.pushToTalk') },
+                    { value: 'wakeWord', label: t('settings.voice.mode.wakeWord') },
+                  ]}
+                  ariaLabel={t('settings.voice.activationMode')}
+                />
               </div>
 
               {/* Feedback Level */}
@@ -87,18 +87,17 @@ export const VoiceSettingsSection: FC = () => {
                 >
                   {t('settings.voice.feedbackLevel')}
                 </label>
-                <select
+                <Select
                   id={feedbackId}
-                  className="w-full rounded-md border border-[var(--sc-border)] bg-[var(--sc-surface-base)] px-3 py-2 text-sm text-[var(--sc-text-primary)]"
                   value={voice.feedbackLevel}
-                  onChange={(e) =>
-                    patchVoice({ feedbackLevel: e.target.value as typeof voice.feedbackLevel })
-                  }
-                >
-                  <option value="minimal">{t('settings.voice.level.minimal')}</option>
-                  <option value="standard">{t('settings.voice.level.standard')}</option>
-                  <option value="verbose">{t('settings.voice.level.verbose')}</option>
-                </select>
+                  onChange={(v) => patchVoice({ feedbackLevel: v as typeof voice.feedbackLevel })}
+                  options={[
+                    { value: 'minimal', label: t('settings.voice.level.minimal') },
+                    { value: 'standard', label: t('settings.voice.level.standard') },
+                    { value: 'verbose', label: t('settings.voice.level.verbose') },
+                  ]}
+                  ariaLabel={t('settings.voice.feedbackLevel')}
+                />
               </div>
 
               {/* TTS Mute */}

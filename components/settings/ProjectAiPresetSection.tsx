@@ -127,17 +127,10 @@ export const ProjectAiPresetSection: FC = () => {
               <Select
                 id="project-ai-provider"
                 value={preset?.provider ?? ''}
-                onChange={(e) =>
-                  patch({ provider: e.target.value as AIProvider | undefined, model: undefined })
-                }
-              >
-                <option value="">{`— ${t('settings.projectAi.provider')} (global) —`}</option>
-                {AI_PROVIDERS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
+                onChange={(v) => patch({ provider: v as AIProvider | undefined, model: undefined })}
+                placeholder={`— ${t('settings.projectAi.provider')} (global) —`}
+                options={AI_PROVIDERS.map((p) => ({ value: p.id, label: p.label }))}
+              />
             </div>
 
             {/* Model — dropdown for local providers, text for others */}
@@ -152,15 +145,10 @@ export const ProjectAiPresetSection: FC = () => {
                 <Select
                   id="project-ai-model"
                   value={preset?.model ?? ''}
-                  onChange={(e) => patch({ model: e.target.value as AiModel })}
-                >
-                  <option value="">{`— (global) —`}</option>
-                  {modelOptions().map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => patch({ model: v as AiModel })}
+                  placeholder={`— (global) —`}
+                  options={modelOptions().map((o) => ({ value: o.value, label: o.label }))}
+                />
               ) : (
                 <Input
                   id="project-ai-model"
@@ -185,17 +173,12 @@ export const ProjectAiPresetSection: FC = () => {
               <Select
                 id="project-ai-creativity"
                 value={preset?.creativity ?? ''}
-                onChange={(e) =>
-                  patch({ creativity: (e.target.value || undefined) as AiCreativity | undefined })
+                onChange={(v) =>
+                  patch({ creativity: (v || undefined) as AiCreativity | undefined })
                 }
-              >
-                <option value="">{`— (global) —`}</option>
-                {CREATIVITY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
+                placeholder={`— (global) —`}
+                options={CREATIVITY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              />
             </div>
 
             {/* Temperature */}

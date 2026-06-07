@@ -49,18 +49,17 @@ export const ToolInputs: FC<ToolInputsProps> = ({
           <Select
             id="tone"
             value={isCustomTone ? 'Custom' : tone}
-            onChange={(e) => onToneSelect(e.target.value)}
-          >
-            <option value="">{t('writer.studio.controls.selectTone')}</option>
-            <option value="More Cinematic">{t('writer.studio.controls.tones.cinematic')}</option>
-            <option value="More Suspenseful">
-              {t('writer.studio.controls.tones.suspenseful')}
-            </option>
-            <option value="More Humorous">{t('writer.studio.controls.tones.humorous')}</option>
-            <option value="More Formal">{t('writer.studio.controls.tones.formal')}</option>
-            <option value="More Poetic">{t('writer.studio.controls.tones.poetic')}</option>
-            <option value="Custom">{t('writer.studio.controls.custom')}</option>
-          </Select>
+            onChange={(v) => onToneSelect(v)}
+            placeholder={t('writer.studio.controls.selectTone')}
+            options={[
+              { value: 'More Cinematic', label: t('writer.studio.controls.tones.cinematic') },
+              { value: 'More Suspenseful', label: t('writer.studio.controls.tones.suspenseful') },
+              { value: 'More Humorous', label: t('writer.studio.controls.tones.humorous') },
+              { value: 'More Formal', label: t('writer.studio.controls.tones.formal') },
+              { value: 'More Poetic', label: t('writer.studio.controls.tones.poetic') },
+              { value: 'Custom', label: t('writer.studio.controls.custom') },
+            ]}
+          />
           {isCustomTone && (
             <div className="mt-2 animate-in">
               <Input

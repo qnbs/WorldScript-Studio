@@ -128,32 +128,27 @@ export const AiSection: FC = () => {
                 >
                   {t('settings.ai.fallbackStep1')}
                 </label>
-                <select
+                <Select
                   id="fb-step-1"
-                  className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                   value={settings.advancedAi.hybridFallbackChain[0] ?? ''}
-                  onChange={(e) => {
+                  onChange={(v) => {
                     const primary = settings.advancedAi.provider;
-                    const v = e.target.value as AIProvider | '';
                     const second = settings.advancedAi.hybridFallbackChain[1];
                     const next: AIProvider[] = [];
-                    if (v && v !== primary) next.push(v);
+                    if (v && v !== primary) next.push(v as AIProvider);
                     if (second && second !== primary && second !== v) next.push(second);
                     handleSettingChange('advancedAi', {
                       ...settings.advancedAi,
                       hybridFallbackChain: next,
                     });
                   }}
-                >
-                  <option value="">{t('settings.ai.fallbackNone')}</option>
-                  {(['gemini', 'openai', 'ollama', 'grok', 'webllm'] as const)
-                    .filter((p) => p !== settings.advancedAi.provider)
-                    .map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                </select>
+                  options={[
+                    { value: '', label: t('settings.ai.fallbackNone') },
+                    ...(['gemini', 'openai', 'ollama', 'grok', 'webllm'] as const)
+                      .filter((p) => p !== settings.advancedAi.provider)
+                      .map((p) => ({ value: p, label: p })),
+                  ]}
+                />
               </div>
               <div className="space-y-1">
                 <label
@@ -162,32 +157,27 @@ export const AiSection: FC = () => {
                 >
                   {t('settings.ai.fallbackStep2')}
                 </label>
-                <select
+                <Select
                   id="fb-step-2"
-                  className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                   value={settings.advancedAi.hybridFallbackChain[1] ?? ''}
-                  onChange={(e) => {
+                  onChange={(v) => {
                     const primary = settings.advancedAi.provider;
                     const first = settings.advancedAi.hybridFallbackChain[0];
-                    const v = e.target.value as AIProvider | '';
                     const next: AIProvider[] = [];
                     if (first && first !== primary) next.push(first);
-                    if (v && v !== primary && v !== first) next.push(v);
+                    if (v && v !== primary && v !== first) next.push(v as AIProvider);
                     handleSettingChange('advancedAi', {
                       ...settings.advancedAi,
                       hybridFallbackChain: next,
                     });
                   }}
-                >
-                  <option value="">{t('settings.ai.fallbackNone')}</option>
-                  {(['gemini', 'openai', 'ollama', 'grok', 'webllm'] as const)
-                    .filter((p) => p !== settings.advancedAi.provider)
-                    .map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                </select>
+                  options={[
+                    { value: '', label: t('settings.ai.fallbackNone') },
+                    ...(['gemini', 'openai', 'ollama', 'grok', 'webllm'] as const)
+                      .filter((p) => p !== settings.advancedAi.provider)
+                      .map((p) => ({ value: p, label: p })),
+                  ]}
+                />
               </div>
             </div>
           )}
@@ -349,8 +339,8 @@ export const AdvancedAiSection: FC = () => {
             <Select
               id="settings-ai-model"
               value={showCustomInput ? 'ollama/custom' : currentModel}
-              onChange={(e) => {
-                if (e.target.value === 'ollama/custom') {
+              onChange={(v) => {
+                if (v === 'ollama/custom') {
                   handleSettingChange('advancedAi', {
                     ...settings.advancedAi,
                     model: 'ollama/custom',
@@ -359,93 +349,144 @@ export const AdvancedAiSection: FC = () => {
                 } else {
                   handleSettingChange('advancedAi', {
                     ...settings.advancedAi,
-                    model: e.target.value,
+                    model: v,
                   });
                 }
               }}
-            >
-              {settings.advancedAi.provider === 'ollama' ? (
-                <>
-                  <optgroup label="Gemma">
-                    <option value="ollama/gemma3">Gemma 3 4B</option>
-                    <option value="ollama/gemma3:12b">Gemma 3 12B</option>
-                    <option value="ollama/gemma3:27b">Gemma 3 27B</option>
-                  </optgroup>
-                  <optgroup label="Llama">
-                    <option value="ollama/llama3.3">Llama 3.3</option>
-                    <option value="ollama/llama3.2">Llama 3.2 3B</option>
-                    <option value="ollama/llama4:scout">Llama 4 Scout 17B</option>
-                  </optgroup>
-                  <optgroup label="Mistral">
-                    <option value="ollama/mistral">Mistral 7B</option>
-                    <option value="ollama/mistral-small3.2:24b">Mistral Small 3.2 24B</option>
-                  </optgroup>
-                  <optgroup label="Qwen">
-                    <option value="ollama/qwen3:8b">Qwen3 8B</option>
-                    <option value="ollama/qwen3:14b">Qwen3 14B</option>
-                    <option value="ollama/qwen3:30b-a3b">Qwen3 30B-A3B (MoE)</option>
-                  </optgroup>
-                  <optgroup label="DeepSeek">
-                    <option value="ollama/deepseek-r1:7b">DeepSeek-R1 7B</option>
-                    <option value="ollama/deepseek-r1:14b">DeepSeek-R1 14B</option>
-                  </optgroup>
-                  <optgroup label="Phi">
-                    <option value="ollama/phi4">Phi-4 14B</option>
-                    <option value="ollama/phi4-mini:3.8b">Phi-4 Mini 3.8B</option>
-                  </optgroup>
-                  <optgroup label="Other">
-                    <option value="ollama/custom">{t('settings.ai.customModel')}</option>
-                  </optgroup>
-                </>
-              ) : settings.advancedAi.provider === 'openai' ? (
-                <>
-                  <optgroup label="GPT-4.1 (2025)">
-                    <option value="gpt-4.1">GPT-4.1</option>
-                    <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
-                    <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
-                  </optgroup>
-                  <optgroup label="o-Series Reasoning">
-                    <option value="o3">o3</option>
-                    <option value="o4-mini">o4-mini</option>
-                    <option value="o3-mini">o3-mini</option>
-                  </optgroup>
-                  <optgroup label="Legacy">
-                    <option value="gpt-4o">GPT-4o</option>
-                    <option value="gpt-4o-mini">GPT-4o Mini</option>
-                  </optgroup>
-                </>
-              ) : settings.advancedAi.provider === 'anthropic' ? (
-                <>
-                  <option value="claude-opus-4-7">Claude Opus 4.7</option>
-                  <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                  <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
-                </>
-              ) : settings.advancedAi.provider === 'webllm' ? (
-                WEBLLM_SUPPORTED_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))
-              ) : (
-                <>
-                  <optgroup label="Gemini 3 — Latest">
-                    <option value="gemini-3.5-flash">Gemini 3.5 Flash ✦</option>
-                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
-                    <option value="gemini-3.1-flash">Gemini 3.1 Flash</option>
-                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
-                  </optgroup>
-                  <optgroup label="Gemini 2.5 — Stable">
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                  </optgroup>
-                  <optgroup label="Legacy">
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                  </optgroup>
-                </>
-              )}
-            </Select>
+              {...(settings.advancedAi.provider === 'anthropic'
+                ? {
+                    options: [
+                      { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
+                      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+                      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+                    ],
+                  }
+                : settings.advancedAi.provider === 'webllm'
+                  ? {
+                      options: WEBLLM_SUPPORTED_MODELS.map((m) => ({
+                        value: m.id,
+                        label: m.label,
+                      })),
+                    }
+                  : {
+                      groups:
+                        settings.advancedAi.provider === 'ollama'
+                          ? [
+                              {
+                                label: 'Gemma',
+                                options: [
+                                  { value: 'ollama/gemma3', label: 'Gemma 3 4B' },
+                                  { value: 'ollama/gemma3:12b', label: 'Gemma 3 12B' },
+                                  { value: 'ollama/gemma3:27b', label: 'Gemma 3 27B' },
+                                ],
+                              },
+                              {
+                                label: 'Llama',
+                                options: [
+                                  { value: 'ollama/llama3.3', label: 'Llama 3.3' },
+                                  { value: 'ollama/llama3.2', label: 'Llama 3.2 3B' },
+                                  { value: 'ollama/llama4:scout', label: 'Llama 4 Scout 17B' },
+                                ],
+                              },
+                              {
+                                label: 'Mistral',
+                                options: [
+                                  { value: 'ollama/mistral', label: 'Mistral 7B' },
+                                  {
+                                    value: 'ollama/mistral-small3.2:24b',
+                                    label: 'Mistral Small 3.2 24B',
+                                  },
+                                ],
+                              },
+                              {
+                                label: 'Qwen',
+                                options: [
+                                  { value: 'ollama/qwen3:8b', label: 'Qwen3 8B' },
+                                  { value: 'ollama/qwen3:14b', label: 'Qwen3 14B' },
+                                  { value: 'ollama/qwen3:30b-a3b', label: 'Qwen3 30B-A3B (MoE)' },
+                                ],
+                              },
+                              {
+                                label: 'DeepSeek',
+                                options: [
+                                  { value: 'ollama/deepseek-r1:7b', label: 'DeepSeek-R1 7B' },
+                                  { value: 'ollama/deepseek-r1:14b', label: 'DeepSeek-R1 14B' },
+                                ],
+                              },
+                              {
+                                label: 'Phi',
+                                options: [
+                                  { value: 'ollama/phi4', label: 'Phi-4 14B' },
+                                  { value: 'ollama/phi4-mini:3.8b', label: 'Phi-4 Mini 3.8B' },
+                                ],
+                              },
+                              {
+                                label: 'Other',
+                                options: [
+                                  { value: 'ollama/custom', label: t('settings.ai.customModel') },
+                                ],
+                              },
+                            ]
+                          : settings.advancedAi.provider === 'openai'
+                            ? [
+                                {
+                                  label: 'GPT-4.1 (2025)',
+                                  options: [
+                                    { value: 'gpt-4.1', label: 'GPT-4.1' },
+                                    { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+                                    { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano' },
+                                  ],
+                                },
+                                {
+                                  label: 'o-Series Reasoning',
+                                  options: [
+                                    { value: 'o3', label: 'o3' },
+                                    { value: 'o4-mini', label: 'o4-mini' },
+                                    { value: 'o3-mini', label: 'o3-mini' },
+                                  ],
+                                },
+                                {
+                                  label: 'Legacy',
+                                  options: [
+                                    { value: 'gpt-4o', label: 'GPT-4o' },
+                                    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+                                  ],
+                                },
+                              ]
+                            : [
+                                {
+                                  label: 'Gemini 3 — Latest',
+                                  options: [
+                                    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash ✦' },
+                                    {
+                                      value: 'gemini-3.1-pro-preview',
+                                      label: 'Gemini 3.1 Pro Preview',
+                                    },
+                                    { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash' },
+                                    {
+                                      value: 'gemini-3.1-flash-lite',
+                                      label: 'Gemini 3.1 Flash-Lite',
+                                    },
+                                  ],
+                                },
+                                {
+                                  label: 'Gemini 2.5 — Stable',
+                                  options: [
+                                    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+                                    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+                                  ],
+                                },
+                                {
+                                  label: 'Legacy',
+                                  options: [
+                                    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+                                    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+                                    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+                                  ],
+                                },
+                              ],
+                    })}
+            />
 
             {/* Custom Ollama model input */}
             {(showCustomInput || currentModel === 'ollama/custom') && (
@@ -643,16 +684,17 @@ export const AdvancedAiSection: FC = () => {
               <Select
                 id="rag-mode-select"
                 value={settings.advancedAi.ragMode ?? 'hybrid'}
-                onChange={(e) =>
+                onChange={(v) =>
                   handleSettingChange('advancedAi', {
                     ...settings.advancedAi,
-                    ragMode: e.target.value as 'lexical' | 'hybrid',
+                    ragMode: v as 'lexical' | 'hybrid',
                   })
                 }
-              >
-                <option value="hybrid">{t('settings.advancedAi.ragModeHybrid')}</option>
-                <option value="lexical">{t('settings.advancedAi.ragModeLexical')}</option>
-              </Select>
+                options={[
+                  { value: 'hybrid', label: t('settings.advancedAi.ragModeHybrid') },
+                  { value: 'lexical', label: t('settings.advancedAi.ragModeLexical') },
+                ]}
+              />
               <p className="mt-2 text-xs text-[var(--sc-text-muted)]">
                 {t('settings.advancedAi.ragModeHint')}
               </p>

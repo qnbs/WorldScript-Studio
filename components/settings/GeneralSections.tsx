@@ -127,21 +127,26 @@ export const GeneralSection: FC = () => {
           <p className="text-sm text-[var(--sc-text-secondary)] mb-2">
             {t('settings.language.description')}
           </p>
-          <Select id="language-select" value={language} onChange={handleLanguageChange}>
-            <option value="en">{t('settings.language.english')}</option>
-            <option value="de">{t('settings.language.german')}</option>
-            <option value="fr">{t('settings.language.french')}</option>
-            <option value="es">{t('settings.language.spanish')}</option>
-            <option value="it">{t('settings.language.italian')}</option>
-            {/* QNBS-v3: Phase 2 B-5 — RTL beta stubs; English placeholder text until human review */}
-            <option value="ar">{t('settings.language.arabic')}</option>
-            <option value="he">{t('settings.language.hebrew')}</option>
-            {/* QNBS-v3: Phase 3 — ja/zh/pt/el Beta languages */}
-            <option value="ja">{t('settings.language.japanese')}</option>
-            <option value="zh">{t('settings.language.chinese')}</option>
-            <option value="pt">{t('settings.language.portuguese')}</option>
-            <option value="el">{t('settings.language.greek')}</option>
-          </Select>
+          <Select
+            id="language-select"
+            value={language}
+            onChange={handleLanguageChange}
+            options={[
+              { value: 'en', label: t('settings.language.english') },
+              { value: 'de', label: t('settings.language.german') },
+              { value: 'fr', label: t('settings.language.french') },
+              { value: 'es', label: t('settings.language.spanish') },
+              { value: 'it', label: t('settings.language.italian') },
+              // QNBS-v3: Phase 2 B-5 — RTL beta stubs; English placeholder text until human review
+              { value: 'ar', label: t('settings.language.arabic') },
+              { value: 'he', label: t('settings.language.hebrew') },
+              // QNBS-v3: Phase 3 — ja/zh/pt/el Beta languages
+              { value: 'ja', label: t('settings.language.japanese') },
+              { value: 'zh', label: t('settings.language.chinese') },
+              { value: 'pt', label: t('settings.language.portuguese') },
+              { value: 'el', label: t('settings.language.greek') },
+            ]}
+          />
         </CardContent>
       </Card>
       <PWAInstallCard />

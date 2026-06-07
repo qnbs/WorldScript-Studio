@@ -120,42 +120,36 @@ describe('EmptyState', () => {
 // ---------------------------------------------------------------------------
 // Select
 // ---------------------------------------------------------------------------
+const SELECT_OPTIONS = [
+  { value: 'a', label: 'Option A' },
+  { value: 'x', label: 'X' },
+  { value: 'y', label: 'Y' },
+];
+
 describe('Select', () => {
-  it('renders a <select> element', () => {
-    render(
-      <Select>
-        <option value="a">Option A</option>
-      </Select>,
-    );
-    expect(screen.getByRole('combobox')).toBeInTheDocument();
+  it('renders a trigger button', () => {
+    render(<Select value="a" onChange={vi.fn()} options={SELECT_OPTIONS} />);
+    expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
-  it('renders children options', () => {
-    render(
-      <Select>
-        <option value="x">X</option>
-        <option value="y">Y</option>
-      </Select>,
-    );
+  it('renders options when opened', async () => {
+    const user = userEvent.setup();
+    render(<Select value="a" onChange={vi.fn()} options={SELECT_OPTIONS} ariaLabel="Test" />);
+    await user.click(screen.getByRole('button'));
     expect(screen.getByRole('option', { name: 'X' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Y' })).toBeInTheDocument();
   });
 
-  it('forwards ref to underlying <select>', () => {
-    const ref = { current: null as HTMLSelectElement | null };
-    render(<Select ref={ref} />);
-    expect(ref.current?.tagName).toBe('SELECT');
-  });
-
   it('applies custom className', () => {
-    const { container } = render(<Select className="my-select" />);
-    const select = container.querySelector('select');
-    expect(select?.className).toContain('my-select');
+    const { container } = render(
+      <Select value="a" onChange={vi.fn()} options={SELECT_OPTIONS} className="my-select" />,
+    );
+    expect(container.querySelector('.my-select')).toBeInTheDocument();
   });
 
   it('forwards disabled prop', () => {
-    render(<Select disabled data-testid="sel" />);
-    expect(screen.getByTestId('sel')).toBeDisabled();
+    render(<Select value="a" onChange={vi.fn()} options={SELECT_OPTIONS} disabled />);
+    expect(screen.getByRole('button')).toBeDisabled();
   });
 });
 
