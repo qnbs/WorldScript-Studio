@@ -8,7 +8,7 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 - **Persistence:** `storageService` → `StorageBackend` (`IndexedDB` web / filesystem Tauri). No second ad-hoc storage for secrets. v1.6 adds `scene-revisions` IDB store (`services/sceneRevisionService.ts`).
 - **AI:** `geminiService` / `aiProviderService` — all network AI goes through these adapters. 4-layer local inference stack: WebLLM → ONNX → Transformers.js → BoW fallback.
 - **Commands:** `services/commands/` registry; execution via `CommandExecutorProvider` / `runCommandById`.
-- **i18n:** Source modules under `locales/<lang>/*.json`; runtime bundles `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` / `i18n:check`. 1590 keys × 5 locales (v1.6).
+- **i18n:** Source modules under `locales/<lang>/*.json`; runtime bundles `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` / `i18n:check`. 2340 keys × 11 locales.
 
 ## Content & copy
 

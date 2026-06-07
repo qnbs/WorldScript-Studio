@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0  
 **Date:** 2026-06-05  
-**Status:** v1.19.0 baseline
+**Status:** v1.20.0 baseline
 
 This document provides a formal STRIDE threat analysis for StoryCraft Studio, mapping threats to mitigations and code locations.
 
