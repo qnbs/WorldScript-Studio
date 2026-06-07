@@ -93,3 +93,4 @@ voice-spike/
 .storycraft-*
 ~/
 
+.playwright-mcp/

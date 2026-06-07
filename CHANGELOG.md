@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.20.0] — 2026-06-06
+## [1.20.0] — 2026-06-07
 
 ### Added
 
@@ -35,236 +35,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/osv-scanner.toml` — ignore `RUSTSEC-2024-0436` (`paste` 1.0.15 *unmaintained*; build-time proc-macro helper, no runtime exposure, no fix release). The advisory was newly published and was failing the required **Security Audit** check on every branch (e.g. Dependabot PR #78).
   - `vercel.json` — `"github": { "silent": true }` so Vercel still deploys but no longer posts commit statuses; the free-tier **"Deployment rate limited — retry in 24 hours"** preview failure can no longer show as a hard fail on PRs. (Vercel was never a *required* status check, so this is purely cosmetic-noise removal.)
 
+### Added
+
+- **Tauri Desktop Pipeline — P0-1 complete** (2026-06-06):
+  - `pnpm-workspace.yaml` migration — moved `overrides`, `peerDependencyRules`, `onlyBuiltDependencies`, `patchedDependencies`, `ignoredBuiltDependencies`, and `allowBuilds` from deprecated `package.json` `"pnpm"` field to `pnpm-workspace.yaml`; resolves `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` on CI
+  - `tauri-build.yml` — `shell: bash` for Windows compatibility; skips `TAURI_SIGNING_PRIVATE_KEY` for `workflow_dispatch` test builds; `jq`-disables `createUpdaterArtifacts` when no signing key is available (prevents "public key found, but no private key" error)
+  - macOS: removed invalid `exceptionDomain` object and `signingIdentity: "-"` from bundle config; added `Entitlements.plist` with hardened-runtime permissions
+  - Release profile hardening: `lto = true`, `codegen-units = 1`, `strip = true`, `panic = "abort"`
+  - Bundle metadata: `category`, `publisher`, `copyright`, `shortDescription`, `longDescription`
+  - Verified: ubuntu-22.04 (deb, rpm, AppImage), windows-latest (MSI), macos-latest (DMG) all build successfully
+
+- **Coverage C-7 — 96 new unit tests** (2026-06-06):
+  - `tests/unit/loraDatasetBuilder.test.ts` (19) — scene pair extraction, quality scoring, synthetic generation, JSONL export (Alpaca/ChatML/ShareGPT), quality report estimation
+  - `tests/unit/loraEvaluationService.test.ts` (16) — cosine similarity, mean similarity, style consistency scoring, score labels, prompt output comparison
+  - `tests/unit/intentEngine.test.ts` (17) — exact template matching, fuzzy Jaccard scoring, navigation slot extraction, view context filtering, command replacement
+  - `tests/unit/feedbackService.test.ts` (23) — TTS queue processing, feedback level filtering (minimal/standard/verbose), mute behavior, event emission, confirm/error/info helpers
+  - `tests/unit/audioNavigator.test.ts` (21) — ARIA landmark scanning (main/nav/aside/region/search), focus cycling, `tabindex` management, live region announcements with priority switching
+
+### Security
+
+- **Accidentally committed signing keys removed** (2026-06-06): `~/.storycraft-tauri.key` and `~/.storycraft-tauri.key.pub` were committed in `da7653b`; rotated in GitHub Secrets, files removed, `.gitignore` hardened with `*.key`, `*.pem`, `*.p12`, `*.pfx`, `*.cer`, `*.der`, `*.sig.key`
+- **aiohttp CVE remediation** (2026-06-06): bumped `aiohttp==3.11.16` → `3.14.0` in `scripts/ci-analyzer/requirements.txt`; resolves 21 Dependabot CVEs (GHSA-...)
+
 ## [Unreleased]
 
 ### Added
 
-- **World Building "Add Manually" now opens the atlas editor** (2026-06-03): `useWorldView.handleAddNewManually` only dispatched `addWorld` and left the user on the grid with a silent "New World" card and no editor — inconsistent with Characters, whose manual-add was deliberately fixed to open the dossier. Now mirrors that flow (create → select → open atlas) with fully-formed defaults (`timeline`/`locations` as `[]`). Adds real-browser `tests/e2e/world.spec.ts` (was none) + a hook-level regression assertion.
-- **CI unblock — OSV `paste` advisory + Vercel rate-limit noise** (2026-06-03):
-  - `src-tauri/osv-scanner.toml` — ignore `RUSTSEC-2024-0436` (`paste` 1.0.15 *unmaintained*; build-time proc-macro helper, no runtime exposure, no fix release). The advisory was newly published and was failing the required **Security Audit** check on every branch (e.g. Dependabot PR #78).
-  - `vercel.json` — `"github": { "silent": true }` so Vercel still deploys but no longer posts commit statuses; the free-tier **"Deployment rate limited — retry in 24 hours"** preview failure can no longer show as a hard fail on PRs. (Vercel was never a *required* status check, so this is purely cosmetic-noise removal.)
-
-### Added
-
-- **P0 Security & Voice Foundation** (2026-06-05):
-  - **P0-2** — Plugin worker isolation (`workers/plugin.worker.ts`) — routes plugin execution to isolated worker context with timeout (30s default) and sandboxed API; `loadPlugin()` in `services/pluginRegistry.ts` now uses `routeTask('plugin.execute')` for worker isolation
-  - **P0-4** — DuckDB OPFS encryption (`services/duckdb/duckdbEncryption.ts`) — encrypts DuckDB analytics data at rest using shared passphrase-derived key from `storageEncryptionService`; provides `initDuckDbEncryption`, `encryptDuckDbData`, `decryptDuckDbData`, `reEncryptDuckDbFiles` functions
-  - **P0-5** — Voice WASM model download UI (`components/voice/VoiceModelDownloadModal.tsx`) — progress modal for Whisper/Kokoro model downloads with cancel/retry controls; integrated with `wasmModelDownloadProgress` and `wasmModelsReady` settings
-  - **Security Threat Model** (`docs/SECURITY-THREAT-MODEL.md`) — formal STRIDE analysis with attack trees for AI prompt injection, plugin sandbox escape, and collaboration MITM; updated mitigation mapping and checklist
-- **Characters & World Building roster overhaul** (2026-06-03):
-  - New shared, framework-free roster layer: `services/rosterMetrics.ts` (completeness scoring + `filterByQuery` + `sortByMode`, 17 unit tests), `components/roster/RosterToolbar.tsx` (stat chips + live search + sort), and `components/roster/CompletenessRing.tsx` (band-colored SVG ring, sr-only labelled).
-  - **CharacterView** + **WorldView** now show a roster toolbar (search by name, sort by name/completeness, live result count) and at-a-glance stats — Characters: total / developed / with-portrait / avg completeness; Worlds: total / developed / locations / avg completeness. Each card carries a completeness ring; a dedicated "no matches" empty state distinguishes an empty search from an empty roster. Search/sort is ephemeral component state (not Redux) so the existing view hooks + their tests are untouched.
-- **Welcome / onboarding gate elaboration** (2026-06-03):
-  - `WelcomePortal` main view gains a feature-highlights grid (AI Co-Pilot, Visual Plot Board, Characters & Worlds, Pro Export) and an **offline-first privacy badge** (data stays on device; API keys encrypted at rest) — orienting first-time users before they choose a path. All existing flows/labels preserved; +1 test.
-  - i18n: 30 new keys (`characters.*`, `worlds.*`, shared `roster.*` in `common`, `portal.*`) translated across all 7 locales (en/de/es/fr/it + ar/he stubs).
-  - **Mobile portal fix**: the welcome shell is now `overflow-y-auto` with `min-h-full` centering (was a non-scrolling `fixed flex items-center`), the feature grid is 2-up on mobile (`grid-cols-2`), and the language selector is `fixed` + reserves top padding. Without this, the taller main view overflowed the Pixel 5 viewport and clipped the bottom action buttons off-screen — which timed out the `click` in every Mobile-Chrome E2E that bootstraps via the portal.
-
-- **Dashboard mission-control overhaul** (2026-06-03):
-  - **`DashboardHeader`** (`components/dashboard/DashboardHeader.tsx`) — personalized, time-aware greeting (morning/afternoon/evening/night), prominent project title + logline, a primary **Continue Writing** CTA that navigates to the manuscript (targeting the last scene with prose), and at-a-glance chips (streak, word count, reading time).
-  - **`WritingMomentumCard`** — wires the previously-unsurfaced `progressTracker` data onto the dashboard: current/longest streak (derived locally via `computeStreak`, accurate even when the Progress view never ran the sync), today-vs-daily-goal and week-vs-weekly-goal progress bars, and a 14-day gap-filled activity sparkline (pure SVG, no chart dep).
-  - **`GoalTrackerCard`** (extracted from `Dashboard.tsx`) — adds a **pace projection**: words remaining + required words/day to hit the deadline, with an on-track / behind / done badge using `--sc-success/warning` tokens.
-  - **`ProjectHealthCard`** (extracted + enhanced) — radial SVG gauge (band-colored by score) plus per-dimension breakdown bars for writing progress, cast depth, and worldbuilding.
-  - **`ManuscriptCompositionCard`** — scene-status distribution segmented bar (outline → final + untracked), reading-time estimate (238 WPM), scene count, and average words/scene.
-  - `hooks/useDashboard.ts` extended with all derived selectors (greeting, continue-section, momentum, composition, pace, health breakdown); 12 new unit assertions across `Dashboard.test.tsx` + `useDashboard.test.ts`; 37 new i18n keys translated across all 7 locales (en/de/es/fr/it + ar/he stubs).
-
-- **WorkerBus v2 Phase 3 — Rust TaskSupervisor + native `text.analyze`** (2026-06-03):
-  - `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs` — the native half of the hybrid router. `storycraft_task_supervisor_ping` (returns supervisor version) and `storycraft_task_supervisor_submit` (taskType dispatcher) registered in `lib.rs` `generate_handler!`. Unknown / bad-payload tasks resolve as `{ success: false, error }` (never a hard `Err`), matching the `RustTaskResultEvent` honest-failure convention so the router's fallback is driven by `result.success`
-  - First native task **`text.analyze`** — word/char/sentence/syllable counts + Flesch Reading Ease, pure Rust, no new deps; 8 `#[cfg(test)]` unit tests
-  - `services/rustTaskSupervisor.ts` — `analyzeTextViaRust()` probes `isRustComputeAvailable()` before routing so a Rust-only task never lands on the web worker pool; returns `null` (→ JS fallback) when unavailable; 5 unit tests
-  - Verified by compiling on the `tauri-build` runners: the crate builds and produces `.deb` / `.rpm` / `.AppImage` bundles on ubuntu (the workflow's final updater-signing step is a separate repo-secret issue, unrelated to code)
-
-- **Local-AI Phase 2.3 perf hardening — unified pipeline LRU cache** (2026-06-03, merged via PR #69):
-  - `services/ai/pipelineLruCache.ts` (new) — one shared, disposing, unit-tested LRU pipeline cache replacing the byte-identical logic duplicated in `workers/inference.worker.ts` and `workers/v2/inference.worker.ts`. Adds **dispose-on-evict** and **dispose-on-replace** (closes a VRAM/RAM leak — evicted/replaced pipelines were dropped without releasing GPU/WASM resources), **in-flight load dedup** (no double-load of multi-MB models), and an injectable clock for deterministic tests; centralized `safeDispose()` swallows sync throws *and* async rejections so a failing backend disposal can never surface as an unhandled rejection in a worker (CodeAnt PR #69)
-  - `tests/unit/services/pipelineLruCache.test.ts` (new) + property/invariant tests for `aiRetry.ts` (delay monotonic in attempt index up to the cap; jitter ∈ `[0, capped)`; `Retry-After` always wins; clamp ≤ `AI_RETRY_MAX_RETRY_AFTER_MS`)
-  - `kokoroTtsEngine` coverage — `cancel()`/`pause()`/`resume()`/`dispose()` + no-WebAssembly branch
-  - `useLoraView` selector-recreation fix (module-level stable empty-dataset selector)
-  - **ADRs** — `docs/adr/0001-state-management-boundaries.md` (Redux persisted/undo vs Zustand `transientUiStore` ephemeral) + `docs/adr/0002-local-ai-stack-layering.md` (WebLLM → ONNX → Transformers.js → heuristic fallback) + `docs/adr/README.md`; README **Quick Start (60-second)** section
-  - Coverage thresholds ratcheted to the CI-measured floor: **L 74 / B 60 / F 66 / S 72**
-
-### Fixed
-
-- **Tauri desktop build unblocked** (2026-06-03) — `tauri-build.yml` had been red since 2026-05-30; CI dispatch on the Phase 3 branch surfaced two pre-existing root causes (never diagnosed):
-  - `src-tauri/Cargo.toml` — removed unused, unresolvable `specta = "2"` / `tauri-specta = "2"` (referenced in no `.rs` file; `build.rs` only calls `tauri_build::build()`; `"2"` matches nothing on crates.io — only `2.0.0-rc.*` exist — so `cargo build` failed at dependency resolution before compiling anything)
-  - `src-tauri/src/lora.rs` — `LoraEnvReport` is deserialized from the Python sidecar's JSON stdout (`serde_json::from_str::<LoraEnvReport>`) but derived only `Serialize` → `E0277` broke the whole-crate compile; added `Deserialize`
-  - With both fixed, the native build compiles cleanly and bundles `.deb`/`.rpm`/`.AppImage`
-
-### Added
-
-- **Production-build smoke guard + startup error handling** (2026-06-02):
-  - `scripts/smoke-prod-build.mjs` (+ `smoke:prod`) — serves the built `dist/` via `vite preview`, loads it in headless Chromium, and fails if `#root` never mounts or any pageerror fires; wired into the CI build job (installs `chromium-headless-shell`). Closes the gap where prod-only rolldown bundling crashes shipped green because the E2E suite runs `vite dev` (no DCE / no minify)
-  - `index.tsx` — `renderStartupError()` helper + a `unhandledrejection` listener (HTML-escaped) so async-bootstrap rejections render the recovery screen instead of a silent blank `#root` (previously only synchronous `error` events were caught)
-- **LoRA module test coverage — Phase 3 (C-7 climb)** (2026-06-02):
-  - `tests/unit/lora/useLoraView.test.ts` (12) · `LoraTrainingWizard.test.tsx` (10) · `loraPanels.test.tsx` (11) — 33 tests covering the previously-0% hook, training wizard, and library/dataset/evaluation panels
-- **LoRA Fine-Tuning view productionized — Local AI Perfection Phase 2.2** (2026-06-02):
-  - `components/lora/LoraView.tsx` — new container assembling the existing `LoraAdapterLibrary` / `LoraDatasetBuilder` / `LoraEvaluationPanel` / `LoraTrainingWizard` behind `LoraViewContext`, with first-visit onboarding and library/dataset/evaluation sub-nav
-  - `App.tsx` — gated `lora` route (lazy-loaded; falls back to Dashboard when `enableLoraAdapters` is off, mirroring `objects`/`mindmap`)
-  - `components/Sidebar.tsx` — conditional "Fine-Tuning" nav entry behind `enableLoraAdapters` (new `enableLora` prop)
-  - `View` type, `APP_SECTIONS`, `viewNavigationLabels`, new `ICONS.LORA` (cpu-chip), `sidebar.lora` i18n key across all 7 locales
-  - **Fixed pre-existing i18n bug:** the `lora` module was orphaned from the i18n build (missing from `scripts/build-i18n.mjs` + `check-i18n-keys.mjs`) and `lora.json` was nested instead of flat-dotted — so `lora.*` keys never reached the runtime bundle and rendered as raw keys once the view went live. Registered the module and flattened `lora.json` in all 7 locales (bundle 2159 → 2234 keys)
-  - `tests/e2e/lora-wizard.spec.ts` re-enabled (flag seeded via localStorage; selectors aligned to the shipped DOM); `tests/unit/lora/LoraView.test.tsx` (6 tests)
-
-- **WorkerBus v2 Phase 2 — runtime wiring, hybrid routing, legacy adapter** (2026-06-02):
-  - `services/workerBusManager.ts` — singleton lifecycle: `initWorkerBus()`, `shutdownWorkerBus()`, `initWorkerBusOnStartup()`, `getWorkerBus()`, `getLegacyAdapter()`; registers `inference` (text + embed) and `duckdb` pools via `WorkerRegistry`
-  - `services/hybridRouter.ts` — `routeTask(taskType, payload, opts)`: routes to v2 Web Worker pool (default) or Rust TaskSupervisor (when `rustComputeEnabled` + `target:'rust'` + Tauri context); transparent fallback to web on Rust failure
-  - `services/legacyWorkerBusAdapter.ts` — `LegacyWorkerBusAdapter`: shims old `@domain/ai-core` WorkerBus API (`enqueue/cancel/dequeue/getTelemetry`) onto v2 bus for gradual migration; old callers keep working unchanged
-  - `services/tauriTaskBridge.ts` — `invokeRustTask()`, `isRustComputeAvailable()` (ping with 60 s TTL cache): typed Tauri bridge for Rust `storycraft_task_supervisor_submit/ping` commands
-  - `app/listenerMiddleware.ts` — ON/OFF listeners for `enableWorkerBusV2` (init/shutdown pools) and `enableRustCompute` (invalidate Rust availability cache); `initWorkerBusOnStartup()` export for cold-start parity with `initAdaptiveAiOnStartup` pattern
-  - `App.tsx` — `void initWorkerBusOnStartup(featureFlags.enableWorkerBusV2)` in mount `useEffect`
-  - `components/settings/FeatureFlagsSection.tsx` — `enableWorkerBusV2` and `enableRustCompute` toggles now visible in Settings → Experimental
-  - i18n keys for both flags across DE/EN/ES/FR/IT (2162 keys total); parity audit 0 criticals
-  - Tests: +31 unit tests (`tauriTaskBridge`, `legacyWorkerBusAdapter`, `workerBusManager`, `hybridRouter`) — all passing; `vi.hoisted` constructor mock pattern for WorkerBus
-
-- **WorkerBus v2 Phase 1 — `@domain/worker-bus` package** (2026-06-01):
-  - Core runtime: `WorkerBus`, `WorkerPool`, `WorkerRegistry`, `ProtocolHandler`
-  - Messaging: typed `MessagePort` protocol with Zod validation (`schemas.ts`, `messageBus.ts`); kind literals: `TASK`, `CANCEL`, `PING`, `PONG`, `PROGRESS`, `RESULT`
-  - Resilience: `CircuitBreaker`, `DeadLetterQueue`, `PriorityTaskQueue`, `CancellationToken`
-  - Progress: `ProgressEmitter` with `AsyncIterable<TaskProgress>` support
-  - Worker bootstrap: `workerBootstrap()`, `registerTaskHandler()`, `deregisterTaskHandler()`
-  - Feature flags: `enableWorkerBusV2`, `enableRustCompute`
-  - Tests: 123 tests across 12 test files (incl. `workerBootstrap.test.ts` — Phase 1 hardening); 84.5% line coverage
-  - v2 worker implementations: `workers/v2/inference.worker.ts` (text + embed), `workers/v2/duckdb.worker.ts` (init/query/exec/shutdown)
-
-### Changed
-
-- **CI: Stryker mutation dropped from the PR/CI pipeline** (2026-06-02): the mutation job was a noisy, flaky, non-gating check (recurrent 20-min timeouts). Removed from `ci.yml`; `mutation.yml` is now manual-only (`workflow_dispatch`, weekly cron removed). To be re-integrated in a later iteration.
-- **CI: branch-protection required-check names realigned** (2026-06-02): updated `main` required status checks from the stale `Quality Gate (Node lts/*)` / `(Node node)` to the current matrix names `(Node 22)` / `(Node 24)` so PRs can satisfy required checks again.
-
-### Fixed
-
-- **Production blank screen — zod tree-shaking (rolldown DCE)** (2026-06-02):
-  - `patches/zod@4.4.3.patch` flips zod's `"sideEffects": false` → `true`. zod v4 (inlined inside `@ai-sdk/*`) declared no side effects, so rolldown's production DCE dropped its lazy `__esm` init wrappers (`init_locales`, `init_from_json_schema`) while keeping the `init_*()` calls → `init_locales is not defined` at bootstrap → blank `#root` for **all** users (Vercel + GitHub Pages). `rollupOptions.treeshake` is ignored by rolldown-vite, so the fix is the dependency-level patch. Verified end-to-end with a headless-browser load of the prod build; guarded going forward by `smoke:prod`
-- **`common.next` / `common.back` i18n keys were orphaned** (2026-06-02) — the LoRA wizard's nav buttons referenced `t('common.next')` / `t('common.back')`, but neither key existed in any locale, so they rendered the raw key string (breaking the wizard E2E). Added to all 7 locales (bundle 2234 → 2236 keys)
-- **AI transient-retry + fetch hardening** (2026-06-02):
-  - `services/ai/aiRetry.ts` (P1-F5) — replaced linear backoff with capped exponential backoff + full jitter; honors a server `Retry-After` (seconds / HTTP-date / `retryAfterMs`) over the computed delay, clamped to 30 s. Pure `computeRetryDelayMs` / `parseRetryAfterMs` helpers + injectable rng; 13 unit tests
-  - `services/ai/fetchAdapter.ts` (P1-F6) — opt-in `timeoutMs` (DEFAULT OFF, streaming-safe) composing `AbortSignal.timeout` with the caller signal via `AbortSignal.any`; existing no-arg callers unchanged; 5 unit tests
-- **Documentation truth-up** (2026-06-02): reconciled stale P0/P1 markers in `AUDIT.md` against the current tree (P0-F3/F5/F7/F8/F9 + P1-F1..F4 were already fixed in code) and marked IDB at-rest encryption UX complete in `TODO.md`.
-
-- **14 CodeAnt AI issues — AI core resource cleanup, race conditions, correctness** (2026-06-01, commit `827a512`):
-  - `webllmOptimizer.ts`: `engine.dispose()` called on cache eviction; `releaseWebLlm` now deletes both `high-performance` and `low-power` power-preference variants when preference is not specified
-  - `computeShaderFactory.ts`: promise-mutex (`deviceInitPromise`) prevents concurrent `requestDevice()` calls from creating duplicate GPU devices
-  - `listenerMiddleware.ts`: `await releaseAllOnnxSessions()` (was fire-and-forget on an async function); `typeof window !== 'undefined'` guards on window assignments; `initAdaptiveAiOnStartup()` sets the window gate on cold-start when `enableAdaptiveAiEngine` is already `true` from localStorage (listener only fires on flag toggle, not initial load)
-  - `localAiDeviceProfiler.ts`: `recommendBackend()` no longer returns `transformers-webgpu` when WebGPU is unavailable (code path is reached only after all GPU checks fail)
-  - `adaptiveAiEngine.ts`: `WarmedModelEntry` gains `task: AiTaskType` field for better telemetry and debugging
-  - `telemetryService.ts`: `recordInferenceTelemetry()` is a no-op until `setTelemetryEnabled(true)` is called; `App.tsx` syncs `enableDuckDbAnalytics` flag on every change — prevents recording telemetry when the user has not opted in
-  - `AiSections.tsx`: `AdaptiveAiHardwarePanel` conditionally mounted at parent level so `useAdaptiveAi` hook (device profiling, GPU queries) never runs when the feature flag is disabled
-  - `AdaptiveAiHardwarePanel.tsx`: replaced all 7 hardcoded strings (`'WebGPU shaders ✓'`, capability labels, `available`/`unavailable`) with `t()` calls; 7 new i18n keys × 5 locales (2160 keys total)
-
-- **E2E test suite stabilisation — 24 failures → ~0** (2026-06-01):
-  - `WelcomePortal.tsx`: language buttons' inactive state `bg-overlay/50 text-secondary` gave WCAG AA failure (2.91:1); active state `bg-indigo-600 text-white` resolved to non-standard values (1.55:1). Replaced with `bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]` / `bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)]`
-  - `helpers.ts waitForSpaReady`: waits for body theme class (`light-theme`/`dark-theme`/`sepia-theme`) before returning — CSS variables were resolving to mid-transition values (#848993) when axe ran before App `useEffect` applied the theme class
-  - `helpers.ts seedGeminiApiKey`: fixed `role="switch"` (was `role="checkbox"`) for the `ToggleSwitch` component; now also disables `localStorageOnly` so Gemini mock calls are not blocked by the cloud-AI gate
-  - `SceneBoardView.tsx`: `role="tablist"` → `role="toolbar"` for display-mode toggle group — `tablist` requires `role="tab"` children, not `button[aria-pressed]`
-  - `ActSwimlane.tsx`: wrapped `SceneCard` (DnD kit adds `role="button"` to the root `<div>`) in `<li>` elements — `<ul>` must only contain `<li>` children (axe `list` rule)
-  - `a11y.spec.ts`: tightened navigation patterns — `/World|Setting/i` (matched 2 items) → `/World Building/i`; `/Outline|Plot Board|Board/i` (matched 3 items) → `/Scene Board/i`
-  - `lora-wizard.spec.ts`: skipped for all projects (LoRA view not yet routed in `App.tsx` — Phase 2.2 pending); also fixed `getByRole('tab', ...)` → `getByRole('button', ...)` for "Early Access Features" Settings nav
-
-- **VRT baselines bootstrapped** (`tests/e2e/visual-regression.spec.ts-snapshots/*.png`): 4 Chromium 1280×720 baseline PNGs committed from CI artifact (home, writer, characters, settings)
-
-- **`pnpm-lock.yaml` out of sync** (commit `ec3889e`): the `@xenova/transformers@2.17.2` → `@huggingface/transformers@^3.8.1` migration in `packages/ai-core/package.json` was not accompanied by a lockfile regeneration, causing `ERR_PNPM_OUTDATED_LOCKFILE` on every CI run
-
-- **AI inference Layer-3 / Layer-2 model collision** (`packages/ai-core/src/index.ts`): when no GPU is available, both ONNX (Layer-2) and Transformers.js (Layer-3) were using `HuggingFaceTB/SmolLM2-135M-Instruct`; empty Layer-2 output caused Layer-3 to also return null → fell to heuristic. Layer-3 now always uses `ONNX_SUPPORTED_MODELS[1]` (`Xenova/distilgpt2`, 82 MB)
-
-- **ScoreCard transient failure**: `api.scorecard.dev` network timeout caused CI red; resolved by re-running the workflow
-
-- **Settings crash hardening** (`components/settings/*`):
-  - `AdvancedEditorSection`, `AccessibilitySection`, `AppearanceSection` now read from defaults-merged local objects. Missing `advancedEditor`, `accessibility`, or `themeCustomization` nested objects (from pre-v1.8 persisted state) can no longer crash the page.
-  - `normalizePersistedSettings` already backfilled these fields in IDB rehydration; the component-level guards are a second line of defense.
-- **Tauri CSP hardening** (`src-tauri/tauri.conf.json`): Removed unrestricted `wss:`/`ws:` protocol-only wildcards from `connect-src`. Added `frame-ancestors 'none'`. Synced desktop version to `1.19.0` (matches `package.json`).
-- **Dev server security** (`vite.config.ts`): Default host changed from `0.0.0.0` to `127.0.0.1` with opt-in via `VITE_DEV_HOST=0.0.0.0` for Codespaces port-forwarding.
-- **Vercel blank screen** (`index.html`): Replaced hardcoded `/StoryCraft-Studio/` paths with Vite `%BASE_URL%` template for manifest link, favicon icon, apple-touch-icon, og:image, and twitter:image. With `build:edge` (base `/`), these resolve to root paths — fixing 404s on Vercel and Cloudflare Pages. With `build` (base `/StoryCraft-Studio/`), GitHub Pages paths remain correct.
-- **Startup blank screen safety net** (`index.tsx`): Added `window.addEventListener('error')` outer handler that renders a static error recovery UI if the async IIFE never executes due to module-evaluation or bundle errors — prevents silent blank page with no user feedback.
-
-### Changed
-
-- **CI: prune-deployments workflow** (`.github/workflows/prune-deployments.yml`): was filtering only `github-pages` environment; Vercel creates `Production` and `Preview` environments that accumulated 160+ un-cleaned deployment records. Script now paginates ALL environments and deletes all but the latest 3 per environment. First run: 156 deployments deleted, 0 failed. Upgraded `actions/github-script` from v7 (node20, deprecated June 2026) to v9.0.0 (node24)
-- **CI: `actions/cache` upgraded** (`storybook` job): `v4.2.3` (node20, deprecated) → `v5.0.5` (SHA: `27d5ce7f`, node24) before the forced June 16 2026 deadline
-- **GitHub App installation token format** (`ghs_`, up to 520 chars): audited all workflows — no hardcoded token length assumptions found; no code changes required
-- **CLAUDE.md — environment-aware shell rules**: Replaced the blanket "ONE Bash call per turn (LOW-END HARDWARE)" rule with environment-aware guidance. On GitHub Codespaces (8-core/16GB), parallel Bash calls and `run_in_background` are allowed. Sequential rules are retained for constrained local hardware. Added "Codespaces Modus Operandi" section with session-start checklist, daily workflow, and test failure triage patterns.
-- **Devcontainer re-enabled** (`.devcontainer/devcontainer.json`): Renamed from `.devcontainer.json.disabled` back to active. `hostRequirements: { cpus: 8, memory: "16gb", storage: "32gb" }` ensures correct Codespaces machine provisioning. Root `devcontainer.json` (empty schema redirect) deleted. `postAttachCommand` and `openFiles` updated to current sprint handoff doc.
-- **`.devcontainer/README.md`**: Added "Optimal Modus Operandi" section — session-start checklist, daily workflow pattern, full quality gate command, test failure triage table, and timeout-prevention guidance.
-
-### Security
-
-- **Feature Parity Audit — 8 critical runtime-gate drifts fixed** (2026-05-29):
-  - `enableProForge` / `enableVoiceWasm` / `enableIdbAtRestEncryption`: toggles in `FeatureFlagsSection.tsx` had no handler in `useSettingsView.ts` — UI toggle fired, Redux was never updated, localStorage unchanged. All 3 cases added.
-  - `ObjectsView` / `MindMapView` / `CharacterInterviewsView`: routed from `App.tsx` without any feature flag guard — views accessible regardless of flag state. Route guards added for all 3.
-  - `CloudSyncBackend.create()`: claimed to be feature-gated in comments but no code ever read `enableCloudSync`. Structural `featureFlagEnabled` parameter added — throws at construction if flag is off.
-  - `PluginRegistry.execute()` / `executeAsync()` / `loadPlugin()`: callable without flag. `setEnabled()` method added; `App.tsx` syncs `enablePluginSystem` flag on change.
-
-- **C-1 — collab-transport crypto hardening** (`packages/collab-transport/src/crypto.js`):
-  - PBKDF2 iterations raised 100k → 600k (OWASP 2024 minimum for PBKDF2-HMAC-SHA-256; matches `collaborationService.ts` + `storageEncryptionService.ts`)
-  - `extractable: false` on derived `CryptoKey` (was `true` — violates SEC-RULE-5; prevented key export)
-  - `return promise.reject(...)` in `decrypt()` — was missing `return`, swallowing unknown-algorithm errors and continuing with garbage IV/ciphertext
-
-### Added
-
-- **CI: Cloud-first Storybook strategy + Debug workflow** (2026-05-31):
-  - `storybook` CI job: Playwright browser cache (`actions/cache`) to save ~60 s on each run; upload path extended with `**/screenshots/`; comment updated for low-end-hardware context
-  - New `.github/workflows/storybook-debug.yml` — manually triggerable (`workflow_dispatch`) debug workflow with configurable `max_workers` (1–4), `retries` (0–5), and verbose Playwright debug output (`pw:browser*,pw:api`); all artifacts uploaded for 14 days even on failure; named `storybook-debug-<run_number>` for easy lookup
-  - **Cloud-first rationale documented**: Storybook build + test-runner are CI-only; local hardware cannot run them reliably
-
-- **Local AI Perfection Sprint — Phase 1.1: IDB Session Lock & Key Rotation** (2026-05-31, commits `698f326`, `c289949`):
-  - `services/storage/storageEncryptionService.ts` — `lockSession()` clears in-memory key; `rotateKey(oldPassphrase, newPassphrase)` re-encrypts all 5 stores atomically via `reEncryptAllAppData()` + `reEncryptAllSnapshots()`; rate-limiting enforced in `IdbUnlockModal` (3 failures → 5 s lockout; 6 failures → 30 s lockout)
-  - `components/settings/PrivacySection.tsx` — "Lock Session" button wired to `lockSession()` + Redux dispatch; passphrase change flow fully integrated
-  - i18n: 7 new keys × 5 locales (`settings.privacy.lockSession`, `settings.privacy.lockSessionConfirm`, `settings.privacy.sessionLocked`, `settings.privacy.unlockSession`, `settings.privacy.keyRotation`, `settings.privacy.keyRotationSuccess`, `settings.privacy.keyRotationError`)
-
-- **Local AI Perfection Sprint — Phase 1.2: Voice Async Refactor + Silero VAD + Kokoro TTS** (2026-05-31, commit `754aff0`):
-  - All voice engine interfaces (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`) refactored to `async processChunk()` — enables non-blocking pipeline usage
-  - `services/voice/sileroVadEngine.ts` — full Silero VAD v4 implementation via ONNX Runtime Web; LSTM hidden-state threading; `processChunk(Float32Array)` → `{ isSpeech: boolean, probability: number }`; lazy `ort.InferenceSession` creation; ~2 MB model lazy-loaded; gated behind `enableVoiceWasm`
-  - `services/voice/kokoroTtsEngine.ts` — full Kokoro TTS ONNX implementation; text → PCM Float32Array; lazy model session; phoneme-pad preprocessing; `dispose()` releases ONNX session; gated behind `enableVoiceWasm`
-  - TTS factory (`createTtsEngine`) updated to prefer `KokoroTtsEngine` when `enableVoiceWasm` is on; falls back to `WebSpeechTtsEngine`
-  - All existing engine tests updated to async interface
-
-- **Local AI Perfection Sprint — Phase 1.3: GPU Metrics & Diagnostics** (2026-05-31, commits `4441f1f`, `c289949`):
-  - `services/ai/aiProviderService.ts` — `fallbackReason` field added to provider result; tracks whether fallback was due to GPU OOM, worker crash, missing adapter, or missing model
-  - `packages/ai-core/src/index.ts` — `MAX_RESTART_ATTEMPTS = 5` hard cap on worker restarts prevents runaway restart loops after GPU crashes
-  - `services/ai/ecoModeService.ts` — RAM-pressure eco-mode trigger: if `performance.memory.usedJSHeapSize / jsHeapSizeLimit > 0.85`, eco mode activates automatically
-  - `components/settings/AdaptiveAiHardwarePanel.tsx` — 3 troubleshooting cards ("GPU not detected", "Inference crashes", "Slow generation") with WGSL shader diagnostics
-  - i18n: 7 new keys × 5 locales (`settings.ai.gpuDiagnostics.*`)
-
-- **Local AI Perfection Sprint — Phase 2.1: Real Local Text-Gen Pipelines + AbortSignal** (2026-05-31, commit `4441f1f`):
-  - `packages/ai-core/src/index.ts` — `runLocalTextGeneration` refactored into `runWebLlmLayer` + `runTransformersLayer` helpers; echo stubs replaced with real `@huggingface/transformers@3.8.1` (`text-generation`) pipelines
-  - WebLLM layer: SmolLM2-135M-Instruct (128 max tokens, `dtype: 'q8'`); Transformers.js layer: distilgpt2 (64 tokens, `dtype: 'q8'`)
-  - `AbortSignal` propagated end-to-end: `runLocalTextGeneration` → `runWebLlmLayer` → worker task → `inference.worker.ts` pre/post pipeline checks; `onProgress` short-circuits on abort
-  - Error propagation hardened: no empty `catch` blocks; all errors logged via `StructuredLogger` with context
-
-- **Local AI Perfection Sprint — Build: transformers.js v2 → v3 migration** (2026-05-31, commit `9ceafb9`):
-  - `packages/ai-core/package.json` — `@xenova/transformers@2.17.2` → `@huggingface/transformers@3.8.1` (optionalDependencies)
-  - `tsconfig.json` paths + `vite.config.ts` + `vitest.config.ts` aliases updated to `dist/transformers.web.js` (v3 ESM entry)
-  - API migration: `quantized: true` → `dtype: 'q8'`; pipeline typed-overload union too large (TS2590) — loose-cast to `FeatureExtractionPipeline | TextGenerationPipeline` via `as unknown`
-  - **Resolves long-standing "vitest broken / Failed to load url basic" blocker** — v3 ESM structure is correctly tree-shakeable by Vitest
-
-- **C-4 — Cloud-Sync (Cloudflare R2)** — already fully implemented (3 files, 41 tests):
-  - `services/cloudSync/cloudSyncBackend.ts` — `StorageBackend` implementation; projects/settings → R2; API keys never sent to cloud; delegation throws on sensitive keys
-  - `services/cloudSync/cloudSyncClient.ts` — thin HTTP wrapper around R2 REST / Worker-proxied API (fetch + Bearer token, no AWS SDK)
-  - `services/cloudSync/cloudSyncEncryption.ts` — AES-256-GCM E2E encryption; server sees only ciphertext
-  - 41 unit tests (39 + 2 feature flag gate tests); flag: `enableCloudSync` (off by default); `create()` throws structurally if flag is off
-
-- **C-3 — LoRA Inference Wiring** — fully wired through Vercel AI SDK path (parity audit fix):
-  - `LoraAdapter.ollamaModelTag?: string` — Ollama model tag created by `ollama create <tag> -f Modelfile`
-  - `AIRequestOptions.loraModelPath?: string` — passed through to Ollama; overrides `opts.model` when set and `provider === 'ollama'`
-  - `selectActiveLoraOllamaTag` selector (`features/lora/loraSelectors.ts`) — returns active adapter's Ollama tag or null
-  - **Fix**: selector now imported by `useStoryCraftAI.ts`; `loraModelPath` injected into `body`; `completionBodySchema` updated to accept it; `storyCraftCompletionFetch.ts` applies Ollama override — closes C-3 completion gap
-  - Training workflow remains Python sidecar
-
-- **C-2 — Plugin System Beta** — reference plugins + runtime gate fix:
-  - `wordCountOverlay.plugin.ts` — read-only plugin: logs project title + scene list via sandboxed API (`project.read`, `scene.read`)
-  - `sceneAppender.plugin.ts` — write-capable plugin: appends a configurable snippet to the active scene and persists run count via IDB storage (`scene.read`, `scene.write`, `storage.read`, `storage.write`)
-  - `PluginRegistry.setEnabled()` + `App.tsx` sync — `execute/executeAsync/loadPlugin` now require `enablePluginSystem` flag to be on; 34 unit tests (was 30)
-
-- **C-7 — Coverage Sprint** (2026-05-28): +130 new tests across 5 previously untested modules:
-  - `supervisorAgent.ts` — 19 tests (intake/structural/proof heuristics, fallback sentinels, null-project word count)
-  - `baseAgent.ts` — 23 tests (constructor gateway injection, requireProject, buildAiOpts all 4 providers, generate, selfReflect)
-  - `geminiService.ts` — +17 tests covering `streamText`, `streamAiHelpResponse`, `detectPlotHoles`, `generateImage`, `handleInvalidApiKey`
-  - `helpCatalog.ts` — 16 tests (HELP_CATALOG data integrity + `catalogToHelpCategories()`)
-  - `idbCore.ts` — 19 tests (compressData/decompressData round-trip, retryDb transient backoff, getUserFriendlyDbError)
-  - `loraThunks.ts` — 25 tests (all 9 async thunks); coverage thresholds raised to L73/F65/B58/S71
-
-- **Refactor — 4 production `biome-ignore any` suppressions eliminated** (2026-05-28):
-  - `wasmSttEngine.ts` — typed `WhisperPipelineResult` + `XenovaEnv` interfaces replace `as any` casts
-  - `loraSlice.ts` — `loraPersistenceMiddleware` typed with `Middleware<Record<string, never>, unknown>`
-  - `loraAdapterService.ts` — `_resetLoraDbForTest()` uses typed cast instead of `(global as any)`
-  - `projectState.ts` (new) — `ProjectData` interface extracted from `projectSlice.ts`; re-exported for backward compat
+- (placeholder — see section below for historical unreleased notes)
 
 ## [1.19.0] — 2026-05-28
 
@@ -1100,7 +897,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTPS-only external API communication
 - Device-scoped encryption key derivation
 
-[Unreleased]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.19.0...HEAD
+[Unreleased]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.20.0...HEAD
+[1.20.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.18.1...v1.19.0
 [1.18.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.18.0...v1.18.1
 [1.18.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.17.1...v1.18.0
