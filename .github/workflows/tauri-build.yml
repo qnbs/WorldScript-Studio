@@ -66,6 +66,10 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             unset TAURI_SIGNING_PRIVATE_KEY
             unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+            # Disable updater artifacts when no private key is available;
+            # otherwise Tauri errors: "public key found, but no private key".
+            jq '.bundle.createUpdaterArtifacts = false' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
+            mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
           fi
           pnpm exec tauri build
 
