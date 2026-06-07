@@ -55,15 +55,11 @@ jobs:
           # Updater signing (minisign) — required for auto-update functionality
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS signing (Apple Developer ID) — optional until certificates are provisioned
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # Windows signing (Authenticode) — optional until certificate is provisioned
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          # QNBS-v3: macOS/Windows code signing env vars are intentionally omitted
+          # until Apple Developer ID and Authenticode certificates are provisioned.
+          # Add APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_ID,
+          # APPLE_TEAM_ID, APPLE_PASSWORD, WINDOWS_CERTIFICATE,
+          # WINDOWS_CERTIFICATE_PASSWORD here when ready.
         run: |
           # QNBS-v3: Skip updater signing for workflow_dispatch test builds.
           # Tagged releases (v*) require valid secrets for both signing and updater.
