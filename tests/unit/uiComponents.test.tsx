@@ -5,6 +5,7 @@
  * QNBS-v3: Covers 8 previously untested UI files in one suite.
  */
 import { fireEvent, render, renderHook, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { AddNewCard } from '../../components/ui/AddNewCard';
@@ -228,44 +229,38 @@ describe('Checkbox', () => {
 // ---------------------------------------------------------------------------
 
 describe('Select', () => {
-  it('renders a select element', () => {
-    render(
-      <Select>
-        <option value="a">A</option>
-      </Select>,
-    );
-    expect(screen.getByRole('combobox')).toBeTruthy();
+  it('renders a trigger button', () => {
+    render(<Select value="a" onChange={vi.fn()} options={[{ value: 'a', label: 'A' }]} />);
+    expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
-  it('forwards ref', () => {
-    const ref = createRef<HTMLSelectElement>();
-    render(
-      <Select ref={ref}>
-        <option>x</option>
-      </Select>,
-    );
-    expect(ref.current?.tagName).toBe('SELECT');
+  it('renders trigger with selected value', () => {
+    render(<Select value="a" onChange={vi.fn()} options={[{ value: 'a', label: 'A' }]} />);
+    expect(screen.getByRole('button')).toHaveTextContent('A');
   });
 
-  it('passes value and onChange', () => {
+  it('passes value and onChange', async () => {
+    const user = userEvent.setup();
     const onChange = vi.fn();
     render(
-      <Select value="a" onChange={onChange}>
-        <option value="a">A</option>
-        <option value="b">B</option>
-      </Select>,
+      <Select
+        value="a"
+        onChange={onChange}
+        options={[
+          { value: 'a', label: 'A' },
+          { value: 'b', label: 'B' },
+        ]}
+        ariaLabel="Test"
+      />,
     );
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'b' } });
-    expect(onChange).toHaveBeenCalled();
+    await user.click(screen.getByRole('button'));
+    await user.click(screen.getByRole('option', { name: 'B' }));
+    expect(onChange).toHaveBeenCalledWith('b');
   });
 
   it('can be disabled', () => {
-    render(
-      <Select disabled>
-        <option>x</option>
-      </Select>,
-    );
-    expect((screen.getByRole('combobox') as HTMLSelectElement).disabled).toBe(true);
+    render(<Select value="a" onChange={vi.fn()} options={[{ value: 'a', label: 'A' }]} disabled />);
+    expect(screen.getByRole('button')).toBeDisabled();
   });
 });
 

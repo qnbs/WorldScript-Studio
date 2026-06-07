@@ -5,6 +5,7 @@ import { useBookPreviewView } from '../hooks/useBookPreviewView';
 import type { StorySection } from '../types';
 import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';
+import { Select } from './ui/Select';
 
 // ── TOC Sidebar ──────────────────────────────────────────────────────────────
 
@@ -106,16 +107,16 @@ const ControlsBar: FC = () => {
       </div>
 
       {/* Font family */}
-      <select
+      <Select
         value={fontFamily}
-        onChange={(e) => setFontFamily(e.target.value)}
-        aria-label={t('preview.controls.fontFamily')}
-        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]"
-      >
-        <option value="system-ui">{t('preview.controls.fontSystemUi')}</option>
-        <option value="serif">{t('preview.controls.fontSerif')}</option>
-        <option value="monospace">{t('preview.controls.fontMono')}</option>
-      </select>
+        onChange={(v) => setFontFamily(v)}
+        ariaLabel={t('preview.controls.fontFamily')}
+        options={[
+          { value: 'system-ui', label: t('preview.controls.fontSystemUi') },
+          { value: 'serif', label: t('preview.controls.fontSerif') },
+          { value: 'monospace', label: t('preview.controls.fontMono') },
+        ]}
+      />
 
       {/* Word count toggle */}
       <button

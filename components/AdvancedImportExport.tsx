@@ -226,12 +226,13 @@ export const AdvancedImportExport: React.FC = () => {
             <Select
               id="import-format"
               value={importFormat}
-              onChange={(e) => setImportFormat(e.target.value as 'json' | 'markdown' | 'docx')}
-            >
-              <option value="json">JSON (.json)</option>
-              <option value="markdown">Markdown (.md)</option>
-              <option value="docx">{t('export.format.docx')}</option>
-            </Select>
+              onChange={(v) => setImportFormat(v as 'json' | 'markdown' | 'docx')}
+              options={[
+                { value: 'json', label: 'JSON (.json)' },
+                { value: 'markdown', label: 'Markdown (.md)' },
+                { value: 'docx', label: t('export.format.docx') },
+              ]}
+            />
           </div>
 
           <div className="flex justify-end space-x-2">
@@ -262,12 +263,13 @@ export const AdvancedImportExport: React.FC = () => {
             <Select
               id="export-adv-format"
               value={exportFormat}
-              onChange={(e) => setExportFormat(e.target.value as 'json' | 'markdown' | 'docx')}
-            >
-              <option value="json">JSON (.json)</option>
-              <option value="markdown">Markdown (.md)</option>
-              <option value="docx">{t('export.format.docx')}</option>
-            </Select>
+              onChange={(v) => setExportFormat(v as 'json' | 'markdown' | 'docx')}
+              options={[
+                { value: 'json', label: 'JSON (.json)' },
+                { value: 'markdown', label: 'Markdown (.md)' },
+                { value: 'docx', label: t('export.format.docx') },
+              ]}
+            />
           </div>
 
           <div className="flex justify-end space-x-2">

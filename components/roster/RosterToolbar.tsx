@@ -80,15 +80,13 @@ export const RosterToolbar: FC<RosterToolbarProps> = ({
       <div className="w-40 shrink-0">
         <Select
           value={sort}
-          onChange={(e) => onSortChange(e.target.value as RosterSort)}
-          aria-label={sortAriaLabel}
-        >
-          {ROSTER_SORT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {t(opt.labelKey)}
-            </option>
-          ))}
-        </Select>
+          onChange={(v) => onSortChange(v as RosterSort)}
+          ariaLabel={sortAriaLabel}
+          options={ROSTER_SORT_OPTIONS.map((opt) => ({
+            value: opt.value,
+            label: t(opt.labelKey),
+          }))}
+        />
       </div>
     </div>
 

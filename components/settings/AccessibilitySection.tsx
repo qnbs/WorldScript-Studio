@@ -141,17 +141,17 @@ export const AccessibilitySection: FC = () => {
             <Select
               id="settings-live-region-verbosity"
               value={accessibility.liveRegionVerbosity}
-              onChange={(e) =>
+              onChange={(v) =>
                 patchA11y({
-                  liveRegionVerbosity: e.target
-                    .value as AccessibilitySettings['liveRegionVerbosity'],
+                  liveRegionVerbosity: v as AccessibilitySettings['liveRegionVerbosity'],
                 })
               }
-            >
-              <option value="minimal">{t('settings.accessibility.liveRegion.minimal')}</option>
-              <option value="normal">{t('settings.accessibility.liveRegion.normal')}</option>
-              <option value="verbose">{t('settings.accessibility.liveRegion.verbose')}</option>
-            </Select>
+              options={[
+                { value: 'minimal', label: t('settings.accessibility.liveRegion.minimal') },
+                { value: 'normal', label: t('settings.accessibility.liveRegion.normal') },
+                { value: 'verbose', label: t('settings.accessibility.liveRegion.verbose') },
+              ]}
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -191,23 +191,21 @@ export const AccessibilitySection: FC = () => {
             <Select
               id="settings-colorblind-mode"
               value={accessibility.colorBlindMode}
-              onChange={(e) =>
+              onChange={(v) =>
                 patchA11y({
-                  colorBlindMode: e.target.value as AccessibilitySettings['colorBlindMode'],
+                  colorBlindMode: v as AccessibilitySettings['colorBlindMode'],
                 })
               }
-            >
-              <option value="none">{t('settings.accessibility.colorBlind.none')}</option>
-              <option value="protanopia">
-                {t('settings.accessibility.colorBlind.protanopia')}
-              </option>
-              <option value="deuteranopia">
-                {t('settings.accessibility.colorBlind.deuteranopia')}
-              </option>
-              <option value="tritanopia">
-                {t('settings.accessibility.colorBlind.tritanopia')}
-              </option>
-            </Select>
+              options={[
+                { value: 'none', label: t('settings.accessibility.colorBlind.none') },
+                { value: 'protanopia', label: t('settings.accessibility.colorBlind.protanopia') },
+                {
+                  value: 'deuteranopia',
+                  label: t('settings.accessibility.colorBlind.deuteranopia'),
+                },
+                { value: 'tritanopia', label: t('settings.accessibility.colorBlind.tritanopia') },
+              ]}
+            />
           </div>
         </CardContent>
       </Card>

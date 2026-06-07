@@ -129,12 +129,17 @@ const IdeaForm: FC = () => {
                   >
                     {t('outline.advanced.pacingLabel')}
                   </label>
-                  <Select id="pacing" value={pacing} onChange={(e) => setPacing(e.target.value)}>
-                    <option value="">{t('outline.advanced.pacingDefault')}</option>
-                    <option value="Slow Burn">{t('outline.advanced.pacingSlow')}</option>
-                    <option value="Medium Paced">{t('outline.advanced.pacingMedium')}</option>
-                    <option value="Fast-Paced Thriller">{t('outline.advanced.pacingFast')}</option>
-                  </Select>
+                  <Select
+                    id="pacing"
+                    value={pacing}
+                    onChange={(v) => setPacing(v)}
+                    placeholder={t('outline.advanced.pacingDefault')}
+                    options={[
+                      { value: 'Slow Burn', label: t('outline.advanced.pacingSlow') },
+                      { value: 'Medium Paced', label: t('outline.advanced.pacingMedium') },
+                      { value: 'Fast-Paced Thriller', label: t('outline.advanced.pacingFast') },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label

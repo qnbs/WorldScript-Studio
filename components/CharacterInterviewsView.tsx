@@ -7,6 +7,7 @@ import { useCharacterInterviewsView } from '../hooks/useCharacterInterviewsView'
 import { useTranslation } from '../hooks/useTranslation';
 import { ArchetypeSelector } from './character-interviews/ArchetypeSelector';
 import { InterviewPanel } from './character-interviews/InterviewPanel';
+import { Select } from './ui/Select';
 
 function CharacterInterviewsViewContent() {
   const { t } = useTranslation();
@@ -50,21 +51,13 @@ function CharacterInterviewsViewContent() {
           >
             {t('characterInterviews.selectCharacter')}
           </label>
-          <select
+          <Select
             id="ci-character-select"
             value={selectedCharacterId ?? ''}
-            onChange={(e) => selectCharacter(e.target.value)}
-            className="w-full rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-2 py-1.5 text-sm text-[var(--sc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
-          >
-            <option value="" disabled>
-              {t('characterInterviews.selectCharacterPlaceholder')}
-            </option>
-            {characters.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => selectCharacter(v)}
+            placeholder={t('characterInterviews.selectCharacterPlaceholder')}
+            options={characters.map((c) => ({ value: c.id, label: c.name }))}
+          />
         </div>
 
         {/* Interview list */}

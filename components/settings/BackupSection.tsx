@@ -40,18 +40,19 @@ export const BackupSection: FC = () => {
             <Select
               id="settings-backup-frequency"
               value={settings.backup.backupFrequency}
-              onChange={(e) =>
+              onChange={(v) =>
                 handleSettingChange('backup', {
                   ...settings.backup,
-                  backupFrequency: e.target.value,
+                  backupFrequency: v,
                 })
               }
-            >
-              <option value="manual">{t('settings.backup.frequency.manual')}</option>
-              <option value="daily">{t('settings.backup.frequency.daily')}</option>
-              <option value="weekly">{t('settings.backup.frequency.weekly')}</option>
-              <option value="monthly">{t('settings.backup.frequency.monthly')}</option>
-            </Select>
+              options={[
+                { value: 'manual', label: t('settings.backup.frequency.manual') },
+                { value: 'daily', label: t('settings.backup.frequency.daily') },
+                { value: 'weekly', label: t('settings.backup.frequency.weekly') },
+                { value: 'monthly', label: t('settings.backup.frequency.monthly') },
+              ]}
+            />
           </div>
           <div>
             <label

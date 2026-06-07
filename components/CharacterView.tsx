@@ -240,25 +240,27 @@ const CharacterDossier: FC = () => {
               <Select
                 id="portrait-style-select"
                 value={portraitStyle}
-                onChange={(e) => setPortraitStyle(e.target.value)}
-              >
-                <option value="digital painting">
-                  {t('characters.edit.portrait.styles.digitalPainting')}
-                </option>
-                <option value="photorealistic">
-                  {t('characters.edit.portrait.styles.photorealistic')}
-                </option>
-                <option value="anime">{t('characters.edit.portrait.styles.anime')}</option>
-                <option value="cartoon">{t('characters.edit.portrait.styles.cartoon')}</option>
-                <option value="watercolor">
-                  {t('characters.edit.portrait.styles.watercolor')}
-                </option>
-                <option value="oil painting">
-                  {t('characters.edit.portrait.styles.oilPainting')}
-                </option>
-                <option value="sketch">{t('characters.edit.portrait.styles.sketch')}</option>
-                <option value="comic book">{t('characters.edit.portrait.styles.comicBook')}</option>
-              </Select>
+                onChange={(v) => setPortraitStyle(v)}
+                options={[
+                  {
+                    value: 'digital painting',
+                    label: t('characters.edit.portrait.styles.digitalPainting'),
+                  },
+                  {
+                    value: 'photorealistic',
+                    label: t('characters.edit.portrait.styles.photorealistic'),
+                  },
+                  { value: 'anime', label: t('characters.edit.portrait.styles.anime') },
+                  { value: 'cartoon', label: t('characters.edit.portrait.styles.cartoon') },
+                  { value: 'watercolor', label: t('characters.edit.portrait.styles.watercolor') },
+                  {
+                    value: 'oil painting',
+                    label: t('characters.edit.portrait.styles.oilPainting'),
+                  },
+                  { value: 'sketch', label: t('characters.edit.portrait.styles.sketch') },
+                  { value: 'comic book', label: t('characters.edit.portrait.styles.comicBook') },
+                ]}
+              />
             </div>
             <div className="flex gap-2">
               <Button

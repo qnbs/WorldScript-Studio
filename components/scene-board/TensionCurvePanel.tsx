@@ -7,6 +7,7 @@ import { selectPlotTensionOverrides } from '../../features/project/projectSelect
 import { projectActions } from '../../features/project/projectSlice';
 import { computeTensionCurve } from '../../services/plotBoardService';
 import type { StorySection } from '../../types';
+import { Select } from '../ui/Select';
 
 // ── Beat sheet presets ────────────────────────────────────────────────────────
 
@@ -226,17 +227,17 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
               {t('sceneboard.tension.showBeatSheet')}
             </label>
             {showBeats && (
-              <select
+              <Select
                 value={activeBeatSheet}
-                onChange={(e) => setActiveBeatSheet(e.target.value as BeatSheetKey)}
-                className="text-xs px-1 py-0.5 rounded bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] outline-none"
-                aria-label={t('sceneboard.tension.beatSheetSelect')}
-              >
-                <option value="none">{t('sceneboard.tension.beatSheetNone')}</option>
-                <option value="three-act">{t('sceneboard.tension.beatSheetThreeAct')}</option>
-                <option value="save-the-cat">{t('sceneboard.tension.beatSheetSaveCat')}</option>
-                <option value="hero's-journey">{t('sceneboard.tension.beatSheetHero')}</option>
-              </select>
+                onChange={(v) => setActiveBeatSheet(v as BeatSheetKey)}
+                ariaLabel={t('sceneboard.tension.beatSheetSelect')}
+                options={[
+                  { value: 'none', label: t('sceneboard.tension.beatSheetNone') },
+                  { value: 'three-act', label: t('sceneboard.tension.beatSheetThreeAct') },
+                  { value: 'save-the-cat', label: t('sceneboard.tension.beatSheetSaveCat') },
+                  { value: "hero's-journey", label: t('sceneboard.tension.beatSheetHero') },
+                ]}
+              />
             )}
             <button
               type="button"

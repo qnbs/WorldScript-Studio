@@ -43,13 +43,14 @@ export const EditorSection: FC = () => {
             <Select
               id="font-family-select"
               value={settings.editorFont}
-              onChange={(e) => handleSettingChange('editorFont', e.target.value)}
-            >
-              <option value="serif">{t('settings.font.serif')}</option>
-              <option value="sans-serif">{t('settings.font.sans')}</option>
-              <option value="monospace">{t('settings.font.mono')}</option>
-              <option value="custom">{t('settings.font.custom')}</option>
-            </Select>
+              onChange={(v) => handleSettingChange('editorFont', v)}
+              options={[
+                { value: 'serif', label: t('settings.font.serif') },
+                { value: 'sans-serif', label: t('settings.font.sans') },
+                { value: 'monospace', label: t('settings.font.mono') },
+                { value: 'custom', label: t('settings.font.custom') },
+              ]}
+            />
           </div>
           {settings.editorFont === 'custom' && (
             <div className="space-y-4 p-4 border border-[var(--sc-border-subtle)] rounded-lg">
@@ -70,19 +71,20 @@ export const EditorSection: FC = () => {
                 />
                 <Select
                   value={settings.customFont?.format || 'woff2'}
-                  onChange={(e) =>
+                  onChange={(v) =>
                     handleSettingChange('customFont', {
                       name: settings.customFont?.name || '',
                       url: settings.customFont?.url || '',
-                      format: e.target.value as 'woff' | 'woff2' | 'ttf' | 'otf',
+                      format: v as 'woff' | 'woff2' | 'ttf' | 'otf',
                     })
                   }
-                >
-                  <option value="woff">WOFF</option>
-                  <option value="woff2">WOFF2</option>
-                  <option value="ttf">TTF</option>
-                  <option value="otf">OTF</option>
-                </Select>
+                  options={[
+                    { value: 'woff', label: 'WOFF' },
+                    { value: 'woff2', label: 'WOFF2' },
+                    { value: 'ttf', label: 'TTF' },
+                    { value: 'otf', label: 'OTF' },
+                  ]}
+                />
               </div>
               <Input
                 placeholder={t('settings.editor.customFontUrl')}

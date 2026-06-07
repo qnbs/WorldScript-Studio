@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useMindMapViewContext } from '../../contexts/MindMapViewContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import type { MindMapLinkedEntityType, MindMapNodeShape, MindMapNodeType } from '../../types';
+import { Select } from '../ui/Select';
 
 const SHAPES: MindMapNodeShape[] = ['circle', 'rectangle', 'diamond', 'ellipse', 'hexagon'];
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444'];
@@ -141,15 +142,15 @@ export function MindMapNodeEditor() {
           >
             {t('mindmap.nodeType')}
           </label>
-          <select
+          <Select
             id="mm-node-type"
             value={type}
-            onChange={(e) => setType(e.target.value as MindMapNodeType)}
-            className={inputClass}
-          >
-            <option value="free">{t('mindmap.nodeTypeFree')}</option>
-            <option value="linked">{t('mindmap.nodeTypeLinked')}</option>
-          </select>
+            onChange={(v) => setType(v as MindMapNodeType)}
+            options={[
+              { value: 'free', label: t('mindmap.nodeTypeFree') },
+              { value: 'linked', label: t('mindmap.nodeTypeLinked') },
+            ]}
+          />
         </div>
 
         {type === 'linked' && (
@@ -160,19 +161,13 @@ export function MindMapNodeEditor() {
             >
               {t('mindmap.linkedEntityType')}
             </label>
-            <select
+            <Select
               id="mm-node-entity-type"
               value={linkedEntityType}
-              onChange={(e) => setLinkedEntityType(e.target.value as MindMapLinkedEntityType)}
-              className={inputClass}
-            >
-              <option value="">{t('mindmap.linkedEntityTypePlaceholder')}</option>
-              {LINKED_TYPES.map((lt) => (
-                <option key={lt} value={lt}>
-                  {lt}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setLinkedEntityType(v as MindMapLinkedEntityType)}
+              placeholder={t('mindmap.linkedEntityTypePlaceholder')}
+              options={LINKED_TYPES.map((lt) => ({ value: lt, label: lt }))}
+            />
           </div>
         )}
 

@@ -99,8 +99,8 @@ export const useSettingsView = () => {
   }, [activeCategory, refreshSnapshots]);
 
   const handleLanguageChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      setLanguage(e.target.value as 'en' | 'de' | 'fr' | 'es' | 'it');
+    (value: string) => {
+      setLanguage(value as 'en' | 'de' | 'fr' | 'es' | 'it');
     },
     [setLanguage],
   );

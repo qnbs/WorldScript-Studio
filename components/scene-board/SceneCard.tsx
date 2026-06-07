@@ -120,39 +120,34 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
             <div className="flex items-center gap-2">
               <Select
                 value={editData.status}
-                onChange={(e) =>
+                onChange={(v) =>
                   setEditData((p) => ({
                     ...p,
-                    status: e.target.value as
-                      | 'outline'
-                      | 'draft'
-                      | 'first-draft'
-                      | 'revised'
-                      | 'final',
+                    status: v as 'outline' | 'draft' | 'first-draft' | 'revised' | 'final',
                   }))
                 }
-                className="text-xs"
-              >
-                <option value="draft">{t('sceneboard.status.draft')}</option>
-                <option value="outline">{t('sceneboard.status.outline')}</option>
-                <option value="first-draft">{t('sceneboard.status.firstDraft')}</option>
-                <option value="revised">{t('sceneboard.status.revised')}</option>
-                <option value="final">{t('sceneboard.status.final')}</option>
-              </Select>
+                options={[
+                  { value: 'draft', label: t('sceneboard.status.draft') },
+                  { value: 'outline', label: t('sceneboard.status.outline') },
+                  { value: 'first-draft', label: t('sceneboard.status.firstDraft') },
+                  { value: 'revised', label: t('sceneboard.status.revised') },
+                  { value: 'final', label: t('sceneboard.status.final') },
+                ]}
+              />
               <Select
-                value={editData.act}
-                onChange={(e) =>
+                value={String(editData.act)}
+                onChange={(v) =>
                   setEditData((p) => ({
                     ...p,
-                    act: parseInt(e.target.value, 10) as 1 | 2 | 3,
+                    act: parseInt(v, 10) as 1 | 2 | 3,
                   }))
                 }
-                className="text-xs"
-              >
-                <option value={1}>{t('sceneboard.act1')}</option>
-                <option value={2}>{t('sceneboard.act2')}</option>
-                <option value={3}>{t('sceneboard.act3')}</option>
-              </Select>
+                options={[
+                  { value: '1', label: t('sceneboard.act1') },
+                  { value: '2', label: t('sceneboard.act2') },
+                  { value: '3', label: t('sceneboard.act3') },
+                ]}
+              />
               <input
                 type="color"
                 value={editData.color}
@@ -180,30 +175,18 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
               />
               <Select
                 value={editData.sceneLocationId || ''}
-                onChange={(e) => setEditData((p) => ({ ...p, sceneLocationId: e.target.value }))}
-                className="text-xs"
-                aria-label={t('sceneboard.timeline.locationLabel')}
-              >
-                <option value="">{t('sceneboard.timeline.locationNone')}</option>
-                {locationOptions.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.label}
-                  </option>
-                ))}
-              </Select>
+                onChange={(v) => setEditData((p) => ({ ...p, sceneLocationId: v }))}
+                ariaLabel={t('sceneboard.timeline.locationLabel')}
+                placeholder={t('sceneboard.timeline.locationNone')}
+                options={locationOptions.map((loc) => ({ value: loc.id, label: loc.label }))}
+              />
               <Select
                 value={editData.povCharacterId || ''}
-                onChange={(e) => setEditData((p) => ({ ...p, povCharacterId: e.target.value }))}
-                className="text-xs"
-                aria-label={t('sceneboard.timeline.povLabel')}
-              >
-                <option value="">{t('sceneboard.timeline.povNone')}</option>
-                {characters.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={(v) => setEditData((p) => ({ ...p, povCharacterId: v }))}
+                ariaLabel={t('sceneboard.timeline.povLabel')}
+                placeholder={t('sceneboard.timeline.povNone')}
+                options={characters.map((c) => ({ value: c.id, label: c.name }))}
+              />
             </div>
             <div className="flex justify-between">
               <Button size="sm" variant="danger" onClick={() => onDelete(section.id)}>

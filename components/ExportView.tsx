@@ -224,17 +224,18 @@ const ExportControls: FC = () => {
               <Select
                 id="export-format"
                 value={format}
-                onChange={(e) =>
-                  setFormat(e.target.value as 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt')
+                onChange={(v) =>
+                  setFormat(v as 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt')
                 }
-              >
-                <option value="md">{t('export.format.md')}</option>
-                <option value="txt">{t('export.format.txt')}</option>
-                <option value="norm-txt">{t('export.format.normTxt')}</option>
-                <option value="pdf">{t('export.format.pdf')}</option>
-                <option value="docx">Microsoft Word (.docx)</option>
-                <option value="epub">eBook (.epub)</option>
-              </Select>
+                options={[
+                  { value: 'md', label: t('export.format.md') },
+                  { value: 'txt', label: t('export.format.txt') },
+                  { value: 'norm-txt', label: t('export.format.normTxt') },
+                  { value: 'pdf', label: t('export.format.pdf') },
+                  { value: 'docx', label: 'Microsoft Word (.docx)' },
+                  { value: 'epub', label: 'eBook (.epub)' },
+                ]}
+              />
             </div>
             {format === 'pdf' && (
               <div className="space-y-4 border-t border-[var(--sc-border-subtle)] pt-4 animate-in">
@@ -252,17 +253,18 @@ const ExportControls: FC = () => {
                     <Select
                       id="export-pdf-font"
                       value={pdfOptions.font}
-                      onChange={(e) =>
+                      onChange={(v) =>
                         setPdfOptions((o) => ({
                           ...o,
-                          font: e.target.value as typeof o.font,
+                          font: v as typeof o.font,
                         }))
                       }
-                    >
-                      <option value="Times">Times New Roman</option>
-                      <option value="Courier">Courier</option>
-                      <option value="Helvetica">Helvetica/Arial</option>
-                    </Select>
+                      options={[
+                        { value: 'Times', label: 'Times New Roman' },
+                        { value: 'Courier', label: 'Courier' },
+                        { value: 'Helvetica', label: 'Helvetica/Arial' },
+                      ]}
+                    />
                   </div>
                   <div>
                     <label
@@ -273,17 +275,18 @@ const ExportControls: FC = () => {
                     </label>
                     <Select
                       id="export-pdf-font-size"
-                      value={pdfOptions.fontSize}
-                      onChange={(e) =>
+                      value={String(pdfOptions.fontSize)}
+                      onChange={(v) =>
                         setPdfOptions((o) => ({
                           ...o,
-                          fontSize: Number(e.target.value) as typeof o.fontSize,
+                          fontSize: Number(v) as typeof o.fontSize,
                         }))
                       }
-                    >
-                      <option value="12">12 pt</option>
-                      <option value="11">11 pt</option>
-                    </Select>
+                      options={[
+                        { value: '12', label: '12 pt' },
+                        { value: '11', label: '11 pt' },
+                      ]}
+                    />
                   </div>
                 </div>
                 <div>
@@ -296,16 +299,17 @@ const ExportControls: FC = () => {
                   <Select
                     id="export-pdf-line-spacing"
                     value={pdfOptions.lineSpacing}
-                    onChange={(e) =>
+                    onChange={(v) =>
                       setPdfOptions((o) => ({
                         ...o,
-                        lineSpacing: e.target.value as typeof o.lineSpacing,
+                        lineSpacing: v as typeof o.lineSpacing,
                       }))
                     }
-                  >
-                    <option value="double">{t('export.format.double')}</option>
-                    <option value="single">{t('export.format.single')}</option>
-                  </Select>
+                    options={[
+                      { value: 'double', label: t('export.format.double') },
+                      { value: 'single', label: t('export.format.single') },
+                    ]}
+                  />
                 </div>
                 <Checkbox
                   id="pdf-titlepage"

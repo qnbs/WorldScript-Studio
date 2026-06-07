@@ -63,17 +63,10 @@ const ContextPanel: FC = React.memo(() => {
             <Select
               id="writer-section-select"
               value={selectedSectionId || ''}
-              onChange={(e) => dispatch(writerActions.setSelectedSectionId(e.target.value))}
-            >
-              <option value="" disabled>
-                {t('writer.studio.context.selectSection')}
-              </option>
-              {project.manuscript.map((sec) => (
-                <option key={sec.id} value={sec.id}>
-                  {sec.title}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => dispatch(writerActions.setSelectedSectionId(v))}
+              placeholder={t('writer.studio.context.selectSection')}
+              options={project.manuscript.map((sec) => ({ value: sec.id, label: sec.title }))}
+            />
           </div>
           <div className="relative flex-grow border rounded-md border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] overflow-hidden min-h-[300px]">
             {/* QNBS-v3: data-testid disambiguates Writer vs Manuscript textareas in Playwright (shared aria labelling). */}

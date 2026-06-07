@@ -67,18 +67,19 @@ export const NotificationsSection: FC = () => {
             <Select
               id="settings-writing-reminders"
               value={settings.notifications.writingReminders}
-              onChange={(e) =>
+              onChange={(v) =>
                 handleSettingChange('notifications', {
                   ...settings.notifications,
-                  writingReminders: e.target.value,
+                  writingReminders: v,
                 })
               }
-            >
-              <option value="never">{t('settings.notifications.frequency.never')}</option>
-              <option value="daily">{t('settings.notifications.frequency.daily')}</option>
-              <option value="weekly">{t('settings.notifications.frequency.weekly')}</option>
-              <option value="monthly">{t('settings.notifications.frequency.monthly')}</option>
-            </Select>
+              options={[
+                { value: 'never', label: t('settings.notifications.frequency.never') },
+                { value: 'daily', label: t('settings.notifications.frequency.daily') },
+                { value: 'weekly', label: t('settings.notifications.frequency.weekly') },
+                { value: 'monthly', label: t('settings.notifications.frequency.monthly') },
+              ]}
+            />
           </div>
         </CardContent>
       </Card>

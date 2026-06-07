@@ -57,21 +57,20 @@ export const IntegrationsSection: FC = () => {
             <Select
               id="settings-sync-provider"
               value={settings.integrations.syncProvider}
-              onChange={(e) =>
+              onChange={(v) =>
                 handleSettingChange('integrations', {
                   ...settings.integrations,
-                  syncProvider: e.target.value,
+                  syncProvider: v,
                 })
               }
-            >
-              <option value="none">{t('settings.integrations.providers.none')}</option>
-              <option value="google-drive">
-                {t('settings.integrations.providers.googleDrive')}
-              </option>
-              <option value="dropbox">{t('settings.integrations.providers.dropbox')}</option>
-              <option value="onedrive">{t('settings.integrations.providers.onedrive')}</option>
-              <option value="icloud">{t('settings.integrations.providers.icloud')}</option>
-            </Select>
+              options={[
+                { value: 'none', label: t('settings.integrations.providers.none') },
+                { value: 'google-drive', label: t('settings.integrations.providers.googleDrive') },
+                { value: 'dropbox', label: t('settings.integrations.providers.dropbox') },
+                { value: 'onedrive', label: t('settings.integrations.providers.onedrive') },
+                { value: 'icloud', label: t('settings.integrations.providers.icloud') },
+              ]}
+            />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ToggleSwitch

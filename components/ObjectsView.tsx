@@ -5,6 +5,7 @@ import { useObjectsView } from '../hooks/useObjectsView';
 import type { ObjectGroup, StoryObject, StoryObjectType } from '../types';
 import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';
+import { Select } from './ui/Select';
 
 // ── Object Type Badge ─────────────────────────────────────────────────────────
 
@@ -80,18 +81,15 @@ const ObjectForm: FC = () => {
         >
           {t('objects.type')}
         </label>
-        <select
+        <Select
           id="obj-type"
           value={type}
-          onChange={(e) => setType(e.target.value as StoryObjectType)}
-          className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
-        >
-          {OBJECT_TYPES.map((ot) => (
-            <option key={ot} value={ot}>
-              {t(`objects.typeLabel.${ot}`)}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setType(v as StoryObjectType)}
+          options={OBJECT_TYPES.map((ot) => ({
+            value: ot,
+            label: t(`objects.typeLabel.${ot}`),
+          }))}
+        />
       </div>
       <div>
         <label
@@ -487,20 +485,16 @@ const ObjectsViewContent: FC = () => {
                 placeholder={t('objects.search')}
                 className="flex-1 min-w-[160px] px-3 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               />
-              <select
+              <Select
                 value={selectedGroupFilter ?? ''}
-                onChange={(e) => setSelectedGroupFilter(e.target.value || null)}
-                className="px-3 py-2 text-sm rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
-                aria-label={t('objects.filterByGroup')}
-              >
-                <option value="">{t('objects.allGroups')}</option>
-                <option value="ungrouped">{t('objects.ungrouped')}</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setSelectedGroupFilter(v || null)}
+                ariaLabel={t('objects.filterByGroup')}
+                options={[
+                  { value: '', label: t('objects.allGroups') },
+                  { value: 'ungrouped', label: t('objects.ungrouped') },
+                  ...groups.map((g) => ({ value: g.id, label: g.name })),
+                ]}
+              />
             </div>
 
             {/* Object form (inline) */}

@@ -13,41 +13,41 @@ const meta: Meta<typeof Select> = {
 export default meta;
 type Story = StoryObj<typeof Select>;
 
+const OPTIONS = [
+  { value: '', label: 'Select an option' },
+  { value: 'a', label: 'Option A' },
+  { value: 'b', label: 'Option B' },
+  { value: 'c', label: 'Option C' },
+];
+
 export const Default: Story = {
   args: {
-    children: (
-      <>
-        <option value="">Select an option</option>
-        <option value="a">Option A</option>
-        <option value="b">Option B</option>
-        <option value="c">Option C</option>
-      </>
-    ),
+    value: '',
+    onChange: () => {},
+    options: OPTIONS,
   },
 };
 
 export const WithValue: Story = {
   args: {
-    defaultValue: 'b',
-    children: (
-      <>
-        <option value="a">Option A</option>
-        <option value="b">Option B (selected)</option>
-        <option value="c">Option C</option>
-      </>
-    ),
+    value: 'b',
+    onChange: () => {},
+    options: [
+      { value: 'a', label: 'Option A' },
+      { value: 'b', label: 'Option B (selected)' },
+      { value: 'c', label: 'Option C' },
+    ],
   },
 };
 
 export const Disabled: Story = {
   args: {
     disabled: true,
-    defaultValue: 'a',
-    children: (
-      <>
-        <option value="a">Disabled Select</option>
-        <option value="b">Option B</option>
-      </>
-    ),
+    value: 'a',
+    onChange: () => {},
+    options: [
+      { value: 'a', label: 'Disabled Select' },
+      { value: 'b', label: 'Option B' },
+    ],
   },
 };

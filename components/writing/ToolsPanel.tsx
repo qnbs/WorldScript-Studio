@@ -145,20 +145,21 @@ const ToolsPanel: FC = React.memo(() => {
                     <Select
                       id="style"
                       value={style}
-                      onChange={(e) => dispatch(writerActions.setStyle(e.target.value))}
-                    >
-                      <option value="">{t('writer.studio.controls.default')}</option>
-                      <option value="Cinematic">
-                        {t('writer.studio.controls.styles.cinematic')}
-                      </option>
-                      <option value="Concise">{t('writer.studio.controls.styles.concise')}</option>
-                      <option value="Descriptive">
-                        {t('writer.studio.controls.styles.descriptive')}
-                      </option>
-                      <option value="Minimalist">
-                        {t('writer.studio.controls.styles.minimalist')}
-                      </option>
-                    </Select>
+                      onChange={(v) => dispatch(writerActions.setStyle(v))}
+                      placeholder={t('writer.studio.controls.default')}
+                      options={[
+                        { value: 'Cinematic', label: t('writer.studio.controls.styles.cinematic') },
+                        { value: 'Concise', label: t('writer.studio.controls.styles.concise') },
+                        {
+                          value: 'Descriptive',
+                          label: t('writer.studio.controls.styles.descriptive'),
+                        },
+                        {
+                          value: 'Minimalist',
+                          label: t('writer.studio.controls.styles.minimalist'),
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               </div>

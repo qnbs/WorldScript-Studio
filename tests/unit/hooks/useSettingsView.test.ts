@@ -234,9 +234,7 @@ describe('handleLanguageChange', () => {
   it('calls setLanguage with the selected value', () => {
     const { result } = renderHook(() => useSettingsView());
     act(() => {
-      result.current.handleLanguageChange({
-        target: { value: 'de' },
-      } as React.ChangeEvent<HTMLSelectElement>);
+      result.current.handleLanguageChange('de');
     });
     expect(mockSetLanguage).toHaveBeenCalledWith('de');
   });

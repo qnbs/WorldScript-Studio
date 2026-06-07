@@ -15,6 +15,7 @@ import type { AdvancedAiSettings, AIProvider, LocalBackendPreset } from '../../t
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
 
 interface AiProviderCardProps {
@@ -284,25 +285,19 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               >
                 {t('settings.ai.localBackendPreset')}
               </label>
-              <select
+              <Select
                 id="local-backend-preset"
-                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
                 value={advancedAi.localBackendPreset}
-                onChange={(e) => {
-                  const preset = e.target.value as LocalBackendPreset;
+                onChange={(v) => {
+                  const preset = v as LocalBackendPreset;
                   const url =
                     preset === 'custom'
                       ? advancedAi.ollamaBaseUrl
                       : LOCAL_BACKEND_PRESET_DEFAULT_URL[preset];
                   onAdvancedAiPatch({ localBackendPreset: preset, ollamaBaseUrl: url });
                 }}
-              >
-                {presetOptions.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {t(o.labelKey)}
-                  </option>
-                ))}
-              </select>
+                options={presetOptions.map((o) => ({ value: o.id, label: t(o.labelKey) }))}
+              />
             </div>
             <label
               htmlFor="ollama-server-url"
@@ -432,22 +427,14 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               >
                 {t('settings.ai.webllm.modelSelect')}
               </label>
-              <select
+              <Select
                 id="webllm-model-select"
-                aria-label={t('settings.ai.webllm.modelSelectAriaLabel')}
-                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
-                onChange={(e) => onModelSelect?.(e.target.value)}
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  {t('settings.ai.webllm.modelSelect')}
-                </option>
-                {WEBLLM_SUPPORTED_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+                ariaLabel={t('settings.ai.webllm.modelSelectAriaLabel')}
+                value=""
+                onChange={(v) => onModelSelect?.(v)}
+                placeholder={t('settings.ai.webllm.modelSelect')}
+                options={WEBLLM_SUPPORTED_MODELS.map((m) => ({ value: m.id, label: m.label }))}
+              />
             </div>
 
             <p className="text-xs text-[var(--sc-text-muted)]">
@@ -470,19 +457,13 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               >
                 {t('settings.ai.onnx.modelSelect')}
               </label>
-              <select
+              <Select
                 id="onnx-model-select"
-                aria-label={t('settings.ai.onnx.modelSelect')}
-                className="w-full rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none"
+                ariaLabel={t('settings.ai.onnx.modelSelect')}
                 value={advancedAi.model}
-                onChange={(e) => onModelSelect?.(e.target.value)}
-              >
-                {ONNX_SUPPORTED_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => onModelSelect?.(v)}
+                options={ONNX_SUPPORTED_MODELS.map((m) => ({ value: m.id, label: m.label }))}
+              />
             </div>
           </div>
         )}
