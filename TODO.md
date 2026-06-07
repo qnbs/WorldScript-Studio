@@ -26,7 +26,13 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   - **Hinweis:** Rust TaskSupervisor UI (ManuscriptStatsPanel) ist separat in WorkerBus v2 Phase 3 (siehe unten).
 
 ### P2 — Global Readiness & i18n
-- 🔄 **P1-5** — Beta-Sprachen: ja/zh/pt/el ≤ 5% English-Placeholders. **Stand (2026-06-07):** 2339/2340 Keys (99,96%) sind EN-Placeholder — nur `portal.language.searchPlaceholder` übersetzt. Strategie: Top-4 Files (common + portal + settings + manuscript) komplett übersetzen = ~30% aller Keys → reduziert EN-Anteil auf ~70%. Rest über Community/MT.
+- 🔄 **P1-5** — Beta-Sprachen: ja/zh/pt/el ≤ 5% English-Placeholders. **Stand (2026-06-07):**
+  - ✅ `scripts/bulk-translate-locales.mjs` erstellt — kostenloser Google-Translate-Endpoint mit Rate-Limiting & Retry
+  - ✅ portal.json (40) + sidebar.json (23) + dashboard.json (107) übersetzt für alle 4 Sprachen
+  - EN-Placeholder-Rate reduziert: **100% → ~93%** (157–163 Keys übersetzt pro Sprache)
+  - ⬜ Verbleibend: common.json (509), settings.json (648), writer.json (80), manuscript.json (67), etc.
+  - ⬜ Ziel ≤5% erfordert ~2200 weitere Übersetzungen pro Sprache → Bulk-Script mit API-Key oder Community
+  - Command: `node scripts/bulk-translate-locales.mjs --lang=ja,zh,pt,el --all --delay=400`
 - ✅ **P1-4** — Error Boundaries + Logging: Alle 19+ Views in `App.tsx` mit `ErrorBoundary`/`ViewErrorBoundary` gewrappt (WelcomePortal früher Return-Path + alle Modals/Portals). Commits `f810d51` + `6305d64`.
 
 ### P3 — Architektur-Hardening & Performance
