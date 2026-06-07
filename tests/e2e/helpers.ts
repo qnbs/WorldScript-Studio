@@ -69,7 +69,7 @@ export async function selectFirstEnabledWriterSection(page: Page): Promise<void>
   await expect.poll(async () => options.count()).toBeGreaterThan(0);
   // Use direct DOM click to avoid "subtree intercepts pointer events" when
   // the dropdown is overlapped by other elements (e.g. textarea in Writer view).
-  await options.first().evaluate((el) => el.click());
+  await options.first().evaluate((el) => (el as HTMLElement).click());
 }
 
 /** Outline / AI flows call Gemini only when a key exists in encrypted storage — seed before mocked HTTP in CI. */
