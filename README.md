@@ -48,7 +48,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 ### PWA & Desktop
 
 - **Install as PWA:** In Chromium/Edge, open the Live Demo → use the install icon in the address bar (or browser menu) for an offline-capable app shortcut.
-- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — signed `.appimage`, `.msi`, and `.dmg` artifacts with an auto-generated `latest.json` update manifest. **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/SPRINT-V1.10.md`](docs/SPRINT-V1.10.md).
+- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — signed `.appimage`, `.msi`, and `.dmg` artifacts with an auto-generated `latest.json` update manifest. **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md).
 
 ---
 
@@ -333,7 +333,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2 236 i18n keys** across all 7 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2 340 i18n keys** across all 11 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -342,8 +342,12 @@ Shipped UI locales with **2 236 i18n keys** across all 7 languages — zero hard
 - 🇮🇹 **Italian** (Italiano)
 - 🇸🇦 **Arabic** (العربية) — *Beta, RTL*
 - 🇮🇱 **Hebrew** (עברית) — *Beta, RTL*
+- 🇯🇵 **Japanese** (日本語) — *Beta*
+- 🇨🇳 **Chinese Simplified** (简体中文) — *Beta*
+- 🇵🇹 **Portuguese** (Português) — *Beta*
+- 🇬🇷 **Greek** (Ελληνικά) — *Beta*
 
-All seven trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette.
+All eleven trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette.
 
 **RTL Layout Beta** (Arabic / Hebrew): all 18 UI modules are fully translated; `help.json` long-form prose remains English fallback (community follow-up). Self-hosted **Noto Sans Arabic / Hebrew** + **Noto Naskh Arabic** (manuscript editor) provide proper glyph coverage. Switching to ar/he sets `html[dir="rtl"]`; a global `[dir="rtl"]` CSS net plus logical-property shell layout mirror the UI, while canvas/SVG boards (Plot Board, Character Graph) stay LTR to keep pointer/geometry math correct. The `enableRtlLayout` flag (off by default) additionally forces RTL for layout testing regardless of locale.
 
@@ -664,16 +668,16 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) | GitHub language stats (Linguist), i18n bundles, cold-start translation fixes |
 | [`docs/PLOT-BOARD.md`](docs/PLOT-BOARD.md) | Plot-Board v2 architecture: canvas, connections, subplots, tension curve |
 | [`docs/PROGRESS-TRACKER.md`](docs/PROGRESS-TRACKER.md) | Progress Tracker: session lifecycle, streak algorithm, SVG charts |
-| [`docs/SPRINT-V1.5.md`](docs/SPRINT-V1.5.md) | Sprint reference: v1.5 local-AI architecture implementation plan |
-| [`docs/SPRINT-V1.6.md`](docs/SPRINT-V1.6.md) | Sprint reference: v1.6 Plot-Board v2 & Writer Experience |
-| [`docs/SPRINT-V1.7.md`](docs/SPRINT-V1.7.md) | Sprint reference: v1.7 DuckDB Analytics + Hybrid RAG + AI Extensions |
-| [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md) | Sprint reference: v1.8 RAG prompt assembly + Writer/Plot Board AI |
-| [`docs/SPRINT-V1.9.md`](docs/SPRINT-V1.9.md) | Sprint reference: v1.9 lazy loading, Help/Settings hub, Tauri desktop UX |
-| [`docs/SPRINT-V1.10.md`](docs/SPRINT-V1.10.md) | Sprint reference: v1.10 mobile UX, coverage 55 %, deploy & help expansion |
+| [`docs/history/sprints/SPRINT-V1.5.md`](docs/history/sprints/SPRINT-V1.5.md) | Sprint reference: v1.5 local-AI architecture implementation plan |
+| [`docs/history/sprints/SPRINT-V1.6.md`](docs/history/sprints/SPRINT-V1.6.md) | Sprint reference: v1.6 Plot-Board v2 & Writer Experience |
+| [`docs/history/sprints/SPRINT-V1.7.md`](docs/history/sprints/SPRINT-V1.7.md) | Sprint reference: v1.7 DuckDB Analytics + Hybrid RAG + AI Extensions |
+| [`docs/history/sprints/SPRINT-V1.8.md`](docs/history/sprints/SPRINT-V1.8.md) | Sprint reference: v1.8 RAG prompt assembly + Writer/Plot Board AI |
+| [`docs/history/sprints/SPRINT-V1.9.md`](docs/history/sprints/SPRINT-V1.9.md) | Sprint reference: v1.9 lazy loading, Help/Settings hub, Tauri desktop UX |
+| [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md) | Sprint reference: v1.10 mobile UX, coverage 55 %, deploy & help expansion |
 | [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge Ultimate Author Pipeline — 8-stage agentic editing system architecture |
-| [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0/v1.18.1 ProForge Humanization & Refinement + TypeScript strict-mode sweep |
-| [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md) | Sprint handoff: v1.19.0 Phase 2 — B-1..B-8 security, voice WASM, collab-transport, a11y gate, RTL |
-| [`docs/SPRINT-HANDOFF-2026-06-01.md`](docs/SPRINT-HANDOFF-2026-06-01.md) | Sprint handoff: 2026-06-01 CI hardening — 14 CodeAnt AI fixes, E2E stabilisation (24→0), prune-deployments, node24 upgrade |
+| [`docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0/v1.18.1 ProForge Humanization & Refinement + TypeScript strict-mode sweep |
+| [`docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md) | Sprint handoff: v1.19.0 Phase 2 — B-1..B-8 security, voice WASM, collab-transport, a11y gate, RTL |
+| [`docs/history/sprints/SPRINT-HANDOFF-2026-06-01.md`](docs/history/sprints/SPRINT-HANDOFF-2026-06-01.md) | Sprint handoff: 2026-06-01 CI hardening — 14 CodeAnt AI fixes, E2E stabilisation (24→0), prune-deployments, node24 upgrade |
 | [`docs/IDB-ENCRYPTION.md`](docs/IDB-ENCRYPTION.md) | IDB at-rest encryption architecture (B-1, AES-256-GCM, passphrase-derived key) |
 | [`docs/VOICE_MASTER_PLAN.md`](docs/VOICE_MASTER_PLAN.md) | Voice Full Support master plan — foundation v1.0 complete, WASM scaffold (B-2) in v1.19.0 |
 | [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA manifest, service worker, share-target checklist |

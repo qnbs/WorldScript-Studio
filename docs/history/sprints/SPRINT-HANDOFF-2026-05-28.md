@@ -16,7 +16,7 @@
 | B-6 | `services/logger.ts` rewrite — IDB sink (1 000-entry LRU), Tauri JSONL sink, GDPR `sanitizeLogContext`, `createLogger(module)` + `.withContext(ctx)` | ✅ Done |
 | B-7 | Vitest coverage gate: L 71 / F 63 / B 57 / S 69 (measured: 73/65/58/71) | ✅ Done |
 | B-8 | Stryker `break` 70→75; `mutate` targets 34→40 files | ✅ Done |
-| DOCS-1 | `docs/SPRINT-HANDOFF-2026-05-28.md` — this file | ✅ Done |
+| DOCS-1 | `docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md` — this file | ✅ Done |
 | DOCS-2 | `CHANGELOG.md` `[1.19.0]` entry | ✅ Done |
 | DOCS-3 | `ROADMAP.md` v1.19.0 section + v2.0 partial-delivery notes | ✅ Done |
 | DOCS-4 | `TODO.md` B-series done section + Phase 3 open items | ✅ Done |
