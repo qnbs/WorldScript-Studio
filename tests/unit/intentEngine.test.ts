@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { HybridIntentEngine } from '../../services/voice/intentEngine';
-import type { IntentContext, VoiceCommandDefinition } from '../../services/voice/voiceTypes';
+import type { IntentContext } from '../../services/voice/voiceTypes';
 
 function makeContext(overrides: Partial<IntentContext> = {}): IntentContext {
   return {
     currentView: 'dashboard',
-    selectedSceneId: null,
+    selectedIds: [],
+    characterNames: [],
+    sectionTitles: [],
+    worldNames: [],
+    lastCommandId: null,
     ...overrides,
   };
 }
