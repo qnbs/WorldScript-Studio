@@ -50,7 +50,8 @@
             "maxAllowedComplexity": 50
           }
         },
-        "useLiteralKeys": "off"
+        "useLiteralKeys": "off",
+        "useOptionalChain": "error"
       },
       "suspicious": {
         "noExplicitAny": "error",

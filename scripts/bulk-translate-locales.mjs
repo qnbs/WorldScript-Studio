@@ -104,7 +104,7 @@ async function translateFree(text, targetLang) {
   }
   const data = await res.json();
   // Response format: [[[translated, original, ...], ...], ...]
-  if (Array.isArray(data) && data[0] && data[0][0]) {
+  if (Array.isArray(data) && data[0]?.[0]) {
     return data[0].map((item) => item[0]).join('');
   }
   throw new Error('Unexpected response format');
