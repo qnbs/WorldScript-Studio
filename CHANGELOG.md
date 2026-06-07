@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **WebGPU detector service (2026-05-18):** New `services/ai/webGpuDetectorService.ts` — `detectWebGpuDetails()` queries `navigator.gpu.requestAdapter()`, reads `adapter.limits.maxBufferSize` for VRAM tier heuristic (≥8 GB = high, ≥4 GB = medium, else low). AiProviderCard gains live GPU status badge, WebLLM model dropdown, and ONNX model dropdown. `LOCAL_INFERENCE_PROVIDERS` + `isLocalInferenceProvider()` added to `orchestrationProviders.ts`. 12 new settings i18n keys across all 5 locales (1408 → 1414 total).
+
+- **ONNX Runtime Web Layer-2 in ai-core (2026-05-18):** `packages/ai-core/src/index.ts` adds an ONNX WASM fallback layer between WebLLM and Transformers.js. `LocalAiLayer` type includes `'onnx'`. `ONNX_SUPPORTED_MODELS` exported. `vite.config.ts` gains `vendor-ai-onnx` manual chunk to keep onnxruntime-web + @xenova/transformers under Workbox's 8 MiB SW cache limit.
+
+- **Yjs AES-256-GCM encryption foundation (2026-05-18):** `collaborationService.ts` gains `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 600 000 iterations, SHA-256, AES-256-GCM), and `getEncryptionStatus()` (`'encrypted' | 'psk-only' | 'plaintext'`). `CollaborationPanel.tsx` shows green/amber encryption status badge post-connect. 3 new collab i18n keys.
+
+- **Tauri v2 auto-updater pipeline (2026-05-18):** `tauri-build.yml` gains a `Generate latest.json` step that builds the Tauri v2 update manifest from signed `.sig` files and uploads it to GitHub Release. `docs/TAURI-UPDATER.md` extended with a full GitHub Secrets table. `docs/TAURI-CI.md` gains a 7-step first-release checklist.
+
+- **Cross-Project-Search v2 (2026-05-18):** DB_VERSION 7→8 with new `projects-index-store`. New `crossProjectIndexService.ts` — `indexProject()`, `listIndexedProjects()`, `removeProjectIndex()` (privacy-preserving: no manuscript plaintext). `searchAcrossProjectIndex()` added to `crossProjectSearchService.ts`. `CrossProjectSearchPanel.tsx` runs two-phase search (index first, then current project). 3 new `crossSearch.*` i18n keys (1414 total).
+
+- **Mobile-aware E2E helpers (2026-05-17):** `clickNavItem(page, name)` in `tests/e2e/helpers.ts` — tries desktop `#sidebar` (hidden md:flex), then mobile bottom-tab-bar (`[data-tour="nav-mobile"]`), then the "More" sheet; eliminates all `sidebar(page)` calls that fail on Pixel 5 viewport. `selectFirstEnabledWriterSection` now switches to the context tab on mobile before locating the section selector.
+- **ARIA tablist on WriterView mobile segmented control:** Each tab button gains `role="tab"`, `aria-selected`, `aria-controls`, `data-testid="writer-tab-{context|tools|result}"`; container gains `role="tablist"`; panel divs gain `role="tabpanel"` + `aria-labelledby` — axe-compliant and stably selectable in Playwright.
+- **Mobile VC button in WriterViewUI:** `md:hidden` version of the version-control toggle button with `data-testid="writer-version-control-btn"` and `aria-expanded` — mirrors the desktop button that is hidden on Pixel 5 viewport.
+- **Stable test anchors:** `data-testid="snapshot-label-input"` on the snapshot-label `<Input>` in `VersionControlPanel.tsx`; `data-testid="export-preview"` on the `<pre>` export preview in `ExportView.tsx`.
+- **OSV vulnerability scan in CI security job:** `google/osv-scanner-action@v2` step wired after `pnpm audit` — `osv-scanner.toml` existed but was never executed; advisories now caught on every push/PR.
+- **JUnit E2E artifact:** Playwright JUnit reporter output (`tests/e2e/results/junit.xml`) uploaded as `e2e-junit` artifact — enables per-test check annotations on GitHub PRs.
+
+### Changed
+
+- **i18n Comprehensive Sweep (2026-05-18):** All remaining hardcoded user-facing strings eliminated across 5 locales — **1 440 keys** total (up from 1 414). Fixes include: `help.tryTour` (was rendering raw key `"try.Help"` in the command palette), `initialProject.chapter1` (`"Chapter 1"` in projectSlice + AdvancedImportExport — extended `resetProject` payload with optional `chapter1Title`), `manuscript.resizer.left/right` (hardcoded German string `"Linkes Panel anpassen"` remained in source), `writer.stopGenerating / tools.selectLabel / versionControl.tooltip`, `settings.ai.temperature.precise/balanced/creative`, `export.pasteSection.heading` (`"Google Docs / Notion"`), `outline.result.body`, `characters.uploadImage / editorTabsAriaLabel`, `worlds.uploadImage / editorTabsAriaLabel`, `templates.tabs.myTemplates / community`, `error.boundary.title/description/reset/reload/report`, `manuscript.spellcheck.didYouMean/applyFix`, `manuscript.grammar.checkButton`, `manuscript.zenMode.enter/exit/label`, and `writer.studio.controls.custom/customTonePlaceholder`.
+
+- **ErrorBoundary fully localized (2026-05-18):** `components/ui/ErrorBoundary.tsx` refactored with inner `ErrorFallback` functional component — accesses `useTranslation()` hook to render title, description, and all buttons (Reset View, Reload Page, Report issue) in the active locale. Import path corrected to `hooks/useTranslation`; `onReset` passed conditionally to satisfy `exactOptionalPropertyTypes`.
+
+- **Unit-test coverage — 1 641 tests / 150 test files (2026-05-18):** Measured **62.86 % statements · 49.06 % branches · 54.10 % functions · 64.68 % lines**. Vitest thresholds at statements 53 / branches 37 / functions 50 / lines 55 — all passing.
+
+- **Unit-test coverage — Phase 4.5 thresholds met (2026-05-17):** Measured **63.32 % lines · 61.5 % statements · 47.1 % branches · 53.2 % functions** (1 561 tests). Vitest thresholds at lines 55 / statements 53 / branches 37 / functions 50.
+- **Stryker mutation gate enforced:** `thresholds.break` raised `null` → `30`; `timeoutMS` lowered 180 000 → 120 000 ms; CI mutation job `continue-on-error` → `false`, `timeout-minutes: 20` → `30`.
+- **Lighthouse performance promoted to error:** `categories:performance` `warn:0.5` → `error:0.4`; `categories:seo` added as `warn:0.8`; FCP tightened 6 000 → 5 000 ms; LCP tightened 8 000 → 7 000 ms.
+- **CI concurrency fix:** `cancel-in-progress` restricted to PRs only — main-branch deploys no longer cancelled by a concurrent push.
+- **Artifact retention aligned:** `dist` 7 → 3 days; `lighthouse-report` and `storybook` 14 → 7 days.
+
+### Fixed
+
+- **TypeScript 6 strict hardening (2026-05-18):** `'grok-3'` and `'grok-3-mini'` added to `AiModel` union in `types.ts` (TS2322 in `aiProviderService.test.ts`); double-cast `(x as unknown as Record<string, unknown>)['key']` pattern for `CollaborationService` private member access (TS2352); bracket notation `['gpu']` / `['__TAURI__']` required by TypeScript 6 index-signature enforcement (TS4111); PBKDF2 `Uint8Array<ArrayBuffer>` generic in `collaborationService.ts` for Web Crypto API strict typing.
+
+- **Test mocks (2026-05-18):** `tests/unit/ErrorBoundary.test.tsx` gains `vi.mock('../../hooks/useTranslation', …)` with an EN string map so rendered-text assertions survive the i18n refactor. `tests/unit/AdvancedImportExport.test.tsx` heading assertion updated from hardcoded `'Google Docs / Notion'` to `'export.pasteSection.heading'` (consistent with the `t: (k) => k` mock pattern already used in that file).
+
+- **E2E Desktop + Mobile Chrome (2026-05-17):** `writer`, `snapshots`, `a11y`, `export` spec files migrated to 2026 Golden Hierarchy selectors (getByRole > getByTestId; no CSS, no XPath). Fixes CI exit-code 1 after WriterView component split.
+
+- **WebLLM model selector (Phase 3B):** `packages/ai-core` now exports `WEBLLM_SUPPORTED_MODELS` (4 curated MLC-packaged checkpoints: Llama 3.2 1B, Llama 3.2 3B, Phi-3.5 Mini, Gemma 2 2B), `WebLlmModelId`, and `WebLlmProgressReport` types. `runLocalTextGeneration` accepts an optional `modelId` and `onProgress` callback for per-model download-progress tracking. `services/localAiFacade.ts` forwards both parameters. `types.ts` expands the `AiModel` union with the four specific MLC model IDs. Settings → AI (Advanced) now shows a dynamic model dropdown populated from `WEBLLM_SUPPORTED_MODELS`, a pre-download button, a WCAG 2.2 `role="progressbar"` progress bar, and a `useRef` mounted guard that prevents `setState`-on-unmount. All 5 locale `settings.json` files gain the 3 new i18n keys (`settings.ai.webllm.model`, `settings.ai.webllm.downloadProgress`, `settings.ai.webllm.downloading`).
+
+- **Cross-project search service (Phase 3A):** New `services/crossProjectSearchService.ts` — `searchAcrossProjects(query, projectData)` fuzzy-searches project title, logline, manuscript sections, and character names/fields using `normalizeSearch()` from `fuzzyScore.ts`; returns `CrossProjectSearchResult[]` sorted by score. Results include `projectId`, `projectTitle`, `matchType`, `excerpt` (truncated to 120 chars with `…`), and `score`. v1 scope is single-project (multi-project search requires a DB_VERSION bump + IDB migration — deferred to v2). `app/transientUiStore.ts` gains `isCrossProjectSearchOpen` + `setCrossProjectSearchOpen`. The `labs-cross-project-search` command in `services/commands/commandDefinitions.tsx` now opens the search panel instead of a stub toast. All 5 locale `common.json` files gain 7 `crossSearch.*` keys.
+
+- **Collaboration security warning (Phase 3C):** `CollaborationPanel.tsx` displays a pre-connection security-warning banner (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) that is only visible before connecting. The banner explains that the public y-webrtc signaling relay can observe connection metadata, includes a keyboard-accessible self-hosting link, and disappears once connected. All 5 locale `common.json` files gain `collab.securityWarning`, `collab.securityWarningDetail`, and `collab.selfHostLinkLabel`.
+
+- **E2E tests for new features:** `tests/e2e/commands.spec.ts` — palette open/close (Ctrl+K / Escape), "dashboard" text search surfaces nav command, Enter-to-navigate, fuzzy "wrt" match. `tests/e2e/collaboration.spec.ts` — security warning `[role=alert]` is visible pre-connection and non-empty. Both specs are CI-only (`test.skip(!isCI)`).
+
+### Changed
+
+- **Unit-test coverage — Phase 1 thresholds met:** 17 new test files added (733 tests total); Vitest coverage thresholds bumped to `{ lines: 35, functions: 30, branches: 22, statements: 33 }` (previously 25/21/17/24). Measured coverage: **36.47 % lines · 35.53 % statements · 24.96 % branches · 30.22 % functions** — all Phase 1 targets exceeded. New files cover: `commands/` (fuzzyScore, palettePreferences, commandSystem), project thunks (writing, character, binder, management), hooks (useDashboard, useManuscriptView, useGlobalKeyboardShortcuts, useCharacterView, useOutlineGenerator), `aiProviderService` fallback chain, `dbService` snapshots, `dbService` binder assets, and `crossProjectSearchService`.
+
+- **Stryker mutation targets expanded (Phase 4):** `stryker.conf.json` `mutate` array now includes `services/commands/fuzzyScore.ts`, `services/commands/palettePreferences.ts`, and `services/commands/commandBuilder.ts` in addition to the existing `codexService.ts` and `dbMigration.ts`.
+
+---
+
 ## [1.20.0] — 2026-06-07
 
 ### Added
@@ -56,12 +115,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Accidentally committed signing keys removed** (2026-06-06): `~/.storycraft-tauri.key` and `~/.storycraft-tauri.key.pub` were committed in `da7653b`; rotated in GitHub Secrets, files removed, `.gitignore` hardened with `*.key`, `*.pem`, `*.p12`, `*.pfx`, `*.cer`, `*.der`, `*.sig.key`
 - **aiohttp CVE remediation** (2026-06-06): bumped `aiohttp==3.11.16` → `3.14.0` in `scripts/ci-analyzer/requirements.txt`; resolves 21 Dependabot CVEs (GHSA-...)
-
-## [Unreleased]
-
-### Added
-
-- (placeholder — see section below for historical unreleased notes)
 
 ## [1.19.0] — 2026-05-28
 
@@ -286,43 +339,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dbService.ts` migration defaults: `advancedAi.ragMode` added so existing IDB state without the key is upgraded to `'hybrid'` on first load.
 - `DuckDB` resilience: init retry (3×), dual-write retry (3×), OPFS fallback to in-memory when `navigator.storage.getDirectory()` unavailable, error surfaces to Redux `analyticsActions.setDuckDbError`.
 
-## [1.5.0] — 2026-05-18
+## [1.6.2] — 2026-05-20
 
-### Added (v1.5 Master Perfection Run)
+### Refactored
 
-- **WorkerBus v2:** Backpressure cap (32-task queue), priority preemption (max 3× requeue), AbortController map, `cancel(taskId)`, extended telemetry (`peakLatencyMs`, `errorRate`, `lastSuccessAt`).
-- **GpuResourceManager:** Mutex for WebLLM/ONNX-WebGPU consumers; priority queue; 30s auto-release deadlock prevention.
-- **DeviceHealthService:** Full device report (CPU cores, memory heap, storage quota, battery level, GPU VRAM tier, device class). `getModelRecommendation()` maps tier × task to concrete model IDs.
-- **EcoModeService:** Battery API integration; explicit override API; `applyAdaptiveMode()`.
-- **InferenceProgressEmitter:** Pub/sub progress snapshots for WebLLM loading; `subscribeWebLlmLoading()`, `reportWebLlmProgress()`, `reportWebLlmReady()`, `reportWebLlmError()`, `reset()`.
-- **Active ONNX + Transformers.js inference:** `inference.worker.ts` — WorkerBus protocol, pipeline cache (8 entries), trusted-message origin guard, AbortController integration. Layers 2 & 3 now perform real inference instead of returning echo strings.
-- **AiInferenceCacheService:** Two-layer LRU — in-memory 64 entries (DJB2+FNV hash) + IndexedDB 256 entries (7-day TTL). Skips cache for prompts > 512 chars.
-- **LocalEmbeddingService:** `Xenova/all-MiniLM-L6-v2` 384-dim embeddings; L2-normalised; worker-offloaded; micro-batch (8); `embedText()`, `embedBatch()`, `cosineSimilarity()`.
-- **LocalNlpService:** Sentiment analysis (distilbert), summarisation (distilbart), keyword topic classification — all worker-offloaded via WorkerBus.
-- **LocalAiDownloadProgress:** WCAG 2.2 AA modal (`role="progressbar"`, `aria-valuenow`, `aria-valuetext` with ETA, `aria-live="polite"/"assertive"`, `role="dialog"`, focus on open, cancel button).
-- **GpuMetricsPanel:** GPU queue state, WorkerBus telemetry, device-class badge, eco-mode toggle (`role="switch"`). Feature-gated by `enableAppHealthPanel`.
-- **Model recommendations engine:** `getModelRecommendationForTask(task, report, ecoMode)` — VRAM tier × task → concrete model IDs. `getProviderSpeedEstimate()` for Ollama ping.
-- **Hybrid RAG service (`localRagService.ts`):** Token-based chunking (300 tokens, 50-token overlap), MAX_CHUNKS 500, `indexedAt` recency field. `retrieveContext()` with `'lexical'|'semantic'|'hybrid'` modes; hybrid = 60% semantic + 30% token overlap + 10% recency; sliding window 3 most-recent chunks always included.
-- **Cross-Project AI enrichment:** `enrichProjectIndex()` generates `aiSummary` (100 chars) + `embeddingVector` from local model. `semanticSearchProjects()` uses cosine similarity with keyword fallback.
-- **Mobile: PointerEvent resize handles:** `ManuscriptView.tsx` upgraded from `MouseEvent` to `PointerEvent` with `setPointerCapture()` / `releasePointerCapture()`. `touch-action: none` on drag handles.
-- **useSwipeGesture:** PointerEvent swipe detection; threshold + velocity window; dominant-axis direction. Wired to `WriterViewUI` mobile panel switching.
-- **useLongPress:** PointerEvent long-press; 10px movement cancel threshold; configurable ms duration.
-- **useHaptics:** `navigator.vibrate()` wrapper with graceful degradation.
-- **BottomSheet:** WCAG 2.2 compliant drawer; `role="dialog"`, `aria-modal`, focus trap (querySelectorAll-based), Escape to close, drag-to-dismiss (> 30% height), `touch-action: none`.
-- **PromptLibrary:** 17 original prompts + 3 new (styleTransfer, plotHoleFix, chapterAutoGeneration) in a versioned, category-organised registry. `getPrompt(id, vars)`, `listByCategory()`, `exportPromptLibrary()`, `importPromptLibrary()` with JSON validation. A/B variant selection.
-- **StyleTransfer prompt:** `geminiService` case `'styleTransfer'` — author voice mimicry with `authorStyle` exemplar. Returns JSON `{ transformed, voiceNotes }`.
-- **PlotHoleFix prompt:** `geminiService` case `'plotHoleFix'` — extends detection with chainable fix generation. 2048-token thinking budget.
-- **ChapterAutoGeneration prompt:** `geminiService` case `'chapterAutoGeneration'` — outline section → full chapter. 8192-token extended thinking budget.
-- **PluginRegistry:** `PluginDescriptor` interface; `register()`, `unregister()`, `getByType()`, `list()`, `size`, `clear()`. Singleton `pluginRegistry` export.
-- **UsageAnalyticsService:** Opt-in only (default: off). Ring buffer 500 events. `track()`, `getAnonymizedSummary()`, `flush()`. No PII — event type + timestamp + device class only.
-- **Updated AI model catalogue (2025 releases):** WebLLM list now includes Qwen 2.5 0.5B, Phi-4 Mini 3.8B, Gemma 3 1B/4B, Llama 3.3 70B. ONNX default model updated to SmolLM2-135M-Instruct (replaces DistilGPT-2). OpenAI model list adds GPT-4.1, o3, o4-mini. aiProviderService validates `o\d` prefixes alongside `gpt-`.
-- **DeepWiki badge** added to README header.
+- **Plot-Board content moved to projectSlice (undo-able):** Connections, subplots, and tension overrides now live in `features/project/projectSlice.ts` (and thus inside `redux-undo`) instead of `plotBoardSlice`. `plotBoardSlice` is now viewport/UI-state only (zoom, pan, mode, draw-state). New actions: `addPlotConnection`, `updatePlotConnection`, `removePlotConnection`, `removePlotConnectionsForSection`, `finishPlotDrawConnection`, `addPlotSubplot`, `updatePlotSubplot`, `deletePlotSubplot`, `assignSectionToPlotSubplot`, `removeSectionFromPlotSubplot`, `setPlotTensionOverride`, `clearPlotTensionOverride`, `clearAllPlotTensionOverrides`. New selectors in `projectSelectors.ts`: `selectPlotConnections`, `selectPlotSubplots`, `selectPlotTensionOverrides`. All five scene-board components (`ConnectionLayer`, `ConnectionToolbar`, `PlotCanvas`, `SubplotPanel`, `TensionCurvePanel`) updated to dispatch project actions and read from project selectors. `handleDeleteSection` now also dispatches `removePlotConnectionsForSection` to keep the board consistent.
 
-### Changed
+### Added
 
-- i18n: 20 new keys for download progress + GPU panel (1459 total across 5 locales).
-- `services/ai/index.ts` now re-exports all Day 4 service functions.
-- `crossProjectIndexService.ts`: `ProjectSearchIndex` gains optional `aiSummary` and `embeddingVector` fields.
+- **Locale-aware readability metric:** `services/readabilityFlesch.ts` now supports five language-specific formulas — EN: Flesch Reading Ease, DE: Amstad (1978), FR: Kandel-Moles, ES: Fernández Huerta, IT: Gulpease — instead of a single English-centric heuristic. `estimateSyllables(word, locale)` uses per-locale vowel patterns (including diacritics). `useDashboard.ts` passes the active locale to `computeReadabilitySnapshot`. Dashboard i18n labels updated in all four non-English locales to name the correct formula.
+
+### Fixed
+
+- **docker.yml token permissions (CodeQL):** Top-level `permissions` block now sets only `contents: read`; `packages: write` scoped to the `build-push` job only — follows principle of least privilege as required by CodeQL Token-Permissions rule.
+- **biome.json schema version:** Updated `2.4.12` → `2.4.15` to match installed Biome CLI.
+
+### Tests
+
+- `tests/unit/plotBoardSlice.test.ts`: Subplot/connection/tension test suites removed (migrated to `projectSlice`); viewport tests retained.
+- `tests/unit/projectSlice.test.ts`: 15 new tests covering plot connections (incl. undo, dedup, self-loop guard), subplots (CRUD, section-assign), and tension overrides.
+- `tests/unit/hooks/useSceneBoardView.test.ts`: `handleDeleteSection` test extended to verify `removePlotConnectionsForSection` dispatch; `plotBoard` mock state simplified (no connections/subplots/tensionOverrides).
+- `tests/unit/SceneBoardView.test.tsx`, `SubplotPanel.test.tsx`, `ConnectionLayer.test.tsx`, `TensionCurvePanel.test.tsx`: mock state updated to new plotBoard shape.
+- `tests/unit/thunkUtils.test.ts`: default model assertion updated `gemini-2.5-flash → gemini-3.5-flash` (settingsSlice default changed in v1.6.1).
+- **Total: 2 024 tests / 178 files — 0 failures. Coverage: 65.91% lines / 50.59% branches / 56.74% functions / 64.25% statements.**
+
+## [1.6.1] — 2026-05-19
+
+### Added
+
+- **Gemini 3.x model catalogue:** Default model bumped to `gemini-3.5-flash`; Gemini 3.1 Pro Preview, 3.1 Flash, and 3.1 Flash-Lite added to the provider dropdown. Legacy `gemini-2.0-flash` removed; `gemini-2.5-x` stable group retained. All fallback model IDs updated across `geminiService`, `storyCraftCompletionFetch`, `dbService` migration, `AiSections`, and `settingsSlice`.
+- **Docker image:** Multi-stage `Dockerfile` (builder → nginx:1.27-alpine runner); `.dockerignore`; `docker.yml` GitHub Actions workflow (GHCR push on `v*` tags / `workflow_dispatch`).
+- **Tauri v1.6:** `tauri.conf.json` + `Cargo.toml` version bumped `1.4.0 → 1.6.0`; auto-updater set `active: true`; `TAURI-CI.md` example tag updated to `v1.6.0`.
 
 ## [1.6.0] — 2026-05-19
 
@@ -391,98 +438,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New: `plotBoardSlice.test.ts`, `plotBoardService.test.ts`, `ConnectionLayer.test.tsx`, `SubplotPanel.test.tsx`, `TensionCurvePanel.test.tsx`, `sceneRevisionService.test.ts`, `sceneCommentsSlice.test.ts`, `progressTrackerSlice.test.ts`.
 - Fixed: `useSceneBoardView.test.ts` mock state extended with `plotBoard` shape; `ConnectionLayer.test.tsx` updated to use `data-testid="connection-group"` (biome correctly removed redundant `role="img"` from `<g>` inside `role="img"` SVG).
 
-## [1.6.2] — 2026-05-20
+## [1.5.0] — 2026-05-18
 
-### Refactored
+### Added (v1.5 Master Perfection Run)
 
-- **Plot-Board content moved to projectSlice (undo-able):** Connections, subplots, and tension overrides now live in `features/project/projectSlice.ts` (and thus inside `redux-undo`) instead of `plotBoardSlice`. `plotBoardSlice` is now viewport/UI-state only (zoom, pan, mode, draw-state). New actions: `addPlotConnection`, `updatePlotConnection`, `removePlotConnection`, `removePlotConnectionsForSection`, `finishPlotDrawConnection`, `addPlotSubplot`, `updatePlotSubplot`, `deletePlotSubplot`, `assignSectionToPlotSubplot`, `removeSectionFromPlotSubplot`, `setPlotTensionOverride`, `clearPlotTensionOverride`, `clearAllPlotTensionOverrides`. New selectors in `projectSelectors.ts`: `selectPlotConnections`, `selectPlotSubplots`, `selectPlotTensionOverrides`. All five scene-board components (`ConnectionLayer`, `ConnectionToolbar`, `PlotCanvas`, `SubplotPanel`, `TensionCurvePanel`) updated to dispatch project actions and read from project selectors. `handleDeleteSection` now also dispatches `removePlotConnectionsForSection` to keep the board consistent.
-
-### Added
-
-- **Locale-aware readability metric:** `services/readabilityFlesch.ts` now supports five language-specific formulas — EN: Flesch Reading Ease, DE: Amstad (1978), FR: Kandel-Moles, ES: Fernández Huerta, IT: Gulpease — instead of a single English-centric heuristic. `estimateSyllables(word, locale)` uses per-locale vowel patterns (including diacritics). `useDashboard.ts` passes the active locale to `computeReadabilitySnapshot`. Dashboard i18n labels updated in all four non-English locales to name the correct formula.
-
-### Fixed
-
-- **docker.yml token permissions (CodeQL):** Top-level `permissions` block now sets only `contents: read`; `packages: write` scoped to the `build-push` job only — follows principle of least privilege as required by CodeQL Token-Permissions rule.
-- **biome.json schema version:** Updated `2.4.12` → `2.4.15` to match installed Biome CLI.
-
-### Tests
-
-- `tests/unit/plotBoardSlice.test.ts`: Subplot/connection/tension test suites removed (migrated to `projectSlice`); viewport tests retained.
-- `tests/unit/projectSlice.test.ts`: 15 new tests covering plot connections (incl. undo, dedup, self-loop guard), subplots (CRUD, section-assign), and tension overrides.
-- `tests/unit/hooks/useSceneBoardView.test.ts`: `handleDeleteSection` test extended to verify `removePlotConnectionsForSection` dispatch; `plotBoard` mock state simplified (no connections/subplots/tensionOverrides).
-- `tests/unit/SceneBoardView.test.tsx`, `SubplotPanel.test.tsx`, `ConnectionLayer.test.tsx`, `TensionCurvePanel.test.tsx`: mock state updated to new plotBoard shape.
-- `tests/unit/thunkUtils.test.ts`: default model assertion updated `gemini-2.5-flash → gemini-3.5-flash` (settingsSlice default changed in v1.6.1).
-- **Total: 2 024 tests / 178 files — 0 failures. Coverage: 65.91% lines / 50.59% branches / 56.74% functions / 64.25% statements.**
-
-## [1.6.1] — 2026-05-19
-
-### Added
-
-- **Gemini 3.x model catalogue:** Default model bumped to `gemini-3.5-flash`; Gemini 3.1 Pro Preview, 3.1 Flash, and 3.1 Flash-Lite added to the provider dropdown. Legacy `gemini-2.0-flash` removed; `gemini-2.5-x` stable group retained. All fallback model IDs updated across `geminiService`, `storyCraftCompletionFetch`, `dbService` migration, `AiSections`, and `settingsSlice`.
-- **Docker image:** Multi-stage `Dockerfile` (builder → nginx:1.27-alpine runner); `.dockerignore`; `docker.yml` GitHub Actions workflow (GHCR push on `v*` tags / `workflow_dispatch`).
-- **Tauri v1.6:** `tauri.conf.json` + `Cargo.toml` version bumped `1.4.0 → 1.6.0`; auto-updater set `active: true`; `TAURI-CI.md` example tag updated to `v1.6.0`.
-
-## [Unreleased]
-
-### Added
-
-- **WebGPU detector service (2026-05-18):** New `services/ai/webGpuDetectorService.ts` — `detectWebGpuDetails()` queries `navigator.gpu.requestAdapter()`, reads `adapter.limits.maxBufferSize` for VRAM tier heuristic (≥8 GB = high, ≥4 GB = medium, else low). AiProviderCard gains live GPU status badge, WebLLM model dropdown, and ONNX model dropdown. `LOCAL_INFERENCE_PROVIDERS` + `isLocalInferenceProvider()` added to `orchestrationProviders.ts`. 12 new settings i18n keys across all 5 locales (1408 → 1414 total).
-
-- **ONNX Runtime Web Layer-2 in ai-core (2026-05-18):** `packages/ai-core/src/index.ts` adds an ONNX WASM fallback layer between WebLLM and Transformers.js. `LocalAiLayer` type includes `'onnx'`. `ONNX_SUPPORTED_MODELS` exported. `vite.config.ts` gains `vendor-ai-onnx` manual chunk to keep onnxruntime-web + @xenova/transformers under Workbox's 8 MiB SW cache limit.
-
-- **Yjs AES-256-GCM encryption foundation (2026-05-18):** `collaborationService.ts` gains `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 600 000 iterations, SHA-256, AES-256-GCM), and `getEncryptionStatus()` (`'encrypted' | 'psk-only' | 'plaintext'`). `CollaborationPanel.tsx` shows green/amber encryption status badge post-connect. 3 new collab i18n keys.
-
-- **Tauri v2 auto-updater pipeline (2026-05-18):** `tauri-build.yml` gains a `Generate latest.json` step that builds the Tauri v2 update manifest from signed `.sig` files and uploads it to GitHub Release. `docs/TAURI-UPDATER.md` extended with a full GitHub Secrets table. `docs/TAURI-CI.md` gains a 7-step first-release checklist.
-
-- **Cross-Project-Search v2 (2026-05-18):** DB_VERSION 7→8 with new `projects-index-store`. New `crossProjectIndexService.ts` — `indexProject()`, `listIndexedProjects()`, `removeProjectIndex()` (privacy-preserving: no manuscript plaintext). `searchAcrossProjectIndex()` added to `crossProjectSearchService.ts`. `CrossProjectSearchPanel.tsx` runs two-phase search (index first, then current project). 3 new `crossSearch.*` i18n keys (1414 total).
-
-- **Mobile-aware E2E helpers (2026-05-17):** `clickNavItem(page, name)` in `tests/e2e/helpers.ts` — tries desktop `#sidebar` (hidden md:flex), then mobile bottom-tab-bar (`[data-tour="nav-mobile"]`), then the "More" sheet; eliminates all `sidebar(page)` calls that fail on Pixel 5 viewport. `selectFirstEnabledWriterSection` now switches to the context tab on mobile before locating the section selector.
-- **ARIA tablist on WriterView mobile segmented control:** Each tab button gains `role="tab"`, `aria-selected`, `aria-controls`, `data-testid="writer-tab-{context|tools|result}"`; container gains `role="tablist"`; panel divs gain `role="tabpanel"` + `aria-labelledby` — axe-compliant and stably selectable in Playwright.
-- **Mobile VC button in WriterViewUI:** `md:hidden` version of the version-control toggle button with `data-testid="writer-version-control-btn"` and `aria-expanded` — mirrors the desktop button that is hidden on Pixel 5 viewport.
-- **Stable test anchors:** `data-testid="snapshot-label-input"` on the snapshot-label `<Input>` in `VersionControlPanel.tsx`; `data-testid="export-preview"` on the `<pre>` export preview in `ExportView.tsx`.
-- **OSV vulnerability scan in CI security job:** `google/osv-scanner-action@v2` step wired after `pnpm audit` — `osv-scanner.toml` existed but was never executed; advisories now caught on every push/PR.
-- **JUnit E2E artifact:** Playwright JUnit reporter output (`tests/e2e/results/junit.xml`) uploaded as `e2e-junit` artifact — enables per-test check annotations on GitHub PRs.
+- **WorkerBus v2:** Backpressure cap (32-task queue), priority preemption (max 3× requeue), AbortController map, `cancel(taskId)`, extended telemetry (`peakLatencyMs`, `errorRate`, `lastSuccessAt`).
+- **GpuResourceManager:** Mutex for WebLLM/ONNX-WebGPU consumers; priority queue; 30s auto-release deadlock prevention.
+- **DeviceHealthService:** Full device report (CPU cores, memory heap, storage quota, battery level, GPU VRAM tier, device class). `getModelRecommendation()` maps tier × task to concrete model IDs.
+- **EcoModeService:** Battery API integration; explicit override API; `applyAdaptiveMode()`.
+- **InferenceProgressEmitter:** Pub/sub progress snapshots for WebLLM loading; `subscribeWebLlmLoading()`, `reportWebLlmProgress()`, `reportWebLlmReady()`, `reportWebLlmError()`, `reset()`.
+- **Active ONNX + Transformers.js inference:** `inference.worker.ts` — WorkerBus protocol, pipeline cache (8 entries), trusted-message origin guard, AbortController integration. Layers 2 & 3 now perform real inference instead of returning echo strings.
+- **AiInferenceCacheService:** Two-layer LRU — in-memory 64 entries (DJB2+FNV hash) + IndexedDB 256 entries (7-day TTL). Skips cache for prompts > 512 chars.
+- **LocalEmbeddingService:** `Xenova/all-MiniLM-L6-v2` 384-dim embeddings; L2-normalised; worker-offloaded; micro-batch (8); `embedText()`, `embedBatch()`, `cosineSimilarity()`.
+- **LocalNlpService:** Sentiment analysis (distilbert), summarisation (distilbart), keyword topic classification — all worker-offloaded via WorkerBus.
+- **LocalAiDownloadProgress:** WCAG 2.2 AA modal (`role="progressbar"`, `aria-valuenow`, `aria-valuetext` with ETA, `aria-live="polite"/"assertive"`, `role="dialog"`, focus on open, cancel button).
+- **GpuMetricsPanel:** GPU queue state, WorkerBus telemetry, device-class badge, eco-mode toggle (`role="switch"`). Feature-gated by `enableAppHealthPanel`.
+- **Model recommendations engine:** `getModelRecommendationForTask(task, report, ecoMode)` — VRAM tier × task → concrete model IDs. `getProviderSpeedEstimate()` for Ollama ping.
+- **Hybrid RAG service (`localRagService.ts`):** Token-based chunking (300 tokens, 50-token overlap), MAX_CHUNKS 500, `indexedAt` recency field. `retrieveContext()` with `'lexical'|'semantic'|'hybrid'` modes; hybrid = 60% semantic + 30% token overlap + 10% recency; sliding window 3 most-recent chunks always included.
+- **Cross-Project AI enrichment:** `enrichProjectIndex()` generates `aiSummary` (100 chars) + `embeddingVector` from local model. `semanticSearchProjects()` uses cosine similarity with keyword fallback.
+- **Mobile: PointerEvent resize handles:** `ManuscriptView.tsx` upgraded from `MouseEvent` to `PointerEvent` with `setPointerCapture()` / `releasePointerCapture()`. `touch-action: none` on drag handles.
+- **useSwipeGesture:** PointerEvent swipe detection; threshold + velocity window; dominant-axis direction. Wired to `WriterViewUI` mobile panel switching.
+- **useLongPress:** PointerEvent long-press; 10px movement cancel threshold; configurable ms duration.
+- **useHaptics:** `navigator.vibrate()` wrapper with graceful degradation.
+- **BottomSheet:** WCAG 2.2 compliant drawer; `role="dialog"`, `aria-modal`, focus trap (querySelectorAll-based), Escape to close, drag-to-dismiss (> 30% height), `touch-action: none`.
+- **PromptLibrary:** 17 original prompts + 3 new (styleTransfer, plotHoleFix, chapterAutoGeneration) in a versioned, category-organised registry. `getPrompt(id, vars)`, `listByCategory()`, `exportPromptLibrary()`, `importPromptLibrary()` with JSON validation. A/B variant selection.
+- **StyleTransfer prompt:** `geminiService` case `'styleTransfer'` — author voice mimicry with `authorStyle` exemplar. Returns JSON `{ transformed, voiceNotes }`.
+- **PlotHoleFix prompt:** `geminiService` case `'plotHoleFix'` — extends detection with chainable fix generation. 2048-token thinking budget.
+- **ChapterAutoGeneration prompt:** `geminiService` case `'chapterAutoGeneration'` — outline section → full chapter. 8192-token extended thinking budget.
+- **PluginRegistry:** `PluginDescriptor` interface; `register()`, `unregister()`, `getByType()`, `list()`, `size`, `clear()`. Singleton `pluginRegistry` export.
+- **UsageAnalyticsService:** Opt-in only (default: off). Ring buffer 500 events. `track()`, `getAnonymizedSummary()`, `flush()`. No PII — event type + timestamp + device class only.
+- **Updated AI model catalogue (2025 releases):** WebLLM list now includes Qwen 2.5 0.5B, Phi-4 Mini 3.8B, Gemma 3 1B/4B, Llama 3.3 70B. ONNX default model updated to SmolLM2-135M-Instruct (replaces DistilGPT-2). OpenAI model list adds GPT-4.1, o3, o4-mini. aiProviderService validates `o\d` prefixes alongside `gpt-`.
+- **DeepWiki badge** added to README header.
 
 ### Changed
 
-- **i18n Comprehensive Sweep (2026-05-18):** All remaining hardcoded user-facing strings eliminated across 5 locales — **1 440 keys** total (up from 1 414). Fixes include: `help.tryTour` (was rendering raw key `"try.Help"` in the command palette), `initialProject.chapter1` (`"Chapter 1"` in projectSlice + AdvancedImportExport — extended `resetProject` payload with optional `chapter1Title`), `manuscript.resizer.left/right` (hardcoded German string `"Linkes Panel anpassen"` remained in source), `writer.stopGenerating / tools.selectLabel / versionControl.tooltip`, `settings.ai.temperature.precise/balanced/creative`, `export.pasteSection.heading` (`"Google Docs / Notion"`), `outline.result.body`, `characters.uploadImage / editorTabsAriaLabel`, `worlds.uploadImage / editorTabsAriaLabel`, `templates.tabs.myTemplates / community`, `error.boundary.title/description/reset/reload/report`, `manuscript.spellcheck.didYouMean/applyFix`, `manuscript.grammar.checkButton`, `manuscript.zenMode.enter/exit/label`, and `writer.studio.controls.custom/customTonePlaceholder`.
+- i18n: 20 new keys for download progress + GPU panel (1459 total across 5 locales).
+- `services/ai/index.ts` now re-exports all Day 4 service functions.
+- `crossProjectIndexService.ts`: `ProjectSearchIndex` gains optional `aiSummary` and `embeddingVector` fields.
 
-- **ErrorBoundary fully localized (2026-05-18):** `components/ui/ErrorBoundary.tsx` refactored with inner `ErrorFallback` functional component — accesses `useTranslation()` hook to render title, description, and all buttons (Reset View, Reload Page, Report issue) in the active locale. Import path corrected to `hooks/useTranslation`; `onReset` passed conditionally to satisfy `exactOptionalPropertyTypes`.
-
-- **Unit-test coverage — 1 641 tests / 150 test files (2026-05-18):** Measured **62.86 % statements · 49.06 % branches · 54.10 % functions · 64.68 % lines**. Vitest thresholds at statements 53 / branches 37 / functions 50 / lines 55 — all passing.
-
-- **Unit-test coverage — Phase 4.5 thresholds met (2026-05-17):** Measured **63.32 % lines · 61.5 % statements · 47.1 % branches · 53.2 % functions** (1 561 tests). Vitest thresholds at lines 55 / statements 53 / branches 37 / functions 50.
-- **Stryker mutation gate enforced:** `thresholds.break` raised `null` → `30`; `timeoutMS` lowered 180 000 → 120 000 ms; CI mutation job `continue-on-error` → `false`, `timeout-minutes: 20` → `30`.
-- **Lighthouse performance promoted to error:** `categories:performance` `warn:0.5` → `error:0.4`; `categories:seo` added as `warn:0.8`; FCP tightened 6 000 → 5 000 ms; LCP tightened 8 000 → 7 000 ms.
-- **CI concurrency fix:** `cancel-in-progress` restricted to PRs only — main-branch deploys no longer cancelled by a concurrent push.
-- **Artifact retention aligned:** `dist` 7 → 3 days; `lighthouse-report` and `storybook` 14 → 7 days.
-
-### Fixed
-
-- **TypeScript 6 strict hardening (2026-05-18):** `'grok-3'` and `'grok-3-mini'` added to `AiModel` union in `types.ts` (TS2322 in `aiProviderService.test.ts`); double-cast `(x as unknown as Record<string, unknown>)['key']` pattern for `CollaborationService` private member access (TS2352); bracket notation `['gpu']` / `['__TAURI__']` required by TypeScript 6 index-signature enforcement (TS4111); PBKDF2 `Uint8Array<ArrayBuffer>` generic in `collaborationService.ts` for Web Crypto API strict typing.
-
-- **Test mocks (2026-05-18):** `tests/unit/ErrorBoundary.test.tsx` gains `vi.mock('../../hooks/useTranslation', …)` with an EN string map so rendered-text assertions survive the i18n refactor. `tests/unit/AdvancedImportExport.test.tsx` heading assertion updated from hardcoded `'Google Docs / Notion'` to `'export.pasteSection.heading'` (consistent with the `t: (k) => k` mock pattern already used in that file).
-
-- **E2E Desktop + Mobile Chrome (2026-05-17):** `writer`, `snapshots`, `a11y`, `export` spec files migrated to 2026 Golden Hierarchy selectors (getByRole > getByTestId; no CSS, no XPath). Fixes CI exit-code 1 after WriterView component split.
-
-- **WebLLM model selector (Phase 3B):** `packages/ai-core` now exports `WEBLLM_SUPPORTED_MODELS` (4 curated MLC-packaged checkpoints: Llama 3.2 1B, Llama 3.2 3B, Phi-3.5 Mini, Gemma 2 2B), `WebLlmModelId`, and `WebLlmProgressReport` types. `runLocalTextGeneration` accepts an optional `modelId` and `onProgress` callback for per-model download-progress tracking. `services/localAiFacade.ts` forwards both parameters. `types.ts` expands the `AiModel` union with the four specific MLC model IDs. Settings → AI (Advanced) now shows a dynamic model dropdown populated from `WEBLLM_SUPPORTED_MODELS`, a pre-download button, a WCAG 2.2 `role="progressbar"` progress bar, and a `useRef` mounted guard that prevents `setState`-on-unmount. All 5 locale `settings.json` files gain the 3 new i18n keys (`settings.ai.webllm.model`, `settings.ai.webllm.downloadProgress`, `settings.ai.webllm.downloading`).
-
-- **Cross-project search service (Phase 3A):** New `services/crossProjectSearchService.ts` — `searchAcrossProjects(query, projectData)` fuzzy-searches project title, logline, manuscript sections, and character names/fields using `normalizeSearch()` from `fuzzyScore.ts`; returns `CrossProjectSearchResult[]` sorted by score. Results include `projectId`, `projectTitle`, `matchType`, `excerpt` (truncated to 120 chars with `…`), and `score`. v1 scope is single-project (multi-project search requires a DB_VERSION bump + IDB migration — deferred to v2). `app/transientUiStore.ts` gains `isCrossProjectSearchOpen` + `setCrossProjectSearchOpen`. The `labs-cross-project-search` command in `services/commands/commandDefinitions.tsx` now opens the search panel instead of a stub toast. All 5 locale `common.json` files gain 7 `crossSearch.*` keys.
-
-- **Collaboration security warning (Phase 3C):** `CollaborationPanel.tsx` displays a pre-connection security-warning banner (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) that is only visible before connecting. The banner explains that the public y-webrtc signaling relay can observe connection metadata, includes a keyboard-accessible self-hosting link, and disappears once connected. All 5 locale `common.json` files gain `collab.securityWarning`, `collab.securityWarningDetail`, and `collab.selfHostLinkLabel`.
-
-- **E2E tests for new features:** `tests/e2e/commands.spec.ts` — palette open/close (Ctrl+K / Escape), "dashboard" text search surfaces nav command, Enter-to-navigate, fuzzy "wrt" match. `tests/e2e/collaboration.spec.ts` — security warning `[role=alert]` is visible pre-connection and non-empty. Both specs are CI-only (`test.skip(!isCI)`).
-
-### Changed
-
-- **Unit-test coverage — Phase 1 thresholds met:** 17 new test files added (733 tests total); Vitest coverage thresholds bumped to `{ lines: 35, functions: 30, branches: 22, statements: 33 }` (previously 25/21/17/24). Measured coverage: **36.47 % lines · 35.53 % statements · 24.96 % branches · 30.22 % functions** — all Phase 1 targets exceeded. New files cover: `commands/` (fuzzyScore, palettePreferences, commandSystem), project thunks (writing, character, binder, management), hooks (useDashboard, useManuscriptView, useGlobalKeyboardShortcuts, useCharacterView, useOutlineGenerator), `aiProviderService` fallback chain, `dbService` snapshots, `dbService` binder assets, and `crossProjectSearchService`.
-
-- **Stryker mutation targets expanded (Phase 4):** `stryker.conf.json` `mutate` array now includes `services/commands/fuzzyScore.ts`, `services/commands/palettePreferences.ts`, and `services/commands/commandBuilder.ts` in addition to the existing `codexService.ts` and `dbMigration.ts`.
-
----
-
-## [1.4.0] - 2026-05-12
+## [1.4.0] — 2026-05-12
 
 ### Added
 
@@ -525,9 +519,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **README / AUDIT:** CI vs local validation (typecheck, lint, i18n; defer heavy E2E to cloud CI); Gold-Standard audit section dated **2026-05-10**.
 - **Complete curated markdown pass (16 `.md` sources incl. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)):** explicit inventory and cross-links in **[`AUDIT.md`](AUDIT.md)**; **README** Documentation Hub includes deployment guide and **`.github/ACTIONS-OPTIMIZATIONS.md`**; **`docs/CI.md`** related-files table links the historical Actions doc; **`.github/copilot-instructions.md`** i18n bundle wording updated. References throughout: Playwright **[`tests/e2e/helpers.ts`](tests/e2e/helpers.ts)** (no `networkidle` under Vite), Version Control overlay / **Escape**, memoized **`selectCurrentBranchSnapshots`**. Generated paths (`tests/e2e/html-report/`, `.stryker-tmp/`) remain non-doc.
 
----
-
-## [1.3.0] - 2026-05-08
+## [1.3.0] — 2026-05-08
 
 ### Added
 
@@ -551,7 +543,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependencies:** Added `@axe-core/playwright`, `@stryker-mutator/*`; refreshed `@google/genai` where applicable.
 - **Documentation:** README install/PWA/desktop CTA; AUDIT migration + accessibility notes.
 
-## [1.2.0] - 2026-05-02
+## [1.2.0] — 2026-05-02
 
 ### Added
 
@@ -709,7 +701,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New CSS custom properties for theme-aware glass/overlay effects: `--overlay-backdrop`, `--glass-bg`, `--glass-bg-hover`, `--glass-border`, `--glass-highlight`, `--card-gradient-overlay` with appropriate values for both dark and light themes.
 - Added `export.error.epubFailed` translation key to all 5 locale files (de, en, es, fr, it).
 
-## [1.1.1] - 2026-04-17
+## [1.1.1] — 2026-04-17
 
 ### Security
 
@@ -739,7 +731,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deduplicated 4 utility functions between `geminiService.ts` and `aiProviderService.ts`.
 - Documented Tauri feature parity gaps as tracked tech debt in AUDIT.md.
 
-## [1.1.0] - 2026-04-16
+## [1.1.0] — 2026-04-16
 
 ### Security
 
@@ -783,7 +775,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AUDIT.md` updated with resolution status for addressed findings
 - Lazy-loaded `docx`/`jszip` export libraries and improved Vite manual chunk splitting with a higher `chunkSizeWarningLimit` for optimized production builds
 
-## [1.0.0] - 2025-01-01
+## [1.0.0] — 2025-01-01
 
 ### Added
 
@@ -897,7 +889,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTPS-only external API communication
 - Device-scoped encryption key derivation
 
-[Unreleased]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.20.0...HEAD
 [1.20.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.18.1...v1.19.0
 [1.18.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.18.0...v1.18.1
@@ -909,8 +900,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.9.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.6.0...v1.7.0
+[1.6.2]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.6.1...v1.6.2
+[1.6.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.4.0...v1.6.0
+[1.5.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.0.0...v1.2.0
+[1.1.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/qnbs/StoryCraft-Studio/releases/tag/v1.0.0
