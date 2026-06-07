@@ -3,7 +3,7 @@
  * QNBS-v3: Mocks SettingsViewContext; tests font selector, sliders, toggles, preview.
  */
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,9 +47,20 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
 
 vi.mock('../../../components/ui/Select', () => ({
   Select: vi.fn(
-    ({ children, value, onChange, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-      <select value={value} onChange={onChange} {...rest}>
-        {children}
+    ({
+      value,
+      onChange,
+      ...rest
+    }: {
+      value: string;
+      onChange: (v: string) => void;
+      [key: string]: unknown;
+    }) => (
+      <select value={value} onChange={(e) => onChange?.(e.target.value)} {...rest}>
+        <option value="serif">Serif</option>
+        <option value="sans-serif">Sans-serif</option>
+        <option value="monospace">Monospace</option>
+        <option value="custom">Custom</option>
       </select>
     ),
   ),
@@ -110,9 +121,9 @@ describe('EditorSection', () => {
   });
 
   it('calls handleSettingChange when font family is changed', async () => {
-    const user = userEvent.setup();
     render(<EditorSection />);
-    await user.selectOptions(screen.getByRole('combobox'), 'sans-serif');
+    const select = screen.getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'sans-serif' } });
     expect(mockHandleSettingChange).toHaveBeenCalledWith('editorFont', 'sans-serif');
   });
 

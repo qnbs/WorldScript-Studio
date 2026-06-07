@@ -417,6 +417,27 @@ vi.mock('../../../contexts/WriterViewContext', () => ({
 ```
 Apply for any `use*ViewContext` hook.
 
+**Custom Select/LanguageSelector mocks:** Mock as native `<select>` for testing-library compatibility:
+```ts
+vi.mock('../../../components/ui/Select', () => ({
+  Select: ({ value, onChange, options, ariaLabel }: any) => (
+    <select
+      data-testid="select-mock"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={ariaLabel}
+    >
+      {options.map((opt: any) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+```
+Same pattern applies to `LanguageSelector`.
+
 ### Settings Navigation
 
 `components/SettingsView.tsx` uses `NAV_GROUPS` — typed array of `{ key: string; ids: readonly string[] }` — for semantic sidebar sections (Writing, AI Models, Appearance & Accessibility, Privacy & Data, Connections, System). When adding a new settings tab: add its `id` to the correct group in `NAV_GROUPS`; do not create a flat ungrouped entry.

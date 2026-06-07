@@ -147,18 +147,20 @@ describe('AccessibilitySection', () => {
 
   it('renders the live region verbosity select', () => {
     render(<AccessibilitySection />);
-    expect(
-      screen.getByRole('combobox', { name: 'settings.accessibility.liveRegionVerbosity' }),
-    ).toBeInTheDocument();
+    // The Select component is a custom dropdown, not a native select
+    expect(screen.getByLabelText('settings.accessibility.liveRegionVerbosity')).toBeInTheDocument();
   });
 
   it('calls handleSettingChange when verbosity changes', async () => {
     const user = userEvent.setup();
     render(<AccessibilitySection />);
-    const select = screen.getByRole('combobox', {
-      name: 'settings.accessibility.liveRegionVerbosity',
+    const button = screen.getByLabelText('settings.accessibility.liveRegionVerbosity');
+    await user.click(button);
+    // The Select component is a custom dropdown, not a native select
+    const verboseOption = screen.getByRole('option', {
+      name: 'settings.accessibility.liveRegion.verbose',
     });
-    await user.selectOptions(select, 'verbose');
+    await user.click(verboseOption);
     expect(mockHandleSettingChange).toHaveBeenCalledWith(
       'accessibility',
       expect.objectContaining({ liveRegionVerbosity: 'verbose', presetId: 'custom' }),

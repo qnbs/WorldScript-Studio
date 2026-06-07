@@ -490,23 +490,25 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       }}
                       className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-start transition-all duration-150 group ${
                         isActive
-                          ? 'bg-[var(--sc-accent)] text-white shadow-md'
+                          ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] shadow-md'
                           : 'text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)]'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className={`p-1.5 rounded-md shrink-0 ${isActive ? 'text-white bg-[var(--glass-bg-hover)]' : 'text-[var(--sc-text-secondary)] bg-[var(--sc-surface-overlay)] group-hover:bg-[var(--sc-surface-base)]'}`}
+                          className={`p-1.5 rounded-md shrink-0 ${isActive ? 'text-[var(--sc-text-on-accent)] bg-[var(--glass-bg-hover)]' : 'text-[var(--sc-text-secondary)] bg-[var(--sc-surface-overlay)] group-hover:bg-[var(--sc-surface-base)]'}`}
                         >
                           {cmd.icon}
                         </div>
                         <div className="min-w-0">
-                          <div className={`font-medium truncate ${isActive ? 'text-white' : ''}`}>
+                          <div
+                            className={`font-medium truncate ${isActive ? 'text-[var(--sc-text-on-accent)]' : ''}`}
+                          >
                             {renderTitle(cmd.title)}
                           </div>
                           {sug && !query ? (
                             <div
-                              className={`text-xs truncate ${isActive ? 'text-white' : 'text-[var(--sc-text-muted)]'}`}
+                              className={`text-xs truncate ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
                             >
                               {t(sug.reasonKey)}
                             </div>
@@ -517,7 +519,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                         {prefs.pinnedIds.includes(cmd.id) ? (
                           <span
                             // QNBS-v3: text-white/70 fails WCAG AA contrast on --sc-accent background; use full-opacity white.
-                            className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-white' : 'text-[var(--sc-text-muted)]'}`}
+                            className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
                           >
                             {t('palette.pin.badge')}
                           </span>
@@ -527,7 +529,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                             {cmd.shortcutDisplay.map((k) => (
                               <kbd
                                 key={k}
-                                className={`px-1.5 py-0.5 text-xs rounded border ${isActive ? 'border-[var(--glass-highlight)] bg-[var(--glass-bg-hover)] text-white' : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-muted)]'}`}
+                                className={`px-1.5 py-0.5 text-xs rounded border ${isActive ? 'border-[var(--glass-highlight)] bg-[var(--glass-bg-hover)] text-[var(--sc-text-on-accent)]' : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-muted)]'}`}
                               >
                                 {k}
                               </kbd>

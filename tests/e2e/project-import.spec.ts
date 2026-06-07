@@ -73,7 +73,8 @@ test.describe('Project Import (CI-only)', () => {
     // first() avoids strict-mode violation when both mobile + desktop ContextPanel are in DOM
     await selectFirstEnabledWriterSection(page);
     const sectionSel = page.locator('#writer-section-select').first();
-    await expect(sectionSel.locator('option', { hasText: /Chapter One/i })).toBeAttached();
+    // QNBS-v3: Select is a custom dropdown (button + listbox); verify selected text instead of <option>
+    await expect(sectionSel).toContainText(/Chapter One/i);
   });
 
   test('import survives a page reload (IndexedDB persistence)', async ({ page }) => {

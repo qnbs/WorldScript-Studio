@@ -1,7 +1,7 @@
 # UI Modernization Guide — StoryCraft Studio
 
 **Version:** v1.20.0 (2026-06-06)
-**Status:** Phase 1 Complete — LanguageSelector, RadioGroup, Tabs
+**Status:** Phase 1 & 2 (Select) Complete — LanguageSelector, RadioGroup, Tabs, Select
 
 ## Overview
 
@@ -117,12 +117,40 @@ const [activeTab, setActiveTab] = useState('general');
 </TabPanel>
 ```
 
+### Select
+
+Custom accessible dropdown component replacing native `<select>` elements.
+
+**Features:**
+- WAI-ARIA compliant with `role="listbox"` and `role="option"`
+- Support for option groups via `SelectOptionGroup`
+- Disabled state support
+- Keyboard navigation (Escape to close)
+- Uses design tokens for styling
+- z-index managed via `--sc-z-docked` token
+
+**Usage:**
+```tsx
+import { Select } from './ui/Select';
+
+<Select
+  value={selectedValue}
+  onChange={setSelectedValue}
+  options={[
+    { value: 'option1', label: 'Option 1' },
+    { value: 'option2', label: 'Option 2' },
+  ]}
+  ariaLabel="Select an option"
+/>
+```
+
 ## Phase Roadmap
 
 | Phase | Components | Status |
 |-------|------------|--------|
 | Phase 1 | LanguageSelector, RadioGroup, Tabs | ✅ Complete |
-| Phase 2 | Select (Combobox), Dropdown Menu, Action Menu | Pending |
+| Phase 2 | Select (Combobox) | ✅ Complete |
+| Phase 2b | Dropdown Menu, Action Menu | Pending |
 | Phase 3 | Manuscript Editor, Plot Board, Scene Board | Pending |
 | Phase 4 | Dashboard, Progress Tracker, Export View | Pending |
 | Phase 5 | Loading States, Empty States, Error States | Pending |
@@ -131,7 +159,32 @@ const [activeTab, setActiveTab] = useState('general');
 
 ### Replacing Native Selects
 
-Replace `<select>` elements with the new `LanguageSelector` or upcoming `Combobox` component:
+Replace `<select>` elements with the appropriate component:
+
+- **Language selection:** Use `LanguageSelector` (includes search, flag emojis, beta indicators)
+- **Generic selection:** Use `Select` (custom accessible dropdown with `role="listbox"`)
+
+```tsx
+// Before (generic select)
+<select onChange={(e) => setValue(e.target.value)}>
+  <option value="option1">Option 1</option>
+  <option value="option2">Option 2</option>
+</select>
+
+// After
+import { Select } from './ui/Select';
+
+<Select
+  value={value}
+  onChange={setValue}
+  options={[
+    { value: 'option1', label: 'Option 1' },
+    { value: 'option2', label: 'Option 2' },
+  ]}
+/>
+```
+
+### Replacing Native Selects (Language)
 
 ```tsx
 // Before
@@ -143,6 +196,15 @@ Replace `<select>` elements with the new `LanguageSelector` or upcoming `Combobo
 // After
 <LanguageSelector value={language} onChange={setLanguage} />
 ```
+
+### When to Keep Native Selects
+
+Native `<select>` elements are retained in certain contexts where they are more appropriate:
+
+- **AI Model selection** (e.g., `AiProviderCard.tsx`): Native selects are kept because model lists are static, don't require search/filter, and native selects provide better keyboard navigation for long lists on some platforms.
+- **Simple dropdowns** with few options where the custom Select would add unnecessary complexity.
+
+When in doubt, prefer the custom `Select` component for consistency with the design system.
 
 ### Replacing Checkbox Toggles
 
@@ -162,6 +224,32 @@ All components include:
 - Unit tests in `tests/unit/components/ui/`
 - Storybook stories in `stories/ui/`
 - Accessibility tests via `@storybook/addon-a11y`
+
+### Testing Custom Selects
+
+When testing components that use `Select` or `LanguageSelector`, mock them as native `<select>` elements for compatibility with testing-library queries:
+
+```tsx
+// In test setup or component test
+vi.mock('../components/ui/Select', () => ({
+  Select: ({ value, onChange, options, ariaLabel }: any) => (
+    <select
+      data-testid="select-mock"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={ariaLabel}
+    >
+      {options.map((opt: any) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+```
+
+This allows tests to use standard `select` queries while the production code uses the custom accessible dropdown.
 
 Run tests:
 ```bash

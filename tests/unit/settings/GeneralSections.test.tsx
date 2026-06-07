@@ -70,6 +70,64 @@ vi.mock('../../../services/storageService', () => ({
   },
 }));
 
+vi.mock('../../../components/ui/LanguageSelector', () => ({
+  LanguageSelector: vi.fn(
+    ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+      <select value={value} onChange={(e) => onChange?.(e.target.value)}>
+        <option value="en">English</option>
+        <option value="de">German</option>
+        <option value="fr">French</option>
+        <option value="es">Spanish</option>
+        <option value="it">Italian</option>
+        <option value="ar">Arabic</option>
+        <option value="he">Hebrew</option>
+        <option value="ja">Japanese</option>
+        <option value="zh">Chinese</option>
+        <option value="pt">Portuguese</option>
+        <option value="el">Greek</option>
+      </select>
+    ),
+  ),
+}));
+
+vi.mock('../../../components/ui/Select', () => ({
+  Select: vi.fn(
+    ({
+      value,
+      onChange,
+      options,
+      groups,
+      ariaLabel,
+      ...rest
+    }: {
+      value: string;
+      onChange: (v: string) => void;
+      options?: Array<{ value: string; label: string; disabled?: boolean }>;
+      groups?: Array<{
+        label: string;
+        options: Array<{ value: string; label: string; disabled?: boolean }>;
+      }>;
+      ariaLabel?: string;
+      [key: string]: unknown;
+    }) => (
+      <select
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        aria-label={ariaLabel}
+        {...rest}
+      >
+        {(options ?? groups?.flatMap((g) => g.options) ?? []).map(
+          (opt: { value: string; label: string; disabled?: boolean }) => (
+            <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+              {opt.label}
+            </option>
+          ),
+        )}
+      </select>
+    ),
+  ),
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------

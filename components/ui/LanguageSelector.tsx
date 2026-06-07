@@ -107,7 +107,7 @@ export const LanguageSelector = React.memo(
     // QNBS-v3: Compact variant for header (button with current language indicator)
     if (variant === 'compact') {
       return (
-        <div className={`relative ${className}`} ref={containerRef}>
+        <div className={`relative z-50 isolate ${className}`} ref={containerRef}>
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
@@ -142,7 +142,7 @@ export const LanguageSelector = React.memo(
             <div
               role="listbox"
               aria-label={t('portal.language.groupLabel')}
-              className="absolute top-full right-0 mt-2 w-64 max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[var(--sc-z-docked)]"
+              className="absolute top-full right-0 mt-2 w-64 max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[100]"
             >
               {showSearch && (
                 <div className="p-2 border-b border-[var(--sc-border-subtle)]">
@@ -213,7 +213,7 @@ export const LanguageSelector = React.memo(
 
     // Full variant for settings page
     return (
-      <div className={`relative ${className}`} ref={containerRef}>
+      <div className={`relative z-50 isolate ${className}`} ref={containerRef}>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
@@ -250,7 +250,7 @@ export const LanguageSelector = React.memo(
           <div
             role="listbox"
             aria-label={t('portal.language.groupLabel')}
-            className="absolute top-full left-0 mt-2 w-full max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[var(--sc-z-docked)]"
+            className="absolute top-full left-0 mt-2 w-full max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[100]"
           >
             {showSearch && (
               <div className="p-2 border-b border-[var(--sc-border-subtle)]">

@@ -103,3 +103,6 @@ The `@storybook/addon-a11y` addon runs axe-core per story — all stories must p
 | **EmptyState** | `components/ui/EmptyState.tsx` | Primary/secondary actions + optional icon slot |
 | **Skeleton** | `components/ui/Skeleton.tsx` | Loading placeholder; use before data arrives (not a generic spinner) |
 | **ViewErrorBoundary** | `components/ui/ViewErrorBoundary.tsx` | Wraps every lazy view; retry + live-region announce |
+| **Input** | `components/ui/Input.tsx` | Text input with optional voice dictation button; glass-morphism styling |
+| **Select** | `components/ui/Select.tsx` | Custom accessible dropdown with `role="listbox"`; replaces native `<select>` |
+| **LanguageSelector** | `components/ui/LanguageSelector.tsx` | Language picker with search, flags, beta indicators; uses Select pattern |
