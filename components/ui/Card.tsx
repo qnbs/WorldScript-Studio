@@ -18,7 +18,7 @@ export const Card: React.FC<CardProps> = ({
     <Component
       type={isInteractive ? 'button' : undefined}
       className={`
-        relative group overflow-hidden rounded-sc-xl
+        relative group rounded-sc-xl
         bg-[var(--sc-surface-raised)]/60 backdrop-blur-3xl
         border border-[var(--glass-border)]
         shadow-[0_8px_30px_rgb(0,0,0,0.04)]
@@ -36,7 +36,7 @@ export const Card: React.FC<CardProps> = ({
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--glass-highlight)] to-transparent opacity-50 pointer-events-none" />
 
       {/* Spotlight Effect */}
-      <div className="absolute -inset-px bg-gradient-to-r from-indigo-500/0 via-indigo-500/5 to-indigo-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-lg pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-500/5 to-indigo-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-lg pointer-events-none" />
 
       <div className="relative z-10 h-full flex flex-col">{children}</div>
     </Component>
