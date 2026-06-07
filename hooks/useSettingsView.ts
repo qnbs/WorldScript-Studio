@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import type { RootState } from '../app/store';
 import type { PassphraseModalMode } from '../components/settings/PassphraseModal';
 import { useToast } from '../components/ui/Toast';
+import type { Language } from '../contexts/I18nContext';
 import { featureFlagsActions } from '../features/featureFlags/featureFlagsSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -100,7 +101,7 @@ export const useSettingsView = () => {
 
   const handleLanguageChange = useCallback(
     (value: string) => {
-      setLanguage(value as 'en' | 'de' | 'fr' | 'es' | 'it');
+      setLanguage(value as Language);
     },
     [setLanguage],
   );
