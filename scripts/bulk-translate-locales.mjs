@@ -1,17 +1,24 @@
 #!/usr/bin/env node
 /**
- * Bulk Locale Translation Script
+ * Bulk Locale Translation Script — P1-5 i18n Beta
  *
  * Translates English locale files to target languages using the free
  * Google Translate endpoint (unofficial, rate-limited).
  *
- * Usage:
- *   node scripts/bulk-translate-locales.mjs --lang=ja --files=common,portal
- *   node scripts/bulk-translate-locales.mjs --lang=ja,zh,pt,el --all
+ * Features:
+ *   - Glossary lookup before API call (locales/translation-glossary.json)
+ *   - Checkpointing (translation-progress.json) for resumable runs
+ *   - Preserves flat key structure (matches EN locale format)
+ *   - Idempotent: skips already-translated keys on re-run
+ *   - Placeholder-safe: {{count}}, {{name}}, etc. are preserved
  *
- * Rate limits: ~100 requests/minute recommended to avoid IP blocks.
- * For production-scale translation, use Google Cloud Translation API
- * with an API key (set GOOGLE_TRANSLATE_API_KEY env var).
+ * Usage:
+ *   node scripts/bulk-translate-locales.mjs --lang=ja --files=common
+ *   node scripts/bulk-translate-locales.mjs --lang=ja,zh,pt,el --all --delay=400
+ *   node scripts/bulk-translate-locales.mjs --lang=pt --files=common --checkpoint=progress.json
+ *
+ * Rate limits: ~100 requests/minute recommended. Use --delay=400–600.
+ * For production scale, set GOOGLE_TRANSLATE_API_KEY for official API.
  */
 
 import fs from 'node:fs';
@@ -33,6 +40,57 @@ const FREE_ENDPOINT =
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadGlossary() {
+  const glossaryPath = path.join(ROOT, 'locales', 'translation-glossary.json');
+  if (!fs.existsSync(glossaryPath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(glossaryPath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function glossaryTranslate(text, lang, glossary) {
+  const langGlossary = glossary[lang];
+  if (!langGlossary) return null;
+
+  // Exact match
+  if (langGlossary[text]) return langGlossary[text];
+
+  // Partial match for short terms embedded in longer strings
+  // (conservative: only replace whole words)
+  let result = text;
+  for (const [en, translated] of Object.entries(langGlossary)) {
+    if (en.startsWith('_')) continue;
+    // Word-boundary replacement for standalone terms
+    const regex = new RegExp(`\\b${en}\\b`, 'g');
+    if (regex.test(result)) {
+      result = result.replace(regex, translated);
+    }
+  }
+  return result === text ? null : result;
+}
+
+function loadCheckpoint(lang, file) {
+  const cpPath = path.join(ROOT, `.translation-progress-${lang}-${file}.json`);
+  if (!fs.existsSync(cpPath)) return new Set();
+  try {
+    const data = JSON.parse(fs.readFileSync(cpPath, 'utf8'));
+    return new Set(data.done || []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCheckpoint(lang, file, doneSet) {
+  const cpPath = path.join(ROOT, `.translation-progress-${lang}-${file}.json`);
+  fs.writeFileSync(
+    cpPath,
+    JSON.stringify({ done: Array.from(doneSet), updated: new Date().toISOString() }, null, 2) +
+      '\n',
+  );
 }
 
 async function translateFree(text, targetLang) {
@@ -65,68 +123,67 @@ async function translateWithRetry(text, targetLang, retries = 3) {
   return text;
 }
 
-function flatten(obj, prefix = '') {
-  const result = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (typeof v === 'string') result[key] = v;
-    else if (typeof v === 'object' && v !== null) Object.assign(result, flatten(v, key));
-  }
-  return result;
-}
-
-function unflatten(flat) {
-  const result = {};
-  for (const [key, value] of Object.entries(flat)) {
-    const parts = key.split('.');
-    let curr = result;
-    for (let i = 0; i < parts.length - 1; i++) {
-      if (!curr[parts[i]]) curr[parts[i]] = {};
-      curr = curr[parts[i]];
-    }
-    curr[parts[parts.length - 1]] = value;
-  }
-  return result;
-}
-
 async function translateFile(enPath, outPath, targetLang, delayMs = 600) {
+  const glossary = loadGlossary();
   const enData = JSON.parse(fs.readFileSync(enPath, 'utf8'));
-  const flatEn = flatten(enData);
-  const existing = fs.existsSync(outPath)
-    ? flatten(JSON.parse(fs.readFileSync(outPath, 'utf8')))
-    : {};
+  const existing = fs.existsSync(outPath) ? JSON.parse(fs.readFileSync(outPath, 'utf8')) : {};
 
-  const toTranslate = {};
-  for (const [k, v] of Object.entries(flatEn)) {
-    if (existing[k] && existing[k] !== v) {
-      // Already translated (different from EN)
-      toTranslate[k] = existing[k];
-    } else {
-      toTranslate[k] = v;
-    }
+  const fileBase = path.basename(enPath, '.json');
+  const checkpoint = loadCheckpoint(targetLang, fileBase);
+
+  // Build list of keys to translate
+  const keysToTranslate = [];
+  for (const [key, value] of Object.entries(enData)) {
+    if (typeof value !== 'string') continue;
+    if (checkpoint.has(key)) continue;
+    if (existing[key] && existing[key] !== value) continue; // already translated
+    keysToTranslate.push(key);
   }
+
+  if (keysToTranslate.length === 0) {
+    console.log(`  All ${Object.keys(enData).length} keys already translated.`);
+    return;
+  }
+
+  console.log(
+    `  Translating ${keysToTranslate.length}/${Object.keys(enData).length} keys for ${targetLang}...`,
+  );
 
   const translated = { ...existing };
-  const keys = Object.keys(toTranslate).filter((k) => toTranslate[k] === flatEn[k]);
+  const done = new Set(checkpoint);
 
-  console.log(`  Translating ${keys.length} keys for ${targetLang}...`);
+  for (let i = 0; i < keysToTranslate.length; i++) {
+    const key = keysToTranslate[i];
+    const original = enData[key];
 
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i];
-    const original = flatEn[key];
-    try {
-      const result = await translateWithRetry(original, targetLang);
-      translated[key] = result;
-      process.stdout.write(`  ${i + 1}/${keys.length} ${key.slice(0, 40)}\r`);
-    } catch (err) {
-      console.error(`\n  Failed: ${key} = "${original}" — ${err.message}`);
-      translated[key] = original; // fallback to EN
+    // Try glossary first
+    let result = glossaryTranslate(original, targetLang, glossary);
+
+    if (!result) {
+      try {
+        result = await translateWithRetry(original, targetLang);
+      } catch (err) {
+        console.error(`\n  Failed: ${key} = "${original}" — ${err.message}`);
+        result = original; // fallback to EN
+      }
     }
+
+    translated[key] = result;
+    done.add(key);
+    process.stdout.write(`  ${i + 1}/${keysToTranslate.length} ${key.slice(0, 40)}\r`);
+
+    // Save checkpoint every 10 keys
+    if ((i + 1) % 10 === 0) {
+      fs.writeFileSync(outPath, JSON.stringify(translated, Object.keys(enData).sort(), 2) + '\n');
+      saveCheckpoint(targetLang, fileBase, done);
+    }
+
     if (delayMs > 0) await sleep(delayMs);
   }
 
-  const outData = unflatten(translated);
-  fs.writeFileSync(outPath, JSON.stringify(outData, null, 2) + '\n');
+  // Final write with keys in same order as EN
+  fs.writeFileSync(outPath, JSON.stringify(translated, Object.keys(enData).sort(), 2) + '\n');
+  saveCheckpoint(targetLang, fileBase, done);
   console.log(`\n  Written: ${outPath}`);
 }
 
@@ -147,7 +204,7 @@ async function main() {
 
   if (opts.lang.length === 0) {
     console.error(
-      'Usage: node bulk-translate-locales.mjs --lang=ja [--files=common,portal] [--all]',
+      'Usage: node bulk-translate-locales.mjs --lang=ja [--files=common,portal] [--all] [--delay=400]',
     );
     console.error('Supported languages:', Object.keys(SUPPORTED_LANGS).join(', '));
     process.exit(1);
