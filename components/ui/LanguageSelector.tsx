@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Language } from '../../contexts/I18nContext';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -47,7 +47,7 @@ export const LanguageSelector = React.memo(
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // QNBS-v3: Close on outside click / escape
-    useEffect(() => {
+    useLayoutEffect(() => {
       const handleClickOutside = (event: MouseEvent | TouchEvent) => {
         const target = event.target as Node;
         const isInsideContainer = containerRef.current?.contains(target);
@@ -83,35 +83,46 @@ export const LanguageSelector = React.memo(
       }
     }, [isOpen]);
 
-    // QNBS-v3: Position dropdown as fixed when opened to escape stacking context
-    useEffect(() => {
+    // QNBS-v3: Position dropdown as fixed when opened to escape any parent
+    // stacking context or overflow clipping. getBoundingClientRect() already
+    // returns viewport-relative coordinates, which is exactly what fixed
+    // positioning needs — adding scroll offsets would push the dropdown
+    // outside the visible viewport as soon as the page is scrolled.
+    useLayoutEffect(() => {
       if (!isOpen || !containerRef.current || !dropdownRef.current) return;
+
+      const dropdown = dropdownRef.current;
 
       const updatePosition = () => {
         const containerRect = containerRef.current?.getBoundingClientRect();
         if (!containerRect) return;
 
-        const dropdown = dropdownRef.current;
-        if (!dropdown) return;
-
-        // Position as fixed to escape any stacking context
         dropdown.style.position = 'fixed';
-        dropdown.style.top = `${containerRect.bottom + window.scrollY}px`;
-        dropdown.style.left = `${containerRect.left + window.scrollX}px`;
-        dropdown.style.width = `${containerRect.width}px`;
+        dropdown.style.top = `${containerRect.bottom + 8}px`; // 8px = mt-2 spacing
         dropdown.style.marginTop = '0';
         dropdown.style.marginLeft = '0';
+
+        if (variant === 'compact') {
+          // Right-align the 256 px dropdown beneath the trigger
+          dropdown.style.left = `${containerRect.right - 256}px`;
+          dropdown.style.width = '256px';
+        } else {
+          dropdown.style.left = `${containerRect.left}px`;
+          dropdown.style.width = `${containerRect.width}px`;
+        }
       };
 
+      // Position immediately before paint to avoid visible flicker
       updatePosition();
-      window.addEventListener('scroll', updatePosition);
+
+      window.addEventListener('scroll', updatePosition, true);
       window.addEventListener('resize', updatePosition);
 
       return () => {
-        window.removeEventListener('scroll', updatePosition);
+        window.removeEventListener('scroll', updatePosition, true);
         window.removeEventListener('resize', updatePosition);
       };
-    }, [isOpen]);
+    }, [isOpen, variant]);
 
     // QNBS-v3: Filter languages by search query (search in native name, label, and code)
     const filteredLanguages = useMemo(() => {
@@ -141,14 +152,14 @@ export const LanguageSelector = React.memo(
     // QNBS-v3: Compact variant for header (button with current language indicator)
     if (variant === 'compact') {
       return (
-        <div className={`relative z-50 isolate ${className}`} ref={containerRef}>
+        <div className={`relative ${className}`} ref={containerRef}>
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
             aria-haspopup="listbox"
             aria-expanded={isOpen}
             aria-label={t('portal.language.groupLabel')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-sc-md bg-[var(--glass-bg)] hover:bg-[var(--glass-bg-hover)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-sc-md bg-[var(--glass-bg)] hover:bg-[var(--glass-bg-hover)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] cursor-pointer"
           >
             <span className="text-base" aria-hidden="true">
               {currentMeta.flag}
@@ -174,9 +185,11 @@ export const LanguageSelector = React.memo(
 
           {isOpen && (
             <div
+              ref={dropdownRef}
               role="listbox"
               aria-label={t('portal.language.groupLabel')}
-              className="absolute top-full right-0 mt-2 w-64 max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[100]"
+              className="max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[10000]"
+              // QNBS-v3: z-index must exceed PWAInstallBanner (z-9998) so the fixed dropdown isn't hidden
             >
               {showSearch && (
                 <div className="p-2 border-b border-[var(--sc-border-subtle)]">
@@ -247,14 +260,14 @@ export const LanguageSelector = React.memo(
 
     // Full variant for settings page
     return (
-      <div className={`relative z-50 isolate ${className}`} ref={containerRef}>
+      <div className={`relative ${className}`} ref={containerRef}>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           aria-label={t('portal.language.groupLabel')}
-          className="flex items-center justify-between w-full px-4 py-2.5 text-sm rounded-sc-lg bg-[var(--glass-bg)] hover:bg-[var(--glass-bg-hover)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+          className="flex items-center justify-between w-full px-4 py-2.5 text-sm rounded-sc-lg bg-[var(--glass-bg)] hover:bg-[var(--glass-bg-hover)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] cursor-pointer"
         >
           <div className="flex items-center gap-3">
             <span className="text-base" aria-hidden="true">
@@ -285,7 +298,7 @@ export const LanguageSelector = React.memo(
             ref={dropdownRef}
             role="listbox"
             aria-label={t('portal.language.groupLabel')}
-            className="max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[10000] isolate"
+            className="max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[10000]"
           >
             {showSearch && (
               <div className="p-2 border-b border-[var(--sc-border-subtle)]">
@@ -299,7 +312,7 @@ export const LanguageSelector = React.memo(
                 />
               </div>
             )}
-            <ul className="py-1 max-h-64 overflow-y-auto">
+            <ul className="py-1">
               {filteredLanguages.map((lang) => {
                 const meta = LANGUAGE_METADATA[lang];
                 const isActive = lang === value;
