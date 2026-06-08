@@ -38,71 +38,80 @@ export async function initTauriDeepLink(
     unlisten = await listen<string[] | string>('deep-link://new-url', async (event) => {
       // Handle both array and string payloads
       const urls = Array.isArray(event.payload) ? event.payload : [event.payload];
-      const url = urls[0];
 
-      if (!url) {
-        log.warn('Received empty URL in deep-link event');
-        return;
-      }
-
-      log.info('Received deep-link event', { url });
-
-      // Parse the URL to get the file path (storycraft://path/to/file.storycraft)
-      // The deep-link plugin handles custom schemes, but for file associations we need
-      // to handle the case where the file path is passed as a CLI argument
-      try {
-        // For file associations on Windows/Linux, the deep-link plugin parses CLI args
-        // and emits the URL. We need to convert storycraft:// URLs back to file paths
-        // or handle direct file paths if passed.
-        let filePath = url;
-
-        // Check if it's a storycraft:// URL and extract the path
-        if (url.startsWith('storycraft://') || url.startsWith('storycraft:')) {
-          // On Windows, the URL might be storycraft:///C:/path/to/file.storycraft
-          // On Linux, it might be storycraft:///home/user/file.storycraft
-          filePath = url.replace(/^storycraft:\/\/?/, '').replace(/^\/+/, '/');
+      // Process all URLs in the payload (user may have selected multiple files)
+      for (const url of urls) {
+        if (!url) {
+          log.warn('Received empty URL in deep-link event');
+          continue;
         }
 
-        // Read file via Tauri FS plugin
-        const { readTextFile, exists } = await import('@tauri-apps/plugin-fs');
+        log.info('Received deep-link event', { url });
 
-        if (!(await exists(filePath))) {
-          throw new Error('File not found');
-        }
+        // Parse the URL to get the file path (storycraft://path/to/file.storycraft)
+        // The deep-link plugin handles custom schemes, but for file associations we need
+        // to handle the case where the file path is passed as a CLI argument
+        try {
+          // For file associations on Windows/Linux, the deep-link plugin parses CLI args
+          // and emits the URL. We need to convert storycraft:// URLs back to file paths
+          // or handle direct file paths if passed.
+          let filePath = url;
 
-        const content = await readTextFile(filePath);
-        const fileName = filePath.split(/[/\\]/).pop() || 'project.json';
+          // Check if it's a storycraft:// URL and extract the path
+          if (url.startsWith('storycraft://') || url.startsWith('storycraft:')) {
+            // On Windows, the URL might be storycraft:///C:/path/to/file.storycraft
+            // On Linux, it might be storycraft:///home/user/file.storycraft
+            // QNBS-v3: Strip storycraft:// prefix and normalize Windows drive-letter paths
+            filePath = url.replace(/^storycraft:\/\/?/, '');
+            // Windows paths like /C:/... need the leading slash removed
+            if (/^[A-Za-z]:/.test(filePath)) {
+              filePath = filePath.replace(/^\/+/, '');
+            } else {
+              filePath = filePath.replace(/^\/+/, '/');
+            }
+          }
 
-        // Create a File object for the existing import flow
-        const file = new File([content], fileName, {
-          type: 'application/json',
-        });
+          // Read file via Tauri FS plugin
+          const { readTextFile, exists } = await import('@tauri-apps/plugin-fs');
 
-        // Dispatch import thunk
-        const resultAction = await dispatch(importProjectThunk(file));
+          if (!(await exists(filePath))) {
+            throw new Error('File not found');
+          }
 
-        if (importProjectThunk.fulfilled.match(resultAction)) {
-          // Navigate to manuscript view after successful import
-          window.location.hash = '#/manuscript';
-        } else {
-          // Show error notification
+          const content = await readTextFile(filePath);
+          const fileName = filePath.split(/[/\\]/).pop() || 'project.json';
+
+          // Create a File object for the existing import flow
+          const file = new File([content], fileName, {
+            type: 'application/json',
+          });
+
+          // Dispatch import thunk
+          const resultAction = await dispatch(importProjectThunk(file));
+
+          if (importProjectThunk.fulfilled.match(resultAction)) {
+            // Navigate to manuscript view after successful import
+            window.location.hash = '#/manuscript';
+          } else {
+            // Show error notification
+            dispatch(
+              statusActions.addNotification({
+                type: 'error',
+                title: t('error.deepLink.title'),
+                description: resultAction.error?.message ?? t('error.deepLink.unknown'),
+              }),
+            );
+          }
+        } catch (error) {
+          log.error('Failed to open project file via deep link', { error, url });
           dispatch(
             statusActions.addNotification({
               type: 'error',
               title: t('error.deepLink.title'),
-              description: resultAction.error?.message ?? t('error.deepLink.unknown'),
+              description: error instanceof Error ? error.message : String(error),
             }),
           );
         }
-      } catch (error) {
-        log.error('Failed to open project file via deep link', { error, url });
-        dispatch(
-          statusActions.addNotification({
-            type: 'error',
-            title: t('error.deepLink.title'),
-            description: error instanceof Error ? error.message : String(error),
-          }),
-        );
       }
     });
 
