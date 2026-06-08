@@ -27,7 +27,7 @@
   "characters.dossier.refineButton": "Refine with IA",
   "characters.dossier.refineLabel": "Refinar retrato",
   "characters.dossier.refinePlaceholder": "e.g., 'Adicionar a scar', 'make hair red'",
-  "characters.dossier.title": "Dossiê: {{nome}}",
+  "characters.dossier.title": "Dossiê: {{name}}",
   "characters.edit.appearance": "Aparência",
   "characters.edit.arc": "Personagem Arc",
   "characters.edit.backstory": "História de fundo",

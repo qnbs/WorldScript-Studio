@@ -10,7 +10,7 @@
   "worlds.atlas.refineButton": "Refine with IA",
   "worlds.atlas.refineLabel": "Refinar imagem do ambiente",
   "worlds.atlas.refinePlaceholder": "e.g., 'Adicionar a second moon', 'make it winter'",
-  "worlds.atlas.title": "Atlas: {{nome}}",
+  "worlds.atlas.title": "Atlas: {{name}}",
   "worlds.deleteConfirm": "Tem certeza de que deseja excluir este mundo? Esta ação não pode ser desfeita.",
   "worlds.deleteLabel": "Excluir {{name}}",
   "worlds.description": "Criar and manage the settings of your story. Click a card to open the atlas.",

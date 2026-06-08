@@ -105,7 +105,7 @@
   "templates.modal.ai.title": "Personalize with IA",
   "templates.modal.sectionsTitle": "Seções de modelo",
   "templates.modal.standardButton": "Aplicar em branco",
-  "templates.modal.title": "Visualização: {{nome}}",
+  "templates.modal.title": "Visualização: {{name}}",
   "templates.murderMystery.arc": "Uma narrativa de quebra-cabeças que segue uma investigação do crime à revelação, repleta de desorientações.",
   "templates.murderMystery.description": "Uma trama centrada em um assassinato que um protagonista deve resolver. Inclui pistas, pistas falsas e suspeitos.",
   "templates.murderMystery.name": "Mistério de assassinato",

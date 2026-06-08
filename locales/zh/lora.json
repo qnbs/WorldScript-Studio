@@ -20,7 +20,7 @@
   "lora.dataset.title": "数据集生成器",
   "lora.dataset.total": "全部的",
   "lora.errors.cloudBlocked": "云托管模型不能用于训练。选择本地型号。",
-  "lora.errors.insufficientVram": "此预设的 VRAM 不足。此预设需要 {{require}} GB。",
+  "lora.errors.insufficientVram": "此预设的 VRAM 不足。此预设需要 {{required}} GB。",
   "lora.errors.pythonNotFound": "未找到 Python 3。安装 Python ≥ 3.10 并将其添加到您的 PATH 中。",
   "lora.errors.trainingFailed": "训练失败：{{message}}",
   "lora.evaluation.adapted": "风格适应",

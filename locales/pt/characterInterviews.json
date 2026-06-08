@@ -18,7 +18,7 @@
   "characterInterviews.emptyState": "Ainda não há entrevistas. Selecione um personagem para começar.",
   "characterInterviews.interviewTitle": "Título da Entrevista",
   "characterInterviews.interviewTitlePlaceholder": "Título opcional…",
-  "characterInterviews.interviewsForCharacter": "Entrevistas para {{nome}}",
+  "characterInterviews.interviewsForCharacter": "Entrevistas para {{name}}",
   "characterInterviews.messageRoleAi": "Personagem",
   "characterInterviews.messageRoleUser": "Entrevistador",
   "characterInterviews.newInterview": "Nova Entrevista",

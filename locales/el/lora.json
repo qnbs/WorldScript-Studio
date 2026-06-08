@@ -20,7 +20,7 @@
   "lora.dataset.title": "Εργαλείο δημιουργίας συνόλου δεδομένων",
   "lora.dataset.total": "Σύνολο",
   "lora.errors.cloudBlocked": "Τα μοντέλα που φιλοξενούνται στο cloud δεν μπορούν να χρησιμοποιηθούν για εκπαίδευση. Επιλέξτε ένα τοπικό μοντέλο.",
-  "lora.errors.insufficientVram": "Ανεπαρκής VRAM για αυτήν την προεπιλογή. Αυτή η προεπιλογή απαιτεί {{απαιτείται}} GB.",
+  "lora.errors.insufficientVram": "Ανεπαρκής VRAM για αυτήν την προεπιλογή. Αυτή η προεπιλογή απαιτεί {{required}} GB.",
   "lora.errors.pythonNotFound": "Η Python 3 δεν βρέθηκε. Εγκαταστήστε την Python ≥ 3.10 και προσθέστε τη στο PATH σας.",
   "lora.errors.trainingFailed": "Η εκπαίδευση απέτυχε: {{message}}",
   "lora.evaluation.adapted": "Προσαρμοσμένο στυλ",

@@ -1939,6 +1939,8 @@
   "settings.voice.cloudFallback": "السماح باحتياطي STT السحابي",
   "settings.voice.cloudFallbackHint": "عند عدم توفّر التعرّف المحلي على الكلام، أرسل الصوت إلى مزوّدين سحابيين. يتطلب إنترنت.",
   "settings.voice.downloadModels": "Download Models",
+  "settings.voice.downloadSttModel": "Download STT (Whisper)",
+  "settings.voice.downloadTtsModel": "Download TTS (Kokoro)",
   "settings.voice.enableHint": "فعّل الأوامر الصوتية والإملاء والملاحظات الصوتية.",
   "settings.voice.enableLabel": "تفعيل الدعم الصوتي",
   "settings.voice.feedbackLevel": "مستوى الملاحظات الصوتية",

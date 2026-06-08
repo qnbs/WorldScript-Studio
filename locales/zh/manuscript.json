@@ -28,7 +28,7 @@
   "manuscript.inspector.aiWorkingStatus": "人工智能正在按照您的要求工作。",
   "manuscript.inspector.charCount": "角色 Count",
   "manuscript.inspector.readTime": "预计。阅读时间",
-  "manuscript.inspector.readTimeValue": "〜{{时间}} 分钟",
+  "manuscript.inspector.readTimeValue": "〜{{time}} 分钟",
   "manuscript.inspector.regionAriaLabel": "项目详情和AI辅助工具",
   "manuscript.inspector.statsTitle": "部分统计",
   "manuscript.inspector.title": "督察",

@@ -28,7 +28,7 @@
   "manuscript.inspector.aiWorkingStatus": "人工知能があなたのリクエストに応えています。",
   "manuscript.inspector.charCount": "キャラクター Count",
   "manuscript.inspector.readTime": "EST（東部基準時。読書時間",
-  "manuscript.inspector.readTimeValue": "~{{時間}}分",
+  "manuscript.inspector.readTimeValue": "~{{time}}分",
   "manuscript.inspector.regionAriaLabel": "プロジェクトの詳細とAIアシスタントツール",
   "manuscript.inspector.statsTitle": "セクション統計",
   "manuscript.inspector.title": "検査官",

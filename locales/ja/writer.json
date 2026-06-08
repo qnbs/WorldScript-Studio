@@ -1,5 +1,5 @@
 {
-  "writer.chapter.label": "章: {{タイトル}}",
+  "writer.chapter.label": "章: {{title}}",
   "writer.context.hide": "コンテキストを隠す",
   "writer.context.label": "コンテクスト",
   "writer.context.show": "コンテキストを表示",
@@ -63,7 +63,7 @@
   "writer.studio.tools.dialogue.title": "生成 Dialogue",
   "writer.studio.tools.grammarCheck.instruction": "テキストを選択し、「文法とスタイル」をクリックして、エラーとスタイルをチェックして改善します（英語/ドイツ語を自動検出します）。",
   "writer.studio.tools.grammarCheck.title": "文法とスタイル",
-  "writer.studio.tools.improve.instruction": "選択したテキスト: {{選択内容}}",
+  "writer.studio.tools.improve.instruction": "選択したテキスト: {{selection}}",
   "writer.studio.tools.improve.noSelection": "改善する原稿内のテキストを選択します。",
   "writer.studio.tools.improve.title": "テキストを改善する",
   "writer.studio.tools.plotholes.instruction": "選択したテキスト内の論理的なギャップやプロットの穴を見つけます。",

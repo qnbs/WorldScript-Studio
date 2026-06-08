@@ -27,7 +27,7 @@
   "characters.dossier.refineButton": "AIで絞り込む",
   "characters.dossier.refineLabel": "ポートレートを調整する",
   "characters.dossier.refinePlaceholder": "e.g., '追加 a scar', 'make hair red'",
-  "characters.dossier.title": "関係書類: {{名前}}",
+  "characters.dossier.title": "関係書類: {{name}}",
   "characters.edit.appearance": "外観",
   "characters.edit.arc": "キャラクター Arc",
   "characters.edit.backstory": "バックストーリー",

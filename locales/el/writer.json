@@ -1,5 +1,5 @@
 {
-  "writer.chapter.label": "Κεφάλαιο: {{τίτλος}}",
+  "writer.chapter.label": "Κεφάλαιο: {{title}}",
   "writer.context.hide": "Απόκρυψη περιβάλλοντος",
   "writer.context.label": "Συμφραζόμενα",
   "writer.context.show": "Εμφάνιση πλαισίου",
@@ -63,7 +63,7 @@
   "writer.studio.tools.dialogue.title": "Δημιουργία Dialogue",
   "writer.studio.tools.grammarCheck.instruction": "Επιλέξτε κείμενο και κάντε κλικ στο «Γραμματική και Στυλ» για να ελέγξετε και να βελτιώσετε τα σφάλματα και το στυλ (εντοπίζει αυτόματα Αγγλικά/Γερμανικά).",
   "writer.studio.tools.grammarCheck.title": "Γραμματική & Στυλ",
-  "writer.studio.tools.improve.instruction": "Επιλεγμένο κείμενο: {{επιλογή}}",
+  "writer.studio.tools.improve.instruction": "Επιλεγμένο κείμενο: {{selection}}",
   "writer.studio.tools.improve.noSelection": "Επιλέξτε κείμενο στο χειρόγραφο για βελτίωση.",
   "writer.studio.tools.improve.title": "Βελτίωση κειμένου",
   "writer.studio.tools.plotholes.instruction": "Βρείτε λογικά κενά ή τρύπες σχεδίασης στο επιλεγμένο κείμενο.",

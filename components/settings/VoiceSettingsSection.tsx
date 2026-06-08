@@ -190,16 +190,29 @@ export const VoiceSettingsSection: FC = () => {
                   </p>
                 </div>
                 {!voice.wasmModelsReady && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDownloadModelType('stt');
-                      setDownloadModalOpen(true);
-                    }}
-                    className="rounded-md bg-[var(--sc-accent)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--sc-accent-hover)]"
-                  >
-                    {t('settings.voice.downloadModels')}
-                  </button>
+                  // QNBS-v3: Separate STT/TTS buttons — CodeAnt P2-2 fix (TTS path was unreachable)
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDownloadModelType('stt');
+                        setDownloadModalOpen(true);
+                      }}
+                      className="rounded-md bg-[var(--sc-accent)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--sc-accent-hover)]"
+                    >
+                      {t('settings.voice.downloadSttModel')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDownloadModelType('tts');
+                        setDownloadModalOpen(true);
+                      }}
+                      className="rounded-md bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] px-3 py-1.5 text-sm font-medium text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-hover)]"
+                    >
+                      {t('settings.voice.downloadTtsModel')}
+                    </button>
+                  </div>
                 )}
               </div>
             </>

@@ -620,6 +620,8 @@
   "settings.voice.cloudFallback": "Να επιτρέπεται το Cloud STT Fallback",
   "settings.voice.cloudFallbackHint": "Όταν η τοπική αναγνώριση ομιλίας δεν είναι διαθέσιμη, στείλτε ήχο σε παρόχους cloud. Απαιτεί διαδίκτυο.",
   "settings.voice.downloadModels": "Download Models",
+  "settings.voice.downloadSttModel": "Download STT (Whisper)",
+  "settings.voice.downloadTtsModel": "Download TTS (Kokoro)",
   "settings.voice.enableHint": "Ενεργοποιήστε φωνητικές εντολές, υπαγόρευση και ηχητική ανάδραση.",
   "settings.voice.enableLabel": "Ενεργοποίηση φωνητικής υποστήριξης",
   "settings.voice.feedbackLevel": "Επίπεδο σχολίων ήχου",
@@ -647,7 +649,7 @@
   "settings.voice.wasmModelsReady": "Downloaded and ready for local voice processing",
   "voice.modelDownload.cancel": "Ακύρωση",
   "voice.modelDownload.description": "Λήψη μοντέλου {{model}} ({{size}} MB). Αυτό επιτρέπει την τοπική επεξεργασία φωνής χωρίς δρομολόγηση cloud.",
-  "voice.modelDownload.error": "Η λήψη απέτυχε: {{σφάλμα}}",
+  "voice.modelDownload.error": "Η λήψη απέτυχε: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% ολοκληρώθηκε",
   "voice.modelDownload.retry": "Δοκιμάζω πάλι",
   "voice.modelDownload.title": "Λήψη φωνητικού μοντέλου"

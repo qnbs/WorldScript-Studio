@@ -620,6 +620,8 @@
   "settings.voice.cloudFallback": "אפשרו חלופת STT בענן",
   "settings.voice.cloudFallbackHint": "כשזיהוי דיבור מקומי אינו זמין, שלחו אודיו לספקי ענן. דורש אינטרנט.",
   "settings.voice.downloadModels": "Download Models",
+  "settings.voice.downloadSttModel": "Download STT (Whisper)",
+  "settings.voice.downloadTtsModel": "Download TTS (Kokoro)",
   "settings.voice.enableHint": "הפעילו פקודות קוליות, הכתבה ומשוב אודיו.",
   "settings.voice.enableLabel": "הפעלת תמיכה קולית",
   "settings.voice.feedbackLevel": "רמת משוב אודיו",

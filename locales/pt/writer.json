@@ -1,5 +1,5 @@
 {
-  "writer.chapter.label": "Capítulo: {{título}}",
+  "writer.chapter.label": "Capítulo: {{title}}",
   "writer.context.hide": "Ocultar contexto",
   "writer.context.label": "Contexto",
   "writer.context.show": "Mostrar contexto",

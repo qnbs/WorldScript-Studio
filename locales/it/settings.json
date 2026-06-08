@@ -619,6 +619,9 @@
   "settings.voice.autoPunctuationHint": "Aggiungi automaticamente punti e virgole durante la dettatura.",
   "settings.voice.cloudFallback": "Consenti fallback STT cloud",
   "settings.voice.cloudFallbackHint": "Quando il riconoscimento vocale locale non è disponibile, invia audio ai provider cloud. Richiede internet.",
+  "settings.voice.downloadModels": "Scarica modelli",
+  "settings.voice.downloadSttModel": "Download STT (Whisper)",
+  "settings.voice.downloadTtsModel": "Download TTS (Kokoro)",
   "settings.voice.enableHint": "Attiva comandi vocali, dettatura e feedback audio.",
   "settings.voice.enableLabel": "Abilita controllo vocale",
   "settings.voice.feedbackLevel": "Livello di feedback audio",
@@ -641,14 +644,13 @@
   "settings.voice.title": "Controllo vocale",
   "settings.voice.ttsMuted": "Silenzia tutta l’uscita vocale",
   "settings.voice.ttsMutedHint": "Disabilita il text-to-speech mantenendo gli indicatori visivi.",
+  "settings.voice.wasmModels": "Modelli vocali WASM",
+  "settings.voice.wasmModelsNotReady": "Modelli Whisper STT (~42 MB) e Kokoro TTS (~15 MB) non scaricati",
+  "settings.voice.wasmModelsReady": "Scaricati e pronti per il riconoscimento vocale locale",
   "voice.modelDownload.cancel": "Annulla",
   "voice.modelDownload.description": "Download del modello {{model}} ({{size}} MB). Questo abilita l'elaborazione vocale locale senza instradamento cloud.",
   "voice.modelDownload.error": "Download fallito: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% completato",
   "voice.modelDownload.retry": "Riprova",
-  "voice.modelDownload.title": "Download modello vocale",
-  "settings.voice.wasmModels": "Modelli vocali WASM",
-  "settings.voice.wasmModelsReady": "Scaricati e pronti per il riconoscimento vocale locale",
-  "settings.voice.wasmModelsNotReady": "Modelli Whisper STT (~42 MB) e Kokoro TTS (~15 MB) non scaricati",
-  "settings.voice.downloadModels": "Scarica modelli"
+  "voice.modelDownload.title": "Download modello vocale"
 }

@@ -502,7 +502,10 @@ export class VoiceCommandService {
    * QNBS-v3: P1-2 — Download WASM voice models (Whisper STT + Kokoro TTS).
    * Called from VoiceModelDownloadModal when enableVoiceWasm is toggled.
    */
-  async downloadVoiceModels(modelType: 'stt' | 'tts'): Promise<void> {
+  // QNBS-v3: P1-2 / CodeAnt P2-3 — signal allows VoiceModelDownloadModal cancel to abort mid-download
+  async downloadVoiceModels(modelType: 'stt' | 'tts', signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return;
+
     const modelId = modelType === 'stt' ? 'Xenova/whisper-tiny.en' : 'onnxruntime-community/kokoro';
 
     // QNBS-v3: Trigger model download via transformers pipeline warm-up.
@@ -517,6 +520,8 @@ export class VoiceCommandService {
       if (typedEnv.backends?.onnx?.wasm) {
         typedEnv.backends.onnx.wasm.proxy = false;
       }
+
+      if (signal?.aborted) return;
 
       // Report initial progress
       this.d(
@@ -533,10 +538,11 @@ export class VoiceCommandService {
         opts: unknown,
       ) => Promise<unknown>;
 
-      // QNBS-v3: Progress callback for download status
+      // QNBS-v3: Progress callback — guard with aborted check to avoid stale state after cancel
       const pipe = await createPipeline(task, modelId, {
         dtype: 'q8',
         onProgress: (progress: unknown) => {
+          if (signal?.aborted) return;
           const p = progress as { progress?: number; loaded?: number; total?: number };
           const pct = p.progress ?? (p.loaded && p.total ? p.loaded / p.total : 0);
           this.d(
@@ -546,6 +552,13 @@ export class VoiceCommandService {
           );
         },
       });
+
+      if (signal?.aborted) {
+        if (pipe && typeof (pipe as { dispose?: () => void }).dispose === 'function') {
+          (pipe as { dispose: () => void }).dispose();
+        }
+        return;
+      }
 
       // Mark complete
       this.d(
@@ -562,6 +575,7 @@ export class VoiceCommandService {
 
       logger.info(`[VoiceCommandService] ${modelType.toUpperCase()} model downloaded successfully`);
     } catch (err) {
+      if (signal?.aborted) return;
       logger.error(`[VoiceCommandService] Model download failed:`, err);
       this.d(
         settingsActions.setVoiceSettings({
@@ -590,10 +604,14 @@ export function getVoiceService(config?: Partial<VoiceServiceConfig>): VoiceComm
 /**
  * QNBS-v3: P1-2 — Convenience wrapper for VoiceModelDownloadModal.
  * Downloads WASM voice models via the singleton instance.
+ * Accepts an optional AbortSignal so the modal cancel button can abort mid-download.
  */
-export async function downloadVoiceModels(modelType: 'stt' | 'tts'): Promise<void> {
+export async function downloadVoiceModels(
+  modelType: 'stt' | 'tts',
+  signal?: AbortSignal,
+): Promise<void> {
   const service = getVoiceService();
-  await service.downloadVoiceModels(modelType);
+  await service.downloadVoiceModels(modelType, signal);
 }
 
 export function resetVoiceService(): void {

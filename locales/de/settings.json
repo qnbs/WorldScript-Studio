@@ -619,6 +619,9 @@
   "settings.voice.autoPunctuationHint": "Automatisch Punkte und Kommas beim Diktieren einfügen.",
   "settings.voice.cloudFallback": "Cloud-STT-Fallback erlauben",
   "settings.voice.cloudFallbackHint": "Wenn lokale Spracherkennung nicht verfügbar ist, Audio an Cloud-Anbieter senden. Erfordert Internet.",
+  "settings.voice.downloadModels": "Modelle herunterladen",
+  "settings.voice.downloadSttModel": "Download STT (Whisper)",
+  "settings.voice.downloadTtsModel": "Download TTS (Kokoro)",
   "settings.voice.enableHint": "Aktiviert Sprachbefehle, Diktat und akustisches Feedback.",
   "settings.voice.enableLabel": "Sprachunterstützung aktivieren",
   "settings.voice.feedbackLevel": "Audio-Feedback-Stufe",
@@ -641,14 +644,13 @@
   "settings.voice.title": "Vollständige Sprachunterstützung",
   "settings.voice.ttsMuted": "Alle Sprachausgabe stummschalten",
   "settings.voice.ttsMutedHint": "Text-zu-Sprache deaktivieren, während visuelle Indikatoren erhalten bleiben.",
+  "settings.voice.wasmModels": "WASM Sprachmodelle",
+  "settings.voice.wasmModelsNotReady": "Whisper STT (~42 MB) und Kokoro TTS (~15 MB) Modelle nicht heruntergeladen",
+  "settings.voice.wasmModelsReady": "Heruntergeladen und bereit für lokale Sprachverarbeitung",
   "voice.modelDownload.cancel": "Abbrechen",
   "voice.modelDownload.description": "Lade {{model}}-Modell ({{size}} MB) herunter. Dies ermöglicht lokale Sprachverarbeitung ohne Cloud-Routing.",
   "voice.modelDownload.error": "Download fehlgeschlagen: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% abgeschlossen",
   "voice.modelDownload.retry": "Wiederholen",
-  "voice.modelDownload.title": "Sprachmodell-Download",
-  "settings.voice.wasmModels": "WASM Sprachmodelle",
-  "settings.voice.wasmModelsReady": "Heruntergeladen und bereit für lokale Sprachverarbeitung",
-  "settings.voice.wasmModelsNotReady": "Whisper STT (~42 MB) und Kokoro TTS (~15 MB) Modelle nicht heruntergeladen",
-  "settings.voice.downloadModels": "Modelle herunterladen"
+  "voice.modelDownload.title": "Sprachmodell-Download"
 }

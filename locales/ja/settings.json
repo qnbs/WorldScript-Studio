@@ -620,6 +620,8 @@
   "settings.voice.cloudFallback": "クラウド STT フォールバックを許可する",
   "settings.voice.cloudFallbackHint": "ローカルの音声認識が利用できない場合は、音声をクラウド プロバイダーに送信します。インターネットが必要です。",
   "settings.voice.downloadModels": "Download Models",
+  "settings.voice.downloadSttModel": "Download STT (Whisper)",
+  "settings.voice.downloadTtsModel": "Download TTS (Kokoro)",
   "settings.voice.enableHint": "音声コマンド、ディクテーション、音声フィードバックを有効にします。",
   "settings.voice.enableLabel": "音声サポートを有効にする",
   "settings.voice.feedbackLevel": "オーディオフィードバックレベル",
@@ -648,7 +650,7 @@
   "voice.modelDownload.cancel": "キャンセル",
   "voice.modelDownload.description": "{{model}} モデルをダウンロードしています ({{size}} MB)。これにより、クラウド ルーティングを使用せずにローカル音声処理が可能になります。",
   "voice.modelDownload.error": "ダウンロードに失敗しました: {{error}}",
-  "voice.modelDownload.progress": "{{パーセント}}% 完了",
+  "voice.modelDownload.progress": "{{percent}}% 完了",
   "voice.modelDownload.retry": "リトライ",
   "voice.modelDownload.title": "音声モデルのダウンロード"
 }

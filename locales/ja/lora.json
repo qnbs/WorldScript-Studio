@@ -22,7 +22,7 @@
   "lora.errors.cloudBlocked": "クラウドでホストされているモデルはトレーニングに使用できません。ローカル モデルを選択します。",
   "lora.errors.insufficientVram": "このプリセットには VRAM が不十分です。このプリセットには {{required}} GB が必要です。",
   "lora.errors.pythonNotFound": "Python 3 が見つかりません。 Python ≥ 3.10 をインストールし、PATH に追加します。",
-  "lora.errors.trainingFailed": "トレーニングが失敗しました: {{メッセージ}}",
+  "lora.errors.trainingFailed": "トレーニングが失敗しました: {{message}}",
   "lora.evaluation.adapted": "スタイルに合わせた",
   "lora.evaluation.base": "ベースモデル",
   "lora.evaluation.baseline": "ベースライン",

@@ -28,7 +28,7 @@
   "manuscript.inspector.aiWorkingStatus": "A inteligência artificial está trabalhando a seu pedido.",
   "manuscript.inspector.charCount": "Personagem Count",
   "manuscript.inspector.readTime": "Husa. Tempo de leitura",
-  "manuscript.inspector.readTimeValue": "~{{tempo}} min",
+  "manuscript.inspector.readTimeValue": "~{{time}} min",
   "manuscript.inspector.regionAriaLabel": "Project details and IA assistant tools",
   "manuscript.inspector.statsTitle": "Estatísticas da seção",
   "manuscript.inspector.title": "Inspetor",

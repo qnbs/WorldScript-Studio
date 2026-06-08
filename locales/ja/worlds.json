@@ -10,7 +10,7 @@
   "worlds.atlas.refineButton": "AIで絞り込む",
   "worlds.atlas.refineLabel": "雰囲気イメージを洗練する",
   "worlds.atlas.refinePlaceholder": "e.g., '追加 a second moon', 'make it winter'",
-  "worlds.atlas.title": "アトラス: {{名前}}",
+  "worlds.atlas.title": "アトラス: {{name}}",
   "worlds.deleteConfirm": "このワールドを削除してもよろしいですか?この操作は元に戻すことができません。",
   "worlds.deleteLabel": "削除 {{name}}",
   "worlds.description": "作成 and manage the settings of your story. Click a card to open the atlas.",
