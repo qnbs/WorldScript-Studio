@@ -111,8 +111,14 @@ describe('CloudSyncBackend', () => {
     expect(result).toBeNull();
   });
 
-  it('loadProject decrypts and returns data', async () => {
-    mockGet.mockResolvedValueOnce(JSON.stringify({ id: 'proj-abc', title: 'Story' }));
+  it('loadProject decrypts and returns data (LWW-wrapped payload)', async () => {
+    // QNBS-v3: P2-1 — stored format is CloudSyncPayload<T> since LWW was added
+    mockGet.mockResolvedValueOnce(
+      JSON.stringify({
+        data: { id: 'proj-abc', title: 'Story' },
+        meta: { lastModified: 1000, deviceId: 'test-device', version: 1 },
+      }),
+    );
     const backend = makeBackend();
     const result = await backend.loadProject('proj-abc');
     expect(result?.title).toBe('Story');
@@ -191,5 +197,36 @@ describe('CloudSyncBackend', () => {
   it('saveApiKey throws (API keys are local-only)', async () => {
     const backend = makeBackend();
     await expect(backend.saveApiKey('openai', 'key')).rejects.toThrow('API keys');
+  });
+
+  // --- LWW conflict resolution (P2-1) ---
+
+  it('saveProject wraps data in CloudSyncPayload envelope with meta', async () => {
+    const backend = makeBackend();
+    await backend.saveProject({
+      present: {
+        data: { id: 'p1', title: 'T', sections: [] } as unknown as ReturnType<typeof Object>,
+      },
+    } as Parameters<typeof backend.saveProject>[0]);
+    expect(mockPut).toHaveBeenCalledOnce();
+    const [, blob] = mockPut.mock.calls[0] as [string, string];
+    const payload = JSON.parse(blob) as {
+      data: unknown;
+      meta: { lastModified: number; deviceId: string; version: number };
+    };
+    // QNBS-v3: verify meta fields exist (LWW envelope)
+    expect(payload.meta).toBeDefined();
+    expect(typeof payload.meta.lastModified).toBe('number');
+    expect(typeof payload.meta.deviceId).toBe('string');
+    expect(payload.meta.version).toBe(1);
+    expect(payload.data).toBeDefined();
+  });
+
+  it('loadWithMetadata returns null for missing key', async () => {
+    mockGet.mockResolvedValueOnce(null);
+    const backend = makeBackend();
+    // loadProject delegates to loadWithMetadata
+    const result = await backend.loadProject('missing-project');
+    expect(result).toBeNull();
   });
 });

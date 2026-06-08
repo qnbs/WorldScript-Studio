@@ -4,6 +4,7 @@
  */
 
 import type { AppDispatch, RootState } from '../../app/store';
+import { settingsActions } from '../../features/settings/settingsSlice';
 import {
   appendVoiceTranscript,
   setActiveSttEngine,
@@ -494,6 +495,97 @@ export class VoiceCommandService {
   resetOnboarding(): void {
     this.d(setVoiceOnboardingComplete(false));
   }
+
+  // ── Voice WASM Model Download ───────────────────────────────────────────────
+
+  /**
+   * QNBS-v3: P1-2 — Download WASM voice models (Whisper STT + Kokoro TTS).
+   * Called from VoiceModelDownloadModal when enableVoiceWasm is toggled.
+   */
+  // QNBS-v3: P1-2 / CodeAnt P2-3 — signal allows VoiceModelDownloadModal cancel to abort mid-download
+  async downloadVoiceModels(modelType: 'stt' | 'tts', signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return;
+
+    const modelId = modelType === 'stt' ? 'Xenova/whisper-tiny.en' : 'onnxruntime-community/kokoro';
+
+    // QNBS-v3: Trigger model download via transformers pipeline warm-up.
+    // This forces the model to be fetched and cached in browser storage.
+    try {
+      const { pipeline, env } = await import('@huggingface/transformers');
+      // Disable WASM proxy for direct inline execution
+      interface XenovaEnv {
+        backends?: { onnx?: { wasm?: { proxy?: boolean } } };
+      }
+      const typedEnv = env as unknown as XenovaEnv;
+      if (typedEnv.backends?.onnx?.wasm) {
+        typedEnv.backends.onnx.wasm.proxy = false;
+      }
+
+      if (signal?.aborted) return;
+
+      // Report initial progress
+      this.d(
+        settingsActions.setVoiceSettings({
+          wasmModelDownloadProgress: 0.1,
+        }),
+      );
+
+      // Create pipeline to trigger model download
+      const task = modelType === 'stt' ? 'automatic-speech-recognition' : 'text-to-speech';
+      const createPipeline = pipeline as (
+        task: string,
+        model: string,
+        opts: unknown,
+      ) => Promise<unknown>;
+
+      // QNBS-v3: Progress callback — guard with aborted check to avoid stale state after cancel
+      const pipe = await createPipeline(task, modelId, {
+        dtype: 'q8',
+        onProgress: (progress: unknown) => {
+          if (signal?.aborted) return;
+          const p = progress as { progress?: number; loaded?: number; total?: number };
+          const pct = p.progress ?? (p.loaded && p.total ? p.loaded / p.total : 0);
+          this.d(
+            settingsActions.setVoiceSettings({
+              wasmModelDownloadProgress: Math.min(0.95, pct),
+            }),
+          );
+        },
+      });
+
+      if (signal?.aborted) {
+        if (pipe && typeof (pipe as { dispose?: () => void }).dispose === 'function') {
+          (pipe as { dispose: () => void }).dispose();
+        }
+        return;
+      }
+
+      // Mark complete
+      this.d(
+        settingsActions.setVoiceSettings({
+          wasmModelDownloadProgress: 1.0,
+          wasmModelsReady: true,
+        }),
+      );
+
+      // Dispose pipeline - it will be recreated on actual use
+      if (pipe && typeof (pipe as { dispose?: () => void }).dispose === 'function') {
+        (pipe as { dispose: () => void }).dispose();
+      }
+
+      logger.info(`[VoiceCommandService] ${modelType.toUpperCase()} model downloaded successfully`);
+    } catch (err) {
+      if (signal?.aborted) return;
+      logger.error(`[VoiceCommandService] Model download failed:`, err);
+      this.d(
+        settingsActions.setVoiceSettings({
+          wasmModelDownloadProgress: 0,
+          voiceWasmDownloadError: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      throw err;
+    }
+  }
 }
 
 // ── Singleton ────────────────────────────────────────────────────────────────
@@ -507,6 +599,19 @@ export function getVoiceService(config?: Partial<VoiceServiceConfig>): VoiceComm
     voiceServiceInstance.updateConfig(config);
   }
   return voiceServiceInstance;
+}
+
+/**
+ * QNBS-v3: P1-2 — Convenience wrapper for VoiceModelDownloadModal.
+ * Downloads WASM voice models via the singleton instance.
+ * Accepts an optional AbortSignal so the modal cancel button can abort mid-download.
+ */
+export async function downloadVoiceModels(
+  modelType: 'stt' | 'tts',
+  signal?: AbortSignal,
+): Promise<void> {
+  const service = getVoiceService();
+  await service.downloadVoiceModels(modelType, signal);
 }
 
 export function resetVoiceService(): void {

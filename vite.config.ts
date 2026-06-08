@@ -57,18 +57,20 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'public',
       filename: 'sw.js',
+      // QNBS-v3: inlineDynamicImports: false prevents dynamic imports from being inlined into the SW bundle
+      // (Workbox 7.x uses this property; VitePWA will warn but it's the correct option)
       injectManifest: {
-        // Default Workbox limit is 2 MiB; onnx/transformers vendor chunk exceeds it (CI build fails otherwise).
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: [
           '**/*.{js,css,html,svg,ico,woff,woff2,png,webp}',
           'community-templates/**/*.json',
           'locales/**/bundle.json',
         ],
-        // QNBS-v3: Exclude DuckDB, WebLLM, and voice WASM chunks from SW precache — loaded lazily when flag=on.
+        // QNBS-v3: Exclude DuckDB, WebLLM, AI-Core, and voice WASM chunks from SW precache — loaded lazily when flag=on.
         globIgnores: [
           '**/vendor-duckdb*',
           '**/vendor-webllm*',
+          '**/vendor-ai-core*',
           '**/vendor-voice-wasm*',
           '**/*.wasm',
         ],
@@ -120,7 +122,7 @@ export default defineConfig({
       resolveDependencies: (_filename: string, deps: string[]) =>
         deps.filter(
           (d) =>
-            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx|vendor-webllm|vendor-voice-wasm/.test(
+            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx|vendor-webllm|vendor-voice-wasm|vendor-ai-core/.test(
               d,
             ),
         ),
@@ -138,66 +140,45 @@ export default defineConfig({
 
         // Code splitting for better load times
         manualChunks: (id) => {
+          // QNBS-v3: Workspace packages - handle before node_modules check
+          // @domain/ai-core contains WebLLM/ONNX/Transformers which are ~6 MB combined
+          // Match workspace source path and resolved pnpm paths
+          if (
+            id.includes('packages/ai-core') ||
+            id.includes('.pnpm/@domain+ai-core') ||
+            id.includes('.pnpm/@mlc-ai+web-llm') ||
+            id.includes('.pnpm/@huggingface+transformers') ||
+            id.includes('.pnpm/onnxruntime-web') ||
+            id.includes('node_modules/@mlc-ai/web-llm') ||
+            id.includes('node_modules/@huggingface/transformers') ||
+            id.includes('node_modules/onnxruntime-web')
+          ) {
+            return 'vendor-ai-core';
+          }
+          if (id.includes('packages/collab-transport')) {
+            return 'collaboration-vendor';
+          }
+          if (id.includes('packages/worker-bus')) {
+            return 'worker-bus';
+          }
+          if (id.includes('packages/ui')) {
+            return 'ui-vendor';
+          }
+
+          // QNBS-v3: Scene board chunk
           if (id.includes('components/scene-board/') || id.includes('SceneBoardView')) {
             return 'plot-board';
           }
-          if (!id?.includes('node_modules')) return undefined;
-          if (id.includes('/react-dom/') || id.includes('/react/')) {
-            return 'react-vendor';
-          }
-          if (
-            id.includes('@reduxjs') ||
-            id.includes('/react-redux/') ||
-            id.includes('/redux-undo/')
-          ) {
-            return 'redux-vendor';
-          }
-          if (id.includes('@google/genai')) {
-            return 'ai-vendor';
-          }
-          // QNBS-v3: Vercel AI SDK + provider packages bundled together, analogous to @google/genai.
-          if (
-            id.includes('node_modules/ai/') ||
-            id.includes('/node_modules/ai/') ||
-            id.includes('@ai-sdk/')
-          ) {
-            return 'ai-sdk-vendor';
-          }
-          if (id.includes('y-webrtc') || id.includes('yjs')) {
-            return 'collaboration-vendor';
-          }
-          if (id.includes('@dnd-kit') || id.includes('/dnd-kit/')) {
-            return 'interaction-vendor';
-          }
-          if (id.includes('recharts') || id.includes('react-force-graph-2d')) {
-            return 'data-vendor';
-          }
-          if (id.includes('/jspdf/')) {
-            return 'export-vendor-pdf';
-          }
-          if (id.includes('/docx/') || id.includes('/jszip/') || id.includes('mammoth')) {
-            return 'export-vendor-docx-ebook';
-          }
-          // QNBS-v3: onnx/transformers exceed Workbox 8 MiB SW cache limit — separate chunk prevents exclusion.
-          if (id.includes('onnxruntime-web') || id.includes('@huggingface/transformers')) {
-            return 'vendor-ai-onnx';
-          }
-          // QNBS-v3: DuckDB-WASM bundle is ~2 MB gzip; isolate so SW cache exclusion glob matches vendor-duckdb*.
-          if (id.includes('@duckdb/duckdb-wasm')) {
-            return 'vendor-duckdb';
-          }
-          // QNBS-v3: WebLLM is ~6 MB — isolate to prevent OOM during Vercel build and exclude from SW precache.
-          if (id.includes('@mlc-ai/web-llm')) {
-            return 'vendor-webllm';
-          }
-          // QNBS-v3: Voice WASM engines (WasmSttEngine, SileroVadEngine) — lazy-loaded when enableVoiceWasm=on.
+
+          // QNBS-v3: Voice WASM engines - lazy-loaded when enableVoiceWasm=on
           if (
             id.includes('services/voice/wasmSttEngine') ||
             id.includes('services/voice/sileroVadEngine')
           ) {
             return 'vendor-voice-wasm';
           }
-          // QNBS-v3: LoRA feature chunk — lazy-loaded, no heavy training libs (training is Python sidecar).
+
+          // QNBS-v3: LoRA feature chunk - lazy-loaded
           if (
             id.includes('features/lora/') ||
             id.includes('components/lora/') ||
@@ -205,10 +186,71 @@ export default defineConfig({
           ) {
             return 'lora-feature';
           }
-          // QNBS-v3: Plugin worker — isolated execution context for sandboxed plugins (P0-2).
+
+          // QNBS-v3: Plugin worker - isolated execution context
           if (id.includes('workers/plugin.worker')) {
             return 'plugin-worker';
           }
+
+          // QNBS-v3: Only apply node_modules chunking for non-workspace packages.
+          // Workspace packages (packages/*) are handled above.
+          if (!id?.includes('node_modules')) return undefined;
+
+          // React vendor
+          if (id.includes('/react-dom/') || id.includes('/react/')) {
+            return 'react-vendor';
+          }
+
+          // Redux vendor
+          if (
+            id.includes('@reduxjs') ||
+            id.includes('/react-redux/') ||
+            id.includes('/redux-undo/')
+          ) {
+            return 'redux-vendor';
+          }
+
+          // AI vendors
+          if (id.includes('@google/genai')) {
+            return 'ai-vendor';
+          }
+          // QNBS-v3: Vercel AI SDK + provider packages bundled together
+          if (
+            id.includes('node_modules/ai/') ||
+            id.includes('/node_modules/ai/') ||
+            id.includes('@ai-sdk/')
+          ) {
+            return 'ai-sdk-vendor';
+          }
+
+          // Collaboration vendor (yjs, y-webrtc)
+          if (id.includes('y-webrtc') || id.includes('yjs')) {
+            return 'collaboration-vendor';
+          }
+
+          // Interaction vendor
+          if (id.includes('@dnd-kit') || id.includes('/dnd-kit/')) {
+            return 'interaction-vendor';
+          }
+
+          // Data vendor
+          if (id.includes('recharts') || id.includes('react-force-graph-2d')) {
+            return 'data-vendor';
+          }
+
+          // Export vendors
+          if (id.includes('/jspdf/')) {
+            return 'export-vendor-pdf';
+          }
+          if (id.includes('/docx/') || id.includes('/jszip/') || id.includes('mammoth')) {
+            return 'export-vendor-docx-ebook';
+          }
+
+          // QNBS-v3: DuckDB-WASM bundle is ~2 MB gzip; isolate for SW cache exclusion
+          if (id.includes('@duckdb/duckdb-wasm')) {
+            return 'vendor-duckdb';
+          }
+
           return undefined;
         },
       },

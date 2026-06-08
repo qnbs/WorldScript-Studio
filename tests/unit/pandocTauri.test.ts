@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tryPandocMarkdownToEpub } from '../../services/pandocTauri';
 
+// QNBS-v3: Mock must be at top level per vitest requirements
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
 describe('pandocTauri', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -23,10 +28,9 @@ describe('pandocTauri', () => {
   });
 
   it('returns null when Tauri invoke throws', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
     vi.stubGlobal('window', { __TAURI__: {} });
-    vi.mock('@tauri-apps/api/core', () => ({
-      invoke: vi.fn().mockRejectedValue(new Error('Not available')),
-    }));
+    (invoke as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Not available'));
     const result = await tryPandocMarkdownToEpub('# Hello');
     expect(result).toBeNull();
   });

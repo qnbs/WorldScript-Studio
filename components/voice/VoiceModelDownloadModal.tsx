@@ -3,7 +3,7 @@
  * QNBS-v3: P0-5 — Whisper STT + Kokoro TTS model download with cancel/retry.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -33,17 +33,21 @@ export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadMod
   const progress = useAppSelector((s) => s.settings.voice.wasmModelDownloadProgress ?? 0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // QNBS-v3: CodeAnt P2-3 — AbortController lets cancel button stop an in-flight download
+  const abortRef = useRef<AbortController | null>(null);
 
   const handleDownload = useCallback(async () => {
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setIsDownloading(true);
     setError(null);
 
     try {
-      // Trigger model download via voice service
-      // QNBS-v3: P0-5 — downloadVoiceModels to be implemented in voiceCommandService
-      // Placeholder: actual download would be triggered here
-      // const { downloadVoiceModels } = await import('../../services/voice/voiceCommandService');
-      // await downloadVoiceModels(modelType);
+      // Trigger model download via voice service, passing the abort signal
+      const { downloadVoiceModels } = await import('../../services/voice/voiceCommandService');
+      await downloadVoiceModels(modelType, ctrl.signal);
+
+      if (ctrl.signal.aborted) return;
 
       dispatch(
         settingsActions.setVoiceSettings({
@@ -52,14 +56,20 @@ export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadMod
       );
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!ctrl.signal.aborted) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setIsDownloading(false);
+      if (!ctrl.signal.aborted) {
+        setIsDownloading(false);
+      }
     }
-  }, [dispatch, onClose]);
+  }, [dispatch, onClose, modelType]);
 
   const handleCancel = useCallback(() => {
-    // Cancel download logic would be implemented in voiceCommandService
+    // Abort any in-flight download before closing
+    abortRef.current?.abort();
+    abortRef.current = null;
     setIsDownloading(false);
     onClose();
   }, [onClose]);

@@ -634,6 +634,8 @@ export interface VoiceSettings {
   wasmModelDownloadProgress?: number;
   /** WASM voice models ready for use */
   wasmModelsReady?: boolean;
+  /** WASM voice model download error message */
+  voiceWasmDownloadError?: string;
 }
 
 export interface Settings {

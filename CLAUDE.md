@@ -116,8 +116,8 @@ services/         → External adapters; key sub-dirs:
 packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui,
                      collab-transport (vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption),
                      worker-bus (typed worker pool, circuit breakers, dead-letter queue — see § WorkerBus below)
-locales/          → i18n source JSON (de/en/es/fr/it/ar/he × 15 modules); runtime: public/locales/<lang>/bundle.json
-                     ar/ + he/ — locale stubs added in B-5 (RTL beta); full translation content is v2.0
+locales/          → i18n source JSON (de/en/es/fr/it/ar/he/el/ja/pt/zh × 15 modules); runtime: public/locales/<lang>/bundle.json
+                     ar/ + he/ — RTL stubs behind enableRtlLayout; el/ja/pt/zh — Beta locales (P1-5)
 tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
 types/            → Supplemental TypeScript definitions (duckdb-wasm-worker.d.ts, tauri-plugins.d.ts)
 types.ts          → Core shared interfaces and types (root level)
@@ -286,9 +286,9 @@ The production build uses **rolldown** (not esbuild/rollup), and its behavior di
 
 ### Feature Flags
 
-Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (20 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2` (@deprecated — v1 board removed in v1.6; retained in slice for localStorage compat; hidden from Settings UI). All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`, 19 visible toggles). Do not use scattered `if (true)` hacks.
+Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (21 flags). Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2` (@deprecated — v1 board removed in v1.6; retained in slice for localStorage compat; hidden from Settings UI). All others default **off**. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
 
-Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`, `enableStoryBibleAdvanced`, `enableBinderResearch`, `enableCompileWizard`, `enableProjectHealthScore`, `enableAppHealthPanel`. **B-series (all off):** `enableIdbAtRestEncryption` (B-1, passphrase UX complete — enable via Settings › Privacy), `enableVoiceWasm` (B-2, model download UI not wired), `enableRtlLayout` (B-5, ar/he stubs only). **Stub/future (all off):** `enableCloudSync`, `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`.
+Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`, `enableStoryBibleAdvanced`, `enableBinderResearch`, `enableCompileWizard`, `enableProjectHealthScore`, `enableAppHealthPanel`. **B-series (all off):** `enableIdbAtRestEncryption` (B-1, passphrase UX complete — enable via Settings › Privacy), `enableVoiceWasm` (B-2, Whisper model download UI shipped in P1-2), `enableRtlLayout` (B-5, ar/he stubs only). **Edge-AI (all off):** `enableAdaptiveAiEngine`, `enableWebnnInference`, `enableComputeShaders`, `enableWorkerBusV2`, `enableRustCompute`. **Stub/future (all off):** `enableLoraAdapters`, `enablePluginSystem`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`. Note: `enableCloudSync` was **retired** in v1.20 (no UI shipped; `CloudSyncBackend.create()` requires explicit-consent boolean instead).
 
 ### Command Center & shortcuts
 
@@ -300,7 +300,7 @@ Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`, `ena
 
 ### i18n
 
-Custom React Context in `I18nContext.tsx` — not i18next. Locale files for de, en, es, fr, it (15 modules merged into `public/locales/<lang>/bundle.json` — rebuilt by `pnpm run i18n:bundle` or auto via `pnpm run i18n:check`). All user-facing strings must use `t('key.path')` from `useTranslation()`. New keys: add to **all five** locale trees (`node scripts/check-i18n-keys.mjs --fix`), then `pnpm run i18n:bundle`.
+Custom React Context in `I18nContext.tsx` — not i18next. Source locales: **de, en, es, fr, it** (core), **ar, he** (RTL stubs, B-5), **el, ja, pt, zh** (Beta, P1-5). All 12 ship as `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` or auto via `pnpm run i18n:check`. All user-facing strings must use `t('key.path')` from `useTranslation()`. New keys: add to **all 12** locale trees (`node scripts/check-i18n-keys.mjs --fix`), then `pnpm run i18n:bundle`. The `/i18n-key` skill targets the **5 core** locales only; update Beta/RTL locales manually afterward.
 
 **RTL stubs (B-5):** `locales/ar/` + `locales/he/` are English-fallback stubs behind `enableRtlLayout`. Full content is v2.0 community task.
 
@@ -395,7 +395,7 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 **useAppSelectorShallow with plotBoard:** Include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in mock state. Connections/subplots/tensionOverrides are in `project.present.data` — mock via `selectPlotConnections: () => []` etc. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines.
 
-**FeatureFlagsState mocks:** Always include ALL 20 flags (TypeScript strict rejects partial). B-series to include: `enableIdbAtRestEncryption: false, enableVoiceWasm: false`.
+**FeatureFlagsState mocks:** Always include ALL 21 flags (TypeScript strict rejects partial). Include the edge-AI flags: `enableAdaptiveAiEngine: false, enableWebnnInference: false, enableComputeShaders: false, enableWorkerBusV2: false, enableRustCompute: false`. B-series to include: `enableIdbAtRestEncryption: false, enableVoiceWasm: false`.
 
 **ConnectionLayer test IDs:** Connection `<g>` elements use `data-testid="connection-group"` — query by testid, not role.
 
@@ -454,7 +454,7 @@ Same pattern applies to `LanguageSelector`.
 
 **Web Speech API fallbacks:** `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` — zero downloads, all modern browsers.
 
-**WASM scaffolds (B-2, gated behind `enableVoiceWasm`):** `WasmSttEngine` (Whisper.cpp WASM) + `SileroVadEngine` (Silero VAD v4 via ONNX). Model download UI is Phase 3.
+**WASM scaffolds (B-2, gated behind `enableVoiceWasm`):** `WasmSttEngine` (Whisper.cpp WASM) + `SileroVadEngine` (Silero VAD v4 via ONNX). Model download UI shipped in P1-2 — `VoiceModelDownloadModal` in `components/voice/`; triggered from `VoiceSettingsSection`. `VoiceCommandService.preloadModel(modelType)` handles the download pipeline.
 
 **Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact Map match → fuzzy Jaccard + keyword bonus → slot extraction. Character/section/world names injected from Redux state.
 
@@ -478,7 +478,7 @@ Reference plugins: `wordCountOverlay.plugin.ts`, `sceneAppender.plugin.ts`. Gate
 
 ### Cloud Sync (Cloudflare R2)
 
-`services/cloudSync/` — `cloudSyncBackend.ts` (StorageBackend, API keys never sent to cloud), `cloudSyncClient.ts` (fetch + Bearer token), `cloudSyncEncryption.ts` (AES-256-GCM E2E). Gate: `enableCloudSync` flag.
+`services/cloudSync/` — `cloudSyncBackend.ts` (StorageBackend, API keys never sent to cloud), `cloudSyncClient.ts` (fetch + Bearer token), `cloudSyncEncryption.ts` (AES-256-GCM E2E). The `enableCloudSync` feature flag was **retired** in v1.20; use `CloudSyncBackend.create(..., explicitConsent = true)` as the activation gate. This service is not yet wired into `storageService` (v2.0 feature).
 
 ### LoRA Adapter Inference
 
@@ -500,7 +500,7 @@ See `AUDIT.md` and `TODO.md` for the full list. Key items:
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries.
 - `workers/inference.worker.ts` — `@huggingface/transformers` v3 (migrated from `@xenova` 2026-05-31); resolved via `tsconfig.json` `paths` alias; if alias breaks, restore `@ts-expect-error`.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
-- **Voice WASM (B-2 scaffold ready):** `wasmSttEngine.ts` + `sileroVadEngine.ts` exist but model download UI not wired. Phase 3: connect to `WasmSttEngine.initialize()`.
+- **Voice WASM (B-2 complete):** `wasmSttEngine.ts` + `sileroVadEngine.ts` + `VoiceModelDownloadModal` all shipped (P1-2). Remaining: full end-to-end integration test coverage for the WASM path.
 - **IDB at-rest encryption (B-1 complete):** Passphrase UX shipped — `IdbUnlockModal` (startup), `PassphraseModal` (set/change/disable in Settings › Privacy). Flag `enableIdbAtRestEncryption` may be enabled; actual IDB read/write integration for `idbProjectStore` etc. is a separate Phase 4 task (currently service-layer only).
 
 ## graphify

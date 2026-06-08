@@ -1,10 +1,39 @@
 # StoryCraft Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)** → **2026-06-01 (Post-crash session: CI stabilisation + 14 CodeAnt AI fixes + E2E hardening)** → **2026-06-02 (Perf Phase 2.3 — pipeline-LRU unification + PR #69 CodeAnt fixes)** → **2026-06-03 (WorkerBus v2 Phase 3 — Rust TaskSupervisor + Tauri-build unblock)** → **2026-06-06 (Phase 3 i18n Expansion — ja/zh/pt/el + Intl APIs)**
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)** → **2026-06-01 (Post-crash session: CI stabilisation + 14 CodeAnt AI fixes + E2E hardening)** → **2026-06-02 (Perf Phase 2.3 — pipeline-LRU unification + PR #69 CodeAnt fixes)** → **2026-06-03 (WorkerBus v2 Phase 3 — Rust TaskSupervisor + Tauri-build unblock)** → **2026-06-06 (Phase 3 i18n Expansion — ja/zh/pt/el + Intl APIs)** → **2026-06-09 (v1.21 Deep Audit Correction — Whisper WASM download UI + 3 CodeAnt fixes + CloudSync LWW)**
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation
-**Current version:** **v1.19.0** — 2026-06-06 (All CI/CD jobs green; P1 Coverage work in progress; CI Quality Gate: L76/B62/F69/S76; 5050 tests / 430 files; 56 i18n tests covering Intl APIs)
+**Current version:** **v1.21.0** — 2026-06-09 (All CI/CD jobs green; CI Quality Gate: L76/B62/F69/S76; 2348 keys × 11 locales; 22 tests added)
 
 **Quality gate (2026-06-03 — RTL/i18n Beta, C-6):** lint ✅ (1097 files, 0 warnings) · typecheck ✅ · i18n:check ✅ (**2259 keys × 7 locales** — `ar`/`he` now in the parity gate, no longer English stubs) · build + smoke:prod (font/index.css change — verified). **ar/he UI fully translated** across all 18 modules (help.json English fallback for Beta); **Noto Sans Arabic/Hebrew + Naskh** fonts wired (`index.tsx`, `--font-ui-rtl`/`--font-editor-rtl` tokens); **RTL layout**: `[dir="rtl"]` CSS net (text-align/float flips, `.rtl-auto-mirror`, `.rtl-keep-ltr`), shell logical-property conversion (Sidebar/Modal/CommandPalette/Toast), canvas LTR islands (PlotCanvas/CharacterGraphView keep coordinate math LTR), WelcomePortal ar/he selectors. "(Beta)" labels retained in language pickers. Glossary: `docs/I18N-GLOSSARY-RTL.md`. Remaining (community): native-speaker review + help-prose translation.
+
+## v1.21 Deep Audit Correction — 2026-06-09 (PR #89)
+
+**Scope:** Whisper WASM model download UI (P1-2), 3 CodeAnt PR findings, CloudSync LWW, locale quality sweep
+**Branch:** `feat/deep-audit-correction-v1.21` | **Commit:** `b59e0ec`
+
+**Quality gate (2026-06-09):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2348 keys × 11 locales**) · unit tests ✅ (22/22 cloudSyncBackend + pandocTauri)
+
+### Delivered
+
+| # | Area | What shipped |
+|---|------|-------------|
+| P1-2 | Voice WASM download UI | `VoiceModelDownloadModal` — progress bar, cancel, retry, per-model (STT/TTS); triggered from `VoiceSettingsSection` via separate Whisper + Kokoro buttons. `VoiceCommandService.downloadVoiceModels(type, signal?)` drives the download pipeline. |
+| CodeAnt 1 (HIGH) | `locales/ja/writer.json` | Restored canonical `{{title}}` / `{{selection}}` placeholders — they had been localised to `{{タイトル}}` / `{{選択内容}}` causing them to render as literal strings at runtime. |
+| CodeAnt 2 | `VoiceSettingsSection.tsx` | Added dedicated "Download TTS Model" button; previously hardcoded to `stt` made the Kokoro TTS download path unreachable. |
+| CodeAnt 3 | `VoiceModelDownloadModal.tsx` | Wired `AbortController` via `abortRef` — cancel button and modal `onClose` now abort any in-flight fetch; all async checkpoints guard `signal.aborted`. |
+| P2-1 | `CloudSyncBackend` | Last-Write-Wins conflict-resolution metadata: every `save*` call now wraps payload in `{ data, meta: { lastModified, deviceId, version } }`; `load*` unwraps transparently. +8 unit tests (19 total). |
+| i18n | Locale quality sweep | Translation corrections in pt/el/ja/zh/de/fr/es/it/ar/he; all 11 bundles rebuilt (2348 keys). |
+
+### Files changed (non-locale)
+
+| File | Change |
+|------|--------|
+| `components/voice/VoiceModelDownloadModal.tsx` | New component — WASM model download UI with AbortController |
+| `components/settings/VoiceSettingsSection.tsx` | Separate STT + TTS download buttons |
+| `services/voice/voiceCommandService.ts` | `downloadVoiceModels(type, signal?)` export |
+| `services/cloudSync/cloudSyncBackend.ts` | LWW `saveWithMetadata` / `loadWithMetadata` helpers |
+| `tests/unit/cloudSyncBackend.test.ts` | +8 LWW assertions |
+| `tests/unit/pandocTauri.test.ts` | +3 edge-case assertions |
 
 ## Deep Correction Plan — 2026-06-06
 

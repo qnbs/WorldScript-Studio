@@ -1,6 +1,5 @@
 {
   "portal.back": "Retour",
-  "portal.language.searchPlaceholder": "Rechercher des langues...",
   "portal.demo.chapterContent": "Le brouillard du matin collait aux quais lorsque Lyra déroula la vieille carte. Un cercle à peine lisible marquait le nord-ouest — la tour dont personne ne parlait.\n\nElle rangea le papier et suivit le sentier jusqu’à ce que la grille de fer se dresse devant elle. Le cadenas était tiède au soleil ; le métal, encore froid.",
   "portal.demo.chapterTitle": "Chapitre 1 — Devant la grille",
   "portal.demo.logline": "Un extrait pour essayer plan, manuscrit et espace de travail.",
@@ -18,6 +17,7 @@
   "portal.features.worldbuilding.description": "Dossiers riches, atlas, portraits IA et cartes de relations.",
   "portal.features.worldbuilding.title": "Personnages et mondes",
   "portal.language.groupLabel": "Langue de l'écran d'accueil",
+  "portal.language.searchPlaceholder": "Rechercher des langues...",
   "portal.new.ai.description": "Donnez une idée simple et laissez l’IA construire un plan détaillé.",
   "portal.new.ai.title": "Générer avec l’IA",
   "portal.new.blank.description": "Pour celles et ceux qui savent où ils vont — premier chapitre vide.",
