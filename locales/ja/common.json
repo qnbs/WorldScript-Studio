@@ -148,6 +148,8 @@
   "error.db.invalidState": "内部データベースエラー。ページをリロードしてください。",
   "error.db.quotaExceeded": "ブラウザのストレージがいっぱいです。古いプロジェクトまたはスナップショットを削除してください。",
   "error.db.unknown": "データベースへのアクセス中に不明なエラーが発生しました。",
+  "error.deepLink.title": "Failed to open project file",
+  "error.deepLink.unknown": "Unknown error",
   "error.fileImportError": "ファイルインポートエラー",
   "error.mic.denied": "マイクへのアクセスが拒否されました。ブラウザの設定で許可を与えてください。",
   "error.mic.generic": "音声認識エラー: {{error}}",

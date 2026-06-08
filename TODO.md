@@ -17,6 +17,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **P0-2** — Coverage C-7: 96 neue Tests geschrieben (Ziel 90 übertroffen).
   - LoRA: datasetBuilder (19) + evaluationService (16)
   - Voice: intentEngine (17) + feedbackService (23) + audioNavigator (21)
+- ✅ **P0-4** — Native File Associations + Single-Instance: `.storycraft`/`.scst` extensions registered, deep link handler in `services/tauriDeepLink.ts`, Rust `RunEvent::Opened`/`RunEvent::SecondInstance` handlers in `lib.rs`.
 - 🔄 **P0-3** — Quality Gates stabil: lint ✅ · typecheck ✅ · i18n:check ✅ (2026-06-07). parity:check + bundle:budget + smoke:prod benötigen Build → CI-only auf Low-End. Warte auf nächsten CI-Run für Bestätigung.
 
 ### P1 — AI Resilience & Core Reliability

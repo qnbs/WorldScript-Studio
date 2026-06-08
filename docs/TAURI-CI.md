@@ -119,6 +119,36 @@ Complete these steps once before pushing the first signed release tag:
 | Updater | `docs/TAURI-UPDATER.md` when publishing signed tags |
 | Local CI | Heavy builds optional — `infra/low-end-ci/` act + native `pnpm run ci:quick` |
 | Version UI | Settings shows app version; matches release tag after install |
+| File Associations | `.storycraft` and `.scst` extensions registered; double-click opens project |
+| Single-Instance | Second instance focuses main window + opens file via `RunEvent::SecondInstance` |
+
+## Native File Associations (v1.20)
+
+StoryCraft Studio registers `.storycraft` and `.scst` file extensions for native project opening.
+
+### Configuration
+
+- `tauri.conf.json` → `bundle.fileAssociations` registers both extensions with `role: "Editor"`
+- `tauri.conf.json` → `app.deepLink.protocols` enables `storycraft://` protocol
+- `src-tauri/src/lib.rs` → `RunEvent::Opened` and `RunEvent::SecondInstance` handlers
+- `services/tauriDeepLink.ts` → Frontend event listener for `open-project-file`
+
+### Behavior
+
+1. **Double-click** a `.storycraft` or `.scst` file → App opens (or activates existing instance) and loads the project
+2. **Drag-drop** file onto app icon → Same behavior as double-click
+3. **Second instance** → Main window focused, file opened in existing instance
+4. **Error handling** → Toast notification with error details if file cannot be loaded
+
+### Icon Preparation
+
+Create icons in `icons/` directory:
+- `icons/storycraft-16x16.png` - File icon for Windows/Linux
+- `icons/storycraft-32x32.png` - File icon for Windows/Linux
+- `icons/storycraft-48x48.png` - File icon for Windows/Linux
+- `icons/storycraft-256x256.png` - File icon for Windows/Linux
+
+macOS uses the existing `icons/icon.icns` for file associations.
 
 **Post-release (updater):**
 
