@@ -58,6 +58,7 @@ import {
   hasPassphraseSentinel,
   isIdbEncryptionReady,
 } from './services/storage/storageEncryptionService';
+import { initTauriDeepLink } from './services/tauriDeepLink';
 import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services/tauriMenuService';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
@@ -489,6 +490,17 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     });
     return () => unregisterTauriMenuHandler();
   }, [executeCommand]);
+
+  // QNBS-v3: Tauri deep link handler for native file associations (.storycraft, .scst)
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void initTauriDeepLink(dispatch, t).then((fn) => {
+      cleanup = fn;
+    });
+    return () => {
+      cleanup?.();
+    };
+  }, [dispatch, t]);
 
   const renderView = () => {
     switch (currentView) {

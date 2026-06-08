@@ -158,6 +158,8 @@
   "error.ollama.unreachable": "Ollama no accesible ({{url}}): {{message}}",
   "error.ollama.unreachableHint": "Ollama no accesible ({{url}}). Asegúrate de que Ollama está en ejecución: ollama serve",
   "error.snapshotError": "Error de instantánea",
+  "error.deepLink.title": "Error al abrir el archivo del proyecto",
+  "error.deepLink.unknown": "Error desconocido",
   "export.epubExport": "Exportar EPUB 3.0",
   "export.section": "Sección {{index}}",
   "header.openMenu": "Abrir menú",

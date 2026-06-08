@@ -148,6 +148,8 @@
   "error.db.invalidState": "שגיאה פנימית במסד הנתונים. אנא טענו מחדש את הדף.",
   "error.db.quotaExceeded": "אחסון הדפדפן מלא. אנא מחקו פרויקטים או תמונות מצב ישנים.",
   "error.db.unknown": "שגיאה לא ידועה בעת גישה למסד הנתונים.",
+  "error.deepLink.title": "Failed to open project file",
+  "error.deepLink.unknown": "Unknown error",
   "error.fileImportError": "שגיאת ייבוא קובץ",
   "error.mic.denied": "הגישה למיקרופון נדחתה. אנא העניקו הרשאה בהגדרות הדפדפן שלכם.",
   "error.mic.generic": "שגיאת זיהוי דיבור: {{error}}",

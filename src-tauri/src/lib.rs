@@ -39,6 +39,10 @@ fn install_app_menu(_app: &tauri::App) -> tauri::Result<()> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    // QNBS-v3: Single-instance plugin with deep-link feature handles file associations
+    // The plugin automatically handles CLI args and emits "deep-link://new-url" event
+    .plugin(tauri_plugin_single_instance::Builder::new().build())
+    .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_http::init())
     .plugin(tauri_plugin_dialog::init())

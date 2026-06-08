@@ -148,6 +148,8 @@
   "error.db.invalidState": "Erro interno do banco de dados. Por favor, recarregue a página.",
   "error.db.quotaExceeded": "O armazenamento do navegador está cheio. Exclua projetos ou instantâneos antigos.",
   "error.db.unknown": "Erro desconhecido ao acessar o banco de dados.",
+  "error.deepLink.title": "Failed to open project file",
+  "error.deepLink.unknown": "Unknown error",
   "error.fileImportError": "Erro de importação de arquivo",
   "error.mic.denied": "Acesso ao microfone negado. Por favor, conceda permissão nas configurações do seu navegador.",
   "error.mic.generic": "Erro de reconhecimento de fala: {{error}}",

@@ -57,6 +57,8 @@
   "critic.noResults": "No analysis results yet.",
   "error.fileImportError": "File Import Error",
   "error.snapshotError": "Snapshot Error",
+  "error.deepLink.title": "Failed to open project file",
+  "error.deepLink.unknown": "Unknown error",
   "palette.placeholder": "Type a command or search...",
   "palette.noResults": "No results found.",
   "palette.category.navigation": "Navigation",

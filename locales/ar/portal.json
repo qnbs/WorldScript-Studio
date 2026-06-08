@@ -1,6 +1,5 @@
 {
   "portal.back": "رجوع",
-  "portal.language.searchPlaceholder": "البحث في اللغات...",
   "portal.demo.chapterContent": "تشبّث ضباب الصباح بالأرصفة بينما فردت ليرا خريطة المدينة القديمة. كانت دائرة باهتة تحدّد الركن الشمالي الغربي — البرج الذي لا يذكره أحد.\n\nطوت الورقة وتبعت الممر الضيق حتى ارتفعت أمامها الشبكة الحديدية. كان القفل دافئًا تحت الشمس؛ أما المعدن فظلّ باردًا.",
   "portal.demo.chapterTitle": "الفصل الأول — أمام البوابة",
   "portal.demo.logline": "عيّنة قصيرة لتجربة المخطط والمخطوطة ومساحة العمل.",
@@ -18,6 +17,7 @@
   "portal.features.worldbuilding.description": "Rich dossiers, atlases, AI portraits, and relationship maps.",
   "portal.features.worldbuilding.title": "Characters & Worlds",
   "portal.language.groupLabel": "لغة شاشة الترحيب",
+  "portal.language.searchPlaceholder": "البحث في اللغات...",
   "portal.new.ai.description": "قدّم فكرة بسيطة ودع الذكاء الاصطناعي يبني لك مخطط حبكة مفصّلًا.",
   "portal.new.ai.title": "التوليد بالذكاء الاصطناعي",
   "portal.new.blank.description": "لمن يعرف وجهته. ابدأ بفصل أول فارغ.",
