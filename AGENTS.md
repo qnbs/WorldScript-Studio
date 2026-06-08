@@ -223,6 +223,7 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n + unit tests with coverage
 - Wrap view roots with `components/ui/ViewErrorBoundary.tsx`.
 - File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors.
 - All 19 views are lazy-loaded in `App.tsx` via `React.lazy()`.
+- **Custom Select components** (`Select.tsx`, `LanguageSelector.tsx`): Use `role="listbox"` on dropdown container, `role="option"` on items, `aria-haspopup="listbox"` and `aria-expanded` on trigger button. Mock as native `<select>` in tests for compatibility.
 
 ### Comments
 

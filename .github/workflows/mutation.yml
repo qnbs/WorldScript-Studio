@@ -70,7 +70,7 @@ jobs:
       # === Incremental cache (per module) ===
       - name: Restore Stryker incremental cache
         id: cache-incremental
-        uses: actions/cache@5a3ec84eff280545c4d25ce531d7d5df8141b7b4 # v4.2.3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: reports/stryker-incremental-${{ matrix.name }}.json
           key: stryker-incremental-${{ matrix.name }}-${{ github.sha }}
@@ -124,7 +124,7 @@ jobs:
 
       - name: Upload Stryker report
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: stryker-report-${{ matrix.name }}
           path: reports/mutation/
@@ -145,7 +145,7 @@ jobs:
 
     steps:
       - name: Download all Stryker reports
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392843f41234a28b80 # v4.1.9
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: all-reports
           pattern: stryker-report-*

@@ -20,6 +20,18 @@ const KEY_PREFIX_PROJECT = 'project/';
 const KEY_PREFIX_CODEX = 'codex/';
 const KEY_PREFIX_RAG = 'rag/';
 
+// QNBS-v3: P2-1 — Conflict resolution metadata for Last-Write-Wins
+interface CloudSyncMetadata {
+  lastModified: number;
+  deviceId: string;
+  version: number;
+}
+
+interface CloudSyncPayload<T> {
+  data: T;
+  meta: CloudSyncMetadata;
+}
+
 export class CloudSyncBackend implements StorageBackend {
   private readonly client: CloudSyncClient;
   private readonly encryptionKey: CryptoKey;
@@ -57,19 +69,46 @@ export class CloudSyncBackend implements StorageBackend {
     return decryptCloudPayload<T>(this.encryptionKey, blob);
   }
 
+  // QNBS-v3: P2-1 — Last-Write-Wins conflict resolution helpers
+  private getDeviceId(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  private async saveWithMetadata<T>(key: string, data: T): Promise<void> {
+    const payload: CloudSyncPayload<T> = {
+      data,
+      meta: {
+        lastModified: Date.now(),
+        deviceId: this.getDeviceId(),
+        version: 1,
+      },
+    };
+    const blob = await this.enc(payload);
+    await this.client.put(key, blob);
+  }
+
+  private async loadWithMetadata<T>(key: string): Promise<T | null> {
+    const blob = await this.client.get(key);
+    if (!blob) return null;
+    const payload = await this.dec<CloudSyncPayload<T>>(blob);
+    return payload.data;
+  }
+
   async saveProject(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
     // QNBS-v3: StoryProject has no id; extract it from the SaveProjectEnvelope before flattening.
     const env = project as { present?: { data?: { id?: string } }; data?: { id?: string } };
     const projectId = env?.present?.data?.id ?? env?.data?.id ?? 'default';
-    const blob = await this.enc(flat);
-    await this.client.put(`${KEY_PREFIX_PROJECT}${projectId}`, blob);
+    // QNBS-v3: P2-1 — Use conflict-aware save with metadata
+    await this.saveWithMetadata(`${KEY_PREFIX_PROJECT}${projectId}`, flat);
   }
 
   async loadProject(projectId: string): Promise<StoryProject | null> {
-    const blob = await this.client.get(`${KEY_PREFIX_PROJECT}${projectId}`);
-    if (!blob) return null;
-    return this.dec<StoryProject>(blob);
+    // QNBS-v3: P2-1 — Use conflict-aware load with metadata
+    return this.loadWithMetadata<StoryProject>(`${KEY_PREFIX_PROJECT}${projectId}`);
   }
 
   async listProjects(): Promise<string[]> {
@@ -82,25 +121,23 @@ export class CloudSyncBackend implements StorageBackend {
   }
 
   async saveSettings(settings: Settings): Promise<void> {
-    const blob = await this.enc(settings);
-    await this.client.put(KEY_SETTINGS, blob);
+    // QNBS-v3: P2-1 — Use conflict-aware save with metadata
+    await this.saveWithMetadata(KEY_SETTINGS, settings);
   }
 
   async loadSettings(): Promise<Settings | null> {
-    const blob = await this.client.get(KEY_SETTINGS);
-    if (!blob) return null;
-    return this.dec<Settings>(blob);
+    // QNBS-v3: P2-1 — Use conflict-aware load with metadata
+    return this.loadWithMetadata<Settings>(KEY_SETTINGS);
   }
 
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
-    const blob = await this.enc(codex);
-    await this.client.put(`${KEY_PREFIX_CODEX}${codex.projectId}`, blob);
+    // QNBS-v3: P2-1 — Use conflict-aware save with metadata
+    await this.saveWithMetadata(`${KEY_PREFIX_CODEX}${codex.projectId}`, codex);
   }
 
   async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
-    const blob = await this.client.get(`${KEY_PREFIX_CODEX}${projectId}`);
-    if (!blob) return null;
-    return this.dec<StoryCodex>(blob);
+    // QNBS-v3: P2-1 — Use conflict-aware load with metadata
+    return this.loadWithMetadata<StoryCodex>(`${KEY_PREFIX_CODEX}${projectId}`);
   }
 
   async deleteStoryCodex(projectId: string): Promise<void> {
@@ -108,14 +145,14 @@ export class CloudSyncBackend implements StorageBackend {
   }
 
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
-    const blob = await this.enc(vectors);
-    await this.client.put(`${KEY_PREFIX_RAG}${projectId}`, blob);
+    // QNBS-v3: P2-1 — Use conflict-aware save with metadata
+    await this.saveWithMetadata(`${KEY_PREFIX_RAG}${projectId}`, vectors);
   }
 
   async getRagVectors(projectId: string): Promise<unknown[]> {
-    const blob = await this.client.get(`${KEY_PREFIX_RAG}${projectId}`);
-    if (!blob) return [];
-    return this.dec<unknown[]>(blob);
+    // QNBS-v3: P2-1 — Use conflict-aware load with metadata
+    const result = await this.loadWithMetadata<unknown[]>(`${KEY_PREFIX_RAG}${projectId}`);
+    return result ?? [];
   }
 
   async deleteRagVectors(projectId: string): Promise<void> {

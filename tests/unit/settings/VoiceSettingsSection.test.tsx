@@ -38,6 +38,14 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
   }),
 }));
 
+// QNBS-v3: VoiceModelDownloadModal uses useAppDispatch/useAppSelector — mock the whole component to avoid needing a Redux Provider
+vi.mock('../../../components/voice/VoiceModelDownloadModal', () => ({
+  VoiceModelDownloadModal: vi.fn(
+    ({ isOpen, modelType }: { isOpen: boolean; onClose: () => void; modelType: string }) =>
+      isOpen ? <div data-testid="voice-download-modal" data-model-type={modelType} /> : null,
+  ),
+}));
+
 vi.mock('../../../components/ui/Select', () => ({
   Select: vi.fn(
     ({

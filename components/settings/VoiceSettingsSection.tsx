@@ -4,15 +4,18 @@
  */
 
 import type { FC } from 'react';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Select } from '../ui/Select';
+import { VoiceModelDownloadModal } from '../voice/VoiceModelDownloadModal';
 import { ToggleSwitch } from './SettingsShared';
 
 export const VoiceSettingsSection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
   const voice = settings.voice;
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [downloadModelType, setDownloadModelType] = useState<'stt' | 'tts'>('stt');
 
   const activationId = useId();
   const feedbackId = useId();
@@ -173,10 +176,56 @@ export const VoiceSettingsSection: FC = () => {
                   {voice.listeningTimeoutSeconds}s
                 </p>
               </div>
+
+              {/* WASM Model Download */}
+              <div className="flex items-center justify-between rounded-lg border border-[var(--sc-border-subtle)] p-4">
+                <div>
+                  <p className="text-sm font-medium text-[var(--sc-text-primary)]">
+                    {t('settings.voice.wasmModels')}
+                  </p>
+                  <p className="text-xs text-[var(--sc-text-muted)]">
+                    {voice.wasmModelsReady
+                      ? t('settings.voice.wasmModelsReady')
+                      : t('settings.voice.wasmModelsNotReady')}
+                  </p>
+                </div>
+                {!voice.wasmModelsReady && (
+                  // QNBS-v3: Separate STT/TTS buttons — CodeAnt P2-2 fix (TTS path was unreachable)
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDownloadModelType('stt');
+                        setDownloadModalOpen(true);
+                      }}
+                      className="rounded-md bg-[var(--sc-accent)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--sc-accent-hover)]"
+                    >
+                      {t('settings.voice.downloadSttModel')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDownloadModelType('tts');
+                        setDownloadModalOpen(true);
+                      }}
+                      className="rounded-md bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] px-3 py-1.5 text-sm font-medium text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-hover)]"
+                    >
+                      {t('settings.voice.downloadTtsModel')}
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </CardContent>
       </Card>
+
+      {/* WASM Model Download Modal */}
+      <VoiceModelDownloadModal
+        isOpen={downloadModalOpen}
+        onClose={() => setDownloadModalOpen(false)}
+        modelType={downloadModelType}
+      />
     </div>
   );
 };

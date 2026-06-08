@@ -9,10 +9,10 @@
   <img src="https://img.shields.io/badge/TypeScript-7.x_(tsgo)-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7 (tsgo)">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · Ollama · WebLLM">
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
-  <img src="https://img.shields.io/badge/Version-v1.20.0-6366F1" alt="v1.20.0">
+  <img src="https://img.shields.io/badge/Version-v1.21.0-6366F1" alt="v1.21.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-11_locales-2340_keys-0EA5E9" alt="i18n 11 locales — 2340 keys">
+  <img src="https://img.shields.io/badge/i18n-11_locales-2348_keys-0EA5E9" alt="i18n 11 locales — 2348 keys">
   <img src="https://img.shields.io/badge/Tests-~5000_%2B_%2F_427_files-22C55E" alt="~5000+ tests / 427 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
@@ -232,12 +232,13 @@ See [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) for full architectu
 
 A single-keystroke toggle that collapses all sidebars and chrome, leaving only the manuscript editor. Exit with `Escape` or the same toggle key. State is stored in the Zustand `transientUiStore` (`flowMode` flag) so it resets on page load.
 
-### 🗣️ Voice Dictation & WASM Voice Engines _(v1.17 foundation + v1.19.0 WASM scaffold)_
+### 🗣️ Voice Dictation & WASM Voice Engines _(v1.17 foundation + v1.19.0 WASM scaffold + v1.21 model download UI)_
 
-Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field. **v1.19.0** adds WASM STT/VAD engine scaffolds:
+Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field. **v1.19.0** adds WASM STT/VAD engine scaffolds; **v1.21** ships the full model download flow:
 
 - **`WasmSttEngine`** (`services/voice/wasmSttEngine.ts`) — Whisper.cpp WASM interface scaffold (model download, chunked inference, 99+ language detection).
 - **`SileroVadEngine`** (`services/voice/sileroVadEngine.ts`) — Silero VAD v4 via ONNX Runtime Web (~2 MB model, lazy-loaded, replaces energy-threshold VAD).
+- **`VoiceModelDownloadModal`** (`components/voice/`) — Progress bar, per-model cancel (AbortController), and retry for both Whisper STT (~42 MB) and Kokoro TTS (~15 MB). Triggered from **Settings → Voice** via separate "Download STT Model" / "Download TTS Model" buttons.
 - Web Speech API fallback active in all environments; WASM engines activate when model is downloaded and `featureFlags.enableVoiceWasm` is on.
 
 ### ⌨️ Command Palette & Productivity Hub
@@ -333,7 +334,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2 340 i18n keys** across all 11 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2 348 i18n keys** across all 11 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -414,9 +415,9 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 236 keys × 7 locales (incl. ar/he RTL Beta); EN fallback; `localStorage` persistence |
-| **Testing**          | Vitest 4.x (2 500+ tests / 392 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
-| **Code Quality**     | Biome (lint + format) + TypeScript 6 strict              | `--error-on-warnings` in CI; zero `any` policy                      |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 348 keys × 11 locales (de/en/es/fr/it + ar/he RTL Beta + ja/zh/pt/el Beta); EN fallback; `localStorage` persistence |
+| **Testing**          | Vitest 4.x (5 000+ tests / 430 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
+| **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
 

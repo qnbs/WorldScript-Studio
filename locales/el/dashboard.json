@@ -80,7 +80,7 @@
   "dashboard.momentum.goalReached": "Ο στόχος επιτεύχθηκε",
   "dashboard.momentum.longest": "Καλύτερο: {{count}}",
   "dashboard.momentum.noActivity": "Δεν έχει καταγραφεί ακόμα γραφή — ξεκινήστε μια συνεδρία για να δημιουργήσετε τη σειρά σας.",
-  "dashboard.momentum.ofGoal": "{{τρέχον}} / {{στόχος}}",
+  "dashboard.momentum.ofGoal": "{{current}} / {{goal}}",
   "dashboard.momentum.thisWeek": "Αυτή την εβδομάδα",
   "dashboard.momentum.title": "Συγγραφική ορμή",
   "dashboard.momentum.today": "Σήμερα",

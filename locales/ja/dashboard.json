@@ -80,7 +80,7 @@
   "dashboard.momentum.goalReached": "目標達成",
   "dashboard.momentum.longest": "ベスト: {{count}}",
   "dashboard.momentum.noActivity": "書き込みはまだ記録されていません。セッションを開始して連続記録を築きましょう。",
-  "dashboard.momentum.ofGoal": "{{現在}} / {{目標}}",
+  "dashboard.momentum.ofGoal": "{{current}} / {{goal}}",
   "dashboard.momentum.thisWeek": "今週",
   "dashboard.momentum.title": "執筆の勢い",
   "dashboard.momentum.today": "今日",

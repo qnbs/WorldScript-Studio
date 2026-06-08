@@ -1,6 +1,5 @@
 {
   "portal.back": "Zurück",
-  "portal.language.searchPlaceholder": "Sprachen suchen...",
   "portal.demo.chapterContent": "Die Morgennebel hingen über den Kais, als Lyra den alten Plan der Stadtbibliothek entrollte. Ein Kreis, kaum lesbar, markierte den Platz Nordwest — dort stand der Turm, von dem niemand sprach.\n\nSie steckte den Zettel ein und ging den schmalen Pfad entlang, bis das Gitter vor ihr aufragte. Das Schloss war warm vom Sonnenlicht; das Metall jedoch kalt.",
   "portal.demo.chapterTitle": "Erstes Kapitel — Vor dem Tor",
   "portal.demo.logline": "Eine Kurzgeschichte zum Ausprobieren von Outline, Manuskript und Werkzeugleiste.",
@@ -18,6 +17,7 @@
   "portal.features.worldbuilding.description": "Reichhaltige Dossiers, Atlanten, KI-Porträts und Beziehungskarten.",
   "portal.features.worldbuilding.title": "Charaktere & Welten",
   "portal.language.groupLabel": "Sprache auf dem Willkommensbildschirm",
+  "portal.language.searchPlaceholder": "Sprachen suchen...",
   "portal.new.ai.description": "Geben Sie eine einfache Idee an und lassen Sie unsere KI eine detaillierte Handlungsgliederung für Sie erstellen.",
   "portal.new.ai.title": "Mit KI generieren",
   "portal.new.blank.description": "Für diejenigen, die wissen, wohin sie wollen. Beginnen Sie mit einem leeren ersten Kapitel.",

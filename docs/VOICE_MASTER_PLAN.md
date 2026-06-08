@@ -1,6 +1,6 @@
 # StoryCraft Studio — Voice Full Support (opt-in) Master Plan v1.0
 
-> Created: 2026-05-24 | Updated: 2026-06-01 | Author: Senior Voice Architect | Status: **Phase 1 Complete (v1.17.0) + Phase 2 WASM Scaffold + KokoroTTS + Async Engine Refactor Complete (2026-05-31)**
+> Created: 2026-05-24 | Updated: 2026-06-09 | Author: Senior Voice Architect | Status: **Phase 1 Complete (v1.17.0) + Phase 2 WASM Scaffold + KokoroTTS + Async Engine Refactor Complete (2026-05-31) + Phase 3 Model Download UI Complete (v1.21, 2026-06-09)**
 
 ---
 
@@ -453,29 +453,37 @@ locales/*/settings.json            — 2025 keys × 5 locales (voice keys added)
 
 ### Phase 2: Core WASM Engines (2026-05-31 Local AI Perfection — complete) ✅
 16. ✅ VAD Engine (Silero via ONNX) — full LSTM implementation; `processChunk` async; model download UI Phase 3
-17. ⬜ Wake-Word Engine (Sherpa-ONNX) — Phase 3
-18. ✅ STT engine (Whisper.cpp WASM) — `wasmSttEngine.ts` scaffold; chunked inference; model download UI Phase 3
+17. ⬜ Wake-Word Engine (Sherpa-ONNX) — Phase 4
+18. ✅ STT engine (Whisper.cpp WASM) — `wasmSttEngine.ts` scaffold; chunked inference; model download UI delivered Phase 3
 19. ✅ TTS engine (Kokoro ONNX) — `kokoroTtsEngine.ts` full implementation; PCM Float32Array output; `enableVoiceWasm` gated
-20. ✅ Async engine refactor — all `processChunk()` methods async; eco-mode eco-mode battery subscriber
-21. ⬜ AudioWorklet for microphone processing — Phase 3
+20. ✅ Async engine refactor — all `processChunk()` methods async; eco-mode battery subscriber
+21. ⬜ AudioWorklet for microphone processing — Phase 4
 
-### Phase 3: Advanced NLU (v1.2)
+### Phase 3: Model Download UI (v1.21, 2026-06-09) ✅ COMPLETE
+21. ✅ `VoiceModelDownloadModal` (`components/voice/`) — progress bar, cancel (AbortController), retry; handles both STT (Whisper Q8, ~42 MB) and TTS (Kokoro, ~15 MB) model types
+22. ✅ `VoiceSettingsSection` — separate "Download STT Model" + "Download TTS Model" buttons; `downloadModelType` state threads choice into modal
+23. ✅ `VoiceCommandService.downloadVoiceModels(modelType, signal?)` — AbortSignal-aware download pipeline; all await checkpoints respect cancellation
+24. ✅ CodeAnt fixes: modal cancel now truly aborts in-flight fetch; TTS path fully reachable from Settings UI
+25. ✅ `settings.voice.wasmModelsReady` flipped to `true` on successful download (persisted)
+26. ✅ i18n keys: `voice.modelDownload.*` added to all 11 locales (2348 keys total)
+
+### Phase 4: Advanced NLU (v1.2)
 21. Semantic intent matching (MiniLM embeddings)
 22. Local LLM fallback (WebLLM Phi-3.5 mini)
 23. Complex multi-slot commands
 
-### Phase 4: Deep App Integration (v1.2)
-24. Plot Board voice control (canvas mode)
-25. AI feature voice integration
-26. Settings voice shortcuts
-27. Collaboration voice commands
+### Phase 5: Deep App Integration (v1.2)
+27. Plot Board voice control (canvas mode)
+28. AI feature voice integration
+29. Settings voice shortcuts
+30. Collaboration voice commands
 
-### Phase 5: Polish & Testing (v1.2)
-28. Integration tests (voiceCommandService, useVoice)
-29. E2E tests (Playwright)
-30. Accessibility audit (axe-core)
-31. Performance optimization
-32. Documentation finalization
+### Phase 6: Polish & Testing (v1.2)
+31. Integration tests (voiceCommandService, useVoice)
+32. E2E tests (Playwright)
+33. Accessibility audit (axe-core)
+34. Performance optimization
+35. Documentation finalization
 
 ---
 

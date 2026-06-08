@@ -1,6 +1,6 @@
 # UI Modernization Guide — StoryCraft Studio
 
-**Version:** v1.20.0 (2026-06-06)
+**Version:** v1.21.0 (2026-06-09)
 **Status:** Phase 1 & 2 (Select) Complete — LanguageSelector, RadioGroup, Tabs, Select
 
 ## Overview

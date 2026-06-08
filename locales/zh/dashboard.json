@@ -80,7 +80,7 @@
   "dashboard.momentum.goalReached": "目标达成",
   "dashboard.momentum.longest": "最佳：{{count}}",
   "dashboard.momentum.noActivity": "尚未记录任何写作记录 - 开始一个会话来建立您的连续记录。",
-  "dashboard.momentum.ofGoal": "{{当前}} / {{目标}}",
+  "dashboard.momentum.ofGoal": "{{current}} / {{goal}}",
   "dashboard.momentum.thisWeek": "本星期",
   "dashboard.momentum.title": "写作动力",
   "dashboard.momentum.today": "今天",
