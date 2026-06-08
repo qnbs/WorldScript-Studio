@@ -38,9 +38,8 @@ let failed = false;
 for (const f of files) {
   const full = path.join(assetsDir, f);
   const kb = fs.statSync(full).size / 1024;
-  // QNBS-v3: Entry chunk detection - Vite 8/Rolldown may name it 'index-' or 'lib-'
-  const isEntryChunk = f.startsWith('index-') || f.startsWith('lib-');
-  if (isEntryChunk && kb > maxEntryKb) {
+  // QNBS-v3: Only index-* is the real entry point; lib-* are vendor chunks checked against maxKb
+  if (f.startsWith('index-') && kb > maxEntryKb) {
     console.error(
       `[bundle:budget] Entry chunk exceeds ${maxEntryKb} KB: ${f} (${kb.toFixed(1)} KB)`,
     );
