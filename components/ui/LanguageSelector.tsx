@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Language } from '../../contexts/I18nContext';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -47,7 +48,7 @@ export const LanguageSelector = React.memo(
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // QNBS-v3: Close on outside click / escape
-    useLayoutEffect(() => {
+    useEffect(() => {
       const handleClickOutside = (event: MouseEvent | TouchEvent) => {
         const target = event.target as Node;
         const isInsideContainer = containerRef.current?.contains(target);
@@ -83,11 +84,10 @@ export const LanguageSelector = React.memo(
       }
     }, [isOpen]);
 
-    // QNBS-v3: Position dropdown as fixed when opened to escape any parent
-    // stacking context or overflow clipping. getBoundingClientRect() already
-    // returns viewport-relative coordinates, which is exactly what fixed
-    // positioning needs — adding scroll offsets would push the dropdown
-    // outside the visible viewport as soon as the page is scrolled.
+    // QNBS-v3: Position dropdown via portal to document.body with absolute
+    // positioning. This escapes any parent stacking context, overflow clipping,
+    // backdrop-filter/transform containing blocks, and z-index traps that
+    // break fixed positioning inside Card components.
     useLayoutEffect(() => {
       if (!isOpen || !containerRef.current || !dropdownRef.current) return;
 
@@ -97,22 +97,24 @@ export const LanguageSelector = React.memo(
         const containerRect = containerRef.current?.getBoundingClientRect();
         if (!containerRect) return;
 
-        dropdown.style.position = 'fixed';
-        dropdown.style.top = `${containerRect.bottom + 8}px`; // 8px = mt-2 spacing
+        // body-relative coordinates for absolute positioning under document.body
+        const scrollX = window.scrollX ?? document.documentElement.scrollLeft ?? 0;
+        const scrollY = window.scrollY ?? document.documentElement.scrollTop ?? 0;
+
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = `${containerRect.bottom + scrollY + 8}px`; // 8px gap
         dropdown.style.marginTop = '0';
         dropdown.style.marginLeft = '0';
 
         if (variant === 'compact') {
-          // Right-align the 256 px dropdown beneath the trigger
-          dropdown.style.left = `${containerRect.right - 256}px`;
+          dropdown.style.left = `${containerRect.right + scrollX - 256}px`;
           dropdown.style.width = '256px';
         } else {
-          dropdown.style.left = `${containerRect.left}px`;
+          dropdown.style.left = `${containerRect.left + scrollX}px`;
           dropdown.style.width = `${containerRect.width}px`;
         }
       };
 
-      // Position immediately before paint to avoid visible flicker
       updatePosition();
 
       window.addEventListener('scroll', updatePosition, true);
@@ -149,8 +151,81 @@ export const LanguageSelector = React.memo(
       [onChange],
     );
 
+    const isCompact = variant === 'compact';
+    const itemPadding = isCompact ? 'px-3 py-2' : 'px-4 py-2.5';
+    const inputPadding = isCompact ? 'px-2.5 py-1.5' : 'px-3 py-2';
+
+    const dropdown = (
+      <div
+        ref={dropdownRef}
+        role="listbox"
+        aria-label={t('portal.language.groupLabel')}
+        className="absolute max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[10000]"
+      >
+        {showSearch && (
+          <div className="p-2 border-b border-[var(--sc-border-subtle)]">
+            <input
+              ref={inputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('portal.language.searchPlaceholder')}
+              className={`w-full text-sm rounded-sc-md bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] ${inputPadding}`}
+            />
+          </div>
+        )}
+        <ul className="py-1">
+          {filteredLanguages.map((lang) => {
+            const meta = LANGUAGE_METADATA[lang];
+            const isActive = lang === value;
+            return (
+              <li key={lang}>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(lang)}
+                  role="option"
+                  aria-selected={isActive}
+                  className={`w-full flex items-center gap-3 text-left text-sm transition-colors ${itemPadding} ${
+                    isActive
+                      ? 'bg-[var(--sc-accent-subtle)] text-[var(--sc-text-primary)]'
+                      : 'text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)]'
+                  } focus-visible:outline-none focus-visible:bg-[var(--sc-surface-raised)]`}
+                >
+                  <span className="text-base" aria-hidden="true">
+                    {meta.flag}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium">{meta.nativeName}</div>
+                    <div className="text-xs text-[var(--sc-text-muted)] truncate">{meta.label}</div>
+                  </div>
+                  {meta.isBeta && (
+                    <span className="text-[0.6em] opacity-70 px-1" aria-hidden="true">
+                      β
+                    </span>
+                  )}
+                  {isActive && (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="currentColor"
+                      className="w-4 h-4 text-[var(--sc-accent)]"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+
     // QNBS-v3: Compact variant for header (button with current language indicator)
-    if (variant === 'compact') {
+    if (isCompact) {
       return (
         <div className={`relative ${className}`} ref={containerRef}>
           <button
@@ -171,7 +246,7 @@ export const LanguageSelector = React.memo(
               </sup>
             )}
             <svg
-              xmlns="http://www.w3.org/2020/svg"
+              xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
               strokeWidth={2}
@@ -183,77 +258,7 @@ export const LanguageSelector = React.memo(
             </svg>
           </button>
 
-          {isOpen && (
-            <div
-              ref={dropdownRef}
-              role="listbox"
-              aria-label={t('portal.language.groupLabel')}
-              className="max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[10000]"
-              // QNBS-v3: z-index must exceed PWAInstallBanner (z-9998) so the fixed dropdown isn't hidden
-            >
-              {showSearch && (
-                <div className="p-2 border-b border-[var(--sc-border-subtle)]">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t('portal.language.searchPlaceholder')}
-                    className="w-full px-2.5 py-1.5 text-sm rounded-sc-md bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
-                  />
-                </div>
-              )}
-              <ul className="py-1">
-                {filteredLanguages.map((lang) => {
-                  const meta = LANGUAGE_METADATA[lang];
-                  const isActive = lang === value;
-                  return (
-                    <li key={lang}>
-                      <button
-                        type="button"
-                        onClick={() => handleSelect(lang)}
-                        role="option"
-                        aria-selected={isActive}
-                        className={`w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
-                          isActive
-                            ? 'bg-[var(--sc-accent-subtle)] text-[var(--sc-text-primary)]'
-                            : 'text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)]'
-                        } focus-visible:outline-none focus-visible:bg-[var(--sc-surface-raised)]`}
-                      >
-                        <span className="text-base" aria-hidden="true">
-                          {meta.flag}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium">{meta.nativeName}</div>
-                          <div className="text-xs text-[var(--sc-text-muted)] truncate">
-                            {meta.label}
-                          </div>
-                        </div>
-                        {meta.isBeta && (
-                          <span className="text-[0.6em] opacity-70 px-1" aria-hidden="true">
-                            β
-                          </span>
-                        )}
-                        {isActive && (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={2}
-                            stroke="currentColor"
-                            className="w-4 h-4 text-[var(--sc-accent)]"
-                            aria-hidden="true"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+          {isOpen && createPortal(dropdown, document.body)}
         </div>
       );
     }
@@ -293,76 +298,7 @@ export const LanguageSelector = React.memo(
           </svg>
         </button>
 
-        {isOpen && (
-          <div
-            ref={dropdownRef}
-            role="listbox"
-            aria-label={t('portal.language.groupLabel')}
-            className="max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[10000]"
-          >
-            {showSearch && (
-              <div className="p-2 border-b border-[var(--sc-border-subtle)]">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t('portal.language.searchPlaceholder')}
-                  className="w-full px-3 py-2 text-sm rounded-sc-md bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
-                />
-              </div>
-            )}
-            <ul className="py-1">
-              {filteredLanguages.map((lang) => {
-                const meta = LANGUAGE_METADATA[lang];
-                const isActive = lang === value;
-                return (
-                  <li key={lang}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelect(lang)}
-                      role="option"
-                      aria-selected={isActive}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
-                        isActive
-                          ? 'bg-[var(--sc-accent-subtle)] text-[var(--sc-text-primary)]'
-                          : 'text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)]'
-                      } focus-visible:outline-none focus-visible:bg-[var(--sc-surface-raised)]`}
-                    >
-                      <span className="text-base" aria-hidden="true">
-                        {meta.flag}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium">{meta.nativeName}</div>
-                        <div className="text-xs text-[var(--sc-text-muted)] truncate">
-                          {meta.label}
-                        </div>
-                      </div>
-                      {meta.isBeta && (
-                        <span className="text-[0.6em] opacity-70 px-1" aria-hidden="true">
-                          β
-                        </span>
-                      )}
-                      {isActive && (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={2}
-                          stroke="currentColor"
-                          className="w-4 h-4 text-[var(--sc-accent)]"
-                          aria-hidden="true"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
+        {isOpen && createPortal(dropdown, document.body)}
       </div>
     );
   },
