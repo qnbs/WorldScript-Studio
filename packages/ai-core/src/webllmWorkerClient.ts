@@ -1,25 +1,11 @@
 /*
- * WebLLM Worker Client (Main Thread Proxy)
- *
- * Provides a clean async API that mirrors the previous direct webllmOptimizer usage
- * but routes all heavy work (model init + inference) to the dedicated Web Worker.
- *
- * Usage example:
- *   import { createWebLlmWorkerClient } from '@domain/ai-core';
- *   const client = createWebLlmWorkerClient();
- *   await client.init('Qwen2.5-0.5B-Instruct-q4f16_1-MLC');
- *   const result = await client.generate('Write a short story...');
- *   client.dispose();
- *
- * Benefits:
- * - Main thread remains responsive during model loading and long generations.
- * - WebGPU context is fully isolated in the worker.
- * - Easy to integrate with existing WorkerBus / gpuResourceManager.
+ * WebLLM Worker Client - Main thread proxy for the dedicated worker (P1-1)
  */
 
-/// <reference types="vite/client" /> // for import.meta.url in Vite
-
-import type { WebLlmProgressReport } from './index'; // or define locally
+interface WebLlmProgressReport {
+  progress: number;
+  text: string;
+}
 
 interface GenerateOptions {
   maxTokens?: number;
@@ -29,8 +15,8 @@ interface GenerateOptions {
   signal?: AbortSignal;
 }
 
-interface WebLlmWorkerClient {
-  init(modelId: string, options?: any): Promise<void>;
+export interface WebLlmWorkerClient {
+  init(modelId: string, options?: Record<string, unknown>): Promise<void>;
   generate(prompt: string, options?: GenerateOptions): Promise<string>;
   prewarm(modelId: string): Promise<void>;
   dispose(): Promise<void>;
@@ -39,216 +25,119 @@ interface WebLlmWorkerClient {
 }
 
 interface PendingRequest {
-  resolve: (value: any) => void;
-  reject: (reason?: any) => void;
-  onProgress?: (report: WebLlmProgressReport) => void;
+  resolve: (value?: unknown) => void;
+  reject: (reason?: unknown) => void;
   onStreamChunk?: (chunk: string, done: boolean) => void;
 }
 
-let worker: Worker | null = null;
-let pendingRequests = new Map<string, PendingRequest>();
-let currentModelId: string | null = null;
-let isInitialized = false;
+let workerInstance: Worker | null = null;
+const pending = new Map<string, PendingRequest>();
+let ready = false;
+let currentModel: string | null = null;
 
-// Generate unique request IDs
-function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+function genId(): string {
+  return `wllm_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-function ensureWorker(): Worker {
-  if (worker) return worker;
+function getWorker(): Worker {
+  if (workerInstance) return workerInstance;
 
-  // Vite-friendly worker creation (bundles correctly as ESM worker)
-  worker = new Worker(
-    new URL('./webllm.worker.ts', import.meta.url),
-    { type: 'module' }
-  );
+  workerInstance = new Worker(new URL('./webllm.worker.ts', import.meta.url), { type: 'module' });
 
-  worker.onmessage = (event: MessageEvent) => {
-    const { id, type, payload } = event.data as {
-      id: string;
-      type: string;
-      payload?: any;
-    };
+  workerInstance.onmessage = (e: MessageEvent) => {
+    const { id, type, payload } = e.data as { id: string; type: string; payload?: any };
+    const p = pending.get(id);
+    if (!p) return;
 
-    const pending = pendingRequests.get(id);
-    if (!pending) {
-      // Progress or unsolicited messages
-      if (type === 'progress' && pendingRequests.size > 0) {
-        // Broadcast progress to the most recent init request if needed
-        // For simplicity, we assume progress is tied to init/generate id
+    if (type === 'progress' && p.onStreamChunk) {
+      // progress can be handled separately if needed
+    }
+    if (type === 'ready') {
+      ready = true;
+      currentModel = payload?.modelId ?? null;
+      p.resolve();
+      pending.delete(id);
+    } else if (type === 'result') {
+      p.resolve(payload?.text ?? '');
+      pending.delete(id);
+    } else if (type === 'stream-chunk') {
+      if (p.onStreamChunk) p.onStreamChunk(payload?.text ?? '', !!payload?.done);
+      if (payload?.done) {
+        p.resolve('');
+        pending.delete(id);
       }
-      return;
-    }
-
-    switch (type) {
-      case 'progress':
-        if (pending.onProgress) {
-          pending.onProgress(payload as WebLlmProgressReport);
-        }
-        break;
-
-      case 'ready':
-        isInitialized = true;
-        currentModelId = payload?.modelId || null;
-        pending.resolve(undefined);
-        pendingRequests.delete(id);
-        break;
-
-      case 'result':
-        pending.resolve(payload?.text || '');
-        pendingRequests.delete(id);
-        break;
-
-      case 'stream-chunk':
-        if (pending.onStreamChunk && payload) {
-          pending.onStreamChunk(payload.text || '', !!payload.done);
-        }
-        if (payload?.done) {
-          pending.resolve(''); // final resolve after stream ends
-          pendingRequests.delete(id);
-        }
-        break;
-
-      case 'error':
-        pending.reject(new Error(payload?.message || 'WebLLM Worker error'));
-        pendingRequests.delete(id);
-        break;
-
-      default:
-        pending.reject(new Error(`Unknown worker response type: ${type}`));
-        pendingRequests.delete(id);
+    } else if (type === 'error') {
+      p.reject(new Error(payload?.message ?? 'Worker error'));
+      pending.delete(id);
     }
   };
 
-  worker.onerror = (err) => {
-    console.error('[webllmWorkerClient] Worker error:', err);
-    // Reject all pending on fatal worker error
-    pendingRequests.forEach((p) => p.reject(new Error('WebLLM worker crashed')));
-    pendingRequests.clear();
-    // Optional: auto-recreate worker on next use
-    worker = null;
+  workerInstance.onerror = () => {
+    pending.forEach((pr) => pr.reject(new Error('Worker crashed')));
+    pending.clear();
+    workerInstance = null;
   };
 
-  return worker;
+  return workerInstance;
 }
 
-/**
- * Create and return a WebLLM Worker Client instance.
- * Call this from services that need isolated WebLLM inference.
- */
 export function createWebLlmWorkerClient(): WebLlmWorkerClient {
-  const clientId = generateRequestId(); // for potential multi-client tracking
-
   return {
-    async init(modelId: string, options: any = {}): Promise<void> {
-      const w = ensureWorker();
-      const requestId = generateRequestId();
-
-      return new Promise((resolve, reject) => {
-        pendingRequests.set(requestId, { resolve, reject });
-
-        w.postMessage({
-          id: requestId,
-          type: 'init',
-          payload: { modelId, options },
-        });
+    async init(modelId: string, options: Record<string, unknown> = {}): Promise<void> {
+      const w = getWorker();
+      const rid = genId();
+      return new Promise((res, rej) => {
+        pending.set(rid, { resolve: res, reject: rej });
+        w.postMessage({ id: rid, type: 'init', payload: { modelId, options } });
       });
     },
-
     async generate(prompt: string, options: GenerateOptions = {}): Promise<string> {
-      if (!isInitialized || !currentModelId) {
-        throw new Error('WebLLM Worker not initialized. Call init() first.');
-      }
+      if (!ready) throw new Error('Call init() first');
+      const w = getWorker();
+      const rid = genId();
+      return new Promise((res, rej) => {
+        const entry: PendingRequest = { resolve: res, reject: rej, onStreamChunk: options.onStreamChunk };
+        pending.set(rid, entry);
 
-      const w = ensureWorker();
-      const requestId = generateRequestId();
-
-      return new Promise((resolve, reject) => {
-        const pending: PendingRequest = {
-          resolve,
-          reject,
-          onStreamChunk: options.onStreamChunk,
-        };
-        pendingRequests.set(requestId, pending);
-
-        // Forward AbortSignal if provided
         if (options.signal) {
           options.signal.addEventListener('abort', () => {
-            w.postMessage({
-              id: generateRequestId(),
-              type: 'abort',
-              payload: { requestId },
-            });
+            w.postMessage({ id: genId(), type: 'abort', payload: { requestId: rid } });
           }, { once: true });
         }
 
         w.postMessage({
-          id: requestId,
+          id: rid,
           type: 'generate',
-          payload: {
-            prompt,
-            options: {
-              maxTokens: options.maxTokens,
-              temperature: options.temperature,
-              stream: !!options.stream || !!options.onStreamChunk,
-            },
-          },
+          payload: { prompt, options: { maxTokens: options.maxTokens, temperature: options.temperature, stream: options.stream || !!options.onStreamChunk } },
         });
       });
     },
-
     async prewarm(modelId: string): Promise<void> {
-      const w = ensureWorker();
-      const requestId = generateRequestId();
-
-      return new Promise((resolve, reject) => {
-        pendingRequests.set(requestId, { resolve, reject });
-        w.postMessage({ id: requestId, type: 'prewarm', payload: { modelId } });
+      const w = getWorker();
+      const rid = genId();
+      return new Promise((res, rej) => {
+        pending.set(rid, { resolve: res, reject: rej });
+        w.postMessage({ id: rid, type: 'prewarm', payload: { modelId } });
       });
     },
-
     async dispose(): Promise<void> {
-      if (!worker) return Promise.resolve();
-
-      const w = worker;
-      const requestId = generateRequestId();
-
-      return new Promise((resolve) => {
-        // We resolve even on error to allow cleanup
-        pendingRequests.set(requestId, {
-          resolve: () => {
-            // Terminate worker after dispose
-            try { w.terminate(); } catch {}
-            worker = null;
-            isInitialized = false;
-            currentModelId = null;
-            pendingRequests.clear();
-            resolve(undefined);
-          },
-          reject: () => resolve(undefined),
-        });
-
-        w.postMessage({ id: requestId, type: 'dispose' });
+      if (!workerInstance) return;
+      const w = workerInstance;
+      const rid = genId();
+      return new Promise((res) => {
+        pending.set(rid, { resolve: () => { try { w.terminate(); } catch {} ; workerInstance = null; ready = false; currentModel = null; pending.clear(); res(); }, reject: res });
+        w.postMessage({ id: rid, type: 'dispose' });
       });
     },
-
-    isReady(): boolean {
-      return isInitialized;
-    },
-
-    getCurrentModel(): string | null {
-      return currentModelId;
-    },
+    isReady: () => ready,
+    getCurrentModel: () => currentModel,
   };
 }
 
-// Optional singleton for simple use cases (most services can use their own instance)
-let singletonClient: WebLlmWorkerClient | null = null;
-
+let singleton: WebLlmWorkerClient | null = null;
 export function getWebLlmWorkerClient(): WebLlmWorkerClient {
-  if (!singletonClient) {
-    singletonClient = createWebLlmWorkerClient();
-  }
-  return singletonClient;
+  if (!singleton) singleton = createWebLlmWorkerClient();
+  return singleton;
 }
+
+export type { WebLlmProgressReport, WebLlmWorkerClient, GenerateOptions };
