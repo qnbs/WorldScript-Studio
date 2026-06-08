@@ -493,8 +493,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
   // QNBS-v3: Tauri deep link handler for native file associations (.storycraft, .scst)
   useEffect(() => {
-    void initTauriDeepLink(dispatch);
-  }, [dispatch]);
+    void initTauriDeepLink(dispatch, t);
+  }, [dispatch, t]);
 
   const renderView = () => {
     switch (currentView) {

@@ -8,6 +8,7 @@
 import type { AppDispatch } from '../app/store';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../features/status/statusSlice';
+import type { I18nTranslate } from './commands/commandTypes';
 import { createLogger } from './logger';
 import { isTauriRuntime } from './tauriRuntime';
 
@@ -20,9 +21,13 @@ let unlisten: (() => void) | null = null;
  * Call this once during app startup (e.g., in App.tsx useEffect).
  *
  * @param dispatch - Redux dispatch function for importing projects
+ * @param t - Translation function for localized error messages
  * @returns Cleanup function to remove the event listener
  */
-export async function initTauriDeepLink(dispatch: AppDispatch): Promise<() => void> {
+export async function initTauriDeepLink(
+  dispatch: AppDispatch,
+  t: I18nTranslate,
+): Promise<() => void> {
   if (!isTauriRuntime()) {
     return () => {};
   }
@@ -84,8 +89,8 @@ export async function initTauriDeepLink(dispatch: AppDispatch): Promise<() => vo
           dispatch(
             statusActions.addNotification({
               type: 'error',
-              title: 'Failed to open project file',
-              description: resultAction.error?.message ?? 'Unknown error',
+              title: t('error.deepLink.title'),
+              description: resultAction.error?.message ?? t('error.deepLink.unknown'),
             }),
           );
         }
@@ -94,7 +99,7 @@ export async function initTauriDeepLink(dispatch: AppDispatch): Promise<() => vo
         dispatch(
           statusActions.addNotification({
             type: 'error',
-            title: 'Failed to open project file',
+            title: t('error.deepLink.title'),
             description: error instanceof Error ? error.message : String(error),
           }),
         );
