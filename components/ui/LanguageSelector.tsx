@@ -44,11 +44,15 @@ export const LanguageSelector = React.memo(
     const [searchQuery, setSearchQuery] = useState('');
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     // QNBS-v3: Close on outside click / escape
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-        if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        const target = event.target as Node;
+        const isInsideContainer = containerRef.current?.contains(target);
+        const isInsideDropdown = dropdownRef.current?.contains(target);
+        if (!isInsideContainer && !isInsideDropdown) {
           setIsOpen(false);
           setSearchQuery('');
         }
@@ -77,6 +81,36 @@ export const LanguageSelector = React.memo(
       if (isOpen && inputRef.current) {
         inputRef.current.focus();
       }
+    }, [isOpen]);
+
+    // QNBS-v3: Position dropdown as fixed when opened to escape stacking context
+    useEffect(() => {
+      if (!isOpen || !containerRef.current || !dropdownRef.current) return;
+
+      const updatePosition = () => {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (!containerRect) return;
+
+        const dropdown = dropdownRef.current;
+        if (!dropdown) return;
+
+        // Position as fixed to escape any stacking context
+        dropdown.style.position = 'fixed';
+        dropdown.style.top = `${containerRect.bottom + window.scrollY}px`;
+        dropdown.style.left = `${containerRect.left + window.scrollX}px`;
+        dropdown.style.width = `${containerRect.width}px`;
+        dropdown.style.marginTop = '0';
+        dropdown.style.marginLeft = '0';
+      };
+
+      updatePosition();
+      window.addEventListener('scroll', updatePosition);
+      window.addEventListener('resize', updatePosition);
+
+      return () => {
+        window.removeEventListener('scroll', updatePosition);
+        window.removeEventListener('resize', updatePosition);
+      };
     }, [isOpen]);
 
     // QNBS-v3: Filter languages by search query (search in native name, label, and code)
@@ -248,9 +282,10 @@ export const LanguageSelector = React.memo(
 
         {isOpen && (
           <div
+            ref={dropdownRef}
             role="listbox"
             aria-label={t('portal.language.groupLabel')}
-            className="absolute top-full left-0 mt-2 w-full max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[100]"
+            className="max-h-80 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[10000] isolate"
           >
             {showSearch && (
               <div className="p-2 border-b border-[var(--sc-border-subtle)]">
