@@ -31,8 +31,8 @@ importers:
         specifier: ^3.0.79
         version: 3.0.79(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
       '@ai-sdk/openai':
-        specifier: ^3.0.65
-        version: 3.0.65(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
+        specifier: ^3.0.68
+        version: 3.0.68(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
       '@ai-sdk/react':
         specifier: ^3.0.193
         version: 3.0.193(react@19.2.7)(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
@@ -345,8 +345,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai@3.0.65':
-    resolution: {integrity: sha512-ZlVoWH+zrdiYDiUt6n/xvfCsk33mzsB81TUQkBRVx79rxU1FKZqVH9J/QCtEpSLqx0cUzjvtIw9l9p7EbUv+dw==}
+  '@ai-sdk/openai@3.0.68':
+    resolution: {integrity: sha512-FCs/DPr4M95UyZ/ABHJmTmCEYRCka/4J0Bna0nsd78QCdGIS0X/zhn+fVzB7mZJo7464uOWYUjROx9PGNGOb0w==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -4709,8 +4709,8 @@ packages:
   events-universal@1.0.1:
     resolution: {integrity: sha512-LUd5euvbMLpwOF8m6ivPCbhQeSiYVNb8Vs0fQ8QjXo0JTkEHpz8pxdQf0gStltaPpw0Cca8b39KxvK9cfKRiAw==}
 
-  eventsource-parser@3.0.8:
-    resolution: {integrity: sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ==}
+  eventsource-parser@3.1.0:
+    resolution: {integrity: sha512-kJezFj9YFAMLeORyi7aCLxLbD5/qWMQnoMVlVPyHIll7lgRJCc3JVln9Vgl9nwQi0YkMnhdGTMNn7CkRRAptMg==}
     engines: {node: '>=18.0.0'}
 
   execa@5.1.1:
@@ -7057,12 +7057,12 @@ packages:
     resolution: {integrity: sha512-6CC9uyBL+/48dYizRf7H7VAYCMCNTBeM78x/VTUe9bFEaxBepPJDa1Ow99LqI/1yF7kuy7Q3cQsYMrcjGUcskA==}
     engines: {node: '>= 0.4'}
 
-  string.prototype.trim@1.2.10:
-    resolution: {integrity: sha512-Rs66F0P/1kedk5lyYyH9uBzuiI/kNRmwJAR9quK6VOtIpZ2G+hMZd+HQbbv25MgCA6gEffoMZYxlTod4WcdrKA==}
+  string.prototype.trim@1.2.11:
+    resolution: {integrity: sha512-PwvK7BU+CMTJGYQCTZb5RWXIML92lftJLhQz1tBzgKiqGxJaMlBAa48POXaNAC2s4y8jr3EFqrkF9+44neS46w==}
     engines: {node: '>= 0.4'}
 
-  string.prototype.trimend@1.0.9:
-    resolution: {integrity: sha512-G7Ok5C6E/j4SGfyLCloXTrngQIQU3PWtXGst3yM7Bea9FRURf1S42ZHlZZtsNque2FN2PoUhfZXYLNWwEr4dLQ==}
+  string.prototype.trimend@1.0.10:
+    resolution: {integrity: sha512-2+3aDAOmPTmuFwjDnmJG2ctEkQKVki7vOSqaxkv42Mowj1V6PnvuwFCRrR5lChUux1TBskPjfkeTOhqczDMxTw==}
     engines: {node: '>= 0.4'}
 
   string.prototype.trimstart@1.0.8:
@@ -7684,8 +7684,8 @@ packages:
   which-module@2.0.1:
     resolution: {integrity: sha512-iBdZ57RDvnOR9AGBhML2vFZf7h8vmBjhoaZqODJBFWHVtKkDmKuHai3cx5PgVMrX5YDNp27AofYbAwctSS+vhQ==}
 
-  which-typed-array@1.1.21:
-    resolution: {integrity: sha512-zbRA8cVm6io/d5W8uIe2hblzN76/Wm3v/yiythQvr+dpBWeqhPSWIDNj4zOyHi4zKbMK6DN34Xsr9jPHJERAEw==}
+  which-typed-array@1.1.22:
+    resolution: {integrity: sha512-fvO4ExWMFsqyhG3AiPAObMuY1lxaqgYcxbc49CNdWDDECOJNgQyvsOWVwbZc+qf3rzRtxojBK+CMEv0Ld5CYpw==}
     engines: {node: '>= 0.4'}
 
   which@1.3.1:
@@ -7975,7 +7975,7 @@ snapshots:
       '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
       zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
 
-  '@ai-sdk/openai@3.0.65(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))':
+  '@ai-sdk/openai@3.0.68(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))':
     dependencies:
       '@ai-sdk/provider': 3.0.10
       '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
@@ -7985,7 +7985,7 @@ snapshots:
     dependencies:
       '@ai-sdk/provider': 3.0.10
       '@standard-schema/spec': 1.1.0
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.0
       zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
 
   '@ai-sdk/provider@3.0.10':
@@ -12107,15 +12107,15 @@ snapshots:
       safe-regex-test: 1.1.0
       set-proto: 1.0.0
       stop-iteration-iterator: 1.1.0
-      string.prototype.trim: 1.2.10
-      string.prototype.trimend: 1.0.9
+      string.prototype.trim: 1.2.11
+      string.prototype.trimend: 1.0.10
       string.prototype.trimstart: 1.0.8
       typed-array-buffer: 1.0.3
       typed-array-byte-length: 1.0.3
       typed-array-byte-offset: 1.0.4
       typed-array-length: 1.0.8
       unbox-primitive: 1.1.0
-      which-typed-array: 1.1.21
+      which-typed-array: 1.1.22
 
   es-define-property@1.0.1: {}
 
@@ -12279,7 +12279,7 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
 
-  eventsource-parser@3.0.8: {}
+  eventsource-parser@3.1.0: {}
 
   execa@5.1.1:
     dependencies:
@@ -13060,7 +13060,7 @@ snapshots:
 
   is-typed-array@1.1.15:
     dependencies:
-      which-typed-array: 1.1.21
+      which-typed-array: 1.1.22
 
   is-typedarray@1.0.0: {}
 
@@ -15178,7 +15178,7 @@ snapshots:
       set-function-name: 2.0.2
       side-channel: 1.1.0
 
-  string.prototype.trim@1.2.10:
+  string.prototype.trim@1.2.11:
     dependencies:
       call-bind: 1.0.9
       call-bound: 1.0.4
@@ -15187,8 +15187,9 @@ snapshots:
       es-abstract: 1.24.2
       es-object-atoms: 1.1.2
       has-property-descriptors: 1.0.2
+      safe-regex-test: 1.1.0
 
-  string.prototype.trimend@1.0.9:
+  string.prototype.trimend@1.0.10:
     dependencies:
       call-bind: 1.0.9
       call-bound: 1.0.4
@@ -15815,7 +15816,7 @@ snapshots:
       isarray: 2.0.5
       which-boxed-primitive: 1.1.1
       which-collection: 1.0.2
-      which-typed-array: 1.1.21
+      which-typed-array: 1.1.22
 
   which-collection@1.0.2:
     dependencies:
@@ -15826,7 +15827,7 @@ snapshots:
 
   which-module@2.0.1: {}
 
-  which-typed-array@1.1.21:
+  which-typed-array@1.1.22:
     dependencies:
       available-typed-arrays: 1.0.7
       call-bind: 1.0.9
