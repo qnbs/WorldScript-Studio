@@ -3,19 +3,30 @@ import React from 'react';
 
 export const ToggleSwitch: FC<{
   label?: string;
+  hint?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   ariaLabel?: string;
-}> = React.memo(({ label, checked, onChange, ariaLabel }) => {
+}> = React.memo(({ label, hint, checked, onChange, ariaLabel }) => {
   const labelId = React.useId();
+  const hintId = React.useId();
   // QNBS-v3: Ensure switch always has an accessible name (CodeAnt AI fix)
   const accessibleName = ariaLabel ?? label ?? 'Toggle';
   return (
-    <div className="flex items-center justify-between">
-      {label && (
-        <span id={labelId} className="text-sm font-medium text-[var(--sc-text-secondary)]">
-          {label}
-        </span>
+    <div className="flex items-start justify-between gap-3">
+      {(label ?? hint) && (
+        <div className="flex flex-col gap-0.5 min-w-0">
+          {label && (
+            <span id={labelId} className="text-sm font-medium text-[var(--sc-text-secondary)]">
+              {label}
+            </span>
+          )}
+          {hint && (
+            <span id={hintId} className="text-xs text-[var(--sc-text-muted)]">
+              {hint}
+            </span>
+          )}
+        </div>
       )}
       <button
         type="button"
@@ -23,6 +34,7 @@ export const ToggleSwitch: FC<{
         aria-checked={checked}
         aria-label={accessibleName}
         aria-labelledby={label ? labelId : undefined}
+        aria-describedby={hint ? hintId : undefined}
         onClick={() => onChange(!checked)}
         className={`${
           checked

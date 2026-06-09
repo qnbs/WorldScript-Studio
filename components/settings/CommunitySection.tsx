@@ -33,7 +33,7 @@ export const CommunitySection: React.FC = () => {
               href="https://github.com/qnbs/StoryCraft-Studio/discussions"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-4 py-3 hover:bg-[var(--sc-surface-overlay)] transition-colors group min-h-[44px]"
+              className="flex items-center gap-3 rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-4 py-3 hover:bg-[var(--sc-surface-overlay)] transition-colors group min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
             >
               <svg
                 aria-hidden="true"
@@ -64,7 +64,7 @@ export const CommunitySection: React.FC = () => {
               href="https://github.com/qnbs/StoryCraft-Studio/issues"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-4 py-3 hover:bg-[var(--sc-surface-overlay)] transition-colors group min-h-[44px]"
+              className="flex items-center gap-3 rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-4 py-3 hover:bg-[var(--sc-surface-overlay)] transition-colors group min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
             >
               <svg
                 aria-hidden="true"
@@ -122,7 +122,8 @@ export const CommunitySection: React.FC = () => {
                       {t(WEBLLM_USE_CASES[m.id] ?? 'settings.community.useCase.balanced')}
                     </p>
                   </div>
-                  <span className="shrink-0 text-xs bg-[var(--sc-interactive-bg)] text-[var(--sc-interactive-fg)] px-1.5 py-0.5 rounded">
+                  {/* QNBS-v3: --sc-interactive-bg/fg tokens don't exist; --sc-info-bg/fg do and semantically fit */}
+                  <span className="shrink-0 text-xs bg-[var(--sc-info-bg)] text-[var(--sc-info-fg)] px-1.5 py-0.5 rounded">
                     WebGPU
                   </span>
                 </li>

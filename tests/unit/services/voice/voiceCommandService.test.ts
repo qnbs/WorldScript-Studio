@@ -13,11 +13,8 @@ vi.mock('../../../../services/ai/ecoModeService', () => ({
 }));
 
 vi.mock('../../../../services/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), withContext: vi.fn() }),
 }));
 
 vi.mock('../../../../services/voice/feedbackService', () => ({

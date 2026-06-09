@@ -25,6 +25,7 @@ const makeCtx = (overrides?: Record<string, unknown>) => ({
       dataEncryption: true,
       localStorageOnly: false,
       shareUsageData: false,
+      euDataResidency: true,
     },
   },
   featureFlags: { enableIdbAtRestEncryption: false },
@@ -90,9 +91,9 @@ describe('PrivacySection', () => {
     expect(screen.getByText('settings.privacy.shareUsageData')).toBeInTheDocument();
   });
 
-  it('renders five toggles total', () => {
+  it('renders six toggles total (including euDataResidency)', () => {
     render(<PrivacySection />);
-    expect(screen.getAllByRole('switch').length).toBe(5);
+    expect(screen.getAllByRole('switch').length).toBe(6);
   });
 
   it('analytics toggle calls handleSettingChange when clicked', async () => {

@@ -25,28 +25,29 @@ import featureFlagsReducer, {
 // Shared initial state — must include ALL 20 flags (strict TypeScript)
 // ---------------------------------------------------------------------------
 
+// QNBS-v3: all flags default true (v1.21 — full feature set on fresh install); RTL stays false
 const initialState: FeatureFlagsState = {
-  enableStoryBibleAdvanced: false,
-  enableBinderResearch: false,
-  enableCompileWizard: false,
-  enableProjectHealthScore: false,
-  enableAppHealthPanel: false,
-  enableDuckDbAnalytics: false,
-  enableObjectsGroups: false,
-  enableMindMaps: false,
-  enableCharacterInterviews: false,
+  enableStoryBibleAdvanced: true,
+  enableBinderResearch: true,
+  enableCompileWizard: true,
+  enableProjectHealthScore: true,
+  enableAppHealthPanel: true,
+  enableDuckDbAnalytics: true,
+  enableObjectsGroups: true,
+  enableMindMaps: true,
+  enableCharacterInterviews: true,
   enableRtlLayout: false,
-  enableLoraAdapters: false,
-  enablePluginSystem: false,
-  enableVoiceSupport: false,
-  enableProForge: false,
-  enableIdbAtRestEncryption: false,
-  enableVoiceWasm: false,
-  enableAdaptiveAiEngine: false,
-  enableWebnnInference: false,
-  enableComputeShaders: false,
-  enableWorkerBusV2: false,
-  enableRustCompute: false,
+  enableLoraAdapters: true,
+  enablePluginSystem: true,
+  enableVoiceSupport: true,
+  enableProForge: true,
+  enableIdbAtRestEncryption: true,
+  enableVoiceWasm: true,
+  enableAdaptiveAiEngine: true,
+  enableWebnnInference: true,
+  enableComputeShaders: true,
+  enableWorkerBusV2: true,
+  enableRustCompute: true,
 };
 
 // ---------------------------------------------------------------------------
@@ -102,83 +103,68 @@ describe('featureFlagsSlice — individual setters', () => {
     {
       flag: 'enableStoryBibleAdvanced',
       action: featureFlagsActions.setEnableStoryBibleAdvanced,
-      defaultOn: false,
+      defaultOn: true,
     },
     {
       flag: 'enableBinderResearch',
       action: featureFlagsActions.setEnableBinderResearch,
-      defaultOn: false,
+      defaultOn: true,
     },
     {
       flag: 'enableCompileWizard',
       action: featureFlagsActions.setEnableCompileWizard,
-      defaultOn: false,
+      defaultOn: true,
     },
     {
       flag: 'enableProjectHealthScore',
       action: featureFlagsActions.setEnableProjectHealthScore,
-      defaultOn: false,
+      defaultOn: true,
     },
     {
       flag: 'enableAppHealthPanel',
       action: featureFlagsActions.setEnableAppHealthPanel,
-      defaultOn: false,
+      defaultOn: true,
     },
     {
       flag: 'enableDuckDbAnalytics',
       action: featureFlagsActions.setEnableDuckDbAnalytics,
-      defaultOn: false,
+      defaultOn: true,
     },
     {
       flag: 'enableObjectsGroups',
       action: featureFlagsActions.setEnableObjectsGroups,
-      defaultOn: false,
+      defaultOn: true,
     },
-    {
-      flag: 'enableMindMaps',
-      action: featureFlagsActions.setEnableMindMaps,
-      defaultOn: false,
-    },
+    { flag: 'enableMindMaps', action: featureFlagsActions.setEnableMindMaps, defaultOn: true },
     {
       flag: 'enableCharacterInterviews',
       action: featureFlagsActions.setEnableCharacterInterviews,
-      defaultOn: false,
+      defaultOn: true,
     },
-    {
-      flag: 'enableRtlLayout',
-      action: featureFlagsActions.setEnableRtlLayout,
-      defaultOn: false,
-    },
+    // QNBS-v3: RTL stays false — ar/he locales are stubs only
+    { flag: 'enableRtlLayout', action: featureFlagsActions.setEnableRtlLayout, defaultOn: false },
     {
       flag: 'enableLoraAdapters',
       action: featureFlagsActions.setEnableLoraAdapters,
-      defaultOn: false,
+      defaultOn: true,
     },
     {
       flag: 'enablePluginSystem',
       action: featureFlagsActions.setEnablePluginSystem,
-      defaultOn: false,
+      defaultOn: true,
     },
     {
       flag: 'enableVoiceSupport',
       action: featureFlagsActions.setEnableVoiceSupport,
-      defaultOn: false,
+      defaultOn: true,
     },
-    {
-      flag: 'enableProForge',
-      action: featureFlagsActions.setEnableProForge,
-      defaultOn: false,
-    },
+    { flag: 'enableProForge', action: featureFlagsActions.setEnableProForge, defaultOn: true },
     {
       flag: 'enableIdbAtRestEncryption',
       action: featureFlagsActions.setEnableIdbAtRestEncryption,
-      defaultOn: false,
+      defaultOn: true,
     },
-    {
-      flag: 'enableVoiceWasm',
-      action: featureFlagsActions.setEnableVoiceWasm,
-      defaultOn: false,
-    },
+    { flag: 'enableVoiceWasm', action: featureFlagsActions.setEnableVoiceWasm, defaultOn: true },
   ];
 
   it.each(cases)('$flag default is $defaultOn', ({ flag, defaultOn }) => {

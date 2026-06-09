@@ -338,7 +338,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-2 sm:pt-[12vh] px-2 sm:px-4">
       <div
-        className="fixed inset-0 bg-[var(--sc-backdrop-strong)] backdrop-blur-sm transition-opacity duration-200"
+        className="fixed inset-0 bg-[var(--sc-backdrop-strong)] backdrop-blur-sm transition-opacity duration-200 motion-reduce:transition-none"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -349,7 +349,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         aria-modal="true"
         aria-label={t('palette.ariaLabel')}
         tabIndex={-1}
-        className="relative w-full max-w-2xl bg-[var(--sc-surface-raised)]/90 backdrop-blur-xl border border-[var(--sc-border-subtle)] shadow-2xl rounded-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 ring-1 ring-[var(--glass-border)] max-h-[95vh] sm:max-h-[85vh]"
+        className="relative w-full max-w-2xl bg-[var(--sc-surface-raised)]/90 backdrop-blur-xl border border-[var(--sc-border-subtle)] shadow-2xl rounded-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 motion-reduce:animate-none ring-1 ring-[var(--glass-border)] max-h-[95vh] sm:max-h-[85vh]"
       >
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {paletteLiveStatus}

@@ -50,7 +50,12 @@
       - script-src: nur eigene Skripte (Vite ES modules, kein inline nötig)
       - style-src: eigene + unsafe-inline (React inline-styles) + fonts.googleapis.com für CJK/Greek
       - font-src: self + fonts.gstatic.com für CJK/Greek (Google Fonts)
-      - connect-src: Gemini API + OpenAI API + Collaboration WebSocket endpoints
+      - connect-src: Gemini, OpenAI, xAI, Groq, OpenRouter, Ollama (localhost:11434),
+                    LM Studio (localhost:1234), local AI (localhost:8000),
+                    Yjs signaling WebSockets (explicit endpoints only — no wildcards),
+                    https: — intentional broad HTTPS allowance for user-configured
+                    openAiCompatibleBaseUrl (arbitrary remote proxy endpoints that
+                    cannot be statically enumerated in the CSP)
       - img-src: data: URLs für Base64-Bilder erlaubt
       - Produktions-CSP wird über HTTP-Header des Hosts verschärft
     -->
@@ -61,7 +66,7 @@
             style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
             font-src    'self' https://fonts.gstatic.com data:;
             img-src     'self' data: blob:;
-            connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev wss://*.workers.dev wss: ws:;
+            connect-src 'self' https: https://generativelanguage.googleapis.com https://api.openai.com https://api.x.ai https://api.groq.com https://openrouter.ai https://api.openrouter.ai http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev;
             worker-src  'self' blob:;
             manifest-src 'self';
             object-src  'none';

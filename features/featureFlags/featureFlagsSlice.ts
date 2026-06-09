@@ -5,90 +5,76 @@ export interface FeatureFlagsState {
   // QNBS-v3: enableCrossProjectSearch promoted to permanent core behaviour (v1.8).
   // QNBS-v3: enablePlotBoardV2 retired — v1 board removed in v1.6; flag had no effect.
   // QNBS-v3: enableCloudSync retired — Cloud Sync UI is not yet built; the toggle was a no-op.
-  /** Story Bible Light: graph edges + consistency hints in Codex (default: false). */
+  /** Story Bible Light: graph edges + consistency hints in Codex (default: true). */
   enableStoryBibleAdvanced: boolean;
-  /** Research binder sidebar in Manuscript (default: false). */
+  /** Research binder sidebar in Manuscript (default: true). */
   enableBinderResearch: boolean;
-  /** Guided compile wizard on Export view (default: false). */
+  /** Guided compile wizard on Export view (default: true). */
   enableCompileWizard: boolean;
-  /** Experimental: Project health insights from dashboard (default: false). */
+  /** Experimental: Project health insights from dashboard (default: true). */
   enableProjectHealthScore: boolean;
-  /** Experimental: About-page runtime diagnostics (default: false). */
+  /** Experimental: About-page runtime diagnostics (default: true). */
   enableAppHealthPanel: boolean;
-  /** DuckDB-WASM analytics side-car: OPFS-backed query engine for dashboards (default: false). */
+  /** DuckDB-WASM analytics side-car: OPFS-backed query engine for dashboards (default: true). */
   enableDuckDbAnalytics: boolean;
-  /** Story Objects & Groups inventory view — v1.7 Bibisco-depth feature (default: false). */
+  /** Story Objects & Groups inventory view — v1.7 Bibisco-depth feature (default: true). */
   enableObjectsGroups: boolean;
-  /** Enhanced Mind Maps — SVG canvas, 5 node shapes, entity linking (default: false). */
+  /** Enhanced Mind Maps — SVG canvas, 5 node shapes, entity linking (default: true). */
   enableMindMaps: boolean;
-  /** Character Interviews v2 — archetype-based AI interview sessions (default: false). */
+  /** Character Interviews v2 — archetype-based AI interview sessions (default: true). */
   enableCharacterInterviews: boolean;
   /** RTL layout foundation — sets html[dir]=rtl for manual testing; gated until RTL locales land (default: false). */
   enableRtlLayout: boolean;
-  /** LoRA adapter inference — load .safetensors adapters for local WebLLM models (default: false). */
+  /** LoRA adapter inference — load .safetensors adapters for local WebLLM models (default: true). */
   enableLoraAdapters: boolean;
-  /** Plugin system v0.1 — ESM-based extensions with sandboxed capability API (default: false). */
+  /** Plugin system v0.1 — ESM-based extensions with sandboxed capability API (default: true). */
   enablePluginSystem: boolean;
-  /** Voice Full Support — opt-in voice command, dictation and audio navigation (default: false). */
+  /** Voice Full Support — opt-in voice command, dictation and audio navigation (default: true). */
   enableVoiceSupport: boolean;
-  /** ProForge Ultimate Author Pipeline — agentic 8-stage manuscript pipeline (default: false). */
+  /** ProForge Ultimate Author Pipeline — agentic 8-stage manuscript pipeline (default: true). */
   enableProForge: boolean;
-  /** IDB at-rest encryption — AES-256-GCM passphrase-derived key for all manuscript stores (default: false). */
+  /** IDB at-rest encryption — AES-256-GCM passphrase-derived key for all manuscript stores (default: true). */
   enableIdbAtRestEncryption: boolean;
-  /** Voice WASM engines — local Whisper STT + Silero VAD via ONNX; no cloud audio routing (default: false). */
+  /** Voice WASM engines — local Whisper STT + Silero VAD via ONNX; no cloud audio routing (default: true). */
   enableVoiceWasm: boolean;
-  /** Adaptive AI Engine — runtime device profiler + automatic backend/model selection (default: false). */
+  /** Adaptive AI Engine — runtime device profiler + automatic backend/model selection (default: true). */
   enableAdaptiveAiEngine: boolean;
-  /** WebNN inference — NPU/GPU acceleration via ONNX Runtime Web WebNN execution provider (default: false). */
+  /** WebNN inference — NPU/GPU acceleration via ONNX Runtime Web WebNN execution provider (default: true). */
   enableWebnnInference: boolean;
-  /** Compute Shaders — custom WGSL kernels for RAG, plot-board, voice preprocessing (default: false). */
+  /** Compute Shaders — custom WGSL kernels for RAG, plot-board, voice preprocessing (default: true). */
   enableComputeShaders: boolean;
-  /** WorkerBus v2 — unified worker orchestration backbone (default: false). */
+  /** WorkerBus v2 — unified worker orchestration backbone (default: true). */
   enableWorkerBusV2: boolean;
-  /** Rust Compute — offload heavy tasks to Tauri Rust TaskSupervisor (default: true in Tauri, false in web). */
+  /** Rust Compute — offload heavy tasks to Tauri Rust TaskSupervisor (default: true). */
   enableRustCompute: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
 
 const defaultFeatureFlagsState: FeatureFlagsState = {
-  enableStoryBibleAdvanced: false,
-  enableBinderResearch: false,
-  enableCompileWizard: false,
-  enableProjectHealthScore: false,
-  enableAppHealthPanel: false,
-  // QNBS-v3: DuckDB-WASM analytics is experimental; off by default until P1 analytics features land
-  enableDuckDbAnalytics: false,
-  // QNBS-v3: v1.7 Objects inventory — off by default; feature-flagged for staged rollout.
-  enableObjectsGroups: false,
-  // QNBS-v3: v1.7 Mind Maps — off by default; requires Objects to be useful.
-  enableMindMaps: false,
-  // QNBS-v3: v1.7 Character Interviews — off by default; requires AI key to be useful.
-  enableCharacterInterviews: false,
-  // QNBS-v3: RTL foundation — off by default; flip to test mirrored layout before RTL locales ship.
+  // QNBS-v3: all flags on by default so new installs get the full feature set immediately
+  enableStoryBibleAdvanced: true,
+  enableBinderResearch: true,
+  enableCompileWizard: true,
+  enableProjectHealthScore: true,
+  enableAppHealthPanel: true,
+  enableDuckDbAnalytics: true,
+  enableObjectsGroups: true,
+  enableMindMaps: true,
+  enableCharacterInterviews: true,
+  // QNBS-v3: RTL stays off — ar/he locales are stubs only; enabling RTL without content breaks layout
   enableRtlLayout: false,
-  // QNBS-v3: LoRA adapter inference — off by default; browser LoRA is experimental (no training, inference only).
-  enableLoraAdapters: false,
-  // QNBS-v3: Plugin system v0.1 — off by default; sandboxed API contract is stable, loader is not yet wired.
-  enablePluginSystem: false,
-  // QNBS-v3: Voice Full Support — off by default; requires download of WASM voice models and microphone permission.
-  enableVoiceSupport: false,
-  // QNBS-v3: ProForge Pipeline — off by default; major feature requiring agentic AI setup.
-  enableProForge: false,
-  // QNBS-v3: IDB at-rest encryption — off by default; requires passphrase setup in Settings > Privacy.
-  enableIdbAtRestEncryption: false,
-  // QNBS-v3: Voice WASM engines — off by default; ~40 MB Whisper model download on first use.
-  enableVoiceWasm: false,
-  // QNBS-v3: Adaptive AI Engine — off by default; requires benchmark calibration before enabling.
-  enableAdaptiveAiEngine: false,
-  // QNBS-v3: WebNN inference — off by default; WebNN spec is still evolving (2026).
-  enableWebnnInference: false,
-  // QNBS-v3: Compute Shaders — off by default; WGSL kernels require GPU compatibility testing.
-  enableComputeShaders: false,
-  // QNBS-v3: WorkerBus v2 — off by default; Phase 2 runtime wiring lands in services/workerBusManager.ts.
-  enableWorkerBusV2: false,
-  // QNBS-v3: Rust Compute — off by default; Phase 2 HybridRouter routes to Tauri TaskSupervisor when true.
-  enableRustCompute: false,
+  enableLoraAdapters: true,
+  enablePluginSystem: true,
+  enableVoiceSupport: true,
+  enableProForge: true,
+  enableIdbAtRestEncryption: true,
+  enableVoiceWasm: true,
+  enableAdaptiveAiEngine: true,
+  enableWebnnInference: true,
+  enableComputeShaders: true,
+  enableWorkerBusV2: true,
+  enableRustCompute: true,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {

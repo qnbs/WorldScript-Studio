@@ -80,6 +80,14 @@ export const PrivacySection: FC = () => {
                 handleSettingChange('privacy', { ...settings.privacy, shareUsageData: v })
               }
             />
+            <ToggleSwitch
+              label={t('settings.privacy.euDataResidency')}
+              hint={t('settings.privacy.euDataResidencyHint')}
+              checked={settings.privacy.euDataResidency}
+              onChange={(v) =>
+                handleSettingChange('privacy', { ...settings.privacy, euDataResidency: v })
+              }
+            />
           </div>
         </CardContent>
       </Card>
@@ -105,7 +113,8 @@ export const PrivacySection: FC = () => {
               </Button>
             )}
             {encEnabled && !encryptionReady && (
-              <Button variant="primary" onClick={() => setPassphraseModal('set')}>
+              // QNBS-v3: 'unlock' re-derives in-memory key from passphrase; 'set' would overwrite existing encryption sentinel
+              <Button variant="primary" onClick={() => setPassphraseModal('unlock')}>
                 {t('settings.privacy.encryptionUnlockAction')}
               </Button>
             )}

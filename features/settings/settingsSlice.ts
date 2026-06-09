@@ -35,7 +35,7 @@ const getSystemThemePreference = (): Theme => {
 const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
-  appearancePreset: 'default',
+  appearancePreset: 'sepia',
   editorFont: 'serif',
   fontSize: 16,
   lineSpacing: 1.6,
