@@ -91,12 +91,16 @@ test.describe('Voice — WASM engine path (enableVoiceSupport + enableVoiceWasm)
     await clickNavItem(page, /Settings/i);
     await page.getByRole('button', { name: /Voice.*Speech|Sprache/i }).click();
 
-    // The "Download offline model" button / section only renders when enableVoiceWasm is on
-    await expect(
-      page
-        .getByRole('button', { name: /Download.*model|Download.*offline|Model download/i })
-        .or(page.getByText(/Download offline model|Offline-Modell herunterladen/i)),
-    ).toBeVisible({ timeout: 10000 });
+    // Enable voice support first — voice.enabled defaults to false in Redux store
+    const voiceToggle = page
+      .getByRole('switch', { name: /Enable voice|Voice commands|Sprachbefehle/i })
+      .first();
+    await expect(voiceToggle).toBeVisible({ timeout: 10000 });
+    await voiceToggle.click();
+
+    // QNBS-v3: WASM section renders only when enableVoiceWasm + voice.enabled are both true;
+    // buttons are "Download STT (Whisper)" / "Download TTS (Kokoro)" — use testid for stability.
+    await expect(page.getByTestId('voice-wasm-download-section')).toBeVisible({ timeout: 10000 });
   });
 });
 
@@ -117,12 +121,17 @@ test.describe('Voice — WASM section absent when enableVoiceWasm is off', () =>
     await clickNavItem(page, /Settings/i);
     await page.getByRole('button', { name: /Voice.*Speech|Sprache/i }).click();
 
-    // Download section should not be present
-    await expect(
-      page
-        .getByRole('button', { name: /Download.*offline|Model download/i })
-        .or(page.getByText(/Download offline model/i)),
-    ).not.toBeVisible({ timeout: 3000 });
+    // Enable voice so we can confirm the WASM section is absent due to the flag, not voice.enabled
+    const voiceToggle = page
+      .getByRole('switch', { name: /Enable voice|Voice commands|Sprachbefehle/i })
+      .first();
+    await expect(voiceToggle).toBeVisible({ timeout: 10000 });
+    await voiceToggle.click();
+
+    // QNBS-v3: With enableVoiceWasm:false, the WASM download section must not render.
+    await expect(page.getByTestId('voice-wasm-download-section')).not.toBeVisible({
+      timeout: 3000,
+    });
   });
 });
 

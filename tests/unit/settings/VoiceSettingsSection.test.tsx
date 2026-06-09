@@ -41,6 +41,10 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
       language: 'en',
       theme: 'dark',
     },
+    // QNBS-v3: featureFlags needed since VoiceSettingsSection gates WASM section by enableVoiceWasm
+    featureFlags: {
+      enableVoiceWasm: false,
+    },
     handleSettingChange: mockHandleSettingChange,
     handleResetSettings: vi.fn(),
   }),

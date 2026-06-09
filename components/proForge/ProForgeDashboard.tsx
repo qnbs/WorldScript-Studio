@@ -111,12 +111,14 @@ export const ProForgeDashboard: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
+      {/* QNBS-v3: flex flex-col so children can use flex-1 instead of h-full — percentage heights
+          inside overflow-y-auto resolve to 0 in Chrome when the flex chain has auto sizing. */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
         {!currentRun ? (
           /* Start Screen */
           <div
             data-testid="proforge-empty-state"
-            className="flex flex-col items-center justify-center h-full gap-6 p-8"
+            className="flex flex-col items-center justify-center flex-1 gap-6 p-8"
           >
             <div className="text-center max-w-md">
               <div

@@ -14,7 +14,7 @@ import { VoiceModelDownloadModal } from '../voice/VoiceModelDownloadModal';
 import { ToggleSwitch } from './SettingsShared';
 
 export const VoiceSettingsSection: FC = () => {
-  const { t, settings, handleSettingChange } = useSettingsViewContext();
+  const { t, settings, handleSettingChange, featureFlags } = useSettingsViewContext();
   const dispatch = useAppDispatch();
   const voice = settings.voice;
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
@@ -346,8 +346,10 @@ export const VoiceSettingsSection: FC = () => {
       )}
 
       {/* ── WASM Models ── */}
-      {voice.enabled && (
-        <Card>
+      {/* QNBS-v3: Only render when enableVoiceWasm is on — the section is meaningless without
+          the offline engine flag, and the test matrix expects it absent when the flag is off. */}
+      {featureFlags.enableVoiceWasm && voice.enabled && (
+        <Card data-testid="voice-wasm-download-section">
           <CardHeader>
             <h3 className="text-base font-semibold text-[var(--sc-text-primary)]">
               {t('settings.voice.wasmModels')}
