@@ -84,5 +84,48 @@ describe('idbProjectStore', () => {
       expect(result.integrations.syncProvider).toBe('evernote');
       expect(result.integrations.evernoteSync).toBe(false);
     });
+
+    it('applies backup defaults when backup is missing', () => {
+      const result = normalizePersistedSettings({});
+      expect(result.backup.autoBackup).toBe(true);
+      expect(result.backup.backupFrequency).toBe('weekly');
+      expect(result.backup.maxBackups).toBe(10);
+    });
+
+    it('applies voice defaults when voice is missing', () => {
+      const result = normalizePersistedSettings({});
+      expect(typeof result.voice).toBe('object');
+      expect(result.voice).not.toBeNull();
+    });
+
+    it('applies performance defaults when performance is missing', () => {
+      const result = normalizePersistedSettings({});
+      expect(result.performance.autoSaveInterval).toBe(30);
+      expect(result.performance.preloadContent).toBe(true);
+    });
+
+    it('applies notifications defaults when notifications is null', () => {
+      const result = normalizePersistedSettings({ notifications: null });
+      expect(result.notifications.desktopNotifications).toBe(false);
+      expect(result.notifications.writingReminders).toBe('never');
+    });
+
+    it('applies advancedAi defaults when advancedAi is missing', () => {
+      const result = normalizePersistedSettings({});
+      expect(result.advancedAi.provider).toBe('gemini');
+      expect(result.advancedAi.temperature).toBe(0.7);
+      expect(result.advancedAi.ragMode).toBe('hybrid');
+    });
+
+    it('normalizes keyboardShortcuts to array when missing', () => {
+      const result = normalizePersistedSettings({});
+      expect(Array.isArray(result.keyboardShortcuts)).toBe(true);
+    });
+
+    it('normalizes writingGoals to array when missing', () => {
+      const result = normalizePersistedSettings({});
+      expect(Array.isArray(result.writingGoals)).toBe(true);
+      expect(result.writingGoals.length).toBeGreaterThan(0);
+    });
   });
 });

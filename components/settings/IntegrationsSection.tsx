@@ -56,6 +56,7 @@ export const IntegrationsSection: FC = () => {
             </label>
             <Select
               id="settings-sync-provider"
+              ariaLabel={t('settings.integrations.syncProvider')}
               value={settings.integrations.syncProvider}
               onChange={(v) =>
                 handleSettingChange('integrations', {
@@ -72,9 +73,11 @@ export const IntegrationsSection: FC = () => {
               ]}
             />
           </div>
+          {/* QNBS-v3: these 4 toggles persist preference state but have no backend implementation yet */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ToggleSwitch
               label={t('settings.integrations.evernoteSync')}
+              hint={t('settings.integrations.comingSoon')}
               checked={settings.integrations.evernoteSync}
               onChange={(v) =>
                 handleSettingChange('integrations', { ...settings.integrations, evernoteSync: v })
@@ -82,6 +85,7 @@ export const IntegrationsSection: FC = () => {
             />
             <ToggleSwitch
               label={t('settings.integrations.notionSync')}
+              hint={t('settings.integrations.comingSoon')}
               checked={settings.integrations.notionSync}
               onChange={(v) =>
                 handleSettingChange('integrations', { ...settings.integrations, notionSync: v })
@@ -89,6 +93,7 @@ export const IntegrationsSection: FC = () => {
             />
             <ToggleSwitch
               label={t('settings.integrations.scrivenerExport')}
+              hint={t('settings.integrations.comingSoon')}
               checked={settings.integrations.scrivenerExport}
               onChange={(v) =>
                 handleSettingChange('integrations', {
@@ -99,6 +104,7 @@ export const IntegrationsSection: FC = () => {
             />
             <ToggleSwitch
               label={t('settings.integrations.googleDocsImport')}
+              hint={t('settings.integrations.comingSoon')}
               checked={settings.integrations.googleDocsImport}
               onChange={(v) =>
                 handleSettingChange('integrations', {
@@ -165,9 +171,14 @@ export const IntegrationsSection: FC = () => {
                 t('settings.integrations.languageToolTest')
               )}
             </Button>
-            {ltMsg ? (
-              <span className="text-xs text-[var(--sc-text-secondary)] max-w-md">{ltMsg}</span>
-            ) : null}
+            {/* QNBS-v3: role="status" announces async test result to AT without interrupting (WCAG 4.1.3) */}
+            <span
+              role="status"
+              aria-live="polite"
+              className="text-xs text-[var(--sc-text-secondary)] max-w-md"
+            >
+              {ltMsg}
+            </span>
           </div>
         </CardContent>
       </Card>

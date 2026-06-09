@@ -388,6 +388,11 @@ export const useSettingsView = () => {
         });
         setEncryptionReady(true);
         toast.success(t('settings.privacy.encryptionActiveStatus'));
+      } else if (passphraseModal === 'unlock') {
+        // QNBS-v3: unlock re-derives the in-memory key from the passphrase without modifying the sentinel
+        await verifyAndInitIdbEncryption(_current);
+        setEncryptionReady(true);
+        toast.success(t('settings.privacy.encryptionActiveStatus'));
       } else if (passphraseModal === 'disable') {
         // QNBS-v3: verify current passphrase first, then remove sentinel and disable flag
         await verifyAndInitIdbEncryption(_current);

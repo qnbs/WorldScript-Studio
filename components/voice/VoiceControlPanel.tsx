@@ -42,7 +42,7 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
 
   if (microphonePermission === 'denied') {
     return (
-      <div className="fixed bottom-4 right-4 z-50 p-3 rounded-[var(--radius-sc-lg)] bg-[var(--sc-surface-raised)] border border-[var(--sc-border)] shadow-lg">
+      <div className="fixed bottom-20 right-4 z-50 md:bottom-4 md:right-4 p-3 rounded-[var(--radius-sc-lg)] bg-[var(--sc-surface-raised)] border border-[var(--sc-border)] shadow-lg">
         <p className="text-sm text-[var(--sc-text-primary)]">{t('voice.permissionDenied')}</p>
       </div>
     );
@@ -52,7 +52,7 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
 
   return (
     <section
-      className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 p-2 rounded-[var(--radius-sc-lg)] bg-[var(--sc-surface-raised)] border border-[var(--sc-border)] shadow-lg"
+      className="fixed bottom-20 right-4 z-50 md:bottom-4 md:right-4 flex flex-col gap-2 p-2 rounded-[var(--radius-sc-lg)] bg-[var(--sc-surface-raised)] border border-[var(--sc-border)] shadow-lg"
       aria-label={t('voice.panelLabel')}
     >
       <button

@@ -229,4 +229,94 @@ describe('CloudSyncBackend', () => {
     const result = await backend.loadProject('missing-project');
     expect(result).toBeNull();
   });
+
+  // --- StoryCodex CRUD ---
+
+  it('saveStoryCodex puts under codex/<projectId>', async () => {
+    const backend = makeBackend();
+    await backend.saveStoryCodex({
+      projectId: 'proj-1',
+      extractedAt: new Date().toISOString(),
+      entities: [],
+      summary: '',
+    });
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.stringContaining('codex/proj-1'),
+      expect.any(String),
+    );
+  });
+
+  it('getStoryCodex returns data from stored payload', async () => {
+    mockGet.mockResolvedValueOnce(
+      JSON.stringify({
+        data: { projectId: 'proj-1', characters: [] },
+        meta: { lastModified: 1000, deviceId: 'dev', version: 1 },
+      }),
+    );
+    const backend = makeBackend();
+    const result = await backend.getStoryCodex('proj-1');
+    expect(result?.projectId).toBe('proj-1');
+  });
+
+  it('getStoryCodex returns null when not found', async () => {
+    mockGet.mockResolvedValueOnce(null);
+    const backend = makeBackend();
+    expect(await backend.getStoryCodex('missing')).toBeNull();
+  });
+
+  it('deleteStoryCodex calls delete with correct key', async () => {
+    const backend = makeBackend();
+    await backend.deleteStoryCodex('proj-1');
+    expect(mockDelete).toHaveBeenCalledWith('codex/proj-1');
+  });
+
+  // --- RAG vectors CRUD ---
+
+  it('saveRagVectors puts under rag/<projectId>', async () => {
+    const backend = makeBackend();
+    await backend.saveRagVectors('proj-1', [{ id: 'v1' }]);
+    expect(mockPut).toHaveBeenCalledWith(expect.stringContaining('rag/proj-1'), expect.any(String));
+  });
+
+  it('getRagVectors returns array from stored payload', async () => {
+    mockGet.mockResolvedValueOnce(
+      JSON.stringify({
+        data: [{ id: 'v1' }, { id: 'v2' }],
+        meta: { lastModified: 1000, deviceId: 'dev', version: 1 },
+      }),
+    );
+    const backend = makeBackend();
+    const result = await backend.getRagVectors('proj-1');
+    expect(result).toHaveLength(2);
+  });
+
+  it('getRagVectors returns empty array when key not found', async () => {
+    mockGet.mockResolvedValueOnce(null);
+    const backend = makeBackend();
+    const result = await backend.getRagVectors('proj-1');
+    expect(result).toEqual([]);
+  });
+
+  it('deleteRagVectors calls delete with correct key', async () => {
+    const backend = makeBackend();
+    await backend.deleteRagVectors('proj-1');
+    expect(mockDelete).toHaveBeenCalledWith('rag/proj-1');
+  });
+
+  // --- getDeviceId always produces a non-empty string ---
+
+  it('saveStoryCodex deviceId in meta is a non-empty string', async () => {
+    // QNBS-v3: getDeviceId uses crypto.randomUUID when available; meta must always be a string
+    const backend = makeBackend();
+    await backend.saveStoryCodex({
+      projectId: 'p1',
+      extractedAt: new Date().toISOString(),
+      entities: [],
+      summary: '',
+    });
+    const [, blob] = mockPut.mock.calls[0] as [string, string];
+    const payload = JSON.parse(blob) as { meta: { deviceId: string } };
+    expect(typeof payload.meta.deviceId).toBe('string');
+    expect(payload.meta.deviceId.length).toBeGreaterThan(0);
+  });
 });

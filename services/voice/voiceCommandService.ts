@@ -30,6 +30,7 @@ import { HybridIntentEngine } from './intentEngine';
 import { createSttEngine } from './sttEngine';
 import { createTtsEngine } from './ttsEngine';
 import { createVadEngine } from './vadEngine';
+import { VoiceActivityCoordinator } from './voiceActivityCoordinator';
 import type {
   SttEngine,
   SttResult,
@@ -70,6 +71,7 @@ export class VoiceCommandService {
   private getState: GetStateFn | null = null;
   private config: VoiceServiceConfig;
 
+  private coordinator: VoiceActivityCoordinator | null = null;
   private isInitialized = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
   private eventListeners: VoiceEventListener[] = [];
@@ -271,10 +273,25 @@ export class VoiceCommandService {
 
     this.emit({ type: 'listening-started', timestamp: Date.now() });
 
-    await this.sttEngine.start(
-      (result) => this.handleSttResult(result),
-      (error) => this.handleSttError(error),
-    );
+    // QNBS-v3: Route through VoiceActivityCoordinator when Whisper WASM is active —
+    // feeds PCM frames to the VAD and triggers STT on detected speech boundaries.
+    if (this.config.enableVoiceWasm && this.sttEngine.id === 'whisper' && this.vadEngine) {
+      // QNBS-v3: dispose previous coordinator before reassigning to prevent leaked mic stream
+      if (this.coordinator) {
+        await this.coordinator.dispose();
+        this.coordinator = null;
+      }
+      this.coordinator = new VoiceActivityCoordinator(this.vadEngine, this.sttEngine);
+      await this.coordinator.start(
+        (result) => this.handleSttResult(result),
+        (error) => this.handleSttError(error),
+      );
+    } else {
+      await this.sttEngine.start(
+        (result) => this.handleSttResult(result),
+        (error) => this.handleSttError(error),
+      );
+    }
 
     // Auto-stop after timeout
     this.listeningTimer = setTimeout(() => {
@@ -309,7 +326,11 @@ export class VoiceCommandService {
     this.d(setVoiceMode('inactive'));
     this.d(setDictationActive(false));
 
-    if (this.sttEngine) {
+    if (this.coordinator) {
+      // QNBS-v3: Whisper/VAD coordinator owns its own teardown path
+      await this.coordinator.stop();
+      this.coordinator = null;
+    } else if (this.sttEngine) {
       await this.sttEngine.stop();
     }
 
@@ -475,12 +496,18 @@ export class VoiceCommandService {
     await this.stopListening();
     this.cancelSpeech();
 
-    await Promise.all([
-      this.sttEngine?.dispose(),
-      this.ttsEngine?.dispose(),
-      this.vadEngine?.dispose(),
-      this.wakeWordEngine?.dispose(),
-    ]);
+    // QNBS-v3: coordinator.dispose() handles its own engine teardown when active
+    if (this.coordinator) {
+      await this.coordinator.dispose();
+      this.coordinator = null;
+    } else {
+      await Promise.all([
+        this.sttEngine?.dispose(),
+        this.ttsEngine?.dispose(),
+        this.vadEngine?.dispose(),
+        this.wakeWordEngine?.dispose(),
+      ]);
+    }
 
     this.isInitialized = false;
     this.eventListeners = [];

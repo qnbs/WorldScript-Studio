@@ -208,25 +208,41 @@
   --sc-surface-overlay: #e8dcc8;
   --sc-text-primary: #3d3428;
   --sc-text-secondary: #5c5346;
-  --sc-text-muted: #8a7f72;
-  --sc-accent: #b45309;
-  --sc-accent-hover: #92400e;
-  --sc-accent-subtle: rgba(180, 83, 9, 0.14);
-  --sc-accent-glow: 0 0 32px -8px rgba(180, 83, 9, 0.28);
+  /* QNBS-v3: #655c50 = 5.57:1 on #f4ecd8 (AA) — darkened from #8a7f72 which was 3.33:1 (fail) */
+  --sc-text-muted: #655c50;
+  /* QNBS-v3: #b45309 was 4.27:1 on base / 3.66:1 on active-nav-bg (#ecdabf) — both below 4.5:1 AA.
+     Darkened to #92400e (5.68:1 on base, 4.97:1 on active-nav-bg). White text on buttons: 6.69:1 ✓ */
+  --sc-accent: #92400e;
+  --sc-accent-hover: #78350f;
+  --sc-accent-subtle: rgba(146, 64, 14, 0.14);
+  --sc-accent-glow: 0 0 32px -8px rgba(146, 64, 14, 0.28);
   --sc-border-subtle: rgba(61, 52, 40, 0.12);
   --sc-border-strong: rgba(61, 52, 40, 0.22);
-  --sc-border-focus: #b45309;
-  --sc-ring-focus: rgba(180, 83, 9, 0.45);
+  --sc-border-focus: #92400e;
+  --sc-ring-focus: rgba(146, 64, 14, 0.45);
   --sc-prose-bg: #faf6ee;
   --sc-prose-fg: #2c2419;
-  --nav-text-active: #b45309;
-  --nav-background-active: rgba(180, 83, 9, 0.12);
+  --nav-text-active: #92400e;
+  --nav-background-active: rgba(146, 64, 14, 0.12);
   --sc-bg: var(--sc-surface-base);
   --sc-fg: var(--sc-text-primary);
   --sc-muted: var(--sc-text-muted);
   --border-interactive: var(--sc-border-focus);
   --ring-focus: var(--sc-ring-focus);
   --nav-border-active: var(--sc-accent);
+
+  /* QNBS-v3: state colors — dark-theme values (#4ade80 etc.) fail on sepia's light bg;
+     override with light-theme-equivalent deep tones that pass WCAG AA on all sepia surfaces */
+  --sc-danger-fg: #b91c1c;
+  --sc-danger-bg: rgba(185, 28, 28, 0.08);
+  --sc-danger-border: rgba(185, 28, 28, 0.25);
+  --sc-success-fg: #166534;
+  --sc-success-bg: rgba(22, 101, 52, 0.08);
+  /* QNBS-v3: #9a3412 distinguishes warning from accent (#92400e) — both warm but different hues */
+  --sc-warning-fg: #9a3412;
+  --sc-warning-bg: rgba(146, 64, 14, 0.08);
+  --sc-info-fg: #1d4ed8;
+  --sc-info-bg: rgba(29, 78, 216, 0.08);
 
   /* QNBS-v3: Data-viz categorical palette — sepia-adjusted for warmth. */
   --sc-data-1: #dc2626;

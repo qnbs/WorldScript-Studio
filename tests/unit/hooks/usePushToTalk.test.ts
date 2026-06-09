@@ -44,6 +44,7 @@ vi.mock('../../../services/voice/voiceCommandService', () => ({
 
 vi.mock('../../../services/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), withContext: vi.fn() }),
 }));
 
 // ---------------------------------------------------------------------------
