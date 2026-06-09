@@ -119,13 +119,13 @@ export async function waitForSpaReady(page: Page): Promise<void> {
       .waitFor({ state: 'visible', timeout: 25000 }),
   ]);
   // QNBS-v3: theme class is applied in App useEffect after first render — wait for it so
-  //          CSS variable values are stable (avoids axe false-positives on mid-transition colors)
+  //          CSS variable values are stable (avoids axe false-positives on mid-transition colors).
+  //          appearance-sepia stacks with light-theme/dark-theme, not a standalone class.
   await page
     .waitForFunction(
       () =>
         document.body.classList.contains('light-theme') ||
-        document.body.classList.contains('dark-theme') ||
-        document.body.classList.contains('sepia-theme'),
+        document.body.classList.contains('dark-theme'),
       { timeout: 5000 },
     )
     .catch(() => {}); // best-effort: if no theme class, continue anyway
