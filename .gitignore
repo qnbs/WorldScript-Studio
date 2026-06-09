@@ -43,6 +43,13 @@ playwright-report/
 # CI Analyzer artifacts (downloaded from GitHub Actions)
 artifacts/
 
+# CI job artifacts written/downloaded locally
+e2e-deep-report/
+gitleaks-results.sarif/
+vitest-results-node22/
+vitest-results-node24/
+vrt-screenshots/
+
 # Playwright HTML report / junit (generated locally or in CI artifacts)
 tests/e2e/html-report/
 tests/e2e/results/
