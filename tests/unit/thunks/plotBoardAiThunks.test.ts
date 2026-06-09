@@ -156,11 +156,11 @@ describe('suggestNextBeatThunk', () => {
     await store.dispatch(
       suggestNextBeatThunk({ plotSummary: 'Test.', selectedSectionIds: [], lang: 'it' }),
     );
-    // QNBS-v3: featureFlags.enableDuckDbAnalytics defaults to false — confirm it reaches assembleRAGPrompt.
+    // QNBS-v3: featureFlags.enableDuckDbAnalytics defaults to true (v1.21) — confirm it reaches assembleRAGPrompt.
     expect(mockAssemble).toHaveBeenCalledWith(
       'plotSuggestion',
       expect.any(Object),
-      expect.objectContaining({ duckDbEnabled: false }),
+      expect.objectContaining({ duckDbEnabled: true }),
     );
   });
 });
