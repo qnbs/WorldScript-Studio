@@ -9,11 +9,11 @@
   <img src="https://img.shields.io/badge/TypeScript-7.x_(tsgo)-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7 (tsgo)">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · Ollama · WebLLM">
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
-  <img src="https://img.shields.io/badge/Version-v1.21.0-6366F1" alt="v1.21.0">
+  <img src="https://img.shields.io/badge/Version-v1.20.0-6366F1" alt="v1.20.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-11_locales-2348_keys-0EA5E9" alt="i18n 11 locales — 2348 keys">
-  <img src="https://img.shields.io/badge/Tests-~5000_%2B_%2F_427_files-22C55E" alt="~5000+ tests / 427 files">
+  <img src="https://img.shields.io/badge/i18n-11_locales-2357_keys-0EA5E9" alt="i18n 11 locales — 2357 keys">
+  <img src="https://img.shields.io/badge/Tests-~5000_%2B_%2F_433_files-22C55E" alt="~5000+ tests / 433 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
@@ -232,9 +232,9 @@ See [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) for full architectu
 
 A single-keystroke toggle that collapses all sidebars and chrome, leaving only the manuscript editor. Exit with `Escape` or the same toggle key. State is stored in the Zustand `transientUiStore` (`flowMode` flag) so it resets on page load.
 
-### 🗣️ Voice Dictation & WASM Voice Engines _(v1.17 foundation + v1.19.0 WASM scaffold + v1.21 model download UI)_
+### 🗣️ Voice Dictation & WASM Voice Engines _(v1.17 foundation + v1.19.0 WASM scaffold + v1.21 model download UI — in development)_
 
-Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field. **v1.19.0** adds WASM STT/VAD engine scaffolds; **v1.21** ships the full model download flow:
+Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field. **v1.19.0** adds WASM STT/VAD engine scaffolds; **v1.21 (in development)** ships the full model download flow:
 
 - **`WasmSttEngine`** (`services/voice/wasmSttEngine.ts`) — Whisper.cpp WASM interface scaffold (model download, chunked inference, 99+ language detection).
 - **`SileroVadEngine`** (`services/voice/sileroVadEngine.ts`) — Silero VAD v4 via ONNX Runtime Web (~2 MB model, lazy-loaded, replaces energy-threshold VAD).
@@ -598,10 +598,10 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-06-01, v1.19.0+):**
-- **~5 000+ unit tests** across **427 test files** — all passing (2026-06-07)
+**Current test metrics (2026-06-10):**
+- **~5 000+ unit tests** across **433 test files** — all passing
 - Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2 340 keys × 11 locales** (en/de/fr/es/it + ar/he RTL Beta + ja/zh/pt/el Beta)
+- i18n: **2 357 keys × 11 locales** (en/de/fr/es/it + ar/he RTL Beta + ja/zh/pt/el Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 
