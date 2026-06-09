@@ -125,8 +125,8 @@ test.describe('Error paths — Settings sections with all flags on', () => {
     /AI Configuration|KI.Konfiguration/i,
     /Accessibility|Barrierefreiheit/i,
     /Privacy.*Security|Datenschutz/i,
-    // QNBS-v3: English label is "Early Access Features", German is "Early-Access-Funktionen"
-    /Early Access|Experimentell/i,
+    // QNBS-v3: English "Early Access Features", German "Early-Access-Funktionen"; dot matches space/hyphen
+    /Early.Access|Experimentell/i,
   ];
 
   for (const sectionName of settingsSections) {
