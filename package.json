@@ -61,7 +61,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test",
     "test:e2e:ui": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test --ui",
-    "test:e2e:deep": "node -e \"if (process.env.CI !== 'true') { console.error('E2E deep tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test tests/e2e/deep/ --project=chromium",
+    "test:e2e:deep": "node -e \"if (process.env.CI !== 'true') { console.error('E2E deep tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && RUN_DEEP_E2E=1 playwright test tests/e2e/deep/ --project=chromium",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "test:storybook": "test-storybook",

@@ -38,10 +38,10 @@ for (const config of testConfigurations) {
         timeout: 15000,
       });
 
-      // No fatal error overlay should be visible
-      await expect(page.getByRole('heading', { name: /Something went wrong|Error|Fehler/i }))
-        .not.toBeVisible({ timeout: 2000 })
-        .catch(() => {});
+      // QNBS-v3: No .catch() — a visible error boundary is a real regression, not a flake.
+      await expect(
+        page.getByRole('heading', { name: /Something went wrong|Error|Fehler/i }),
+      ).not.toBeVisible({ timeout: 2000 });
     });
   });
 }
