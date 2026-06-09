@@ -306,7 +306,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           {renderedContent}
         </div>
       </div>
-      <div className="absolute bottom-4 right-6 text-xs text-[var(--sc-text-muted)] bg-[var(--sc-surface-raised)]/90 border border-[var(--sc-border-subtle)] px-3 py-1 rounded-full pointer-events-none backdrop-blur-sm shadow-sm transition-opacity duration-300">
+      <div className="absolute bottom-20 left-6 md:bottom-4 text-xs text-[var(--sc-text-muted)] bg-[var(--sc-surface-raised)]/90 border border-[var(--sc-border-subtle)] px-3 py-1 rounded-full pointer-events-none backdrop-blur-sm shadow-sm transition-opacity duration-300">
         {activeSectionStats.wordCount} {t('common.words')}
       </div>
       {mentions.length > 0 && (mentionPosition !== null || isMobile) && (

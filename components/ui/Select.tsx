@@ -144,7 +144,7 @@ export const Select = React.memo(
           <div
             role="listbox"
             aria-label={ariaLabel}
-            className="absolute top-full left-0 mt-2 w-full max-h-64 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[var(--sc-z-docked)]"
+            className="absolute top-full left-0 mt-2 w-full max-h-64 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[var(--sc-z-sticky)]"
           >
             <ul className="py-1">
               {options?.map(renderOption)}
