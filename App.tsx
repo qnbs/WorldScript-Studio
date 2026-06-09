@@ -201,7 +201,17 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       document.body.classList.add(isDark ? 'dark-theme' : 'light-theme');
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
       if (themeColorMeta) {
-        themeColorMeta.setAttribute('content', isDark ? '#020617' : '#ffffff');
+        // QNBS-v3: Sepia has distinct dark/light surface colors; reflect them in the
+        // mobile browser chrome so the status bar matches the app shell.
+        const themeColor =
+          settings.appearancePreset === 'sepia'
+            ? isDark
+              ? '#1c1308'
+              : '#f4ecd8'
+            : isDark
+              ? '#020617'
+              : '#ffffff';
+        themeColorMeta.setAttribute('content', themeColor);
       }
       try {
         localStorage.setItem('storycraft-theme', isDark ? 'dark' : 'light');
@@ -223,7 +233,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       applyTheme(settings.theme === 'dark');
     }
     return undefined;
-  }, [settings.theme]);
+  }, [settings.theme, settings.appearancePreset]);
 
   // QNBS-v3: Appearance presets + a11y hooks → body classes (pairs with index.css tokens).
   useEffect(() => {

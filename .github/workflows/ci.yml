@@ -277,6 +277,45 @@ jobs:
           retention-days: 7
 
   # ----------------------------------------------------------
+  # 6a. E2E DEEP COVERAGE: Feature-flag matrix + error paths (non-blocking)
+  # QNBS-v3: Separate from the required `e2e` gate. Runs tests/e2e/deep/ with
+  # explicit flag combinations that were previously invisible (coverage illusion).
+  # continue-on-error:true so deep failures inform but never block a merge.
+  # ----------------------------------------------------------
+  e2e-deep:
+    name: 🔬 E2E Deep Coverage (feature-flag matrix)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [quality]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: ./.github/actions/setup
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run deep E2E coverage
+        run: pnpm run test:e2e:deep
+        env:
+          CI: 'true'
+
+      - name: Upload deep E2E report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-deep-report
+          path: tests/e2e/html-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ----------------------------------------------------------
   # 6. LIGHTHOUSE: Performance budgets (after build)
   # ----------------------------------------------------------
   lighthouse:

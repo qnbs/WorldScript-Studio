@@ -57,7 +57,36 @@ vi.mock('../../hooks/useSettingsView', () => ({
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => vi.fn()),
   useAppSelector: vi.fn((selector: (s: unknown) => unknown) =>
-    selector({ settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 } }),
+    selector({
+      settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 },
+      // QNBS-v3: SettingsViewUI reads s.featureFlags.enableVoiceSupport — must include all 21 flags
+      featureFlags: {
+        enableCodexAutoTracking: true,
+        enableCrossProjectSearch: true,
+        enablePlotBoardV2: true,
+        enableDuckDbAnalytics: false,
+        enableVoiceSupport: false,
+        enableProForge: false,
+        enableStoryBibleAdvanced: false,
+        enableBinderResearch: false,
+        enableCompileWizard: false,
+        enableProjectHealthScore: false,
+        enableAppHealthPanel: false,
+        enableIdbAtRestEncryption: false,
+        enableVoiceWasm: false,
+        enableRtlLayout: false,
+        enableAdaptiveAiEngine: false,
+        enableWebnnInference: false,
+        enableComputeShaders: false,
+        enableWorkerBusV2: false,
+        enableRustCompute: false,
+        enableLoraAdapters: false,
+        enablePluginSystem: false,
+        enableObjectsGroups: false,
+        enableMindMaps: false,
+        enableCharacterInterviews: false,
+      },
+    }),
   ),
 }));
 

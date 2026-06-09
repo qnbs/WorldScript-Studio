@@ -7,8 +7,6 @@ beforeAll(() => {
 });
 
 const mockHandleSelectCategory = vi.fn();
-const mockHandleAskAi = vi.fn();
-const mockSetUserInput = vi.fn();
 
 const mockHelpContent = [
   {
@@ -23,7 +21,7 @@ vi.mock('../../hooks/useHelpView', () => ({
   useHelpView: () => ({
     t: (key: string) => key,
     helpContent: mockHelpContent,
-    activeCategory: 'ai',
+    activeCategory: 'story',
     selectedArticle: null,
     handleSelectCategory: mockHandleSelectCategory,
     handleSelectArticle: vi.fn(),
@@ -32,11 +30,6 @@ vi.mock('../../hooks/useHelpView', () => ({
     searchQuery: '',
     setSearchQuery: vi.fn(),
     searchResults: [],
-    chatHistory: [{ role: 'model', text: 'Welcome to the help assistant.' }],
-    userInput: 'Test input',
-    setUserInput: mockSetUserInput,
-    isAiReplying: false,
-    handleAskAi: mockHandleAskAi,
   }),
 }));
 
@@ -47,33 +40,28 @@ vi.mock('../../app/hooks', () => ({
 describe('HelpView', () => {
   beforeEach(() => {
     mockHandleSelectCategory.mockClear();
-    mockHandleAskAi.mockClear();
-    mockSetUserInput.mockClear();
   });
 
-  it('renders the AI assistant section when ai category is active', () => {
+  it('renders the help title heading', () => {
     render(<HelpView />);
+    expect(screen.getByRole('heading', { name: 'help.title' })).toBeInTheDocument();
+  });
 
-    expect(screen.getByRole('heading', { name: 'help.ai.title' })).toBeInTheDocument();
-    expect(screen.getByText('Welcome to the help assistant.')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('help.ai.placeholder')).toBeInTheDocument();
+  it('renders article list when a matching category is active', () => {
+    render(<HelpView />);
+    // ArticleList renders the category title as an h2 heading
+    expect(screen.getByRole('heading', { level: 2, name: 'help.story.title' })).toBeInTheDocument();
+    // Article items are rendered as buttons
+    expect(screen.getByRole('button', { name: 'help.story.article1' })).toBeInTheDocument();
   });
 
   it('calls handleSelectCategory when a navigation button is clicked', () => {
     render(<HelpView />);
 
-    const navButton = screen.getByText('help.story.title');
-    fireEvent.click(navButton);
+    // The nav renders each category as a <button> — use getByRole to disambiguate from the ArticleList heading
+    const navButtons = screen.getAllByRole('button', { name: 'help.story.title' });
+    fireEvent.click(navButtons[0]!);
 
     expect(mockHandleSelectCategory).toHaveBeenCalledWith('story');
-  });
-
-  it('submits the AI query when the ask button is clicked', () => {
-    render(<HelpView />);
-
-    const askButton = screen.getByRole('button', { name: 'help.tabs.askAi' });
-    fireEvent.click(askButton);
-
-    expect(mockHandleAskAi).toHaveBeenCalled();
   });
 });

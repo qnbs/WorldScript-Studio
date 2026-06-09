@@ -17,6 +17,10 @@ const e2eProjects = isCi
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // QNBS-v3: deep/ specs run in a separate non-blocking CI job (e2e-deep) so they don't
+  // add ~30 tests to the required e2e gate. Run locally with: pnpm run test:e2e:deep
+  // RUN_DEEP_E2E=1 clears the ignore list so the e2e-deep job can discover deep/ specs.
+  testIgnore: process.env['RUN_DEEP_E2E'] ? [] : ['**/deep/**'],
   fullyParallel: true,
   forbidOnly: !!process.env['CI'],
   retries: process.env['CI'] ? 2 : 0,

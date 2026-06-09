@@ -18,40 +18,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 pnpm run dev           # Vite dev server on http://localhost:3000
-pnpm run dev:turbo     # Turbo parallel dev (all packages)
 pnpm run build         # Production build to dist/
-pnpm run build:edge    # Edge/SSR-compatible build (Vercel, Cloudflare Workers)
-pnpm run build:pages   # Cloudflare Pages build
-pnpm run preview       # Preview production build locally
-pnpm run smoke:prod    # Headless-browser mount check on the built dist/ (run AFTER build; catches prod-only crashes)
+pnpm run smoke:prod    # Headless mount check on dist/ (run AFTER build; catches prod-only crashes)
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
-pnpm run format        # Biome format --write (format only)
 pnpm run typecheck     # TypeScript type check (tsgo --noEmit)
-pnpm run typecheck:parallel # TypeScript type check with parallel workers (tsgo --checkers 4 --builders 4)
-pnpm run parity:check  # Feature flag parity audit (must report 0 drifts)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
 pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 54%, branches 46%, functions 68%, statements 56%)
-pnpm run test:vrt      # Visual regression tests (Chromium only; CI-only by policy)
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
-pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
-pnpm run test:e2e      # Playwright E2E tests (CI=true required; E2E are CI-only)
-pnpm run analyze       # Bundle analysis (ANALYZE=true vite build)
-pnpm run bundle:budget # Check vendor chunk sizes (max 7000 KB; entry max 4500 KB)
-pnpm run storybook     # Storybook on port 6006
-pnpm run test:storybook # Storybook test-runner (CI; needs Storybook running or built)
-pnpm run tauri:dev     # Tauri desktop app (requires Rust)
 pnpm run i18n:bundle   # Rebuild public/locales/<lang>/bundle.json from source JSON
+pnpm run mutation      # Stryker mutation — CI-ONLY; trigger via: gh workflow run mutation.yml
+pnpm run test:e2e      # Playwright E2E tests (CI=true required; CI-only)
+pnpm run test:e2e:deep # Deep coverage suite — feature-flag matrix + error paths (CI-only; non-blocking)
+pnpm run test:storybook # Storybook test-runner (CI; needs Storybook running or built)
 pnpm run graphify:update    # Rebuild AST-only knowledge graph (no API cost)
-pnpm run graphify:bootstrap # First-time graph setup
-pnpm run codegraph:update   # Force-reindex CodeGraph
-pnpm run codegraph:affected # List files/tests affected by current diff
-pnpm run graphs:update      # Update both graphify + CodeGraph in one shot
-pnpm run ci:quick           # lint + typecheck + i18n:check + unit tests (no coverage) — low-end hardware shortcut
-pnpm run ci:quick:unit      # lint + typecheck + i18n:check only
-pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with coverage
+pnpm run ci:quick           # lint + typecheck + i18n:check + unit tests — low-end hardware shortcut
 ```
 
 **Run a single test file:** `pnpm exec vitest run tests/unit/serviceName.test.ts`
@@ -70,14 +53,15 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with co
 - **OSV vulnerabilities**: Run `pnpm audit` or check the security CI job. Add `pnpm.overrides` with pinned exact versions.
 - Correction loop: fix → commit → verify CI → fix until all jobs green.
 
-**PR review-comment policy (proactive, exhaustive, immediate — every PR, always):**
-- On every open PR, treat **all** inline review comments, suggestions, issues, bug reports, and notes — from **CodeAnt AI and any other reviewer/bot** (human or automated) — as actionable work to be addressed **proactively and immediately**, without waiting to be asked.
-- Fetch them all: inline via `gh api repos/qnbs/StoryCraft-Studio/pulls/<N>/comments --paginate`; issue-level via `.../issues/<N>/comments`; thread/resolution state via the GraphQL `reviewThreads` query.
-- For **each** comment: (1) **validate** the finding against the *current* code — never trust a comment's line/anchor, which may be stale (CodeAnt pins to the old commit); (2) if valid, **implement the real fix directly** (root cause, fully worked out — code + tests + i18n + docs, everything that belongs to it), not a suppression or a partial patch; (3) if already fixed or a false positive, say so explicitly with evidence.
-- After fixing, **reply** to each thread (`POST .../pulls/<N>/comments/<id>/replies`) citing the resolving commit + what changed, then **resolve** the thread (GraphQL `resolveReviewThread`). Leave **0 unresolved threads**.
-- Then commit (Conventional Commits), push, and verify CI goes green per the correction loop above. This is a standing rule: do it now and on every future PR.
+**PR review-comment policy:** Proactively fix ALL inline comments (CodeAnt AI + any bot) on every PR, without being asked. Validate findings against the current code (line anchors may be stale), implement real root-cause fixes. Reply to each thread citing the resolving commit (`POST .../comments/<id>/replies`), resolve it (GraphQL `resolveReviewThread`), leave 0 unresolved. Then commit, push, green CI.
 
 **E2E notes:** Do NOT use `networkidle` waits (HMR keeps WebSocket open). Scope sidebar navigation via `#sidebar`. Shared helpers: `tests/e2e/helpers.ts`. Mobile E2E: set `RUN_MOBILE_E2E=1` locally (off by default).
+
+**Feature-flag E2E coverage (anti-pattern guard):** Every test that relies on a specific flag state MUST use `setFeatureFlags(page, {...})` from `helpers.ts` to make that dependency explicit and guard against future default changes. Call it BEFORE `page.goto()` — it uses `addInitScript` so it runs before app JS.
+
+Three E2E layers: (1) feature specs (`proforge-flags.spec.ts`, `voice-flags.spec.ts`, `lora-wizard.spec.ts`) — flag explicitly seeded, required CI gate; (2) deep matrix (`tests/e2e/deep/feature-flag-matrix.spec.ts`) — parametrized smoke across all `testConfigurations` in `test-matrix.ts`, non-blocking `e2e-deep` job; (3) error paths (`tests/e2e/deep/error-paths.spec.ts`) — offline AI, rapid nav, all flags on; also in `e2e-deep`.
+
+When adding a new feature flag: (a) add an entry to `tests/e2e/config/test-matrix.ts`, (b) write at least one test in `tests/e2e/<feature>-flags.spec.ts` that seeds the flag and verifies a critical UI element. Ask: *"If this flag were off by default tomorrow, would CI still catch a regression?"*
 
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
@@ -195,28 +179,13 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 ### DuckDB Analytics
 
-`workers/duckdbWorker.ts` runs DuckDB-WASM off main thread (OPFS → in-memory fallback). `services/duckdb/duckdbClient.ts`: singleton with AbortSignal, init retry 3× exponential backoff. Schema: 10 tables + 5 views incl. `rag_chunks` (FLOAT[384]), `cross_project_index`, `codex_*`.
-
-Key rules:
-- Gate all DuckDB paths behind `featureFlagsSlice.enableDuckDbAnalytics` (off by default).
-- Dual-write (IDB + DuckDB) goes through `duckdbListenerLoader.ts` — dynamically imported to avoid blocking cold start.
-- `ragVectorMigration.ts` handles the FLOAT[64]→FLOAT[384] column upgrade.
-- `hooks/useDuckDb.ts` initializes with 30 s timeout; `hooks/useAnalytics.ts` parallelizes 4 queries behind the feature flag.
+`workers/duckdbWorker.ts` off main thread (OPFS → in-memory fallback). `duckdbClient.ts`: singleton, init retry 3× backoff. Schema: 10 tables + 5 views incl. `rag_chunks` (FLOAT[384]). Gate all paths behind `enableDuckDbAnalytics`. Dual-write via `duckdbListenerLoader.ts` (dynamically imported). `ragVectorMigration.ts`: FLOAT[64]→FLOAT[384] upgrade. `useDuckDb.ts` 30s timeout; `useAnalytics.ts` parallelizes 4 queries.
 
 ### Logging
 
 Use `services/logger.ts` (StructuredLogger — B-6, v1.19.0) for all diagnostic output. Never use `console.log` in production paths. `console.warn`/`console.error` are allowed. Never write API keys, IVs, or plaintext payloads to any log.
 
-**StructuredLogger API:**
-```ts
-const log = createLogger('myModule');
-log.info('Initialized');
-log.warn('Retry', { attempt: 2 });
-log.error('Failed', new Error('...'));
-const scopedLog = log.withContext({ projectId: 'abc' });
-```
-
-**GDPR sanitization:** `sanitizeLogContext(ctx)` redacts `/key|token|password|passphrase/i` → `'[REDACTED]'` on every `.withContext()` and all IDB/Tauri writes.
+**StructuredLogger API:** `createLogger('module')` → `.info/.warn/.error(msg, ctx?)` + `.withContext(ctx)` for scoped logging. **GDPR sanitization:** `sanitizeLogContext(ctx)` redacts `/key|token|password|passphrase/i` → `'[REDACTED]'` on every `.withContext()` and all IDB/Tauri writes.
 
 **Sinks:** IDB (`storycraft-logs-db`, 1 000-entry LRU) + Tauri JSONL (`$APPDATA/logs/storycraft-YYYY-MM-DD.jsonl`) + console (DEV-only). `getRecentLogs()` / `clearLogs()` — backward-compat ring-buffer API retained.
 
@@ -236,36 +205,13 @@ Client-side env vars must use the `VITE_*` prefix. Access via `import.meta.env.V
 
 ### Collaboration
 
-Real-time P2P via Yjs + `packages/collab-transport` (`collaborationService.ts`). Signaling-channel AES-256-GCM with PBKDF2 (600 000 iter, SHA-256), deterministic salt from `projectId`. **RTCDataChannel E2E encryption** baked into `packages/collab-transport` (vendor fork y-webrtc 10.3.0, crypto hardened in C-1). Signaling URLs: `settings.collaboration.webrtcSignalingUrls`. No second CRDT layer.
-
-**Fork maintenance:** All files imported by `y-webrtc.js` must exist in `src/` — missing relative imports cause `UNRESOLVED_IMPORT` on Vercel builds. Security audit checklist: [issue #60](https://github.com/qnbs/StoryCraft-Studio/issues/60).
+Real-time P2P via Yjs + `packages/collab-transport`. Signaling AES-256-GCM/PBKDF2, deterministic salt from `projectId`. RTCDataChannel E2E encryption in vendor fork y-webrtc 10.3.0 (C-1). No second CRDT layer. **Fork maintenance:** All files imported by `y-webrtc.js` must exist in `src/` — missing imports cause `UNRESOLVED_IMPORT` on Vercel (security checklist: issue #60).
 
 ### WorkerBus v2 (`packages/worker-bus`)
 
-`@domain/worker-bus` is the central orchestration layer for all background worker tasks. It replaces the ad-hoc worker wiring in `packages/ai-core` with a production-grade runtime.
+Central orchestration layer for all background tasks. Key files: `workerBus.ts` (orchestrator, priority queue + circuit breakers), `workerPool.ts` (auto-scaling `MIN`→`MAX_WORKERS_INFERENCE`, idle timeout), `taskQueue.ts` (heap: `critical > high > normal > low > background`), `circuitBreaker.ts` (per-worker health gate), `deadLetterQueue.ts`, `protocolHandler.ts` (typed postMessage + version negotiation), `workerBootstrap.ts` (`registerTaskHandler` inside worker scripts, `WorkerHandlerContext.progress.emit`).
 
-**Key components:**
-- `WorkerBus` (`workerBus.ts`) — top-level orchestrator; routes tasks to the right pool via priority queue and circuit breakers.
-- `WorkerPool` (`workerPool.ts`) — lifecycle-managed pool of `PooledWorker` instances; auto-scales between `MIN_WORKERS` and `MAX_WORKERS_INFERENCE`; idle workers time out after `WORKER_IDLE_TIMEOUT_MS`.
-- `PriorityTaskQueue` (`taskQueue.ts`) — heap-ordered by `TaskPriority` (`critical > high > normal > low > background`); bounded by `MAX_QUEUE_SIZE`.
-- `CircuitBreaker` (`circuitBreaker.ts`) — per-worker health gate; opens after `CIRCUIT_BREAKER_THRESHOLD` consecutive failures within `CIRCUIT_BREAKER_WINDOW_MS`; auto-resets after `CIRCUIT_BREAKER_RECOVERY_MS`.
-- `DeadLetterQueue` (`deadLetterQueue.ts`) — captures undeliverable tasks (capacity `DEAD_LETTER_CAPACITY`); inspect via `WorkerBusTelemetry`.
-- `ProtocolHandler` (`protocolHandler.ts`) — typed `postMessage` with version negotiation (`PROTOCOL_VERSION`) and ping/pong health-check.
-- `WorkerRegistry` (`workerRegistry.ts`) — maps `WorkerCapability` tags to pool instances.
-- `workerBootstrap.ts` — `registerTaskHandler` / `deregisterTaskHandler` for use inside worker scripts; provides `WorkerHandlerContext` with `ProgressEmitter`.
-
-**Usage pattern in workers:**
-```ts
-import { registerTaskHandler, postMessageFromWorker } from '@domain/worker-bus';
-registerTaskHandler('inference', async (task, ctx) => {
-  ctx.progress.emit(0.5);
-  return result;
-});
-```
-
-**All constants** are re-exported from `constants.ts` — never hardcode timeouts or thresholds. **Schemas** (Zod) in `schemas.ts` gate all cross-thread messages; `validateWorkerMessage` throws on protocol mismatch.
-
-After any modification to `packages/worker-bus`, run `pnpm exec vitest run tests/unit/workerBus` to verify the runtime contracts.
+**All constants** re-exported from `constants.ts`. **Schemas** (Zod) in `schemas.ts` gate cross-thread messages. After changes: `pnpm exec vitest run tests/unit/workerBus`.
 
 ### Code Splitting
 
@@ -275,14 +221,11 @@ All 22 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (e
 
 ### Build & bundler gotchas (Vite 8 + rolldown)
 
-The production build uses **rolldown** (not esbuild/rollup), and its behavior differs from dev. These bit hard once (2026-06-02 production blank screen) — read before touching deps, `vite.config.ts`, or debugging a prod-only failure:
+Production uses **rolldown** (not esbuild/rollup); CI E2E runs `vite dev` — prod bundle is never exercised by E2E. `pnpm run smoke:prod` (CI build job) is the guard; run locally after any `vite.config.ts` or dep change.
 
-- **CI E2E runs `vite dev`** (`playwright.config.ts` `webServer.command`), so the **production rolldown bundle is never exercised by E2E or Lighthouse** — a prod-only crash ships green. `pnpm run smoke:prod` (build → `vite preview` → headless mount check) is the guard; it runs in the CI **build** job. Run it locally after any change to `vite.config.ts`, the bundler, or a vendor dep.
-- **rolldown ignores `rollupOptions.treeshake`** (incl. `moduleSideEffects`) in this Vite version — confirmed via canary. Tree-shaking is controlled by each package's `package.json` `"sideEffects"`. A dep with `"sideEffects": false` whose side-effect-only modules are needed at runtime can have its lazy `__esm` init wrappers **dropped while the `init_*()` calls survive** → `init_<name> is not defined` ReferenceError at bootstrap → blank screen. Fix at the dependency level with `pnpm patch <dep>` → `"sideEffects": true` (see `patches/zod@4.4.3.patch`).
-- **`pnpm patch-commit` re-resolves** and can trip the pre-existing peer-dep strictness (`vite-plugin-pwa` wants `workbox@^7.4.1`). Apply with `pnpm install --no-strict-peer-dependencies`; CI/Vercel use `--frozen-lockfile` and are unaffected.
-- **Canary test "is my `vite.config.ts` even read?"**: rename a `manualChunks` return string, rebuild, check the output filename changed. Chunk hashes are content-derived, so an unchanged `[hash]` means the option had **no effect on content** (not that the config was skipped).
-- **`tsc` incremental cache can mask new type errors locally** while CI (clean checkout) fails. Before trusting a local `typecheck`, delete `*.tsbuildinfo`. `vitest` uses esbuild and does **not** type-check, so a green test run says nothing about types.
-- **Diagnose blank/white screens by loading the built/live bundle in a real browser**, not by theorizing: `pnpm exec playwright install chromium-headless-shell`, then `import { chromium } from '@playwright/test'` from inside the repo and capture `pageerror`. `index.tsx` renders a recovery screen on `error` **and** `unhandledrejection` — a pure blank `#root` with a `pageerror` is a hard module-eval/bundler crash.
+- **rolldown ignores `rollupOptions.treeshake`** — tree-shaking controlled by `package.json "sideEffects"`. A dep with `"sideEffects": false` can drop its `__esm` init wrappers → `init_<name> is not defined` blank screen. Fix: `pnpm patch <dep>` → `"sideEffects": true` (see `patches/zod@4.4.3.patch`). Apply with `pnpm install --no-strict-peer-dependencies`.
+- **`tsc` incremental cache** can mask new type errors — delete `*.tsbuildinfo` before trusting local typecheck. `vitest` uses esbuild and does NOT type-check.
+- **Blank screen diagnosis:** capture `pageerror` in real Chromium on the built bundle. `index.tsx` renders a recovery screen on `error`/`unhandledrejection`; pure blank `#root` = hard module-eval crash.
 
 ### Feature Flags
 
@@ -347,9 +290,7 @@ All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Docu
 
 ### Plot Board
 
-**plotBoardSlice:** `features/plotBoard/plotBoardSlice.ts` — ephemeral viewport/UI state only (zoom/pan/mode/draw state). NOT undo-able; persists to `localStorage`. Selectors: `selectActiveMode`, `selectZoom`, `selectPan`, `selectSnapToGrid`, `selectIsDrawingConnection`, `selectDrawFromSectionId`, `selectSelectedConnectionId`, `selectActiveSubplotFilter`.
-
-Story content (connections, subplots, tensionOverrides) lives in `projectSlice` — use selectors from `features/project/projectSelectors.ts` and dispatch `projectActions.addPlotConnection / removePlotConnection / addPlotSubplot / deletePlotSubplot / setPlotTensionOverride / clearAllPlotTensionOverrides`.
+**plotBoardSlice:** `features/plotBoard/plotBoardSlice.ts` — ephemeral viewport/UI state only (zoom/pan/mode/draw). NOT undo-able; persists to `localStorage`. Story content (connections, subplots, tensionOverrides) lives in `projectSlice` — use selectors from `features/project/projectSelectors.ts` and dispatch `projectActions.add/removePlotConnection`, `add/deletePlotSubplot`, `setPlotTensionOverride`.
 
 **plotBoardService:** `services/plotBoardService.ts` — `computeTensionCurve(sections, overrides)`, `autoLayoutScenes(sections)`, `exportBoardAsSvg(svgEl)`.
 
@@ -359,27 +300,11 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 ### ProForge Pipeline
 
-8-stage agentic editing pipeline. Flag: `enableProForge` (off by default). Full docs: `docs/PROFORGE-PIPELINE.md`.
+8-stage agentic editing pipeline. Flag: `enableProForge`. Full docs: `docs/PROFORGE-PIPELINE.md`. Stages: `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Pauses at `awaitingReview` — manuscript never auto-modified without user approval.
 
-**Stage sequence:** `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Stages pause at `awaitingReview` — **manuscript is never auto-modified** without explicit user approval.
+**Redux slice** (`features/proForge/proForgeSlice.ts`, root key `proForge`, NOT undo-wrapped). **Types** in `features/proForge/types.ts`. **Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — call via `hooks/useProForgeOrchestrator.ts`, never instantiate in components. Agents (all 8 extend `BaseAgent`) lazy-loaded per stage; call `this.buildAiOpts({ maxTokens: N })` — `AIRequestOptions` requires `model` + `provider`. `BaseAgent` provides `requireProject()`, `getMemoryBank()`, `selfReflect()`, `elapsed()`.
 
-**Redux slice** (`features/proForge/proForgeSlice.ts`, root key `proForge`, NOT undo-wrapped): actions `stageStarted`, `stageCompleted`, `stageAwaitingReview`, `submitStageReview`, `skipStage`, `rollbackToStage`, `pipelineAborted`, `pipelineCompleted`.
-
-**Types:** `features/proForge/types.ts` — `PipelineStage`, `PipelineConfig`, `PipelineRun`, `StageResult`, `ReviewItem`, `ReviewItemStatus` + per-stage output interfaces (`DiagnosticReport`, `StructuralEditPlan`, `ProseEditBatch`, etc.).
-
-**Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — call via `hooks/useProForgeOrchestrator.ts` (never instantiate in components). Agents are lazy-loaded per stage.
-
-**Agents** (`pipelineAgents/`): all 8 extend `BaseAgent`. Always call `this.buildAiOpts({ maxTokens: N })` — `AIRequestOptions` requires `model` and `provider`. Do not duplicate `requireProject()`, `getMemoryBank()`, `selfReflect()`, `elapsed()` — they're in BaseAgent.
-
-**SupervisorAgent** (`supervisorAgent.ts`): heuristic gate, no AI calls. `evaluate(stage, result)` → `{verdict: 'pass'|'retry'|'fail', reason, retryHint?}`. Detects `isFallback: true`, uniform-score sentinels, implausible ratios. Hard gate: intake `qualityScore < 30` → fail.
-
-**Honest fallbacks:** All `createFallback*` use 0 scores + `isFallback: true`. Never fake mid-range values — the SupervisorAgent uses these flags to trigger retries.
-
-**Memory Bank:** IDB store `proforge-memory-bank` (`proForgeMemoryBank.ts`). Accessed by agents only, not UI.
-
-**View:** `ProForgeViewContext` + `useProForgeOrchestrator` + `components/proForge/`. Use `useProForgeViewContext()` to consume.
-
-**`PipelineConfig` key fields:** `genrePreset`, `selectedStages`, `aiProvider`, `ragMode`, `maxTokens`, `creativity`, `useDuckDb`, `autoAcceptThreshold` (0 = never auto-accept), `language`, `maxRetries` (0|1, default 1).
+**SupervisorAgent**: heuristic gate, no AI calls. `evaluate(stage, result)` → `{verdict: 'pass'|'retry'|'fail'}`. Hard gate: intake `qualityScore < 30` → fail. All `createFallback*` use 0 scores + `isFallback: true` — never fake mid-range values. **Memory Bank:** IDB `proforge-memory-bank`. **View:** `ProForgeViewContext` + `useProForgeViewContext()`.
 
 ### Scene-level services
 
@@ -393,50 +318,19 @@ Story content (connections, subplots, tensionOverrides) lives in `projectSlice` 
 
 ### Test mock patterns
 
-**useAppSelectorShallow with plotBoard:** Include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in mock state. Connections/subplots/tensionOverrides are in `project.present.data` — mock via `selectPlotConnections: () => []` etc. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines.
+**useAppSelectorShallow with plotBoard:** Include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in mock state. Connections/subplots/tensionOverrides are in `project.present.data`. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines.
 
-**FeatureFlagsState mocks:** Always include ALL 21 flags (TypeScript strict rejects partial). Include the edge-AI flags: `enableAdaptiveAiEngine: false, enableWebnnInference: false, enableComputeShaders: false, enableWorkerBusV2: false, enableRustCompute: false`. B-series to include: `enableIdbAtRestEncryption: false, enableVoiceWasm: false`.
+**FeatureFlagsState mocks:** Always include ALL 21 flags (TypeScript strict rejects partial), including edge-AI: `enableAdaptiveAiEngine: false, enableWebnnInference: false, enableComputeShaders: false, enableWorkerBusV2: false, enableRustCompute: false` and B-series: `enableIdbAtRestEncryption: false, enableVoiceWasm: false`.
 
-**ConnectionLayer test IDs:** Connection `<g>` elements use `data-testid="connection-group"` — query by testid, not role.
+**ConnectionLayer test IDs:** `data-testid="connection-group"` — query by testid, not role.
 
-**DuckDB in tests:** Mock `services/duckdb/duckdbClient` with `{ execAsync: vi.fn(), queryAsync: vi.fn() }`. Never initialize real DuckDB-WASM in unit tests.
+**DuckDB in tests:** Mock `services/duckdb/duckdbClient` with `{ execAsync: vi.fn(), queryAsync: vi.fn() }`. Never initialize real DuckDB-WASM.
 
-**AI thunk tests:** `settingsReducer` defaults to `privacy.localStorageOnly: true`, so AI thunks throw "Cloud provider blocked". Fix: add before all imports:
-```ts
-vi.mock('../../../services/ai/aiPolicy', () => ({
-  assertCloudAiAllowedSync: vi.fn(),
-  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
-}));
-```
+**AI thunk tests:** `settingsReducer` defaults to `privacy.localStorageOnly: true` → AI thunks throw. Fix: mock `services/ai/aiPolicy` with `assertCloudAiAllowedSync: vi.fn()` + `assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined)` before all imports.
 
-**Context hooks in component tests:** Mock the context module rather than wrapping in the real provider tree:
-```ts
-vi.mock('../../../contexts/WriterViewContext', () => ({
-  useWriterViewContext: vi.fn(() => ({ flowMode: false, toggleFlowMode: vi.fn() })),
-}));
-```
-Apply for any `use*ViewContext` hook.
+**Context hooks in component tests:** Mock the context module (`vi.mock('../../../contexts/XyzContext', ...)`) rather than wrapping in the real provider tree. Apply for any `use*ViewContext` hook.
 
-**Custom Select/LanguageSelector mocks:** Mock as native `<select>` for testing-library compatibility:
-```ts
-vi.mock('../../../components/ui/Select', () => ({
-  Select: ({ value, onChange, options, ariaLabel }: any) => (
-    <select
-      data-testid="select-mock"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={ariaLabel}
-    >
-      {options.map((opt: any) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  ),
-}));
-```
-Same pattern applies to `LanguageSelector`.
+**Custom Select/LanguageSelector mocks:** Mock as native `<select>` element for testing-library compatibility. See canonical pattern in existing settings test files.
 
 ### Settings Navigation
 
@@ -450,19 +344,9 @@ Same pattern applies to `LanguageSelector`.
 
 ### Voice Full Support
 
-**Abstract engine pattern:** `services/voice/voiceTypes.ts` defines `SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`. Contract: `isAvailable()` → `initialize()` → use → `dispose()`.
+Engines defined in `services/voice/voiceTypes.ts` (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`). Contract: `isAvailable()` → `initialize()` → use → `dispose()`. Web Speech API fallbacks: `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine` (zero downloads). WASM path (B-2, `enableVoiceWasm`): `WasmSttEngine` (Whisper.cpp) + `SileroVadEngine`; model download via `VoiceModelDownloadModal` + `VoiceCommandService.preloadModel(modelType)`.
 
-**Web Speech API fallbacks:** `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine`, `EnergyThresholdWakeWordEngine` — zero downloads, all modern browsers.
-
-**WASM scaffolds (B-2, gated behind `enableVoiceWasm`):** `WasmSttEngine` (Whisper.cpp WASM) + `SileroVadEngine` (Silero VAD v4 via ONNX). Model download UI shipped in P1-2 — `VoiceModelDownloadModal` in `components/voice/`; triggered from `VoiceSettingsSection`. `VoiceCommandService.preloadModel(modelType)` handles the download pipeline.
-
-**Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact Map match → fuzzy Jaccard + keyword bonus → slot extraction. Character/section/world names injected from Redux state.
-
-**Orchestrator:** `VoiceCommandService` singleton — state machine (idle → listening → processing → speaking + dictating). Dispatches via `runCommandById`. `appStoreRef` object pattern for Redux access outside React.
-
-**Hooks:** `useVoice`, `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation`, `useVoiceAccessibility`.
-
-**Gating:** Requires `settings.voice.enabled && featureFlags.enableVoiceSupport`.
+**Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact match → fuzzy Jaccard + slot extraction. **Orchestrator:** `VoiceCommandService` singleton (state machine), dispatches via `runCommandById`, `appStoreRef` for Redux outside React. **Hooks:** `useVoice`, `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation`, `useVoiceAccessibility`. **Gating:** `settings.voice.enabled && featureFlags.enableVoiceSupport`.
 
 ### Local inference
 
@@ -490,18 +374,16 @@ Reference plugins: `wordCountOverlay.plugin.ts`, `sceneAppender.plugin.ts`. Gate
 
 ### Virtual scrolling
 
-`NavigatorPanel.tsx` uses `useVirtualizer` from `@tanstack/react-virtual`. Pattern: scrollable `<ul>` with `ref={scrollRef}` + `position: relative`; sentinel `<li>` sets `height: virtualizer.getTotalSize()`; items `position: absolute` with `transform: translateY(${virtualRow.start}px)`. Each item `<li>` needs `data-index={index}` + `ref={virtualizer.measureElement}`. Use `estimateSize: () => 40, overscan: 3`. Never lift `overflow-y: auto` into a parent.
+`NavigatorPanel.tsx` uses `useVirtualizer` (`@tanstack/react-virtual`): scrollable `<ul ref={scrollRef}>` + `position: relative`; sentinel `<li>` sets `height: totalSize`; items `position: absolute, transform: translateY(start)`. Items need `data-index` + `ref={measureElement}`. Use `estimateSize: () => 40, overscan: 3`. Never lift `overflow-y: auto` into a parent.
 
 ## Known Technical Debt
 
-See `AUDIT.md` and `TODO.md` for the full list. Key items:
-
-- **`StorageBackend` + `SaveProjectInput`** — contract in `services/storageBackend.ts`; use `storageService` in app code.
+See `AUDIT.md` and `TODO.md`. Key items:
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries.
-- `workers/inference.worker.ts` — `@huggingface/transformers` v3 (migrated from `@xenova` 2026-05-31); resolved via `tsconfig.json` `paths` alias; if alias breaks, restore `@ts-expect-error`.
+- `workers/inference.worker.ts` — `@huggingface/transformers` v3 path alias in `tsconfig.json`; if alias breaks, restore `@ts-expect-error`.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
-- **Voice WASM (B-2 complete):** `wasmSttEngine.ts` + `sileroVadEngine.ts` + `VoiceModelDownloadModal` all shipped (P1-2). Remaining: full end-to-end integration test coverage for the WASM path.
-- **IDB at-rest encryption (B-1 complete):** Passphrase UX shipped — `IdbUnlockModal` (startup), `PassphraseModal` (set/change/disable in Settings › Privacy). Flag `enableIdbAtRestEncryption` may be enabled; actual IDB read/write integration for `idbProjectStore` etc. is a separate Phase 4 task (currently service-layer only).
+- **B-1 (IDB encryption):** Passphrase UX complete (`IdbUnlockModal`, `PassphraseModal`). Actual IDB read/write integration for stores is Phase 4 (service-layer only currently).
+- **B-2 (Voice WASM):** Engine + download UI shipped. Remaining: E2E integration test coverage.
 
 ## graphify
 
@@ -531,46 +413,8 @@ Rules:
 
 ## Agent Checklist — Post-Change Verification
 
-The following rules are derived from the v1.19.0 audit (AUDIT.md) and MUST be
-followed after any change in the respective area.
-
-### Feature Flags
-- When adding, removing, or modifying a feature flag, always run:
-  ```bash
-  pnpm exec tsx scripts/audit-feature-parity.ts
-  ```
-  The script must report **0 drifts** before the change is considered complete.
-
-### Content Security Policy (CSP)
-- When modifying `src-tauri/tauri.conf.json` CSP directives or `index.html` CSP
-  meta tags, validate the result with:
-  ```bash
-  # Online validator (manual)
-  open https://csp-evaluator.withgoogle.com
-  ```
-  Tauri builds must never contain `*` in `default-src`, `connect-src`, or
-  `img-src`. WebSocket sources must be explicit hostnames, not protocol-only.
-
-### Dependencies & Supply Chain
-- When adding a new dependency (prod or dev), run:
-  ```bash
-  pnpm audit --audit-level=high
-  ```
-  If transitive vulnerabilities are introduced, evaluate:
-  1. Can the dependency be replaced with a lighter alternative?
-  2. Can the vulnerable transitive dep be overridden via `pnpm.overrides`?
-  3. Document the accepted risk in `AUDIT.md` under "Known Vulnerabilities".
-
-### Vendor Forks
-- When modifying `packages/collab-transport/`, update `VENDOR-FORKS.md` and
-  ensure `scripts/verify-vendor-fork.mjs` still passes:
-  ```bash
-  pnpm run verify:vendor
-  ```
-
-### Settings / Storage
-- When adding a new nested settings object, add a corresponding default-merge
-  guard in **both** places:
-  1. `services/storage/idbProjectStore.ts` → `normalizePersistedSettings`
-  2. `features/settings/settingsSlice.ts` → `setSettings` reducer
-  3. The consuming component must use `?? defaults` as a defensive fallback.
+- **Feature flags:** After any flag change run `pnpm exec tsx scripts/audit-feature-parity.ts` — must report 0 drifts.
+- **CSP:** After modifying CSP directives in `src-tauri/tauri.conf.json` or `index.html`, validate at `https://csp-evaluator.withgoogle.com`. No `*` in `default-src`, `connect-src`, or `img-src`; WebSocket sources must be explicit hostnames.
+- **Dependencies:** After adding a dep run `pnpm audit --audit-level=high`. Override vulnerabilities via `pnpm.overrides`; document accepted risk in `AUDIT.md`.
+- **Vendor forks:** After modifying `packages/collab-transport/`, update `VENDOR-FORKS.md` + run `pnpm run verify:vendor`.
+- **Settings / Storage:** New nested settings objects need default-merge guards in both `services/storage/idbProjectStore.ts → normalizePersistedSettings` AND `features/settings/settingsSlice.ts → setSettings`. Components use `?? defaults`.

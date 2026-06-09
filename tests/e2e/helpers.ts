@@ -119,13 +119,13 @@ export async function waitForSpaReady(page: Page): Promise<void> {
       .waitFor({ state: 'visible', timeout: 25000 }),
   ]);
   // QNBS-v3: theme class is applied in App useEffect after first render — wait for it so
-  //          CSS variable values are stable (avoids axe false-positives on mid-transition colors)
+  //          CSS variable values are stable (avoids axe false-positives on mid-transition colors).
+  //          appearance-sepia stacks with light-theme/dark-theme, not a standalone class.
   await page
     .waitForFunction(
       () =>
         document.body.classList.contains('light-theme') ||
-        document.body.classList.contains('dark-theme') ||
-        document.body.classList.contains('sepia-theme'),
+        document.body.classList.contains('dark-theme'),
       { timeout: 5000 },
     )
     .catch(() => {}); // best-effort: if no theme class, continue anyway
@@ -170,4 +170,35 @@ export async function ensureBlankProject(page: Page): Promise<void> {
 /** Desktop sidebar (`md:`); avoids duplicate nav controls vs mobile tab bar. */
 export function sidebar(page: Page) {
   return page.locator('#sidebar');
+}
+
+/**
+ * Seed feature-flag overrides into localStorage so the Redux slice picks them up on init.
+ *
+ * MUST be called BEFORE page.goto() — uses addInitScript so it runs before any app JS.
+ * Only the specified keys are overridden; all other flags keep their slice defaults.
+ * The storage key is 'storycraft-feature-flags' (mirrors featureFlagsSlice.ts).
+ *
+ * Example:
+ *   await setFeatureFlags(page, { enableProForge: true });
+ *   await page.goto('/');
+ */
+export async function setFeatureFlags(
+  page: Page,
+  flags: Partial<Record<string, boolean>>,
+): Promise<void> {
+  await page.addInitScript((overrides) => {
+    try {
+      const stored = localStorage.getItem('storycraft-feature-flags');
+      const existing: Record<string, boolean> = stored
+        ? (JSON.parse(stored) as Record<string, boolean>)
+        : {};
+      localStorage.setItem(
+        'storycraft-feature-flags',
+        JSON.stringify({ ...existing, ...overrides }),
+      );
+    } catch {
+      /* storage unavailable — slice falls back to defaults */
+    }
+  }, flags);
 }

@@ -557,7 +557,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           )}
         </div>
 
-        <div className="hidden sm:flex items-center justify-between px-4 py-2 border-t border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)]/30 text-xs text-[var(--sc-text-muted)]">
+        {/* QNBS-v3: text-secondary instead of text-muted — muted (#655c50) fails WCAG AA 4.5:1 on
+            the sepia overlay bg; secondary (#5c5346) gives ~5.2:1 across all themes. */}
+        <div className="hidden sm:flex items-center justify-between px-4 py-2 border-t border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)]/30 text-xs text-[var(--sc-text-secondary)]">
           <div className="flex gap-3 flex-wrap">
             <span className="flex items-center gap-1">
               <kbd className="bg-[var(--sc-surface-base)] px-1 rounded border border-[var(--sc-border-subtle)]">

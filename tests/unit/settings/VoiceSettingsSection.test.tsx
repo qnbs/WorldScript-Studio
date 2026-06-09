@@ -29,13 +29,31 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
         dictationAutoPunctuation: true,
         allowCloudSttFallback: false,
         listeningTimeoutSeconds: 10,
+        // QNBS-v3: add all fields accessed by VoiceSettingsSection to avoid toFixed/undefined errors
+        speechRate: 1.0,
+        speechVolume: 0.8,
+        sttEngine: 'auto',
+        ttsEngine: 'auto',
+        wakeWordPhrase: 'hey story',
+        wasmModelsReady: false,
+        webSpeechConsentGranted: false,
       },
       language: 'en',
       theme: 'dark',
     },
+    // QNBS-v3: featureFlags needed since VoiceSettingsSection gates WASM section by enableVoiceWasm
+    featureFlags: {
+      enableVoiceWasm: false,
+    },
     handleSettingChange: mockHandleSettingChange,
     handleResetSettings: vi.fn(),
   }),
+}));
+
+// QNBS-v3: VoiceSettingsSection itself calls useAppDispatch — mock app/hooks to avoid needing a Redux Provider
+vi.mock('../../../app/hooks', () => ({
+  useAppDispatch: vi.fn(() => vi.fn()),
+  useAppSelector: vi.fn(() => undefined),
 }));
 
 // QNBS-v3: VoiceModelDownloadModal uses useAppDispatch/useAppSelector — mock the whole component to avoid needing a Redux Provider
@@ -148,7 +166,9 @@ describe('VoiceSettingsSection', () => {
   it('shows listening timeout slider when voice is enabled', () => {
     mockVoiceEnabled = true;
     render(<VoiceSettingsSection />);
-    expect(screen.getByRole('slider')).toBeInTheDocument();
+    // Multiple sliders render (timeout + speechRate + speechVolume when !ttsMuted)
+    const sliders = screen.getAllByRole('slider');
+    expect(sliders.length).toBeGreaterThan(0);
   });
 
   it('calls handleSettingChange when activation mode changes', async () => {

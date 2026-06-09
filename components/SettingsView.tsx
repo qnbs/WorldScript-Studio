@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { SettingsViewContext, useSettingsViewContext } from '../contexts/SettingsViewContext';
 import { useSettingsView } from '../hooks/useSettingsView';
@@ -75,7 +76,10 @@ const NAV_GROUPS = [
   { key: 'aiModels', ids: ['ai', 'advanced-ai', 'lora-adapters'] },
   { key: 'appearanceAccessibility', ids: ['appearance', 'accessibility'] },
   { key: 'privacyData', ids: ['privacy', 'data', 'backup'] },
-  { key: 'connections', ids: ['collaboration', 'integrations', 'notifications', 'community'] },
+  {
+    key: 'connections',
+    ids: ['collaboration', 'voice', 'integrations', 'notifications', 'community'],
+  },
   { key: 'system', ids: ['performance', 'plugins', 'shortcuts', 'guide', 'experimental', 'about'] },
 ] as const satisfies ReadonlyArray<{ key: string; ids: readonly string[] }>;
 
@@ -83,6 +87,7 @@ const NAV_GROUPS = [
 
 const SettingsViewUI: FC = () => {
   const { t, project, activeCategory, setActiveCategory } = useSettingsViewContext();
+  const enableVoiceSupport = useAppSelector((s) => s.featureFlags.enableVoiceSupport);
   const [settingsQuery, setSettingsQuery] = useState('');
 
   const navCategories = useMemo(
@@ -170,6 +175,19 @@ const SettingsViewUI: FC = () => {
           <path d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
         ),
       },
+      // QNBS-v3: Voice nav item shown only when enableVoiceSupport is on — keeps Settings nav
+      // clean for users who have not enabled voice, and satisfies the "absent when flag off" E2E test.
+      ...(enableVoiceSupport
+        ? [
+            {
+              id: 'voice',
+              label: t('settings.categories.voice'),
+              icon: (
+                <path d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+              ),
+            },
+          ]
+        : []),
       {
         id: 'integrations',
         label: t('settings.categories.integrations'),
@@ -214,7 +232,7 @@ const SettingsViewUI: FC = () => {
         ),
       },
     ],
-    [t],
+    [t, enableVoiceSupport],
   );
 
   const q = settingsQuery.trim().toLowerCase();
