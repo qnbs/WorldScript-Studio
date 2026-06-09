@@ -3,7 +3,7 @@
  * QNBS-v3: B-2 completion — verifies coordinator start/stop/dispose + error-handling paths.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../../services/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), withContext: vi.fn() }),
@@ -77,33 +77,32 @@ function buildMocks() {
   };
 }
 
+// QNBS-v3: define FakeAudioContext at module level so it closes over the mutable
+// mockAudioCtxInstance var (rebuilt each beforeEach), avoiding repeated class definitions.
+class FakeAudioContext {
+  constructor() {
+    // biome-ignore lint/correctness/noConstructorReturn: needed to return mock instance to caller
+    // biome-ignore lint/suspicious/noExplicitAny: test constructor shim returns partial mock
+    return mockAudioCtxInstance as any;
+  }
+}
+
 beforeEach(() => {
   buildMocks();
 
-  // Use a real class (not arrow fn) so `new AudioContext()` works in jsdom.
-  // biome-ignore lint/suspicious/noExplicitAny: test shim assigns partial mock to this
-  const instance = mockAudioCtxInstance as any;
-  class FakeAudioContext {
-    constructor() {
-      // biome-ignore lint/correctness/noConstructorReturn: needed to return mock instance to caller
-      return instance;
-    }
-  }
-  Object.defineProperty(global, 'AudioContext', {
-    value: FakeAudioContext,
-    writable: true,
-    configurable: true,
-  });
-
-  Object.defineProperty(global, 'navigator', {
-    value: {
-      mediaDevices: {
-        getUserMedia: vi.fn().mockResolvedValue(mockStream),
-      },
+  // vi.stubGlobal registers the stub so vi.unstubAllGlobals() in afterEach can restore jsdom defaults.
+  vi.stubGlobal('AudioContext', FakeAudioContext);
+  vi.stubGlobal('navigator', {
+    mediaDevices: {
+      getUserMedia: vi.fn().mockResolvedValue(mockStream),
     },
-    writable: true,
-    configurable: true,
   });
+});
+
+afterEach(() => {
+  // QNBS-v3: restore AudioContext and navigator to jsdom defaults — prevents global
+  // state leaking into subsequent test files and causing order-dependent failures.
+  vi.unstubAllGlobals();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -165,6 +164,32 @@ describe('VoiceActivityCoordinator', () => {
       await expect(coordinator.start(vi.fn(), onError)).rejects.toBeDefined();
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
     });
+
+    it('does not re-initialize engines on subsequent start() calls', async () => {
+      // WasmSttEngine keeps a 40 MB pipeline alive — re-initializing would cause memory churn
+      const vad = makeVad();
+      const stt = makeStt();
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      await coordinator.start(vi.fn(), vi.fn());
+      await coordinator.stop();
+      await coordinator.start(vi.fn(), vi.fn());
+      expect(vad.initialize).toHaveBeenCalledOnce();
+      expect(stt.initialize).toHaveBeenCalledOnce();
+      await coordinator.dispose();
+    });
+
+    it('re-initializes after dispose()', async () => {
+      const vad = makeVad();
+      const stt = makeStt();
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      await coordinator.start(vi.fn(), vi.fn());
+      await coordinator.dispose();
+      // dispose() resets isEngineInitialized — second lifecycle calls initialize() again
+      await coordinator.start(vi.fn(), vi.fn());
+      expect(vad.initialize).toHaveBeenCalledTimes(2);
+      expect(stt.initialize).toHaveBeenCalledTimes(2);
+      await coordinator.dispose();
+    });
   });
 
   describe('stop()', () => {
@@ -213,6 +238,47 @@ describe('VoiceActivityCoordinator', () => {
       const coordinator = new VoiceActivityCoordinator(makeVad(), stt);
       await coordinator.start(vi.fn(), vi.fn());
       await expect(coordinator.dispose()).resolves.not.toThrow();
+    });
+  });
+
+  describe('VAD null-segment handling', () => {
+    it('treats null segment as "no state change" and does not reset speechChunkCount', async () => {
+      // WebRtcVadEngine returns null for most frames (no transition). The coordinator must
+      // not interpret null as silence; doing so would reset speechChunkCount and prevent
+      // MIN_SPEECH_CHUNKS from ever being reached during continuous speech.
+      const vad = makeVad({
+        // First call: speech-start edge; subsequent calls: null (ongoing speech)
+        processChunk: vi
+          .fn()
+          .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+          .mockResolvedValue(null),
+      });
+      const stt = makeStt();
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      await coordinator.start(vi.fn(), vi.fn());
+
+      // Simulate 3 null frames after the initial speech-start edge via the audio processor
+      const processor = mockScriptProcessor;
+      const fireFrame = () => {
+        if (processor.onaudioprocess) {
+          const buf = new Float32Array(4096).fill(0.1);
+          (processor.onaudioprocess as (e: unknown) => void)({
+            inputBuffer: { getChannelData: () => buf },
+          });
+        }
+      };
+      // Fire the speech-start frame
+      fireFrame();
+      await Promise.resolve();
+      // Fire 2 more null frames — should NOT reset speechChunkCount
+      fireFrame();
+      await Promise.resolve();
+      fireFrame();
+      await Promise.resolve();
+
+      // STT should NOT have been stopped/restarted (no false-silence flush triggered)
+      expect(stt.stop).not.toHaveBeenCalled();
+      await coordinator.dispose();
     });
   });
 });

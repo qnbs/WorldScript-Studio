@@ -10,7 +10,7 @@ import { DEFAULT_AUDIO_CONFIG } from './voiceTypes';
 
 const log = createLogger('VoiceActivityCoordinator');
 
-/** Minimum consecutive speech chunks before firing STT. Avoids false-positive tiny bursts. */
+/** Minimum consecutive speech-edge events before firing STT. */
 const MIN_SPEECH_CHUNKS = 2;
 /** Max buffered duration in ms before forcing an STT flush to avoid unbounded memory use. */
 const MAX_BUFFER_MS = 15_000;
@@ -25,6 +25,12 @@ export class VoiceActivityCoordinator {
   private bufferedDurationMs = 0;
   private isSttActive = false;
   private running = false;
+  // QNBS-v3: tracks last known VAD state so null frames ("no change") don't reset speech
+  private lastVadSpeechState = false;
+  // QNBS-v3: guard prevents overlapping flush cycles (stop + restart) on Whisper WASM
+  private isFlushing = false;
+  // QNBS-v3: engines are initialized once per coordinator lifetime, not per start() call
+  private isEngineInitialized = false;
 
   constructor(
     private readonly vad: VadEngine,
@@ -37,8 +43,13 @@ export class VoiceActivityCoordinator {
   ): Promise<void> {
     this.running = true;
     try {
-      await this.vad.initialize();
-      await this.stt.initialize();
+      // Initialize engines once — WasmSttEngine keeps the 40 MB Whisper pipeline
+      // alive across sessions; re-calling initialize() would cause memory churn.
+      if (!this.isEngineInitialized) {
+        await this.vad.initialize();
+        await this.stt.initialize();
+        this.isEngineInitialized = true;
+      }
       this.mediaStream = await this.setupAudioCapture();
       this.startFramePump(onResult, onError);
     } catch (err) {
@@ -60,10 +71,13 @@ export class VoiceActivityCoordinator {
       this.isSttActive = false;
     }
     this.resetBufferState();
+    this.lastVadSpeechState = false;
+    this.isFlushing = false;
   }
 
   async dispose(): Promise<void> {
     await this.stop();
+    this.isEngineInitialized = false;
     try {
       await this.vad.dispose();
     } catch (err) {
@@ -135,13 +149,30 @@ export class VoiceActivityCoordinator {
       .processChunk(chunk)
       .then((segment) => {
         if (!this.running) return;
-        const hasSpeech = segment?.isSpeech ?? false;
+
+        // QNBS-v3: WebRtcVadEngine returns null for "no state change" frames (most audio).
+        // Treating null as silence was causing speechChunkCount to reset on every steady-state
+        // speech frame, preventing MIN_SPEECH_CHUNKS from ever being reached. Preserve the
+        // last known speech state instead of coercing null to false.
+        if (segment === null) {
+          // No VAD state change — accumulate buffer duration if already in speech
+          if (this.lastVadSpeechState) {
+            this.bufferedDurationMs += chunk.durationMs;
+            if (this.isSttActive && this.bufferedDurationMs >= MAX_BUFFER_MS) {
+              this.flushStt(onResult, onError);
+            }
+          }
+          return;
+        }
+
+        const hasSpeech = segment.isSpeech;
+        this.lastVadSpeechState = hasSpeech;
 
         if (hasSpeech) {
           this.speechChunkCount++;
           this.bufferedDurationMs += chunk.durationMs;
 
-          // Activate STT after MIN_SPEECH_CHUNKS of confirmed speech
+          // Activate STT after MIN_SPEECH_CHUNKS of confirmed speech-start events
           if (!this.isSttActive && this.speechChunkCount >= MIN_SPEECH_CHUNKS) {
             this.isSttActive = true;
             this.stt.start(onResult, onError).catch((err) => {
@@ -158,7 +189,7 @@ export class VoiceActivityCoordinator {
             this.flushStt(onResult, onError);
           }
         } else {
-          // Silence detected — stop STT if active
+          // Confirmed silence edge from VAD — stop STT if active
           if (this.isSttActive) {
             this.flushStt(onResult, onError);
           }
@@ -171,18 +202,29 @@ export class VoiceActivityCoordinator {
   }
 
   private flushStt(onResult: (result: SttResult) => void, onError: (error: Error) => void): void {
+    // QNBS-v3: Guard against overlapping flush cycles. WasmSttEngine.stop() is async
+    // (150 ms drain + cleanupAudio); starting STT before stop() resolves races over
+    // shared mediaStream/recorder/audioContext fields and can corrupt the capture session.
+    if (this.isFlushing) return;
+    this.isFlushing = true;
     this.isSttActive = false;
     this.resetBufferState();
-    this.stt.stop().catch((err) => {
-      log.warn('stt.stop() failed during flush', { err });
-    });
-    // Restart STT for next utterance
+
     this.stt
-      .start(onResult, onError)
+      .stop()
+      .catch((err) => {
+        log.warn('stt.stop() failed during flush', { err });
+      })
       .then(() => {
-        this.isSttActive = true;
+        this.isFlushing = false;
+        if (!this.running) return;
+        // Restart STT for the next utterance only after stop() has fully resolved
+        return this.stt.start(onResult, onError).then(() => {
+          this.isSttActive = true;
+        });
       })
       .catch((err) => {
+        this.isFlushing = false;
         log.error(
           'stt.start() failed after flush',
           err instanceof Error ? err : new Error(String(err)),
