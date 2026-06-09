@@ -74,9 +74,12 @@ test.describe('ProForge Pipeline (feature-flag explicit)', () => {
     }
     await btn.click();
 
-    // QNBS-v3: ProForgeDashboard renders in both the desktop grid and the CSS-hidden mobile panel;
-    // .first() avoids the strict-mode violation from the duplicate testid.
-    await expect(page.getByTestId('proforge-empty-state').first()).toBeVisible({ timeout: 10000 });
+    // QNBS-v3: ProForgeDashboard renders in both the desktop grid and the CSS-hidden mobile panel
+    // (md:hidden). .first() picked the hidden mobile instance on Desktop Chrome.
+    // .filter({ visible: true }) resolves to the only visible instance regardless of viewport.
+    await expect(page.getByTestId('proforge-empty-state').filter({ visible: true })).toBeVisible({
+      timeout: 10000,
+    });
   });
 });
 
