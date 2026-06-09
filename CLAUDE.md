@@ -36,8 +36,9 @@ pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 54%, branche
 pnpm run test:vrt      # Visual regression tests (Chromium only; CI-only by policy)
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
-pnpm run mutation      # Stryker mutation report (see stryker.conf.json)
+pnpm run mutation      # Stryker mutation — CI-ONLY (OOM risk on low-end hardware); trigger via: gh workflow run mutation.yml
 pnpm run test:e2e      # Playwright E2E tests (CI=true required; E2E are CI-only)
+pnpm run test:e2e:deep # Deep coverage suite — feature-flag matrix + error paths (CI-only; non-blocking e2e-deep job)
 pnpm run analyze       # Bundle analysis (ANALYZE=true vite build)
 pnpm run bundle:budget # Check vendor chunk sizes (max 7000 KB; entry max 4500 KB)
 pnpm run storybook     # Storybook on port 6006
@@ -78,6 +79,15 @@ pnpm run ci:quick:coverage  # lint + typecheck + i18n:check + unit tests with co
 - Then commit (Conventional Commits), push, and verify CI goes green per the correction loop above. This is a standing rule: do it now and on every future PR.
 
 **E2E notes:** Do NOT use `networkidle` waits (HMR keeps WebSocket open). Scope sidebar navigation via `#sidebar`. Shared helpers: `tests/e2e/helpers.ts`. Mobile E2E: set `RUN_MOBILE_E2E=1` locally (off by default).
+
+**Feature-flag E2E coverage (anti-pattern guard):** Every test that relies on a specific flag state MUST use `setFeatureFlags(page, {...})` from `helpers.ts` to make that dependency explicit and guard against future default changes. Call it BEFORE `page.goto()` — it uses `addInitScript` so it runs before app JS.
+
+Three layers of E2E coverage:
+1. **Specific feature specs** (`tests/e2e/proforge-flags.spec.ts`, `voice-flags.spec.ts`, `lora-wizard.spec.ts`) — exercise one feature in depth with the flag explicitly seeded. Required CI gate.
+2. **Deep matrix** (`tests/e2e/deep/feature-flag-matrix.spec.ts`) — parametrized smoke tests across all `testConfigurations` in `tests/e2e/config/test-matrix.ts`; runs in the non-blocking `e2e-deep` CI job.
+3. **Error paths** (`tests/e2e/deep/error-paths.spec.ts`) — offline AI calls, rapid navigation, settings sections under all flags on; also in `e2e-deep`.
+
+When adding a new feature flag: (a) add an entry to `tests/e2e/config/test-matrix.ts`, (b) write at least one test in `tests/e2e/<feature>-flags.spec.ts` that seeds the flag and verifies a critical UI element. Ask: *"If this flag were off by default tomorrow, would CI still catch a regression?"*
 
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
