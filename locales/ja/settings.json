@@ -230,7 +230,7 @@
   "settings.appearance.preset": "クリエイティブパレット",
   "settings.appearance.presetDefault": "デフォルト",
   "settings.appearance.presetFantasy": "ファンタジー",
-  "settings.appearance.presetHint": "アクセントと暖かさのプリセットは、ダーク/ライト テーマとスタックします。",
+  "settings.appearance.presetHint": "プリセットはライト/ダークモードと組み合わさります。作家のセピアは両方のモードに完全対応しています。",
   "settings.appearance.presetRomance": "ロマンス",
   "settings.appearance.presetSepia": "作家のセピア",
   "settings.appearance.primaryColor": "原色",
