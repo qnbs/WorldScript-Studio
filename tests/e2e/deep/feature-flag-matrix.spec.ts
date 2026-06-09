@@ -33,8 +33,11 @@ for (const config of testConfigurations) {
       await selectEnglish(page);
       await ensureBlankProject(page);
 
-      // Main shell must be present — no error boundary, no blank screen
-      await expect(page.locator('#sidebar, [data-tour="nav-mobile"]').first()).toBeVisible({
+      // Main shell must be present — no error boundary, no blank screen.
+      // QNBS-v3: nav-mobile is md:hidden on desktop; .first() on combined locator picks the hidden
+      // element on desktop viewports — use viewport-aware selector.
+      const isDesktop = (page.viewportSize()?.width ?? 1280) >= 768;
+      await expect(page.locator(isDesktop ? '#sidebar' : '[data-tour="nav-mobile"]')).toBeVisible({
         timeout: 15000,
       });
 

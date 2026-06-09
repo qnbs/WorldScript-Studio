@@ -89,8 +89,11 @@ test.describe('Error paths — rapid navigation between views', () => {
       await clickNavItem(page, nav).catch(() => {});
     }
 
-    // After rapid switching, the app shell must still be intact
-    await expect(page.locator('#sidebar, [data-tour="nav-mobile"]').first()).toBeVisible({
+    // After rapid switching, the app shell must still be intact.
+    // QNBS-v3: nav-mobile is md:hidden, so .first() on combined locator picks the hidden element
+    // on desktop viewports — use viewport-aware selector instead.
+    const isDesktop = (page.viewportSize()?.width ?? 1280) >= 768;
+    await expect(page.locator(isDesktop ? '#sidebar' : '[data-tour="nav-mobile"]')).toBeVisible({
       timeout: 10000,
     });
   });
@@ -122,7 +125,8 @@ test.describe('Error paths — Settings sections with all flags on', () => {
     /AI Configuration|KI.Konfiguration/i,
     /Accessibility|Barrierefreiheit/i,
     /Privacy.*Security|Datenschutz/i,
-    /Experimental|Experimentell/i,
+    // QNBS-v3: English label is "Early Access Features", German is "Early-Access-Funktionen"
+    /Early Access|Experimentell/i,
   ];
 
   for (const sectionName of settingsSections) {

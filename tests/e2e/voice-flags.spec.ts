@@ -64,8 +64,10 @@ test.describe('Voice — Web Speech API path (enableVoiceSupport, enableVoiceWas
     // Pressing Ctrl+Shift+V should not throw. We check no error dialog appears.
     await page.keyboard.press('Control+Shift+V');
     // QNBS-v3: No fixed sleep — the sidebar assertion below already waits up to 5 s.
-    // App should still be functional — sidebar nav still works
-    await expect(page.locator('#sidebar, [data-tour="nav-mobile"]').first()).toBeVisible({
+    // App should still be functional — use viewport-aware selector: nav-mobile is md:hidden
+    // so .first() on the combined locator picks the hidden element on desktop viewports.
+    const isDesktop = (page.viewportSize()?.width ?? 1280) >= 768;
+    await expect(page.locator(isDesktop ? '#sidebar' : '[data-tour="nav-mobile"]')).toBeVisible({
       timeout: 5000,
     });
   });

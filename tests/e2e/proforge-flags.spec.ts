@@ -74,9 +74,9 @@ test.describe('ProForge Pipeline (feature-flag explicit)', () => {
     }
     await btn.click();
 
-    // QNBS-v3: Use data-testid to avoid strict-mode violation — ProForgeDashboard renders in both
-    // the desktop grid and the CSS-hidden mobile panel, producing duplicate "refined" headings.
-    await expect(page.getByTestId('proforge-empty-state')).toBeVisible({ timeout: 10000 });
+    // QNBS-v3: ProForgeDashboard renders in both the desktop grid and the CSS-hidden mobile panel;
+    // .first() avoids the strict-mode violation from the duplicate testid.
+    await expect(page.getByTestId('proforge-empty-state').first()).toBeVisible({ timeout: 10000 });
   });
 });
 
