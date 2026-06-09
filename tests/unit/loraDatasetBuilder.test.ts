@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DatasetEntry } from '../../features/lora/types';
 import {
   estimateDatasetQuality,
   exportAsJsonl,
@@ -6,7 +7,6 @@ import {
   scoreDatasetEntries,
   scoreDatasetEntry,
 } from '../../services/lora/loraDatasetBuilder';
-import type { DatasetEntry } from '../../features/lora/types';
 
 // Mocks
 vi.mock('../../services/storageService', () => ({
@@ -23,8 +23,8 @@ vi.mock('../../services/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn() },
 }));
 
-import { storageService } from '../../services/storageService';
 import { embedText } from '../../services/ai/localEmbeddingService';
+import { storageService } from '../../services/storageService';
 
 const mockLoadProject = vi.mocked(storageService.loadProject);
 const mockEmbedText = vi.mocked(embedText);

@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EvaluationPrompt } from '../../services/lora/loraEvaluationService';
 import {
   comparePromptOutputs,
   computeStyleConsistencyScore,
   scoreLabel,
 } from '../../services/lora/loraEvaluationService';
-import type { EvaluationPrompt } from '../../services/lora/loraEvaluationService';
 
 vi.mock('../../services/ai/localEmbeddingService', () => ({
   embedText: vi.fn(),
 }));
 
 import { embedText } from '../../services/ai/localEmbeddingService';
+
 const mockEmbedText = vi.mocked(embedText);
 
 function makePrompt(overrides: Partial<EvaluationPrompt> = {}): EvaluationPrompt {
@@ -63,7 +64,10 @@ describe('computeStyleConsistencyScore', () => {
 
   it('computes improvement as score - baseline', async () => {
     const prompts = [
-      makePrompt({ baseOutput: 'Short.', adaptedOutput: 'A much longer and more elaborate description of the very same event.' }),
+      makePrompt({
+        baseOutput: 'Short.',
+        adaptedOutput: 'A much longer and more elaborate description of the very same event.',
+      }),
     ];
     const report = await computeStyleConsistencyScore(prompts);
     expect(report.improvement).toBeCloseTo(report.score - report.baseline, 5);
@@ -87,9 +91,7 @@ describe('computeStyleConsistencyScore', () => {
   });
 
   it('limits sample comparisons to 5 entries', async () => {
-    const prompts = Array.from({ length: 10 }, (_, i) =>
-      makePrompt({ prompt: `Prompt ${i}` }),
-    );
+    const prompts = Array.from({ length: 10 }, (_, i) => makePrompt({ prompt: `Prompt ${i}` }));
     const report = await computeStyleConsistencyScore(prompts);
     expect(report.sampleComparisons).toHaveLength(5);
   });
@@ -107,7 +109,10 @@ describe('computeStyleConsistencyScore', () => {
   it('returns different scores for divergent outputs', async () => {
     const prompts = [
       makePrompt({ baseOutput: 'The cat sat.', adaptedOutput: 'The cat sat on the mat.' }),
-      makePrompt({ baseOutput: 'The dog ran.', adaptedOutput: 'A completely different sentence structure here.' }),
+      makePrompt({
+        baseOutput: 'The dog ran.',
+        adaptedOutput: 'A completely different sentence structure here.',
+      }),
     ];
     const report = await computeStyleConsistencyScore(prompts);
     expect(report.score).toBeGreaterThanOrEqual(0);
@@ -174,7 +179,10 @@ describe('comparePromptOutputs', () => {
   it('returns different scores for divergent outputs', async () => {
     const prompts = [
       makePrompt({ baseOutput: 'The cat sat.', adaptedOutput: 'The cat sat on the mat.' }),
-      makePrompt({ baseOutput: 'The dog ran.', adaptedOutput: 'A completely different sentence structure here.' }),
+      makePrompt({
+        baseOutput: 'The dog ran.',
+        adaptedOutput: 'A completely different sentence structure here.',
+      }),
     ];
     const report = await computeStyleConsistencyScore(prompts);
     expect(report.score).toBeGreaterThanOrEqual(0);

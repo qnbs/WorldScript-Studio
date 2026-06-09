@@ -1,93 +1,77 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { useHelpView } from '../../hooks/useHelpView';
 
-const mockStreamAiHelpResponse = vi.fn<
-  (
-    ...args: [string, string, Record<string, unknown>, { onChunk: (chunk: string) => void }]
-  ) => Promise<void>
->(async (_question, _creativity, _opts, callbacks) => {
-  callbacks.onChunk('Hello from AI.');
-});
-
-const mockState = {
-  settings: {
-    aiCreativity: 'Balanced',
-    advancedAi: {
-      provider: 'gemini',
-      model: 'gemini-2.5-flash',
-      temperature: 0.7,
-      maxTokens: 4096,
-      ollamaBaseUrl: 'http://localhost:11434',
-      localBackendPreset: 'ollama_default',
-      openAiCompatibleBaseUrl: '',
-      openAiSiteUrl: '',
-      openAiSiteTitle: 'StoryCraft Studio',
-      hybridFallbackEnabled: false,
-      hybridFallbackChain: [],
-    },
-  },
-};
-
-vi.mock('../../app/hooks', () => ({
-  useAppSelector: (selector: (state: typeof mockState) => unknown) => selector(mockState),
-}));
 vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (key: string) => key, language: 'en' }),
 }));
-vi.mock('../../services/aiProviderService', () => ({
-  streamAiHelpResponse: (...args: Parameters<typeof mockStreamAiHelpResponse>) =>
-    mockStreamAiHelpResponse(...args),
-}));
 
 describe('useHelpView', () => {
-  beforeEach(() => {
-    mockStreamAiHelpResponse.mockClear();
+  it('initialises with getting-started category and no selected article', () => {
+    const { result } = renderHook(() => useHelpView());
+    expect(result.current.activeCategory).toBe('getting-started');
+    expect(result.current.selectedArticle).toBeNull();
+    expect(result.current.searchQuery).toBe('');
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('sends a user prompt and appends AI chunks to chat history', async () => {
+  it('handleSelectCategory changes category and clears article + search', () => {
     const { result } = renderHook(() => useHelpView());
 
     act(() => {
-      result.current.setUserInput('Hello AI');
+      result.current.handleSelectArticle(result.current.helpContent[0]!.articles[0]!);
+    });
+    act(() => {
+      result.current.setSearchQuery('test');
     });
 
-    await act(async () => {
-      await result.current.handleAskAi();
+    act(() => {
+      result.current.handleSelectCategory('writing');
     });
 
-    expect(mockStreamAiHelpResponse).toHaveBeenCalledWith(
-      'Hello AI',
-      mockState.settings.aiCreativity,
-      expect.objectContaining({ provider: 'gemini', model: 'gemini-2.5-flash' }),
-      expect.objectContaining({ onChunk: expect.any(Function) }),
-      expect.objectContaining({ docContext: expect.any(String) }),
-    );
-    const lastHistoryItem = result.current.chatHistory[result.current.chatHistory.length - 1];
-    expect(lastHistoryItem?.text).toContain('Hello from AI.');
-    expect(result.current.isAiReplying).toBe(false);
+    expect(result.current.activeCategory).toBe('writing');
+    expect(result.current.selectedArticle).toBeNull();
+    expect(result.current.searchQuery).toBe('');
   });
 
-  it('shows an error message when AI fails', async () => {
-    mockStreamAiHelpResponse.mockRejectedValueOnce(new Error('Service failed'));
+  it('handleSelectArticle sets the selected article', () => {
+    const { result } = renderHook(() => useHelpView());
+    const firstArticle = result.current.helpContent[0]!.articles[0]!;
+
+    act(() => {
+      result.current.handleSelectArticle(firstArticle);
+    });
+
+    expect(result.current.selectedArticle).toBe(firstArticle);
+  });
+
+  it('handleBackToList clears the selected article', () => {
+    const { result } = renderHook(() => useHelpView());
+    const firstArticle = result.current.helpContent[0]!.articles[0]!;
+
+    act(() => {
+      result.current.handleSelectArticle(firstArticle);
+    });
+    act(() => {
+      result.current.handleBackToList();
+    });
+
+    expect(result.current.selectedArticle).toBeNull();
+  });
+
+  it('searchResults updates when searchQuery changes', () => {
     const { result } = renderHook(() => useHelpView());
 
     act(() => {
-      result.current.setUserInput('Hello AI');
+      result.current.setSearchQuery('export');
     });
 
-    await act(async () => {
-      await result.current.handleAskAi();
-    });
+    expect(result.current.searchQuery).toBe('export');
+    expect(Array.isArray(result.current.searchResults)).toBe(true);
+  });
 
-    await waitFor(() => {
-      const lastHistoryItem = result.current.chatHistory[result.current.chatHistory.length - 1];
-      expect(lastHistoryItem?.text).toBe('help.ai.error');
-    });
-    expect(result.current.isAiReplying).toBe(false);
+  it('helpContent contains at least one category with articles', () => {
+    const { result } = renderHook(() => useHelpView());
+    expect(result.current.helpContent.length).toBeGreaterThan(0);
+    expect(result.current.helpContent[0]!.articles.length).toBeGreaterThan(0);
   });
 });
