@@ -50,12 +50,22 @@
       - script-src: nur eigene Skripte (Vite ES modules, kein inline nötig)
       - style-src: eigene + unsafe-inline (React inline-styles) + fonts.googleapis.com für CJK/Greek
       - font-src: self + fonts.gstatic.com für CJK/Greek (Google Fonts)
-      - connect-src: Gemini, OpenAI, xAI, Groq, OpenRouter, Ollama (localhost:11434),
-                    LM Studio (localhost:1234), local AI (localhost:8000),
-                    Yjs signaling WebSockets (explicit endpoints only — no wildcards),
-                    https: — intentional broad HTTPS allowance for user-configured
-                    openAiCompatibleBaseUrl (arbitrary remote proxy endpoints that
-                    cannot be statically enumerated in the CSP)
+      - connect-src: 'self'
+                    + https:  — intentional broad HTTPS scheme-source. REQUIRED by the
+                      shipped BYOK feature `openAiCompatibleBaseUrl` (Settings → AI →
+                      custom base URL): users point StoryCraft at arbitrary self-hosted
+                      or third-party OpenAI-compatible proxies that cannot be statically
+                      enumerated in a meta CSP. Because `https:` already covers every
+                      HTTPS origin, the explicit cloud-provider endpoints (Gemini,
+                      OpenAI, xAI, Groq, OpenRouter) were REMOVED as dead allowlist
+                      entries — keeping them implied a hardening that `https:` negates.
+                      Decision recorded in docs/adr/0004-csp-connect-src-byok-tradeoff.md.
+                    + http://localhost|127.0.0.1 (:11434 Ollama, :1234 LM Studio,
+                      :8000 local AI) — NOT covered by `https:`, so kept explicit.
+                    + wss:// Yjs signaling — explicit endpoints only, no ws: wildcard.
+                    The native Tauri build (src-tauri/tauri.conf.json) keeps a STRICT
+                    connect-src with no `https:` blanket; only the web PWA accepts the
+                    broader scheme for BYOK. See ADR-0004 for the web-vs-Tauri rationale.
       - img-src: data: URLs für Base64-Bilder erlaubt
       - Produktions-CSP wird über HTTP-Header des Hosts verschärft
     -->
@@ -66,7 +76,7 @@
             style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
             font-src    'self' https://fonts.gstatic.com data:;
             img-src     'self' data: blob:;
-            connect-src 'self' https: https://generativelanguage.googleapis.com https://api.openai.com https://api.x.ai https://api.groq.com https://openrouter.ai https://api.openrouter.ai http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev;
+            connect-src 'self' https: http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev;
             worker-src  'self' blob:;
             manifest-src 'self';
             object-src  'none';
