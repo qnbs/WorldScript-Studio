@@ -64,7 +64,7 @@ export class ProtocolHandler {
 
   private onMessage(event: MessageEvent, _timeoutMs?: number): void {
     const msg = validateWorkerMessage(event.data);
-    if (!msg || msg.kind !== 'RESULT') return;
+    if (msg?.kind !== 'RESULT') return;
 
     const pending = this.pending.get(msg.taskId);
     if (!pending) return;
