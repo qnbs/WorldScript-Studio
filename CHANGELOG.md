@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **CSP connect-src — documented BYOK tradeoff (ADR-0004):** Explicit cloud-provider endpoints in `index.html` `connect-src` removed as redundant; the intentional `https:` scheme-source (required by the shipped `openAiCompatibleBaseUrl` BYOK feature) is retained and documented. Tauri CSP stays strict (no `https:` blanket). Regression test in `tests/unit/csp.test.ts`.
 - **Coverage batches A–C:** Incremental unit-test coverage additions; thresholds held at lines 74 / functions 67 / branches 60 / statements 72. (`364025e`)
-- **Dependency bumps:** `@huggingface/transformers` 3.8.1 → 4.2.0 (ai-core; v4 API surface verified — see ADR/notes), `@biomejs/biome` → 2.4.16, `@mlc-ai/web-llm` → 0.2.84, `vite` → 8.0.16, `@google/genai` → 2.8.0, `@tanstack/react-virtual` → 3.14.2.
+- **Dependency bumps:** `@huggingface/transformers` 3.8.1 → 4.2.0 — **major bump verified (WS-3)**: the APIs ai-core/voice consume are unchanged in v4.2.0 (`pipeline(task, model, { dtype, device })`, `env.backends.onnx.wasm.proxy`, `RawAudio`/`read_audio` exports); `pnpm typecheck` clean and 63 ai-core/voice integration tests green; no source changes required. Production bundling (rolldown tree-shaking / `vendor-ai-onnx` chunk) is exercised by the CI `build` + `smoke:prod` jobs. Also `@biomejs/biome` → 2.4.16, `@mlc-ai/web-llm` → 0.2.84, `vite` → 8.0.16, `@google/genai` → 2.8.0, `@tanstack/react-virtual` → 3.14.2.
 
 ### Fixed
 
