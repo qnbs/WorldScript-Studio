@@ -187,6 +187,12 @@ addDebouncedListener(
         api.dispatch(statusActions.setSavingStatus('idle'));
       }
     } catch (error) {
+      // QNBS-v3: TaskAbortError = a newer debounce cycle cancelled us AFTER the save already
+      // succeeded (at the api.delay(2000) cleanup step). The data is safe — just reset status.
+      if ((error as { name?: string }).name === 'TaskAbortError') {
+        api.dispatch(statusActions.setSavingStatus('idle'));
+        return;
+      }
       logger.error('Auto-save (project) failed:', error);
       api.dispatch(
         statusActions.addNotification({

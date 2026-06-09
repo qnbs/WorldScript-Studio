@@ -1,6 +1,6 @@
 import DOMPurify from 'dompurify';
 import type { FC } from 'react';
-import React, { Fragment, useEffect, useRef } from 'react';
+import React from 'react';
 import { useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { useCommandExecutor } from '../contexts/CommandExecutorContext';
@@ -11,9 +11,6 @@ import type { HelpCategory } from '../types';
 import { HelpSearchInput, HelpSearchPanel } from './help/HelpSearchPanel';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
-import { Input } from './ui/Input';
-import { SectionIcon } from './ui/SectionIcon';
-import { Spinner } from './ui/Spinner';
 
 // --- SUB-COMPONENTS ---
 
@@ -143,197 +140,6 @@ const ArticleList: FC<{ category: HelpCategory }> = ({ category }) => {
   );
 };
 
-const ChatMessage: FC<{ role: 'user' | 'model'; text: string }> = React.memo(({ role, text }) => {
-  const isUser = role === 'user';
-  const theme = useAppSelector((state) => state.settings.theme);
-
-  const parsedText = text.split(/```([\s\S]*?)```/g).map((part, index) => {
-    if (index % 2 === 1) {
-      return (
-        <pre
-          // biome-ignore lint/suspicious/noArrayIndexKey: deterministic regex split of immutable text
-          key={`code-${index}`}
-          className="bg-[var(--sc-surface-base)] p-3 rounded-md text-sm whitespace-pre-wrap"
-        >
-          <code>{part}</code>
-        </pre>
-      );
-    }
-    const bolded = part.split(/(\*\*[\s\S]*?\*\*)/g).map((subPart, subIndex) => {
-      if (subIndex % 2 === 1) {
-        // biome-ignore lint/suspicious/noArrayIndexKey: deterministic regex split of immutable text
-        return <strong key={`b-${index}-${subIndex}`}>{subPart.slice(2, -2)}</strong>;
-      }
-      return subPart;
-    });
-    // biome-ignore lint/suspicious/noArrayIndexKey: deterministic regex split of immutable text
-    return <Fragment key={`t-${index}`}>{bolded}</Fragment>;
-  });
-
-  return (
-    <div className={`flex items-start gap-3 ${isUser ? 'justify-end' : ''}`}>
-      {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--sc-accent)]/20 flex items-center justify-center">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-5 h-5 text-[var(--sc-accent)]"
-          >
-            {ICONS.SPARKLES}
-          </svg>
-        </div>
-      )}
-      <div
-        className={`max-w-xl p-3 rounded-lg prose ${theme === 'dark' ? 'prose-invert' : ''} prose-p:my-0 ${isUser ? 'bg-[var(--sc-accent)] text-white shadow-lg' : 'bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)]'}`}
-      >
-        {parsedText}
-      </div>
-    </div>
-  );
-});
-ChatMessage.displayName = 'ChatMessage';
-
-const AiAssistant: FC = () => {
-  const { t, chatHistory, userInput, setUserInput, isAiReplying, handleAskAi } =
-    useHelpViewContext();
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-
-  const lastChatText = chatHistory[chatHistory.length - 1]?.text ?? '';
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll chat pane when history or streaming updates
-  useEffect(() => {
-    const el = chatContainerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [chatHistory.length, lastChatText, isAiReplying]);
-
-  const handleSuggestionClick = (suggestion: string) => {
-    setUserInput(suggestion);
-    void handleAskAi(suggestion);
-  };
-
-  return (
-    <Card className="h-full flex flex-col">
-      <CardHeader>
-        <div className="flex items-center gap-3">
-          <SectionIcon section="help" size="sm" />
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('help.ai.title')}
-          </h2>
-        </div>
-      </CardHeader>
-      <CardContent className="p-0 flex flex-col flex-grow min-h-0">
-        <div ref={chatContainerRef} className="flex-grow p-4 space-y-4 overflow-y-auto">
-          {chatHistory.map((msg, index) => {
-            // biome-ignore lint/suspicious/noArrayIndexKey: append-only chat history
-            return <ChatMessage key={`${msg.role}-${index}`} {...msg} />;
-          })}
-          {isAiReplying &&
-            chatHistory.length > 0 &&
-            chatHistory[chatHistory.length - 1]?.text === '' && (
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--sc-accent)]/20 flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-5 h-5 text-[var(--sc-accent)]"
-                  >
-                    {ICONS.SPARKLES}
-                  </svg>
-                </div>
-                <div
-                  className={`max-w-xl p-3 rounded-lg bg-[var(--glass-bg)] border border-[var(--sc-border-subtle)] flex space-x-2 items-center`}
-                >
-                  <div
-                    className="w-2 h-2 bg-[var(--sc-accent)] rounded-full animate-pulse"
-                    style={{ animationDelay: '0s' }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-[var(--sc-accent)] rounded-full animate-pulse"
-                    style={{ animationDelay: '0.2s' }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-[var(--sc-accent)] rounded-full animate-pulse"
-                    style={{ animationDelay: '0.4s' }}
-                  ></div>
-                </div>
-              </div>
-            )}
-        </div>
-        <div className="p-4 border-t border-[var(--sc-border-subtle)] space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleSuggestionClick(t('help.ai.suggestion1'))}
-            >
-              {t('help.ai.suggestion1')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleSuggestionClick(t('help.ai.suggestion2'))}
-            >
-              {t('help.ai.suggestion2')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleSuggestionClick(t('help.ai.suggestion3'))}
-            >
-              {t('help.ai.suggestion3')}
-            </Button>
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleAskAi();
-            }}
-            className="flex items-center gap-2"
-          >
-            <Input
-              type="text"
-              placeholder={t('help.ai.placeholder')}
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              disabled={isAiReplying}
-              className="flex-grow"
-            />
-            <Button
-              type="submit"
-              disabled={isAiReplying || !userInput}
-              aria-label={t('help.tabs.askAi')}
-            >
-              {isAiReplying ? (
-                <Spinner />
-              ) : (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-5 h-5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
-                  />
-                </svg>
-              )}
-            </Button>
-          </form>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
 const HelpViewUI: FC = () => {
   const {
     t,
@@ -354,10 +160,6 @@ const HelpViewUI: FC = () => {
   const renderContent = () => {
     if (selectedArticle) {
       return <ArticleViewer />;
-    }
-
-    if (activeCategory === 'ai') {
-      return <AiAssistant />;
     }
 
     const category = helpContent.find((cat) => cat.id === activeCategory);
@@ -403,13 +205,6 @@ const HelpViewUI: FC = () => {
                   onClick={() => handleSelectCategory(cat.id)}
                 />
               ))}
-            <NavButton
-              key="ai"
-              icon={ICONS.SPARKLES}
-              label={t('help.ai.title')}
-              isActive={activeCategory === 'ai'}
-              onClick={() => handleSelectCategory('ai')}
-            />
             <Button
               type="button"
               variant="secondary"
