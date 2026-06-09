@@ -30,16 +30,28 @@ test.describe('ProForge Pipeline (feature-flag explicit)', () => {
   });
 
   test('ProForge toggle button is present in Writer view', async ({ page }) => {
-    // Desktop viewport — the ProForge button is hidden on mobile
-    const btn = page.getByTestId('writer-proforge-btn-desktop');
+    // QNBS-v3: Desktop and Mobile Chrome both run in CI. Pick the correct button by viewport
+    // because writer-proforge-btn-desktop is md:hidden on mobile (Pixel 5 = 393px wide).
+    const viewportWidth = page.viewportSize()?.width ?? 1280;
+    const btnTestId =
+      viewportWidth < 768 ? 'writer-proforge-btn-mobile' : 'writer-proforge-btn-desktop';
+    const btn = page.getByTestId(btnTestId);
     await expect(btn).toBeVisible({ timeout: 10000 });
     await expect(btn).toHaveAttribute('aria-pressed', 'false');
     await expect(btn).toHaveAttribute('aria-label', /Activate ProForge Pipeline/i);
   });
 
   test('clicking ProForge toggle activates the pipeline dashboard', async ({ page }) => {
-    const btn = page.getByTestId('writer-proforge-btn-desktop');
+    const viewportWidth = page.viewportSize()?.width ?? 1280;
+    const isMobile = viewportWidth < 768;
+    const btn = page.getByTestId(
+      isMobile ? 'writer-proforge-btn-mobile' : 'writer-proforge-btn-desktop',
+    );
     await expect(btn).toBeVisible({ timeout: 10000 });
+    // On mobile, the tools tab must be active before clicking the toggle
+    if (isMobile) {
+      await page.getByTestId('writer-tab-tools').click();
+    }
     await btn.click();
 
     // Pipeline dashboard heading must appear
@@ -51,30 +63,44 @@ test.describe('ProForge Pipeline (feature-flag explicit)', () => {
   });
 
   test('ProForge empty state renders when no run is active', async ({ page }) => {
-    const btn = page.getByTestId('writer-proforge-btn-desktop');
+    const viewportWidth = page.viewportSize()?.width ?? 1280;
+    const isMobile = viewportWidth < 768;
+    const btn = page.getByTestId(
+      isMobile ? 'writer-proforge-btn-mobile' : 'writer-proforge-btn-desktop',
+    );
     await expect(btn).toBeVisible({ timeout: 10000 });
+    if (isMobile) {
+      await page.getByTestId('writer-tab-tools').click();
+    }
     await btn.click();
 
-    // Empty-state copy confirms the pipeline is ready and waiting, not errored
-    await expect(page.getByText(/Your manuscript, refined\.|refined/i)).toBeVisible({
-      timeout: 10000,
-    });
+    // QNBS-v3: Use data-testid to avoid strict-mode violation — ProForgeDashboard renders in both
+    // the desktop grid and the CSS-hidden mobile panel, producing duplicate "refined" headings.
+    await expect(page.getByTestId('proforge-empty-state')).toBeVisible({ timeout: 10000 });
+  });
+});
+
+// QNBS-v3: Moved to a separate describe so its beforeEach seeds enableProForge:false.
+// Putting this test inside the enableProForge:true group and doing a mid-test localStorage
+// override + reload is broken: addInitScript re-runs on reload and overwrites the override.
+test.describe('ProForge Pipeline — flag disabled', () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(!isCI, 'CI-only E2E suite');
+    await setFeatureFlags(page, { enableProForge: false });
+    await page.goto('/');
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
   });
 
   test('disabling ProForge flag hides the toggle', async ({ page }) => {
-    // Override to OFF after first load — do a second navigation to re-init Redux
-    await page.evaluate(() => {
-      try {
-        localStorage.setItem('storycraft-feature-flags', JSON.stringify({ enableProForge: false }));
-      } catch {
-        /* ignore */
-      }
-    });
-    await page.reload();
-    await waitForSpaReady(page);
     await clickNavItem(page, /AI Writing Studio|Writer/i);
-
-    const btn = page.getByTestId('writer-proforge-btn-desktop');
-    await expect(btn).not.toBeVisible({ timeout: 5000 });
+    // Both desktop and mobile buttons must be absent
+    await expect(page.getByTestId('writer-proforge-btn-desktop')).not.toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByTestId('writer-proforge-btn-mobile')).not.toBeVisible({
+      timeout: 5000,
+    });
   });
 });

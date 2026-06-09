@@ -114,7 +114,10 @@ export const ProForgeDashboard: React.FC = () => {
       <div className="flex-1 overflow-y-auto">
         {!currentRun ? (
           /* Start Screen */
-          <div className="flex flex-col items-center justify-center h-full gap-6 p-8">
+          <div
+            data-testid="proforge-empty-state"
+            className="flex flex-col items-center justify-center h-full gap-6 p-8"
+          >
             <div className="text-center max-w-md">
               <div
                 className="w-16 h-16 rounded-sc-xl mx-auto mb-4 flex items-center justify-center"

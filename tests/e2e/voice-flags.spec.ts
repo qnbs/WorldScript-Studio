@@ -37,9 +37,9 @@ test.describe('Voice — Web Speech API path (enableVoiceSupport, enableVoiceWas
     await ensureBlankProject(page);
   });
 
-  test('voice control button is present in the app header', async ({ page }) => {
-    // The voice control button is sm:hidden so only visible on mobile viewports (<640px).
-    // We also expose it via Settings → Voice & Speech section in the settings nav.
+  // QNBS-v3: Renamed from "voice control button is present in the app header" — the voice
+  // feature surface is the Settings → Voice & Speech section, not a standalone header button.
+  test('Voice & Speech section is accessible via Settings nav', async ({ page }) => {
     await clickNavItem(page, /Settings/i);
     await page.getByRole('button', { name: /Voice.*Speech|Sprache/i }).click();
     await expect(page.getByRole('heading', { name: /Voice.*Speech|Sprache|Voice/i })).toBeVisible({
@@ -63,7 +63,7 @@ test.describe('Voice — Web Speech API path (enableVoiceSupport, enableVoiceWas
     await clickNavItem(page, /AI Writing Studio|Writer/i);
     // Pressing Ctrl+Shift+V should not throw. We check no error dialog appears.
     await page.keyboard.press('Control+Shift+V');
-    await page.waitForTimeout(300);
+    // QNBS-v3: No fixed sleep — the sidebar assertion below already waits up to 5 s.
     // App should still be functional — sidebar nav still works
     await expect(page.locator('#sidebar, [data-tour="nav-mobile"]').first()).toBeVisible({
       timeout: 5000,
@@ -96,21 +96,22 @@ test.describe('Voice — WASM engine path (enableVoiceSupport + enableVoiceWasm)
         .or(page.getByText(/Download offline model|Offline-Modell herunterladen/i)),
     ).toBeVisible({ timeout: 10000 });
   });
+});
+
+// QNBS-v3: Moved to a separate describe with enableVoiceWasm:false in beforeEach.
+// The mid-test localStorage + reload pattern is broken: addInitScript re-runs on
+// reload and overwrites any localStorage override with the original flag values.
+test.describe('Voice — WASM section absent when enableVoiceWasm is off', () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(!isCI, 'CI-only E2E suite');
+    await setFeatureFlags(page, { enableVoiceSupport: true, enableVoiceWasm: false });
+    await page.goto('/');
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+  });
 
   test('WASM engine section does NOT appear when enableVoiceWasm is off', async ({ page }) => {
-    // Override to off mid-session
-    await page.evaluate(() => {
-      try {
-        localStorage.setItem(
-          'storycraft-feature-flags',
-          JSON.stringify({ enableVoiceSupport: true, enableVoiceWasm: false }),
-        );
-      } catch {
-        /* ignore */
-      }
-    });
-    await page.reload();
-    await waitForSpaReady(page);
     await clickNavItem(page, /Settings/i);
     await page.getByRole('button', { name: /Voice.*Speech|Sprache/i }).click();
 
@@ -139,8 +140,10 @@ test.describe('Voice — flag disabled hides all voice UI', () => {
 
   test('Voice & Speech section is absent from Settings nav', async ({ page }) => {
     await clickNavItem(page, /Settings/i);
-    // Wait for settings to load, then verify Voice section is not listed
-    await page.waitForTimeout(500);
+    // QNBS-v3: Wait for settings nav to render (heading visible) before asserting button absence.
+    await expect(
+      page.getByRole('heading', { name: /Settings|Einstellungen/i }).first(),
+    ).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole('button', { name: /Voice.*Speech/i })).not.toBeVisible({
       timeout: 3000,
     });

@@ -47,10 +47,11 @@ test.describe('Error paths — offline AI calls', () => {
       page.locator('textarea, [contenteditable="true"], [role="textbox"]').first(),
     ).toBeVisible({ timeout: 10000 });
 
-    // No fatal error overlay
-    await expect(page.getByRole('heading', { name: /Something went wrong/i }))
-      .not.toBeVisible({ timeout: 2000 })
-      .catch(() => {});
+    // QNBS-v3: Assert directly — if a fatal error heading IS visible this must fail the test.
+    // No .catch() suppression: a visible error boundary is a real regression.
+    await expect(page.getByRole('heading', { name: /Something went wrong/i })).not.toBeVisible({
+      timeout: 2000,
+    });
   });
 });
 
@@ -82,10 +83,10 @@ test.describe('Error paths — rapid navigation between views', () => {
       /Settings|Einstellungen/i,
     ];
 
+    // QNBS-v3: intentional rapid fire — no waits between navigations to stress concurrent unmounts.
+    // Navigation failures are allowed mid-loop; we only assert final app health below.
     for (const nav of navItems) {
       await clickNavItem(page, nav).catch(() => {});
-      // Minimal wait — we're testing for race conditions, not content
-      await page.waitForTimeout(100);
     }
 
     // After rapid switching, the app shell must still be intact
@@ -126,16 +127,19 @@ test.describe('Error paths — Settings sections with all flags on', () => {
 
   for (const sectionName of settingsSections) {
     test(`"${sectionName.source}" section opens without crash`, async ({ page }) => {
+      // QNBS-v3: These are core sections always present — assert visibility rather than
+      // wrapping in a conditional that turns the test into a no-op when the button is missing.
       const btn = page.getByRole('button', { name: sectionName }).first();
-      if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await btn.click();
-        // Wait briefly for any async load
-        await page.waitForTimeout(300);
-        // No fatal error boundary
-        await expect(page.getByRole('heading', { name: /Something went wrong/i }))
-          .not.toBeVisible({ timeout: 2000 })
-          .catch(() => {});
-      }
+      await expect(btn).toBeVisible({ timeout: 5000 });
+      await btn.click();
+      // Wait for section content to render before checking for error boundary
+      await expect(page.getByRole('heading', { name: sectionName }).first()).toBeVisible({
+        timeout: 5000,
+      });
+      // QNBS-v3: No .catch() — a visible error boundary is a real regression, not a flake.
+      await expect(page.getByRole('heading', { name: /Something went wrong/i })).not.toBeVisible({
+        timeout: 2000,
+      });
     });
   }
 });
