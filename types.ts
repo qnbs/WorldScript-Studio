@@ -857,6 +857,9 @@ declare global {
   interface Window {
     SpeechRecognition: ISpeechRecognitionConstructor;
     webkitSpeechRecognition: ISpeechRecognitionConstructor;
+    // QNBS-v3: cross-service gate set by listenerMiddleware (adaptive-AI ON/OFF) and read by
+    // localAiFacade — typed here so call sites avoid `(window as any)` casts (F-4 abatement).
+    __storycraft_adaptive_ai__?: boolean;
   }
 }
 

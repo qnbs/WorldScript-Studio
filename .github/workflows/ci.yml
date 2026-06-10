@@ -90,6 +90,9 @@ jobs:
       - name: Lint (Biome)
         run: pnpm run lint
 
+      - name: Suppression-debt ratchet (biome-ignore count)
+        run: node scripts/check-suppressions.mjs
+
       - name: i18n key parity (vs en)
         run: pnpm run i18n:check
 

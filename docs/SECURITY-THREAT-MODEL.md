@@ -116,7 +116,22 @@ Goal: Intercept/decrypt collaboration traffic
 | `aiPolicy.ts` | S | Provider allowlist, localStorageOnly gate | ✅ Complete |
 | `logger.ts` | I,R | GDPR sanitization, no key logging | ✅ Complete |
 | `sw.js` | I | Network-only for AI hosts | ✅ Complete |
-| `tauri.conf.json` | I | CSP with explicit connect-src | ✅ Complete |
+| `tauri.conf.json` | I | Strict CSP — explicit `connect-src` allowlist, no `https:` blanket | ✅ Complete |
+| `index.html` (web PWA) | I | CSP `connect-src 'self' https:` — broad HTTPS by design for BYOK; no `http:`/`ws:` wildcards | ⚠️ Documented tradeoff ([ADR-0004](adr/0004-csp-connect-src-byok-tradeoff.md)) |
+
+### CSP connect-src: web-vs-Tauri asymmetry (ADR-0004)
+
+The web PWA's `connect-src` intentionally allows the `https:` scheme-source because the shipped BYOK
+feature `openAiCompatibleBaseUrl` (Settings → AI → custom base URL) lets users target arbitrary
+self-hosted/third-party OpenAI-compatible proxies that cannot be statically enumerated in a `<meta>`
+CSP. The redundant explicit cloud-provider entries were removed (they changed nothing under `https:`
+and implied a hardening the policy did not provide). **Residual risk:** a `fetch` driven in the web
+PWA (e.g. via AI prompt injection) can reach any HTTPS origin. Mitigations: no secrets in
+`connect-src`-reachable globals; keys encrypted at rest and only attached to the user's chosen
+provider request; AI output never `eval`'d; host HTTP-header CSP tightens production further.
+`http:`/`ws:` scheme-wildcards remain disallowed (cleartext exfiltration blocked). The native **Tauri**
+CSP stays strict (no `https:`). Closing this fully = build-time CSP generation (Option C, v2.0).
+Regression test: `tests/unit/csp.test.ts`.
 
 ## Security Checklist
 
@@ -125,7 +140,7 @@ Goal: Intercept/decrypt collaboration traffic
 - [x] IV uniqueness per operation (random 12-byte)
 - [x] No API keys in localStorage/sessionStorage
 - [x] No console.log of sensitive data
-- [x] CSP restricts connect-src to known hosts
+- [x] CSP connect-src: Tauri strict (known hosts); web PWA `https:` by design for BYOK, no `http:`/`ws:` wildcards (ADR-0004)
 - [x] Collaboration requires password in production
 - [x] Plugin system permission-gated
 - [x] Plugin system Worker-isolated (P0-2) — `workers/plugin.worker.ts`

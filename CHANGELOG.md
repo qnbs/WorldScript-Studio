@@ -7,60 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> Post-v1.20.0 work toward **v1.21.0 (in development)** — not yet released/tagged.
+
 ### Added
 
-- **WebGPU detector service (2026-05-18):** New `services/ai/webGpuDetectorService.ts` — `detectWebGpuDetails()` queries `navigator.gpu.requestAdapter()`, reads `adapter.limits.maxBufferSize` for VRAM tier heuristic (≥8 GB = high, ≥4 GB = medium, else low). AiProviderCard gains live GPU status badge, WebLLM model dropdown, and ONNX model dropdown. `LOCAL_INFERENCE_PROVIDERS` + `isLocalInferenceProvider()` added to `orchestrationProviders.ts`. 12 new settings i18n keys across all 5 locales (1408 → 1414 total).
-
-- **ONNX Runtime Web Layer-2 in ai-core (2026-05-18):** `packages/ai-core/src/index.ts` adds an ONNX WASM fallback layer between WebLLM and Transformers.js. `LocalAiLayer` type includes `'onnx'`. `ONNX_SUPPORTED_MODELS` exported. `vite.config.ts` gains `vendor-ai-onnx` manual chunk to keep onnxruntime-web + @xenova/transformers under Workbox's 8 MiB SW cache limit.
-
-- **Yjs AES-256-GCM encryption foundation (2026-05-18):** `collaborationService.ts` gains `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 600 000 iterations, SHA-256, AES-256-GCM), and `getEncryptionStatus()` (`'encrypted' | 'psk-only' | 'plaintext'`). `CollaborationPanel.tsx` shows green/amber encryption status badge post-connect. 3 new collab i18n keys.
-
-- **Tauri v2 auto-updater pipeline (2026-05-18):** `tauri-build.yml` gains a `Generate latest.json` step that builds the Tauri v2 update manifest from signed `.sig` files and uploads it to GitHub Release. `docs/TAURI-UPDATER.md` extended with a full GitHub Secrets table. `docs/TAURI-CI.md` gains a 7-step first-release checklist.
-
-- **Cross-Project-Search v2 (2026-05-18):** DB_VERSION 7→8 with new `projects-index-store`. New `crossProjectIndexService.ts` — `indexProject()`, `listIndexedProjects()`, `removeProjectIndex()` (privacy-preserving: no manuscript plaintext). `searchAcrossProjectIndex()` added to `crossProjectSearchService.ts`. `CrossProjectSearchPanel.tsx` runs two-phase search (index first, then current project). 3 new `crossSearch.*` i18n keys (1414 total).
-
-- **Mobile-aware E2E helpers (2026-05-17):** `clickNavItem(page, name)` in `tests/e2e/helpers.ts` — tries desktop `#sidebar` (hidden md:flex), then mobile bottom-tab-bar (`[data-tour="nav-mobile"]`), then the "More" sheet; eliminates all `sidebar(page)` calls that fail on Pixel 5 viewport. `selectFirstEnabledWriterSection` now switches to the context tab on mobile before locating the section selector.
-- **ARIA tablist on WriterView mobile segmented control:** Each tab button gains `role="tab"`, `aria-selected`, `aria-controls`, `data-testid="writer-tab-{context|tools|result}"`; container gains `role="tablist"`; panel divs gain `role="tabpanel"` + `aria-labelledby` — axe-compliant and stably selectable in Playwright.
-- **Mobile VC button in WriterViewUI:** `md:hidden` version of the version-control toggle button with `data-testid="writer-version-control-btn"` and `aria-expanded` — mirrors the desktop button that is hidden on Pixel 5 viewport.
-- **Stable test anchors:** `data-testid="snapshot-label-input"` on the snapshot-label `<Input>` in `VersionControlPanel.tsx`; `data-testid="export-preview"` on the `<pre>` export preview in `ExportView.tsx`.
-- **OSV vulnerability scan in CI security job:** `google/osv-scanner-action@v2` step wired after `pnpm audit` — `osv-scanner.toml` existed but was never executed; advisories now caught on every push/PR.
-- **JUnit E2E artifact:** Playwright JUnit reporter output (`tests/e2e/results/junit.xml`) uploaded as `e2e-junit` artifact — enables per-test check annotations on GitHub PRs.
+- **Sepia dark mode — "Candlelit Manuscript" variant:** New warm low-light theme variant joining the light/dark/sepia families; body-class themed via `--sc-*` tokens (no `dark:` prefix). (`1321478`)
+- **Deep E2E coverage layer:** Non-blocking `e2e-deep` job — feature-flag matrix (`tests/e2e/deep/feature-flag-matrix.spec.ts`) parametrized across `test-matrix.ts`, plus error-path specs (offline AI, rapid nav, all-flags-on). Explicit per-flag specs seed state via `setFeatureFlags()`. (`663ca2f`)
+- **Chinese (zh) locale + pt/el Beta translation batches:** zh Simplified brought under the 5% English-placeholder target; pt/el Beta translation batches landed. (`364025e`, `e8cddcb`)
+- **Whisper WASM STT download UI + VAD→Whisper bridge:** `VoiceModelDownloadModal` ships; `VoiceActivityCoordinator` wires `WebRtcVadEngine` PCM frames into `WasmSttEngine` (MIN_SPEECH_CHUNKS gate + MAX_BUFFER_MS flush) behind `enableVoiceWasm`. (`e8cddcb`, `364025e`)
 
 ### Changed
 
-- **i18n Comprehensive Sweep (2026-05-18):** All remaining hardcoded user-facing strings eliminated across 5 locales — **1 440 keys** total (up from 1 414). Fixes include: `help.tryTour` (was rendering raw key `"try.Help"` in the command palette), `initialProject.chapter1` (`"Chapter 1"` in projectSlice + AdvancedImportExport — extended `resetProject` payload with optional `chapter1Title`), `manuscript.resizer.left/right` (hardcoded German string `"Linkes Panel anpassen"` remained in source), `writer.stopGenerating / tools.selectLabel / versionControl.tooltip`, `settings.ai.temperature.precise/balanced/creative`, `export.pasteSection.heading` (`"Google Docs / Notion"`), `outline.result.body`, `characters.uploadImage / editorTabsAriaLabel`, `worlds.uploadImage / editorTabsAriaLabel`, `templates.tabs.myTemplates / community`, `error.boundary.title/description/reset/reload/report`, `manuscript.spellcheck.didYouMean/applyFix`, `manuscript.grammar.checkButton`, `manuscript.zenMode.enter/exit/label`, and `writer.studio.controls.custom/customTonePlaceholder`.
-
-- **ErrorBoundary fully localized (2026-05-18):** `components/ui/ErrorBoundary.tsx` refactored with inner `ErrorFallback` functional component — accesses `useTranslation()` hook to render title, description, and all buttons (Reset View, Reload Page, Report issue) in the active locale. Import path corrected to `hooks/useTranslation`; `onReset` passed conditionally to satisfy `exactOptionalPropertyTypes`.
-
-- **Unit-test coverage — 1 641 tests / 150 test files (2026-05-18):** Measured **62.86 % statements · 49.06 % branches · 54.10 % functions · 64.68 % lines**. Vitest thresholds at statements 53 / branches 37 / functions 50 / lines 55 — all passing.
-
-- **Unit-test coverage — Phase 4.5 thresholds met (2026-05-17):** Measured **63.32 % lines · 61.5 % statements · 47.1 % branches · 53.2 % functions** (1 561 tests). Vitest thresholds at lines 55 / statements 53 / branches 37 / functions 50.
-- **Stryker mutation gate enforced:** `thresholds.break` raised `null` → `30`; `timeoutMS` lowered 180 000 → 120 000 ms; CI mutation job `continue-on-error` → `false`, `timeout-minutes: 20` → `30`.
-- **Lighthouse performance promoted to error:** `categories:performance` `warn:0.5` → `error:0.4`; `categories:seo` added as `warn:0.8`; FCP tightened 6 000 → 5 000 ms; LCP tightened 8 000 → 7 000 ms.
-- **CI concurrency fix:** `cancel-in-progress` restricted to PRs only — main-branch deploys no longer cancelled by a concurrent push.
-- **Artifact retention aligned:** `dist` 7 → 3 days; `lighthouse-report` and `storybook` 14 → 7 days.
+- **CSP connect-src — documented BYOK tradeoff (ADR-0004):** Explicit cloud-provider endpoints in `index.html` `connect-src` removed as redundant; the intentional `https:` scheme-source (required by the shipped `openAiCompatibleBaseUrl` BYOK feature) is retained and documented. Tauri CSP stays strict (no `https:` blanket). Regression test in `tests/unit/csp.test.ts`.
+- **Coverage batches A–C:** Incremental unit-test coverage additions; thresholds held at lines 74 / functions 67 / branches 60 / statements 72. (`364025e`)
+- **Dependency bumps:** `@huggingface/transformers` 3.8.1 → 4.2.0 — **major bump verified (WS-3)**: the APIs ai-core/voice consume are unchanged in v4.2.0 (`pipeline(task, model, { dtype, device })`, `env.backends.onnx.wasm.proxy`, `RawAudio`/`read_audio` exports); `pnpm typecheck` clean and 63 ai-core/voice integration tests green; no source changes required. Production bundling (rolldown tree-shaking / `vendor-ai-onnx` chunk) is exercised by the CI `build` + `smoke:prod` jobs. Also `@biomejs/biome` → 2.4.16, `@mlc-ai/web-llm` → 0.2.84, `vite` → 8.0.16, `@google/genai` → 2.8.0, `@tanstack/react-virtual` → 3.14.2.
 
 ### Fixed
 
-- **TypeScript 6 strict hardening (2026-05-18):** `'grok-3'` and `'grok-3-mini'` added to `AiModel` union in `types.ts` (TS2322 in `aiProviderService.test.ts`); double-cast `(x as unknown as Record<string, unknown>)['key']` pattern for `CollaborationService` private member access (TS2352); bracket notation `['gpu']` / `['__TAURI__']` required by TypeScript 6 index-signature enforcement (TS4111); PBKDF2 `Uint8Array<ArrayBuffer>` generic in `collaborationService.ts` for Web Crypto API strict typing.
+- **Command palette footer contrast (a11y):** `text-muted` → `text-secondary` for WCAG 2.2 AA contrast. (`672e56d`)
+- **Voice settings tab + auto-save false-positive + help locale cleanup.** (`e049f08`)
+- **E2E / CI stabilization:** viewport-aware nav locators, ProForge empty-state visibility on Desktop Chrome, Voice WASM section, Early-Access hyphenated German label, and 17 unit-test fixes across SettingsView/HelpView/VoiceSettingsSection. (`43602c2`, `f16ba42`, `3cf9387`, `fe598ed`, `d73397e`)
 
-- **Test mocks (2026-05-18):** `tests/unit/ErrorBoundary.test.tsx` gains `vi.mock('../../hooks/useTranslation', …)` with an EN string map so rendered-text assertions survive the i18n refactor. `tests/unit/AdvancedImportExport.test.tsx` heading assertion updated from hardcoded `'Google Docs / Notion'` to `'export.pasteSection.heading'` (consistent with the `t: (k) => k` mock pattern already used in that file).
+### Docs
 
-- **E2E Desktop + Mobile Chrome (2026-05-17):** `writer`, `snapshots`, `a11y`, `export` spec files migrated to 2026 Golden Hierarchy selectors (getByRole > getByTestId; no CSS, no XPath). Fixes CI exit-code 1 after WriterView component split.
-
-- **WebLLM model selector (Phase 3B):** `packages/ai-core` now exports `WEBLLM_SUPPORTED_MODELS` (4 curated MLC-packaged checkpoints: Llama 3.2 1B, Llama 3.2 3B, Phi-3.5 Mini, Gemma 2 2B), `WebLlmModelId`, and `WebLlmProgressReport` types. `runLocalTextGeneration` accepts an optional `modelId` and `onProgress` callback for per-model download-progress tracking. `services/localAiFacade.ts` forwards both parameters. `types.ts` expands the `AiModel` union with the four specific MLC model IDs. Settings → AI (Advanced) now shows a dynamic model dropdown populated from `WEBLLM_SUPPORTED_MODELS`, a pre-download button, a WCAG 2.2 `role="progressbar"` progress bar, and a `useRef` mounted guard that prevents `setState`-on-unmount. All 5 locale `settings.json` files gain the 3 new i18n keys (`settings.ai.webllm.model`, `settings.ai.webllm.downloadProgress`, `settings.ai.webllm.downloading`).
-
-- **Cross-project search service (Phase 3A):** New `services/crossProjectSearchService.ts` — `searchAcrossProjects(query, projectData)` fuzzy-searches project title, logline, manuscript sections, and character names/fields using `normalizeSearch()` from `fuzzyScore.ts`; returns `CrossProjectSearchResult[]` sorted by score. Results include `projectId`, `projectTitle`, `matchType`, `excerpt` (truncated to 120 chars with `…`), and `score`. v1 scope is single-project (multi-project search requires a DB_VERSION bump + IDB migration — deferred to v2). `app/transientUiStore.ts` gains `isCrossProjectSearchOpen` + `setCrossProjectSearchOpen`. The `labs-cross-project-search` command in `services/commands/commandDefinitions.tsx` now opens the search panel instead of a stub toast. All 5 locale `common.json` files gain 7 `crossSearch.*` keys.
-
-- **Collaboration security warning (Phase 3C):** `CollaborationPanel.tsx` displays a pre-connection security-warning banner (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) that is only visible before connecting. The banner explains that the public y-webrtc signaling relay can observe connection metadata, includes a keyboard-accessible self-hosting link, and disappears once connected. All 5 locale `common.json` files gain `collab.securityWarning`, `collab.securityWarningDetail`, and `collab.selfHostLinkLabel`.
-
-- **E2E tests for new features:** `tests/e2e/commands.spec.ts` — palette open/close (Ctrl+K / Escape), "dashboard" text search surfaces nav command, Enter-to-navigate, fuzzy "wrt" match. `tests/e2e/collaboration.spec.ts` — security warning `[role=alert]` is visible pre-connection and non-empty. Both specs are CI-only (`test.skip(!isCI)`).
-
-### Changed
-
-- **Unit-test coverage — Phase 1 thresholds met:** 17 new test files added (733 tests total); Vitest coverage thresholds bumped to `{ lines: 35, functions: 30, branches: 22, statements: 33 }` (previously 25/21/17/24). Measured coverage: **36.47 % lines · 35.53 % statements · 24.96 % branches · 30.22 % functions** — all Phase 1 targets exceeded. New files cover: `commands/` (fuzzyScore, palettePreferences, commandSystem), project thunks (writing, character, binder, management), hooks (useDashboard, useManuscriptView, useGlobalKeyboardShortcuts, useCharacterView, useOutlineGenerator), `aiProviderService` fallback chain, `dbService` snapshots, `dbService` binder assets, and `crossProjectSearchService`.
-
-- **Stryker mutation targets expanded (Phase 4):** `stryker.conf.json` `mutate` array now includes `services/commands/fuzzyScore.ts`, `services/commands/palettePreferences.ts`, and `services/commands/commandBuilder.ts` in addition to the existing `codexService.ts` and `dbMigration.ts`.
+- **Integrity & hardening cycle (v1.21, audit F-1…F-9):** README badge → released v1.20.0 + refreshed metrics (433 test files / 2 357 i18n keys); 28 misfiled v1.19-era CHANGELOG entries migrated to `[1.19.0]`; TODO sprint rollover. ADR-0004 (CSP/BYOK). New suppression-count ratchet gate (`scripts/check-suppressions.mjs`, wired into CI `quality`) + first abatement tranche — 22 `noExplicitAny` suppressions removed, baseline ratcheted 181 → 159. Bundle-budget single source of truth (`bundle:budget` = `--max-kb 6500 --max-entry-kb 4000`, script defaults aligned). Governance docs: `VENDOR-FORKS.md` gains a CVE/OSV-coverage section (the vendored y-webrtc source is invisible to OSV — manual upstream-advisory process documented), new `docs/COVERAGE-POLICY.md` (threshold ratchet rule).
 
 ---
 
@@ -143,10 +113,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Sequential shell execution rule** codified in all 4 instruction files (`CLAUDE.md` project root, `.github/copilot-instructions.md`, `.cursorrules`, `infra/low-end-ci/DAILY-DRIVER.md`) — ONE Bash call per response, no parallel shell calls on this 3.7 GB RAM hardware.
 
+- **WebGPU detector service (2026-05-18):** New `services/ai/webGpuDetectorService.ts` — `detectWebGpuDetails()` queries `navigator.gpu.requestAdapter()`, reads `adapter.limits.maxBufferSize` for VRAM tier heuristic (≥8 GB = high, ≥4 GB = medium, else low). AiProviderCard gains live GPU status badge, WebLLM model dropdown, and ONNX model dropdown. `LOCAL_INFERENCE_PROVIDERS` + `isLocalInferenceProvider()` added to `orchestrationProviders.ts`. 12 new settings i18n keys across all 5 locales (1408 → 1414 total).
+
+- **ONNX Runtime Web Layer-2 in ai-core (2026-05-18):** `packages/ai-core/src/index.ts` adds an ONNX WASM fallback layer between WebLLM and Transformers.js. `LocalAiLayer` type includes `'onnx'`. `ONNX_SUPPORTED_MODELS` exported. `vite.config.ts` gains `vendor-ai-onnx` manual chunk to keep onnxruntime-web + @xenova/transformers under Workbox's 8 MiB SW cache limit.
+
+- **Yjs AES-256-GCM encryption foundation (2026-05-18):** `collaborationService.ts` gains `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 600 000 iterations, SHA-256, AES-256-GCM), and `getEncryptionStatus()` (`'encrypted' | 'psk-only' | 'plaintext'`). `CollaborationPanel.tsx` shows green/amber encryption status badge post-connect. 3 new collab i18n keys.
+
+- **Tauri v2 auto-updater pipeline (2026-05-18):** `tauri-build.yml` gains a `Generate latest.json` step that builds the Tauri v2 update manifest from signed `.sig` files and uploads it to GitHub Release. `docs/TAURI-UPDATER.md` extended with a full GitHub Secrets table. `docs/TAURI-CI.md` gains a 7-step first-release checklist.
+
+- **Cross-Project-Search v2 (2026-05-18):** DB_VERSION 7→8 with new `projects-index-store`. New `crossProjectIndexService.ts` — `indexProject()`, `listIndexedProjects()`, `removeProjectIndex()` (privacy-preserving: no manuscript plaintext). `searchAcrossProjectIndex()` added to `crossProjectSearchService.ts`. `CrossProjectSearchPanel.tsx` runs two-phase search (index first, then current project). 3 new `crossSearch.*` i18n keys (1414 total).
+
+- **Mobile-aware E2E helpers (2026-05-17):** `clickNavItem(page, name)` in `tests/e2e/helpers.ts` — tries desktop `#sidebar` (hidden md:flex), then mobile bottom-tab-bar (`[data-tour="nav-mobile"]`), then the "More" sheet; eliminates all `sidebar(page)` calls that fail on Pixel 5 viewport. `selectFirstEnabledWriterSection` now switches to the context tab on mobile before locating the section selector.
+
+- **ARIA tablist on WriterView mobile segmented control:** Each tab button gains `role="tab"`, `aria-selected`, `aria-controls`, `data-testid="writer-tab-{context|tools|result}"`; container gains `role="tablist"`; panel divs gain `role="tabpanel"` + `aria-labelledby` — axe-compliant and stably selectable in Playwright.
+
+- **Mobile VC button in WriterViewUI:** `md:hidden` version of the version-control toggle button with `data-testid="writer-version-control-btn"` and `aria-expanded` — mirrors the desktop button that is hidden on Pixel 5 viewport.
+
+- **Stable test anchors:** `data-testid="snapshot-label-input"` on the snapshot-label `<Input>` in `VersionControlPanel.tsx`; `data-testid="export-preview"` on the `<pre>` export preview in `ExportView.tsx`.
+
+- **OSV vulnerability scan in CI security job:** `google/osv-scanner-action@v2` step wired after `pnpm audit` — `osv-scanner.toml` existed but was never executed; advisories now caught on every push/PR.
+
+- **JUnit E2E artifact:** Playwright JUnit reporter output (`tests/e2e/results/junit.xml`) uploaded as `e2e-junit` artifact — enables per-test check annotations on GitHub PRs.
+
 ### Changed
 
 - `services/logger.ts` — backward-compat `logger` export, `getRecentLogs()`, `formatLogsForReport()`, and `clearLogs()` retained; in-memory cache kept at 200 entries as fast path for `formatLogsForReport`.
 - `packages/collab-transport` replaces pnpm-patched `y-webrtc` dependency; `patchedDependencies` entry removed from `package.json`.
+
+- **i18n Comprehensive Sweep (2026-05-18):** All remaining hardcoded user-facing strings eliminated across 5 locales — **1 440 keys** total (up from 1 414). Fixes include: `help.tryTour` (was rendering raw key `"try.Help"` in the command palette), `initialProject.chapter1` (`"Chapter 1"` in projectSlice + AdvancedImportExport — extended `resetProject` payload with optional `chapter1Title`), `manuscript.resizer.left/right` (hardcoded German string `"Linkes Panel anpassen"` remained in source), `writer.stopGenerating / tools.selectLabel / versionControl.tooltip`, `settings.ai.temperature.precise/balanced/creative`, `export.pasteSection.heading` (`"Google Docs / Notion"`), `outline.result.body`, `characters.uploadImage / editorTabsAriaLabel`, `worlds.uploadImage / editorTabsAriaLabel`, `templates.tabs.myTemplates / community`, `error.boundary.title/description/reset/reload/report`, `manuscript.spellcheck.didYouMean/applyFix`, `manuscript.grammar.checkButton`, `manuscript.zenMode.enter/exit/label`, and `writer.studio.controls.custom/customTonePlaceholder`.
+
+- **ErrorBoundary fully localized (2026-05-18):** `components/ui/ErrorBoundary.tsx` refactored with inner `ErrorFallback` functional component — accesses `useTranslation()` hook to render title, description, and all buttons (Reset View, Reload Page, Report issue) in the active locale. Import path corrected to `hooks/useTranslation`; `onReset` passed conditionally to satisfy `exactOptionalPropertyTypes`.
+
+- **Unit-test coverage — 1 641 tests / 150 test files (2026-05-18):** Measured **62.86 % statements · 49.06 % branches · 54.10 % functions · 64.68 % lines**. Vitest thresholds at statements 53 / branches 37 / functions 50 / lines 55 — all passing.
+
+- **Unit-test coverage — Phase 4.5 thresholds met (2026-05-17):** Measured **63.32 % lines · 61.5 % statements · 47.1 % branches · 53.2 % functions** (1 561 tests). Vitest thresholds at lines 55 / statements 53 / branches 37 / functions 50.
+
+- **Stryker mutation gate enforced:** `thresholds.break` raised `null` → `30`; `timeoutMS` lowered 180 000 → 120 000 ms; CI mutation job `continue-on-error` → `false`, `timeout-minutes: 20` → `30`.
+
+- **Lighthouse performance promoted to error:** `categories:performance` `warn:0.5` → `error:0.4`; `categories:seo` added as `warn:0.8`; FCP tightened 6 000 → 5 000 ms; LCP tightened 8 000 → 7 000 ms.
+
+- **CI concurrency fix:** `cancel-in-progress` restricted to PRs only — main-branch deploys no longer cancelled by a concurrent push.
+
+- **Artifact retention aligned:** `dist` 7 → 3 days; `lighthouse-report` and `storybook` 14 → 7 days.
+
+- **Unit-test coverage — Phase 1 thresholds met:** 17 new test files added (733 tests total); Vitest coverage thresholds bumped to `{ lines: 35, functions: 30, branches: 22, statements: 33 }` (previously 25/21/17/24). Measured coverage: **36.47 % lines · 35.53 % statements · 24.96 % branches · 30.22 % functions** — all Phase 1 targets exceeded. New files cover: `commands/` (fuzzyScore, palettePreferences, commandSystem), project thunks (writing, character, binder, management), hooks (useDashboard, useManuscriptView, useGlobalKeyboardShortcuts, useCharacterView, useOutlineGenerator), `aiProviderService` fallback chain, `dbService` snapshots, `dbService` binder assets, and `crossProjectSearchService`.
+
+- **Stryker mutation targets expanded (Phase 4):** `stryker.conf.json` `mutate` array now includes `services/commands/fuzzyScore.ts`, `services/commands/palettePreferences.ts`, and `services/commands/commandBuilder.ts` in addition to the existing `codexService.ts` and `dbMigration.ts`.
+
+### Fixed
+
+- **TypeScript 6 strict hardening (2026-05-18):** `'grok-3'` and `'grok-3-mini'` added to `AiModel` union in `types.ts` (TS2322 in `aiProviderService.test.ts`); double-cast `(x as unknown as Record<string, unknown>)['key']` pattern for `CollaborationService` private member access (TS2352); bracket notation `['gpu']` / `['__TAURI__']` required by TypeScript 6 index-signature enforcement (TS4111); PBKDF2 `Uint8Array<ArrayBuffer>` generic in `collaborationService.ts` for Web Crypto API strict typing.
+
+- **Test mocks (2026-05-18):** `tests/unit/ErrorBoundary.test.tsx` gains `vi.mock('../../hooks/useTranslation', …)` with an EN string map so rendered-text assertions survive the i18n refactor. `tests/unit/AdvancedImportExport.test.tsx` heading assertion updated from hardcoded `'Google Docs / Notion'` to `'export.pasteSection.heading'` (consistent with the `t: (k) => k` mock pattern already used in that file).
+
+- **E2E Desktop + Mobile Chrome (2026-05-17):** `writer`, `snapshots`, `a11y`, `export` spec files migrated to 2026 Golden Hierarchy selectors (getByRole > getByTestId; no CSS, no XPath). Fixes CI exit-code 1 after WriterView component split.
+
+- **WebLLM model selector (Phase 3B):** `packages/ai-core` now exports `WEBLLM_SUPPORTED_MODELS` (4 curated MLC-packaged checkpoints: Llama 3.2 1B, Llama 3.2 3B, Phi-3.5 Mini, Gemma 2 2B), `WebLlmModelId`, and `WebLlmProgressReport` types. `runLocalTextGeneration` accepts an optional `modelId` and `onProgress` callback for per-model download-progress tracking. `services/localAiFacade.ts` forwards both parameters. `types.ts` expands the `AiModel` union with the four specific MLC model IDs. Settings → AI (Advanced) now shows a dynamic model dropdown populated from `WEBLLM_SUPPORTED_MODELS`, a pre-download button, a WCAG 2.2 `role="progressbar"` progress bar, and a `useRef` mounted guard that prevents `setState`-on-unmount. All 5 locale `settings.json` files gain the 3 new i18n keys (`settings.ai.webllm.model`, `settings.ai.webllm.downloadProgress`, `settings.ai.webllm.downloading`).
+
+- **Cross-project search service (Phase 3A):** New `services/crossProjectSearchService.ts` — `searchAcrossProjects(query, projectData)` fuzzy-searches project title, logline, manuscript sections, and character names/fields using `normalizeSearch()` from `fuzzyScore.ts`; returns `CrossProjectSearchResult[]` sorted by score. Results include `projectId`, `projectTitle`, `matchType`, `excerpt` (truncated to 120 chars with `…`), and `score`. v1 scope is single-project (multi-project search requires a DB_VERSION bump + IDB migration — deferred to v2). `app/transientUiStore.ts` gains `isCrossProjectSearchOpen` + `setCrossProjectSearchOpen`. The `labs-cross-project-search` command in `services/commands/commandDefinitions.tsx` now opens the search panel instead of a stub toast. All 5 locale `common.json` files gain 7 `crossSearch.*` keys.
+
+- **Collaboration security warning (Phase 3C):** `CollaborationPanel.tsx` displays a pre-connection security-warning banner (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) that is only visible before connecting. The banner explains that the public y-webrtc signaling relay can observe connection metadata, includes a keyboard-accessible self-hosting link, and disappears once connected. All 5 locale `common.json` files gain `collab.securityWarning`, `collab.securityWarningDetail`, and `collab.selfHostLinkLabel`.
+
+- **E2E tests for new features:** `tests/e2e/commands.spec.ts` — palette open/close (Ctrl+K / Escape), "dashboard" text search surfaces nav command, Enter-to-navigate, fuzzy "wrt" match. `tests/e2e/collaboration.spec.ts` — security warning `[role=alert]` is visible pre-connection and non-empty. Both specs are CI-only (`test.skip(!isCI)`).
+
 
 ## [1.18.1] — 2026-05-27
 

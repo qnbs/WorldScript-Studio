@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RootState } from '../../app/store';
 import type { Subplot } from '../../types';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
@@ -10,39 +11,39 @@ const mockDispatch = vi.fn();
 const makeMockState = (overrides?: {
   plotSubplots?: Subplot[];
   activeSubplotFilter?: string | null;
-}) => ({
-  project: {
-    present: {
-      data: {
-        manuscript: [],
-        plotSubplots: overrides?.plotSubplots ?? [],
-        plotConnections: [],
-        plotTensionOverrides: {},
-        characters: { ids: [], entities: {} },
-        worlds: { ids: [], entities: {} },
-        outline: [],
-        logline: '',
-        title: '',
+}) =>
+  ({
+    project: {
+      present: {
+        data: {
+          manuscript: [],
+          plotSubplots: overrides?.plotSubplots ?? [],
+          plotConnections: [],
+          plotTensionOverrides: {},
+          characters: { ids: [], entities: {} },
+          worlds: { ids: [], entities: {} },
+          outline: [],
+          logline: '',
+          title: '',
+        },
       },
     },
-  },
-  plotBoard: {
-    activeSubplotFilter: overrides?.activeSubplotFilter ?? null,
-    selectedConnectionId: null,
-    isDrawingConnection: false,
-    drawFromSectionId: null,
-    activeMode: 'canvas',
-    zoom: 1,
-    panX: 0,
-    panY: 0,
-    snapToGrid: false,
-  },
-});
+    plotBoard: {
+      activeSubplotFilter: overrides?.activeSubplotFilter ?? null,
+      selectedConnectionId: null,
+      isDrawingConnection: false,
+      drawFromSectionId: null,
+      activeMode: 'canvas',
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      snapToGrid: false,
+    },
+  }) as unknown as RootState;
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
-  // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-  useAppSelectorShallow: vi.fn((selector: (s: any) => unknown) => selector(makeMockState())),
+  useAppSelectorShallow: vi.fn((selector: (s: RootState) => unknown) => selector(makeMockState())),
 }));
 
 import { SubplotPanel } from '../../components/scene-board/SubplotPanel';
@@ -74,8 +75,7 @@ describe('SubplotPanel', () => {
 
   it('renders subplot rows when subplots exist', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(makeMockState({ plotSubplots: [mockSubplot] })),
     );
 
@@ -101,8 +101,7 @@ describe('SubplotPanel', () => {
 
   it('dispatches setActiveSubplotFilter when filter button clicked', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(makeMockState({ plotSubplots: [mockSubplot] })),
     );
 
@@ -115,8 +114,7 @@ describe('SubplotPanel', () => {
 
   it('dispatches deletePlotSubplot when delete button clicked', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(makeMockState({ plotSubplots: [mockSubplot] })),
     );
 

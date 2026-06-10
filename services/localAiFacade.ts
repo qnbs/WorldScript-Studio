@@ -53,8 +53,7 @@ export async function generateLocalText(
   try {
     // QNBS-v3: When adaptive AI engine is enabled, use its task config for optimal backend/model.
     const adaptiveEnabled =
-      typeof window !== 'undefined' &&
-      (window as unknown as Record<string, boolean>)['__storycraft_adaptive_ai__'] === true;
+      typeof window !== 'undefined' && window.__storycraft_adaptive_ai__ === true;
 
     let result: LocalAiResponse;
     let usedBackend = 'heuristic';

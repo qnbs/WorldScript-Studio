@@ -8,6 +8,27 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## v1.21.0 — Integrity & Hardening Cycle (2026-06-10) — DELIVERED (PR #104, pending merge)
+
+> Master Plan: `.claude/plans/master-prompt-storycraft-studio-glistening-pnueli.md` (Deep Audit 2026-06-09, findings F-1…F-9).
+> NOTE: prior sprint blocks are retained inline below (file convention), not moved to `docs/history/`.
+
+### WS — Integrity & Hardening
+- ✅ **WS-1** (F-1/F-3/F-5, `bc53bbc`) — README badge v1.21.0→v1.20.0 + metrics (433 test files / 2 357 i18n keys); 28 misfiled CHANGELOG entries migrated `[Unreleased]`→`[1.19.0]`; this TODO rollover.
+- ✅ **WS-2** (F-2, `5e7e49e`) — CSP `connect-src` Option B: removed redundant cloud endpoints, kept `https:` for shipped BYOK; ADR-0004 + `tests/unit/csp.test.ts` (6/6); Tauri CSP stays strict.
+- ✅ **WS-3** (F-6, `6ce236f`) — `@huggingface/transformers` 4.2.0 verified against ai-core/voice: APIs unchanged, typecheck clean, 63 tests green; no source change.
+- ✅ **WS-4** (F-4, `f3cc74f`+`6cc3e7d`) — suppression-debt ratchet gate (`scripts/check-suppressions.mjs`, baseline 181) wired into CI; abated **22** `noExplicitAny` (3 production + 19 test mocks — `services/` had none) → baseline **159**.
+- ✅ **WS-5** (F-8, `8e5bd4a`) — bundle-budget single source of truth: `--max-kb 6500 --max-entry-kb 4000`, script defaults aligned; corrected the inaccurate "~4000 KB entry" claim (real entry ≈ 496 KB).
+- ✅ **WS-6** (F-7/F-9, `3e0aa82`) — `VENDOR-FORKS.md` CVE/OSV-coverage section (vendored y-webrtc invisible to OSV → manual process) + new `docs/COVERAGE-POLICY.md` ratchet rule.
+
+### Carried over from v1.20.0
+- ⬜ **P1-1** — WebLLM Worker Offload: full GPU isolation in dedicated worker (not started, 5–7 days).
+- 🔄 **P1-2** — Whisper WASM STT end-to-end: download UI ✅ + VAD→STT bridge ✅; remaining = full E2E integration test (CI-only).
+- ✅ **P1-7** — Bundle Budget single source of truth (F-8): `package.json` `bundle:budget` = `--max-kb 6500 --max-entry-kb 4000`; `scripts/check-bundle-budget.mjs` defaults match. Real sizes (CI 2026-06-09): entry `index-*` ≈ 496 KB; largest vendor chunk `lib-*` ≈ 6 054 KB (~446 KB headroom under the 6500 per-chunk ceiling).
+- ⬜ **P2-2..P2-4** — v2.0 foundation (Cloud-Sync conflict resolution, Plugin Registry Beta, ADRs 0005+).
+
+---
+
 ## v1.20.0 — Deep Correction & Release Hardening (2026-06-06)
 
 > Master Plan: `docs/AUDIT-2026-06-06-Deep-Correction-Plan.md` (aus `.kimi/plans/obsidian-swamp-thing-tempest.md`)
@@ -18,7 +39,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   - LoRA: datasetBuilder (19) + evaluationService (16)
   - Voice: intentEngine (17) + feedbackService (23) + audioNavigator (21)
 - ✅ **P0-4** — Native File Associations + Single-Instance: `.storycraft`/`.scst` extensions registered, deep link handler in `services/tauriDeepLink.ts`, Rust `RunEvent::Opened`/`RunEvent::SecondInstance` handlers in `lib.rs`.
-- 🔄 **P0-3** — Quality Gates stabil: lint ✅ · typecheck ✅ · i18n:check ✅ (2026-06-07). parity:check + bundle:budget + smoke:prod benötigen Build → CI-only auf Low-End. Warte auf nächsten CI-Run für Bestätigung.
+- ✅ **P0-3** — Quality Gates stabil: lint ✅ · typecheck ✅ · i18n:check ✅ · parity:check + bundle:budget + smoke:prod green on `main` (CI confirmed through PR #103, merged 2026-06-09).
 
 ### P1 — AI Resilience & Core Reliability
 - ⬜ **P1-1** — WebLLM Worker Offload: Full GPU-Isolation in Dedicated Worker (nicht gestartet, 5–7 Tage)
@@ -27,20 +48,12 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   - **Hinweis:** Rust TaskSupervisor UI (ManuscriptStatsPanel) ist separat in WorkerBus v2 Phase 3 (siehe unten).
 
 ### P2 — Global Readiness & i18n
-- 🔄 **P1-5** — Beta-Sprachen: ja/zh/pt/el ≤ 5% English-Placeholders. **Stand (2026-06-07):**
-  - ✅ `scripts/bulk-translate-locales.mjs` — kostenloser Google-Translate-Endpoint mit Rate-Limiting, Retry, Checkpointing, Glossary
-  - ✅ `locales/translation-glossary.json` — feste Übersetzungen für Produktbegriffe
-  - ✅ `docs/BULK-TRANSLATION.md` — vollständige Anleitung für User
-  - ✅ Übersetzte Files: portal.json (40) + sidebar.json (23) + dashboard.json (107) + common.json (509)
-  - EN-Placeholder-Rate reduziert: **100% → ~71.5%** (660–668 Keys übersetzt pro Sprache)
-  - ⬜ Verbleibend: settings.json (648), writer.json (80), manuscript.json (67), characters.json (71), etc.
-  - ⬜ Ziel ≤5% erfordert ~1550 weitere Übersetzungen pro Sprache
-  - Command: `node scripts/bulk-translate-locales.mjs --lang=ja,zh,pt,el --all --delay=400`
+- ✅ **P1-5** — Beta-Sprachen ja/zh/pt/el ≤ 5% English-Placeholders **erreicht** (verifiziert 2026-06-09: pt 2.2% · el 2.8% · ja 0.9% · zh 0.5%). Tooling: `scripts/bulk-translate-locales.mjs` (Google-Translate-Endpoint mit Rate-Limiting/Retry/Checkpointing/Glossary) + `locales/translation-glossary.json` + `docs/BULK-TRANSLATION.md`. Command: `node scripts/bulk-translate-locales.mjs --lang=ja,zh,pt,el --all --delay=400`.
 - ✅ **P1-4** — Error Boundaries + Logging: Alle 19+ Views in `App.tsx` mit `ErrorBoundary`/`ViewErrorBoundary` gewrappt (WelcomePortal früher Return-Path + alle Modals/Portals). Commits `f810d51` + `6305d64`.
 
 ### P3 — Architektur-Hardening & Performance
 - ✅ **P1-6** — Race-Condition Audit: Redux-Undo + Zustand reconcile (`listenerMiddleware.ts` clears `manuscriptPinnedBinderNodeId` when node no longer exists after project change/undo/redo). Commit `a799bc9`.
-- ⬜ **P1-7** — Bundle Budget: Entry ≤ 4000 KB, Total ≤ 6500 KB. Aktuell ~4000 KB Entry (nahe Limit). Monitoring via CI.
+- ✅ **P1-7** — Bundle Budget: ceilings unified in one place (`bundle:budget` = `--max-kb 6500 --max-entry-kb 4000`; script defaults match). Correction: the prior "~4000 KB Entry (nahe Limit)" note was inaccurate — the `index-*` entry is ~496 KB; the binding constraint is the `lib-*` vendor chunk (~6 054 KB vs the 6500 per-chunk ceiling). See WS-5 / F-8.
 - ⬜ **P2-1** — Error Boundaries + Logging: Alle 19 Views, Kein console.error
 
 ### P4 — v2.0 Foundation

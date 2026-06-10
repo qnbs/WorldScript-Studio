@@ -1,43 +1,43 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RootState } from '../../app/store';
 import { ProgressTrackerView } from '../../components/ProgressTrackerView';
 
 const mockDispatch = vi.fn();
 const mockSessionActive = { startedAt: Date.now(), startWordCount: 100 };
 const today = new Date().toISOString().slice(0, 10);
 
-const makeMockState = (progressTrackerOverride = {}) => ({
-  project: {
-    present: {
-      data: {
-        manuscript: [{ id: 'ms1', content: 'hello world test' }],
-        writingHistory: [
-          { date: today, words: 300 },
-          { date: '2024-01-01', words: 500 },
-        ],
+const makeMockState = (progressTrackerOverride = {}) =>
+  ({
+    project: {
+      present: {
+        data: {
+          manuscript: [{ id: 'ms1', content: 'hello world test' }],
+          writingHistory: [
+            { date: today, words: 300 },
+            { date: '2024-01-01', words: 500 },
+          ],
+        },
       },
     },
-  },
-  progressTracker: {
-    dailyGoalWords: 500,
-    weeklyGoalWords: 2500,
-    activeSession: null,
-    streakDays: 3,
-    longestStreak: 7,
-    totalWordsAllTime: 1200,
-    ...progressTrackerOverride,
-  },
-  settings: { language: 'en', theme: 'dark' },
-});
+    progressTracker: {
+      dailyGoalWords: 500,
+      weeklyGoalWords: 2500,
+      activeSession: null,
+      streakDays: 3,
+      longestStreak: 7,
+      totalWordsAllTime: 1200,
+      ...progressTrackerOverride,
+    },
+    settings: { language: 'en', theme: 'dark' },
+  }) as unknown as RootState;
 
 let mockState = makeMockState();
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => mockDispatch),
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  useAppSelector: vi.fn((selector: (s: any) => unknown) => selector(mockState as any)),
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  useAppSelectorShallow: vi.fn((selector: (s: any) => unknown) => selector(mockState as any)),
+  useAppSelector: vi.fn((selector: (s: RootState) => unknown) => selector(mockState)),
+  useAppSelectorShallow: vi.fn((selector: (s: RootState) => unknown) => selector(mockState)),
 }));
 
 vi.mock('../../hooks/useTranslation', () => ({
@@ -81,9 +81,8 @@ describe('ProgressTrackerView', () => {
   it('shows Stop Session button when session is active', async () => {
     mockState = makeMockState({ activeSession: mockSessionActive });
     const { useAppSelector } = await import('../../app/hooks');
-    vi.mocked(useAppSelector).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      (selector: (s: any) => unknown) => selector(mockState as any),
+    vi.mocked(useAppSelector).mockImplementation((selector: (s: RootState) => unknown) =>
+      selector(mockState),
     );
     render(<ProgressTrackerView />);
     expect(screen.getByRole('button', { name: 'progress.session.stop' })).toBeDefined();
@@ -92,9 +91,8 @@ describe('ProgressTrackerView', () => {
   it('dispatches endSession when Stop Session clicked', async () => {
     mockState = makeMockState({ activeSession: mockSessionActive });
     const { useAppSelector } = await import('../../app/hooks');
-    vi.mocked(useAppSelector).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      (selector: (s: any) => unknown) => selector(mockState as any),
+    vi.mocked(useAppSelector).mockImplementation((selector: (s: RootState) => unknown) =>
+      selector(mockState),
     );
     render(<ProgressTrackerView />);
     fireEvent.click(screen.getByRole('button', { name: 'progress.session.stop' }));
@@ -111,11 +109,10 @@ describe('ProgressTrackerView', () => {
     mockState = {
       ...makeMockState(),
       project: { present: { data: { manuscript: [], writingHistory: [] } } },
-    };
+    } as unknown as RootState;
     const { useAppSelector } = await import('../../app/hooks');
-    vi.mocked(useAppSelector).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      (selector: (s: any) => unknown) => selector(mockState as any),
+    vi.mocked(useAppSelector).mockImplementation((selector: (s: RootState) => unknown) =>
+      selector(mockState),
     );
     render(<ProgressTrackerView />);
     expect(screen.getByText('progress.chart.noData')).toBeDefined();
@@ -148,9 +145,8 @@ describe('ProgressTrackerView', () => {
   it('session timer displays timer element when session active', async () => {
     mockState = makeMockState({ activeSession: mockSessionActive });
     const { useAppSelector } = await import('../../app/hooks');
-    vi.mocked(useAppSelector).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      (selector: (s: any) => unknown) => selector(mockState as any),
+    vi.mocked(useAppSelector).mockImplementation((selector: (s: RootState) => unknown) =>
+      selector(mockState),
     );
     render(<ProgressTrackerView />);
     expect(screen.getByRole('timer')).toBeDefined();

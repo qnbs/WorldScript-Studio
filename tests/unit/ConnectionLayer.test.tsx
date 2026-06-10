@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import type { RootState } from '../../app/store';
 import type { PlotConnection, Subplot } from '../../types';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
@@ -13,39 +14,39 @@ const makeMockState = (overrides?: {
   isDrawingConnection?: boolean;
   drawFromSectionId?: string | null;
   selectedConnectionId?: string | null;
-}) => ({
-  project: {
-    present: {
-      data: {
-        manuscript: [],
-        plotConnections: overrides?.connections ?? [],
-        plotSubplots: overrides?.subplots ?? [],
-        plotTensionOverrides: {},
-        characters: { ids: [], entities: {} },
-        worlds: { ids: [], entities: {} },
-        outline: [],
-        logline: '',
-        title: '',
+}) =>
+  ({
+    project: {
+      present: {
+        data: {
+          manuscript: [],
+          plotConnections: overrides?.connections ?? [],
+          plotSubplots: overrides?.subplots ?? [],
+          plotTensionOverrides: {},
+          characters: { ids: [], entities: {} },
+          worlds: { ids: [], entities: {} },
+          outline: [],
+          logline: '',
+          title: '',
+        },
       },
     },
-  },
-  plotBoard: {
-    selectedConnectionId: overrides?.selectedConnectionId ?? null,
-    isDrawingConnection: overrides?.isDrawingConnection ?? false,
-    drawFromSectionId: overrides?.drawFromSectionId ?? null,
-    activeMode: 'canvas',
-    activeSubplotFilter: null,
-    zoom: 1,
-    panX: 0,
-    panY: 0,
-    snapToGrid: false,
-  },
-});
+    plotBoard: {
+      selectedConnectionId: overrides?.selectedConnectionId ?? null,
+      isDrawingConnection: overrides?.isDrawingConnection ?? false,
+      drawFromSectionId: overrides?.drawFromSectionId ?? null,
+      activeMode: 'canvas',
+      activeSubplotFilter: null,
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      snapToGrid: false,
+    },
+  }) as unknown as RootState;
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
-  // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-  useAppSelectorShallow: vi.fn((selector: (s: any) => unknown) => selector(makeMockState())),
+  useAppSelectorShallow: vi.fn((selector: (s: RootState) => unknown) => selector(makeMockState())),
 }));
 
 import { ConnectionLayer } from '../../components/scene-board/ConnectionLayer';
@@ -110,8 +111,7 @@ describe('ConnectionLayer', () => {
 
   it('renders a path group for each connection', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(makeMockState({ connections: [conn1] })),
     );
 
@@ -130,8 +130,7 @@ describe('ConnectionLayer', () => {
 
   it('skips connections whose section positions are missing from layout', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(
         makeMockState({
           connections: [
@@ -161,8 +160,7 @@ describe('ConnectionLayer', () => {
 
   it('dispatches setSelectedConnection when a hit-test path is clicked', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(makeMockState({ connections: [conn1] })),
     );
 
@@ -185,8 +183,7 @@ describe('ConnectionLayer', () => {
 
   it('shows draw-mode preview path when isDrawingConnection is true', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(makeMockState({ isDrawingConnection: true, drawFromSectionId: 's1' })),
     );
 
@@ -205,8 +202,7 @@ describe('ConnectionLayer', () => {
 
   it('does not show preview path when cursorCanvasPos is null', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(makeMockState({ isDrawingConnection: true, drawFromSectionId: 's1' })),
     );
 
@@ -225,8 +221,7 @@ describe('ConnectionLayer', () => {
 
   it('renders label text when connection has a label', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(
         makeMockState({
           connections: [{ ...conn1, label: 'Key link' }],
@@ -250,8 +245,7 @@ describe('ConnectionLayer', () => {
   it('uses subplot color when connection has subplotId', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
     const subplot: Subplot = { id: 'sp-1', name: 'Love arc', color: '#a855f7', sectionIds: [] };
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(
         makeMockState({
           connections: [{ ...conn1, subplotId: 'sp-1' }],
@@ -275,8 +269,7 @@ describe('ConnectionLayer', () => {
 
   it('uses parallel stroke-dasharray for parallel connection type', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
       selector(makeMockState({ connections: [{ ...conn1, type: 'parallel' }] })),
     );
 
