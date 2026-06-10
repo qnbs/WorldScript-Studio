@@ -8,18 +8,18 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## v1.21.0 — Integrity & Hardening Cycle (2026-06-10) — IN PROGRESS
+## v1.21.0 — Integrity & Hardening Cycle (2026-06-10) — DELIVERED (PR #104, pending merge)
 
 > Master Plan: `.claude/plans/master-prompt-storycraft-studio-glistening-pnueli.md` (Deep Audit 2026-06-09, findings F-1…F-9).
 > NOTE: prior sprint blocks are retained inline below (file convention), not moved to `docs/history/`.
 
 ### WS — Integrity & Hardening
-- 🔄 **WS-1** — Doc integrity: README badge v1.21.0→v1.20.0 + metrics (433 test files / 2 357 i18n keys); 28 misfiled CHANGELOG entries migrated `[Unreleased]`→`[1.19.0]`; this TODO rollover.
-- ⬜ **WS-2** — CSP `connect-src`: Option B (documented BYOK `https:` tradeoff) + ADR-0004 + `tests/unit/csp.test.ts`; Tauri CSP stays strict (no `https:` blanket).
-- ⬜ **WS-3** — Verify `@huggingface/transformers` 4.2.0 major bump against ai-core integration points (embeddings, ONNX, RAG).
-- ⬜ **WS-4** — Suppression-debt ratchet gate (`scripts/check-suppressions.mjs`, baseline 181) wired into CI + ≥20-site `noExplicitAny` abatement in `services/` (→ ≤161).
-- ⬜ **WS-5** — Bundle-budget single source of truth (Entry 4 000 KB / Total 6 500 KB).
-- ⬜ **WS-6** — `docs/VENDORED-DEPS.md` (y-webrtc fork CVE process + OSV coverage) + `docs/COVERAGE-POLICY.md` ratchet rule.
+- ✅ **WS-1** (F-1/F-3/F-5, `bc53bbc`) — README badge v1.21.0→v1.20.0 + metrics (433 test files / 2 357 i18n keys); 28 misfiled CHANGELOG entries migrated `[Unreleased]`→`[1.19.0]`; this TODO rollover.
+- ✅ **WS-2** (F-2, `5e7e49e`) — CSP `connect-src` Option B: removed redundant cloud endpoints, kept `https:` for shipped BYOK; ADR-0004 + `tests/unit/csp.test.ts` (6/6); Tauri CSP stays strict.
+- ✅ **WS-3** (F-6, `6ce236f`) — `@huggingface/transformers` 4.2.0 verified against ai-core/voice: APIs unchanged, typecheck clean, 63 tests green; no source change.
+- ✅ **WS-4** (F-4, `f3cc74f`+`6cc3e7d`) — suppression-debt ratchet gate (`scripts/check-suppressions.mjs`, baseline 181) wired into CI; abated **22** `noExplicitAny` (3 production + 19 test mocks — `services/` had none) → baseline **159**.
+- ✅ **WS-5** (F-8, `8e5bd4a`) — bundle-budget single source of truth: `--max-kb 6500 --max-entry-kb 4000`, script defaults aligned; corrected the inaccurate "~4000 KB entry" claim (real entry ≈ 496 KB).
+- ✅ **WS-6** (F-7/F-9, `3e0aa82`) — `VENDOR-FORKS.md` CVE/OSV-coverage section (vendored y-webrtc invisible to OSV → manual process) + new `docs/COVERAGE-POLICY.md` ratchet rule.
 
 ### Carried over from v1.20.0
 - ⬜ **P1-1** — WebLLM Worker Offload: full GPU isolation in dedicated worker (not started, 5–7 days).
