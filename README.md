@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/TypeScript-7.x_(tsgo)-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7 (tsgo)">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · Ollama · WebLLM">
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
-  <img src="https://img.shields.io/badge/Version-v1.20.0-6366F1" alt="v1.20.0">
+  <img src="https://img.shields.io/badge/Version-v1.21.0-6366F1" alt="v1.21.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-11_locales-2357_keys-0EA5E9" alt="i18n 11 locales — 2357 keys">
@@ -232,9 +232,9 @@ See [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) for full architectu
 
 A single-keystroke toggle that collapses all sidebars and chrome, leaving only the manuscript editor. Exit with `Escape` or the same toggle key. State is stored in the Zustand `transientUiStore` (`flowMode` flag) so it resets on page load.
 
-### 🗣️ Voice Dictation & WASM Voice Engines _(v1.17 foundation + v1.19.0 WASM scaffold + v1.21 model download UI — in development)_
+### 🗣️ Voice Dictation & WASM Voice Engines _(v1.17 foundation + v1.19.0 WASM scaffold + v1.21 model download UI)_
 
-Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field. **v1.19.0** adds WASM STT/VAD engine scaffolds; **v1.21 (in development)** ships the full model download flow:
+Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field. **v1.19.0** adds WASM STT/VAD engine scaffolds; **v1.21** ships the full model download flow:
 
 - **`WasmSttEngine`** (`services/voice/wasmSttEngine.ts`) — Whisper.cpp WASM interface scaffold (model download, chunked inference, 99+ language detection).
 - **`SileroVadEngine`** (`services/voice/sileroVadEngine.ts`) — Silero VAD v4 via ONNX Runtime Web (~2 MB model, lazy-loaded, replaces energy-threshold VAD).
