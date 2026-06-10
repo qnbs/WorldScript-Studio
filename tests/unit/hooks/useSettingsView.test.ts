@@ -151,6 +151,17 @@ vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
       type: 'featureFlags/setEnableIdbAtRestEncryption',
       payload: v,
     }),
+    setEnableGlobalCopilot: (v: unknown) => ({
+      type: 'featureFlags/setEnableGlobalCopilot',
+      payload: v,
+    }),
+  },
+}));
+
+vi.mock('../../../features/copilot/copilotSlice', () => ({
+  copilotActions: {
+    setOpen: (v: unknown) => ({ type: 'copilot/setOpen', payload: v }),
+    clear: () => ({ type: 'copilot/clear' }),
   },
 }));
 
@@ -296,6 +307,31 @@ describe('handleSettingChange', () => {
     const { result } = renderHook(() => useSettingsView());
     act(() => result.current.handleSettingChange('enableProForge', false));
     expect(mockToastInfo).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3 (CodeAnt #8): disabling the Copilot flag must also end the active session so a
+  // re-enable later doesn't restore a stale (possibly streaming) panel.
+  it('dispatches setEnableGlobalCopilot when toggled on, without clearing the session', () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => result.current.handleSettingChange('enableGlobalCopilot', true));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'featureFlags/setEnableGlobalCopilot', payload: true }),
+    );
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'copilot/clear' }),
+    );
+  });
+
+  it('closes and clears the Copilot when enableGlobalCopilot toggled off', () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => result.current.handleSettingChange('enableGlobalCopilot', false));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'featureFlags/setEnableGlobalCopilot', payload: false }),
+    );
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'copilot/setOpen', payload: false }),
+    );
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'copilot/clear' }));
   });
 
   it('logs warning for unknown key', () => {

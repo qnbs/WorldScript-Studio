@@ -76,9 +76,12 @@ export async function createNodeProForgeCapability(
   const snapshot = payloadToSnapshot(payload);
 
   // Seed memory entries from the payload into the in-process bank.
+  // QNBS-v3 (CodeAnt #5): derive a DETERMINISTIC id when the payload omits one, so re-building the
+  // capability (e.g. before the per-payload cache in capability.ts kicks in, or with a different
+  // adapter) overwrites rather than mints a fresh random id per seed → no duplicate RAG hits / bloat.
   for (const entry of payload.memoryEntries) {
     await saveMemoryEntry({
-      ...(entry.id !== undefined && { id: entry.id }),
+      id: entry.id ?? `${payload.projectId}:${entry.category}:${entry.key}`,
       projectId: payload.projectId,
       category: entry.category,
       key: entry.key,

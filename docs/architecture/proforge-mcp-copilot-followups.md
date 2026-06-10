@@ -1,12 +1,14 @@
 # ProForge MCP + Global Copilot — Follow-up Backlog (CodeAnt PR #107)
 
-> **Status:** deferred for later execution (intentional). Threads on PR #107 remain open.
+> **Status:** ✅ **ALL 6 ITEMS COMPLETED** on `feat/proforge-dual-purpose-mcp-copilot` (no separate
+> branch needed — fixed in place on PR #107). Each is covered by tests (unit + MCP smoke) and the
+> resolving change is noted per item below.
 > **Scope:** 8 CodeAnt.ai findings, all on code introduced by PR #107 (`feat/proforge-dual-purpose-mcp-copilot`).
 > **Source PR:** https://github.com/qnbs/StoryCraft-Studio/pull/107
 >
 > Each item below was **validated against the current code** (not just trusting the bot). CodeAnt's
 > severity is shown alongside a **re-rated severity** for *this* codebase (a local stdio dev tool +
-> an offline PWA), with the reasoning. Pick up items top-to-bottom — they're ordered by real impact.
+> an offline PWA), with the reasoning.
 
 ## Quick triage table
 

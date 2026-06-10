@@ -51,10 +51,18 @@ export function fail(err: unknown): ToolResult {
       isError: true,
     };
   }
-  const message = err instanceof Error ? err.message : String(err);
+  // QNBS-v3 (CodeAnt #1–#3): unexpected (non-ProForgeError) failures get a GENERIC client message;
+  // the real detail goes to stderr only (operator console — stdout is the MCP JSON-RPC stream).
+  // ProForgeError messages above are our own validation/text and safe to surface; arbitrary errors
+  // (provider HTTP, fs, etc.) might carry incidental detail, so we don't echo them to the client.
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  process.stderr.write(`[proforge-mcp] internal error: ${detail}\n`);
   return {
     content: [
-      { type: 'text', text: JSON.stringify({ error: { code: 'INTERNAL', message } }, null, 2) },
+      {
+        type: 'text',
+        text: JSON.stringify({ error: { code: 'INTERNAL', message: 'Internal error' } }, null, 2),
+      },
     ],
     isError: true,
   };

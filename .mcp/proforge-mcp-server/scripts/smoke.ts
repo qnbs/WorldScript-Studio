@@ -44,24 +44,50 @@ async function main(): Promise<void> {
   console.error('apply_edits OK');
 
   // 3) rag_query (lexical, inline project payload + memory entries)
-  const rag = await client.callTool({
-    name: 'proforge_rag_query',
-    arguments: {
-      project: {
-        projectId: 'p1',
-        title: 'Demo',
-        memoryEntries: [
-          { category: 'lore', key: 'dragon', content: 'The dragon Vex guards the northern pass.' },
-          { category: 'style', key: 'tone', content: 'Wry, fast-paced.' },
-        ],
-      },
-      query: 'dragon',
-      mode: 'lexical',
+  const ragArgs = {
+    project: {
+      projectId: 'p1',
+      title: 'Demo',
+      memoryEntries: [
+        { category: 'lore', key: 'dragon', content: 'The dragon Vex guards the northern pass.' },
+        { category: 'style', key: 'tone', content: 'Wry, fast-paced.' },
+      ],
     },
-  });
+    query: 'dragon',
+    mode: 'lexical',
+  };
+  const rag = await client.callTool({ name: 'proforge_rag_query', arguments: ragArgs });
   const ragContent = (rag.content as Array<{ type: string; text: string }>)[0];
   assert(ragContent?.text.includes('dragon'), 'rag_query did not return the dragon entry');
   console.error('rag_query OK');
+
+  // 3b) Repeat the identical query — seeding must be idempotent (CodeAnt #5). Before the fix each
+  // call re-seeded the in-process memory bank with fresh random ids, growing the result set.
+  const ragAgain = await client.callTool({ name: 'proforge_rag_query', arguments: ragArgs });
+  const ragAgainContent = (ragAgain.content as Array<{ type: string; text: string }>)[0];
+  const firstHits = JSON.parse(ragContent?.text ?? '[]') as unknown[];
+  const secondHits = JSON.parse(ragAgainContent?.text ?? '[]') as unknown[];
+  assert(Array.isArray(firstHits) && Array.isArray(secondHits), 'rag results should be arrays');
+  assert(
+    secondHits.length === firstHits.length,
+    `rag_query duplicated seeded memory: ${firstHits.length} -> ${secondHits.length}`,
+  );
+  console.error('rag_query idempotent-seed OK');
+
+  // 4) No project + no --project → actionable VALIDATION error, not an opaque internal crash
+  // (CodeAnt #1–#3, #6): ProForgeError messages pass through fail(); only unexpected errors are generic.
+  const noProj = await client.callTool({ name: 'proforge_rag_query', arguments: { query: 'x' } });
+  const noProjContent = (noProj.content as Array<{ type: string; text: string }>)[0];
+  assert(noProj.isError === true, 'missing-project call should be flagged isError');
+  assert(
+    noProjContent?.text.includes('VALIDATION'),
+    'missing-project should be a VALIDATION error',
+  );
+  assert(
+    noProjContent?.text.includes('No project payload'),
+    'missing-project error message should stay actionable',
+  );
+  console.error('missing-project VALIDATION OK');
 
   await client.close();
   console.error('\n✅ SMOKE PASS');

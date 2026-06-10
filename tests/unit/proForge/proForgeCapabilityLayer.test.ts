@@ -115,6 +115,20 @@ describe('ProForgeCapabilityLayer', () => {
         code: 'VALIDATION',
       });
     });
+
+    // QNBS-v3 (CodeAnt #6): an empty-string runId must be rejected, not collapse to "no filter"
+    // and silently return the latest run.
+    it('throws VALIDATION when getSupervisorStatus runId is empty', async () => {
+      await expect(layer.getSupervisorStatus({ projectId: 'p1', runId: '' })).rejects.toMatchObject(
+        { code: 'VALIDATION' },
+      );
+    });
+
+    it('throws VALIDATION when getHistory runId is empty', async () => {
+      await expect(layer.getHistory({ projectId: 'p1', runId: '' })).rejects.toMatchObject({
+        code: 'VALIDATION',
+      });
+    });
   });
 
   describe('runStage', () => {

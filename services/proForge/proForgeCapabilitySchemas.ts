@@ -108,8 +108,10 @@ export type RunStageInput = z.infer<typeof runStageInputSchema>;
 export const getHistoryInputSchema = z.object({
   projectId: z.string().min(1),
   limit: z.number().int().positive().max(100).default(20),
+  // QNBS-v3: min(1) so an empty string is a VALIDATION error, not silently coerced to
+  // "no filter" → returning the latest run (CodeAnt #6). Optional still allows omission.
   /** Optional: filter to a single run. */
-  runId: z.string().optional(),
+  runId: z.string().min(1).optional(),
 });
 export type GetHistoryInput = z.infer<typeof getHistoryInputSchema>;
 
@@ -151,8 +153,10 @@ export type RagQueryInput = z.infer<typeof ragQueryInputSchema>;
 
 export const getSupervisorStatusInputSchema = z.object({
   projectId: z.string().min(1),
+  // QNBS-v3: min(1) — empty string must be a VALIDATION error rather than truthiness-collapsing to
+  // "no id" and returning the most-recent run (CodeAnt #6).
   /** Defaults to the most recent run for the project. */
-  runId: z.string().optional(),
+  runId: z.string().min(1).optional(),
 });
 export type GetSupervisorStatusInput = z.infer<typeof getSupervisorStatusInputSchema>;
 

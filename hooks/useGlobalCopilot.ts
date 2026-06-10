@@ -145,8 +145,16 @@ export function useGlobalCopilot(currentView: View) {
   const open = useCallback(() => dispatch(copilotActions.setOpen(true)), [dispatch]);
   const close = useCallback(() => {
     stop();
+    // QNBS-v3 (CodeAnt #7): stop() can abort the stream without firing useStoryCraftAI's
+    // onFinish/onError, leaving status stuck at 'streaming' — after which sendMessage's
+    // `status === 'streaming'` guard blocks every future send. Reset to idle on close so the
+    // panel is usable again next time it opens.
+    if (status === 'streaming') {
+      dispatch(copilotActions.finishLastAssistant());
+      dispatch(copilotActions.setStatus('idle'));
+    }
     dispatch(copilotActions.setOpen(false));
-  }, [dispatch, stop]);
+  }, [dispatch, stop, status]);
   const toggle = useCallback(() => dispatch(copilotActions.toggle()), [dispatch]);
   const clear = useCallback(() => {
     stop();
