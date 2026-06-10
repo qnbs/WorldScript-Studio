@@ -164,7 +164,7 @@ describe('WriterViewUI', () => {
     render(<WriterViewUI />);
     expect(screen.getByTestId('writer-proforge-btn-desktop')).toHaveAttribute(
       'aria-label',
-      'Activate ProForge Pipeline',
+      'proforge.toggle.activate',
     );
   });
 
@@ -174,7 +174,7 @@ describe('WriterViewUI', () => {
     render(<WriterViewUI />);
     expect(screen.getByTestId('writer-proforge-btn-mobile')).toHaveAttribute(
       'aria-label',
-      'Activate ProForge Pipeline',
+      'proforge.toggle.activate',
     );
   });
 
@@ -184,7 +184,7 @@ describe('WriterViewUI', () => {
     render(<WriterViewUI />);
     expect(screen.getByTestId('writer-proforge-btn-desktop')).toHaveAttribute(
       'aria-label',
-      'Deactivate ProForge',
+      'proforge.toggle.deactivate',
     );
   });
 
@@ -194,7 +194,7 @@ describe('WriterViewUI', () => {
     render(<WriterViewUI />);
     expect(screen.getByTestId('writer-proforge-btn-mobile')).toHaveAttribute(
       'aria-label',
-      'Deactivate ProForge',
+      'proforge.toggle.deactivate',
     );
   });
 

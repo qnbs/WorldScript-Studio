@@ -375,6 +375,7 @@
   "settings.featureFlags.enableCompileWizard": "Compile wizard (エクスポート)",
   "settings.featureFlags.enableComputeShaders": "WebGPU コンピューティング シェーダー (GPU アクセラレーションによる RAG およびアテンション)",
   "settings.featureFlags.enableDuckDbAnalytics": "高度な分析 (高速ストーリー データベース)",
+  "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableIdbAtRestEncryption": "IDB at-rest encryption (AES-256-GCM) — enable via 設定 › Privacy",
   "settings.featureFlags.enableLoraAdapters": "LoRA アダプターの推論 (実験的)",
   "settings.featureFlags.enableMindMaps": "強化されたマインドマップ",

@@ -375,6 +375,7 @@
   "settings.featureFlags.enableCompileWizard": "Compile wizard (Exportar)",
   "settings.featureFlags.enableComputeShaders": "Sombreadores de computação WebGPU (RAG e atenção acelerados por GPU)",
   "settings.featureFlags.enableDuckDbAnalytics": "Análise avançada (banco de dados de histórias rápidas)",
+  "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableIdbAtRestEncryption": "IDB at-rest encryption (AES-256-GCM) — enable via Configurações › Privacy",
   "settings.featureFlags.enableLoraAdapters": "Inferência do adaptador LoRA (experimental)",
   "settings.featureFlags.enableMindMaps": "Mapas mentais aprimorados",

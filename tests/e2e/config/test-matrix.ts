@@ -19,7 +19,8 @@ export type E2EFlagKey =
   | 'enablePluginSystem'
   | 'enableIdbAtRestEncryption'
   | 'enableAdaptiveAiEngine'
-  | 'enableWorkerBusV2';
+  | 'enableWorkerBusV2'
+  | 'enableGlobalCopilot';
 
 export interface TestConfig {
   name: string;
@@ -68,6 +69,11 @@ export const testConfigurations: readonly TestConfig[] = [
     name: 'workerbus-v2',
     description: 'WorkerBus v2 orchestration layer active',
     flags: { enableWorkerBusV2: true },
+  },
+  {
+    name: 'global-copilot',
+    description: 'Global AI Copilot live assistant launcher visible',
+    flags: { enableGlobalCopilot: true },
   },
 ] as const;
 

@@ -23,33 +23,9 @@ import type {
 import { isEditingStage, nextStage } from '../../features/proForge/types';
 import { logger } from '../logger';
 import { planAcceptedManuscriptEdits } from './applyReviewEdits';
-
-// ---------------------------------------------------------------------------
-// Agent imports (lazy to avoid circular deps at module level)
-// ---------------------------------------------------------------------------
-
-async function loadAgent(stage: PipelineStage) {
-  switch (stage) {
-    case 'intake':
-      return (await import('./pipelineAgents/diagnosticAgent')).DiagnosticAgent;
-    case 'structural':
-      return (await import('./pipelineAgents/structuralAgent')).StructuralAgent;
-    case 'lineProse':
-      return (await import('./pipelineAgents/proseAgent')).ProseAgent;
-    case 'copyEdit':
-      return (await import('./pipelineAgents/copyEditAgent')).CopyEditAgent;
-    case 'proof':
-      return (await import('./pipelineAgents/proofAgent')).ProofAgent;
-    case 'production':
-      return (await import('./pipelineAgents/productionAgent')).ProductionAgent;
-    case 'publishing':
-      return (await import('./pipelineAgents/publishingAgent')).PublishingAgent;
-    case 'analytics':
-      return (await import('./pipelineAgents/analyticsAgent')).AnalyticsAgent;
-    default:
-      throw new Error(`No agent registered for stage: ${stage}`);
-  }
-}
+// QNBS-v3: stage→agent mapping extracted to a shared registry so the Core Capability Layer can run
+// a single stage programmatically without duplicating it.
+import { loadAgent } from './pipelineAgents/agentRegistry';
 
 // ---------------------------------------------------------------------------
 // Orchestrator

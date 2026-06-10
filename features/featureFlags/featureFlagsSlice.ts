@@ -47,6 +47,8 @@ export interface FeatureFlagsState {
   enableWorkerBusV2: boolean;
   /** Rust Compute — offload heavy tasks to Tauri Rust TaskSupervisor (default: true). */
   enableRustCompute: boolean;
+  /** Global AI Copilot — beginner-friendly, context-aware, local-first in-app live assistant (default: true). */
+  enableGlobalCopilot: boolean;
 }
 
 const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
@@ -75,6 +77,7 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableComputeShaders: true,
   enableWorkerBusV2: true,
   enableRustCompute: true,
+  enableGlobalCopilot: true,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -179,6 +182,9 @@ const featureFlagsSlice = createSlice({
     setEnableRustCompute(state, action: PayloadAction<boolean>) {
       state.enableRustCompute = action.payload;
     },
+    setEnableGlobalCopilot(state, action: PayloadAction<boolean>) {
+      state.enableGlobalCopilot = action.payload;
+    },
   },
 });
 
@@ -227,6 +233,8 @@ export const selectEnableWorkerBusV2 = (state: { featureFlags: FeatureFlagsState
   state.featureFlags.enableWorkerBusV2;
 export const selectEnableRustCompute = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableRustCompute;
+export const selectEnableGlobalCopilot = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableGlobalCopilot;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

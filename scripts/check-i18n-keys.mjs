@@ -35,6 +35,7 @@ const MODULES = [
   'mindmap',
   'characterInterviews',
   'lora',
+  'copilot',
 ];
 
 const REF = 'en';

@@ -5,7 +5,10 @@
 
 import type { PipelineStage, StageResult } from '../../../features/proForge/types';
 import type { AIProvider, AiModel } from '../../../types';
-import { type InferenceGateway, inferenceGateway } from '../../ai/inferenceGateway';
+// QNBS-v3: type-only import — the singleton is loaded lazily in getGateway() so that running an
+// agent with an injected context.gateway (Node/MCP, tests) never eagerly pulls aiProviderService
+// and its browser-only deps (@domain/ai-core, localAiFacade, storageService) at module eval.
+import type { InferenceGateway } from '../../ai/inferenceGateway';
 import type { AIRequestOptions } from '../../aiProviderService';
 import { logger } from '../../logger';
 import { getMemoryBank, type ProForgeMemoryBank } from '../proForgeMemoryBank';
@@ -13,15 +16,27 @@ import type { OrchestratorContext } from '../proForgeOrchestrator';
 
 export abstract class BaseAgent {
   protected readonly context: OrchestratorContext;
-  // QNBS-v3: Gateway injected from context or falls back to module singleton — keeps agents testable.
-  protected readonly gateway: InferenceGateway;
+  // QNBS-v3: Gateway injected from context; falls back to the module singleton (lazy) when absent.
+  private readonly gatewayOverride: InferenceGateway | undefined;
+  private gatewayResolved: InferenceGateway | undefined;
   // QNBS-v3: Supervisor feedback from the previous failed attempt; prepended to the next prompt
   // so a retry is materially different instead of re-rolling the identical request.
   private retryFeedback = '';
 
   constructor(context: OrchestratorContext) {
     this.context = context;
-    this.gateway = context.gateway ?? inferenceGateway;
+    this.gatewayOverride = context.gateway;
+  }
+
+  // QNBS-v3: Resolve the gateway lazily. Injected gateway wins; otherwise the browser singleton is
+  // dynamically imported on first use (keeps the agent module browser-dep-free until actually run
+  // against cloud AI in the app).
+  protected async getGateway(): Promise<InferenceGateway> {
+    if (this.gatewayOverride) return this.gatewayOverride;
+    if (!this.gatewayResolved) {
+      this.gatewayResolved = (await import('../../ai/inferenceGateway')).inferenceGateway;
+    }
+    return this.gatewayResolved;
   }
 
   /** Orchestrator-only: seed corrective feedback for a retry attempt. */
@@ -70,7 +85,8 @@ export abstract class BaseAgent {
   // aiProviderService.generateText(prompt, creativity, this.buildAiOpts(...)) pattern.
   protected async generate(prompt: string, maxTokens?: number): Promise<string> {
     // QNBS-v3: exactOptionalPropertyTypes — only pass maxTokens when it's defined.
-    const result = await this.gateway.generate({
+    const gateway = await this.getGateway();
+    const result = await gateway.generate({
       prompt: this.withRetryPreamble(prompt),
       creativity: this.context.config.creativity,
       options: this.buildAiOpts(maxTokens !== undefined ? { maxTokens } : undefined),
@@ -134,7 +150,8 @@ ${analysisSummary.substring(0, 400)}`;
 
     try {
       // QNBS-v3: selfReflect routes through gateway for consistent retry + policy handling.
-      const response = await this.gateway.generate({
+      const gateway = await this.getGateway();
+      const response = await gateway.generate({
         prompt,
         creativity: 'Focused',
         options: this.buildAiOpts({ maxTokens: 100 }),

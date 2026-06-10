@@ -1,0 +1,21 @@
+{
+  "name": "@storycraft/proforge-mcp-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server exposing the StoryCraft ProForge Core Capability Layer to external AI agents",
+  "bin": {
+    "proforge-mcp-server": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4"
+  }
+}

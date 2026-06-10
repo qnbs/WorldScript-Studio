@@ -80,6 +80,7 @@ vi.mock('../../app/hooks', () => ({
         enableComputeShaders: false,
         enableWorkerBusV2: false,
         enableRustCompute: false,
+        enableGlobalCopilot: false,
         enableLoraAdapters: false,
         enablePluginSystem: false,
         enableObjectsGroups: false,

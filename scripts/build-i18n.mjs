@@ -45,6 +45,7 @@ const modules = [
   'mindmap',
   'characterInterviews',
   'lora',
+  'copilot',
 ];
 
 let totalKeys = 0;

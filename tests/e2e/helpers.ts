@@ -19,7 +19,12 @@ export async function clickNavItem(page: Page, name: RegExp): Promise<void> {
     return;
   }
   // 3. Mobile "More" sheet (Settings, Outline, Export… not in the 5-item tab bar)
-  await page.locator('[data-tour="nav-mobile"]').getByRole('button', { name: /More/i }).click();
+  // QNBS-v3: assert the More button is actually clickable before clicking. A floating overlay
+  // (e.g. the Copilot FAB) sitting on top would make .click() time out with an opaque
+  // "intercepts pointer events" trace; toBeVisible gives a clear failure and absorbs small races.
+  const moreBtn = page.locator('[data-tour="nav-mobile"]').getByRole('button', { name: /More/i });
+  await expect(moreBtn).toBeVisible({ timeout: 8000 });
+  await moreBtn.click();
   await page.locator('#sidebar-mobile').waitFor({ state: 'visible' });
   await page.locator('#sidebar-mobile').getByRole('button', { name }).click();
 }

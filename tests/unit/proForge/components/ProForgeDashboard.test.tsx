@@ -96,7 +96,7 @@ describe('ProForgeDashboard', () => {
   describe('start screen (no active run)', () => {
     it('renders "Start Pipeline" button when no run is active', () => {
       render(<ProForgeDashboard />);
-      expect(screen.getByText('Start Pipeline')).toBeInTheDocument();
+      expect(screen.getByText('proforge.dashboard.start')).toBeInTheDocument();
     });
 
     it('shows "No active pipeline" subtitle when no run is active', () => {
@@ -112,7 +112,7 @@ describe('ProForgeDashboard', () => {
       });
       render(<ProForgeDashboard />);
 
-      const btn = screen.getByText('Starting...');
+      const btn = screen.getByText('proforge.dashboard.starting');
       // biome-ignore lint/suspicious/noExplicitAny: test cast
       expect((btn as any).disabled).toBe(true);
     });
@@ -121,7 +121,7 @@ describe('ProForgeDashboard', () => {
       const user = userEvent.setup();
       render(<ProForgeDashboard />);
 
-      await user.click(screen.getByText('Start Pipeline'));
+      await user.click(screen.getByText('proforge.dashboard.start'));
       expect(mockStartPipeline).toHaveBeenCalledTimes(1);
     });
 
@@ -129,9 +129,9 @@ describe('ProForgeDashboard', () => {
       const user = userEvent.setup();
       render(<ProForgeDashboard />);
 
-      expect(screen.queryByText('Genre Preset:')).not.toBeInTheDocument();
-      await user.click(screen.getByText('Show Configuration'));
-      expect(screen.getByText('Genre Preset:')).toBeInTheDocument();
+      expect(screen.queryByText('proforge.dashboard.config.genrePreset')).not.toBeInTheDocument();
+      await user.click(screen.getByText('proforge.dashboard.showConfig'));
+      expect(screen.getByText('proforge.dashboard.config.genrePreset')).toBeInTheDocument();
     });
   });
 
@@ -166,7 +166,7 @@ describe('ProForgeDashboard', () => {
       });
       render(<ProForgeDashboard />);
 
-      expect(screen.getByLabelText('Abort pipeline')).toBeInTheDocument();
+      expect(screen.getByLabelText('proforge.dashboard.abortAria')).toBeInTheDocument();
     });
 
     it('calls abortPipeline when Abort button is clicked', async () => {
@@ -177,7 +177,7 @@ describe('ProForgeDashboard', () => {
       });
       render(<ProForgeDashboard />);
 
-      await user.click(screen.getByLabelText('Abort pipeline'));
+      await user.click(screen.getByLabelText('proforge.dashboard.abortAria'));
       expect(mockAbortPipeline).toHaveBeenCalledTimes(1);
     });
 
@@ -225,7 +225,7 @@ describe('ProForgeDashboard', () => {
       });
       render(<ProForgeDashboard />);
 
-      await user.click(screen.getByLabelText('View trace log'));
+      await user.click(screen.getByLabelText('proforge.dashboard.traceAria'));
       expect(mockSetActiveView).toHaveBeenCalledWith('trace');
     });
   });

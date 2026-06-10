@@ -126,7 +126,7 @@ describe('PipelineProgressPanel', () => {
   describe('empty state (no currentRun)', () => {
     it('shows "No pipeline running." message', () => {
       render(<PipelineProgressPanel />);
-      expect(screen.getByText('No pipeline running.')).toBeInTheDocument();
+      expect(screen.getByText('proforge.progress.noneRunning')).toBeInTheDocument();
     });
   });
 
@@ -138,8 +138,8 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.getByText('Current Status')).toBeInTheDocument();
-      expect(screen.getByText('structural')).toBeInTheDocument();
+      expect(screen.getByText('proforge.progress.currentStatus')).toBeInTheDocument();
+      expect(screen.getByText('proforge.stageName.structural')).toBeInTheDocument();
     });
 
     it('renders the run status', () => {
@@ -149,7 +149,7 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.getByText('running')).toBeInTheDocument();
+      expect(screen.getByText('proforge.status.running')).toBeInTheDocument();
     });
 
     it('shows stage-specific loading message when isLoading=true', () => {
@@ -189,7 +189,7 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.getByText('Stage Details: intake')).toBeInTheDocument();
+      expect(screen.getByText('proforge.progress.stageDetails')).toBeInTheDocument();
       // AI Calls metric
       expect(screen.getByText('5')).toBeInTheDocument();
       // Tokens — toLocaleString output differs by Node ICU build; accept both
@@ -206,7 +206,7 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.getByText(/This stage is awaiting your review/)).toBeInTheDocument();
+      expect(screen.getByText('proforge.progress.awaitingReviewHint')).toBeInTheDocument();
     });
 
     it('does not show awaiting-review warning when stage is running', () => {
@@ -217,7 +217,7 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.queryByText(/awaiting your review/)).not.toBeInTheDocument();
+      expect(screen.queryByText('proforge.progress.awaitingReviewHint')).not.toBeInTheDocument();
     });
   });
 
@@ -247,7 +247,7 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.getByText('Pipeline Totals')).toBeInTheDocument();
+      expect(screen.getByText('proforge.progress.totals')).toBeInTheDocument();
       // Total AI Calls: 3 + 7 = 10
       expect(screen.getByText('10')).toBeInTheDocument();
       // Total Tokens: 1000 + 2000 = 3000 — toLocaleString varies by ICU build
@@ -264,7 +264,7 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.getByText('Pipeline Totals')).toBeInTheDocument();
+      expect(screen.getByText('proforge.progress.totals')).toBeInTheDocument();
     });
   });
 
@@ -280,12 +280,12 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.getByText('Completed Stages')).toBeInTheDocument();
+      expect(screen.getByText('proforge.progress.completedStages')).toBeInTheDocument();
       // "intake" appears as both Active Stage value and in stage history — use getAllByText
-      expect(screen.getAllByText('intake').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('structural')).toBeInTheDocument();
-      expect(screen.getByText('accepted')).toBeInTheDocument();
-      expect(screen.getByText('skipped')).toBeInTheDocument();
+      expect(screen.getAllByText('proforge.stageName.intake').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('proforge.stageName.structural')).toBeInTheDocument();
+      expect(screen.getByText('proforge.status.accepted')).toBeInTheDocument();
+      expect(screen.getByText('proforge.status.skipped')).toBeInTheDocument();
     });
 
     it('does not render Stage History section when stages array is empty', () => {
@@ -295,7 +295,7 @@ describe('PipelineProgressPanel', () => {
       });
       render(<PipelineProgressPanel />);
 
-      expect(screen.queryByText('Completed Stages')).not.toBeInTheDocument();
+      expect(screen.queryByText('proforge.progress.completedStages')).not.toBeInTheDocument();
     });
   });
 });

@@ -96,6 +96,7 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableComputeShaders: false,
       enableWorkerBusV2: false,
       enableRustCompute: false,
+      enableGlobalCopilot: false,
     },
     ...overrides,
   };

@@ -1,0 +1,37 @@
+{
+  "projectId": "demo-novel",
+  "title": "The Northern Pass",
+  "logline": "A reluctant cartographer must map a dragon-guarded mountain range before winter seals it forever.",
+  "manuscript": [
+    {
+      "id": "ch1",
+      "title": "Chapter 1 — The Commission",
+      "content": "Mira had never wanted to draw the northern pass. The quick brown ink dried slow in the cold, and her hands shook as the magistrate slid the contract across the table. 'No one has mapped it and returned,' he said. She signed anyway."
+    },
+    {
+      "id": "ch2",
+      "title": "Chapter 2 — Vex",
+      "content": "The dragon was smaller than the legends, and far more bored. Vex watched her unroll her vellum and sharpen her quills with the patience of something that had outlived every prior mapmaker."
+    }
+  ],
+  "characters": [{ "id": "c1", "name": "Mira" }, { "id": "c2", "name": "Vex" }],
+  "worlds": [{ "id": "w1", "name": "The Northern Pass" }],
+  "memoryEntries": [
+    {
+      "category": "lore",
+      "key": "dragon-vex",
+      "content": "Vex is an ancient dragon who guards the northern pass and tolerates cartographers."
+    },
+    {
+      "category": "style",
+      "key": "tone",
+      "content": "Wry, grounded fantasy; understated emotion; short declarative sentences."
+    }
+  ],
+  "config": {
+    "genrePreset": "fantasy",
+    "ragMode": "lexical",
+    "creativity": "Balanced",
+    "language": "en"
+  }
+}

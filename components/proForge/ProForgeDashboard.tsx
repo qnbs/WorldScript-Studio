@@ -10,18 +10,19 @@ import { PIPELINE_STAGES, type PipelineStage } from '../../features/proForge/typ
 import { PipelineProgressPanel } from './PipelineProgressPanel';
 import { PipelineReviewPanel } from './PipelineReviewPanel';
 
-// QNBS-v3: Author-facing stage names replace internal pipeline IDs — novelists understand editorial stages, not queue names.
-const STAGE_LABELS: Record<PipelineStage, string> = {
-  idle: 'Ready',
-  intake: '1. Reading Your Draft',
-  structural: '2. Shaping the Story',
-  lineProse: '3. Polishing the Prose',
-  copyEdit: '4. Copy Editing',
-  proof: '5. Final Proof',
-  production: '6. Preparing Your Files',
-  publishing: '7. Publishing Prep',
-  analytics: '8. Run Summary',
-  archived: 'Archived',
+// QNBS-v3: Author-facing stage names replace internal pipeline IDs — novelists understand editorial
+// stages, not queue names. Values are i18n keys (proforge.dashboard.stageLabel.*) resolved via t().
+const STAGE_LABEL_KEY: Record<PipelineStage, string> = {
+  idle: 'proforge.dashboard.stageLabel.idle',
+  intake: 'proforge.dashboard.stageLabel.intake',
+  structural: 'proforge.dashboard.stageLabel.structural',
+  lineProse: 'proforge.dashboard.stageLabel.lineProse',
+  copyEdit: 'proforge.dashboard.stageLabel.copyEdit',
+  proof: 'proforge.dashboard.stageLabel.proof',
+  production: 'proforge.dashboard.stageLabel.production',
+  publishing: 'proforge.dashboard.stageLabel.publishing',
+  analytics: 'proforge.dashboard.stageLabel.analytics',
+  archived: 'proforge.dashboard.stageLabel.archived',
 };
 
 const STAGE_COLORS: Record<string, string> = {
@@ -52,9 +53,11 @@ export const ProForgeDashboard: React.FC = () => {
   const [showConfig, setShowConfig] = useState(false);
 
   const handleStart = useCallback(() => {
-    const label = pipelineLabel.trim() || `Pipeline ${new Date().toLocaleDateString()}`;
+    const label =
+      pipelineLabel.trim() ||
+      t('proforge.dashboard.defaultLabel', { date: new Date().toLocaleDateString() });
     void startPipeline(label, defaultConfig);
-  }, [pipelineLabel, defaultConfig, startPipeline]);
+  }, [pipelineLabel, defaultConfig, startPipeline, t]);
 
   const handleAbort = useCallback(() => {
     void abortPipeline();
@@ -94,7 +97,7 @@ export const ProForgeDashboard: React.FC = () => {
               type="button"
               onClick={handleAbort}
               className="px-3 py-1.5 text-sm rounded-sc-md bg-[var(--sc-error)] text-white hover:opacity-90 transition-opacity"
-              aria-label="Abort pipeline"
+              aria-label={t('proforge.dashboard.abortAria')}
             >
               {t('common.abort')}
             </button>
@@ -103,9 +106,9 @@ export const ProForgeDashboard: React.FC = () => {
             type="button"
             onClick={() => setActiveView('trace')}
             className="px-3 py-1.5 text-sm rounded-sc-md bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-hover)] transition-colors"
-            aria-label="View trace log"
+            aria-label={t('proforge.dashboard.traceAria')}
           >
-            Trace
+            {t('proforge.dashboard.trace')}
           </button>
         </div>
       </div>
@@ -138,7 +141,7 @@ export const ProForgeDashboard: React.FC = () => {
                 type="text"
                 value={pipelineLabel}
                 onChange={(e) => setPipelineLabel(e.target.value)}
-                placeholder="Pipeline label (optional)"
+                placeholder={t('proforge.dashboard.labelPlaceholder')}
                 className="w-full px-3 py-2 rounded-sc-md bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               />
               <button
@@ -148,37 +151,49 @@ export const ProForgeDashboard: React.FC = () => {
                 className="w-full px-4 py-2.5 text-sm font-medium rounded-sc-md text-white transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: 'var(--sc-accent)' }}
               >
-                {isLoading ? 'Starting...' : 'Start Pipeline'}
+                {isLoading ? t('proforge.dashboard.starting') : t('proforge.dashboard.start')}
               </button>
               <button
                 type="button"
                 onClick={() => setShowConfig(!showConfig)}
                 className="w-full px-4 py-2 text-xs text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] transition-colors"
               >
-                {showConfig ? 'Hide Configuration' : 'Show Configuration'}
+                {showConfig
+                  ? t('proforge.dashboard.hideConfig')
+                  : t('proforge.dashboard.showConfig')}
               </button>
             </div>
 
             {showConfig && (
               <div className="w-full max-w-md p-4 rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] text-xs space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-[var(--sc-text-secondary)]">Genre Preset:</span>
+                  <span className="text-[var(--sc-text-secondary)]">
+                    {t('proforge.dashboard.config.genrePreset')}
+                  </span>
                   <span>{defaultConfig.genrePreset}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--sc-text-secondary)]">AI Provider:</span>
+                  <span className="text-[var(--sc-text-secondary)]">
+                    {t('proforge.dashboard.config.aiProvider')}
+                  </span>
                   <span>{defaultConfig.aiProvider}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--sc-text-secondary)]">RAG Mode:</span>
+                  <span className="text-[var(--sc-text-secondary)]">
+                    {t('proforge.dashboard.config.ragMode')}
+                  </span>
                   <span>{defaultConfig.ragMode}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--sc-text-secondary)]">Max Tokens:</span>
+                  <span className="text-[var(--sc-text-secondary)]">
+                    {t('proforge.dashboard.config.maxTokens')}
+                  </span>
                   <span>{defaultConfig.maxTokens}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--sc-text-secondary)]">Creativity:</span>
+                  <span className="text-[var(--sc-text-secondary)]">
+                    {t('proforge.dashboard.config.creativity')}
+                  </span>
                   <span>{defaultConfig.creativity}</span>
                 </div>
               </div>
@@ -189,7 +204,7 @@ export const ProForgeDashboard: React.FC = () => {
           <div className="p-4 space-y-4">
             {/* Stage Pipeline */}
             <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-4">
-              <h3 className="text-sm font-medium mb-3">Pipeline Stages</h3>
+              <h3 className="text-sm font-medium mb-3">{t('proforge.dashboard.stagesHeading')}</h3>
               <div className="flex flex-wrap gap-2">
                 {PIPELINE_STAGES.filter((s) => s !== 'idle' && s !== 'archived').map((stage) => {
                   const status = getStageStatus(stage);
@@ -216,7 +231,7 @@ export const ProForgeDashboard: React.FC = () => {
                       }}
                       aria-current={active ? 'step' : undefined}
                     >
-                      {STAGE_LABELS[stage]}
+                      {t(STAGE_LABEL_KEY[stage])}
                       {status === 'running' && (
                         <span className="ml-1.5 inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                       )}

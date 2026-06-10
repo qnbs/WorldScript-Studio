@@ -57,6 +57,7 @@ const loggerMiddleware: Middleware = (store) => (next) => (action) => {
 };
 
 import analyticsReducer from '../features/analytics/analyticsSlice';
+import copilotReducer from '../features/copilot/copilotSlice';
 import loraReducer, {
   hydrateLoraState,
   loadPersistedLoraState,
@@ -106,6 +107,7 @@ const combinedReducer = combineReducers({
   mindMapUi: mindMapUiReducer,
   voice: voiceReducer,
   lora: loraReducer,
+  copilot: copilotReducer,
   [aiApi.reducerPath]: aiApi.reducer,
 });
 
