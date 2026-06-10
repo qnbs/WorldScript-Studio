@@ -20,8 +20,9 @@ import type {
   ReviewItemStatus,
   SupervisionDecision,
 } from '../../features/proForge/types';
-import { nextStage } from '../../features/proForge/types';
+import { isEditingStage, nextStage } from '../../features/proForge/types';
 import { logger } from '../logger';
+import { planAcceptedManuscriptEdits } from './applyReviewEdits';
 
 // ---------------------------------------------------------------------------
 // Agent imports (lazy to avoid circular deps at module level)
@@ -77,6 +78,28 @@ export class ProForgeOrchestrator {
   }
 
   // -------------------------------------------------------------------------
+  // Internal helpers
+  // -------------------------------------------------------------------------
+
+  /** QNBS-v3: HEAD snapshot of the current branch — deduplicates the 4× inline lookup. */
+  private headSnapshotId(): string | undefined {
+    const vcState = this.context.getState().versionControl;
+    return vcState.branches.find((b) => b.id === vcState.currentBranchId)?.headSnapshotId;
+  }
+
+  /** QNBS-v3: Best-effort persist of run history to IDB (survives reload). Never throws. */
+  private async persistHistory(): Promise<void> {
+    try {
+      const runHistory = this.context.getState().proForge.runHistory;
+      if (!runHistory?.length) return;
+      const { saveRunHistory } = await import('./proForgeHistoryStore');
+      await saveRunHistory(this.context.projectId, runHistory);
+    } catch (err) {
+      logger.warn('ProForge: failed to persist run history', err);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Public API
   // -------------------------------------------------------------------------
 
@@ -86,6 +109,9 @@ export class ProForgeOrchestrator {
    */
   async startPipeline(label: string, config: PipelineConfig): Promise<void> {
     const { dispatch, getState, projectId } = this.context;
+    // QNBS-v3: Reset the abort signal — the orchestrator instance is reused across runs
+    // (cached in a hook ref); a prior abort would otherwise leave every agent pre-aborted.
+    this.abortController = new AbortController();
     const state = getState();
 
     // Create pre-pipeline snapshot via version control
@@ -106,9 +132,7 @@ export class ProForgeOrchestrator {
     );
 
     // Retrieve the snapshot ID (it's the last one created on current branch)
-    const vcState = getState().versionControl;
-    const currentBranch = vcState.branches.find((b) => b.id === vcState.currentBranchId);
-    const preSnapshotId = currentBranch?.headSnapshotId ?? 'unknown';
+    const preSnapshotId = this.headSnapshotId() ?? 'unknown';
 
     dispatch(
       (await import('../../features/proForge/proForgeSlice')).startPipeline({
@@ -150,9 +174,7 @@ export class ProForgeOrchestrator {
         }),
       );
     }
-    const vcState = getState().versionControl;
-    const currentBranch = vcState.branches.find((b) => b.id === vcState.currentBranchId);
-    const snapshotId = currentBranch?.headSnapshotId;
+    const snapshotId = this.headSnapshotId();
 
     dispatch(stageStarted({ stage, ...(snapshotId !== undefined && { snapshotId }) }));
 
@@ -166,11 +188,14 @@ export class ProForgeOrchestrator {
     maxRetries: number,
   ): Promise<void> {
     const { dispatch } = this.context;
+    // QNBS-v3: Carries the prior attempt's rejection reasons into the next prompt.
+    let retryFeedback = '';
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const AgentClass = await loadAgent(stage);
         const agent = new AgentClass(this.context);
+        if (retryFeedback) agent.setRetryFeedback(retryFeedback);
         const result = await agent.execute(this.abortController.signal);
 
         if (this.abortController.signal.aborted) {
@@ -187,6 +212,13 @@ export class ProForgeOrchestrator {
             `SupervisorAgent: Stage ${stage} flagged (retry ${attempt + 1}):`,
             decision.reasons,
           );
+          // QNBS-v3: Feed the supervisor's reasons + any self-reflection note into the retry.
+          const reflectionNote = (result.agentOutput as { reflectionNotes?: string } | undefined)
+            ?.reflectionNotes;
+          retryFeedback = [...decision.reasons, reflectionNote]
+            .filter((r): r is string => Boolean(r))
+            .map((r) => `- ${r}`)
+            .join('\n');
           continue;
         }
 
@@ -235,6 +267,7 @@ export class ProForgeOrchestrator {
     if (!next || next === 'archived') {
       // Pipeline complete
       dispatch(pipelineCompleted());
+      await this.persistHistory();
       return;
     }
 
@@ -259,7 +292,41 @@ export class ProForgeOrchestrator {
   ): Promise<void> {
     const { dispatch, getState } = this.context;
 
-    // Create post-stage snapshot after applying accepted edits
+    // QNBS-v3: Apply accepted edits to the manuscript BEFORE snapshotting, so the post-stage
+    // snapshot captures the edited text. Only editing stages mutate prose; production/publishing/
+    // analytics are advisory. Stale/unanchorable edits are skipped, never force-applied.
+    if (isEditingStage(stage)) {
+      const stageResult = getState().proForge.currentRun?.stages.find((s) => s.stage === stage);
+      const project = getState().project.present?.data;
+      if (stageResult && project) {
+        const acceptedIds = new Set(
+          decisions.filter((d) => d.status === 'accepted').map((d) => d.itemId),
+        );
+        const acceptedItems = stageResult.reviewItems.filter((ri) => acceptedIds.has(ri.id));
+        const { updates, applied, skipped } = planAcceptedManuscriptEdits(
+          project.manuscript,
+          acceptedItems,
+        );
+        if (updates.length > 0) {
+          const { projectActions } = await import('../../features/project/projectSlice');
+          for (const update of updates) {
+            dispatch(
+              projectActions.updateManuscriptSection({
+                id: update.id,
+                changes: { content: update.content },
+              }),
+            );
+          }
+        }
+        if (skipped > 0) {
+          logger.warn(
+            `ProForge submitReview: stage ${stage} applied ${applied} edit(s), skipped ${skipped} stale/unanchorable edit(s).`,
+          );
+        }
+      }
+    }
+
+    // Create post-stage snapshot (now reflecting any applied edits).
     const project = getState().project.present?.data;
     if (project) {
       const { versionControlActions } = await import(
@@ -272,9 +339,7 @@ export class ProForgeOrchestrator {
         }),
       );
     }
-    const vcState = getState().versionControl;
-    const currentBranch = vcState.branches.find((b) => b.id === vcState.currentBranchId);
-    const postSnapshotId = currentBranch?.headSnapshotId;
+    const postSnapshotId = this.headSnapshotId();
 
     dispatch(
       submitStageReview({
@@ -336,6 +401,7 @@ export class ProForgeOrchestrator {
     }
 
     dispatch(pipelineAborted());
+    await this.persistHistory();
   }
 
   /**
