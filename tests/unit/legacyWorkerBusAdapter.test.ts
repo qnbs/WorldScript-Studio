@@ -1,4 +1,5 @@
 // QNBS-v3: Tests for LegacyWorkerBusAdapter — old ai-core WorkerBus API shim over v2 bus.
+import type { WorkerBus } from '@domain/worker-bus';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LegacyWorkerBusAdapter } from '../../services/legacyWorkerBusAdapter';
 
@@ -51,8 +52,7 @@ describe('LegacyWorkerBusAdapter', () => {
   describe('enqueue', () => {
     it('calls v2 bus.enqueue with mapped priority and returns true', () => {
       const { bus } = makeMockBus();
-      // biome-ignore lint/suspicious/noExplicitAny: mock type cast
-      adapter = new LegacyWorkerBusAdapter(bus as any);
+      adapter = new LegacyWorkerBusAdapter(bus as unknown as WorkerBus);
       const task = {
         id: 'old-task-1',
         type: 'inference.text',
@@ -71,8 +71,7 @@ describe('LegacyWorkerBusAdapter', () => {
 
     it('includes transferables in enqueue options when present', () => {
       const { bus } = makeMockBus();
-      // biome-ignore lint/suspicious/noExplicitAny: mock type cast
-      adapter = new LegacyWorkerBusAdapter(bus as any);
+      adapter = new LegacyWorkerBusAdapter(bus as unknown as WorkerBus);
       const buffer = new ArrayBuffer(8);
       const task = {
         id: 'old-task-2',
@@ -95,8 +94,7 @@ describe('LegacyWorkerBusAdapter', () => {
       bus.enqueue.mockImplementation(() => {
         throw new Error('circuit open');
       });
-      // biome-ignore lint/suspicious/noExplicitAny: mock type cast
-      adapter = new LegacyWorkerBusAdapter(bus as any);
+      adapter = new LegacyWorkerBusAdapter(bus as unknown as WorkerBus);
       const result = adapter.enqueue({
         id: 'old-task-3',
         type: 'inference.text',
@@ -111,8 +109,7 @@ describe('LegacyWorkerBusAdapter', () => {
   describe('cancel', () => {
     it('delegates to v2 bus.cancel', () => {
       const { bus } = makeMockBus();
-      // biome-ignore lint/suspicious/noExplicitAny: mock type cast
-      adapter = new LegacyWorkerBusAdapter(bus as any);
+      adapter = new LegacyWorkerBusAdapter(bus as unknown as WorkerBus);
       const cancelled = adapter.cancel('some-task-id');
       expect(cancelled).toBe(true);
       expect(bus.cancel).toHaveBeenCalledWith('some-task-id');
@@ -122,8 +119,7 @@ describe('LegacyWorkerBusAdapter', () => {
   describe('dequeue', () => {
     it('always returns undefined (v2 auto-executes tasks)', () => {
       const { bus } = makeMockBus();
-      // biome-ignore lint/suspicious/noExplicitAny: mock type cast
-      adapter = new LegacyWorkerBusAdapter(bus as any);
+      adapter = new LegacyWorkerBusAdapter(bus as unknown as WorkerBus);
       expect(adapter.dequeue()).toBeUndefined();
     });
   });
@@ -131,8 +127,7 @@ describe('LegacyWorkerBusAdapter', () => {
   describe('registerTask', () => {
     it('returns an AbortSignal that is not yet aborted', () => {
       const { bus } = makeMockBus();
-      // biome-ignore lint/suspicious/noExplicitAny: mock type cast
-      adapter = new LegacyWorkerBusAdapter(bus as any);
+      adapter = new LegacyWorkerBusAdapter(bus as unknown as WorkerBus);
       const signal = adapter.registerTask('tid-42');
       expect(signal).toBeInstanceOf(AbortSignal);
       expect(signal.aborted).toBe(false);
@@ -142,8 +137,7 @@ describe('LegacyWorkerBusAdapter', () => {
   describe('getTelemetry', () => {
     it('returns telemetry in the old ai-core format with v2 queue depths', () => {
       const { bus } = makeMockBus();
-      // biome-ignore lint/suspicious/noExplicitAny: mock type cast
-      adapter = new LegacyWorkerBusAdapter(bus as any);
+      adapter = new LegacyWorkerBusAdapter(bus as unknown as WorkerBus);
       const tel = adapter.getTelemetry();
       expect(tel.queueDepth.high).toBe(1);
       expect(tel.queueDepth.normal).toBe(2);
@@ -156,8 +150,7 @@ describe('LegacyWorkerBusAdapter', () => {
 
     it('tracks processed tasks via handle.result promise resolution', async () => {
       const { bus, resolveTask } = makeMockBus();
-      // biome-ignore lint/suspicious/noExplicitAny: mock type cast
-      adapter = new LegacyWorkerBusAdapter(bus as any);
+      adapter = new LegacyWorkerBusAdapter(bus as unknown as WorkerBus);
       adapter.enqueue({
         id: 'tel-task',
         type: 'inference.text',
