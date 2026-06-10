@@ -37,6 +37,7 @@ const mockFeatureFlags = {
   enableComputeShaders: false,
   enableWorkerBusV2: false,
   enableRustCompute: false,
+  enableGlobalCopilot: false,
 };
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
@@ -72,13 +73,13 @@ describe('FeatureFlagsSection', () => {
     expect(screen.getByText('settings.featureFlags.description')).toBeInTheDocument();
   });
 
-  // QNBS-v3: 21 flags remained after housekeeping - 4 retired/promoted + 3 Edge-AI + 2 Phase 2 = 20 toggles.
+  // QNBS-v3: 20 toggles + enableGlobalCopilot (Global AI Copilot) = 21 toggles.
   // Retired: enableCodexAutoTracking, enableCrossProjectSearch (promoted), enablePlotBoardV2 (deprecated), enableCloudSync (stub).
   // Excluded (not a toggle here): enableIdbAtRestEncryption (managed in Settings → Privacy).
-  it('renders 20 feature flag toggles', () => {
+  it('renders 21 feature flag toggles', () => {
     render(<FeatureFlagsSection />);
     const switches = screen.getAllByRole('switch');
-    expect(switches.length).toBe(20);
+    expect(switches.length).toBe(21);
   });
 
   it('does not render the IDB at-rest encryption toggle (managed in Privacy settings)', () => {

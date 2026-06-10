@@ -5,6 +5,7 @@ import type { RootState } from '../app/store';
 import type { PassphraseModalMode } from '../components/settings/PassphraseModal';
 import { useToast } from '../components/ui/Toast';
 import type { Language } from '../contexts/I18nContext';
+import { copilotActions } from '../features/copilot/copilotSlice';
 import { featureFlagsActions } from '../features/featureFlags/featureFlagsSlice';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -257,6 +258,17 @@ export const useSettingsView = () => {
           break;
         case 'enableRustCompute':
           dispatch(featureFlagsActions.setEnableRustCompute(Boolean(value)));
+          break;
+        // QNBS-v3: Global AI Copilot — beginner-friendly in-app live assistant.
+        case 'enableGlobalCopilot':
+          dispatch(featureFlagsActions.setEnableGlobalCopilot(Boolean(value)));
+          // QNBS-v3 (CodeAnt #8): turning the flag OFF unmounts the launcher but leaves the copilot
+          // slice (isOpen / messages / a possibly-stuck 'streaming' status) intact, so re-enabling
+          // later restores a stale panel. Close it and clear the session on disable.
+          if (!value) {
+            dispatch(copilotActions.setOpen(false));
+            dispatch(copilotActions.clear());
+          }
           break;
         // QNBS-v3: enableIdbAtRestEncryption intentionally absent — managed via handlePassphraseConfirm
         // in Settings > Privacy, not the experimental flags UI toggle.

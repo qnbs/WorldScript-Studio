@@ -383,6 +383,7 @@
   "settings.featureFlags.enableProForge": "ProForge Pipeline (8-stage agentic editing)",
   "settings.featureFlags.enableProjectHealthScore": "Project health score (Dashboard)",
   "settings.featureFlags.enableRtlLayout": "RTL layout (experimental)",
+  "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableRustCompute": "Rust Compute (Tauri TaskSupervisor offloading — Phase 2)",
   "settings.featureFlags.enableStoryBibleAdvanced": "Story Bible advanced (graph + hints in Codex)",
   "settings.featureFlags.enableVoiceSupport": "Voice commands & dictation",

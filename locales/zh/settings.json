@@ -375,6 +375,7 @@
   "settings.featureFlags.enableCompileWizard": "Compile wizard (导出)",
   "settings.featureFlags.enableComputeShaders": "WebGPU 计算着色器（GPU 加速的 RAG 和注意力）",
   "settings.featureFlags.enableDuckDbAnalytics": "高级分析（快速故事数据库）",
+  "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableIdbAtRestEncryption": "IDB at-rest encryption (AES-256-GCM) — enable via 设置 › Privacy",
   "settings.featureFlags.enableLoraAdapters": "LoRA 适配器推理（实验）",
   "settings.featureFlags.enableMindMaps": "增强的思维导图",

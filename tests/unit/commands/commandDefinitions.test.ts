@@ -90,6 +90,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableComputeShaders: false,
     enableWorkerBusV2: false,
     enableRustCompute: false,
+    enableGlobalCopilot: false,
   },
 };
 

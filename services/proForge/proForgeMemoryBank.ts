@@ -17,6 +17,15 @@ interface MemoryBankDb extends IDBDatabase {
   // branded type for clarity
 }
 
+// QNBS-v3: In-memory fallback store for non-browser runtimes (Node/MCP, tests without IDBFactory).
+// When `indexedDB` is unavailable the memory bank operates purely in process so agents and the
+// Node capability adapter still get remember/recall/search without an IndexedDB dependency.
+const memFallback = new Map<string, MemoryBankEntry>();
+
+function idbAvailable(): boolean {
+  return typeof indexedDB !== 'undefined';
+}
+
 let dbPromise: Promise<MemoryBankDb> | null = null;
 
 function openMemoryBankDb(): Promise<MemoryBankDb> {
@@ -47,13 +56,18 @@ function openMemoryBankDb(): Promise<MemoryBankDb> {
 export async function saveMemoryEntry(
   entry: Omit<MemoryBankEntry, 'id' | 'createdAt'> & { id?: string },
 ): Promise<MemoryBankEntry> {
-  const db = await openMemoryBankDb();
   const fullEntry: MemoryBankEntry = {
     ...entry,
     id: entry.id ?? `${entry.projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
   };
 
+  if (!idbAvailable()) {
+    memFallback.set(fullEntry.id, fullEntry);
+    return fullEntry;
+  }
+
+  const db = await openMemoryBankDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('entries', 'readwrite');
     const store = tx.objectStore('entries');
@@ -67,6 +81,11 @@ export async function getMemoryEntries(
   projectId: string,
   category?: MemoryBankEntry['category'],
 ): Promise<MemoryBankEntry[]> {
+  if (!idbAvailable()) {
+    return [...memFallback.values()].filter(
+      (e) => e.projectId === projectId && (category === undefined || e.category === category),
+    );
+  }
   const db = await openMemoryBankDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('entries', 'readonly');
@@ -163,6 +182,10 @@ export async function searchMemoryEntries(
 }
 
 export async function deleteMemoryEntry(id: string): Promise<void> {
+  if (!idbAvailable()) {
+    memFallback.delete(id);
+    return;
+  }
   const db = await openMemoryBankDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('entries', 'readwrite');
@@ -295,4 +318,5 @@ export function clearMemoryBankCache(): void {
 export function _resetDbForTest(): void {
   dbPromise = null;
   bankCache.clear();
+  memFallback.clear();
 }

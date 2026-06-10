@@ -144,7 +144,7 @@ describe('BaseAgent', () => {
   });
 
   describe('constructor', () => {
-    it('uses gateway from context when provided', () => {
+    it('uses gateway from context when provided', async () => {
       const customGateway = {
         generate: vi.fn(),
         embed: vi.fn(),
@@ -153,16 +153,17 @@ describe('BaseAgent', () => {
       };
       const ctx = makeContext({ gateway: customGateway });
       const a = new StubAgent(ctx);
-      expect(a['gateway']).toBe(customGateway);
+      // QNBS-v3: gateway is now resolved lazily via getGateway(); injected gateway wins.
+      await expect(a['getGateway']()).resolves.toBe(customGateway);
     });
 
-    it('falls back to module singleton when context.gateway is undefined', () => {
+    it('falls back to module singleton when context.gateway is undefined', async () => {
       const ctx = makeContext();
       // biome-ignore lint/suspicious/noExplicitAny: test access
       (ctx as any).gateway = undefined;
       const a = new StubAgent(ctx);
-      // Falls back to the mocked inferenceGateway singleton
-      expect(a['gateway']).toBeDefined();
+      // QNBS-v3: lazily imports the (mocked) inferenceGateway singleton when none injected.
+      await expect(a['getGateway']()).resolves.toBeDefined();
     });
   });
 

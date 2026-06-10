@@ -394,4 +394,28 @@ Distraction-free writing toggle in the Writer view toolbar:
 
 ---
 
+## Dual-Purpose Architecture (Core Capability Layer + MCP)
+
+ProForge is exposed through a single **Core Capability Layer** consumed by both in-app features and
+external AI agents over MCP — no business-logic duplication. Five typed, validated, observable
+operations: `runStage` · `getHistory` · `applyEdits` · `ragQuery` · `getSupervisorStatus`.
+
+```
+END-USER     Global Copilot · ProForge UI         External AI agents (Cline/Claude/Cursor)
+                  │ in-process (browser adapter)        │ stdio MCP
+CORE         services/proForge/proForgeCapabilityLayer.ts  ← single source of truth
+                  │ ProForgeCapabilityPorts
+   Browser adapter (Redux/IDB)      Node adapter (@google/genai + in-mem + file) → .mcp/proforge-mcp-server/
+```
+
+- **In-app:** the Global AI Copilot calls `createBrowserProForgeCapability(...)` directly (e.g. "run a
+  diagnostic" → `runStage('intake')`). See [`global-copilot-plan.md`](architecture/global-copilot-plan.md).
+- **External:** the [`.mcp/proforge-mcp-server/`](../.mcp/proforge-mcp-server/README.md) stdio server
+  exposes the five ops as MCP tools, operating on a portable project payload (the PWA has no backend,
+  so it cannot read the browser's live IndexedDB).
+
+Full maintainer guide: [`docs/architecture/proforge-capability-layer.md`](architecture/proforge-capability-layer.md).
+
+---
+
 *See `CLAUDE.md` for engineering conventions and `docs/CI.md` for testing requirements.*

@@ -89,7 +89,9 @@ const WriterViewUI: FC = () => {
             data-testid="writer-proforge-btn-desktop"
             onClick={() => dispatch(proForgeActions.setProForgeActive(!isProForgeActive))}
             aria-pressed={isProForgeActive}
-            aria-label={isProForgeActive ? 'Deactivate ProForge' : 'Activate ProForge Pipeline'}
+            aria-label={
+              isProForgeActive ? t('proforge.toggle.deactivate') : t('proforge.toggle.activate')
+            }
             className={`text-xs px-2 py-1 rounded border transition-colors ${
               isProForgeActive
                 ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]'
@@ -161,7 +163,9 @@ const WriterViewUI: FC = () => {
             data-testid="writer-proforge-btn-mobile"
             onClick={() => dispatch(proForgeActions.setProForgeActive(!isProForgeActive))}
             aria-pressed={isProForgeActive}
-            aria-label={isProForgeActive ? 'Deactivate ProForge' : 'Activate ProForge Pipeline'}
+            aria-label={
+              isProForgeActive ? t('proforge.toggle.deactivate') : t('proforge.toggle.activate')
+            }
             className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${
               isProForgeActive
                 ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-accent)]/40 text-[var(--sc-accent)]'

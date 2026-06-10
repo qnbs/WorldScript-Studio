@@ -375,6 +375,7 @@
   "settings.featureFlags.enableCompileWizard": "Compile wizard (Εξαγωγή)",
   "settings.featureFlags.enableComputeShaders": "WebGPU compute shaders (RAG και προσοχή με επιτάχυνση GPU)",
   "settings.featureFlags.enableDuckDbAnalytics": "Προηγμένα αναλυτικά στοιχεία (βάση δεδομένων γρήγορης ιστορίας)",
+  "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableIdbAtRestEncryption": "IDB at-rest encryption (AES-256-GCM) — enable via Ρυθμίσεις › Privacy",
   "settings.featureFlags.enableLoraAdapters": "Συμπεράσματα προσαρμογέα LoRA (πειραματικό)",
   "settings.featureFlags.enableMindMaps": "Βελτιωμένοι χάρτες μυαλού",

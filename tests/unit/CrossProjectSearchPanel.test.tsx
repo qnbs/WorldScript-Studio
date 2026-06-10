@@ -42,6 +42,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableComputeShaders: false,
   enableWorkerBusV2: false,
   enableRustCompute: false,
+  enableGlobalCopilot: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -138,6 +139,7 @@ afterEach(() => {
     enableComputeShaders: false,
     enableWorkerBusV2: false,
     enableRustCompute: false,
+    enableGlobalCopilot: false,
   };
 });
 

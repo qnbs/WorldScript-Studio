@@ -76,10 +76,7 @@
     "ci:quick:coverage": "bash infra/low-end-ci/scripts/ci-quick.sh --unit --coverage",
     "ci:act": "bash infra/low-end-ci/scripts/ci-act-sequential.sh pull_request",
     "ci:act:full": "bash infra/low-end-ci/scripts/ci-act-sequential.sh pull_request --with-storybook --e2e-chromium-only",
-    "deploy:cloudflare": "node scripts/cf-pages-deploy.mjs",
-    "ci:analyze": "python3 scripts/ci-analyzer/analyzer.py --output vscode",
-    "ci:analyze:claude": "bash scripts/ci-analyzer/analyze-with-claude.sh",
-    "ci:analyze:kimi": "bash scripts/ci-analyzer/analyze-with-kimi.sh"
+    "deploy:cloudflare": "node scripts/cf-pages-deploy.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",

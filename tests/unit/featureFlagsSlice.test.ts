@@ -48,6 +48,7 @@ const initialState: FeatureFlagsState = {
   enableComputeShaders: true,
   enableWorkerBusV2: true,
   enableRustCompute: true,
+  enableGlobalCopilot: true,
 };
 
 // ---------------------------------------------------------------------------

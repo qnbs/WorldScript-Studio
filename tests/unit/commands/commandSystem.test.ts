@@ -50,6 +50,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableComputeShaders: false,
   enableWorkerBusV2: false,
   enableRustCompute: false,
+  enableGlobalCopilot: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

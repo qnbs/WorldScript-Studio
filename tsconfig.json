@@ -33,5 +33,5 @@
     "stableTypeOrdering": true
   },
   "include": ["."],
-  "exclude": ["node_modules", "dist", ".storybook"]
+  "exclude": ["node_modules", "dist", ".storybook", ".mcp"]
 }

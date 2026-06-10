@@ -39,6 +39,8 @@ export const FeatureFlagsSection: FC = () => {
     // QNBS-v3: Phase 2 — WorkerBus v2 + Rust Compute (wired in services/workerBusManager.ts)
     { key: 'enableWorkerBusV2', labelKey: 'settings.featureFlags.enableWorkerBusV2' },
     { key: 'enableRustCompute', labelKey: 'settings.featureFlags.enableRustCompute' },
+    // QNBS-v3: Global AI Copilot — beginner-friendly in-app live assistant (ENABLE_GLOBAL_COPILOT).
+    { key: 'enableGlobalCopilot', labelKey: 'settings.featureFlags.enableGlobalCopilot' },
     // QNBS-v3: enableIdbAtRestEncryption removed — toggling without passphrase setup blocks all users.
     // Dedicated UI lives in Settings → Privacy (PrivacySection.tsx).
   ];

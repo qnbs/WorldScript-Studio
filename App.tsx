@@ -18,6 +18,11 @@ const CrossProjectSearchPanelConnected = lazy(() =>
   })),
 );
 
+// QNBS-v3: Global AI Copilot — lazy so its AI-SDK chat path stays out of the initial bundle.
+const CopilotLauncher = lazy(() =>
+  import('./components/copilot/CopilotLauncher').then((m) => ({ default: m.CopilotLauncher })),
+);
+
 import { initAdaptiveAiOnStartup, initWorkerBusOnStartup } from './app/listenerMiddleware';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -666,6 +671,13 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   <CrossProjectSearchPanelConnected />
                 </Suspense>
               </ErrorBoundary>
+              {featureFlags.enableGlobalCopilot && (
+                <ErrorBoundary onReset={() => {}}>
+                  <Suspense fallback={null}>
+                    <CopilotLauncher currentView={currentView} />
+                  </Suspense>
+                </ErrorBoundary>
+              )}
               <ErrorBoundary onReset={() => {}}>
                 <PWAUpdateToast />
               </ErrorBoundary>

@@ -25,6 +25,11 @@ export const PipelineProgressPanel: React.FC = () => {
   const { currentRun, isLoading, activeStageResult } = useProForgeViewContext();
   const { t } = useTranslation();
 
+  // QNBS-v3: localized stage/status labels — reuse the existing proforge.stageName.* set and the
+  // proforge.status.* set so progress badges read in the user's language, not raw enum values.
+  const stageName = (stage: string): string => t(`proforge.stageName.${stage}`);
+  const statusLabel = (status: string): string => t(`proforge.status.${status}`);
+
   const totalMetrics = useMemo(() => {
     if (!currentRun) return null;
     const stages = currentRun.stages;
@@ -39,7 +44,9 @@ export const PipelineProgressPanel: React.FC = () => {
   if (!currentRun) {
     return (
       <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-6 text-center">
-        <p className="text-sm text-[var(--sc-text-secondary)]">No pipeline running.</p>
+        <p className="text-sm text-[var(--sc-text-secondary)]">
+          {t('proforge.progress.noneRunning')}
+        </p>
       </div>
     );
   }
@@ -49,26 +56,26 @@ export const PipelineProgressPanel: React.FC = () => {
       {/* Status Card */}
       <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium">Current Status</h3>
+          <h3 className="text-sm font-medium">{t('proforge.progress.currentStatus')}</h3>
           {isLoading && (
             <span className="flex items-center gap-1.5 text-xs text-[var(--sc-accent)]">
               <span className="w-2 h-2 rounded-full bg-[var(--sc-accent)] animate-pulse" />
-              {t(
-                currentRun
-                  ? (STAGE_LOADING_KEY[currentRun.activeStage] ?? 'proforge.loading.default')
-                  : 'proforge.loading.default',
-              )}
+              {t(STAGE_LOADING_KEY[currentRun.activeStage] ?? 'proforge.loading.default')}
             </span>
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 rounded-sc-md bg-[var(--sc-surface-base)]">
-            <p className="text-xs text-[var(--sc-text-secondary)]">Active Stage</p>
-            <p className="text-sm font-medium mt-0.5 capitalize">{currentRun.activeStage}</p>
+            <p className="text-xs text-[var(--sc-text-secondary)]">
+              {t('proforge.progress.activeStage')}
+            </p>
+            <p className="text-sm font-medium mt-0.5">{stageName(currentRun.activeStage)}</p>
           </div>
           <div className="p-3 rounded-sc-md bg-[var(--sc-surface-base)]">
-            <p className="text-xs text-[var(--sc-text-secondary)]">Status</p>
-            <p className="text-sm font-medium mt-0.5 capitalize">{currentRun.status}</p>
+            <p className="text-xs text-[var(--sc-text-secondary)]">
+              {t('proforge.progress.statusLabel')}
+            </p>
+            <p className="text-sm font-medium mt-0.5">{statusLabel(currentRun.status)}</p>
           </div>
         </div>
       </div>
@@ -76,22 +83,30 @@ export const PipelineProgressPanel: React.FC = () => {
       {/* Active Stage Details */}
       {activeStageResult && (
         <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-4">
-          <h3 className="text-sm font-medium mb-3">Stage Details: {activeStageResult.stage}</h3>
+          <h3 className="text-sm font-medium mb-3">
+            {t('proforge.progress.stageDetails', { stage: stageName(activeStageResult.stage) })}
+          </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MetricBox label="AI Calls" value={activeStageResult.metrics.aiCalls} />
             <MetricBox
-              label="Tokens"
+              label={t('proforge.progress.metric.aiCalls')}
+              value={activeStageResult.metrics.aiCalls}
+            />
+            <MetricBox
+              label={t('proforge.progress.metric.tokens')}
               value={activeStageResult.metrics.tokensConsumed.toLocaleString()}
             />
             <MetricBox
-              label="Duration"
+              label={t('proforge.progress.metric.duration')}
               value={`${(activeStageResult.metrics.durationMs / 1000).toFixed(1)}s`}
             />
-            <MetricBox label="Items Found" value={activeStageResult.metrics.itemsFound} />
+            <MetricBox
+              label={t('proforge.progress.metric.itemsFound')}
+              value={activeStageResult.metrics.itemsFound}
+            />
           </div>
           {activeStageResult.status === 'awaitingReview' && (
             <div className="mt-3 p-2 rounded-sc-md bg-[var(--sc-warning-muted)] text-xs text-[var(--sc-warning)]">
-              ⚠️ This stage is awaiting your review. Click the stage button above to review items.
+              {t('proforge.progress.awaitingReviewHint')}
             </div>
           )}
         </div>
@@ -100,12 +115,24 @@ export const PipelineProgressPanel: React.FC = () => {
       {/* Overall Metrics */}
       {totalMetrics && (
         <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-4">
-          <h3 className="text-sm font-medium mb-3">Pipeline Totals</h3>
+          <h3 className="text-sm font-medium mb-3">{t('proforge.progress.totals')}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MetricBox label="Total AI Calls" value={totalMetrics.aiCalls} />
-            <MetricBox label="Total Tokens" value={totalMetrics.tokens.toLocaleString()} />
-            <MetricBox label="Total Time" value={`${(totalMetrics.duration / 1000).toFixed(1)}s`} />
-            <MetricBox label="Total Items" value={totalMetrics.itemsFound} />
+            <MetricBox
+              label={t('proforge.progress.metric.totalAiCalls')}
+              value={totalMetrics.aiCalls}
+            />
+            <MetricBox
+              label={t('proforge.progress.metric.totalTokens')}
+              value={totalMetrics.tokens.toLocaleString()}
+            />
+            <MetricBox
+              label={t('proforge.progress.metric.totalTime')}
+              value={`${(totalMetrics.duration / 1000).toFixed(1)}s`}
+            />
+            <MetricBox
+              label={t('proforge.progress.metric.totalItems')}
+              value={totalMetrics.itemsFound}
+            />
           </div>
         </div>
       )}
@@ -113,20 +140,20 @@ export const PipelineProgressPanel: React.FC = () => {
       {/* Stage History */}
       {currentRun.stages.length > 0 && (
         <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-4">
-          <h3 className="text-sm font-medium mb-3">Completed Stages</h3>
+          <h3 className="text-sm font-medium mb-3">{t('proforge.progress.completedStages')}</h3>
           <div className="space-y-2">
             {currentRun.stages.map((stage) => (
               <div
                 key={stage.stage}
                 className="flex items-center justify-between p-2 rounded-sc-md bg-[var(--sc-surface-base)] text-xs"
               >
-                <span className="capitalize font-medium">{stage.stage}</span>
+                <span className="font-medium">{stageName(stage.stage)}</span>
                 <div className="flex items-center gap-3">
                   <span className="text-[var(--sc-text-secondary)]">
-                    {stage.metrics.itemsFound} items
+                    {t('proforge.progress.itemsCount', { count: stage.metrics.itemsFound })}
                   </span>
                   <span
-                    className="px-2 py-0.5 rounded-sc-sm capitalize"
+                    className="px-2 py-0.5 rounded-sc-sm"
                     style={{
                       backgroundColor:
                         stage.status === 'accepted'
@@ -144,7 +171,7 @@ export const PipelineProgressPanel: React.FC = () => {
                             : 'var(--sc-text-secondary)',
                     }}
                   >
-                    {stage.status}
+                    {statusLabel(stage.status)}
                   </span>
                 </div>
               </div>
