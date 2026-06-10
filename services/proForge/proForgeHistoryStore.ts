@@ -19,7 +19,13 @@ function openHistoryDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(HISTORY_DB, HISTORY_VERSION);
-    request.onerror = () => reject(new Error('Failed to open ProForge history DB'));
+    request.onerror = () => {
+      // QNBS-v3: Don't memoize a rejected promise — a transient open failure (quota, locked DB)
+      // must not disable run-history for the rest of the session. Clear the cache so later
+      // calls retry the open.
+      dbPromise = null;
+      reject(new Error('Failed to open ProForge history DB'));
+    };
     request.onsuccess = () => resolve(request.result);
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
@@ -42,9 +48,12 @@ export async function saveRunHistory(projectId: string, runs: PipelineRun[]): Pr
   const record: HistoryRecord = { projectId, runs: runs.slice(0, MAX_RUN_HISTORY) };
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
-    const request = tx.objectStore(STORE).put(record);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(new Error('Failed to save ProForge run history'));
+    tx.objectStore(STORE).put(record);
+    // QNBS-v3: Resolve only once the transaction COMMITS — an IDB write is not durable on
+    // request.onsuccess; the tx can still abort (quota/commit failure) afterwards.
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(new Error('Failed to save ProForge run history'));
+    tx.onabort = () => reject(new Error('ProForge run-history transaction aborted'));
   });
 }
 

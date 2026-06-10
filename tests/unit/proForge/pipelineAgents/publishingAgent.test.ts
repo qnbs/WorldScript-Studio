@@ -201,7 +201,13 @@ describe('PublishingAgent', () => {
       const agent = new PublishingAgent(makeContext());
       await agent.execute(new AbortController().signal);
 
-      expect(mockMemoryBank.buildContextString).toHaveBeenCalledWith('publishing', undefined, 2000);
+      // QNBS-v3: story-anchored query + the run's ragMode are threaded so semantic/hybrid recall is honoured.
+      expect(mockMemoryBank.buildContextString).toHaveBeenCalledWith(
+        'publishing',
+        expect.stringContaining('My Novel'),
+        2000,
+        'hybrid',
+      );
     });
 
     it('saves publishingPackage to memoryBank under "meta" category', async () => {

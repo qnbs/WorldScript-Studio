@@ -65,7 +65,9 @@ export function useProForgeOrchestrator() {
       try {
         const { loadRunHistory } = await import('../services/proForge/proForgeHistoryStore');
         const runs = await loadRunHistory(projectId);
-        if (!cancelled && runs.length > 0) {
+        // QNBS-v3: Always dispatch (even []) so switching to a project with no saved history
+        // clears the previous project's run history from Redux instead of leaving it stale.
+        if (!cancelled) {
           dispatch(proForgeActions.loadRunHistory(runs));
         }
       } catch {

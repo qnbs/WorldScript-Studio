@@ -36,7 +36,7 @@ export class DiagnosticAgent extends BaseAgent {
     const avgSectionLength = sections.length > 0 ? Math.round(totalWords / sections.length) : 0;
 
     // Build tool context from memory bank
-    const memoryContext = await memoryBank.buildContextString('intake', undefined, 3000);
+    const memoryContext = await this.gatherMemoryContext('intake', 3000);
 
     // Build the diagnostic prompt
     const manuscriptExcerpt = sections

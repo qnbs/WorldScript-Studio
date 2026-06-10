@@ -27,7 +27,7 @@ export class CopyEditAgent extends BaseAgent {
     const { config } = this.context;
     const project = this.requireProject();
     const memoryBank = this.getMemoryBank();
-    const memoryContext = await memoryBank.buildContextString('copyEdit', undefined, 2000);
+    const memoryContext = await this.gatherMemoryContext('copyEdit', 2000);
 
     const sections = project.manuscript;
     // Process up to 3 sections for MVP

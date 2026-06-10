@@ -3,7 +3,7 @@
  * QNBS-v3: Eliminates the ~30-line constructor/setup skeleton duplicated across 8 agents.
  */
 
-import type { StageResult } from '../../../features/proForge/types';
+import type { PipelineStage, StageResult } from '../../../features/proForge/types';
 import type { AIProvider, AiModel } from '../../../types';
 import { type InferenceGateway, inferenceGateway } from '../../ai/inferenceGateway';
 import type { AIRequestOptions } from '../../aiProviderService';
@@ -41,6 +41,25 @@ export abstract class BaseAgent {
 
   protected getMemoryBank(): ProForgeMemoryBank {
     return getMemoryBank(this.context.projectId);
+  }
+
+  // QNBS-v3: Assemble memory context for a stage. Honours the run's ragMode — a story-anchored
+  // query (title/logline/genre) drives semantic/hybrid relevance ranking of lore/character/prior
+  // entries; with ragMode 'lexical' (or no project) it degrades to keyword/chronological recall.
+  protected async gatherMemoryContext(stage: PipelineStage, maxChars: number): Promise<string> {
+    const project = this.context.getState().project.present?.data;
+    const query = project
+      ? [project.title, project.logline, this.context.config.genrePreset]
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+      : '';
+    return this.getMemoryBank().buildContextString(
+      stage,
+      query || undefined,
+      maxChars,
+      this.context.config.ragMode,
+    );
   }
 
   protected elapsed(startTime: number): number {

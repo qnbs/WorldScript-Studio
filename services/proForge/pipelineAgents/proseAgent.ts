@@ -51,7 +51,7 @@ export class ProseAgent extends BaseAgent {
     const { config } = this.context;
     const project = this.requireProject();
     const memoryBank = this.getMemoryBank();
-    const memoryContext = await memoryBank.buildContextString('lineProse', undefined, 2000);
+    const memoryContext = await this.gatherMemoryContext('lineProse', 2000);
 
     // Process sections in batches to avoid token limits
     const sections = project.manuscript;

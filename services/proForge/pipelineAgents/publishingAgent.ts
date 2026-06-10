@@ -21,7 +21,7 @@ export class PublishingAgent extends BaseAgent {
     const { config } = this.context;
     const project = this.requireProject();
     const memoryBank = this.getMemoryBank();
-    const memoryContext = await memoryBank.buildContextString('publishing', undefined, 2000);
+    const memoryContext = await this.gatherMemoryContext('publishing', 2000);
 
     const totalWords = project.manuscript.reduce(
       (acc, s) => acc + (s.content?.trim().split(/\s+/).length ?? 0),

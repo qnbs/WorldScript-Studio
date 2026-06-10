@@ -39,6 +39,36 @@ function isValidRange(range: { start: number; end: number }, len: number): boole
 }
 
 /**
+ * Find the start offset of the occurrence of `needle` in `content` that is closest to `preferNear`
+ * (the stale original range start, when known) and does not overlap an already-planned edit.
+ * Returns -1 if no free occurrence exists. Keeps duplicate-phrase application deterministic.
+ */
+function nearestFreeOccurrence(
+  content: string,
+  needle: string,
+  preferNear: number | undefined,
+  planned: PlannedEdit[],
+): number {
+  let best = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let idx = content.indexOf(needle);
+  while (idx !== -1) {
+    const end = idx + needle.length;
+    const overlaps = planned.some((p) => idx < p.end && end > p.start);
+    if (!overlaps) {
+      // No range hint → first free occurrence; otherwise the one nearest the original position.
+      const distance = preferNear === undefined ? idx : Math.abs(idx - preferNear);
+      if (distance < bestDistance) {
+        best = idx;
+        bestDistance = distance;
+      }
+    }
+    idx = content.indexOf(needle, idx + 1);
+  }
+  return best;
+}
+
+/**
  * Apply the accepted `ReviewItem`s that target a single section's content.
  * Only items carrying a `proposed` replacement are considered text edits; advisory items
  * (no `proposed`) are ignored and not counted as skipped.
@@ -62,11 +92,13 @@ export function applyReviewEditsToSection(content: string, items: ReviewItem[]):
       }
     }
 
-    // Strategy 2: offsets missing or stale — locate the original text directly.
+    // Strategy 2: offsets missing or stale — locate the original text directly. To stay
+    // deterministic when the same phrase appears multiple times, pick the occurrence nearest the
+    // (stale) original range and skip occurrences already claimed by another planned edit.
     if (item.original) {
-      const idx = content.indexOf(item.original);
-      if (idx !== -1) {
-        planned.push({ start: idx, end: idx + item.original.length, proposed });
+      const target = nearestFreeOccurrence(content, item.original, item.range?.start, planned);
+      if (target !== -1) {
+        planned.push({ start: target, end: target + item.original.length, proposed });
         continue;
       }
     }

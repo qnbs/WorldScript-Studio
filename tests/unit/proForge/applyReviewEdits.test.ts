@@ -82,6 +82,27 @@ describe('applyReviewEditsToSection', () => {
     expect(result.applied).toBe(1);
     expect(result.skipped).toBe(1);
   });
+
+  it('anchors a stale-offset edit to the occurrence nearest the original range', () => {
+    const content = 'cat dog cat dog cat';
+    // 'cat' occurs at offsets 0, 8, 16; the stale range points near the middle one.
+    const result = applyReviewEditsToSection(content, [
+      item({ range: { start: 7, end: 10 }, original: 'cat', proposed: 'COW' }),
+    ]);
+    expect(result.content).toBe('cat dog COW dog cat');
+    expect(result.applied).toBe(1);
+    expect(result.skipped).toBe(0);
+  });
+
+  it('applies duplicate-phrase edits to distinct occurrences (no double-anchoring)', () => {
+    const content = 'go go go';
+    const result = applyReviewEditsToSection(content, [
+      item({ id: '1', original: 'go', proposed: 'A' }),
+      item({ id: '2', original: 'go', proposed: 'B' }),
+    ]);
+    expect(result.applied).toBe(2);
+    expect(result.content).toBe('A B go');
+  });
 });
 
 describe('planAcceptedManuscriptEdits', () => {

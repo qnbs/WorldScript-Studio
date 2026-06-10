@@ -125,12 +125,14 @@ export const PipelineReviewPanel: React.FC = () => {
     (i) => i.confidence >= 0.85 && i.severity !== 'critical' && i.status === 'pending',
   ).length;
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!stage) return;
     const items = activeStageResult?.reviewItems ?? [];
     const decisions = items.map((item) => ({ itemId: item.id, status: item.status }));
-    void submitReview(stage, decisions);
-    // QNBS-v3: WCAG live-region announce so screen-reader users hear the stage was submitted.
+    // QNBS-v3: Await completion before announcing/navigating — submitReview is async (applies
+    // edits + snapshots), so announcing success before it resolves could lie if it rejects.
+    await submitReview(stage, decisions);
+    // WCAG live-region announce so screen-reader users hear the stage was submitted.
     announce(t('proforge.review.announceSubmitted', { stage: stageLabel }), 'polite');
     setActiveView('dashboard');
   }, [stage, stageLabel, activeStageResult, submitReview, setActiveView, announce, t]);
@@ -297,7 +299,7 @@ export const PipelineReviewPanel: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={handleSubmit}
+          onClick={() => void handleSubmit()}
           disabled={pendingCount > 0}
           className="px-4 py-1.5 text-xs font-medium rounded-sc-md text-white disabled:opacity-50 transition-opacity"
           style={{ backgroundColor: 'var(--sc-accent)' }}
