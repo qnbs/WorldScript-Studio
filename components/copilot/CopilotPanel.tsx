@@ -26,6 +26,20 @@ export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel }) =
     return () => document.removeEventListener('keydown', onKey);
   }, [close]);
 
+  // QNBS-v3: clicking/tapping outside the panel dismisses it ("click away to close"). No blocking
+  // backdrop — the assistant is non-blocking, so the rest of the app stays interactive. The listener
+  // is attached after mount, so the pointerdown that opened the panel has already fired (no instant close).
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      const el = panelRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) {
+        close();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [close]);
+
   return (
     <div
       ref={panelRef}
