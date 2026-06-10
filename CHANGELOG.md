@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Docs
 
-- **Integrity & hardening cycle (v1.21):** README version badge corrected to released v1.20.0 + refreshed metrics; misfiled v1.19-era CHANGELOG entries migrated to `[1.19.0]`; TODO sprint rollover. ADR-0004 (CSP/BYOK). `docs/VENDORED-DEPS.md` + `docs/COVERAGE-POLICY.md` governance. Suppression-count ratchet gate (baseline 181).
+- **Integrity & hardening cycle (v1.21, audit F-1…F-9):** README badge → released v1.20.0 + refreshed metrics (433 test files / 2 357 i18n keys); 28 misfiled v1.19-era CHANGELOG entries migrated to `[1.19.0]`; TODO sprint rollover. ADR-0004 (CSP/BYOK). New suppression-count ratchet gate (`scripts/check-suppressions.mjs`, wired into CI `quality`) + first abatement tranche — 22 `noExplicitAny` suppressions removed, baseline ratcheted 181 → 159. Bundle-budget single source of truth (`bundle:budget` = `--max-kb 6500 --max-entry-kb 4000`, script defaults aligned). Governance docs: `VENDOR-FORKS.md` gains a CVE/OSV-coverage section (the vendored y-webrtc source is invisible to OSV — manual upstream-advisory process documented), new `docs/COVERAGE-POLICY.md` (threshold ratchet rule).
 
 ---
 
