@@ -204,7 +204,7 @@ const _tempStore = configureStore({ reducer: rootReducer });
 export type RootState = ReturnType<typeof _tempStore.getState>;
 export type AppDispatch = typeof _tempStore.dispatch;
 
-// Global store reference for non-React consumers (e.g., voice service)
-export const appStoreRef = {
-  current: null as { getState(): RootState; dispatch: AppDispatch } | null,
-};
+// Global store reference for non-React consumers (e.g., voice service, ProForge orchestrator).
+// QNBS-v3: Defined in app/storeRef.ts so consumers can import the ref without pulling the whole
+// reducer graph; re-exported here for backward compatibility.
+export { appStoreRef } from './storeRef';

@@ -12,6 +12,8 @@ import type {
   ReviewItemType,
   StageStatus,
 } from '../../../../features/proForge/types';
+// QNBS-v3: Real English strings so assertions read naturally; t() resolves keys + {{vars}}.
+import mockEnCommon from '../../../../locales/en/common.json';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -144,6 +146,24 @@ vi.mock('../../../../features/proForge/proForgeSlice', () => ({
   },
 }));
 
+vi.mock('../../../../hooks/useTranslation', () => ({
+  useTranslation: () => ({
+    t: (key: string, vars?: Record<string, string | number>) => {
+      const dict = mockEnCommon as Record<string, string>;
+      let s = dict[key] ?? key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) s = s.replace(`{{${k}}}`, String(v));
+      }
+      return s;
+    },
+    language: 'en',
+  }),
+}));
+
+vi.mock('../../../../contexts/LiveRegionContext', () => ({
+  useAnnounce: () => vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
@@ -189,7 +209,8 @@ describe('PipelineReviewPanel', () => {
   describe('header', () => {
     it('shows stage name in header', () => {
       render(<PipelineReviewPanel />);
-      expect(screen.getByText(/Review: intake/i)).toBeInTheDocument();
+      // Stage id 'intake' is localised to its display name in the header.
+      expect(screen.getByText(/Review: Intake/i)).toBeInTheDocument();
     });
 
     it('shows correct pending/accepted/rejected counts', () => {
@@ -425,8 +446,8 @@ describe('PipelineReviewPanel', () => {
         currentStageReviewItems: [makeItem('item-1', 'pending', { severity: 'critical' })],
       });
       render(<PipelineReviewPanel />);
-      // SEVERITY_ICONS.critical = '🔴' in ReviewItemCard; summary card shows longer string
-      expect(screen.getByText('🔴')).toBeInTheDocument();
+      // 🔴 appears in the item card and (for critical items) the summary card; both are aria-hidden.
+      expect(screen.getAllByText('🔴').length).toBeGreaterThanOrEqual(1);
     });
 
     it('shows sectionTitle when present', () => {

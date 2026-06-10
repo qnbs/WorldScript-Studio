@@ -3,7 +3,25 @@
 //          Fresh IDBFactory + _resetDbForTest() ensures complete test isolation.
 
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// QNBS-v3: Deterministic 4-dim embeddings over a tiny vocabulary so semantic ranking is testable
+// without loading the real MiniLM model. searchMemoryEntries dynamically imports this module.
+vi.mock('../../../services/ai/localEmbeddingService', () => {
+  const VOCAB = ['dragon', 'sea', 'hero', 'magic'];
+  const embed = (text: string): number[] => {
+    const lower = text.toLowerCase();
+    const v = VOCAB.map((w) => (lower.match(new RegExp(w, 'g')) ?? []).length);
+    const norm = Math.sqrt(v.reduce((a, b) => a + b * b, 0)) || 1;
+    return v.map((x) => x / norm);
+  };
+  return {
+    embedText: vi.fn(async (t: string) => embed(t)),
+    cosineSimilarity: (a: number[], b: number[]) => a.reduce((s, x, i) => s + x * (b[i] ?? 0), 0),
+    embedBatch: vi.fn(),
+  };
+});
+
 import {
   _resetDbForTest,
   clearMemoryBankCache,
@@ -214,6 +232,42 @@ describe('searchMemoryEntries', () => {
     // 'ab', 'cd', 'ef' are all ≤2 chars → score stays 0 → no results
     const results = await searchMemoryEntries('p1', 'ab');
     expect(results).toHaveLength(0);
+  });
+});
+
+describe('searchMemoryEntries — semantic & hybrid modes', () => {
+  beforeEach(async () => {
+    await saveMemoryEntry({
+      projectId: 'p2',
+      category: 'lore',
+      key: 'k1',
+      content: 'The dragon guards the mountain.',
+      sourceStage: 'intake',
+    });
+    await saveMemoryEntry({
+      projectId: 'p2',
+      category: 'lore',
+      key: 'k2',
+      content: 'The hero sails the sea.',
+      sourceStage: 'intake',
+    });
+  });
+
+  it('ranks by embedding similarity in semantic mode', async () => {
+    const results = await searchMemoryEntries('p2', 'dragon', 10, 'semantic');
+    expect(results[0]?.key).toBe('k1');
+  });
+
+  it('blends keyword + semantic in hybrid mode', async () => {
+    const results = await searchMemoryEntries('p2', 'hero sea', 10, 'hybrid');
+    expect(results[0]?.key).toBe('k2');
+  });
+
+  it('falls back to keyword ranking when embedding fails', async () => {
+    const svc = await import('../../../services/ai/localEmbeddingService');
+    vi.mocked(svc.embedText).mockRejectedValueOnce(new Error('no model'));
+    const results = await searchMemoryEntries('p2', 'dragon', 10, 'hybrid');
+    expect(results.some((r) => r.key === 'k1')).toBe(true);
   });
 });
 

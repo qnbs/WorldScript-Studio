@@ -26,7 +26,7 @@ export class ProofAgent extends BaseAgent {
     const { config } = this.context;
     const project = this.requireProject();
     const memoryBank = this.getMemoryBank();
-    const memoryContext = await memoryBank.buildContextString('proof', undefined, 2000);
+    const memoryContext = await this.gatherMemoryContext('proof', 2000);
 
     // Build full manuscript text (truncated for token limits)
     const sections = project.manuscript;

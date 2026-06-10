@@ -275,6 +275,24 @@ describe('BaseAgent', () => {
         expect.objectContaining({ options: expect.objectContaining({ maxTokens: 4000 }) }),
       );
     });
+
+    it('does not alter the prompt when no retry feedback is set', async () => {
+      mockGenerate.mockResolvedValueOnce({ text: 'OK', usage: {} });
+      await agent.publicGenerate('Original prompt.');
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: 'Original prompt.' }),
+      );
+    });
+
+    it('prepends supervisor feedback to the prompt after setRetryFeedback', async () => {
+      mockGenerate.mockResolvedValueOnce({ text: 'Corrected.', usage: {} });
+      agent.setRetryFeedback('- No structural edits found.');
+      await agent.publicGenerate('Original prompt.');
+      const callArg = mockGenerate.mock.calls.at(-1)?.[0] as { prompt: string };
+      expect(callArg.prompt).toContain('previous attempt was rejected');
+      expect(callArg.prompt).toContain('No structural edits found.');
+      expect(callArg.prompt).toContain('Original prompt.');
+    });
   });
 
   describe('selfReflect()', () => {

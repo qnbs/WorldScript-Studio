@@ -95,8 +95,6 @@ export interface PipelineConfig {
   language: string;
   /** Max supervisor-triggered retries per stage (0 = no retry, 1 = one retry) */
   maxRetries?: 0 | 1;
-  /** Active LoRA adapter ID — enables the optional StyleAdaptedWriterAgent stage. */
-  loraAdapterId?: string;
 }
 
 export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {

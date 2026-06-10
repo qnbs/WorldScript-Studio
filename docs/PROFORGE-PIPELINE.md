@@ -88,7 +88,9 @@ features/proForge/
 
 services/proForge/
   proForgeOrchestrator.ts     # Central orchestrator + executeStageWithSupervision loop
-  proForgeMemoryBank.ts       # IndexedDB-backed project memory
+  proForgeMemoryBank.ts       # IndexedDB-backed project memory (keyword / semantic / hybrid recall)
+  proForgeHistoryStore.ts     # IndexedDB run-history persistence (survives reload)
+  applyReviewEdits.ts         # Applies accepted ReviewItems back into manuscript text
   pipelineAgents/
     baseAgent.ts              # Abstract base class (~200 LOC saved across 8 agents)
     supervisorAgent.ts        # Heuristic quality gate — no AI calls
@@ -100,8 +102,6 @@ services/proForge/
     productionAgent.ts        # Stage 6
     publishingAgent.ts        # Stage 7
     analyticsAgent.ts         # Stage 8
-  pipelineTools/
-    toolRegistry.ts           # Tool-calling registry + built-in tools
   pipelineOutput/
     structuredOutput.ts       # Zod schemas for all AI outputs
 
@@ -159,17 +159,24 @@ export class SupervisorAgent {
 `SupervisionDecision` shape:
 ```typescript
 interface SupervisionDecision {
-  verdict: 'pass' | 'retry' | 'fail';
-  reason: string;
-  retryHint?: string;
+  pass: boolean;
+  retryRecommended: boolean;
+  qualityScore: number;   // 0–100
+  reasons: string[];
 }
 ```
 
-**Decision rules per stage:**
-- `intake`: Detects uniform 50/100 fallback sentinel (all scores = exactly 50) → retry. `qualityScore < 30` → fail (hard gate).
-- `structural`: If edit count > word count / 10 → retry (over-aggressive edits).
-- `proof`: If grammar issue count > word count / 20 → retry (implausible density).
-- All stages: `isFallback: true` on output → retry (up to `maxRetries` times).
+**Decision rules per stage** (all 8 stages are gated):
+- `intake`: `isFallback: true` → fail (`qualityScore` 0). `qualityScore < 30` → hard-fail the pipeline.
+- `structural`: `isFallback: true` → retry. Zero edits + zero review items on a >1000-word manuscript → retry.
+- `lineProse`: Zero prose edits + zero review items on a >1000-word manuscript → retry.
+- `copyEdit`: Zero grammar/style/repetition/format findings on a >1500-word manuscript → retry.
+- `proof`: `isFallback: true` → retry. `overallPass` with zero grammar issues on a >500-word manuscript → retry.
+- `production`: Zero export artifacts → retry.
+- `publishing`: Missing book-title metadata or back-cover blurb → retry.
+- `analytics`: Never blocks (terminal, informational); flags a missing metrics block in `reasons`.
+
+A non-passing decision below the retry budget is attached to the `StageResult` as `supervisorDecision` so the reviewer sees why the stage was flagged. Only `intake` with `qualityScore < 30` hard-fails.
 
 ---
 
@@ -180,17 +187,23 @@ interface SupervisionDecision {
 ```
 for each selected stage:
   attempt = 0
+  retryFeedback = ''
   loop:
+    agent = new AgentClass(context)
+    if retryFeedback: agent.setRetryFeedback(retryFeedback)   # corrective guidance
     result = await agent.execute(signal)
     decision = supervisorAgent.evaluate(stage, result)
-    if decision.verdict === 'pass' OR attempt >= maxRetries:
-      dispatch stageCompleted / stageAwaitingReview
+    if decision.pass OR attempt >= maxRetries:
+      dispatch stageCompleted (with supervisorDecision if !pass)
       break
+    retryFeedback = decision.reasons + reflectionNotes        # fed into next prompt
     attempt++
-    (retry with updated context)
 ```
 
 `maxRetries` (default `1`) is set in `PipelineConfig`. Set to `0` to disable supervision retries.
+On retry, the supervisor's `reasons` (plus any `reflectionNotes`) are injected as a corrective
+preamble into the agent's next prompt via `BaseAgent.setRetryFeedback`, so a retry is materially
+different rather than an identical re-roll.
 
 ---
 
@@ -248,29 +261,27 @@ Every edit, issue, or suggestion produced by an agent becomes a `ReviewItem`:
 - Per-item rationale and confidence score
 - Quick Accept for high-confidence non-critical items (≥ 0.85)
 
+### Applying Accepted Edits
+When a stage's review is submitted, accepted `ReviewItem`s for **editing stages**
+(`intake`, `structural`, `lineProse`, `copyEdit`, `proof`) are written back into the manuscript
+before the post-stage snapshot is taken (`services/proForge/applyReviewEdits.ts`):
+- Edits are applied **back-to-front by offset** so earlier edits never invalidate later offsets.
+- If an offset range no longer matches the recorded `original`, the applier falls back to locating
+  the `original` text; if it can't be found, the edit is **skipped** (counted, never force-applied).
+- Because the `project` slice is `redux-undo` wrapped, applied edits are natively undoable.
+- Non-editing stages (`production`, `publishing`, `analytics`) record decisions only.
+
 ### Snapshots
 - **Pre-pipeline snapshot:** Auto-created at start
 - **Pre-stage snapshot:** Created before each stage
-- **Post-stage snapshot:** Created after review acceptance
+- **Post-stage snapshot:** Created after accepted edits are applied (captures the edited text)
 - Rollback restores any pre-stage snapshot
 
----
-
-## Tool Calling
-
-Agents use the `toolRegistry` (`services/proForge/pipelineTools/toolRegistry.ts`) to interact with the manuscript:
-
-| Tool | Purpose | Stages |
-|------|---------|--------|
-| `readSection` | Read full section content | All |
-| `readAllSections` | List all sections (metadata) | All |
-| `readProjectMeta` | Read title, logline, characters, worlds | All |
-| `searchLore` | Search memory bank for lore | All |
-| `analyzePacing` | Compute tension scores per section | Intake, Structural |
-| `countWords` | Word count statistics | All |
-| `generateReport` | Save structured report to memory bank | All |
-| `getMemoryContext` | Retrieve relevant memory context | All |
-| `proposeEdit` | Queue an edit for Human-in-the-Loop review | Structural, Prose, CopyEdit |
+### Run History Persistence
+Completed and aborted runs are persisted per project to IndexedDB
+(`proforge-run-history`, capped at 20 most-recent) by `proForgeHistoryStore.ts`, and rehydrated on
+load by `useProForgeOrchestrator`. The `proForge` Redux slice itself stays ephemeral; this lets the
+`AnalyticsAgent`'s cross-run comparisons survive a reload.
 
 ---
 
@@ -280,8 +291,10 @@ The `ProForgeMemoryBank` (`services/proForge/proForgeMemoryBank.ts`) provides pe
 
 - **Storage:** IndexedDB (`proforge-memory-bank`)
 - **Categories:** `lore` | `character` | `style` | `feedback` | `edit` | `meta`
-- **Retrieval:** Keyword search + stage-aware filtering
-- **Context Building:** Automatically assembles memory blocks for prompt injection
+- **Stage-context recall:** `buildContextString` returns prior-stage + lore/character entries (chronological).
+- **Targeted search:** `search(query, limit, mode)` honours the run's `ragMode` — `lexical` (keyword),
+  or `semantic` / `hybrid` via the local MiniLM embedding service (`embedText` + cosine similarity),
+  with automatic keyword fallback if embeddings are unavailable (offline / model not loaded).
 
 ---
 
@@ -319,11 +332,12 @@ interface QualityGateReport { isFallback?: boolean; ... }
 // (on DiagnosticReport and StructuralEditPlan)
 reflectionNotes?: string;
 
-// Supervisor decision — attached to StageResult after supervision
+// Supervisor decision — attached to StageResult when a stage is flagged
 interface SupervisionDecision {
-  verdict: 'pass' | 'retry' | 'fail';
-  reason: string;
-  retryHint?: string;
+  pass: boolean;
+  retryRecommended: boolean;
+  qualityScore: number;   // 0–100
+  reasons: string[];
 }
 // On StageResult:
 supervisorDecision?: SupervisionDecision;

@@ -237,7 +237,13 @@ describe('DiagnosticAgent', () => {
       const agent = new DiagnosticAgent(makeContext());
       await agent.execute(new AbortController().signal);
 
-      expect(mockMemoryBank.buildContextString).toHaveBeenCalledWith('intake', undefined, 3000);
+      // QNBS-v3: story-anchored query + the run's ragMode are threaded so semantic/hybrid recall is honoured.
+      expect(mockMemoryBank.buildContextString).toHaveBeenCalledWith(
+        'intake',
+        expect.stringContaining('Test Novel'),
+        3000,
+        'hybrid',
+      );
     });
 
     it('saves diagnosticReport to memoryBank under category "meta"', async () => {

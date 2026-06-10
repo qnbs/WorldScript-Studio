@@ -1,6 +1,7 @@
 /**
  * ProForge Memory Bank — Persistent project-specific memory for agentic context.
- * QNBS-v3: IndexedDB-backed storage with hybrid RAG retrieval for agents.
+ * QNBS-v3: IndexedDB-backed storage. Retrieval honours the run's ragMode — keyword by default,
+ * or semantic/hybrid via the local MiniLM embedding service (best-effort, keyword fallback).
  */
 
 import type { MemoryBankEntry, PipelineStage } from '../../features/proForge/types';
@@ -88,29 +89,77 @@ export async function getMemoryEntries(
   });
 }
 
+export type MemoryRagMode = 'lexical' | 'semantic' | 'hybrid';
+
+function keywordScorer(query: string): (entry: MemoryBankEntry) => number {
+  const keywords = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((k) => k.length > 2);
+  return (entry) => {
+    const text = `${entry.key} ${entry.content}`.toLowerCase();
+    let score = 0;
+    for (const kw of keywords) if (text.includes(kw)) score += 1;
+    return score;
+  };
+}
+
+function rankByKeyword(
+  entries: MemoryBankEntry[],
+  query: string,
+  limit: number,
+): MemoryBankEntry[] {
+  const score = keywordScorer(query);
+  return entries
+    .map((entry) => ({ entry, score: score(entry) }))
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((s) => s.entry);
+}
+
 export async function searchMemoryEntries(
   projectId: string,
   query: string,
   limit = 10,
+  mode: MemoryRagMode = 'lexical',
 ): Promise<MemoryBankEntry[]> {
   const entries = await getMemoryEntries(projectId);
-  // Simple keyword scoring for now; can be upgraded to semantic search
-  const queryLower = query.toLowerCase();
-  const scored = entries
-    .map((entry) => {
-      const text = `${entry.key} ${entry.content}`.toLowerCase();
-      let score = 0;
-      const keywords = queryLower.split(/\s+/).filter((k) => k.length > 2);
-      for (const kw of keywords) {
-        if (text.includes(kw)) score += 1;
-      }
-      return { entry, score };
-    })
-    .filter((s) => s.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  if (entries.length === 0) return [];
 
-  return scored.map((s) => s.entry);
+  if (mode === 'lexical') {
+    return rankByKeyword(entries, query, limit);
+  }
+
+  // QNBS-v3: Semantic/hybrid recall — best-effort. The embedding service is dynamically imported
+  // so the memory bank stays light in node tests, and ANY failure (no model, offline) falls back
+  // to keyword ranking rather than breaking the pipeline.
+  try {
+    const { embedText, cosineSimilarity } = await import('../ai/localEmbeddingService');
+    const scoreKeyword = keywordScorer(query);
+    const maxKw = Math.max(1, ...entries.map(scoreKeyword));
+    const qVec = await embedText(query);
+    const scored = await Promise.all(
+      entries.map(async (entry) => {
+        // QNBS-v3: stored embeddings are persisted as number[]; coerce to the Float32Array the
+        // similarity fn expects. Falls back to computing the embedding when none is stored.
+        const eVec =
+          entry.embedding != null
+            ? new Float32Array(entry.embedding)
+            : await embedText(`${entry.key} ${entry.content}`);
+        const sim = cosineSimilarity(qVec, eVec);
+        // QNBS-v3: hybrid blends semantic (0.7) with normalised keyword overlap (0.3).
+        const score = mode === 'semantic' ? sim : 0.7 * sim + 0.3 * (scoreKeyword(entry) / maxKw);
+        return { entry, score };
+      }),
+    );
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((s) => s.entry);
+  } catch {
+    return rankByKeyword(entries, query, limit);
+  }
 }
 
 export async function deleteMemoryEntry(id: string): Promise<void> {
@@ -159,8 +208,12 @@ export class ProForgeMemoryBank {
     return getMemoryEntries(this.projectId, category);
   }
 
-  async search(query: string, limit = 10): Promise<MemoryBankEntry[]> {
-    return searchMemoryEntries(this.projectId, query, limit);
+  async search(
+    query: string,
+    limit = 10,
+    mode: MemoryRagMode = 'lexical',
+  ): Promise<MemoryBankEntry[]> {
+    return searchMemoryEntries(this.projectId, query, limit, mode);
   }
 
   async recallForStage(stage: PipelineStage): Promise<MemoryBankEntry[]> {
@@ -192,10 +245,15 @@ export class ProForgeMemoryBank {
   /**
    * Build a context string for prompt injection from relevant memory entries.
    */
-  async buildContextString(stage: PipelineStage, query?: string, maxChars = 4000): Promise<string> {
+  async buildContextString(
+    stage: PipelineStage,
+    query?: string,
+    maxChars = 4000,
+    mode: MemoryRagMode = 'lexical',
+  ): Promise<string> {
     let entries: MemoryBankEntry[];
     if (query) {
-      entries = await this.search(query, 20);
+      entries = await this.search(query, 20, mode);
     } else {
       entries = await this.recallForStage(stage);
     }

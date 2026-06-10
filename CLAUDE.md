@@ -22,7 +22,7 @@ pnpm run build         # Production build to dist/
 pnpm run smoke:prod    # Headless mount check on dist/ (run AFTER build; catches prod-only crashes)
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
-pnpm run typecheck     # TypeScript type check (tsgo --noEmit)
+pnpm run typecheck     # TypeScript type check — EXACT CI command (tsgo --project tsconfig.tsgo.json --noEmit --checkers 4). typecheck:single = lighter single-checker (may miss errors the gate catches; do not trust for the gate)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
 pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 54%, branches 46%, functions 68%, statements 56%)
@@ -91,8 +91,9 @@ services/         → External adapters; key sub-dirs:
                      duckdb/      (duckdbClient, duckdbSchema, duckdbAnalytics, duckdbMigration, ragVectorMigration)
                      help/        (helpCatalog, helpSearch, helpDocRetrieval)
                      keyboard/    (shortcut normalization, conflict detection)
-                     proForge/    (proForgeOrchestrator, proForgeMemoryBank, pipelineAgents/ — baseAgent,
-                                   supervisorAgent + 8 stage agents; pipelineOutput/, pipelinePrompts/, pipelineTools/)
+                     proForge/    (proForgeOrchestrator, proForgeMemoryBank, proForgeHistoryStore,
+                                   applyReviewEdits, pipelineAgents/ — baseAgent, supervisorAgent + 8
+                                   stage agents; pipelineOutput/)
                      storage/     (idbCore, idbProjectStore, idbSnapshotStore, idbKeyStore, idbCodexStore,
                                    idbAssetStore, storageEncryptionService — AES-256-GCM at-rest via B-1)
                      voice/       (voiceCommandService, voiceTypes, stt/tts/vad/wakeWord/intent engines,
@@ -300,11 +301,11 @@ All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Docu
 
 ### ProForge Pipeline
 
-8-stage agentic editing pipeline. Flag: `enableProForge`. Full docs: `docs/PROFORGE-PIPELINE.md`. Stages: `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Pauses at `awaitingReview` — manuscript never auto-modified without user approval.
+8-stage agentic editing pipeline. Flag: `enableProForge`. Full docs: `docs/PROFORGE-PIPELINE.md`. Stages: `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Pauses at `awaitingReview` — manuscript never auto-modified without user approval. On review submit, accepted `ReviewItem`s for **editing stages** are applied back into the manuscript via `applyReviewEdits.ts` (offset-safe, back-to-front, stale-match skip) before the post-stage snapshot; redux-undo makes them reversible.
 
-**Redux slice** (`features/proForge/proForgeSlice.ts`, root key `proForge`, NOT undo-wrapped). **Types** in `features/proForge/types.ts`. **Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — call via `hooks/useProForgeOrchestrator.ts`, never instantiate in components. Agents (all 8 extend `BaseAgent`) lazy-loaded per stage; call `this.buildAiOpts({ maxTokens: N })` — `AIRequestOptions` requires `model` + `provider`. `BaseAgent` provides `requireProject()`, `getMemoryBank()`, `selfReflect()`, `elapsed()`.
+**Redux slice** (`features/proForge/proForgeSlice.ts`, root key `proForge`, NOT undo-wrapped, **ephemeral**). Completed/aborted runs persist per project to IDB `proforge-run-history` (`proForgeHistoryStore.ts`, cap 20) and rehydrate via `useProForgeOrchestrator`. **Types** in `features/proForge/types.ts`. **Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — call via `hooks/useProForgeOrchestrator.ts` (reads live state via `appStoreRef` from `app/storeRef.ts`), never instantiate in components. Agents (all 8 extend `BaseAgent`) lazy-loaded per stage; call `this.buildAiOpts({ maxTokens: N })` — `AIRequestOptions` requires `model` + `provider`. `BaseAgent` provides `requireProject()`, `getMemoryBank()`, `selfReflect()`, `elapsed()`, `setRetryFeedback()` (supervisor reasons injected into retry prompts).
 
-**SupervisorAgent**: heuristic gate, no AI calls. `evaluate(stage, result)` → `{verdict: 'pass'|'retry'|'fail'}`. Hard gate: intake `qualityScore < 30` → fail. All `createFallback*` use 0 scores + `isFallback: true` — never fake mid-range values. **Memory Bank:** IDB `proforge-memory-bank`. **View:** `ProForgeViewContext` + `useProForgeViewContext()`.
+**SupervisorAgent**: heuristic gate, no AI calls, gates **all 8 stages**. `evaluate(stage, result)` → `SupervisionDecision { pass, retryRecommended, qualityScore, reasons }`. Detects `isFallback: true` (intake/structural/proof). Hard gate: intake `qualityScore < 30` → fail. All `createFallback*` use 0 scores + `isFallback: true` — never fake mid-range values. **Memory Bank:** IDB `proforge-memory-bank`; `search(query, limit, mode)` honours `ragMode` (`lexical` | `semantic` | `hybrid` via MiniLM embeddings, keyword fallback). **View:** `ProForgeViewContext` + `useProForgeViewContext()`.
 
 ### Scene-level services
 

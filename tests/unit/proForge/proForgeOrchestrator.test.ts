@@ -33,48 +33,56 @@ vi.mock('../../../services/proForge/pipelineAgents/diagnosticAgent', () => ({
   DiagnosticAgent: class {
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
+    setRetryFeedback = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/structuralAgent', () => ({
   StructuralAgent: class {
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
+    setRetryFeedback = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/proseAgent', () => ({
   ProseAgent: class {
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
+    setRetryFeedback = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/copyEditAgent', () => ({
   CopyEditAgent: class {
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
+    setRetryFeedback = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/proofAgent', () => ({
   ProofAgent: class {
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
+    setRetryFeedback = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/productionAgent', () => ({
   ProductionAgent: class {
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
+    setRetryFeedback = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/publishingAgent', () => ({
   PublishingAgent: class {
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
+    setRetryFeedback = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/analyticsAgent', () => ({
   AnalyticsAgent: class {
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
+    setRetryFeedback = vi.fn();
   },
 }));
 
@@ -98,6 +106,11 @@ vi.mock('../../../features/proForge/proForgeSlice', () => ({
   skipStage: vi.fn((p) => ({ type: 'proForge/skipStage', payload: p })),
   submitStageReview: vi.fn((p) => ({ type: 'proForge/submitStageReview', payload: p })),
   proForgeActions: {},
+}));
+
+// Mock run-history persistence dynamic import
+vi.mock('../../../services/proForge/proForgeHistoryStore', () => ({
+  saveRunHistory: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ---------------------------------------------------------------------------
@@ -265,6 +278,35 @@ describe('ProForgeOrchestrator', () => {
       await expect(orch.startPipeline('Fail', DEFAULT_CONFIG)).rejects.toThrow(
         'No project data available',
       );
+    });
+
+    it('resets the abort signal so a re-run after dispose still completes the stage', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [],
+          config: { ...DEFAULT_CONFIG, selectedStages: ['intake'], maxRetries: 0 },
+          label: 'Re-run',
+        },
+        isRunning: true,
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      // Simulate a prior abort — the constructor-created controller is now aborted.
+      orch.dispose();
+
+      await orch.startPipeline('Re-run', {
+        ...DEFAULT_CONFIG,
+        selectedStages: ['intake'],
+        maxRetries: 0,
+      });
+
+      const { stageCompleted, stageFailed } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      // Without the reset, the stale aborted signal would trip the post-execute guard → stageFailed.
+      expect(vi.mocked(stageCompleted)).toHaveBeenCalled();
+      expect(vi.mocked(stageFailed)).not.toHaveBeenCalled();
     });
   });
 
@@ -446,6 +488,140 @@ describe('ProForgeOrchestrator', () => {
 
       const { pipelineCompleted } = await import('../../../features/proForge/proForgeSlice');
       expect(vi.mocked(pipelineCompleted)).toHaveBeenCalled();
+    });
+  });
+
+  describe('submitReview — applying accepted edits to the manuscript', () => {
+    const editItem = {
+      id: 'e1',
+      stage: 'lineProse',
+      type: 'proseEdit',
+      severity: 'info',
+      sectionId: 's1',
+      range: { start: 0, end: 5 },
+      original: 'Hello',
+      proposed: 'Hi',
+      description: 'Tighten greeting',
+      confidence: 0.9,
+      status: 'accepted',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    function findUpdate(ctx: OrchestratorContext) {
+      const calls = (ctx.dispatch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+      return calls
+        .map((c) => c[0] as { payload?: { id?: string; changes?: { content?: string } } })
+        .find((a) => a?.payload?.changes?.content !== undefined);
+    }
+
+    it('writes accepted edits into the section content (editing stage)', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'awaitingReview',
+          activeStage: 'lineProse',
+          label: 'Edit Test',
+          config: DEFAULT_CONFIG,
+          stages: [{ stage: 'lineProse', status: 'awaitingReview', reviewItems: [editItem] }],
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.submitReview('lineProse', [{ itemId: 'e1', status: 'accepted' }], {
+        advance: false,
+      });
+
+      const update = findUpdate(ctx);
+      expect(update?.payload?.id).toBe('s1');
+      expect(update?.payload?.changes?.content).toBe('Hi world.');
+    });
+
+    it('does not modify the manuscript for non-editing stages', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'awaitingReview',
+          activeStage: 'publishing',
+          label: 'Edit Test',
+          config: DEFAULT_CONFIG,
+          stages: [
+            {
+              stage: 'publishing',
+              status: 'awaitingReview',
+              reviewItems: [{ ...editItem, stage: 'publishing' }],
+            },
+          ],
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.submitReview('publishing', [{ itemId: 'e1', status: 'accepted' }], {
+        advance: false,
+      });
+
+      expect(findUpdate(ctx)).toBeUndefined();
+    });
+
+    it('does not apply rejected edits', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'awaitingReview',
+          activeStage: 'lineProse',
+          label: 'Edit Test',
+          config: DEFAULT_CONFIG,
+          stages: [{ stage: 'lineProse', status: 'awaitingReview', reviewItems: [editItem] }],
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.submitReview('lineProse', [{ itemId: 'e1', status: 'rejected' }], {
+        advance: false,
+      });
+
+      expect(findUpdate(ctx)).toBeUndefined();
+    });
+  });
+
+  describe('run-history persistence', () => {
+    it('persists run history to IDB on completion', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          activeStage: 'analytics',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Done',
+        },
+        runHistory: [{ id: 'run-1', label: 'Done' }],
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.advanceToNextStage('analytics');
+
+      const { saveRunHistory } = await import('../../../services/proForge/proForgeHistoryStore');
+      expect(vi.mocked(saveRunHistory)).toHaveBeenCalledWith('p1', [
+        { id: 'run-1', label: 'Done' },
+      ]);
+    });
+
+    it('persists run history to IDB on abort', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          activeStage: 'structural',
+          stages: [],
+          config: DEFAULT_CONFIG,
+          label: 'Aborted',
+          prePipelineSnapshotId: 'snap-pre',
+        },
+        runHistory: [{ id: 'run-1', label: 'Aborted' }],
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.abortPipeline();
+
+      const { saveRunHistory } = await import('../../../services/proForge/proForgeHistoryStore');
+      expect(vi.mocked(saveRunHistory)).toHaveBeenCalledWith('p1', [
+        { id: 'run-1', label: 'Aborted' },
+      ]);
     });
   });
 

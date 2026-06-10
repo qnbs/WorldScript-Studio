@@ -3,8 +3,9 @@
  * QNBS-v3: Bridges Redux state, orchestrator, and UI components.
  */
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { appStoreRef } from '../app/storeRef';
 import { proForgeActions } from '../features/proForge/proForgeSlice';
 import type { PipelineConfig, PipelineStage, ReviewItemStatus } from '../features/proForge/types';
 import { createProForgeOrchestrator } from '../services/proForge/proForgeOrchestrator';
@@ -50,17 +51,49 @@ export function useProForgeOrchestrator() {
     [settings, featureFlags, language],
   );
 
+  // QNBS-v3: Track which project the cached orchestrator was built for, so we rebuild
+  // it (and drop its stale AbortController/context) when the user switches projects.
+  const orchestratorProjectIdRef = useRef<string | null>(null);
+
+  // QNBS-v3: Hydrate persisted run history when a project loads — analytics comparisons across
+  // runs were lost on reload because the proForge slice is ephemeral. Best-effort.
+  const projectId = project?.id;
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { loadRunHistory } = await import('../services/proForge/proForgeHistoryStore');
+        const runs = await loadRunHistory(projectId);
+        // QNBS-v3: Always dispatch (even []) so switching to a project with no saved history
+        // clears the previous project's run history from Redux instead of leaving it stale.
+        if (!cancelled) {
+          dispatch(proForgeActions.loadRunHistory(runs));
+        }
+      } catch {
+        // Non-blocking: history hydration failures must not break the view.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, dispatch]);
+
   const getOrchestrator = useCallback(() => {
     if (!project) return null;
+    const projectId = project.id || 'default';
+
+    if (orchestratorRef.current && orchestratorProjectIdRef.current !== projectId) {
+      orchestratorRef.current.dispose();
+      orchestratorRef.current = null;
+    }
+
     if (!orchestratorRef.current) {
       orchestratorRef.current = createProForgeOrchestrator({
         dispatch,
-        getState: () =>
-          ({
-            ...orchestratorRef.current!.context.getState(),
-            proForge: proForgeState,
-          }) as import('../app/store').RootState,
-        projectId: project.id || 'default',
+        // QNBS-v3: Read the LIVE store (was self-referential → infinite recursion + stale state).
+        getState: () => appStoreRef.current!.getState(),
+        projectId,
         manuscript: project.manuscript.map((s) => ({
           id: s.id,
           title: s.title,
@@ -72,11 +105,16 @@ export function useProForgeOrchestrator() {
         worlds: Object.values(project.worlds?.entities ?? {})
           .filter(Boolean)
           .map((w) => ({ id: (w as { id: string }).id, name: (w as { name: string }).name })),
-        config: currentRun?.config ?? defaultConfig,
+        // QNBS-v3: Live config getter — agents read this.context.config at execute time,
+        // so a custom config passed to startPipeline must win over the build-time default.
+        get config() {
+          return appStoreRef.current!.getState().proForge.currentRun?.config ?? defaultConfig;
+        },
       });
+      orchestratorProjectIdRef.current = projectId;
     }
     return orchestratorRef.current;
-  }, [dispatch, project, proForgeState, defaultConfig, currentRun?.config]);
+  }, [dispatch, project, defaultConfig]);
 
   const startPipeline = useCallback(
     async (label: string, config: PipelineConfig) => {

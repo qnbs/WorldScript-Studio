@@ -6,9 +6,11 @@
 
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
+import { useAnnounce } from '../../contexts/LiveRegionContext';
 import { useProForgeViewContext } from '../../contexts/ProForgeViewContext';
 import { proForgeActions } from '../../features/proForge/proForgeSlice';
 import type { ReviewItem, ReviewItemStatus } from '../../features/proForge/types';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const SEVERITY_ICONS: Record<string, string> = {
   critical: '🔴',
@@ -16,42 +18,30 @@ const SEVERITY_ICONS: Record<string, string> = {
   info: '🔵',
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  structuralEdit: 'Structural',
-  proseEdit: 'Prose',
-  grammarEdit: 'Grammar',
-  styleEdit: 'Style',
-  repetitionHit: 'Repetition',
-  consistencyIssue: 'Consistency',
-  plotHole: 'Plot Hole',
-  legalWarning: 'Legal',
-  technicalIssue: 'Technical',
-  pacingIssue: 'Pacing',
-  arcIssue: 'Arc',
-};
-
 const SEVERITY_GROUPS = [
   {
     key: 'critical' as const,
-    label: 'Critical Actions',
+    labelKey: 'proforge.review.group.critical',
     headerClass: 'text-[var(--sc-error)] border-[var(--sc-error-muted)]',
     badgeClass: 'bg-[var(--sc-error-muted)] text-[var(--sc-error)]',
   },
   {
     key: 'warning' as const,
-    label: 'Warnings',
+    labelKey: 'proforge.review.group.warning',
     headerClass: 'text-[var(--sc-warning,#d97706)] border-[var(--sc-warning-muted,#fef3c7)]',
     badgeClass: 'bg-[var(--sc-warning-muted,#fef3c7)] text-[var(--sc-warning,#d97706)]',
   },
   {
     key: 'info' as const,
-    label: 'Suggestions',
+    labelKey: 'proforge.review.group.info',
     headerClass: 'text-[var(--sc-accent)] border-[var(--sc-accent-muted,#eff6ff)]',
     badgeClass: 'bg-[var(--sc-accent-muted,#eff6ff)] text-[var(--sc-accent)]',
   },
 ] as const;
 
 export const PipelineReviewPanel: React.FC = () => {
+  const { t } = useTranslation();
+  const announce = useAnnounce();
   const {
     currentRun,
     activeStageResult,
@@ -65,6 +55,8 @@ export const PipelineReviewPanel: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
 
   const stage = activeStageResult?.stage;
+  // QNBS-v3: Localised stage label; falls back to the raw stage id if no key exists.
+  const stageLabel = stage ? t(`proforge.stageName.${stage}`) : '';
 
   const pendingCount = currentStageReviewItems.filter((i) => i.status === 'pending').length;
   const acceptedCount = currentStageReviewItems.filter((i) => i.status === 'accepted').length;
@@ -133,13 +125,17 @@ export const PipelineReviewPanel: React.FC = () => {
     (i) => i.confidence >= 0.85 && i.severity !== 'critical' && i.status === 'pending',
   ).length;
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!stage) return;
     const items = activeStageResult?.reviewItems ?? [];
     const decisions = items.map((item) => ({ itemId: item.id, status: item.status }));
-    void submitReview(stage, decisions);
+    // QNBS-v3: Await completion before announcing/navigating — submitReview is async (applies
+    // edits + snapshots), so announcing success before it resolves could lie if it rejects.
+    await submitReview(stage, decisions);
+    // WCAG live-region announce so screen-reader users hear the stage was submitted.
+    announce(t('proforge.review.announceSubmitted', { stage: stageLabel }), 'polite');
     setActiveView('dashboard');
-  }, [stage, activeStageResult, submitReview, setActiveView]);
+  }, [stage, stageLabel, activeStageResult, submitReview, setActiveView, announce, t]);
 
   const handleSkip = useCallback(() => {
     if (!stage) return;
@@ -150,7 +146,7 @@ export const PipelineReviewPanel: React.FC = () => {
   if (!currentRun || !stage) {
     return (
       <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-6 text-center">
-        <p className="text-sm text-[var(--sc-text-secondary)]">No review items available.</p>
+        <p className="text-sm text-[var(--sc-text-secondary)]">{t('proforge.review.noItems')}</p>
       </div>
     );
   }
@@ -160,9 +156,15 @@ export const PipelineReviewPanel: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--sc-border-subtle)]">
         <div>
-          <h3 className="text-sm font-medium capitalize">Review: {stage}</h3>
+          <h3 className="text-sm font-medium">
+            {t('proforge.review.heading', { stage: stageLabel })}
+          </h3>
           <p className="text-xs text-[var(--sc-text-secondary)] mt-0.5">
-            {pendingCount} pending · {acceptedCount} accepted · {rejectedCount} rejected
+            {t('proforge.review.counts', {
+              pending: pendingCount,
+              accepted: acceptedCount,
+              rejected: rejectedCount,
+            })}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -171,9 +173,9 @@ export const PipelineReviewPanel: React.FC = () => {
               type="button"
               onClick={handleQuickAcceptHighConfidence}
               className="px-2.5 py-1 text-xs rounded-sc-md bg-[var(--sc-accent-muted,#eff6ff)] text-[var(--sc-accent)] hover:opacity-80 transition-opacity"
-              title="Accept all high-confidence non-critical suggestions"
+              title={t('proforge.review.quickAcceptTitle')}
             >
-              Quick Accept ({quickAcceptCount})
+              {t('proforge.review.quickAccept', { count: quickAcceptCount })}
             </button>
           )}
           <button
@@ -181,14 +183,14 @@ export const PipelineReviewPanel: React.FC = () => {
             onClick={handleAcceptAll}
             className="px-2.5 py-1 text-xs rounded-sc-md bg-[var(--sc-success-muted)] text-[var(--sc-success)] hover:opacity-80 transition-opacity"
           >
-            Accept All
+            {t('proforge.review.acceptAll')}
           </button>
           <button
             type="button"
             onClick={handleRejectAll}
             className="px-2.5 py-1 text-xs rounded-sc-md bg-[var(--sc-error-muted)] text-[var(--sc-error)] hover:opacity-80 transition-opacity"
           >
-            Reject All
+            {t('proforge.review.rejectAll')}
           </button>
         </div>
       </div>
@@ -198,15 +200,20 @@ export const PipelineReviewPanel: React.FC = () => {
         <div className="mx-4 mt-3 p-3 rounded-sc-md border border-[var(--sc-error-muted)] bg-[var(--sc-error-muted)]">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-[var(--sc-error)]">
-              🔴 {criticalPending.length} Critical{' '}
-              {criticalPending.length === 1 ? 'Issue' : 'Issues'} Need Attention
+              <span aria-hidden="true">🔴 </span>
+              {t(
+                criticalPending.length === 1
+                  ? 'proforge.review.criticalHeadingOne'
+                  : 'proforge.review.criticalHeadingOther',
+                { count: criticalPending.length },
+              )}
             </span>
             <button
               type="button"
               onClick={handleAcceptAllCritical}
               className="px-2 py-0.5 text-xs rounded-sc-sm bg-[var(--sc-error)] text-white hover:opacity-80 transition-opacity"
             >
-              Accept All Critical
+              {t('proforge.review.acceptAllCritical')}
             </button>
           </div>
           {topCritical.map((item) => (
@@ -216,7 +223,7 @@ export const PipelineReviewPanel: React.FC = () => {
           ))}
           {criticalPending.length > 3 && (
             <div className="text-xs text-[var(--sc-error)] mt-1 opacity-70">
-              +{criticalPending.length - 3} more critical issues below
+              {t('proforge.review.moreCritical', { count: criticalPending.length - 3 })}
             </div>
           )}
         </div>
@@ -224,24 +231,27 @@ export const PipelineReviewPanel: React.FC = () => {
 
       {/* Filter Tabs — secondary position */}
       <div className="flex gap-1 px-4 pt-3">
-        {(['all', 'pending', 'accepted', 'rejected'] as const).map((f) => (
-          <button
-            type="button"
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-2.5 py-1 text-xs rounded-sc-md capitalize transition-colors ${
-              filter === f
-                ? 'bg-[var(--sc-accent)] text-white'
-                : 'bg-[var(--sc-surface-base)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'
-            }`}
-          >
-            {f} (
-            {f === 'all'
+        {(['all', 'pending', 'accepted', 'rejected'] as const).map((f) => {
+          const count =
+            f === 'all'
               ? currentStageReviewItems.length
-              : currentStageReviewItems.filter((i) => i.status === f).length}
-            )
-          </button>
-        ))}
+              : currentStageReviewItems.filter((i) => i.status === f).length;
+          return (
+            <button
+              type="button"
+              key={f}
+              onClick={() => setFilter(f)}
+              aria-pressed={filter === f}
+              className={`px-2.5 py-1 text-xs rounded-sc-md transition-colors ${
+                filter === f
+                  ? 'bg-[var(--sc-accent)] text-white'
+                  : 'bg-[var(--sc-surface-base)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'
+              }`}
+            >
+              {t(`proforge.review.filter.${f}`)} ({count})
+            </button>
+          );
+        })}
       </div>
 
       {/* Review Items */}
@@ -254,7 +264,7 @@ export const PipelineReviewPanel: React.FC = () => {
             return (
               <div key={group.key}>
                 <div className={`flex items-center gap-2 mb-2 pb-1 border-b ${group.headerClass}`}>
-                  <span className="text-xs font-semibold">{group.label}</span>
+                  <span className="text-xs font-semibold">{t(group.labelKey)}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded-sc-sm ${group.badgeClass}`}>
                     {items.length}
                   </span>
@@ -269,7 +279,7 @@ export const PipelineReviewPanel: React.FC = () => {
           })
         ) : filteredItems.length === 0 ? (
           <p className="text-sm text-[var(--sc-text-secondary)] text-center py-8">
-            No items match this filter.
+            {t('proforge.review.noItemsForFilter')}
           </p>
         ) : (
           filteredItems.map((item) => (
@@ -285,16 +295,18 @@ export const PipelineReviewPanel: React.FC = () => {
           onClick={handleSkip}
           className="px-3 py-1.5 text-xs rounded-sc-md text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] transition-colors"
         >
-          Skip Stage
+          {t('proforge.review.skipStage')}
         </button>
         <button
           type="button"
-          onClick={handleSubmit}
+          onClick={() => void handleSubmit()}
           disabled={pendingCount > 0}
           className="px-4 py-1.5 text-xs font-medium rounded-sc-md text-white disabled:opacity-50 transition-opacity"
           style={{ backgroundColor: 'var(--sc-accent)' }}
         >
-          {pendingCount > 0 ? `${pendingCount} Pending` : 'Submit & Continue'}
+          {pendingCount > 0
+            ? t('proforge.review.pendingCount', { count: pendingCount })
+            : t('proforge.review.submitContinue')}
         </button>
       </div>
     </div>
@@ -310,12 +322,13 @@ function ReviewItemCard({
   item: ReviewItem;
   onStatusChange: (id: string, status: ReviewItemStatus) => void;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
-  const statusButtons: { status: ReviewItemStatus; label: string; color: string }[] = [
-    { status: 'accepted', label: 'Accept', color: 'var(--sc-success)' },
-    { status: 'rejected', label: 'Reject', color: 'var(--sc-error)' },
-    { status: 'ignored', label: 'Ignore', color: 'var(--sc-text-tertiary)' },
+  const statusButtons: { status: ReviewItemStatus; labelKey: string; color: string }[] = [
+    { status: 'accepted', labelKey: 'proforge.review.accept', color: 'var(--sc-success)' },
+    { status: 'rejected', labelKey: 'proforge.review.reject', color: 'var(--sc-error)' },
+    { status: 'ignored', labelKey: 'proforge.review.ignore', color: 'var(--sc-text-tertiary)' },
   ];
 
   return (
@@ -329,11 +342,15 @@ function ReviewItemCard({
       }`}
     >
       <div className="flex items-start gap-2">
-        <span className="text-sm mt-0.5">{SEVERITY_ICONS[item.severity]}</span>
+        {/* QNBS-v3: Emoji is decorative; severity is conveyed to AT via the sr-only text below. */}
+        <span className="text-sm mt-0.5" aria-hidden="true">
+          {SEVERITY_ICONS[item.severity]}
+        </span>
+        <span className="sr-only">{t(`proforge.review.severity.${item.severity}`)}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-medium px-1.5 py-0.5 rounded-sc-sm bg-[var(--sc-surface-elevated)]">
-              {TYPE_LABELS[item.type] ?? item.type}
+              {t(`proforge.review.type.${item.type}`)}
             </span>
             {item.sectionTitle && (
               <span className="text-xs text-[var(--sc-text-secondary)] truncate">
@@ -341,7 +358,7 @@ function ReviewItemCard({
               </span>
             )}
             <span className="text-xs text-[var(--sc-text-tertiary)] ml-auto">
-              {Math.round(item.confidence * 100)}% confidence
+              {t('proforge.review.confidence', { percent: Math.round(item.confidence * 100) })}
             </span>
           </div>
           <p className="text-sm mt-1.5">{item.description}</p>
@@ -349,10 +366,10 @@ function ReviewItemCard({
           {item.original && item.proposed && expanded && (
             <div className="mt-2 space-y-1.5 text-xs">
               <div className="p-2 rounded-sc-sm bg-[var(--sc-error-muted)] text-[var(--sc-error)]">
-                <span className="font-medium">Original:</span> {item.original}
+                <span className="font-medium">{t('proforge.review.original')}</span> {item.original}
               </div>
               <div className="p-2 rounded-sc-sm bg-[var(--sc-success-muted)] text-[var(--sc-success)]">
-                <span className="font-medium">Proposed:</span> {item.proposed}
+                <span className="font-medium">{t('proforge.review.proposed')}</span> {item.proposed}
               </div>
             </div>
           )}
@@ -361,9 +378,10 @@ function ReviewItemCard({
             <button
               type="button"
               onClick={() => setExpanded(!expanded)}
+              aria-expanded={expanded}
               className="text-xs text-[var(--sc-accent)] mt-1 hover:underline"
             >
-              {expanded ? 'Show less' : 'Show details'}
+              {expanded ? t('proforge.review.showLess') : t('proforge.review.showDetails')}
             </button>
           )}
 
@@ -374,6 +392,7 @@ function ReviewItemCard({
                 type="button"
                 key={btn.status}
                 onClick={() => onStatusChange(item.id, btn.status)}
+                aria-pressed={item.status === btn.status}
                 className={`px-2 py-0.5 text-xs rounded-sc-sm border transition-all ${
                   item.status === btn.status
                     ? 'text-white'
@@ -385,7 +404,7 @@ function ReviewItemCard({
                     : {}
                 }
               >
-                {btn.label}
+                {t(btn.labelKey)}
               </button>
             ))}
           </div>

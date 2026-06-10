@@ -26,7 +26,7 @@ export class StructuralAgent extends BaseAgent {
     const { config } = this.context;
     const project = this.requireProject();
     const memoryBank = this.getMemoryBank();
-    const memoryContext = await memoryBank.buildContextString('structural', undefined, 3000);
+    const memoryContext = await this.gatherMemoryContext('structural', 3000);
 
     // Get diagnostic report from memory
     const diagnosticEntries = await memoryBank.recall('meta');

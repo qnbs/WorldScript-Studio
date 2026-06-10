@@ -66,7 +66,7 @@ const REAL_QUALITY_SCORE = {
   marketability: 77,
 };
 
-// Fallback sentinel: all 3 checked dimensions are exactly 50.
+// Uniform 50 scores — a plausible-but-mediocre real analysis, NOT a fallback by itself.
 const FALLBACK_QUALITY_SCORE = {
   overall: 50,
   prose: 50,
@@ -75,6 +75,17 @@ const FALLBACK_QUALITY_SCORE = {
   pacing: 50,
   dialogue: 50,
   marketability: 50,
+};
+
+// Zeroed scores accompany a genuine fallback report (isFallback: true).
+const ZERO_QUALITY_SCORE = {
+  overall: 0,
+  prose: 0,
+  structure: 0,
+  consistency: 0,
+  pacing: 0,
+  dialogue: 0,
+  marketability: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -88,21 +99,109 @@ describe('SupervisorAgent', () => {
     agent = new SupervisorAgent(makeContext());
   });
 
-  describe('evaluate() — unknown/default stages', () => {
-    it('passes with score 100 for stages without specific logic', () => {
-      const result = agent.evaluate('lineProse', { reviewItems: [], agentOutput: undefined });
+  describe('evaluate() — default/terminal stages', () => {
+    it('passes with score 100 for idle/archived stages (no specific logic)', () => {
+      const idle = agent.evaluate('idle', { reviewItems: [], agentOutput: undefined });
+      expect(idle.pass).toBe(true);
+      expect(idle.qualityScore).toBe(100);
+      expect(idle.reasons).toHaveLength(0);
+      expect(agent.evaluate('archived', { reviewItems: [], agentOutput: undefined }).pass).toBe(
+        true,
+      );
+    });
+  });
+
+  describe('evaluateLineProse', () => {
+    it('passes with score 85 when prose edits are present', () => {
+      const result = agent.evaluate('lineProse', { reviewItems: [], agentOutput: { edits: [{}] } });
+      expect(result.pass).toBe(true);
+      expect(result.qualityScore).toBe(85);
+    });
+
+    it('passes for a short manuscript even with zero edits', () => {
+      const result = agent.evaluate('lineProse', { reviewItems: [], agentOutput: { edits: [] } });
+      expect(result.pass).toBe(true);
+    });
+
+    it('fails for a long manuscript with zero prose edits and no review items', () => {
+      const longAgent = new SupervisorAgent(makeContext('word '.repeat(1100)));
+      const result = longAgent.evaluate('lineProse', {
+        reviewItems: [],
+        agentOutput: { edits: [] },
+      });
+      expect(result.pass).toBe(false);
+      expect(result.retryRecommended).toBe(true);
+    });
+  });
+
+  describe('evaluateCopyEdit', () => {
+    it('passes when copy-edit findings exist', () => {
+      const result = agent.evaluate('copyEdit', {
+        reviewItems: [],
+        agentOutput: { grammarEdits: [{}], styleEdits: [], repetitionHits: [], formatIssues: [] },
+      });
+      expect(result.pass).toBe(true);
+    });
+
+    it('fails for a long manuscript with zero findings', () => {
+      const longAgent = new SupervisorAgent(makeContext('word '.repeat(1600)));
+      const result = longAgent.evaluate('copyEdit', {
+        reviewItems: [],
+        agentOutput: { grammarEdits: [], styleEdits: [], repetitionHits: [], formatIssues: [] },
+      });
+      expect(result.pass).toBe(false);
+      expect(result.retryRecommended).toBe(true);
+    });
+  });
+
+  describe('evaluateProduction', () => {
+    it('passes with score 95 when at least one artifact exists', () => {
+      const result = agent.evaluate('production', {
+        reviewItems: [],
+        agentOutput: { artifacts: [{}] },
+      });
+      expect(result.pass).toBe(true);
+      expect(result.qualityScore).toBe(95);
+    });
+
+    it('fails when no artifacts were produced', () => {
+      const result = agent.evaluate('production', {
+        reviewItems: [],
+        agentOutput: { artifacts: [] },
+      });
+      expect(result.pass).toBe(false);
+      expect(result.reasons.some((r) => r.includes('artifact'))).toBe(true);
+    });
+  });
+
+  describe('evaluatePublishing', () => {
+    it('passes when title + back-cover blurb are present', () => {
+      const result = agent.evaluate('publishing', {
+        reviewItems: [],
+        agentOutput: { metadata: { title: 'My Book' }, blurbs: { backCover: 'A gripping tale.' } },
+      });
+      expect(result.pass).toBe(true);
+    });
+
+    it('fails when title/blurb are missing', () => {
+      const result = agent.evaluate('publishing', {
+        reviewItems: [],
+        agentOutput: { metadata: { title: '' }, blurbs: { backCover: '' } },
+      });
+      expect(result.pass).toBe(false);
+      expect(result.reasons.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('evaluateAnalytics', () => {
+    it('passes with score 100 when metrics exist', () => {
+      const result = agent.evaluate('analytics', { reviewItems: [], agentOutput: { metrics: {} } });
       expect(result.pass).toBe(true);
       expect(result.qualityScore).toBe(100);
-      expect(result.reasons).toHaveLength(0);
     });
 
-    it('passes for copyEdit stage', () => {
-      const result = agent.evaluate('copyEdit', { reviewItems: [], agentOutput: undefined });
-      expect(result.pass).toBe(true);
-    });
-
-    it('passes for publishing stage', () => {
-      const result = agent.evaluate('publishing', { reviewItems: [], agentOutput: undefined });
+    it('never blocks the pipeline even without metrics', () => {
+      const result = agent.evaluate('analytics', { reviewItems: [], agentOutput: undefined });
       expect(result.pass).toBe(true);
     });
   });
@@ -126,11 +225,14 @@ describe('SupervisorAgent', () => {
       expect(result.qualityScore).toBe(72);
     });
 
-    it('fails and recommends retry when all 3 sentinel dimensions are 50', () => {
+    it('fails and recommends retry when the report is marked isFallback', () => {
+      // QNBS-v3: Real fallback reports carry isFallback:true with zeroed scores
+      // (see DiagnosticAgent.createFallbackReport). Detection keys off the flag, not score===50.
       const result = agent.evaluate('intake', {
         reviewItems: [],
         agentOutput: {
-          qualityScore: FALLBACK_QUALITY_SCORE,
+          isFallback: true,
+          qualityScore: ZERO_QUALITY_SCORE,
           consistencyIssues: [],
           structuralGaps: [],
         },
@@ -139,6 +241,19 @@ describe('SupervisorAgent', () => {
       expect(result.retryRecommended).toBe(true);
       expect(result.qualityScore).toBe(0);
       expect(result.reasons.some((r) => r.includes('fallback'))).toBe(true);
+    });
+
+    it('does NOT treat uniform 50 scores as fallback without the isFallback flag', () => {
+      const result = agent.evaluate('intake', {
+        reviewItems: [],
+        agentOutput: {
+          qualityScore: FALLBACK_QUALITY_SCORE,
+          consistencyIssues: [{ id: 'ci-1' }],
+          structuralGaps: [],
+        },
+      });
+      // No isFallback flag → treated as a (low but real) analysis, passes the gate.
+      expect(result.pass).toBe(true);
     });
 
     it('does NOT treat partial 50-scores as fallback (only all-3-at-50 triggers)', () => {

@@ -220,7 +220,13 @@ describe('StructuralAgent', () => {
       const agent = new StructuralAgent(makeContext());
       await agent.execute(new AbortController().signal);
 
-      expect(mockMemoryBank.buildContextString).toHaveBeenCalledWith('structural', undefined, 3000);
+      // QNBS-v3: gatherMemoryContext now passes a project-derived query + ragMode (Comment #5).
+      expect(mockMemoryBank.buildContextString).toHaveBeenCalledWith(
+        'structural',
+        expect.stringContaining('Structural Test'),
+        3000,
+        'hybrid',
+      );
     });
 
     it('calls memoryBank.recall("meta") to retrieve diagnostic report', async () => {

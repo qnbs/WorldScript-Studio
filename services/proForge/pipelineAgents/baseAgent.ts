@@ -3,7 +3,7 @@
  * QNBS-v3: Eliminates the ~30-line constructor/setup skeleton duplicated across 8 agents.
  */
 
-import type { StageResult } from '../../../features/proForge/types';
+import type { PipelineStage, StageResult } from '../../../features/proForge/types';
 import type { AIProvider, AiModel } from '../../../types';
 import { type InferenceGateway, inferenceGateway } from '../../ai/inferenceGateway';
 import type { AIRequestOptions } from '../../aiProviderService';
@@ -15,10 +15,18 @@ export abstract class BaseAgent {
   protected readonly context: OrchestratorContext;
   // QNBS-v3: Gateway injected from context or falls back to module singleton — keeps agents testable.
   protected readonly gateway: InferenceGateway;
+  // QNBS-v3: Supervisor feedback from the previous failed attempt; prepended to the next prompt
+  // so a retry is materially different instead of re-rolling the identical request.
+  private retryFeedback = '';
 
   constructor(context: OrchestratorContext) {
     this.context = context;
     this.gateway = context.gateway ?? inferenceGateway;
+  }
+
+  /** Orchestrator-only: seed corrective feedback for a retry attempt. */
+  setRetryFeedback(feedback: string): void {
+    this.retryFeedback = feedback;
   }
 
   abstract execute(
@@ -35,6 +43,25 @@ export abstract class BaseAgent {
     return getMemoryBank(this.context.projectId);
   }
 
+  // QNBS-v3: Assemble memory context for a stage. Honours the run's ragMode — a story-anchored
+  // query (title/logline/genre) drives semantic/hybrid relevance ranking of lore/character/prior
+  // entries; with ragMode 'lexical' (or no project) it degrades to keyword/chronological recall.
+  protected async gatherMemoryContext(stage: PipelineStage, maxChars: number): Promise<string> {
+    const project = this.context.getState().project.present?.data;
+    const query = project
+      ? [project.title, project.logline, this.context.config.genrePreset]
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+      : '';
+    return this.getMemoryBank().buildContextString(
+      stage,
+      query || undefined,
+      maxChars,
+      this.context.config.ragMode,
+    );
+  }
+
   protected elapsed(startTime: number): number {
     return Math.round(performance.now() - startTime);
   }
@@ -44,11 +71,23 @@ export abstract class BaseAgent {
   protected async generate(prompt: string, maxTokens?: number): Promise<string> {
     // QNBS-v3: exactOptionalPropertyTypes — only pass maxTokens when it's defined.
     const result = await this.gateway.generate({
-      prompt,
+      prompt: this.withRetryPreamble(prompt),
       creativity: this.context.config.creativity,
       options: this.buildAiOpts(maxTokens !== undefined ? { maxTokens } : undefined),
     });
     return result.text;
+  }
+
+  // QNBS-v3: Prepend corrective guidance from the prior failed attempt so the model addresses
+  // the supervisor's concerns rather than repeating the same output.
+  private withRetryPreamble(prompt: string): string {
+    if (!this.retryFeedback) return prompt;
+    return `IMPORTANT — your previous attempt was rejected by the quality reviewer for these reasons:
+${this.retryFeedback}
+
+Produce a corrected response that resolves the issues above. Do not repeat the prior output.
+
+${prompt}`;
   }
 
   // QNBS-v3: Builds AIRequestOptions from context.config — provider/model defaulting for pipeline agents.
