@@ -24,7 +24,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 ### Carried over from v1.20.0
 - ⬜ **P1-1** — WebLLM Worker Offload: full GPU isolation in dedicated worker (not started, 5–7 days).
 - 🔄 **P1-2** — Whisper WASM STT end-to-end: download UI ✅ + VAD→STT bridge ✅; remaining = full E2E integration test (CI-only).
-- ⬜ **P1-7** — Bundle Budget monitoring (limits unified via WS-5).
+- ✅ **P1-7** — Bundle Budget single source of truth (F-8): `package.json` `bundle:budget` = `--max-kb 6500 --max-entry-kb 4000`; `scripts/check-bundle-budget.mjs` defaults match. Real sizes (CI 2026-06-09): entry `index-*` ≈ 496 KB; largest vendor chunk `lib-*` ≈ 6 054 KB (~446 KB headroom under the 6500 per-chunk ceiling).
 - ⬜ **P2-2..P2-4** — v2.0 foundation (Cloud-Sync conflict resolution, Plugin Registry Beta, ADRs 0005+).
 
 ---
@@ -53,7 +53,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ### P3 — Architektur-Hardening & Performance
 - ✅ **P1-6** — Race-Condition Audit: Redux-Undo + Zustand reconcile (`listenerMiddleware.ts` clears `manuscriptPinnedBinderNodeId` when node no longer exists after project change/undo/redo). Commit `a799bc9`.
-- ⬜ **P1-7** — Bundle Budget: Entry ≤ 4000 KB, Total ≤ 6500 KB. Aktuell ~4000 KB Entry (nahe Limit). Monitoring via CI.
+- ✅ **P1-7** — Bundle Budget: ceilings unified in one place (`bundle:budget` = `--max-kb 6500 --max-entry-kb 4000`; script defaults match). Correction: the prior "~4000 KB Entry (nahe Limit)" note was inaccurate — the `index-*` entry is ~496 KB; the binding constraint is the `lib-*` vendor chunk (~6 054 KB vs the 6500 per-chunk ceiling). See WS-5 / F-8.
 - ⬜ **P2-1** — Error Boundaries + Logging: Alle 19 Views, Kein console.error
 
 ### P4 — v2.0 Foundation

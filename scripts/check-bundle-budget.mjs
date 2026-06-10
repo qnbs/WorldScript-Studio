@@ -1,9 +1,20 @@
 #!/usr/bin/env node
 /**
- * Fail CI if any emitted JS chunk under dist/assets exceeds --max-kb (default 7000),
- * and if the main entry chunk exceeds --max-entry-kb (default 4500).
- * Local ML stacks (@mlc-ai/web-llm, onnxruntime-web, @xenova/transformers) routinely emit multi‑MB
- * vendor chunks; keep this ceiling above that bundle while still catching accidental regressions.
+ * Bundle-budget gate (audit finding F-8 — single source of truth).
+ *
+ * Two independent ceilings, both measured on RAW (uncompressed) per-file KB under dist/assets:
+ *   --max-kb       (default 6500): any NON-entry JS chunk (`lib-*`, vendor, lazy views).
+ *   --max-entry-kb (default 4000): the `index-*` entry chunk only.
+ *
+ * The package.json `bundle:budget` script passes these same values explicitly — defaults and
+ * invocation are kept in lockstep so there is ONE budget, not two. Do not diverge them.
+ *
+ * Headroom at 2026-06-09 (main CI build, run 27241741348):
+ *   - entry `index-*.js` ≈ 496 KB  → ~3 500 KB under the 4000 ceiling (entry is small; the ceiling
+ *     is generous on purpose — local-AI views are lazy-loaded, not in the entry).
+ *   - largest chunk `lib-*.js` ≈ 6 054 KB → ~446 KB under the 6500 ceiling. This vendor bundle
+ *     (@mlc-ai/web-llm + onnxruntime-web + transformers) is the real constraint; the 6500 ceiling
+ *     catches an accidental >446 KB regression there while still passing today.
  * Run after `pnpm run build`.
  */
 import fs from 'node:fs';
@@ -15,8 +26,8 @@ const root = path.join(__dirname, '..');
 const assetsDir = path.join(root, 'dist', 'assets');
 
 const argv = process.argv.slice(2);
-let maxKb = 7000;
-let maxEntryKb = 4500;
+let maxKb = 6500;
+let maxEntryKb = 4000;
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--max-kb' && argv[i + 1]) {
     maxKb = Number(argv[i + 1]);
