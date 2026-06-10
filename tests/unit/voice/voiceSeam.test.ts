@@ -14,19 +14,18 @@ import { createVadEngine } from '../../../services/voice/vadEngine';
 import { getVoiceTestHarness } from '../../../services/voice/voiceTestSeam';
 import type { SttEngine, VadEngine } from '../../../services/voice/voiceTypes';
 
+type HarnessWindow = { __voiceTestHarness?: unknown };
+
 function setHarness(value: unknown): void {
-  // biome-ignore lint/suspicious/noExplicitAny: test stub for window global
-  (window as any).__voiceTestHarness = value;
+  (window as HarnessWindow).__voiceTestHarness = value;
 }
 
 describe('voiceTestSeam', () => {
   beforeEach(() => {
-    // biome-ignore lint/suspicious/noExplicitAny: test cleanup
-    delete (window as any).__voiceTestHarness;
+    delete (window as HarnessWindow).__voiceTestHarness;
   });
   afterEach(() => {
-    // biome-ignore lint/suspicious/noExplicitAny: test cleanup
-    delete (window as any).__voiceTestHarness;
+    delete (window as HarnessWindow).__voiceTestHarness;
   });
 
   it('returns undefined when no harness is installed', () => {

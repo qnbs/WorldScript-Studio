@@ -22,8 +22,7 @@ function setWebGpu(present: boolean): void {
   if (present) {
     Object.defineProperty(globalThis.navigator, 'gpu', { value: {}, configurable: true });
   } else if ('gpu' in globalThis.navigator) {
-    // biome-ignore lint/suspicious/noExplicitAny: test cleanup
-    delete (globalThis.navigator as any).gpu;
+    delete (globalThis.navigator as { gpu?: unknown }).gpu;
   }
 }
 

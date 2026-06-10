@@ -219,19 +219,17 @@ describe('downloadVoiceModels', () => {
 // ── Tests: downloadVoiceModels — simulated (E2E test seam) ──────────────────────
 
 describe('downloadVoiceModels — simulated (E2E seam)', () => {
+  type HarnessWindow = { __voiceTestHarness?: unknown };
   beforeEach(() => {
     vi.clearAllMocks();
-    // biome-ignore lint/suspicious/noExplicitAny: test stub for window global
-    delete (window as any).__voiceTestHarness;
+    delete (window as HarnessWindow).__voiceTestHarness;
   });
   afterEach(() => {
-    // biome-ignore lint/suspicious/noExplicitAny: test stub for window global
-    delete (window as any).__voiceTestHarness;
+    delete (window as HarnessWindow).__voiceTestHarness;
   });
 
   it('success mode: marks ready and never calls the real pipeline', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test stub
-    (window as any).__voiceTestHarness = {
+    (window as HarnessWindow).__voiceTestHarness = {
       download: { mode: 'success', steps: 2, stepDelayMs: 0 },
     };
     const { service } = makeService();
@@ -243,8 +241,7 @@ describe('downloadVoiceModels — simulated (E2E seam)', () => {
   });
 
   it('error mode: dispatches voiceWasmDownloadError and throws', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test stub
-    (window as any).__voiceTestHarness = {
+    (window as HarnessWindow).__voiceTestHarness = {
       download: { mode: 'error', steps: 1, stepDelayMs: 0, errorMessage: 'boom' },
     };
     const { service } = makeService();
@@ -256,8 +253,7 @@ describe('downloadVoiceModels — simulated (E2E seam)', () => {
   });
 
   it('pre-aborted signal: returns early without marking ready', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test stub
-    (window as any).__voiceTestHarness = {
+    (window as HarnessWindow).__voiceTestHarness = {
       download: { mode: 'success', steps: 5, stepDelayMs: 5 },
     };
     const controller = new AbortController();
@@ -299,22 +295,21 @@ describe('handleDictationResult via startDictation callback', () => {
 // ── Tests: startListening single-flight guard (C-P1) ───────────────────────────
 
 describe('startListening single-flight guard', () => {
+  type PrivateState = { listeningTimer: ReturnType<typeof setTimeout> | null; isStarting: boolean };
   it('returns early when listening is already active (listeningTimer set)', async () => {
     const { service } = makeService();
     const initSpy = vi.spyOn(service, 'initialize');
-    // biome-ignore lint/suspicious/noExplicitAny: reach private state to simulate active listening
-    (service as any).listeningTimer = setTimeout(() => {}, 10_000);
+    const priv = service as unknown as PrivateState;
+    priv.listeningTimer = setTimeout(() => {}, 10_000);
     await service.startListening();
     expect(initSpy).not.toHaveBeenCalled();
-    // biome-ignore lint/suspicious/noExplicitAny: cleanup
-    clearTimeout((service as any).listeningTimer);
+    if (priv.listeningTimer) clearTimeout(priv.listeningTimer);
   });
 
   it('returns early when a start is already in flight (isStarting)', async () => {
     const { service } = makeService();
     const initSpy = vi.spyOn(service, 'initialize');
-    // biome-ignore lint/suspicious/noExplicitAny: reach private state to simulate in-flight start
-    (service as any).isStarting = true;
+    (service as unknown as PrivateState).isStarting = true;
     await service.startListening();
     expect(initSpy).not.toHaveBeenCalled();
   });

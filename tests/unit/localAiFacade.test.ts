@@ -58,15 +58,14 @@ function makeFakeBus(opts: {
 
 // QNBS-v3: jsdom has no Worker global; define a stub so the worker-first branch is reachable.
 function withWorkerGlobal(fn: () => Promise<void>): () => Promise<void> {
+  const g = globalThis as { Worker?: unknown };
   return async () => {
     const had = 'Worker' in globalThis;
-    // biome-ignore lint/suspicious/noExplicitAny: test stub
-    (globalThis as any).Worker = class {};
+    g.Worker = class {};
     try {
       await fn();
     } finally {
-      // biome-ignore lint/suspicious/noExplicitAny: test stub
-      if (!had) delete (globalThis as any).Worker;
+      if (!had) delete g.Worker;
     }
   };
 }
@@ -80,8 +79,7 @@ describe('localAiFacade', () => {
   });
 
   afterEach(() => {
-    // biome-ignore lint/suspicious/noExplicitAny: test cleanup
-    delete (globalThis as any).Worker;
+    delete (globalThis as { Worker?: unknown }).Worker;
   });
 
   it('returns local layer result when runLocalTextGeneration succeeds', async () => {
