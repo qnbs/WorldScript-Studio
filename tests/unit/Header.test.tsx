@@ -16,6 +16,7 @@ vi.mock('../../app/hooks', () => ({
       project: { past: [], future: [], present: { manuscript: [] } },
       status: { saving: 'idle' },
       settings: {},
+      featureFlags: { enableVoiceSupport: false },
     }),
   ),
 }));
