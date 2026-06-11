@@ -108,11 +108,12 @@ jobs:
         id: collect
         run: |
           mkdir -p release-assets
-          # QNBS-v3: include *.sig so Generate latest.json can read them for the updater manifest
+          # QNBS-v3: *.sig and *.app.tar.gz included — sig files feed latest.json; .app.tar.gz is
+          # the macOS updater bundle (Tauri downloads this to apply updates, not the .dmg installer).
           find downloaded -type f \( \
             -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \
             -o -name '*.msi' -o -name '*.exe' \
-            -o -name '*.dmg' -o -name '*.sig' \
+            -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \
             \) -exec cp {} release-assets/ \;
           echo "Files to upload:" && ls -la release-assets/ || true
           if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
@@ -163,13 +164,13 @@ jobs:
               *.msi)
                 # MSI fallback if no NSIS sig collected yet
                 [ -z "$WIN_SIG" ] && { WIN_URL="${REPO_URL}/${FNAME}"; WIN_SIG="$SIG_CONTENT"; } ;;
-              *_aarch64.dmg)
+              *_aarch64.app.tar.gz|*.app.tar.gz)
+                # QNBS-v3: macOS updater bundle is .app.tar.gz (not .dmg).
+                # .dmg is the user-facing installer; .app.tar.gz is what Tauri downloads for in-app updates.
+                # aarch64 = macos-latest ARM runner. x64 runner not yet in matrix.
                 MAC_AARCH64_URL="${REPO_URL}/${FNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
-              *_x64.dmg)
+              *_x64.app.tar.gz)
                 MAC_X64_URL="${REPO_URL}/${FNAME}"; MAC_X64_SIG="$SIG_CONTENT" ;;
-              *.dmg)
-                # Unknown arch dmg: default to aarch64 (macos-latest runner is ARM)
-                [ -z "$MAC_AARCH64_SIG" ] && { MAC_AARCH64_URL="${REPO_URL}/${FNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT"; } ;;
             esac
           done
 
