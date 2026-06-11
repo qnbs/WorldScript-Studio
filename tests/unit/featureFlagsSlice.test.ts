@@ -39,16 +39,16 @@ const initialState: FeatureFlagsState = {
   enableRtlLayout: false,
   enableLoraAdapters: true,
   enablePluginSystem: true,
-  enableVoiceSupport: true,
+  enableVoiceSupport: false,
   enableProForge: true,
   enableIdbAtRestEncryption: true,
-  enableVoiceWasm: true,
+  enableVoiceWasm: false,
   enableAdaptiveAiEngine: true,
   enableWebnnInference: true,
   enableComputeShaders: true,
   enableWorkerBusV2: true,
   enableRustCompute: true,
-  enableGlobalCopilot: true,
+  enableGlobalCopilot: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -157,7 +157,7 @@ describe('featureFlagsSlice — individual setters', () => {
     {
       flag: 'enableVoiceSupport',
       action: featureFlagsActions.setEnableVoiceSupport,
-      defaultOn: true,
+      defaultOn: false,
     },
     { flag: 'enableProForge', action: featureFlagsActions.setEnableProForge, defaultOn: true },
     {
@@ -165,7 +165,14 @@ describe('featureFlagsSlice — individual setters', () => {
       action: featureFlagsActions.setEnableIdbAtRestEncryption,
       defaultOn: true,
     },
-    { flag: 'enableVoiceWasm', action: featureFlagsActions.setEnableVoiceWasm, defaultOn: true },
+    // QNBS-v3: voice WASM off by default — ~57 MB download; user opt-in
+    { flag: 'enableVoiceWasm', action: featureFlagsActions.setEnableVoiceWasm, defaultOn: false },
+    // QNBS-v3: global copilot off by default — ambient AI; user opt-in per privacy preference
+    {
+      flag: 'enableGlobalCopilot',
+      action: featureFlagsActions.setEnableGlobalCopilot,
+      defaultOn: false,
+    },
   ];
 
   it.each(cases)('$flag default is $defaultOn', ({ flag, defaultOn }) => {

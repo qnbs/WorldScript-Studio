@@ -68,16 +68,19 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableRtlLayout: false,
   enableLoraAdapters: true,
   enablePluginSystem: true,
-  enableVoiceSupport: true,
+  // QNBS-v3: voice off by default — requires browser permission + optional WASM download; user opt-in
+  enableVoiceSupport: false,
   enableProForge: true,
   enableIdbAtRestEncryption: true,
-  enableVoiceWasm: true,
+  // QNBS-v3: voice WASM off by default — ~57 MB Whisper model download; requires explicit opt-in
+  enableVoiceWasm: false,
   enableAdaptiveAiEngine: true,
   enableWebnnInference: true,
   enableComputeShaders: true,
   enableWorkerBusV2: true,
   enableRustCompute: true,
-  enableGlobalCopilot: true,
+  // QNBS-v3: global copilot off by default — ambient AI; user opt-in per privacy preference
+  enableGlobalCopilot: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
