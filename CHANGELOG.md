@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ultimate Copilot AI v2 — Phase 2+3 (PR #110, #111):**
+  - **Markdown rendering** in `CopilotMessageList` — assistant messages rendered as sanitised HTML (DOMPurify + inline micro-markdown renderer; headings, bold, italic, code blocks, lists). No new runtime dependency.
+  - **Sidebar/dialog mode toggle** — panel can be docked to the right edge on desktop (≥ 768 px); preference persisted in `localStorage`. Mobile always uses dialog mode.
+  - **Apply-to-chapter** — "Apply to chapter" button on the last assistant code block rewrites the active manuscript chapter via `applyTextEdit` (offset-safe, dispatched into redux-undo for Ctrl+Z reversal). Gated to blocks ≥ 70 % of section length to prevent partial-snippet overwrites.
+  - **InlineAnnotationLayer** — absolute-positioned badge inside `ManuscriptEditor` showing the heuristic-insight count for the active chapter. Clicking opens the Copilot and auto-expands the Insights section.
+  - **ProForge "Ask Copilot" chip** — each `ReviewItemCard` in the ProForge Review Panel shows an ✦ Ask Copilot button (gated by `enableGlobalCopilot`) that pre-fills the Copilot composer with the item's context.
+  - **`docs/COPILOT.md`** — user-facing feature guide (architecture, modes, Apply-to-chapter, ProForge integration).
+  - **`docs/HEURISTIC-RULES.md`** — per-rule reference (8 rules, how-to-satisfy, i18n key pointers).
+  - **2 new E2E tests** — heuristics-only toggle and sidebar mode toggle in `copilot-flags.spec.ts`.
+  - **i18n:** 2 new keys (`copilot.askCopilot`, `copilot.askAboutReviewItem`) × 11 locales (2532 total).
+
 - **WebLLM worker offload (P1-1, ADR-0005):** `@mlc-ai/web-llm` (WebGPU) inference now runs in a
   dedicated WorkerBus v2 `webllm` pool (`workers/v2/webllm.worker.ts`, capability `inference.webllm`)
   instead of inline on the main thread. Worker-first with an automatic main-thread fallback on

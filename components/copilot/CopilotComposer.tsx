@@ -1,5 +1,6 @@
 import type { FC, FormEvent, KeyboardEvent } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useTransientUiStore } from '../../app/transientUiStore';
 
 interface CopilotComposerProps {
   placeholder: string;
@@ -16,6 +17,16 @@ export const CopilotComposer: FC<CopilotComposerProps> = ({
   onSend,
 }) => {
   const [value, setValue] = useState('');
+  const draftMessage = useTransientUiStore((s) => s.copilotDraftMessage);
+  const setCopilotDraftMessage = useTransientUiStore((s) => s.setCopilotDraftMessage);
+
+  // QNBS-v3: Phase 3 — ProForge "Ask Copilot" chip sets a draft; consume once then clear.
+  useEffect(() => {
+    if (draftMessage) {
+      setValue(draftMessage);
+      setCopilotDraftMessage(null);
+    }
+  }, [draftMessage, setCopilotDraftMessage]);
 
   const submit = () => {
     const trimmed = value.trim();

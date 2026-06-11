@@ -36,6 +36,9 @@ interface TransientUiState {
   // bridges InlineAnnotationLayer (setter) and InsightSection (consumer/reset) without prop-drilling.
   copilotInsightExpanded: boolean;
   setCopilotInsightExpanded: (value: boolean) => void;
+  // QNBS-v3: Phase 3 — ProForge "Ask Copilot" chip pre-fills the composer without prop-drilling.
+  copilotDraftMessage: string | null;
+  setCopilotDraftMessage: (msg: string | null) => void;
 }
 
 export const useTransientUiStore = create<TransientUiState>((set) => ({
@@ -65,4 +68,6 @@ export const useTransientUiStore = create<TransientUiState>((set) => ({
   setActiveSectionId: (id) => set({ activeSectionId: id }),
   copilotInsightExpanded: false,
   setCopilotInsightExpanded: (value) => set({ copilotInsightExpanded: value }),
+  copilotDraftMessage: null,
+  setCopilotDraftMessage: (msg) => set({ copilotDraftMessage: msg }),
 }));

@@ -2528,5 +2528,7 @@
   "copilot.applyingChange": "Applying…",
   "copilot.changeApplied": "Change applied — press Ctrl+Z to undo.",
   "copilot.changeApplyFailed": "Could not apply — the text may have changed.",
-  "copilot.annotationCount": "{count} insight for this chapter"
+  "copilot.annotationCount": "{count} insight for this chapter",
+  "copilot.askAboutReviewItem": "ProForge flagged this as {severity}: \"{description}\". Can you explain the concern and suggest a concrete fix?",
+  "copilot.askCopilot": "Ask Copilot"
 }
