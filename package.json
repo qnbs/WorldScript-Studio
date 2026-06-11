@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.5.2",
   "engines": {
     "node": ">=22.0.0",
-    "pnpm": ">=10.0.0"
+    "pnpm": ">=11.0.0"
   },
   "scripts": {
     "prepare": "simple-git-hooks",

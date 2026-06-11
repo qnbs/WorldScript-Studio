@@ -28,7 +28,7 @@ This document summarizes the **current inventory** and **stabilization measures*
 |-------|--------|-------|
 | Node (recommended) | [`.nvmrc`](../.nvmrc) | **22** |
 | Node (CI matrix) | `ci.yml` `quality` | **22** and **24** (explicit, no `node` = "current") |
-| pnpm | `package.json` `packageManager` | **10.33.0** |
+| pnpm | `package.json` `packageManager` | **11.5.2** |
 | Lint | Biome | `pnpm run lint` |
 | i18n | `scripts/check-i18n-keys.mjs` | `pnpm run i18n:check` |
 | Unit | Vitest + V8 | `pnpm exec vitest run --coverage` |

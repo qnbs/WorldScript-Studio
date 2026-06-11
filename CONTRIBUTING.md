@@ -22,7 +22,7 @@ Thank you for your interest in contributing to StoryCraft Studio — an AI-power
 ### Prerequisites
 
 - **Node.js** ≥ 22 (see [`.nvmrc`](.nvmrc); matches `engines` in [`package.json`](package.json))
-- **pnpm** ≥ 10 (see `packageManager` in `package.json`; recommended via **Corepack**, ships with Node)
+- **pnpm** ≥ 11 (see `packageManager` in `package.json`; recommended via **Corepack**, ships with Node)
 - A **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey) (optional if using **Ollama** in the desktop app only)
 
 ### Windows: Node, Corepack, and pnpm
