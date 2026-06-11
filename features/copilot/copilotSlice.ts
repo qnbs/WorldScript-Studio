@@ -1,7 +1,9 @@
 /**
  * Copilot slice — ephemeral runtime state for the Global AI Copilot live assistant.
  * QNBS-v3: NOT undo-wrapped, NOT persisted (local-first, in-memory only). Root key `copilot`.
- * Chat history + open state live together here; the orchestration is in hooks/useGlobalCopilot.ts.
+ * Chat history and streaming status live here. Proactive insights, heuristicsOnly, and
+ * insightStatus are panel-only overlay state → transientUiStore (Zustand).
+ * Orchestration is in hooks/useGlobalCopilot.ts; insight generation in services/copilot/insightGenerator.ts.
  */
 
 import { createSlice, nanoid, type PayloadAction } from '@reduxjs/toolkit';
@@ -89,6 +91,7 @@ const copilotSlice = createSlice({
       state.messages = [];
       state.status = 'idle';
       state.error = null;
+      // QNBS-v3: copilotInsights + copilotInsightStatus reset via transientUiStore in useGlobalCopilot
     },
   },
 });

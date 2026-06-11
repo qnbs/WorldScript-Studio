@@ -22,6 +22,18 @@ vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
   useAppSelector: (selector: (s: unknown) => unknown) => selector(state),
 }));
+// QNBS-v3: mock transientUiStore — copilot overlay state now lives in Zustand, not Redux
+vi.mock('../../../app/transientUiStore', () => ({
+  useTransientUiStore: (selector: (s: unknown) => unknown) =>
+    selector({
+      copilotInsights: [],
+      copilotHeuristicsOnly: false,
+      copilotInsightStatus: 'idle' as const,
+      setCopilotInsights: vi.fn(),
+      setCopilotHeuristicsOnly: vi.fn(),
+      setCopilotInsightStatus: vi.fn(),
+    }),
+}));
 vi.mock('../../../hooks/useStoryCraftAI', () => ({
   useStoryCraftAI: () => ({ runCompletion: vi.fn(), stop: mockStop, isLoading: false }),
 }));
@@ -51,6 +63,11 @@ vi.mock('../../../services/proForge/adapters/browserProForgeCapability', () => (
 }));
 vi.mock('../../../services/viewNavigationLabels', () => ({
   viewNavigationLabelKey: () => 'nav.writer',
+}));
+// QNBS-v3: mock insight generator so scheduleInsightGeneration doesn't fire timers in tests.
+vi.mock('../../../services/copilot/insightGenerator', () => ({
+  scheduleInsightGeneration: vi.fn(),
+  cancelInsightGeneration: vi.fn(),
 }));
 
 import { useGlobalCopilot } from '../../../hooks/useGlobalCopilot';

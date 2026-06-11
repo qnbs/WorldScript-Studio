@@ -11,6 +11,12 @@ const ctx: CopilotContext = {
   projectTitle: 'My Novel',
   wordCount: 1234,
   language: 'de',
+  chapterCount: 10,
+  characterCount: 3,
+  worldEntryCount: 2,
+  outlineCompleteness: 0.6,
+  selectedText: '',
+  openInsightCount: 0,
 };
 
 describe('copilotContextService', () => {

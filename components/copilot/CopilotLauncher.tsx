@@ -8,13 +8,14 @@ import { CopilotPanel } from './CopilotPanel';
 
 interface CopilotLauncherProps {
   currentView: View;
+  onNavigate?: (view: View) => void;
 }
 
 /**
  * Global Copilot entry point — a floating action button that toggles the assistant panel.
  * QNBS-v3: Mounted in App.tsx behind the enableGlobalCopilot flag. Context-aware via currentView.
  */
-export const CopilotLauncher: FC<CopilotLauncherProps> = ({ currentView }) => {
+export const CopilotLauncher: FC<CopilotLauncherProps> = ({ currentView, onNavigate }) => {
   const copilot = useGlobalCopilot(currentView);
   const { t, isOpen, open } = copilot;
   const announce = useAnnounce();
@@ -56,7 +57,14 @@ export const CopilotLauncher: FC<CopilotLauncherProps> = ({ currentView }) => {
           </svg>
         </button>
       )}
-      {isOpen && <CopilotPanel copilot={copilot} contextLabel={contextLabel} />}
+      {isOpen && (
+        <CopilotPanel
+          copilot={copilot}
+          contextLabel={contextLabel}
+          // QNBS-v3: exactOptionalPropertyTypes — only spread when defined to avoid passing undefined.
+          {...(onNavigate ? { onNavigate } : {})}
+        />
+      )}
     </>
   );
 };
