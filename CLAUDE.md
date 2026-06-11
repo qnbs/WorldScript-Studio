@@ -25,7 +25,7 @@ pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # TypeScript type check — EXACT CI command (tsgo --project tsconfig.tsgo.json --noEmit --checkers 4). typecheck:single = lighter single-checker (may miss errors the gate catches; do not trust for the gate)
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
-pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 54%, branches 46%, functions 68%, statements 56%)
+pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 74%, branches 60%, functions 67%, statements 72%)
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
 pnpm run i18n:bundle   # Rebuild public/locales/<lang>/bundle.json from source JSON
@@ -40,7 +40,7 @@ pnpm run ci:quick           # lint + typecheck + i18n:check + unit tests — low
 **Run a single test file:** `pnpm exec vitest run tests/unit/serviceName.test.ts`
 **Run tests matching a name pattern:** `pnpm exec vitest run -t "pattern"`
 
-**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 54, branches 46, functions 68, statements 56 (P1 target, see `vitest.config.ts`).
+**Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 74, branches 60, functions 67, statements 72 (see `vitest.config.ts`).
 
 **CI pipeline order:** `security` → `quality` (Biome + tsgo + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
 
@@ -86,7 +86,10 @@ features/         → Redux slices: project, settings, status, writer, versionCo
 hooks/            → View business logic (use*View.ts naming); useGlobalKeyboardShortcuts here too
 services/         → External adapters; key sub-dirs:
                      ai/          Vercel AI SDK layer (index.ts entry, providerFactory, storyCraftCompletionFetch,
-                                   hybridFallback, aiPolicy, aiRetry + cache/health/gpu/eco/embedding services)
+                                   hybridFallback, aiPolicy, aiRetry, aiModeService + cache/health/gpu/eco/embedding services)
+                                   providers/ — openrouterProvider (circuit breaker, free-tier catalog, RPM tracking)
+                     copilot/     heuristicEngine (8 manuscript rules), insightGenerator, copilotContextService,
+                                   actionApplier (apply-to-chapter, offset-safe, ≥70% length gate)
                      commands/    (palette registry, fuzzy rank, recent/pinned)
                      duckdb/      (duckdbClient, duckdbSchema, duckdbAnalytics, duckdbMigration, ragVectorMigration)
                      help/        (helpCatalog, helpSearch, helpDocRetrieval)
@@ -114,7 +117,7 @@ scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, g
 
 ### State Management
 
-Redux Toolkit with feature-sliced slices: `features/project/`, `features/settings/`, `features/status/`, `features/writer/`, `features/versionControl/`, `features/featureFlags/`, `features/proForge/`, `features/plotBoard/`, `features/sceneComments/`, `features/progressTracker/`, `features/analytics/`, `features/mindMap/` (mind-map viewport, NOT undo-able), `features/lora/` (LoRA adapter state), `features/voice/` (voice command runtime state). The `project` slice is wrapped with `redux-undo` (100-step history). Side effects (auto-save, Codex extraction, DuckDB dual-write) run in `app/listenerMiddleware.ts`, not in components or hooks.
+Redux Toolkit with feature-sliced slices: `features/project/`, `features/settings/`, `features/status/`, `features/writer/`, `features/versionControl/`, `features/featureFlags/`, `features/proForge/`, `features/plotBoard/`, `features/sceneComments/`, `features/progressTracker/`, `features/analytics/`, `features/mindMap/` (mind-map viewport, NOT undo-able), `features/lora/` (LoRA adapter state), `features/voice/` (voice command runtime state), `features/copilot/` (ephemeral chat state, NOT persisted, NOT undo-wrapped). The `project` slice is wrapped with `redux-undo` (100-step history). Side effects (auto-save, Codex extraction, DuckDB dual-write) run in `app/listenerMiddleware.ts`, not in components or hooks.
 
 **`addDebouncedListener` factory** (`listenerMiddleware.ts`): use this helper instead of writing raw `startListening` calls with delay. **Critical RTK constraint:** `listenerApi.getOriginalState()` can only be called synchronously before the first `await`. Always capture it as `const originalState = listenerApi.getOriginalState() as RootState` at the top before any `await listenerApi.delay(...)`.
 
@@ -165,7 +168,11 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 ### AI Services
 
-`geminiService.ts` is the primary adapter for legacy thunks. `aiProviderService.ts` provides the multi-provider abstraction (Gemini, OpenAI, Ollama, WebLLM, ONNX Runtime Web, Transformers.js). `features/project/aiThunkUtils.ts` provides a deduplicated async-thunk wrapper (service-level `_pendingRequests` Map).
+`geminiService.ts` is the primary adapter for legacy thunks. `aiProviderService.ts` provides the multi-provider abstraction (Gemini, OpenAI, OpenRouter, Claude, Grok, Ollama, WebLLM, ONNX Runtime Web, Transformers.js). `features/project/aiThunkUtils.ts` provides a deduplicated async-thunk wrapper (service-level `_pendingRequests` Map).
+
+**AI Execution Modes:** `services/ai/aiModeService.ts` — singleton managing `AiMode = 'hybrid' | 'cloud' | 'local' | 'eco'`. Mode persisted to `settings.aiMode`; synced from `listenerMiddleware` on change (no page reload). `AiModeIndicator` chip in Copilot header shows active mode + OpenRouter circuit-breaker state.
+
+**OpenRouter (Cloud 5):** `services/ai/providers/openrouterProvider.ts` — circuit breaker (4 × 429 → 5 min pause), RPM tracking, free-tier catalog (`:free` suffix = zero cost). Slots in after primary cloud provider in the routing chain.
 
 **AI constants:** `services/ai/aiConstants.ts` is the single source for `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS`, `LOCAL_INFERENCE_PROVIDERS`. Older per-constant files re-export from here and remain for import compatibility.
 
@@ -344,6 +351,20 @@ All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Docu
 
 **libraryBackupService:** one-click encrypted ZIP export (AES-GCM, `META.json` + `vault.bin`). Settings → Data.
 
+### Global AI Copilot (v2)
+
+Flag: `enableGlobalCopilot`. Redux slice: `features/copilot/copilotSlice.ts` (ephemeral, NOT persisted, NOT undo-wrapped). Hook: `hooks/useGlobalCopilot.ts`. Mount: `App.tsx` (lazy, `ErrorBoundary` + `Suspense`).
+
+**Services (`services/copilot/`):**
+- `copilotContextService.ts` — pure system-prompt builder from current view + project metadata
+- `insightGenerator.ts` — debounced heuristic analysis; result LRU-cached per section
+- `heuristicEngine.ts` — 8 built-in manuscript rules (tension-drop, underdeveloped-character, open-loop, slow-pacing, high-repetition, plot-hole, missing-world-context, overlength-scene); zero network calls
+- `actionApplier.ts` — `applyTextEdit(sectionId, newText)`: offset-safe rewrite dispatched into redux-undo; only runs when block ≥ 70 % of section length
+
+**UI (`components/copilot/`):** `CopilotPanel` (dialog/sidebar toggle, persisted to `localStorage`), `CopilotMessageList` (DOMPurify + micro-markdown renderer — no new runtime dep), `InlineAnnotationLayer` (badge inside `ManuscriptEditor`), `CopilotComposer`. ProForge: each `ReviewItemCard` has an ✦ Ask Copilot chip (pre-fills composer with review-item context).
+
+Docs: `docs/COPILOT.md` (feature guide), `docs/HEURISTIC-RULES.md` (8 rules catalogue).
+
 ### Voice Full Support
 
 Engines defined in `services/voice/voiceTypes.ts` (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`). Contract: `isAvailable()` → `initialize()` → use → `dispose()`. Web Speech API fallbacks: `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine` (zero downloads). WASM path (B-2, `enableVoiceWasm`): `WasmSttEngine` (Whisper.cpp) + `SileroVadEngine`; model download via `VoiceModelDownloadModal` + `VoiceCommandService.preloadModel(modelType)`.
@@ -388,6 +409,7 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
 - **B-1 (IDB encryption):** Passphrase UX complete (`IdbUnlockModal`, `PassphraseModal`). Actual IDB read/write integration for stores is Phase 4 (service-layer only currently).
 - **B-2 (Voice WASM):** Engine + download UI shipped. Remaining: E2E integration test coverage.
+- **SW version sync:** `public/sw.js` `APP_VERSION` is hardcoded and must be manually kept in sync with `package.json` `version` on every release. Long-term fix: move `sw.js` → `src/sw.ts` so Vite's `define` can inject `__APP_VERSION__` at build time.
 
 ## graphify
 
