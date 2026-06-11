@@ -40,7 +40,7 @@
 
 | Layer | Technology |
 |-------|------------|
-| Runtime | Node.js `>=22.0.0` (`.nvmrc`), pnpm `>=10.0.0` (`packageManager: pnpm@10.33.0`) |
+| Runtime | Node.js `>=22.0.0` (`.nvmrc`), pnpm `>=11.0.0` (`packageManager: pnpm@11.5.2`) |
 | Framework | React `^19.2.7`, TypeScript `~6.0.3` (strict) |
 | Build tool | Vite `^8.0.14` (`vite.config.ts`) |
 | Type checker | `tsgo` (TypeScript Go port) via `tsconfig.tsgo.json` with 4 checkers |

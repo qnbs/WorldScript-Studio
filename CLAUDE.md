@@ -70,7 +70,7 @@ Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 
 StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
 
-**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 10, Node ≥ 22. Four internal workspace packages (`@domain/ai-core`, `@domain/ui`, `collab-transport`, `@domain/worker-bus` in `packages/`) are consumed as `workspace:*` deps.
+**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 11, Node ≥ 22. Four internal workspace packages (`@domain/ai-core`, `@domain/ui`, `collab-transport`, `@domain/worker-bus` in `packages/`) are consumed as `workspace:*` deps.
 
 **Live:** `https://storycraft-studio-indol.vercel.app/` (Vercel, primary) · GitHub Pages: `https://qnbs.github.io/StoryCraft-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
 

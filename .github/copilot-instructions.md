@@ -19,7 +19,7 @@ StoryCraft Studio is an AI-powered creative writing application built as an offl
 - **Storage:** Dual IndexedDB via `services/storage/` (decomposed from `dbService.ts` in Phase 1); LZ-String compression + AES-256-GCM key encryption; `storageEncryptionService.ts` for at-rest IDB encryption (B-1, v1.19.0); `storageService.ts` switches browser vs Tauri filesystem
 - **Collaboration:** Yjs + `packages/collab-transport` (vendor fork of y-webrtc 10.3.0, RTCDataChannel E2E AES-256-GCM) for P2P real-time editing
 - **Desktop:** Tauri 2 (optional)
-- **Package manager:** pnpm@10.x
+- **Package manager:** pnpm@11.x
 - **Testing:** Vitest + @testing-library/react (unit), Playwright (E2E)
 
 ### Directory Structure
@@ -31,8 +31,8 @@ components/       → React view components (one per view)
 contexts/         → React context providers (one per major view + I18nContext + CommandExecutorContext)
 features/         → Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
 hooks/            → Custom hooks with view business logic (one hook per view)
-services/         → External adapters: geminiService, aiProviderService, dbService (dual IndexedDB + migration), storageService, collaborationService, epubApiService; **commands/** (palette registry), **keyboard/** (shortcut matching), **help/** (doc retrieval for AI), **settingsExchange** (settings JSON)
-locales/          → i18n source files (de, en, es, fr, it) × 15 JSON modules
+services/         → External adapters: geminiService, aiProviderService, dbService (dual IndexedDB + migration), storageService, collaborationService; **ai/** (aiModeService — execution modes, aiPolicy, aiRetry; **providers/** — openrouterProvider with circuit breaker); **copilot/** (heuristicEngine 8 rules, insightGenerator, copilotContextService, actionApplier); **commands/** (palette registry); **keyboard/** (shortcut matching); **help/** (doc retrieval for AI); **settingsExchange** (settings JSON)
+locales/          → i18n source files — de/en/es/fr/it (core) + ar/he (RTL Beta) + el/ja/pt/zh (Beta) × 15-20 JSON modules (2 594 keys × 11 locales)
 public/locales/   → i18n runtime files served at BASE_URL
 tests/            → Unit + E2E tests (Vitest + Playwright)
 types/            → Additional TypeScript type definitions
@@ -49,7 +49,7 @@ types.ts          → Core shared interfaces and types
 2. **Redux:** All state mutations go through Redux slices. Async operations use `createAsyncThunk`. Side effects (auto-save) run in the listener middleware. The `project` slice is wrapped with `redux-undo` for undo/redo.
    - `features/project/aiThunkUtils.ts` provides a reusable deduplicated async-thunk wrapper for AI requests.
 
-3. **AI Service:** `geminiService.ts` is the primary AI adapter. It handles API key loading/caching, retry logic (2 retries, exponential backoff for 429s), and prompt construction. All AI calls should go through this service or `aiProviderService.ts`.
+3. **AI Service:** `services/ai/index.ts` is the canonical entry (Vercel AI SDK layer). `geminiService.ts` is the primary legacy adapter. `aiProviderService.ts` provides the multi-provider abstraction (Gemini, OpenAI, OpenRouter, Claude, Grok, Ollama, WebLLM, ONNX, Transformers.js). **AI Execution Modes** (`aiModeService.ts`): `hybrid` | `cloud` | `local` | `eco` — control routing strategy, persisted to `settings.aiMode`. **OpenRouter** (`services/ai/providers/openrouterProvider.ts`): Cloud 5 in the routing chain, circuit breaker (4×429 → 5 min pause), free-tier catalog (`:free` suffix models). All cloud AI calls gated by `assertCloudAiAllowed` from `aiPolicy.ts`; retries via `withTransientRetry` in `aiRetry.ts`.
 
 4. **Storage:** `dbService.ts` wraps **dual** IndexedDB (state vs data stores, legacy migration) with compression (LZ-String for payloads > 10KB) and encryption (AES-256-GCM for API keys). `storageService.ts` provides a unified interface that auto-detects IndexedDB vs Tauri filesystem.
 
@@ -63,7 +63,9 @@ types.ts          → Core shared interfaces and types
 
 9. **Voice Full Support:** Gated behind `featureFlags.enableVoiceSupport` + `settings.voice.enabled`. Abstract engine pattern in `services/voice/voiceTypes.ts` (SttEngine, TtsEngine, VadEngine, WakeWordEngine, IntentEngine). `VoiceCommandService` singleton manages state machine (idle → listening → processing → speaking). Web Speech API fallbacks require zero downloads. Hooks: `useVoice`, `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation`.
 
-10. **Feature Flags:** 19 flags in `features/featureFlags/featureFlagsSlice.ts`. Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. All others default off. Do not use scattered `if (true)` hacks — all experimental features must go through a flag.
+10. **Feature Flags:** 21 flags in `features/featureFlags/featureFlagsSlice.ts`. Default **on**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2` (deprecated UI, retained for localStorage compat). All others default off. Key flags: `enableProForge`, `enableGlobalCopilot`, `enableVoiceSupport`, `enableDuckDbAnalytics`, `enableWorkerBusV2`. Do not use scattered `if (true)` hacks — all experimental features must go through a flag.
+
+11. **Global AI Copilot (v2):** `enableGlobalCopilot` flag. `CopilotPanel` (dialog/sidebar mode), `CopilotMessageList` (markdown rendering via DOMPurify), `InlineAnnotationLayer` (badge in ManuscriptEditor). Heuristic rules: `services/copilot/heuristicEngine.ts` (8 rules). Apply-to-chapter: `services/copilot/actionApplier.ts` (offset-safe edit, redux-undo, ≥70% length gate). ProForge integration: Ask-Copilot chip on each `ReviewItemCard`. Docs: `docs/COPILOT.md`, `docs/HEURISTIC-RULES.md`.
 
 ## Coding Standards
 

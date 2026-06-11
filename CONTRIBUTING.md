@@ -29,7 +29,7 @@ Thank you for your interest in contributing to StoryCraft Studio — an AI-power
 
 1. Install **Node.js 22+** LTS from [nodejs.org](https://nodejs.org/) (includes Corepack) or use **nvm-windows** and install `22` from [`.nvmrc`](.nvmrc).
 2. Open **PowerShell or CMD as Administrator** once and run: `corepack enable`
-3. In the repo folder: `corepack prepare pnpm@10.33.0 --activate` (version matches `packageManager` in [`package.json`](package.json); adjust if that field changes).
+3. In the repo folder: `corepack prepare pnpm@11.5.2 --activate` (version matches `packageManager` in [`package.json`](package.json); adjust if that field changes).
 4. Confirm: `pnpm -v` — then `pnpm install` and use `pnpm run …` for all scripts (hooks expect `pnpm` on `PATH`).
 
 If `corepack` is not recognized, reinstall Node or enable the “Tools for Native Modules” / standard installation so `corepack.cmd` is on `PATH`.

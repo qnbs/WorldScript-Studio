@@ -91,7 +91,7 @@ fnm install 22
 fnm default 22
 corepack enable
 cd ~/githubcursor/StoryCraft-Studio
-corepack prepare pnpm@10.33.0 --activate
+corepack prepare pnpm@11.5.2 --activate
 node -v   # v22.x
 pnpm -v
 ```
