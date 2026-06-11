@@ -5,6 +5,7 @@
 
 import type { PipelineStage, StageResult } from '../../../features/proForge/types';
 import type { AIProvider, AiModel } from '../../../types';
+import { getLocalFallbackModel, isEcoMode, shouldRouteLocally } from '../../ai/aiModeService';
 // QNBS-v3: type-only import — the singleton is loaded lazily in getGateway() so that running an
 // agent with an injected context.gateway (Node/MCP, tests) never eagerly pulls aiProviderService
 // and its browser-only deps (@domain/ai-core, localAiFacade, storageService) at module eval.
@@ -107,19 +108,35 @@ ${prompt}`;
   }
 
   // QNBS-v3: Builds AIRequestOptions from context.config — provider/model defaulting for pipeline agents.
+  // Respects the global AI execution mode: local/eco modes override cloud providers (G5).
   protected buildAiOpts(overrides?: {
     maxTokens?: number;
     signal?: AbortSignal;
   }): AIRequestOptions {
     const cfg = this.context.config;
-    const provider = (cfg.aiProvider || 'gemini') as AIProvider;
+    const LOCAL_PROVIDERS = new Set<string>(['webllm', 'onnx', 'ollama', 'transformers']);
+    const configuredProvider = (cfg.aiProvider || 'gemini') as AIProvider;
+
+    // QNBS-v3: Positive routing — when the AI execution mode mandates local inference and the
+    // agent's configured provider is a cloud provider, override to webllm (G5).
+    const provider: AIProvider =
+      shouldRouteLocally() && !LOCAL_PROVIDERS.has(configuredProvider)
+        ? 'webllm'
+        : configuredProvider;
+
     const modelMap: Partial<Record<AIProvider, AiModel>> = {
       gemini: 'gemini-2.5-flash',
       openai: 'gpt-4o-mini',
       anthropic: 'claude-haiku-4-5',
       grok: 'grok-3-mini',
     };
-    const model: AiModel = modelMap[provider] ?? 'gemini-2.5-flash';
+    // QNBS-v3: eco mode OR local routing override → use the local fallback model.
+    const routingOverrideActive = shouldRouteLocally() && !LOCAL_PROVIDERS.has(configuredProvider);
+    const model: AiModel =
+      isEcoMode() || routingOverrideActive
+        ? (getLocalFallbackModel() as AiModel)
+        : (modelMap[provider] ?? 'gemini-2.5-flash');
+
     return {
       model,
       provider,

@@ -7,6 +7,8 @@
 import type { AiCreativity } from '../../types';
 import type { AIRequestOptions } from '../aiProviderService';
 import { generateText } from '../aiProviderService';
+import { getActiveAiMode, getLocalFallbackModel, shouldRouteLocally } from './aiModeService';
+import { logRoutingDecision } from './routingLogger';
 
 // ---------------------------------------------------------------------------
 // Request / Result types
@@ -64,19 +66,40 @@ export interface InferenceGateway {
 // Default implementation — thin wrapper over aiProviderService
 // ---------------------------------------------------------------------------
 
+const _LOCAL_PROVIDERS = new Set<string>(['webllm', 'onnx', 'transformers', 'ollama']);
+
 export class DefaultInferenceGateway implements InferenceGateway {
   async generate(request: GenerateRequest): Promise<GenerateResult> {
     const { prompt, creativity = 'Balanced', options } = request;
 
-    // aiProviderService.generateText already handles: dedup, fallback chain,
+    // QNBS-v3: Positive routing — honour AI execution mode before forwarding to generateText (G6).
+    // generateText does the same check, but doing it here makes the gateway's routing decision
+    // visible in GenerateResult.provider without having to re-derive it from the returned text.
+    let resolvedOptions = options;
+    if (shouldRouteLocally() && !_LOCAL_PROVIDERS.has(options.provider)) {
+      const localModel = getLocalFallbackModel();
+      logRoutingDecision({
+        mode: getActiveAiMode(),
+        originalProvider: options.provider,
+        chosenProvider: 'webllm',
+        reason: 'mode-override',
+      });
+      resolvedOptions = {
+        ...options,
+        provider: 'webllm',
+        model: localModel as typeof options.model,
+      };
+    }
+
+    // aiProviderService.generateText handles: dedup, fallback chain,
     // withTransientRetry (2 attempts), assertCloudAiAllowed policy gate.
-    const text = await generateText(prompt, creativity, options);
+    const text = await generateText(prompt, creativity, resolvedOptions);
 
     return {
       text,
-      model: options.model,
-      provider: options.provider,
-      isFallback: false,
+      model: resolvedOptions.model,
+      provider: resolvedOptions.provider,
+      isFallback: resolvedOptions.provider !== options.provider,
     };
   }
 

@@ -9,6 +9,14 @@
 import { detectWebGpuSupport } from '@domain/ai-core';
 import { z } from 'zod';
 import type { AIProvider, AiCreativity, AiModel, GeminiSchema } from '../types';
+import {
+  getActiveAiMode,
+  getLocalFallbackModel,
+  getOpenRouterFallbackProvider,
+  getOpenRouterModel,
+  shouldRouteLocally,
+  shouldUseOpenRouter,
+} from './ai/aiModeService';
 import { assertCloudAiAllowed } from './ai/aiPolicy';
 import { resolveProviderFallbackChain } from './ai/hybridFallback';
 import {
@@ -16,6 +24,8 @@ import {
   normalizeOpenAiCompatibleBaseUrl,
   resolveOpenAiCompatibleRoot,
 } from './ai/modelNormalization';
+import { generateOpenRouterText, streamOpenRouter } from './ai/providers/openrouterProvider';
+import { logRoutingDecision } from './ai/routingLogger';
 import { attachCause, sanitizePromptValue, stripJsonFences } from './aiUtils';
 import {
   generateImage as generateImageGemini,
@@ -68,6 +78,9 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
   if (opts.signal === signal) return opts;
   return { ...opts, signal };
 }
+
+// QNBS-v3: Providers that run on-device — excluded from cloud-policy gate and ai-mode override.
+const _LOCAL_INFERENCE_PROVIDERS = new Set<string>(['webllm', 'onnx', 'transformers', 'ollama']);
 
 // ─── Fallback reason tracking ────────────────────────────────────────────────
 // QNBS-v3: Records why the last fallback occurred so the UI can explain it to the user.
@@ -261,6 +274,15 @@ async function streamProvider(
   switch (oWithLora.provider) {
     case 'openai':
       return streamOpenAI(prompt, oWithLora, callbacks);
+    case 'openrouter': {
+      // QNBS-v3: OpenRouter streaming — SSE path same as OpenAI.
+      const apiKey = await storageService.getApiKey('openrouter');
+      if (!apiKey)
+        throw new Error(
+          'NO_API_KEY: OpenRouter API key missing. Please enter it in Settings → AI → OpenRouter.',
+        );
+      return streamOpenRouter(prompt, oWithLora, callbacks, apiKey);
+    }
     case 'ollama':
       return streamOllama(prompt, oWithLora, callbacks);
     case 'anthropic':
@@ -308,6 +330,16 @@ async function generateTextSingleProvider(
       });
       return providerTextSchema.parse({ text: result }).text;
     }
+    case 'openrouter': {
+      // QNBS-v3: OpenRouter — load key at call time (encrypted at rest, never in state).
+      const apiKey = await storageService.getApiKey('openrouter');
+      if (!apiKey)
+        throw new Error(
+          'NO_API_KEY: OpenRouter API key missing. Please enter it in Settings → AI → OpenRouter.',
+        );
+      const text = await generateOpenRouterText(prompt, o, apiKey);
+      return providerTextSchema.parse({ text }).text;
+    }
     case 'ollama': {
       let result = '';
       await streamOllama(prompt, o, {
@@ -353,8 +385,48 @@ export async function generateText(
   opts: AIRequestOptions,
   signal?: AbortSignal,
 ): Promise<string> {
-  const { key, controller } = _deduplicateRequest(opts.provider, opts.model, prompt);
-  const o = withMergedAbortSignal(opts, signal ?? controller.signal);
+  // QNBS-v3: Positive routing — apply AI execution mode overrides before dedup keying (G2).
+  // Priority: (1) local-only modes → webllm; (2) OpenRouter enabled → prefer OR for cloud calls;
+  // (3) passthrough — use whatever provider the caller specified.
+  let resolvedOpts = opts;
+  if (shouldRouteLocally() && !_LOCAL_INFERENCE_PROVIDERS.has(opts.provider)) {
+    const localModel = getLocalFallbackModel();
+    logRoutingDecision({
+      mode: getActiveAiMode(),
+      originalProvider: opts.provider,
+      chosenProvider: 'webllm',
+      reason: 'mode-override',
+    });
+    resolvedOpts = { ...opts, provider: 'webllm', model: localModel as AIRequestOptions['model'] };
+  } else if (
+    shouldUseOpenRouter() &&
+    !_LOCAL_INFERENCE_PROVIDERS.has(opts.provider) &&
+    opts.provider !== 'openrouter'
+  ) {
+    // QNBS-v3: OpenRouter routing — when enabled and caller specified a cloud provider other than
+    // openrouter, promote to OpenRouter (free-tier or user-configured model).
+    const orModel = getOpenRouterModel();
+    logRoutingDecision({
+      mode: getActiveAiMode(),
+      originalProvider: opts.provider,
+      chosenProvider: 'openrouter',
+      reason: 'openrouter-preferred',
+    });
+    resolvedOpts = { ...opts, provider: 'openrouter', model: orModel as AIRequestOptions['model'] };
+  } else {
+    logRoutingDecision({
+      mode: getActiveAiMode(),
+      originalProvider: opts.provider,
+      chosenProvider: opts.provider,
+      reason: 'passthrough',
+    });
+  }
+  const { key, controller } = _deduplicateRequest(
+    resolvedOpts.provider,
+    resolvedOpts.model,
+    prompt,
+  );
+  const o = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
   const chain = resolveProviderFallbackChain(o);
   let lastError: unknown;
   try {
@@ -382,6 +454,35 @@ export async function generateText(
         lastError = err;
         const msg = err instanceof Error ? err.message : String(err);
         _lastFallbackReason = `Provider ${nextProvider ?? 'unknown'} failed: ${msg}`;
+        // QNBS-v3: OpenRouter rate-limit or circuit-open — log and promote to its configured fallback
+        // provider rather than continuing blindly down the chain to avoid masking the root cause.
+        if (
+          nextProvider === 'openrouter' &&
+          (msg.startsWith('OPENROUTER_RATE_LIMITED') || msg.startsWith('OPENROUTER_CIRCUIT_OPEN'))
+        ) {
+          const fallback = getOpenRouterFallbackProvider();
+          logRoutingDecision({
+            mode: getActiveAiMode(),
+            originalProvider: 'openrouter',
+            chosenProvider: fallback,
+            reason: 'openrouter-fallback',
+          });
+          try {
+            const { withTransientRetry } = await import('./ai/aiRetry');
+            const result = await withTransientRetry(
+              () =>
+                generateTextSingleProvider(prompt, creativity, {
+                  ...o,
+                  provider: fallback as AIRequestOptions['provider'],
+                }),
+              { attempts: 2 },
+            );
+            _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
+            return result;
+          } catch (fallbackErr) {
+            lastError = fallbackErr;
+          }
+        }
         if (i === chain.length - 1) break;
       }
     }

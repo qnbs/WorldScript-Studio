@@ -35,6 +35,8 @@ const CATEGORY_SORT: CommandCategory[] = [
   'projectManagement',
   'aiActions',
   'settings',
+  'appearance',
+  'accessibility',
   'help',
   'customUser',
 ];
@@ -95,6 +97,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       currentView,
       wordCountApprox,
       featureFlags,
+      aiMode: settings.aiMode,
+      appearancePreset: settings.appearancePreset,
+      advancedEditor: {
+        distractionFree: settings.advancedEditor.distractionFree,
+        typewriterMode: settings.advancedEditor.typewriterMode,
+        zenMode: settings.advancedEditor.zenMode,
+        focusMode: settings.advancedEditor.focusMode,
+      },
+      accessibility: {
+        highContrast: settings.accessibility.highContrast,
+        reducedMotion: settings.accessibility.reducedMotion,
+        largeText: settings.accessibility.largeText,
+      },
     }),
     [
       dispatch,
@@ -108,6 +123,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       currentView,
       wordCountApprox,
       featureFlags,
+      settings.aiMode,
+      settings.appearancePreset,
+      settings.advancedEditor,
+      settings.accessibility,
     ],
   );
 

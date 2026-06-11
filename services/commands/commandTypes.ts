@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { AppDispatch } from '../../app/store';
 import type { Language } from '../../contexts/I18nContext';
 import type { FeatureFlagsState } from '../../features/featureFlags/featureFlagsSlice';
-import type { View } from '../../types';
+import type { AiMode, AppearancePreset, View } from '../../types';
 
 /** Aligns with `I18nContextType['t']` for assignability from `useTranslation().t`. */
 export type I18nTranslate = <T = string>(key: string, replacements?: Record<string, string>) => T;
@@ -13,6 +13,8 @@ export type CommandCategory =
   | 'projectManagement'
   | 'editor'
   | 'settings'
+  | 'appearance'
+  | 'accessibility'
   | 'help'
   | 'global'
   | 'customUser';
@@ -24,6 +26,8 @@ export const COMMAND_CATEGORY_I18N: Record<CommandCategory, string> = {
   projectManagement: 'palette.category.actions',
   editor: 'palette.category.editor',
   settings: 'palette.category.settings',
+  appearance: 'palette.category.appearance',
+  accessibility: 'palette.category.accessibility',
   help: 'palette.category.help',
   global: 'palette.category.global',
   customUser: 'palette.category.custom',
@@ -41,6 +45,23 @@ export interface CommandRuntimeDeps {
   currentView: View;
   wordCountApprox: number;
   featureFlags: FeatureFlagsState;
+  /** Current AI execution mode — used by AI mode switch commands. */
+  aiMode: AiMode;
+  /** Current appearance preset — used by preset switch commands. */
+  appearancePreset: AppearancePreset;
+  /** Current advanced-editor settings snapshot (distractionFree, typewriterMode, etc.). */
+  advancedEditor: {
+    distractionFree: boolean;
+    typewriterMode: boolean;
+    zenMode: boolean;
+    focusMode: boolean;
+  };
+  /** Current accessibility settings snapshot. */
+  accessibility: {
+    highContrast: boolean;
+    reducedMotion: boolean;
+    largeText: boolean;
+  };
 }
 
 export interface PaletteCommandModel {

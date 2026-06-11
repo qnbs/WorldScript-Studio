@@ -9,6 +9,7 @@ import {
   WorkerBus,
 } from '@domain/ai-core';
 import { adaptiveAiEngine } from './ai/adaptiveAiEngine';
+import { notifyLocalModelsReady } from './ai/aiModeService';
 import { gpuResourceManager } from './ai/gpuResourceManager';
 import { inferenceProgressEmitter } from './ai/inferenceProgressEmitter';
 import type { ComputeBackend } from './ai/localAiDeviceProfiler';
@@ -162,6 +163,13 @@ export async function generateLocalText(
     }
 
     const elapsedMs = performance.now() - startedAt;
+
+    // QNBS-v3: Phase 2 — notify aiModeService that real local models are available so hybrid
+    // mode knows fallback is possible when offline. Only fires for actual inference layers
+    // (webllm/onnx/transformers), not the heuristic stub (G4).
+    if (result.layer !== 'heuristic') {
+      notifyLocalModelsReady(true);
+    }
 
     // QNBS-v3: CodeAnt — record latency against the ACTUAL backend/model that produced the response
     //          (not the adaptively-planned one), so a fallback doesn't poison adaptive history.

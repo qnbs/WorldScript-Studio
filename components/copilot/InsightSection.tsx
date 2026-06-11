@@ -5,6 +5,7 @@
  */
 
 import { type FC, useEffect, useRef, useState } from 'react';
+import { useTransientUiStore } from '../../app/transientUiStore';
 import { useAnnounce } from '../../contexts/LiveRegionContext';
 import type { UseGlobalCopilotReturn } from '../../hooks/useGlobalCopilot';
 import type { HeuristicFinding } from '../../services/copilot/heuristicEngine';
@@ -25,6 +26,16 @@ export const InsightSection: FC<InsightSectionProps> = ({ insights, copilot, onN
   const [expanded, setExpanded] = useState(false);
   const announce = useAnnounce();
   const prevCountRef = useRef(0);
+  const forceExpand = useTransientUiStore((s) => s.copilotInsightExpanded);
+  const setCopilotInsightExpanded = useTransientUiStore((s) => s.setCopilotInsightExpanded);
+
+  // QNBS-v3: CodeAnt — badge click in InlineAnnotationLayer sets this; consume once then reset.
+  useEffect(() => {
+    if (forceExpand) {
+      setExpanded(true);
+      setCopilotInsightExpanded(false);
+    }
+  }, [forceExpand, setCopilotInsightExpanded]);
 
   // QNBS-v3: Announce new insights politely so screen-reader users are notified.
   useEffect(() => {

@@ -1,8 +1,11 @@
 import type { AIProvider, PrivacySettings } from '../../types';
 import { storageService } from '../storageService';
+import { getActiveAiMode } from './aiModeService';
 
 const LORA_LOCAL_PROVIDERS = new Set(['webllm', 'onnx', 'transformers', 'ollama']);
 const LOCAL_INFERENCE_PROVIDERS = new Set(['webllm', 'onnx', 'transformers', 'ollama']);
+// QNBS-v3: openrouter is a cloud provider — included in the cloud-gate check below, NOT here.
+// Kept separate to make audit clear: local providers never need a key; cloud providers do.
 
 /**
  * Throws if the given model/provider is cloud-hosted.
@@ -26,6 +29,11 @@ export function assertCloudAiAllowedSync(
   privacy: PrivacySettings | undefined,
 ): void {
   if (LOCAL_INFERENCE_PROVIDERS.has(provider)) return;
+  // QNBS-v3: AI execution mode gates cloud access independently of privacy.localStorageOnly.
+  const mode = getActiveAiMode();
+  if (mode === 'local' || mode === 'eco') {
+    throw new Error(`Cloud provider blocked: AI mode is "${mode}" (local-only).`);
+  }
   if (!privacy) return;
   if (privacy.localStorageOnly) {
     throw new Error('Cloud provider blocked: local-only mode is active.');

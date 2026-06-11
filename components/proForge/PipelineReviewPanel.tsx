@@ -6,8 +6,12 @@
 
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { useTransientUiStore } from '../../app/transientUiStore';
 import { useAnnounce } from '../../contexts/LiveRegionContext';
 import { useProForgeViewContext } from '../../contexts/ProForgeViewContext';
+import { copilotActions } from '../../features/copilot/copilotSlice';
+import { selectEnableGlobalCopilot } from '../../features/featureFlags/featureFlagsSlice';
 import { proForgeActions } from '../../features/proForge/proForgeSlice';
 import type { ReviewItem, ReviewItemStatus } from '../../features/proForge/types';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -323,6 +327,9 @@ function ReviewItemCard({
   onStatusChange: (id: string, status: ReviewItemStatus) => void;
 }) {
   const { t } = useTranslation();
+  const dispatch = useAppDispatch();
+  const isCopilotEnabled = useAppSelector(selectEnableGlobalCopilot);
+  const setCopilotDraftMessage = useTransientUiStore((s) => s.setCopilotDraftMessage);
   const [expanded, setExpanded] = useState(false);
 
   const statusButtons: { status: ReviewItemStatus; labelKey: string; color: string }[] = [
@@ -386,7 +393,7 @@ function ReviewItemCard({
           )}
 
           {/* Status Actions */}
-          <div className="flex gap-2 mt-2">
+          <div className="flex flex-wrap gap-2 mt-2">
             {statusButtons.map((btn) => (
               <button
                 type="button"
@@ -407,6 +414,25 @@ function ReviewItemCard({
                 {t(btn.labelKey)}
               </button>
             ))}
+            {/* QNBS-v3: Phase 3 — Ask Copilot chip pre-fills the Copilot composer with the
+                review item context so the user can get an explanation without copy-pasting. */}
+            {isCopilotEnabled && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCopilotDraftMessage(
+                    t('copilot.askAboutReviewItem', {
+                      severity: item.severity,
+                      description: item.description,
+                    }),
+                  );
+                  dispatch(copilotActions.setOpen(true));
+                }}
+                className="ms-auto px-2 py-0.5 text-xs rounded-sc-sm border border-[var(--sc-border-subtle)] text-[var(--sc-accent)] hover:bg-[var(--sc-surface-elevated)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+              >
+                ✦ {t('copilot.askCopilot')}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { ICONS } from '../../constants';
 import { useManuscriptViewContext } from '../../contexts/ManuscriptViewContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useVoiceDictation } from '../../hooks/useVoiceDictation';
+import { InlineAnnotationLayer } from '../copilot/InlineAnnotationLayer';
 import { DebouncedInput } from '../ui/DebouncedInput';
 import { Textarea } from '../ui/Textarea';
 
@@ -277,6 +278,8 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
         />
       </div>
       <div className="relative flex-grow">
+        {/* QNBS-v3: Phase 2 — show insight badge when there are findings for this chapter */}
+        <InlineAnnotationLayer sectionTitle={activeSection.title} />
         <Textarea
           ref={editorRef}
           value={activeSection.content}

@@ -360,6 +360,12 @@ export interface OutlineSection {
 export type Theme = 'dark' | 'light' | 'auto';
 /** Creative appearance presets — map to `body` classes in App (`.appearance-sepia`, …). */
 export type AppearancePreset = 'default' | 'sepia' | 'fantasy' | 'romance';
+/**
+ * AI execution mode — controls whether requests are routed to cloud providers,
+ * local on-device models, or resolved automatically (hybrid smart routing).
+ * Mirrors the CannaGuide-2025 AiMode pattern (localRoutingService ADR).
+ */
+export type AiMode = 'hybrid' | 'cloud' | 'local' | 'eco';
 export type EditorFont = 'serif' | 'sans-serif' | 'monospace' | 'custom';
 export type AiCreativity = 'Focused' | 'Balanced' | 'Imaginative';
 export type AiModel =
@@ -412,6 +418,8 @@ export type AIProvider =
   | 'anthropic'
   | 'grok'
   | 'ollama'
+  /** OpenRouter — unified OpenAI-compatible gateway with free-tier models and many open-source providers. */
+  | 'openrouter'
   /** Fully in-browser inference (WebLLM / Transformers.js stack in @domain/ai-core). */
   | 'webllm'
   /** ONNX Runtime Web — CPU/WASM inference, no API key needed. */
@@ -638,10 +646,30 @@ export interface VoiceSettings {
   voiceWasmDownloadError?: string;
 }
 
+/** OpenRouter provider settings — key stored encrypted, model controls free-vs-paid selection. */
+export interface OpenRouterSettings {
+  /** Whether OpenRouter is enabled as a provider in the routing chain. */
+  enabled: boolean;
+  /**
+   * OpenRouter API key (encrypted at rest via IDB AES-256-GCM when enableIdbAtRestEncryption is on).
+   * Never logged; sanitizeLogContext redacts it automatically.
+   */
+  apiKey: string;
+  /**
+   * Preferred model identifier. Use `:free` suffix for the free tier
+   * (e.g. `"deepseek/deepseek-r1:free"`, `"meta-llama/llama-3.3-70b-instruct:free"`).
+   */
+  preferredModel: string;
+}
+
 export interface Settings {
   // Basic Settings
   theme: Theme;
   appearancePreset: AppearancePreset;
+  /** AI execution routing mode — hybrid (default), cloud-only, local-only, or eco (tiny models). */
+  aiMode: AiMode;
+  /** OpenRouter cloud provider settings — enabled/disabled, API key, preferred model. */
+  openRouter?: OpenRouterSettings;
   editorFont: EditorFont;
   fontSize: number;
   lineSpacing: number;

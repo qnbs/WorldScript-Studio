@@ -30,6 +30,13 @@ class EcoModeService {
     if (this.isEcoMode() !== prev) this.notify(this.isEcoMode());
   }
 
+  // QNBS-v3: Bridge from aiModeService — when Redux aiMode changes to/from 'eco', sync this
+  // service so all eco consumers (voice, adaptive AI, GpuMetricsPanel) stay consistent (G3).
+  setAiModeEco(active: boolean): void {
+    if (active) this.setEcoModeExplicit(true);
+    else this.clearExplicitEcoMode();
+  }
+
   isEcoMode(): boolean {
     if (this.explicitEcoMode !== null) return this.explicitEcoMode;
     // Auto: eco when battery is low
@@ -58,7 +65,18 @@ class EcoModeService {
       this.cachedBatteryLevel = battery.level;
       battery.addEventListener('levelchange', () => {
         this.cachedBatteryLevel = battery.level;
-        this.notify(this.isEcoMode());
+        const nowEco = this.isEcoMode();
+        this.notify(nowEco);
+        // QNBS-v3: Back-sync battery auto-eco to Redux aiMode so the Settings picker reflects
+        // reality and all routing code (aiModeService) stays consistent (G3 eco bridge).
+        void Promise.all([
+          import('../../app/storeRef'),
+          import('../../features/settings/settingsSlice'),
+        ]).then(([{ appStoreRef }, { settingsActions }]) => {
+          const store = appStoreRef.current;
+          if (!store) return;
+          store.dispatch(settingsActions.setAiMode(nowEco ? 'eco' : 'hybrid'));
+        });
       });
     } catch {
       // Battery API unavailable — stay in auto mode (not eco by default)

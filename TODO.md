@@ -8,6 +8,49 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## AI Execution Mode — Audit, Perfection & OpenRouter (branch: `feat/copilot-ultimate-v2-phase2`)
+
+> Plan: `.claude/plans/storycraft-studio-recursive-valiant.md`
+> All 8 implementation phases complete. Remaining: follow-up UI, tests, PR.
+
+### ✅ Completed (2026-06-11)
+- ✅ **Phase 0** — Cold-start seed: `index.tsx` seeds `aiModeService` from persisted Redux state on startup (G1, commit `97a6d83`)
+- ✅ **Phase 1** — Positive routing: `shouldRouteLocally()` wired into `generateText()` + `DefaultInferenceGateway.generate()` (G2, commit `6f0cca1`)
+- ✅ **Phase 1 (OpenRouter)** — Full OpenRouter provider: circuit breaker (4 × 429 → 5 min), exponential backoff + Retry-After, RPM tracking, free-model detection; `shouldUseOpenRouter()` in routing chain
+- ✅ **Phase 2** — `notifyLocalModelsReady()` wired from `localAiFacade.ts` after successful inference (G4)
+- ✅ **Phase 3** — Eco bridge: `ecoModeService.setAiModeEco()` ↔ Redux aiMode listener; battery auto-eco back-syncs to Redux via `appStoreRef` (G3, G7)
+- ✅ **Phase 4** — ProForge `baseAgent.ts` honours `shouldRouteLocally()` + `isEcoMode()` in `buildAiOpts()` (G5)
+- ✅ **Phase 5** — Routing observability: `services/ai/routingLogger.ts` with `logRoutingDecision()` called at every routing branch (G8)
+- ✅ **Phase 6** — `AiModeIndicator` component in Copilot panel header; OpenRouter circuit/RPM status; 2583 i18n keys × 11 locales (G9)
+- ✅ **Phase 7** — Unit tests: `aiModeService.test.ts` (25), `routingLogger.test.ts` (5), `ecoModeBridge.test.ts` (13), `openrouterProvider.test.ts` (6) — all pass
+- ✅ **Settings state** — `OpenRouterSettings` type in `types.ts`; `settingsSlice` reducer + `DEFAULT_OPENROUTER_SETTINGS`; `idbProjectStore.ts` backfill guard
+
+### ✅ Also completed (2026-06-11, this session)
+- ✅ **P0** — All phases committed and pushed; branch `feat/copilot-ultimate-v2-phase2` up to date
+- ✅ **P1** — `components/settings/OpenRouterSection.tsx` created; wired into `SettingsView.tsx` NAV_GROUPS (aiModels group) + navCategories + renderContent; 12 new i18n keys × 11 locales (2594 keys total)
+- ✅ **P3 (partial)** — `baseAgent.test.ts` extended with 4 routing tests (`shouldRouteLocally()=true` → `provider: 'webllm'`); fixed underlying bug in `baseAgent.ts` (model not set to fallback model when routing override active)
+- ✅ **P4** — Already wired: `aiProviderService.ts case 'openrouter'` already uses `storageService.getApiKey('openrouter')`
+
+### ⬜ Remaining (next sprint)
+
+**Dependency-Hygiene Backlog** (low-urgency, non-blocking, next free session)
+- ⬜ **`.npmrc` Security Hardening** — add `strict-dep-builds=true`, `block-exotic-subdeps=true`, `minimum-release-age=10080` (7-day quarantine) for pnpm 11 hardened installs
+- ⬜ **pnpm override housekeeping** — after `@storybook/test-runner` upgrades to jest-process-manager 1.x (drops wait-on@7), remove the direct lockfile patch on `joi` and rely on normal resolution
+- ⬜ **Renovate grouping** — group `@storybook/*` bumps together so the test-runner chain (jest-process-manager → wait-on → joi) is upgraded atomically
+- ⬜ **Moderate audit threshold** — bump CI `pnpm audit --audit-level` from `high` to `moderate` once known medium advisories (joi@17, wait-on) are fully out of the dep tree
+- ⬜ **AUDIT.md "Known Overrides" table** — document `wait-on@7.2.0 → joi@18.2.1` lockfile patch with GHSA-q7cg-457f-vx79 reference and justification
+
+**P2 — Command Palette integration**
+- ⬜ Register command `ai.mode.openrouter.toggle` — dispatches `settingsActions.setOpenRouter({ enabled: !current })`
+- ⬜ Register command `ai.mode.openrouter.resetCircuit` — calls `resetOpenRouterCircuit()` + toast
+- ⬜ Add to `services/commands/commandDefinitions.ts`
+
+**P3 — Remaining test coverage**
+- ⬜ Add `tests/unit/settings/openRouterSection.test.tsx` — toggle enable, key input, model selector
+- ⬜ Run `pnpm exec tsx scripts/audit-feature-parity.ts` — must report 0 drifts
+
+---
+
 ## v1.21.0 — Integrity & Hardening Cycle (2026-06-10) — DELIVERED (PR #104, pending merge)
 
 > Master Plan: `.claude/plans/master-prompt-storycraft-studio-glistening-pnueli.md` (Deep Audit 2026-06-09, findings F-1…F-9).

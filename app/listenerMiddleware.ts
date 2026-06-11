@@ -532,6 +532,39 @@ listenerMiddleware.startListening({
   },
 });
 
+// QNBS-v3: Sync AI execution mode from Redux settings into both routing singletons.
+// aiModeService drives provider routing; ecoModeService drives voice/adaptive-AI/GPU consumers.
+// Both must stay in lock-step to prevent silent eco-mode divergence (G3 bridge).
+listenerMiddleware.startListening({
+  predicate: (_action, curr, prev) => {
+    return (curr as RootState).settings?.aiMode !== (prev as RootState).settings?.aiMode;
+  },
+  effect: async (_action, listenerApi) => {
+    const state = listenerApi.getState() as RootState;
+    const mode = state.settings?.aiMode ?? 'hybrid';
+    const { setActiveAiMode } = await import('../services/ai/aiModeService');
+    setActiveAiMode(mode);
+    // QNBS-v3: Bridge eco mode — keeps voice/adaptive-AI/GpuMetricsPanel consumers in sync.
+    const { ecoModeService } = await import('../services/ai/ecoModeService');
+    ecoModeService.setAiModeEco(mode === 'eco');
+  },
+});
+
+// QNBS-v3: Sync OpenRouter config into aiModeService when enabled flag or preferred model changes.
+listenerMiddleware.startListening({
+  predicate: (_action, curr, prev) => {
+    const c = (curr as RootState).settings?.openRouter;
+    const p = (prev as RootState).settings?.openRouter;
+    return c?.enabled !== p?.enabled || c?.preferredModel !== p?.preferredModel;
+  },
+  effect: async (_action, listenerApi) => {
+    const state = listenerApi.getState() as RootState;
+    const or = state.settings?.openRouter;
+    const { setOpenRouterConfig } = await import('../services/ai/aiModeService');
+    setOpenRouterConfig(or?.enabled ?? false, or?.preferredModel ?? 'deepseek/deepseek-r1:free');
+  },
+});
+
 export const startAppListening = listenerMiddleware.startListening as TypedStartListening<
   RootState,
   AppDispatch

@@ -3,8 +3,9 @@
 
 import type { FC } from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { useAppSelector } from '../../app/hooks';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { selectEnableAppHealthPanel } from '../../features/featureFlags/featureFlagsSlice';
+import { settingsActions } from '../../features/settings/settingsSlice';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
   type DeviceClass,
@@ -37,6 +38,7 @@ function deviceClassColor(cls: DeviceClass): string {
 
 export const GpuMetricsPanel: FC = () => {
   const { t } = useTranslation();
+  const dispatch = useAppDispatch();
   const enabled = useAppSelector(selectEnableAppHealthPanel);
 
   const [state, setState] = useState<GpuState>({
@@ -66,7 +68,9 @@ export const GpuMetricsPanel: FC = () => {
   if (!enabled) return null;
 
   function handleEcoToggle() {
-    ecoModeService.setEcoModeExplicit(!state.isEco);
+    // QNBS-v3: Route through Redux so aiModeService + ecoModeService both update via the
+    // aiMode listener — avoids silent divergence between Settings picker and this toggle (G7).
+    dispatch(settingsActions.setAiMode(state.isEco ? 'hybrid' : 'eco'));
     setState((prev) => ({ ...prev, isEco: !prev.isEco }));
   }
 

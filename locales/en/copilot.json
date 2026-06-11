@@ -53,5 +53,14 @@
   "copilot.insight.missingWorld.title": "World entry underspecified",
   "copilot.insight.missingWorld.desc": "{entry} appears in your manuscript but its profile is only {pct}% complete.",
   "copilot.insight.overlengthScene.title": "Unusually long chapter",
-  "copilot.insight.overlengthScene.desc": "\"{title}\" is {times}× longer than your average chapter."
+  "copilot.insight.overlengthScene.desc": "\"{title}\" is {times}× longer than your average chapter.",
+  "copilot.sidebarMode": "Dock sidebar",
+  "copilot.dialogMode": "Float panel",
+  "copilot.apply": "Apply to chapter",
+  "copilot.applyingChange": "Applying…",
+  "copilot.changeApplied": "Change applied — press Ctrl+Z to undo.",
+  "copilot.changeApplyFailed": "Could not apply — the text may have changed.",
+  "copilot.annotationCount": "{count} insight for this chapter",
+  "copilot.askCopilot": "Ask Copilot",
+  "copilot.askAboutReviewItem": "ProForge flagged this as {severity}: \"{description}\". Can you explain the concern and suggest a concrete fix?"
 }

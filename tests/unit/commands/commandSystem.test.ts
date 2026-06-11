@@ -69,6 +69,15 @@ function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {
     currentView: 'dashboard',
     wordCountApprox: 0,
     featureFlags: { ...defaultFeatureFlags },
+    aiMode: 'hybrid',
+    appearancePreset: 'default',
+    advancedEditor: {
+      distractionFree: false,
+      typewriterMode: false,
+      zenMode: false,
+      focusMode: false,
+    },
+    accessibility: { highContrast: false, reducedMotion: false, largeText: false },
     ...overrides,
   };
 }
@@ -223,11 +232,12 @@ describe('getStaticCommandDefinitions', () => {
     expect(deps.navigate).toHaveBeenCalledWith('dashboard');
   });
 
-  it('set-theme-toggle is visible only when theme is dark', () => {
+  it('set-theme-dark is visible only when theme is not dark', () => {
     const defs = getStaticCommandDefinitions();
-    const toggle = defs.find((d) => d.id === 'set-theme-toggle');
-    expect(toggle!.when!(makeDeps({ theme: 'dark' }))).toBe(true);
-    expect(toggle!.when!(makeDeps({ theme: 'light' }))).toBe(false);
+    const toggle = defs.find((d) => d.id === 'set-theme-dark');
+    // QNBS-v3: old id was set-theme-toggle; renamed to set-theme-dark with explicit when guards
+    expect(toggle!.when!(makeDeps({ theme: 'light' }))).toBe(true);
+    expect(toggle!.when!(makeDeps({ theme: 'dark' }))).toBe(false);
   });
 
   // QNBS-v3: enableCrossProjectSearch promoted to permanent core — command is always available.
@@ -335,16 +345,17 @@ describe('collectAllDefinitions', () => {
 
 describe('buildPaletteCommandModels', () => {
   it('excludes commands whose when() condition is false', () => {
-    // set-theme-toggle has when: (deps) => deps.theme === 'dark'
-    const deps = makeDeps({ theme: 'light' });
+    // set-theme-dark is hidden when already on dark theme
+    const deps = makeDeps({ theme: 'dark' });
     const models = buildPaletteCommandModels(deps);
-    expect(models.some((m) => m.id === 'set-theme-toggle')).toBe(false);
+    expect(models.some((m) => m.id === 'set-theme-dark')).toBe(false);
   });
 
   it('includes commands whose when() condition is true', () => {
-    const deps = makeDeps({ theme: 'dark' });
+    // set-theme-dark is shown when on light theme
+    const deps = makeDeps({ theme: 'light' });
     const models = buildPaletteCommandModels(deps);
-    expect(models.some((m) => m.id === 'set-theme-toggle')).toBe(true);
+    expect(models.some((m) => m.id === 'set-theme-dark')).toBe(true);
   });
 
   it('includes commands without a when() guard', () => {
@@ -395,9 +406,9 @@ describe('runCommandById', () => {
   });
 
   it('returns false when command when() condition is false', () => {
-    // set-theme-toggle is only visible in dark mode
-    const deps = makeDeps({ theme: 'light' });
-    expect(runCommandById('set-theme-toggle', deps)).toBe(false);
+    // set-theme-dark is only visible when NOT on dark theme
+    const deps = makeDeps({ theme: 'dark' });
+    expect(runCommandById('set-theme-dark', deps)).toBe(false);
   });
 
   it('returns true and executes command for valid id', () => {

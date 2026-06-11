@@ -29,6 +29,20 @@ export {
   ORCHESTRATION_READY_PROVIDERS,
 } from './aiConstants';
 export { aiInferenceCacheService } from './aiInferenceCacheService';
+export {
+  getActiveAiMode,
+  getLocalFallbackModel,
+  getLocalModelsReady,
+  getOpenRouterFallbackProvider,
+  getOpenRouterModel,
+  isCloudOnlyMode,
+  isEcoMode,
+  notifyLocalModelsReady,
+  setActiveAiMode,
+  setOpenRouterConfig,
+  shouldRouteLocally,
+  shouldUseOpenRouter,
+} from './aiModeService';
 export { assertCloudAiAllowed } from './aiPolicy';
 export {
   type AiTaskType,
@@ -82,4 +96,13 @@ export {
   providerToKind,
   type StoryCraftLanguageModelConfig,
 } from './providerFactory';
+export {
+  getApproxRpm,
+  isCircuitOpen,
+  isOpenRouterFreeModel,
+  OPENROUTER_FREE_MODELS,
+  type OpenRouterFreeModel,
+  resetOpenRouterCircuit,
+} from './providers/openrouterProvider';
+export { logRoutingDecision, type RoutingDecision, type RoutingReason } from './routingLogger';
 export { STORYCRAFT_COMPLETION_URL, storyCraftCompletionFetch } from './storyCraftCompletionFetch';

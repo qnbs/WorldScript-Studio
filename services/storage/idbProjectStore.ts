@@ -35,6 +35,8 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   const validSettings = {
     theme: 'dark',
     appearancePreset: 'default',
+    // QNBS-v3: aiMode added in v1.22 — backfill for older persisted settings that lack the field.
+    aiMode: 'hybrid',
     editorFont: 'serif',
     fontSize: 16,
     lineSpacing: 1.6,
@@ -146,6 +148,14 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
       preloadContent: true,
       lazyLoadImages: true,
       offlineMode: false,
+    };
+  }
+  // QNBS-v3: openRouter added in OpenRouter integration — backfill for older persisted settings.
+  if (!validSettings.openRouter || typeof validSettings.openRouter !== 'object') {
+    validSettings.openRouter = {
+      enabled: false,
+      apiKey: '',
+      preferredModel: 'deepseek/deepseek-r1:free',
     };
   }
 

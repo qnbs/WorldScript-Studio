@@ -39,7 +39,7 @@ describe('COMMAND_CATEGORY_I18N', () => {
     expect(COMMAND_CATEGORY_I18N.customUser).toBe('palette.category.custom');
   });
 
-  it('has exactly 8 category entries', () => {
-    expect(Object.keys(COMMAND_CATEGORY_I18N)).toHaveLength(8);
+  it('has exactly 10 category entries', () => {
+    expect(Object.keys(COMMAND_CATEGORY_I18N)).toHaveLength(10);
   });
 });

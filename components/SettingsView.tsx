@@ -5,6 +5,7 @@ import { ICONS } from '../constants';
 import { SettingsViewContext, useSettingsViewContext } from '../contexts/SettingsViewContext';
 import { useSettingsView } from '../hooks/useSettingsView';
 import { SETTINGS_CATEGORY_SEARCH_HINTS } from '../services/settingsSearchHints';
+import { AiExecutionModeSection } from './settings/AiExecutionModeSection';
 import { AdvancedAiSection, AiSection } from './settings/AiSections';
 import { CommunitySection } from './settings/CommunitySection';
 import { DataSection } from './settings/DataSection';
@@ -12,6 +13,7 @@ import { AdvancedEditorSection, EditorSection } from './settings/EditorSections'
 import { FeatureFlagsSection } from './settings/FeatureFlagsSection';
 import { AboutSection, AppearanceSection, GeneralSection } from './settings/GeneralSections';
 import { LoraAdapterSection } from './settings/LoraAdapterSection';
+import { OpenRouterSection } from './settings/OpenRouterSection';
 import { PluginsSection } from './settings/PluginsSection';
 import { ProjectAiPresetSection } from './settings/ProjectAiPresetSection';
 import { SettingsGuideSection } from './settings/SettingsGuideSection';
@@ -73,7 +75,7 @@ NavGroupHeader.displayName = 'NavGroupHeader';
 // X-1: category IDs grouped for sidebar nav; internal section IDs and renderContent() switch unchanged.
 const NAV_GROUPS = [
   { key: 'writing', ids: ['editor', 'advanced-editor', 'project-ai'] },
-  { key: 'aiModels', ids: ['ai', 'advanced-ai', 'lora-adapters'] },
+  { key: 'aiModels', ids: ['ai', 'advanced-ai', 'openrouter', 'lora-adapters'] },
   { key: 'appearanceAccessibility', ids: ['appearance', 'accessibility'] },
   { key: 'privacyData', ids: ['privacy', 'data', 'backup'] },
   {
@@ -133,6 +135,14 @@ const SettingsViewUI: FC = () => {
         label: t('settings.categories.loraAdapters'),
         icon: (
           <path d="M9 3.75H6.912a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H15M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859M12 3v8.25m0 0l-3-3m3 3l3-3" />
+        ),
+      },
+      {
+        id: 'openrouter',
+        label: t('settings.categories.openrouter'),
+        icon: (
+          // QNBS-v3: OpenRouter cloud-gateway icon — route/relay path shape.
+          <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
         ),
       },
       {
@@ -281,13 +291,20 @@ const SettingsViewUI: FC = () => {
       case 'advanced-editor':
         return <AdvancedEditorSection />;
       case 'ai':
-        return <AiSection />;
+        return (
+          <div className="space-y-8">
+            <AiExecutionModeSection />
+            <AiSection />
+          </div>
+        );
       case 'advanced-ai':
         return <AdvancedAiSection />;
       case 'community':
         return <CommunitySection />;
       case 'plugins':
         return <PluginsSection />;
+      case 'openrouter':
+        return <OpenRouterSection />;
       case 'lora-adapters':
         return <LoraAdapterSection />;
       case 'project-ai':

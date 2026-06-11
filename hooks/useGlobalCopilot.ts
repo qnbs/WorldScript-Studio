@@ -5,7 +5,7 @@
  * drives the heuristic insight generator, and supports a heuristics-only offline mode.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { useCommandExecutor } from '../contexts/CommandExecutorContext';
@@ -18,7 +18,9 @@ import {
 } from '../features/copilot/copilotSlice';
 import { selectEnableProForge } from '../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../features/project/projectSelectors';
+import { projectActions } from '../features/project/projectSlice';
 import { approximateManuscriptWordCount } from '../services/commands/wordCountApprox';
+import { applyTextEdit } from '../services/copilot/actionApplier';
 import { detectCopilotIntent, runCopilotDiagnostic } from '../services/copilot/copilotActions';
 import {
   assembleCopilotPrompt,
@@ -87,7 +89,10 @@ export function useGlobalCopilot(currentView: View) {
   const setCopilotInsights = useTransientUiStore((s) => s.setCopilotInsights);
   const setCopilotHeuristicsOnly = useTransientUiStore((s) => s.setCopilotHeuristicsOnly);
   const setCopilotInsightStatus = useTransientUiStore((s) => s.setCopilotInsightStatus);
+  const activeSectionId = useTransientUiStore((s) => s.activeSectionId);
   const project = useAppSelector(selectProjectData);
+  // QNBS-v3: Phase 2 — apply-to-chapter status (transient, ephemeral)
+  const [applyStatus, setApplyStatus] = useState<'idle' | 'applying' | 'success' | 'error'>('idle');
   const enableProForge = useAppSelector(selectEnableProForge);
 
   const { runCompletion, stop, isLoading } = useStoryCraftAI({
@@ -250,6 +255,50 @@ export function useGlobalCopilot(currentView: View) {
     [setCopilotHeuristicsOnly, heuristicsOnly],
   );
 
+  // QNBS-v3: Phase 2 — apply the code block from the last assistant message to the active section.
+  // Uses applyTextEdit (offset-safe via applyReviewEditsToSection); dispatches into redux-undo
+  // so Ctrl+Z always reverses the change.
+  const applyLastSuggestion = useCallback(
+    (codeBlock: string) => {
+      if (!activeSectionId || !project) return;
+      const section = project.manuscript.find((s) => s.id === activeSectionId);
+      if (!section) return;
+
+      const existingContent = section.content ?? '';
+      // QNBS-v3: CodeAnt — partial snippets must not silently overwrite the whole chapter.
+      // Only proceed if the section is empty or the block is ≥70% of existing content length
+      // (clear full-chapter-rewrite intent). Shorter blocks are rejected to prevent data loss.
+      const isFullRewrite =
+        !existingContent.trim() || codeBlock.length / Math.max(existingContent.length, 1) >= 0.7;
+      if (!isFullRewrite) {
+        setApplyStatus('error');
+        setTimeout(() => setApplyStatus('idle'), 3000);
+        return;
+      }
+
+      setApplyStatus('applying');
+      try {
+        const result = applyTextEdit(existingContent, '', codeBlock);
+        if (result.applied > 0) {
+          dispatch(
+            projectActions.updateManuscriptSection({
+              id: activeSectionId,
+              changes: { content: result.content },
+            }),
+          );
+          setApplyStatus('success');
+        } else {
+          setApplyStatus('error');
+        }
+      } catch {
+        setApplyStatus('error');
+      }
+      // Auto-clear feedback after 3s
+      setTimeout(() => setApplyStatus('idle'), 3000);
+    },
+    [activeSectionId, project, dispatch],
+  );
+
   // QNBS-v3: Dynamic view + project-aware suggestions replace the static 3-string list.
   // Falls back to defaults when no project is loaded.
   const suggestions = useMemo((): string[] => {
@@ -313,6 +362,8 @@ export function useGlobalCopilot(currentView: View) {
     toggle,
     clear,
     toggleHeuristicsOnly,
+    applyLastSuggestion,
+    applyStatus,
     executeCommand,
   };
 }

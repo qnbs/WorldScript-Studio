@@ -12,9 +12,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ---------------------------------------------------------------------------
 
 let mockEnabled = true;
+const mockDispatch = vi.fn();
 
 vi.mock('../../../app/hooks', () => ({
   useAppSelector: vi.fn(() => mockEnabled),
+  useAppDispatch: vi.fn(() => mockDispatch),
 }));
 
 vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
@@ -165,13 +167,13 @@ describe('GpuMetricsPanel', () => {
     });
   });
 
-  it('calls setEcoModeExplicit when toggle is clicked', async () => {
+  it('dispatches setAiMode when toggle is clicked', async () => {
     const user = userEvent.setup();
     mockIsEco = false;
     render(<GpuMetricsPanel />);
     await waitFor(() => expect(screen.getByRole('switch')).toBeInTheDocument());
     await user.click(screen.getByRole('switch'));
-    expect(mockSetEcoModeExplicit).toHaveBeenCalledWith(true);
+    expect(mockDispatch).toHaveBeenCalled();
   });
 
   it('calls getHealthReport on mount', async () => {

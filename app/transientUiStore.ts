@@ -29,6 +29,16 @@ interface TransientUiState {
   setCopilotInsights: (findings: HeuristicFinding[]) => void;
   setCopilotHeuristicsOnly: (value: boolean) => void;
   setCopilotInsightStatus: (status: 'idle' | 'running') => void;
+  // QNBS-v3: Phase 2 — shared active section so InlineAnnotationLayer + apply flow can access it
+  activeSectionId: string | null;
+  setActiveSectionId: (id: string | null) => void;
+  // QNBS-v3: CodeAnt — badge click must force-expand the InsightSection; a bool in the store
+  // bridges InlineAnnotationLayer (setter) and InsightSection (consumer/reset) without prop-drilling.
+  copilotInsightExpanded: boolean;
+  setCopilotInsightExpanded: (value: boolean) => void;
+  // QNBS-v3: Phase 3 — ProForge "Ask Copilot" chip pre-fills the composer without prop-drilling.
+  copilotDraftMessage: string | null;
+  setCopilotDraftMessage: (msg: string | null) => void;
 }
 
 export const useTransientUiStore = create<TransientUiState>((set) => ({
@@ -54,4 +64,10 @@ export const useTransientUiStore = create<TransientUiState>((set) => ({
   setCopilotInsights: (findings) => set({ copilotInsights: findings }),
   setCopilotHeuristicsOnly: (value) => set({ copilotHeuristicsOnly: value }),
   setCopilotInsightStatus: (status) => set({ copilotInsightStatus: status }),
+  activeSectionId: null,
+  setActiveSectionId: (id) => set({ activeSectionId: id }),
+  copilotInsightExpanded: false,
+  setCopilotInsightExpanded: (value) => set({ copilotInsightExpanded: value }),
+  copilotDraftMessage: null,
+  setCopilotDraftMessage: (msg) => set({ copilotDraftMessage: msg }),
 }));

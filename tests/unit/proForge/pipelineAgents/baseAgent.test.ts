@@ -11,6 +11,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGenerate = vi.hoisted(() => vi.fn());
 const mockGetMemoryBank = vi.hoisted(() => vi.fn());
+const mockShouldRouteLocally = vi.hoisted(() => vi.fn<() => boolean>().mockReturnValue(false));
+const mockIsEcoMode = vi.hoisted(() => vi.fn<() => boolean>().mockReturnValue(false));
+const mockGetLocalFallbackModel = vi.hoisted(() =>
+  vi.fn<() => string>().mockReturnValue('Llama-3.2-1B-Instruct-q4f16_1-MLC'),
+);
+
+vi.mock('../../../../services/ai/aiModeService', () => ({
+  shouldRouteLocally: mockShouldRouteLocally,
+  isEcoMode: mockIsEcoMode,
+  getLocalFallbackModel: mockGetLocalFallbackModel,
+}));
 
 vi.mock('../../../../services/ai/inferenceGateway', () => ({
   inferenceGateway: { generate: mockGenerate, embed: vi.fn(), modelList: vi.fn() },
@@ -138,6 +149,10 @@ describe('BaseAgent', () => {
     vi.clearAllMocks();
     mockGenerate.mockResolvedValue({ text: 'COHERENT: Analysis is grounded.', usage: {} });
     mockGetMemoryBank.mockReturnValue({ recall: vi.fn(), remember: vi.fn() });
+    // QNBS-v3: Reset routing mocks to defaults (cloud-first, not eco) before each test.
+    mockShouldRouteLocally.mockReturnValue(false);
+    mockIsEcoMode.mockReturnValue(false);
+    mockGetLocalFallbackModel.mockReturnValue('Llama-3.2-1B-Instruct-q4f16_1-MLC');
     agent = new StubAgent(makeContext());
   });
 
@@ -256,6 +271,41 @@ describe('BaseAgent', () => {
       const signal = new AbortController().signal;
       const opts = agent.publicBuildAiOpts({ signal });
       expect(opts.signal).toBe(signal);
+    });
+
+    // QNBS-v3: AI execution mode routing — G5 fix: baseAgent must honour shouldRouteLocally().
+    it('overrides provider to webllm when shouldRouteLocally() is true', () => {
+      mockShouldRouteLocally.mockReturnValue(true);
+      mockGetLocalFallbackModel.mockReturnValue('Llama-3.2-1B-Instruct-q4f16_1-MLC');
+      const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'gemini' } });
+      const a = new StubAgent(ctx);
+      const opts = a.publicBuildAiOpts();
+      expect(opts.provider).toBe('webllm');
+      expect(opts.model).toBe('Llama-3.2-1B-Instruct-q4f16_1-MLC');
+    });
+
+    it('does NOT override provider when shouldRouteLocally() is false', () => {
+      mockShouldRouteLocally.mockReturnValue(false);
+      const opts = agent.publicBuildAiOpts();
+      expect(opts.provider).toBe('gemini');
+    });
+
+    it('does NOT override a local provider even when shouldRouteLocally() is true', () => {
+      mockShouldRouteLocally.mockReturnValue(true);
+      const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'webllm' } });
+      const a = new StubAgent(ctx);
+      const opts = a.publicBuildAiOpts();
+      expect(opts.provider).toBe('webllm');
+    });
+
+    it('uses eco fallback model when isEcoMode() is true', () => {
+      mockIsEcoMode.mockReturnValue(true);
+      mockShouldRouteLocally.mockReturnValue(true);
+      mockGetLocalFallbackModel.mockReturnValue('HuggingFaceTB/SmolLM2-135M-Instruct');
+      const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'gemini' } });
+      const a = new StubAgent(ctx);
+      const opts = a.publicBuildAiOpts();
+      expect(opts.model).toBe('HuggingFaceTB/SmolLM2-135M-Instruct');
     });
   });
 

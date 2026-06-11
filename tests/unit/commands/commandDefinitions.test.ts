@@ -92,6 +92,15 @@ const baseDeps: CommandRuntimeDeps = {
     enableRustCompute: false,
     enableGlobalCopilot: false,
   },
+  aiMode: 'hybrid',
+  appearancePreset: 'default',
+  advancedEditor: {
+    distractionFree: false,
+    typewriterMode: false,
+    zenMode: false,
+    focusMode: false,
+  },
+  accessibility: { highContrast: false, reducedMotion: false, largeText: false },
 };
 
 beforeEach(() => {
@@ -138,8 +147,8 @@ describe('getStaticCommandDefinitions', () => {
   it('includes settings command IDs', () => {
     const cmds = getStaticCommandDefinitions();
     const ids = cmds.map((c) => c.id);
-    expect(ids).toContain('set-theme-toggle');
-    expect(ids).toContain('set-theme-toggle-dark');
+    expect(ids).toContain('set-theme-dark');
+    expect(ids).toContain('set-theme-light');
   });
 
   it('includes help command IDs', () => {
@@ -162,7 +171,7 @@ describe('getStaticCommandDefinitions', () => {
     expect(byId['nav-dashboard']?.category).toBe('navigation');
     expect(byId['ai-outline']?.category).toBe('aiActions');
     expect(byId['act-new-char']?.category).toBe('projectManagement');
-    expect(byId['set-theme-toggle']?.category).toBe('settings');
+    expect(byId['set-theme-dark']?.category).toBe('appearance');
     expect(byId['help-open']?.category).toBe('help');
     expect(byId['global-dashboard']?.category).toBe('global');
     expect(byId['editor-manuscript']?.category).toBe('editor');
@@ -175,14 +184,15 @@ describe('getStaticCommandDefinitions', () => {
     expect(mockNavigate).toHaveBeenCalledWith('dashboard');
   });
 
-  it('set-theme-toggle is only shown in dark theme (when dep)', () => {
+  // QNBS-v3: set-theme-dark shown when NOT already dark; set-theme-light shown when NOT already light
+  it('set-theme-dark/light are shown only when not already on that theme', () => {
     const cmds = getStaticCommandDefinitions();
-    const darkToggle = cmds.find((c) => c.id === 'set-theme-toggle');
-    const lightToggle = cmds.find((c) => c.id === 'set-theme-toggle-dark');
-    expect(darkToggle?.when?.({ ...baseDeps, theme: 'dark' })).toBe(true);
-    expect(darkToggle?.when?.({ ...baseDeps, theme: 'light' })).toBe(false);
-    expect(lightToggle?.when?.({ ...baseDeps, theme: 'dark' })).toBe(false);
-    expect(lightToggle?.when?.({ ...baseDeps, theme: 'light' })).toBe(true);
+    const darkCmd = cmds.find((c) => c.id === 'set-theme-dark');
+    const lightCmd = cmds.find((c) => c.id === 'set-theme-light');
+    expect(darkCmd?.when?.({ ...baseDeps, theme: 'dark' })).toBe(false);
+    expect(darkCmd?.when?.({ ...baseDeps, theme: 'light' })).toBe(true);
+    expect(lightCmd?.when?.({ ...baseDeps, theme: 'light' })).toBe(false);
+    expect(lightCmd?.when?.({ ...baseDeps, theme: 'dark' })).toBe(true);
   });
 
   it('global-open-command-palette calls setCommandPaletteOpen(true)', () => {

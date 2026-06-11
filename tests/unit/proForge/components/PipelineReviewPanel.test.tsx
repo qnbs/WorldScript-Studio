@@ -164,6 +164,13 @@ vi.mock('../../../../contexts/LiveRegionContext', () => ({
   useAnnounce: () => vi.fn(),
 }));
 
+// QNBS-v3: PipelineReviewPanel calls useAppDispatch/useAppSelector directly for copilot flag — mock hooks to avoid Redux Provider
+vi.mock('../../../../app/hooks', () => ({
+  useAppDispatch: () => mockDispatch,
+  useAppSelector: vi.fn(() => false),
+  useAppSelectorShallow: vi.fn(() => false),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------

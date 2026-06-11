@@ -15,6 +15,15 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
     worlds: [],
     navigate: () => undefined,
     theme: 'dark' as const,
+    aiMode: 'hybrid',
+    appearancePreset: 'default',
+    advancedEditor: {
+      distractionFree: false,
+      typewriterMode: false,
+      zenMode: false,
+      focusMode: false,
+    },
+    accessibility: { highContrast: false, reducedMotion: false, largeText: false },
     ...overrides,
   };
 }

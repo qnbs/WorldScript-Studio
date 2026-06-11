@@ -5,6 +5,7 @@ import type {
   AdvancedAiSettings,
   AdvancedEditorSettings,
   AiCreativity,
+  AiMode,
   AppearancePreset,
   BackupSettings,
   CollaborationSettings,
@@ -13,6 +14,7 @@ import type {
   IntegrationSettings,
   KeyboardShortcut,
   NotificationSettings,
+  OpenRouterSettings,
   PerformanceSettings,
   PrivacySettings,
   Settings,
@@ -32,10 +34,19 @@ const getSystemThemePreference = (): Theme => {
   return 'dark';
 };
 
+export const DEFAULT_OPENROUTER_SETTINGS: OpenRouterSettings = {
+  enabled: false,
+  apiKey: '',
+  // QNBS-v3: DeepSeek R1 free tier — strong reasoning + no cost, ideal default (zero friction).
+  preferredModel: 'deepseek/deepseek-r1:free',
+};
+
 const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
   appearancePreset: 'sepia',
+  aiMode: 'hybrid',
+  openRouter: DEFAULT_OPENROUTER_SETTINGS,
   editorFont: 'serif',
   fontSize: 16,
   lineSpacing: 1.6,
@@ -175,12 +186,19 @@ const settingsSlice = createSlice({
     setSettings(state, action: PayloadAction<Settings>) {
       Object.assign(state, action.payload);
       state.accessibility = normalizeAccessibilitySettings(state.accessibility);
+      // QNBS-v3: backfill aiMode for settings persisted before v1.22
+      if (!state.aiMode) state.aiMode = 'hybrid';
+      // QNBS-v3: backfill openRouter for settings persisted before OpenRouter integration
+      if (!state.openRouter) state.openRouter = { ...DEFAULT_OPENROUTER_SETTINGS };
     },
     setTheme(state, action: PayloadAction<Theme>) {
       state.theme = action.payload;
     },
     setAppearancePreset(state, action: PayloadAction<AppearancePreset>) {
       state.appearancePreset = action.payload;
+    },
+    setAiMode(state, action: PayloadAction<AiMode>) {
+      state.aiMode = action.payload;
     },
     setEditorFont(state, action: PayloadAction<EditorFont>) {
       state.editorFont = action.payload;
@@ -271,6 +289,12 @@ const settingsSlice = createSlice({
     },
     setVoiceSettings(state, action: PayloadAction<Partial<VoiceSettings>>) {
       state.voice = { ...state.voice, ...action.payload };
+    },
+    setOpenRouter(state, action: PayloadAction<Partial<OpenRouterSettings>>) {
+      state.openRouter = {
+        ...(state.openRouter ?? DEFAULT_OPENROUTER_SETTINGS),
+        ...action.payload,
+      };
     },
     resetVoiceSettings(state) {
       state.voice = {

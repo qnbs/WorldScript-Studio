@@ -98,6 +98,15 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableRustCompute: false,
       enableGlobalCopilot: false,
     },
+    aiMode: 'hybrid',
+    appearancePreset: 'default',
+    advancedEditor: {
+      distractionFree: false,
+      typewriterMode: false,
+      zenMode: false,
+      focusMode: false,
+    },
+    accessibility: { highContrast: false, reducedMotion: false, largeText: false },
     ...overrides,
   };
 }
