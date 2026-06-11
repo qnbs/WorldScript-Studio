@@ -4,6 +4,9 @@
  * plus lightweight project facts. No React, no Redux — fully unit-testable.
  */
 
+// QNBS-v3: sanitizePromptValue strips control chars + code fences before interpolation
+import { sanitizePromptValue } from '../aiUtils';
+
 export interface CopilotContext {
   /** Raw view id (e.g. 'manuscript'). */
   view: string;
@@ -61,9 +64,12 @@ export function buildSystemPrompt(ctx: CopilotContext): string {
   const hint = VIEW_HINTS[ctx.view] ?? 'this screen';
 
   const projectLines: string[] = [];
-  if (ctx.projectTitle) {
+  // QNBS-v3: sanitize user-controlled strings before interpolating into the system prompt
+  const safeTitle = sanitizePromptValue(ctx.projectTitle);
+  const safeSelectedText = sanitizePromptValue(ctx.selectedText);
+  if (safeTitle) {
     projectLines.push(
-      `The user is working on a project titled "${ctx.projectTitle}" (~${ctx.wordCount} words, ${ctx.chapterCount} chapters).`,
+      `The user is working on a project titled "${safeTitle}" (~${ctx.wordCount} words, ${ctx.chapterCount} chapters).`,
     );
     if (ctx.characterCount > 0) projectLines.push(`Characters: ${ctx.characterCount}.`);
     if (ctx.worldEntryCount > 0) projectLines.push(`World entries: ${ctx.worldEntryCount}.`);
@@ -73,9 +79,9 @@ export function buildSystemPrompt(ctx: CopilotContext): string {
       projectLines.push(
         `There are ${ctx.openInsightCount} active narrative insights the user may want to address.`,
       );
-    if (ctx.selectedText)
+    if (safeSelectedText)
       projectLines.push(
-        `The user has selected this text: "${ctx.selectedText.slice(0, 200)}${ctx.selectedText.length > 200 ? '…' : ''}"`,
+        `The user has selected this text: "${safeSelectedText.slice(0, 200)}${safeSelectedText.length > 200 ? '…' : ''}"`,
       );
   } else {
     projectLines.push('The user has not added much content yet.');

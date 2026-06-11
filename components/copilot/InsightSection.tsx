@@ -13,7 +13,8 @@ import { InsightCard } from './InsightCard';
 
 interface InsightSectionProps {
   insights: HeuristicFinding[];
-  copilot: Pick<UseGlobalCopilotReturn, 't' | 'sendMessage'>;
+  // QNBS-v3: heuristicsOnly threaded through so InsightCard can hide "Tell me more"
+  copilot: Pick<UseGlobalCopilotReturn, 't' | 'sendMessage' | 'heuristicsOnly'>;
   onNavigate?: (view: View) => void;
 }
 

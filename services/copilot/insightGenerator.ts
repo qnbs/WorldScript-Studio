@@ -24,15 +24,40 @@ function evictIfNeeded(): void {
   }
 }
 
-/** Lightweight hash of project state: manuscript length + char count + word totals. */
+/** Lightweight hash of project state — covers edits, profile changes, and structural metadata.
+ * QNBS-v3: Extended to capture section act/status, character arc+motivation lengths,
+ * world completeness, and plotTensionOverrides so shallow edits invalidate the cache.
+ */
 function projectHash(project: ProjectData, language: string): string {
   const manuscriptSig = project.manuscript
     .slice(0, 20) // cap for performance
-    .map((s) => `${s.id}:${s.content?.length ?? 0}`)
+    .map((s) => `${s.id}:${s.content?.length ?? 0}:${s.status ?? ''}:${s.act ?? ''}`)
     .join('|');
-  const charCount = Object.keys(project.characters.entities).length;
-  const worldCount = Object.keys(project.worlds.entities).length;
-  return `${language}:${charCount}:${worldCount}:${manuscriptSig}`;
+
+  const chars = Object.values(project.characters.entities).filter(Boolean);
+  const charSig = chars
+    .map((c) => {
+      const ch = c as { id: string; characterArc?: string; motivation?: string };
+      return `${ch.id}:${(ch.characterArc ?? '').length}:${(ch.motivation ?? '').length}`;
+    })
+    .join('|');
+
+  const worlds = Object.values(project.worlds.entities).filter(Boolean);
+  const worldSig = worlds
+    .map((w) => {
+      const wo = w as { id: string; description?: string; geography?: string; culture?: string };
+      return `${wo.id}:${(wo.description ?? '').length}:${(wo.geography ?? '').length}`;
+    })
+    .join('|');
+
+  const overridesSig = project.plotTensionOverrides
+    ? Object.entries(project.plotTensionOverrides)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}:${v}`)
+        .join(',')
+    : '';
+
+  return `${language}:${charSig}|${worldSig}|${overridesSig}|${manuscriptSig}`;
 }
 
 // ---------------------------------------------------------------------------
