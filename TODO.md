@@ -33,7 +33,12 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ### ⬜ Remaining (next sprint)
 
-**Watch CI** — check test failures from the last CI run (run ID 27349126664) and fix root cause.
+**Dependency-Hygiene Backlog** (low-urgency, non-blocking, next free session)
+- ⬜ **`.npmrc` Security Hardening** — add `strict-dep-builds=true`, `block-exotic-subdeps=true`, `minimum-release-age=10080` (7-day quarantine) for pnpm 11 hardened installs
+- ⬜ **pnpm override housekeeping** — after `@storybook/test-runner` upgrades to jest-process-manager 1.x (drops wait-on@7), remove the direct lockfile patch on `joi` and rely on normal resolution
+- ⬜ **Renovate grouping** — group `@storybook/*` bumps together so the test-runner chain (jest-process-manager → wait-on → joi) is upgraded atomically
+- ⬜ **Moderate audit threshold** — bump CI `pnpm audit --audit-level` from `high` to `moderate` once known medium advisories (joi@17, wait-on) are fully out of the dep tree
+- ⬜ **AUDIT.md "Known Overrides" table** — document `wait-on@7.2.0 → joi@18.2.1` lockfile patch with GHSA-q7cg-457f-vx79 reference and justification
 
 **P2 — Command Palette integration**
 - ⬜ Register command `ai.mode.openrouter.toggle` — dispatches `settingsActions.setOpenRouter({ enabled: !current })`
