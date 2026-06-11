@@ -29,6 +29,9 @@ interface TransientUiState {
   setCopilotInsights: (findings: HeuristicFinding[]) => void;
   setCopilotHeuristicsOnly: (value: boolean) => void;
   setCopilotInsightStatus: (status: 'idle' | 'running') => void;
+  // QNBS-v3: Phase 2 — shared active section so InlineAnnotationLayer + apply flow can access it
+  activeSectionId: string | null;
+  setActiveSectionId: (id: string | null) => void;
 }
 
 export const useTransientUiStore = create<TransientUiState>((set) => ({
@@ -54,4 +57,6 @@ export const useTransientUiStore = create<TransientUiState>((set) => ({
   setCopilotInsights: (findings) => set({ copilotInsights: findings }),
   setCopilotHeuristicsOnly: (value) => set({ copilotHeuristicsOnly: value }),
   setCopilotInsightStatus: (status) => set({ copilotInsightStatus: status }),
+  activeSectionId: null,
+  setActiveSectionId: (id) => set({ activeSectionId: id }),
 }));

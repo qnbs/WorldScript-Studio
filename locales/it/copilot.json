@@ -53,5 +53,12 @@
   "copilot.insight.missingWorld.title": "Voce del mondo incompleta",
   "copilot.insight.missingWorld.desc": "{entry} appare nel tuo manoscritto ma il suo profilo è completato solo al {pct}%.",
   "copilot.insight.overlengthScene.title": "Capitolo insolitamente lungo",
-  "copilot.insight.overlengthScene.desc": "\"{title}\" è {times} volte più lungo del tuo capitolo medio."
+  "copilot.insight.overlengthScene.desc": "\"{title}\" è {times} volte più lungo del tuo capitolo medio.",
+  "copilot.sidebarMode": "Dock as sidebar",
+  "copilot.dialogMode": "Float as dialog",
+  "copilot.apply": "Apply to chapter",
+  "copilot.applyingChange": "Applying…",
+  "copilot.changeApplied": "Change applied — press Ctrl+Z to undo.",
+  "copilot.changeApplyFailed": "Could not apply — the text may have changed.",
+  "copilot.annotationCount": "{count} insight for this chapter"
 }

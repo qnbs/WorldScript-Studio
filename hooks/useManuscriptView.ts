@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
 import {
   selectAllCharacters,
@@ -86,6 +87,12 @@ export const useManuscriptView = ({
   const [activeSectionId, setActiveSectionId] = useState<string | null>(
     manuscript?.[0]?.id ?? null,
   );
+  // QNBS-v3: Phase 2 — publish activeSectionId to transient store so InlineAnnotationLayer
+  // and the copilot apply-flow can read it without prop-drilling through unrelated views.
+  const setGlobalActiveSectionId = useTransientUiStore((s) => s.setActiveSectionId);
+  useEffect(() => {
+    setGlobalActiveSectionId(activeSectionId ?? manuscript?.[0]?.id ?? null);
+  }, [activeSectionId, manuscript, setGlobalActiveSectionId]);
   const [isLoglineModalOpen, setIsLoglineModalOpen] = useState(false);
   const [loglineSuggestions, setLoglineSuggestions] = useState<string[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);

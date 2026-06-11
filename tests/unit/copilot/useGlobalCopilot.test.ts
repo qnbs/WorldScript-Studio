@@ -32,6 +32,9 @@ vi.mock('../../../app/transientUiStore', () => ({
       setCopilotInsights: vi.fn(),
       setCopilotHeuristicsOnly: vi.fn(),
       setCopilotInsightStatus: vi.fn(),
+      // QNBS-v3: Phase 2 additions
+      activeSectionId: null,
+      setActiveSectionId: vi.fn(),
     }),
 }));
 vi.mock('../../../hooks/useStoryCraftAI', () => ({

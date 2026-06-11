@@ -2521,5 +2521,12 @@
   "copilot.insight.missingWorld.title": "Welteneintrag unvollständig",
   "copilot.insight.missingWorld.desc": "{entry} kommt im Manuskript vor, aber das Profil ist nur zu {pct} % ausgefüllt.",
   "copilot.insight.overlengthScene.title": "Ungewöhnlich langes Kapitel",
-  "copilot.insight.overlengthScene.desc": "\"{title}\" ist {times}× länger als dein durchschnittliches Kapitel."
+  "copilot.insight.overlengthScene.desc": "\"{title}\" ist {times}× länger als dein durchschnittliches Kapitel.",
+  "copilot.sidebarMode": "Dock as sidebar",
+  "copilot.dialogMode": "Float as dialog",
+  "copilot.apply": "Apply to chapter",
+  "copilot.applyingChange": "Applying…",
+  "copilot.changeApplied": "Change applied — press Ctrl+Z to undo.",
+  "copilot.changeApplyFailed": "Could not apply — the text may have changed.",
+  "copilot.annotationCount": "{count} insight for this chapter"
 }
