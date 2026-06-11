@@ -7,15 +7,13 @@
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useTransientUiStore } from '../app/transientUiStore';
 import { useCommandExecutor } from '../contexts/CommandExecutorContext';
 import {
   copilotActions,
   selectCopilotError,
-  selectCopilotHeuristicsOnly,
-  selectCopilotInsightStatus,
   selectCopilotIsOpen,
   selectCopilotMessages,
-  selectCopilotProactiveInsights,
   selectCopilotStatus,
 } from '../features/copilot/copilotSlice';
 import { selectEnableProForge } from '../features/featureFlags/featureFlagsSlice';
@@ -78,9 +76,13 @@ export function useGlobalCopilot(currentView: View) {
   const messages = useAppSelector(selectCopilotMessages);
   const status = useAppSelector(selectCopilotStatus);
   const error = useAppSelector(selectCopilotError);
-  const proactiveInsights = useAppSelector(selectCopilotProactiveInsights);
-  const heuristicsOnly = useAppSelector(selectCopilotHeuristicsOnly);
-  const insightStatus = useAppSelector(selectCopilotInsightStatus);
+  // QNBS-v3: panel-only overlay state lives in transientUiStore, not Redux (CodeAnt findings)
+  const proactiveInsights = useTransientUiStore((s) => s.copilotInsights);
+  const heuristicsOnly = useTransientUiStore((s) => s.copilotHeuristicsOnly);
+  const insightStatus = useTransientUiStore((s) => s.copilotInsightStatus);
+  const setCopilotInsights = useTransientUiStore((s) => s.setCopilotInsights);
+  const setCopilotHeuristicsOnly = useTransientUiStore((s) => s.setCopilotHeuristicsOnly);
+  const setCopilotInsightStatus = useTransientUiStore((s) => s.setCopilotInsightStatus);
   const project = useAppSelector(selectProjectData);
   const enableProForge = useAppSelector(selectEnableProForge);
 
@@ -126,17 +128,17 @@ export function useGlobalCopilot(currentView: View) {
   // Cancelled on unmount / Copilot clear so we never dispatch into an unmounted component.
   useEffect(() => {
     if (!project) return;
-    dispatch(copilotActions.setInsightStatus('running'));
+    setCopilotInsightStatus('running');
     scheduleInsightGeneration(project, buildContext(), (findings) => {
-      dispatch(copilotActions.setProactiveInsights(findings));
-      dispatch(copilotActions.setInsightStatus('idle'));
+      setCopilotInsights(findings);
+      setCopilotInsightStatus('idle');
     });
     return () => {
       cancelInsightGeneration();
     };
     // QNBS-v3: `language` is already captured inside `buildContext` (its own dep), so removing
     // it from this array prevents the exhaustive-deps lint warning for a redundant dependency.
-  }, [project, dispatch, buildContext]);
+  }, [project, buildContext, setCopilotInsights, setCopilotInsightStatus]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -225,10 +227,13 @@ export function useGlobalCopilot(currentView: View) {
   const clear = useCallback(() => {
     stop();
     dispatch(copilotActions.clear());
-  }, [dispatch, stop]);
+    // QNBS-v3: reset panel overlay state in Zustand on clear (insights + status, not heuristicsOnly)
+    setCopilotInsights([]);
+    setCopilotInsightStatus('idle');
+  }, [dispatch, stop, setCopilotInsights, setCopilotInsightStatus]);
   const toggleHeuristicsOnly = useCallback(
-    () => dispatch(copilotActions.setHeuristicsOnly(!heuristicsOnly)),
-    [dispatch, heuristicsOnly],
+    () => setCopilotHeuristicsOnly(!heuristicsOnly),
+    [setCopilotHeuristicsOnly, heuristicsOnly],
   );
 
   // QNBS-v3: Dynamic view + project-aware suggestions replace the static 3-string list.

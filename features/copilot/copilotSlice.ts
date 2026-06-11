@@ -1,12 +1,12 @@
 /**
  * Copilot slice — ephemeral runtime state for the Global AI Copilot live assistant.
  * QNBS-v3: NOT undo-wrapped, NOT persisted (local-first, in-memory only). Root key `copilot`.
- * Chat history, proactive insights, and heuristics-only mode live here.
+ * Chat history and streaming status live here. Proactive insights, heuristicsOnly, and
+ * insightStatus are panel-only overlay state → transientUiStore (Zustand).
  * Orchestration is in hooks/useGlobalCopilot.ts; insight generation in services/copilot/insightGenerator.ts.
  */
 
 import { createSlice, nanoid, type PayloadAction } from '@reduxjs/toolkit';
-import type { HeuristicFinding } from '../../services/copilot/heuristicEngine';
 
 export type CopilotRole = 'user' | 'assistant' | 'system';
 export type CopilotStatus = 'idle' | 'streaming' | 'error';
@@ -20,19 +20,11 @@ export interface CopilotMessage {
   pending?: boolean;
 }
 
-export type InsightStatus = 'idle' | 'running';
-
 export interface CopilotState {
   isOpen: boolean;
   messages: CopilotMessage[];
   status: CopilotStatus;
   error: string | null;
-  /** Proactive heuristic findings surfaced in the Insight panel above suggestions. */
-  proactiveInsights: HeuristicFinding[];
-  /** When true the Copilot skips all AI calls and replies from heuristics only. */
-  heuristicsOnly: boolean;
-  /** Tracks whether the insight generator is running. */
-  insightStatus: InsightStatus;
 }
 
 const initialState: CopilotState = {
@@ -40,9 +32,6 @@ const initialState: CopilotState = {
   messages: [],
   status: 'idle',
   error: null,
-  proactiveInsights: [],
-  heuristicsOnly: false,
-  insightStatus: 'idle',
 };
 
 const copilotSlice = createSlice({
@@ -102,17 +91,7 @@ const copilotSlice = createSlice({
       state.messages = [];
       state.status = 'idle';
       state.error = null;
-      state.proactiveInsights = [];
-      state.insightStatus = 'idle';
-    },
-    setProactiveInsights(state, action: PayloadAction<HeuristicFinding[]>) {
-      state.proactiveInsights = action.payload;
-    },
-    setInsightStatus(state, action: PayloadAction<InsightStatus>) {
-      state.insightStatus = action.payload;
-    },
-    setHeuristicsOnly(state, action: PayloadAction<boolean>) {
-      state.heuristicsOnly = action.payload;
+      // QNBS-v3: copilotInsights + copilotInsightStatus reset via transientUiStore in useGlobalCopilot
     },
   },
 });
@@ -123,10 +102,5 @@ export const selectCopilotIsOpen = (s: { copilot: CopilotState }) => s.copilot.i
 export const selectCopilotMessages = (s: { copilot: CopilotState }) => s.copilot.messages;
 export const selectCopilotStatus = (s: { copilot: CopilotState }) => s.copilot.status;
 export const selectCopilotError = (s: { copilot: CopilotState }) => s.copilot.error;
-export const selectCopilotProactiveInsights = (s: { copilot: CopilotState }) =>
-  s.copilot.proactiveInsights;
-export const selectCopilotHeuristicsOnly = (s: { copilot: CopilotState }) =>
-  s.copilot.heuristicsOnly;
-export const selectCopilotInsightStatus = (s: { copilot: CopilotState }) => s.copilot.insightStatus;
 
 export default copilotSlice.reducer;
