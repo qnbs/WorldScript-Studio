@@ -240,22 +240,11 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     return undefined;
   }, [settings.theme, settings.appearancePreset]);
 
-  // QNBS-v3: Appearance presets + a11y hooks → body classes (pairs with index.css tokens).
+  // QNBS-v3: Appearance presets → body class (pairs with index.css tokens).
   useEffect(() => {
-    const appearanceClasses = ['appearance-sepia', 'appearance-fantasy', 'appearance-romance'];
-    document.body.classList.remove(...appearanceClasses);
-    switch (settings.appearancePreset) {
-      case 'sepia':
-        document.body.classList.add('appearance-sepia');
-        break;
-      case 'fantasy':
-        document.body.classList.add('appearance-fantasy');
-        break;
-      case 'romance':
-        document.body.classList.add('appearance-romance');
-        break;
-      default:
-        break;
+    document.body.classList.remove('appearance-sepia');
+    if (settings.appearancePreset === 'sepia') {
+      document.body.classList.add('appearance-sepia');
     }
   }, [settings.appearancePreset]);
 

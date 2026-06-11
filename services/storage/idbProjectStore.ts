@@ -46,6 +46,11 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     ...incoming,
   } as Settings;
 
+  // QNBS-v3: fantasy/romance presets removed in v1.22 — migrate legacy stored values to 'default'
+  if (!['default', 'sepia'].includes(validSettings.appearancePreset)) {
+    validSettings.appearancePreset = 'default';
+  }
+
   validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
 
   validSettings.privacy = {

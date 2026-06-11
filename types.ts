@@ -358,8 +358,8 @@ export interface OutlineSection {
 
 // Settings Types
 export type Theme = 'dark' | 'light' | 'auto';
-/** Creative appearance presets — map to `body` classes in App (`.appearance-sepia`, …). */
-export type AppearancePreset = 'default' | 'sepia' | 'fantasy' | 'romance';
+/** Creative appearance presets — map to `body` classes in App (`.appearance-sepia`). */
+export type AppearancePreset = 'default' | 'sepia';
 /**
  * AI execution mode — controls whether requests are routed to cloud providers,
  * local on-device models, or resolved automatically (hybrid smart routing).

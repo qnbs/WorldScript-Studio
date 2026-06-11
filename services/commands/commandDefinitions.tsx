@@ -272,40 +272,6 @@ export function getStaticCommandDefinitions(): CommandDefinition[] {
         deps.dispatch(settingsActions.setAppearancePreset('sepia'));
       },
     },
-    {
-      id: 'set-preset-fantasy',
-      category: 'appearance',
-      titleKey: 'palette.appearance.presetFantasy',
-      keywords: ['appearance', 'preset', 'fantasy', 'magic', 'dark', 'mystical'],
-      icon: iconBtn(
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"
-        />,
-      ),
-      when: (deps) => deps.appearancePreset !== 'fantasy',
-      run: (deps) => {
-        deps.dispatch(settingsActions.setAppearancePreset('fantasy'));
-      },
-    },
-    {
-      id: 'set-preset-romance',
-      category: 'appearance',
-      titleKey: 'palette.appearance.presetRomance',
-      keywords: ['appearance', 'preset', 'romance', 'pink', 'soft', 'pastel'],
-      icon: iconBtn(
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
-        />,
-      ),
-      when: (deps) => deps.appearancePreset !== 'romance',
-      run: (deps) => {
-        deps.dispatch(settingsActions.setAppearancePreset('romance'));
-      },
-    },
   ];
 
   // ── Accessibility toggle commands ─────────────────────────────────────────

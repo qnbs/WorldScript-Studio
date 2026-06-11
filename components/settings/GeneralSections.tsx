@@ -204,22 +204,6 @@ export const AppearanceSection: FC = () => {
               >
                 {t('settings.appearance.presetSepia')}
               </Button>
-              <Button
-                variant={settings.appearancePreset === 'fantasy' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => handleSettingChange('appearancePreset', 'fantasy')}
-                className="justify-center"
-              >
-                {t('settings.appearance.presetFantasy')}
-              </Button>
-              <Button
-                variant={settings.appearancePreset === 'romance' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => handleSettingChange('appearancePreset', 'romance')}
-                className="justify-center"
-              >
-                {t('settings.appearance.presetRomance')}
-              </Button>
             </div>
           </div>
         </CardContent>
