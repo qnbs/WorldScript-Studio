@@ -65,6 +65,10 @@ jobs:
           # APPLE_TEAM_ID, APPLE_PASSWORD, WINDOWS_CERTIFICATE,
           # WINDOWS_CERTIFICATE_PASSWORD here when ready.
         run: |
+          # QNBS-v3: Strict mode for reliable error handling.
+          # Best Practice 2026: set -euo pipefail catches undefined vars and pipe failures early.
+          set -euo pipefail
+
           # QNBS-v3: Skip updater signing for workflow_dispatch test builds.
           # Tagged releases (v*) require valid secrets for both signing and updater.
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -75,7 +79,16 @@ jobs:
             jq '.bundle.createUpdaterArtifacts = false' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
             mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
           fi
+
+          # QNBS-v3: Validate jq succeeded before proceeding
+          if ! command -v jq &>/dev/null; then
+            echo "::error::jq is required for Tauri build configuration but not installed"
+            exit 1
+          fi
+
+          echo "Building Tauri app for ${{ matrix.os }}..."
           pnpm exec tauri build
+          echo "Tauri build completed successfully"
 
       - name: Upload bundle directory
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -164,13 +177,16 @@ jobs:
               *.msi)
                 # MSI fallback if no NSIS sig collected yet
                 [ -z "$WIN_SIG" ] && { WIN_URL="${REPO_URL}/${FNAME}"; WIN_SIG="$SIG_CONTENT"; } ;;
-              *_aarch64.app.tar.gz|*.app.tar.gz)
+              *_aarch64.app.tar.gz)
                 # QNBS-v3: macOS updater bundle is .app.tar.gz (not .dmg).
                 # .dmg is the user-facing installer; .app.tar.gz is what Tauri downloads for in-app updates.
                 # aarch64 = macos-latest ARM runner. x64 runner not yet in matrix.
                 MAC_AARCH64_URL="${REPO_URL}/${FNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
               *_x64.app.tar.gz)
                 MAC_X64_URL="${REPO_URL}/${FNAME}"; MAC_X64_SIG="$SIG_CONTENT" ;;
+              *.app.tar.gz)
+                # Fallback for generic .app.tar.gz (older Tauri versions)
+                MAC_AARCH64_URL="${REPO_URL}/${FNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
             esac
           done
 
