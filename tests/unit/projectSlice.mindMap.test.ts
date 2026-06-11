@@ -28,8 +28,7 @@ describe('projectSlice — mindMap reducers', () => {
     const state = s([]);
     const payload = makeMap({ id: 'new-map', name: 'My Map' });
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.addMindMap(payload),
     );
     expect(next.data.mindMaps).toHaveLength(1);
@@ -40,8 +39,7 @@ describe('projectSlice — mindMap reducers', () => {
   it('updateMindMap patches fields by id', () => {
     const state = s([makeMap()]);
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.updateMindMap({ id: 'map-1', changes: { name: 'Renamed' } }),
     );
     expect(next.data.mindMaps?.[0]?.name).toBe('Renamed');
@@ -50,8 +48,7 @@ describe('projectSlice — mindMap reducers', () => {
   it('deleteMindMap removes the map', () => {
     const state = s([makeMap()]);
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.deleteMindMap('map-1'),
     );
     expect(next.data.mindMaps).toHaveLength(0);
@@ -60,8 +57,7 @@ describe('projectSlice — mindMap reducers', () => {
   it('addMindMapNode adds a node to the correct map', () => {
     const state = s([makeMap()]);
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.addMindMapNode({
         mapId: 'map-1',
         node: {
@@ -126,8 +122,7 @@ describe('projectSlice — mindMap reducers', () => {
     });
     const state = s([initial]);
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.deleteMindMapNode({ mapId: 'map-1', nodeId }),
     );
     expect(next.data.mindMaps?.[0]?.nodes).toHaveLength(1);
@@ -166,8 +161,7 @@ describe('projectSlice — mindMap reducers', () => {
       }),
     ]);
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.addMindMapEdge({
         mapId: 'map-1',
         edge: {

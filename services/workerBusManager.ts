@@ -10,7 +10,9 @@ const log = createLogger('workerBusManager');
 
 let _bus: WorkerBus | null = null;
 let _adapter: LegacyWorkerBusAdapter | null = null;
-let _initializing = false;
+// QNBS-v3: CodeAnt — hold the in-flight init promise so concurrent callers AWAIT it instead of
+//          returning early while `_bus` is still null (which caused sporadic main-thread fallback).
+let _initPromise: Promise<void> | null = null;
 
 /** Returns the active WorkerBus v2 instance, or null if not yet initialized. */
 export function getWorkerBus(): WorkerBus | null {
@@ -32,9 +34,19 @@ export function isWorkerBusReady(): boolean {
  * Idempotent — concurrent/repeated calls are no-ops.
  */
 export async function initWorkerBus(): Promise<void> {
-  if (_bus !== null || _initializing) return;
-  _initializing = true;
+  if (_bus !== null) return;
+  // QNBS-v3: CodeAnt — concurrent callers share the single in-flight init promise (and await it),
+  //          so none returns before `_bus` is set.
+  if (_initPromise) return _initPromise;
+  _initPromise = doInitWorkerBus();
+  try {
+    await _initPromise;
+  } finally {
+    _initPromise = null;
+  }
+}
 
+async function doInitWorkerBus(): Promise<void> {
   try {
     const {
       WorkerBus,
@@ -67,6 +79,9 @@ export async function initWorkerBus(): Promise<void> {
     //          asset URL. The .ts extension is allowed — Vite transforms it during build.
     const inferenceUrl = new URL('../workers/v2/inference.worker.ts', import.meta.url).href;
     const duckdbUrl = new URL('../workers/v2/duckdb.worker.ts', import.meta.url).href;
+    // QNBS-v3: P1-1 — dedicated WebLLM (WebGPU) worker. Separate pool keeps @mlc-ai/web-llm out
+    //          of the transformers.js worker bundle and isolates the GPU lifecycle.
+    const webllmUrl = new URL('../workers/v2/webllm.worker.ts', import.meta.url).href;
 
     registry.register({
       poolId: 'inference',
@@ -95,6 +110,21 @@ export async function initWorkerBus(): Promise<void> {
       },
     });
 
+    // QNBS-v3: P1-1 — WebLLM pool. maxWorkers:1 (single heavy GPU consumer; tab-leader election
+    //          already serializes across tabs), minWorkers:0 so the GPU thread spins up on demand.
+    registry.register({
+      poolId: 'webllm',
+      capabilities: ['inference.webllm'],
+      options: {
+        maxWorkers: 1,
+        minWorkers: 0,
+        idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
+        workerScript: webllmUrl,
+        capabilities: ['inference.webllm'],
+        labels: { pool: 'webllm', version: 'v2' },
+      },
+    });
+
     // QNBS-v3: Plugin worker pool — isolated execution for sandboxed plugins (P0-2).
     const pluginUrl = new URL('../workers/plugin.worker.ts', import.meta.url).href;
     registry.register({
@@ -114,15 +144,24 @@ export async function initWorkerBus(): Promise<void> {
     _bus = bus;
     _adapter = new LegacyWorkerBusAdapter(bus);
 
-    log.info('WorkerBus v2 initialized', { pools: ['inference', 'duckdb'] });
+    log.info('WorkerBus v2 initialized', { pools: ['inference', 'webllm', 'duckdb', 'plugin'] });
   } catch (err) {
     log.error(
       'WorkerBus v2 initialization failed',
       err instanceof Error ? err : new Error(String(err)),
     );
-  } finally {
-    _initializing = false;
   }
+}
+
+/**
+ * Ensure the WebLLM worker pool is available, initializing the WorkerBus on demand.
+ * QNBS-v3: P1-1 — WebLLM offload is "always-on" and therefore decoupled from the
+ *          `enableWorkerBusV2` feature flag: local AI must run off-thread regardless of whether
+ *          the broader WorkerBus v2 rollout is enabled. Returns null only if init failed.
+ */
+export async function ensureWebLlmPool(): Promise<WorkerBus | null> {
+  if (_bus === null) await initWorkerBus();
+  return _bus;
 }
 
 /**

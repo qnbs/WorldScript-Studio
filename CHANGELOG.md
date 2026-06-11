@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **WebLLM worker offload (P1-1, ADR-0005):** `@mlc-ai/web-llm` (WebGPU) inference now runs in a
+  dedicated WorkerBus v2 `webllm` pool (`workers/v2/webllm.worker.ts`, capability `inference.webllm`)
+  instead of inline on the main thread. Worker-first with an automatic main-thread fallback on
+  `NO_WEBGPU` / worker-spawn failure / circuit-open, decoupled from `enableWorkerBusV2`. GPU mutex +
+  tab-leader election stay on the main thread; loading progress bridges to `inferenceProgressEmitter`
+  so the UX is unchanged.
+- **Whisper WASM STT end-to-end tests (P1-2):** A deterministic, deep-E2E suite
+  (`tests/e2e/deep/voice/whisper-stt.spec.ts`) exercises the full voice orchestration — simulated
+  model download (progress / cancel / error → retry), STT → intent → command-dispatch navigation, and
+  stop-listening stability — via a guarded test seam (`services/voice/voiceTestSeam.ts`). A
+  non-blocking nightly workflow (`voice-nightly.yml`) runs the **real** Whisper download + pipeline
+  init against the live CDN.
+
+### Changed
+
+- **Voice hardening (v1.21 follow-up):** Transcript redacted from the intent-engine debug log
+  (C-P0 — user speech is PII and the IDB log sink persists it); single-flight guard on
+  `VoiceCommandService.startListening` against re-entrant push-to-talk / wake-word starts; download
+  modal progress is now an accessible `role="progressbar"` with a polite live region (`Progress`
+  atom + `VoiceModelDownloadModal`).
 
 ## [1.21.0] — 2026-06-10
 

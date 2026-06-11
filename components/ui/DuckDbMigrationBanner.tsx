@@ -80,7 +80,7 @@ export function DuckDbMigrationBanner() {
           )}
           {!isRunning && !isError && (
             <div className="mt-2">
-              <Progress value={100} />
+              <Progress value={100} aria-label={t('duckdb.migration.complete')} />
             </div>
           )}
         </div>

@@ -249,11 +249,9 @@ describe('ProForgeOrchestrator', () => {
               },
               isRunning: true,
             }),
-            // biome-ignore lint/suspicious/noExplicitAny: test mock cast
-          } as any;
+          } as unknown as ReturnType<OrchestratorContext['getState']>;
         }
-        // biome-ignore lint/suspicious/noExplicitAny: test mock cast
-        return makeMockState() as any;
+        return makeMockState() as unknown as ReturnType<OrchestratorContext['getState']>;
       });
 
       await orch.startPipeline('Test Run', DEFAULT_CONFIG);
@@ -272,8 +270,7 @@ describe('ProForgeOrchestrator', () => {
         project: { present: null },
         versionControl: makeMockState().versionControl,
         proForge: { currentRun: null },
-        // biome-ignore lint/suspicious/noExplicitAny: test mock cast
-      } as any);
+      } as unknown as ReturnType<OrchestratorContext['getState']>);
       const orch = new ProForgeOrchestrator(ctx);
       await expect(orch.startPipeline('Fail', DEFAULT_CONFIG)).rejects.toThrow(
         'No project data available',
@@ -659,10 +656,15 @@ describe('ProForgeOrchestrator', () => {
       const { versionControlActions } = await import(
         '../../../features/versionControl/versionControlSlice'
       );
-      // biome-ignore lint/suspicious/noExplicitAny: mock defines restoreSnapshot; not in production type
-      expect(vi.mocked((versionControlActions as any).restoreSnapshot)).toHaveBeenCalledWith(
-        expect.objectContaining({ snapshotId: 'snap-intake' }),
-      );
+      expect(
+        vi.mocked(
+          (
+            versionControlActions as unknown as {
+              restoreSnapshot: (...args: unknown[]) => unknown;
+            }
+          ).restoreSnapshot,
+        ),
+      ).toHaveBeenCalledWith(expect.objectContaining({ snapshotId: 'snap-intake' }));
     });
 
     it('returns early if no current run', async () => {
@@ -710,10 +712,15 @@ describe('ProForgeOrchestrator', () => {
       const { versionControlActions } = await import(
         '../../../features/versionControl/versionControlSlice'
       );
-      // biome-ignore lint/suspicious/noExplicitAny: mock defines restoreSnapshot; not in production type
-      expect(vi.mocked((versionControlActions as any).restoreSnapshot)).toHaveBeenCalledWith(
-        expect.objectContaining({ snapshotId: 'snap-pre-pipeline' }),
-      );
+      expect(
+        vi.mocked(
+          (
+            versionControlActions as unknown as {
+              restoreSnapshot: (...args: unknown[]) => unknown;
+            }
+          ).restoreSnapshot,
+        ),
+      ).toHaveBeenCalledWith(expect.objectContaining({ snapshotId: 'snap-pre-pipeline' }));
     });
 
     it('returns early if no current run', async () => {
@@ -857,10 +864,15 @@ describe('ProForgeOrchestrator', () => {
       const { versionControlActions } = await import(
         '../../../features/versionControl/versionControlSlice'
       );
-      // biome-ignore lint/suspicious/noExplicitAny: mock defines restoreSnapshot; not in production type
-      expect(vi.mocked((versionControlActions as any).restoreSnapshot)).toHaveBeenCalledWith(
-        expect.objectContaining({ snapshotId: 'snap-structural-pre' }),
-      );
+      expect(
+        vi.mocked(
+          (
+            versionControlActions as unknown as {
+              restoreSnapshot: (...args: unknown[]) => unknown;
+            }
+          ).restoreSnapshot,
+        ),
+      ).toHaveBeenCalledWith(expect.objectContaining({ snapshotId: 'snap-structural-pre' }));
     });
   });
 });

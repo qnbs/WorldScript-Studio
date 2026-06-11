@@ -4,6 +4,7 @@
  */
 
 import { logger } from '../logger';
+import { getVoiceTestHarness } from './voiceTestSeam';
 import type { AudioChunk, VadEngine, VadSegment } from './voiceTypes';
 
 // ── WebRTC VAD Fallback ──────────────────────────────────────────────────────
@@ -79,6 +80,13 @@ export class WebRtcVadEngine implements VadEngine {
 // ── Factory ──────────────────────────────────────────────────────────────────
 
 export async function createVadEngine(enableVoiceWasm = false): Promise<VadEngine> {
+  // QNBS-v3: P1-2 — E2E seam. Returns the injected mock VAD verbatim (undefined in production).
+  const harness = getVoiceTestHarness();
+  if (harness?.vad) {
+    logger.info('[createVadEngine] using injected test VAD engine');
+    return harness.vad;
+  }
+
   // QNBS-v3: Phase 2 — try Silero VAD when enableVoiceWasm is on; falls back to energy-based.
   if (enableVoiceWasm) {
     try {

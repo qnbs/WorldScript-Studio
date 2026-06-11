@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RootState } from '../../app/store';
 import type { StorySection } from '../../types';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
@@ -36,8 +37,9 @@ const makeMockState = (overrides?: { tensionOverrides?: Record<string, number> }
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
-  // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-  useAppSelectorShallow: vi.fn((selector: (s: any) => unknown) => selector(makeMockState())),
+  useAppSelectorShallow: vi.fn((selector: (s: RootState) => unknown) =>
+    selector(makeMockState() as unknown as RootState),
+  ),
 }));
 
 vi.mock('../../components/ui/Select', () => ({
@@ -220,9 +222,8 @@ describe('TensionCurvePanel', () => {
 
   it('uses accent color for overridden dots', async () => {
     const { useAppSelectorShallow } = await import('../../app/hooks');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — required for selector mock assignability
-    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: any) => unknown) =>
-      selector(makeMockState({ tensionOverrides: { s1: 8 } })),
+    vi.mocked(useAppSelectorShallow).mockImplementation((selector: (s: RootState) => unknown) =>
+      selector(makeMockState({ tensionOverrides: { s1: 8 } }) as unknown as RootState),
     );
 
     const { container } = render(

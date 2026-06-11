@@ -31,6 +31,7 @@ import { createSttEngine } from './sttEngine';
 import { createTtsEngine } from './ttsEngine';
 import { createVadEngine } from './vadEngine';
 import { VoiceActivityCoordinator } from './voiceActivityCoordinator';
+import { getVoiceTestHarness, type VoiceTestDownloadHook } from './voiceTestSeam';
 import type {
   SttEngine,
   SttResult,
@@ -73,6 +74,8 @@ export class VoiceCommandService {
 
   private coordinator: VoiceActivityCoordinator | null = null;
   private isInitialized = false;
+  // QNBS-v3: C-P1 — single-flight guard against re-entrant startListening (rapid PTT / wake-word).
+  private isStarting = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
   private eventListeners: VoiceEventListener[] = [];
 
@@ -256,47 +259,71 @@ export class VoiceCommandService {
   // ── Listening Control ──────────────────────────────────────────────────────
 
   async startListening(): Promise<void> {
-    if (!this.isInitialized) {
-      const ok = await this.initialize();
-      if (!ok) {
-        throw new Error('Voice service could not be initialized');
+    // QNBS-v3: C-P1 — single-flight guard. A re-entrant call (rapid push-to-talk presses, or a
+    //          wake-word firing while a start is mid-flight) would race engine init and leak a mic
+    //          stream / orphan a coordinator. Ignore while starting or already listening.
+    if (this.isStarting || this.coordinator || this.listeningTimer) return;
+    this.isStarting = true;
+    try {
+      if (!this.isInitialized) {
+        const ok = await this.initialize();
+        if (!ok) {
+          throw new Error('Voice service could not be initialized');
+        }
       }
-    }
 
-    if (!this.sttEngine) {
-      throw new Error('No STT engine available');
-    }
+      if (!this.sttEngine) {
+        throw new Error('No STT engine available');
+      }
 
-    this.d(setVoiceMode('listening'));
-    this.d(setVoiceError(null));
-    this.d(setVoiceTranscript(''));
+      this.d(setVoiceMode('listening'));
+      this.d(setVoiceError(null));
+      this.d(setVoiceTranscript(''));
 
-    this.emit({ type: 'listening-started', timestamp: Date.now() });
+      this.emit({ type: 'listening-started', timestamp: Date.now() });
 
-    // QNBS-v3: Route through VoiceActivityCoordinator when Whisper WASM is active —
-    // feeds PCM frames to the VAD and triggers STT on detected speech boundaries.
-    if (this.config.enableVoiceWasm && this.sttEngine.id === 'whisper' && this.vadEngine) {
-      // QNBS-v3: dispose previous coordinator before reassigning to prevent leaked mic stream
+      // QNBS-v3: Route through VoiceActivityCoordinator when Whisper WASM is active —
+      // feeds PCM frames to the VAD and triggers STT on detected speech boundaries.
+      if (this.config.enableVoiceWasm && this.sttEngine.id === 'whisper' && this.vadEngine) {
+        // QNBS-v3: C-P1 — the single-flight guard above already guarantees no active coordinator,
+        //          so no pre-dispose is needed here (it would be unreachable dead code).
+        this.coordinator = new VoiceActivityCoordinator(this.vadEngine, this.sttEngine);
+        await this.coordinator.start(
+          (result) => this.handleSttResult(result),
+          (error) => this.handleSttError(error),
+        );
+      } else {
+        await this.sttEngine.start(
+          (result) => this.handleSttResult(result),
+          (error) => this.handleSttError(error),
+        );
+      }
+
+      // Auto-stop after timeout
+      this.listeningTimer = setTimeout(() => {
+        this.stopListening();
+      }, this.config.listeningTimeoutSeconds * 1000);
+    } catch (err) {
+      // QNBS-v3: CodeAnt — roll back the 'listening' mode if startup fails after we set it, so the
+      //          UI/Redux don't stay stuck in listening when capture never actually started.
+      this.d(setVoiceMode('inactive'));
+      this.d(setVoiceError(err instanceof Error ? err.message : 'Voice start failed'));
+      if (this.listeningTimer) {
+        clearTimeout(this.listeningTimer);
+        this.listeningTimer = null;
+      }
       if (this.coordinator) {
-        await this.coordinator.dispose();
+        try {
+          await this.coordinator.dispose();
+        } catch {
+          /* best-effort teardown */
+        }
         this.coordinator = null;
       }
-      this.coordinator = new VoiceActivityCoordinator(this.vadEngine, this.sttEngine);
-      await this.coordinator.start(
-        (result) => this.handleSttResult(result),
-        (error) => this.handleSttError(error),
-      );
-    } else {
-      await this.sttEngine.start(
-        (result) => this.handleSttResult(result),
-        (error) => this.handleSttError(error),
-      );
+      throw err;
+    } finally {
+      this.isStarting = false;
     }
-
-    // Auto-stop after timeout
-    this.listeningTimer = setTimeout(() => {
-      this.stopListening();
-    }, this.config.listeningTimeoutSeconds * 1000);
   }
 
   async startDictation(): Promise<void> {
@@ -533,6 +560,13 @@ export class VoiceCommandService {
   async downloadVoiceModels(modelType: 'stt' | 'tts', signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) return;
 
+    // QNBS-v3: P1-2 — E2E seam. Run a deterministic simulated download (no 42 MB fetch in CI).
+    const downloadHook = getVoiceTestHarness()?.download;
+    if (downloadHook) {
+      await this.runSimulatedDownload(downloadHook, signal);
+      return;
+    }
+
     const modelId = modelType === 'stt' ? 'Xenova/whisper-tiny.en' : 'onnxruntime-community/kokoro';
 
     // QNBS-v3: Trigger model download via transformers pipeline warm-up.
@@ -612,6 +646,66 @@ export class VoiceCommandService {
       );
       throw err;
     }
+  }
+
+  /**
+   * QNBS-v3: P1-2 — Deterministic download simulation for E2E. Emits the same Redux progress
+   * actions as the real path (so the modal UI is exercised identically), honors the abort signal
+   * for cancel coverage, and throws on `mode: 'error'` for retry-path coverage.
+   */
+  private async runSimulatedDownload(
+    hook: VoiceTestDownloadHook,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const steps = Math.max(1, hook.steps ?? 5);
+    const delay = hook.stepDelayMs ?? 50;
+    // QNBS-v3: CodeAnt — on abort, reset progress to 0 so the modal's auto-start (which only fires
+    //          when progress === 0) can re-run on reopen/retry after a cancel.
+    const resetProgress = (): void => {
+      this.d(settingsActions.setVoiceSettings({ wasmModelDownloadProgress: 0 }));
+    };
+
+    this.d(settingsActions.setVoiceSettings({ wasmModelDownloadProgress: 0.05 }));
+
+    for (let i = 1; i <= steps; i++) {
+      if (signal?.aborted) {
+        resetProgress();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (signal?.aborted) {
+        resetProgress();
+        return;
+      }
+      this.d(
+        settingsActions.setVoiceSettings({
+          wasmModelDownloadProgress: Math.min(0.95, i / steps),
+        }),
+      );
+    }
+
+    if (signal?.aborted) {
+      resetProgress();
+      return;
+    }
+
+    if (hook.mode === 'error') {
+      const message = hook.errorMessage ?? 'Simulated download failure';
+      this.d(
+        settingsActions.setVoiceSettings({
+          wasmModelDownloadProgress: 0,
+          voiceWasmDownloadError: message,
+        }),
+      );
+      throw new Error(message);
+    }
+
+    this.d(
+      settingsActions.setVoiceSettings({
+        wasmModelDownloadProgress: 1.0,
+        wasmModelsReady: true,
+      }),
+    );
   }
 }
 

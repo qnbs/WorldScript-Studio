@@ -96,7 +96,9 @@ export class HybridIntentEngine implements IntentEngine {
       }
     }
 
-    logger.debug('No intent match for transcript:', cleaned);
+    // QNBS-v3: C-P0 — never log the raw transcript (user speech is PII; the IDB log sink persists
+    //          it). Log only a non-identifying length so the "no match" case stays debuggable.
+    logger.debug('No intent match', { transcriptLength: cleaned.length });
     return null;
   }
 

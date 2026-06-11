@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockRunLocalTextGeneration = vi.fn();
 const mockDetectWebGpuSupport = vi.fn().mockReturnValue(false);
 const mockSurrenderLeadership = vi.fn();
 const mockAcquireGpu = vi.fn().mockResolvedValue(undefined);
 const mockReleaseGpu = vi.fn();
+const mockEnsureWebLlmPool = vi.fn();
 
 vi.mock('@domain/ai-core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@domain/ai-core')>();
@@ -23,29 +24,73 @@ vi.mock('../../services/ai/gpuResourceManager', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+// QNBS-v3: P1-1 — the WebLLM worker pool is injected; tests drive its enqueue handle directly.
+vi.mock('../../services/workerBusManager', () => ({
+  ensureWebLlmPool: mockEnsureWebLlmPool,
+}));
+
+// QNBS-v3: A fake WorkerBus handle. `progress` lets a test push worker progress events; `result`
+//          resolves/rejects to simulate worker success/failure.
+function makeFakeBus(opts: {
+  result: Promise<unknown>;
+  progressEvents?: Array<{ stage: string; progress: number; message?: string }>;
+}) {
+  const enqueue = vi.fn(
+    (_taskType: string, _payload: unknown, enqueueOpts: { onProgress?: (p: unknown) => void }) => {
+      for (const ev of opts.progressEvents ?? []) {
+        enqueueOpts.onProgress?.({
+          taskId: 't',
+          taskType: 'inference.webllm',
+          timestamp: 0,
+          ...ev,
+        });
+      }
+      return {
+        taskId: 't',
+        result: opts.result,
+        progress: (async function* () {})(),
+        cancel: vi.fn(),
+      };
+    },
+  );
+  return { enqueue };
+}
+
+// QNBS-v3: jsdom has no Worker global; define a stub so the worker-first branch is reachable.
+function withWorkerGlobal(fn: () => Promise<void>): () => Promise<void> {
+  const g = globalThis as { Worker?: unknown };
+  return async () => {
+    const had = 'Worker' in globalThis;
+    g.Worker = class {};
+    try {
+      await fn();
+    } finally {
+      if (!had) delete g.Worker;
+    }
+  };
+}
 
 describe('localAiFacade', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // QNBS-v3: Re-assert defaults after clearAllMocks (which wipes call history but not impls).
-    //          Explicit reset guards against test-order sensitivity.
     mockDetectWebGpuSupport.mockReturnValue(false);
     mockAcquireGpu.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    delete (globalThis as { Worker?: unknown }).Worker;
   });
 
   it('returns local layer result when runLocalTextGeneration succeeds', async () => {
     mockRunLocalTextGeneration.mockResolvedValue({ layer: 'local', text: 'AI output' });
     const { generateLocalText } = await import('../../services/localAiFacade');
     const result = await generateLocalText('prompt');
-    // Task is enqueued then dequeued — runLocalTextGeneration is called
     expect(result.text).toBeTruthy();
     expect(typeof result.layer).toBe('string');
   });
 
-  it('passes AbortSignal to runLocalTextGeneration', async () => {
+  it('passes AbortSignal to runLocalTextGeneration (no-GPU path)', async () => {
     mockRunLocalTextGeneration.mockResolvedValue({ layer: 'local', text: 'ok' });
     const { generateLocalText } = await import('../../services/localAiFacade');
     const controller = new AbortController();
@@ -73,37 +118,6 @@ describe('localAiFacade', () => {
     expect(typeof tele).toBe('object');
   });
 
-  it('includes loraAdapterId in the enqueued task payload', async () => {
-    // QNBS-v3: loraAdapterId is wired into the WorkerBus task payload (for future worker-side LoRA),
-    //          NOT forwarded to runLocalTextGeneration. Spy on the real bus to assert the payload,
-    //          and confirm loraAdapterId never leaks into runLocalTextGeneration's signal slot.
-    // QNBS-v3: dynamic import — a top-level @domain/ai-core import would make the hoisted vi.mock
-    //          factory run before the mock consts initialize (TDZ). The mock spreads the real
-    //          WorkerBus, so its prototype is shared with the module's internal localWorkerBus.
-    const { WorkerBus } = await import('@domain/ai-core');
-    const enqueueSpy = vi.spyOn(WorkerBus.prototype, 'enqueue');
-    mockRunLocalTextGeneration.mockResolvedValue({ layer: 'local', text: 'ok' });
-    const { generateLocalText } = await import('../../services/localAiFacade');
-    await generateLocalText('prompt', 'model', undefined, 'my-lora');
-    expect(enqueueSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'local.text.generate',
-        payload: expect.objectContaining({
-          prompt: 'prompt',
-          modelId: 'model',
-          loraAdapterId: 'my-lora',
-        }),
-      }),
-    );
-    expect(mockRunLocalTextGeneration).toHaveBeenCalledWith(
-      'prompt',
-      'model',
-      undefined,
-      undefined,
-    );
-    enqueueSpy.mockRestore();
-  });
-
   it('acquires and releases GPU mutex when WebGPU is available', async () => {
     mockDetectWebGpuSupport.mockReturnValue(true);
     mockRunLocalTextGeneration.mockResolvedValue({ layer: 'local', text: 'ok' });
@@ -120,7 +134,6 @@ describe('localAiFacade', () => {
     const { generateLocalText } = await import('../../services/localAiFacade');
     await generateLocalText('prompt');
     expect(mockAcquireGpu).not.toHaveBeenCalled();
-    // surrenderLeadership is called unconditionally (in finally)
     expect(mockSurrenderLeadership).toHaveBeenCalled();
   });
 
@@ -133,4 +146,99 @@ describe('localAiFacade', () => {
     expect(mockReleaseGpu).toHaveBeenCalledWith('webllm');
     expect(mockSurrenderLeadership).toHaveBeenCalled();
   });
+
+  // --- P1-1: WebLLM worker offload ------------------------------------------
+
+  it(
+    'routes to the WebLLM worker and returns its result when WebGPU + Worker are available',
+    withWorkerGlobal(async () => {
+      mockDetectWebGpuSupport.mockReturnValue(true);
+      mockEnsureWebLlmPool.mockResolvedValue(
+        makeFakeBus({
+          result: Promise.resolve({ text: 'worker says hi', layer: 'webllm', modelId: 'm' }),
+        }),
+      );
+      const { generateLocalText } = await import('../../services/localAiFacade');
+      const result = await generateLocalText('prompt', 'm');
+      expect(result.layer).toBe('webllm');
+      expect(result.text).toBe('worker says hi');
+      // The main-thread orchestrator must NOT run when the worker succeeds.
+      expect(mockRunLocalTextGeneration).not.toHaveBeenCalled();
+    }),
+  );
+
+  it(
+    'forwards loraAdapterId in the worker task payload',
+    withWorkerGlobal(async () => {
+      mockDetectWebGpuSupport.mockReturnValue(true);
+      const bus = makeFakeBus({
+        result: Promise.resolve({ text: 'ok', layer: 'webllm', modelId: 'm' }),
+      });
+      mockEnsureWebLlmPool.mockResolvedValue(bus);
+      const { generateLocalText } = await import('../../services/localAiFacade');
+      await generateLocalText('prompt', 'm', undefined, 'my-lora');
+      expect(bus.enqueue).toHaveBeenCalledWith(
+        'inference.webllm',
+        expect.objectContaining({ modelId: 'm', loraAdapterId: 'my-lora' }),
+        expect.objectContaining({ capabilities: ['inference.webllm'] }),
+      );
+    }),
+  );
+
+  it(
+    'falls back to the main thread when the worker returns an empty result',
+    withWorkerGlobal(async () => {
+      mockDetectWebGpuSupport.mockReturnValue(true);
+      mockEnsureWebLlmPool.mockResolvedValue(
+        makeFakeBus({ result: Promise.resolve({ text: '', layer: 'webllm', modelId: 'm' }) }),
+      );
+      mockRunLocalTextGeneration.mockResolvedValue({ layer: 'onnx', text: 'fallback text' });
+      const { generateLocalText } = await import('../../services/localAiFacade');
+      const result = await generateLocalText('prompt', 'm');
+      expect(mockRunLocalTextGeneration).toHaveBeenCalled();
+      expect(result.text).toBe('fallback text');
+    }),
+  );
+
+  it(
+    'falls back to the main thread when the worker task rejects (NO_WEBGPU)',
+    withWorkerGlobal(async () => {
+      mockDetectWebGpuSupport.mockReturnValue(true);
+      mockEnsureWebLlmPool.mockResolvedValue(
+        makeFakeBus({ result: Promise.reject(new Error('NO_WEBGPU')) }),
+      );
+      mockRunLocalTextGeneration.mockResolvedValue({ layer: 'transformers', text: 'cpu fallback' });
+      const { generateLocalText } = await import('../../services/localAiFacade');
+      const result = await generateLocalText('prompt', 'm');
+      expect(mockRunLocalTextGeneration).toHaveBeenCalled();
+      expect(result.text).toBe('cpu fallback');
+    }),
+  );
+
+  it(
+    'maps worker progress events onto inferenceProgressEmitter',
+    withWorkerGlobal(async () => {
+      mockDetectWebGpuSupport.mockReturnValue(true);
+      mockEnsureWebLlmPool.mockResolvedValue(
+        makeFakeBus({
+          result: Promise.resolve({ text: 'done', layer: 'webllm', modelId: 'm' }),
+          progressEvents: [
+            { stage: 'loading', progress: 0.5, message: 'half' },
+            { stage: 'done', progress: 1, message: 'Complete' },
+          ],
+        }),
+      );
+      const { inferenceProgressEmitter } = await import(
+        '../../services/ai/inferenceProgressEmitter'
+      );
+      const progSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmProgress');
+      const readySpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmReady');
+      const { generateLocalText } = await import('../../services/localAiFacade');
+      await generateLocalText('prompt', 'm');
+      expect(progSpy).toHaveBeenCalledWith(0.5, 'half');
+      expect(readySpy).toHaveBeenCalled();
+      progSpy.mockRestore();
+      readySpy.mockRestore();
+    }),
+  );
 });

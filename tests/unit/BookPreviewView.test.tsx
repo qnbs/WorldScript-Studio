@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import type { RootState } from '../../app/store';
 import { BookPreviewView } from '../../components/BookPreviewView';
 
 const mockSections = [
@@ -26,10 +27,12 @@ const mockAppState = {
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => vi.fn()),
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  useAppSelector: vi.fn((selector: (s: any) => unknown) => selector(mockAppState as any)),
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  useAppSelectorShallow: vi.fn((selector: (s: any) => unknown) => selector(mockAppState as any)),
+  useAppSelector: vi.fn((selector: (s: RootState) => unknown) =>
+    selector(mockAppState as unknown as RootState),
+  ),
+  useAppSelectorShallow: vi.fn((selector: (s: RootState) => unknown) =>
+    selector(mockAppState as unknown as RootState),
+  ),
 }));
 
 vi.mock('../../hooks/useTranslation', () => ({
@@ -143,16 +146,14 @@ describe('BookPreviewView', () => {
   it('shows no-scenes message when manuscript is empty', async () => {
     const { useAppSelector } = await import('../../app/hooks');
     const emptyState = { ...mockAppState, project: { present: { data: { manuscript: [] } } } };
-    vi.mocked(useAppSelector).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      (selector: (s: any) => unknown) => selector(emptyState as any),
+    vi.mocked(useAppSelector).mockImplementation((selector: (s: RootState) => unknown) =>
+      selector(emptyState as unknown as RootState),
     );
     render(<BookPreviewView />);
     expect(screen.getByText('preview.noScenes')).toBeDefined();
     // Reset
-    vi.mocked(useAppSelector).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      (selector: (s: any) => unknown) => selector(mockAppState as any),
+    vi.mocked(useAppSelector).mockImplementation((selector: (s: RootState) => unknown) =>
+      selector(mockAppState as unknown as RootState),
     );
   });
 });

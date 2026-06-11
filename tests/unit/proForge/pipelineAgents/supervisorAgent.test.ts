@@ -32,8 +32,7 @@ function makeSection(content: string) {
 function makeContext(manuscriptContent = 'Short text.'): OrchestratorContext {
   return {
     projectId: 'proj-test',
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
-    dispatch: vi.fn() as any,
+    dispatch: vi.fn() as unknown as OrchestratorContext['dispatch'],
     getState: vi.fn().mockReturnValue({
       project: {
         present: {
@@ -47,8 +46,7 @@ function makeContext(manuscriptContent = 'Short text.'): OrchestratorContext {
           },
         },
       },
-      // biome-ignore lint/suspicious/noExplicitAny: partial test state
-    } as any),
+    } as unknown as ReturnType<OrchestratorContext['getState']>),
     manuscript: [],
     characters: [],
     worlds: [],
@@ -430,8 +428,7 @@ describe('SupervisorAgent', () => {
               },
             },
           },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock
-        } as any),
+        } as unknown as ReturnType<OrchestratorContext['getState']>),
       };
       const multiAgent = new SupervisorAgent(multiCtx);
       // 7 words total (under 1000) → structural passes
@@ -447,8 +444,7 @@ describe('SupervisorAgent', () => {
         ...makeContext(),
         getState: vi.fn().mockReturnValue({
           project: { present: null },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock
-        } as any),
+        } as unknown as ReturnType<OrchestratorContext['getState']>),
       };
       const nullAgent = new SupervisorAgent(noProjectCtx);
       // Should not throw; word count = 0 → proof passes (under 500)

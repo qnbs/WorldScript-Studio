@@ -13,6 +13,9 @@ import { LOCAL_BACKEND_PRESET_DEFAULT_URL } from '../../services/ai/localBackend
 import { getEffectiveTheme } from '../../services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from '../../services/commands/wordCountApprox';
 
+// QNBS-v3: exact param type of the SUT — avoids `as any` while still passing partial fixtures.
+type WordCountArg = Parameters<typeof approximateManuscriptWordCount>[0];
+
 // ---------------------------------------------------------------------------
 // approximateManuscriptWordCount
 // ---------------------------------------------------------------------------
@@ -23,38 +26,33 @@ describe('approximateManuscriptWordCount', () => {
   });
 
   it('returns 0 for empty manuscript array', () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test cast
-    expect(approximateManuscriptWordCount({ manuscript: [] } as any)).toBe(0);
+    expect(approximateManuscriptWordCount({ manuscript: [] } as unknown as WordCountArg)).toBe(0);
   });
 
   it('counts words across sections', () => {
     const data = {
       manuscript: [{ content: 'Hello world' }, { content: 'Three more words here' }],
     };
-    // biome-ignore lint/suspicious/noExplicitAny: test cast
-    expect(approximateManuscriptWordCount(data as any)).toBe(6);
+    expect(approximateManuscriptWordCount(data as unknown as WordCountArg)).toBe(6);
   });
 
   it('strips HTML tags before counting', () => {
     const data = {
       manuscript: [{ content: '<p>Hello <b>world</b></p>' }],
     };
-    // biome-ignore lint/suspicious/noExplicitAny: test cast
-    expect(approximateManuscriptWordCount(data as any)).toBe(2);
+    expect(approximateManuscriptWordCount(data as unknown as WordCountArg)).toBe(2);
   });
 
   it('handles sections with null/undefined content', () => {
     const data = {
       manuscript: [{ content: null }, { content: undefined }, { content: 'one' }],
     };
-    // biome-ignore lint/suspicious/noExplicitAny: test cast
-    expect(approximateManuscriptWordCount(data as any)).toBe(1);
+    expect(approximateManuscriptWordCount(data as unknown as WordCountArg)).toBe(1);
   });
 
   it('handles multiple whitespace sequences', () => {
     const data = { manuscript: [{ content: '  word1   word2  ' }] };
-    // biome-ignore lint/suspicious/noExplicitAny: test cast
-    expect(approximateManuscriptWordCount(data as any)).toBe(2);
+    expect(approximateManuscriptWordCount(data as unknown as WordCountArg)).toBe(2);
   });
 });
 

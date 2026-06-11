@@ -9,10 +9,8 @@ const BASE: TestState = {
   data: {
     title: '',
     logline: '',
-    // biome-ignore lint/suspicious/noExplicitAny: test minimal shape
-    characters: { ids: [], entities: {} } as any,
-    // biome-ignore lint/suspicious/noExplicitAny: test minimal shape
-    worlds: { ids: [], entities: {} } as any,
+    characters: { ids: [], entities: {} },
+    worlds: { ids: [], entities: {} },
     outline: [],
     manuscript: [],
   },

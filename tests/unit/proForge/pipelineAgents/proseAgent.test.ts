@@ -119,8 +119,7 @@ function makeContext(
 ): OrchestratorContext {
   return {
     projectId: 'proj-prose',
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
-    dispatch: vi.fn() as any,
+    dispatch: vi.fn() as unknown as OrchestratorContext['dispatch'],
     getState: vi.fn().mockReturnValue({
       project: {
         present: {
@@ -144,8 +143,7 @@ function makeContext(
         error: null,
         defaultConfig: DEFAULT_CONFIG,
       },
-      // biome-ignore lint/suspicious/noExplicitAny: partial test state
-    } as any),
+    } as unknown as ReturnType<OrchestratorContext['getState']>),
     manuscript: [],
     characters: [],
     worlds: [],
@@ -318,11 +316,12 @@ describe('ProseAgent', () => {
       const agent = new ProseAgent(makeContext());
       const { agentOutput } = await agent.execute(new AbortController().signal);
 
-      const output = agentOutput as { edits: unknown[] };
+      const output = agentOutput as {
+        edits: Array<{ startOffset: number; endOffset: number; sectionId: string }>;
+      };
       // Two identical offsets should be deduped to 1
       const offsetZeroEdits = output.edits.filter(
-        // biome-ignore lint/suspicious/noExplicitAny: test cast
-        (e: any) => e.startOffset === 0 && e.endOffset === 10 && e.sectionId === 's1',
+        (e) => e.startOffset === 0 && e.endOffset === 10 && e.sectionId === 's1',
       );
       expect(offsetZeroEdits).toHaveLength(1);
     });
@@ -363,8 +362,7 @@ describe('ProseAgent', () => {
       vi.mocked(ctx.getState).mockReturnValue({
         project: { present: null },
         proForge: { currentRun: null },
-        // biome-ignore lint/suspicious/noExplicitAny: test mock
-      } as any);
+      } as unknown as ReturnType<OrchestratorContext['getState']>);
 
       const agent = new ProseAgent(ctx);
       await expect(agent.execute(new AbortController().signal)).rejects.toThrow('No project data');

@@ -23,8 +23,7 @@ describe('loraTrainingService — web build (no Tauri)', () => {
   beforeEach(() => {
     // Ensure __TAURI_INTERNALS__ is NOT present (web build)
     if ('__TAURI_INTERNALS__' in window) {
-      // biome-ignore lint/suspicious/noExplicitAny: test teardown
-      delete (window as any).__TAURI_INTERNALS__;
+      delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     }
   });
 
@@ -52,8 +51,7 @@ describe('loraTrainingService — web build (no Tauri)', () => {
 
 describe('loraTrainingService — Tauri desktop build', () => {
   beforeEach(() => {
-    // biome-ignore lint/suspicious/noExplicitAny: test setup
-    (window as any).__TAURI_INTERNALS__ = {};
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
   });
 
   afterEach(() => {

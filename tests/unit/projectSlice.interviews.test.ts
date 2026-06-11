@@ -37,8 +37,7 @@ describe('projectSlice — characterInterview reducers', () => {
   it('addCharacterInterview creates a new list when none exists', () => {
     const interview = makeInterview();
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      s() as any,
+      s() as unknown as Parameters<typeof projectReducer>[0],
       projectActions.addCharacterInterview({ characterId: 'char-1', interview }),
     );
     expect(next.data.characterInterviews?.['char-1']).toHaveLength(1);
@@ -49,8 +48,7 @@ describe('projectSlice — characterInterview reducers', () => {
     const existing = makeInterview({ id: 'iv-0' });
     const second = makeInterview({ id: 'iv-2' });
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      s({ 'char-1': [existing] }) as any,
+      s({ 'char-1': [existing] }) as unknown as Parameters<typeof projectReducer>[0],
       projectActions.addCharacterInterview({ characterId: 'char-1', interview: second }),
     );
     expect(next.data.characterInterviews?.['char-1']).toHaveLength(2);
@@ -61,8 +59,7 @@ describe('projectSlice — characterInterview reducers', () => {
     const state = s({ 'char-1': [interview] });
     const msg = makeMessage({ id: 'msg-new', content: 'A question' });
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.appendInterviewMessage({
         characterId: 'char-1',
         interviewId: 'iv-1',
@@ -79,8 +76,7 @@ describe('projectSlice — characterInterview reducers', () => {
     const interview = makeInterview();
     const state = s({ 'char-1': [interview] });
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.deleteCharacterInterview({ characterId: 'char-1', interviewId: 'iv-1' }),
     );
     expect(next.data.characterInterviews?.['char-1']).toHaveLength(0);
@@ -90,8 +86,7 @@ describe('projectSlice — characterInterview reducers', () => {
     const interview = makeInterview({ title: 'Old Title' });
     const state = s({ 'char-1': [interview] });
     const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
+      state as unknown as Parameters<typeof projectReducer>[0],
       projectActions.updateCharacterInterview({
         characterId: 'char-1',
         interviewId: 'iv-1',
@@ -105,19 +100,15 @@ describe('projectSlice — characterInterview reducers', () => {
     const aiMsg = makeMessage({ id: 'ai-msg', role: 'ai', content: '' });
     const interview = makeInterview({ messages: [aiMsg] });
     const state = s({ 'char-1': [interview] });
-    const next = projectReducer(
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      state as any,
-      {
-        type: 'project/streamInterviewChunk',
-        payload: {
-          characterId: 'char-1',
-          interviewId: 'iv-1',
-          aiMsgId: 'ai-msg',
-          content: 'Streaming response so far',
-        },
+    const next = projectReducer(state as unknown as Parameters<typeof projectReducer>[0], {
+      type: 'project/streamInterviewChunk',
+      payload: {
+        characterId: 'char-1',
+        interviewId: 'iv-1',
+        aiMsgId: 'ai-msg',
+        content: 'Streaming response so far',
       },
-    );
+    });
     expect(next.data.characterInterviews?.['char-1']?.[0]?.messages?.[0]?.content).toBe(
       'Streaming response so far',
     );

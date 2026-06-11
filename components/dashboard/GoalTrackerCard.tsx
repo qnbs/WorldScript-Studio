@@ -103,7 +103,11 @@ export const GoalTrackerCard: FC = () => {
               / {project.projectGoals?.totalWordCount.toLocaleString()} {t('common.words')}
             </span>
           </div>
-          <Progress value={wordCountProgress} className="h-4" />
+          <Progress
+            value={wordCountProgress}
+            className="h-4"
+            aria-label={t('dashboard.goals.title')}
+          />
           {wordsRemaining > 0 ? (
             <p className="mt-2 text-xs text-[var(--sc-text-muted)]">
               {t('dashboard.goals.wordsRemaining', { count: wordsRemaining.toLocaleString() })}

@@ -143,8 +143,7 @@ function makeContext(
 ): OrchestratorContext {
   return {
     projectId: 'proj-proof',
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
-    dispatch: vi.fn() as any,
+    dispatch: vi.fn() as unknown as OrchestratorContext['dispatch'],
     getState: vi.fn().mockReturnValue({
       project: {
         present: {
@@ -168,8 +167,7 @@ function makeContext(
         error: null,
         defaultConfig: DEFAULT_CONFIG,
       },
-      // biome-ignore lint/suspicious/noExplicitAny: partial test state
-    } as any),
+    } as unknown as ReturnType<OrchestratorContext['getState']>),
     manuscript: [],
     characters: [],
     worlds: [],
@@ -331,8 +329,7 @@ describe('ProofAgent', () => {
       vi.mocked(ctx.getState).mockReturnValue({
         project: { present: null },
         proForge: { currentRun: null },
-        // biome-ignore lint/suspicious/noExplicitAny: test mock
-      } as any);
+      } as unknown as ReturnType<OrchestratorContext['getState']>);
 
       const agent = new ProofAgent(ctx);
       await expect(agent.execute(new AbortController().signal)).rejects.toThrow('No project data');
