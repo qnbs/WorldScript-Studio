@@ -7,13 +7,13 @@
   <img src="https://img.shields.io/badge/Redux_Toolkit-2.x-764ABC?logo=redux" alt="Redux Toolkit">
   <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
   <img src="https://img.shields.io/badge/TypeScript-7.x_(tsgo)-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7 (tsgo)">
-  <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · Ollama · WebLLM">
+  <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_OpenRouter_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · OpenRouter · Ollama · WebLLM">
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
   <img src="https://img.shields.io/badge/Version-v1.21.0-6366F1" alt="v1.21.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-11_locales-2357_keys-0EA5E9" alt="i18n 11 locales — 2357 keys">
-  <img src="https://img.shields.io/badge/Tests-~5000_%2B_%2F_433_files-22C55E" alt="~5000+ tests / 433 files">
+  <img src="https://img.shields.io/badge/i18n-11_locales-2594_keys-0EA5E9" alt="i18n 11 locales — 2594 keys">
+  <img src="https://img.shields.io/badge/Tests-5475%2B_%2F_449_files-22C55E" alt="5475+ tests / 449 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
@@ -52,7 +52,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 ---
 
-**StoryCraft Studio is a cutting-edge, AI-enhanced application meticulously engineered for authors, screenwriters, and creators.** It transforms the daunting task of writing into a seamless, inspiring journey from a fleeting idea to a polished manuscript. By integrating a multi-provider AI stack — including Google Gemini, OpenAI, Grok, Claude, Ollama, and a fully browser-native 4-layer local inference engine — with an intuitive, offline-first interface, StoryCraft Studio acts as your all-in-one creative co-pilot, empowering you to build, write, and refine your narrative universe without compromise.
+**StoryCraft Studio is a cutting-edge, AI-enhanced application meticulously engineered for authors, screenwriters, and creators.** It transforms the daunting task of writing into a seamless, inspiring journey from a fleeting idea to a polished manuscript. By integrating a multi-provider AI stack — including Google Gemini, OpenAI, OpenRouter, Grok, Claude, Ollama, and a fully browser-native 4-layer local inference engine — with an intuitive, offline-first interface, StoryCraft Studio acts as your all-in-one creative co-pilot, empowering you to build, write, and refine your narrative universe without compromise. Four **AI Execution Modes** (Hybrid · Cloud · Local · Eco) let you choose the right balance between quality, privacy, and battery life at any moment.
 
 ---
 
@@ -66,7 +66,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 > Everything is saved locally in IndexedDB and works offline (PWA). Nothing leaves your device unless you choose a cloud provider.
 
-**Running it yourself?** `pnpm install && pnpm run dev` (Node ≥ 22, pnpm 11) → <http://localhost:3000>. Full setup, deployment, and AI-provider options are in [Getting Started](#getting-started).
+**Running it yourself?** `pnpm install && pnpm run dev` (Node ≥ 22, pnpm 11) → <http://localhost:3000>. Full setup, deployment, and AI-provider options — including the new **OpenRouter** free-tier gateway — are in [Getting Started](#getting-started).
 
 ---
 
@@ -228,6 +228,23 @@ Key design points:
 
 See [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) for full architecture, types, and agent reference.
 
+### ✦ Global AI Copilot _(v2 — Ambient Intelligence Layer)_
+
+An always-present AI writing assistant that surfaces proactive insights and lets you chat without leaving the editor. Enable via **Settings → Experimental → Enable Global AI Copilot**.
+
+**Panel modes:**
+- **Dialog** (default) — floating panel, bottom-right
+- **Sidebar** — docked to the right edge on desktop (≥ 768 px); toggle with the dock/float icon
+
+**v2 capabilities (shipped in latest release):**
+- **Markdown rendering** — assistant replies render as formatted HTML (headings, bold, italic, code blocks, lists)
+- **Apply to chapter** — if the last assistant message contains a fenced code block and a chapter is open, one click rewrites it (dispatched into redux-undo; `Ctrl+Z` reversal; gated to blocks ≥ 70 % of chapter length)
+- **Inline Annotation Layer** — a badge inside the Manuscript Editor shows the heuristic insight count for the active chapter; clicking it opens the Copilot and scrolls to the relevant finding
+- **Heuristics-only mode** — brain-icon toggle disables all AI calls; the Copilot replies using only the local [Heuristic Engine](docs/HEURISTIC-RULES.md) (8 built-in rules, pure TypeScript, no network)
+- **ProForge integration** — each ProForge Review item has an **✦ Ask Copilot** chip that pre-fills the chat with the item's context
+
+See [`docs/COPILOT.md`](docs/COPILOT.md) for the full feature guide and architecture overview, and [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md) for the rule catalogue.
+
 ### 🌊 Flow Mode _(Distraction-Free Writing)_
 
 A single-keystroke toggle that collapses all sidebars and chrome, leaving only the manuscript editor. Exit with `Escape` or the same toggle key. State is stored in the Zustand `transientUiStore` (`flowMode` flag) so it resets on page load.
@@ -334,7 +351,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2 348 i18n keys** across all 11 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2 594 i18n keys** across all 11 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -358,7 +375,7 @@ All eleven trees stay in key parity (`pnpm run i18n:check`). Language selection 
 
 ## 🧠 AI Provider Stack
 
-StoryCraft Studio supports **8 distinct AI execution paths**, automatically routing to the best available option:
+StoryCraft Studio supports **9 distinct AI execution paths**, automatically routing to the best available option based on the active **[AI Execution Mode](#-ai-execution-modes)**.
 
 | Layer | Provider | Requires | Notes |
 |-------|----------|----------|-------|
@@ -366,12 +383,30 @@ StoryCraft Studio supports **8 distinct AI execution paths**, automatically rout
 | **Cloud 2** | OpenAI | API key (BYOK) | GPT-4o, GPT-4o-mini |
 | **Cloud 3** | Anthropic Claude | API key (BYOK) | Claude 3.5 Sonnet |
 | **Cloud 4** | Grok (xAI) | API key (BYOK) | grok-3, grok-3-mini |
+| **Cloud 5** | **OpenRouter** | Free or paid key | Unified gateway: DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B + 100s more; `:free` suffix = zero cost |
 | **Local 1** | Ollama | Local server | Default model: Qwen3 8B; configurable URL |
 | **Local 2** | WebLLM (WebGPU) | GPU + browser | MLC-packaged: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B |
 | **Local 3** | ONNX Runtime Web | WASM (any device) | Fallback when no WebGPU; runs fully in-browser |
-| **Local 4** | Transformers.js | WASM / WebGPU | Xenova/distilgpt2 and compatible Hugging Face models |
+| **Local 4** | Transformers.js | WASM / WebGPU | Hugging Face–compatible models; WebGPU or WASM backend |
 
 > **Privacy-first routing:** WebLLM, ONNX, and Transformers.js run entirely in your browser — no network call, no API key needed. Automatic fallback down the stack ensures AI features always work, even offline.
+
+> **OpenRouter free tier:** Sign up at [openrouter.ai/keys](https://openrouter.ai/keys) for a free key with 20 req/min. Models marked `:free` (e.g. `deepseek/deepseek-r1:free`) need no paid credits. Circuit breaker automatically pauses OpenRouter after 4 consecutive 429s and retries after 5 minutes.
+
+### ⚙️ AI Execution Modes
+
+**Settings → AI & Models → AI Execution Mode** lets you control exactly how AI requests are routed:
+
+| Mode | Behaviour | Best for |
+|------|-----------|----------|
+| **Hybrid** _(default)_ | Local models when preloaded → cloud fallback when offline or no local model | Most users — best of both worlds |
+| **Cloud** | All requests go to your configured cloud provider (Gemini, OpenAI, etc.) | Highest quality; requires API key + internet |
+| **Local** | All AI runs on-device via Ollama / WebLLM / ONNX — nothing leaves your device | Maximum privacy; fully offline |
+| **Eco** | Battery-saving: tiny 0.5 B model + rule-based heuristics only; no cloud, no GPU | Mobile / low-end hardware |
+
+An **AI Mode Indicator** chip in the Copilot panel header shows the active mode and turns amber when OpenRouter's circuit breaker is open.
+
+The active mode is persisted to `settings.aiMode` and synced to `aiModeService` via `listenerMiddleware` on every change — no page reload required.
 
 ### WebGPU Hardware Detection
 
@@ -399,7 +434,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | Layer                | Technology                                                | Purpose                                                              |
 | -------------------- | --------------------------------------------------------- | -------------------------------------------------------------------- |
 | **UI Framework**     | React 19 + TypeScript 6 (strict)                         | Component-based, fully type-safe UI with `exactOptionalPropertyTypes` |
-| **Build Tool**       | Vite 8 + pnpm 10 workspaces                              | App build + workspace orchestration (`packages/ai-core`, `packages/ui`) |
+| **Build Tool**       | Vite 8 + pnpm 11 workspaces                              | App build + workspace orchestration (`packages/ai-core`, `packages/ui`) |
 | **State Management** | Redux Toolkit 2.x + Redux-Undo + Zustand                 | Persistent (Redux), ephemeral (Zustand `transientUiStore`) state layers |
 | **Styling**          | Tailwind CSS 4.x + CSS Variables                         | Utility-first design with theme-aware custom properties              |
 | **Cloud AI**         | Gemini / OpenAI / Claude / Grok (BYOK)                   | Provider routing via `aiProviderService.ts`; Vercel AI SDK for streaming |
@@ -415,8 +450,8 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 348 keys × 11 locales (de/en/es/fr/it + ar/he RTL Beta + ja/zh/pt/el Beta); EN fallback; `localStorage` persistence |
-| **Testing**          | Vitest 4.x (5 000+ tests / 430 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2 594 keys × 11 locales (de/en/es/fr/it + ar/he RTL Beta + ja/zh/pt/el Beta); EN fallback; `localStorage` persistence |
+| **Testing**          | Vitest 4.x (5 475+ tests / 449 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -440,7 +475,9 @@ StoryCraft-Studio/
 ├── hooks/                # View business logic (use*View.ts naming); useGlobalKeyboardShortcuts
 ├── contexts/             # React Context providers: I18nContext, CommandExecutorContext, per-view contexts
 ├── services/             # External adapters and domain services
-│   ├── ai/               # webGpuDetectorService, orchestrationProviders, fetchAdapter
+│   ├── ai/               # aiModeService (execution mode), aiPolicy, aiRetry, routingLogger
+│   │   └── providers/    # openrouterProvider (circuit breaker, free-tier catalog)
+│   ├── copilot/          # heuristicEngine (8 rules), insightGenerator, copilotContextService, actionApplier
 │   ├── commands/         # Command registry: definitions, fuzzyScore, palettePreferences, commandBuilder
 │   ├── keyboard/         # Shortcut matching, OS normalization, conflict detection
 │   ├── help/             # RAG-lite retrieval for in-app help articles
@@ -451,7 +488,7 @@ StoryCraft-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (2 500+ tests, 386 files)
+│   ├── unit/             # Vitest unit tests (5 475+ tests, 449 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -469,7 +506,7 @@ StoryCraft-Studio/
 
 A modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+) is all you need for the web app — no installation required.
 
-For local development: **Node ≥ 22**, **pnpm 10** (`npm install -g pnpm`). For the desktop app: **Rust + Tauri CLI** (`cargo install tauri-cli`).
+For local development: **Node ≥ 22**, **pnpm 11** (`npm install -g pnpm`). For the desktop app: **Rust + Tauri CLI** (`cargo install tauri-cli`).
 
 ### 🔐 Setting Up AI
 
@@ -492,7 +529,18 @@ StoryCraft Studio supports local-only AI (no API key) as well as BYOK cloud prov
 2. Start Ollama (it runs a local HTTP server at `http://localhost:11434` by default)
 3. In Settings → AI Provider → select **Ollama** and verify the connection
 
-#### Option C: Browser-Native AI (WebGPU / ONNX / Transformers.js)
+#### Option C: OpenRouter (free-tier cloud gateway)
+
+Access 100+ open-source models — including strong free-tier options — through a single API key:
+
+1. **Get a free key** at [openrouter.ai/keys](https://openrouter.ai/keys) (no credit card for `:free` models)
+2. **Open Settings → OpenRouter** → toggle **Enable OpenRouter** → paste your `sk-or-v1-…` key → click **Save**
+3. Choose a preferred model (default: `deepseek/deepseek-r1:free`) or type a custom model ID
+4. Free tier: 20 req/min · 50 req/day without credits. The circuit breaker pauses automatically on rate-limit bursts and resumes after 5 minutes.
+
+> OpenRouter slots in as Cloud 5 in the routing chain: after your configured primary cloud provider but before local fallbacks.
+
+#### Option D: Browser-Native AI (WebGPU / ONNX / Transformers.js)
 
 No installation, no server, no API key — AI runs directly in your browser:
 
@@ -522,7 +570,7 @@ Vercel is a **first-class** hosting option alongside Pages: connect the repo, us
 git clone https://github.com/qnbs/StoryCraft-Studio.git
 cd StoryCraft-Studio
 
-# Install dependencies (Node ≥ 22, pnpm 10)
+# Install dependencies (Node ≥ 22, pnpm 11)
 pnpm install
 
 # Start the development server (http://localhost:3000)
@@ -598,10 +646,10 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-06-10):**
-- **~5 000+ unit tests** across **433 test files** — all passing
+**Current test metrics (2026-06-11):**
+- **5 475+ unit tests** across **449 test files** — all passing
 - Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2 357 keys × 11 locales** (en/de/fr/es/it + ar/he RTL Beta + ja/zh/pt/el Beta)
+- i18n: **2 594 keys × 11 locales** (en/de/fr/es/it + ar/he RTL Beta + ja/zh/pt/el Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 
@@ -643,7 +691,7 @@ Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, `clickNavIte
 - **🐛 Report Bugs** — Open a GitHub Issue with details and reproduction steps
 - **💡 Suggest Features** — Open a Discussion or Issue
 - **🌍 Improve Translations** — Five locale trees (`en` is the reference); native polish for FR/ES/IT especially welcome in PRs
-- **🧪 Write Tests** — Branch coverage threshold is ≥ 57 %; functions ≥ 63 %; lines ≥ 71 %; contributions to large components (collaboration, AI streaming paths) are particularly valuable
+- **🧪 Write Tests** — Coverage thresholds: branches ≥ 60 %, functions ≥ 67 %, lines ≥ 74 %; contributions to large components (collaboration, AI streaming paths, OpenRouter provider) are particularly valuable
 
 See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vitest / Playwright guide, and architecture notes.
 
@@ -674,6 +722,8 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/history/sprints/SPRINT-V1.8.md`](docs/history/sprints/SPRINT-V1.8.md) | Sprint reference: v1.8 RAG prompt assembly + Writer/Plot Board AI |
 | [`docs/history/sprints/SPRINT-V1.9.md`](docs/history/sprints/SPRINT-V1.9.md) | Sprint reference: v1.9 lazy loading, Help/Settings hub, Tauri desktop UX |
 | [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md) | Sprint reference: v1.10 mobile UX, coverage 55 %, deploy & help expansion |
+| [`docs/COPILOT.md`](docs/COPILOT.md) | Global AI Copilot v2 — panel modes, heuristics, Apply-to-chapter, ProForge integration |
+| [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md) | Heuristic Rules Reference — 8 built-in manuscript analysis rules, how-to-satisfy guidance |
 | [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge Ultimate Author Pipeline — 8-stage agentic editing system architecture |
 | [`docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0/v1.18.1 ProForge Humanization & Refinement + TypeScript strict-mode sweep |
 | [`docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md) | Sprint handoff: v1.19.0 Phase 2 — B-1..B-8 security, voice WASM, collab-transport, a11y gate, RTL |
