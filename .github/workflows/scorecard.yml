@@ -4,8 +4,7 @@ on:
   branch_protection_rule:
   schedule:
     - cron: '30 4 * * 1'   # every Monday 04:30 UTC
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 # Minimal read-all default; individual job overrides what it needs.
 permissions: read-all
@@ -33,9 +32,8 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          # publish_results uploads results to the public Scorecard API and
-          # makes the badge available on https://api.securityscorecards.dev
-          publish_results: true
+          # QNBS-v3: publish_results=false — api.scorecard.dev times out on push runs (context deadline exceeded); SARIF still uploads to GitHub Code Scanning
+          publish_results: false
 
       - name: Upload SARIF artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

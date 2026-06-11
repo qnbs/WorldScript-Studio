@@ -14,7 +14,7 @@ This document summarizes the **current inventory** and **stabilization measures*
 | [`workflows/tauri-build.yml`](workflows/tauri-build.yml) | `workflow_dispatch`, tags `v*` | Desktop bundles (Linux/Win/macOS) |
 | [`workflows/prune-deployments.yml`](workflows/prune-deployments.yml) | `workflow_run` (after CI/CD), weekly cron, `workflow_dispatch` | Prune ALL environments (Production/Preview/github-pages); keeps latest 3 per env |
 | [`workflows/storybook-debug.yml`](workflows/storybook-debug.yml) | `workflow_dispatch` only | Cloud-first Storybook debug: configurable workers/retries, PWDEBUG output |
-| [`workflows/scorecard.yml`](workflows/scorecard.yml) | `push` main, weekly cron | OpenSSF Scorecard → GitHub Code Scanning SARIF |
+| [`workflows/scorecard.yml`](workflows/scorecard.yml) | weekly cron, `workflow_dispatch` | OpenSSF Scorecard → GitHub Code Scanning SARIF (publish_results=false; api.scorecard.dev timed out on push runs) |
 | [`workflows/codeql.yml`](workflows/codeql.yml) | `push`/`pull_request` main, weekly cron | CodeQL JS/TS SAST |
 | [`workflows/docker.yml`](workflows/docker.yml) | `push` main | Docker image build + push to GHCR |
 
