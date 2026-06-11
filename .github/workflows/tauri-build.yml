@@ -108,10 +108,11 @@ jobs:
         id: collect
         run: |
           mkdir -p release-assets
+          # QNBS-v3: include *.sig so Generate latest.json can read them for the updater manifest
           find downloaded -type f \( \
             -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \
             -o -name '*.msi' -o -name '*.exe' \
-            -o -name '*.dmg' \
+            -o -name '*.dmg' -o -name '*.sig' \
             \) -exec cp {} release-assets/ \;
           echo "Files to upload:" && ls -la release-assets/ || true
           if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
@@ -135,14 +136,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # QNBS-v3: Tauri v2 update manifest — collect .sig files from signed bundles.
-          # If no .sig files exist (unsigned build), latest.json is still generated
-          # but platforms will be empty, preventing auto-updates for that release.
-          VERSION="${GITHUB_REF_NAME}"
-          REPO_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}"
+          # QNBS-v3: Tauri v2 updater manifest.
+          # Version must NOT have a 'v' prefix (matches tauri.conf.json version field).
+          # Platform keys: linux-x86_64, windows-x86_64, darwin-aarch64, darwin-x86_64.
+          VERSION="${GITHUB_REF_NAME#v}"   # strip 'v': v1.22.1 → 1.22.1
+          TAG="${GITHUB_REF_NAME}"
+          REPO_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
           PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-          LINUX_URL="" LINUX_SIG="" WIN_URL="" WIN_SIG="" MAC_URL="" MAC_SIG=""
+          LINUX_URL="" LINUX_SIG=""
+          WIN_URL="" WIN_SIG=""
+          MAC_AARCH64_URL="" MAC_AARCH64_SIG=""
+          MAC_X64_URL="" MAC_X64_SIG=""
 
           for SIG_FILE in release-assets/*.sig; do
             [ -f "$SIG_FILE" ] || continue
@@ -150,31 +155,45 @@ jobs:
             FNAME="$(basename "$BASE")"
             SIG_CONTENT="$(cat "$SIG_FILE")"
             case "$FNAME" in
-              *.AppImage)          LINUX_URL="${REPO_URL}/${FNAME}"; LINUX_SIG="$SIG_CONTENT" ;;
-              *.msi|*-setup.exe)   WIN_URL="${REPO_URL}/${FNAME}";   WIN_SIG="$SIG_CONTENT"   ;;
-              *.dmg)               MAC_URL="${REPO_URL}/${FNAME}";   MAC_SIG="$SIG_CONTENT"   ;;
+              *.AppImage)
+                LINUX_URL="${REPO_URL}/${FNAME}"; LINUX_SIG="$SIG_CONTENT" ;;
+              *-setup.exe)
+                # NSIS installer — preferred Windows updater format
+                WIN_URL="${REPO_URL}/${FNAME}"; WIN_SIG="$SIG_CONTENT" ;;
+              *.msi)
+                # MSI fallback if no NSIS sig collected yet
+                [ -z "$WIN_SIG" ] && { WIN_URL="${REPO_URL}/${FNAME}"; WIN_SIG="$SIG_CONTENT"; } ;;
+              *_aarch64.dmg)
+                MAC_AARCH64_URL="${REPO_URL}/${FNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
+              *_x64.dmg)
+                MAC_X64_URL="${REPO_URL}/${FNAME}"; MAC_X64_SIG="$SIG_CONTENT" ;;
+              *.dmg)
+                # Unknown arch dmg: default to aarch64 (macos-latest runner is ARM)
+                [ -z "$MAC_AARCH64_SIG" ] && { MAC_AARCH64_URL="${REPO_URL}/${FNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT"; } ;;
             esac
           done
 
-          # Only generate latest.json if at least one platform is signed
-          if [ -z "$LINUX_SIG" ] && [ -z "$WIN_SIG" ] && [ -z "$MAC_SIG" ]; then
-            echo "::warning::No signed bundles found. Skipping latest.json generation (auto-updater disabled for this release)."
-            exit 0
+          # Hard-fail if secrets are set but no .sig files were produced
+          if [ -z "$LINUX_SIG" ] && [ -z "$WIN_SIG" ] && [ -z "$MAC_AARCH64_SIG" ] && [ -z "$MAC_X64_SIG" ]; then
+            echo "::error::No signed bundles found in release-assets/. Verify TAURI_SIGNING_PRIVATE_KEY secret and that createUpdaterArtifacts=true."
+            exit 1
           fi
 
           jq -n \
             --arg version "$VERSION" \
             --arg pub_date "$PUB_DATE" \
-            --arg linux_url "$LINUX_URL" --arg linux_sig "$LINUX_SIG" \
-            --arg win_url "$WIN_URL"     --arg win_sig "$WIN_SIG" \
-            --arg mac_url "$MAC_URL"     --arg mac_sig "$MAC_SIG" \
+            --arg linux_url "$LINUX_URL"       --arg linux_sig "$LINUX_SIG" \
+            --arg win_url "$WIN_URL"            --arg win_sig "$WIN_SIG" \
+            --arg mac_aarch64_url "$MAC_AARCH64_URL" --arg mac_aarch64_sig "$MAC_AARCH64_SIG" \
+            --arg mac_x64_url "$MAC_X64_URL"    --arg mac_x64_sig "$MAC_X64_SIG" \
             '{version:$version, notes:"See release notes", pub_date:$pub_date,
               platforms:({}
-                | if $linux_sig!="" then .+{"linux-x86_64":{signature:$linux_sig,url:$linux_url}} else . end
-                | if $win_sig!=""   then .+{"windows-x86_64":{signature:$win_sig,url:$win_url}}   else . end
-                | if $mac_sig!=""   then .+{"darwin-x86_64":{signature:$mac_sig,url:$mac_url}}     else . end)}' \
+                | if $linux_sig!=""       then .+{"linux-x86_64":  {signature:$linux_sig,       url:$linux_url}}       else . end
+                | if $win_sig!=""         then .+{"windows-x86_64":{signature:$win_sig,          url:$win_url}}         else . end
+                | if $mac_aarch64_sig!="" then .+{"darwin-aarch64":{signature:$mac_aarch64_sig,  url:$mac_aarch64_url}} else . end
+                | if $mac_x64_sig!=""     then .+{"darwin-x86_64": {signature:$mac_x64_sig,      url:$mac_x64_url}}     else . end)}' \
             > latest.json
 
           echo "Generated latest.json:"
           cat latest.json
-          gh release upload "$VERSION" latest.json --clobber
+          gh release upload "$TAG" latest.json --clobber
