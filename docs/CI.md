@@ -139,6 +139,28 @@ CI=true pnpm run test:e2e
 pnpm exec lhci autorun   # after build + serve/preview as configured in .lighthouserc.cjs
 ```
 
+### Node 24+ Compatibility Troubleshooting
+
+**Problem:** Tests fail with `localStorage.clear is not a function` or similar Web Storage errors on Node 24+.
+
+**Root Cause:** Node.js ab v24.0.0 stellt eine native (aber unvollständige) Web Storage API bereit. Diese überschreibt jsdoms korrekte Implementierung und führt zu fehlenden Methoden wie `.clear()`.
+
+**Solution:** Die `tests/setup.ts` setzt `localStorage` und `sessionStorage` mit vollständigen Mocks. Zusätzlich wird in CI der Vitest-Befehl mit `--no-experimental-webstorage` ausgeführt, um die native Node-Implementierung vollständig zu deaktivieren.
+
+**Local debugging:**
+
+```bash
+# Simuliere CI-Bedingungen exakt
+NODE_OPTIONS="--no-experimental-webstorage" pnpm exec vitest run --coverage --reporter=json --outputFile=test-results.json
+
+# Ohne Coverage für schnelles Feedback
+pnpm exec vitest run
+```
+
+**Coverage Ratchet Mechanism:**
+
+Thresholds in `vitest.config.ts` sind ~1pt unter den CI-gemessenen Werten, um Node 22/24 Varianz zu absorbieren. Nach 3 grünen CI-Läufen auf beiden Node-Versionen kann der Threshold um 1pt erhöht werden (max 5pt pro Quartal).
+
 ---
 
 ## Local CI/CD on low-end hardware (act + Forgejo)
