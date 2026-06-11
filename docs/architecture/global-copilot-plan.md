@@ -1,6 +1,8 @@
 # Global AI Copilot — Implementation Plan
 
-Status: **implemented** (v1.21 cycle). Feature flag: `enableGlobalCopilot` (default on).
+Status: **implemented — v1 (v1.21 cycle) + v2 complete (v1.22.0)**. Feature flag: `enableGlobalCopilot` (default on).
+
+**v2 additions (v1.22.0):** markdown rendering (DOMPurify + micro-renderer), sidebar/dialog mode toggle, apply-to-chapter (`actionApplier.ts`, redux-undo, ≥70% length gate), `InlineAnnotationLayer` (ManuscriptEditor badge), ProForge Ask-Copilot chip. See `docs/COPILOT.md` for the complete user-facing guide and `docs/HEURISTIC-RULES.md` for the 8 heuristic rules catalogue.
 
 A beginner-friendly, context-aware, **local-first** in-app live assistant. It is the first in-process
 consumer of the ProForge **Core Capability Layer** (`services/proForge/proForgeCapabilityLayer.ts`),
