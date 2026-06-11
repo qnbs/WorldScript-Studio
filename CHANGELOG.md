@@ -5,9 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.21.2] — 2026-06-11
 
 ### Added
+
+- **OpenRouter provider (Cloud 5):** Unified gateway to 100+ open-source models. `services/ai/providers/openrouterProvider.ts` — circuit breaker (4 × 429 → 5 min pause), RPM tracking, free-tier catalog (`deepseek/deepseek-r1:free`, `meta-llama/llama-3.3-70b-instruct:free`, `qwen/qwen2.5-72b-instruct:free`, `google/gemma-3-27b-it:free`, `mistralai/mistral-7b-instruct:free`). Settings → OpenRouter panel with enable toggle, API key (AES-encrypted), model selector. Sign up at openrouter.ai/keys — no credit card for `:free` models.
+
+- **AI Execution Modes:** `AiMode = 'hybrid' | 'cloud' | 'local' | 'eco'` — four routing strategies exposed in **Settings → AI & Models → AI Execution Mode**:
+  - **Hybrid** (default): local models when preloaded → cloud fallback
+  - **Cloud**: all requests to configured cloud provider
+  - **Local**: on-device only via Ollama / WebLLM / ONNX — nothing leaves the device
+  - **Eco**: battery-saving tiny 0.5B model + heuristics only; no cloud, no GPU
+  `aiModeService.ts` persists the active mode to `settings.aiMode`; `listenerMiddleware` syncs without page reload. `AiModeIndicator` chip in the Copilot header shows the active mode and turns amber when the OpenRouter circuit breaker is open.
 
 - **Ultimate Copilot AI v2 — Phase 2+3 (PR #110, #111):**
   - **Markdown rendering** in `CopilotMessageList` — assistant messages rendered as sanitised HTML (DOMPurify + inline micro-markdown renderer; headings, bold, italic, code blocks, lists). No new runtime dependency.
@@ -18,7 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **`docs/COPILOT.md`** — user-facing feature guide (architecture, modes, Apply-to-chapter, ProForge integration).
   - **`docs/HEURISTIC-RULES.md`** — per-rule reference (8 rules, how-to-satisfy, i18n key pointers).
   - **2 new E2E tests** — heuristics-only toggle and sidebar mode toggle in `copilot-flags.spec.ts`.
-  - **i18n:** 2 new keys (`copilot.askCopilot`, `copilot.askAboutReviewItem`) × 11 locales (2532 total).
 
 - **WebLLM worker offload (P1-1, ADR-0005):** `@mlc-ai/web-llm` (WebGPU) inference now runs in a
   dedicated WorkerBus v2 `webllm` pool (`workers/v2/webllm.worker.ts`, capability `inference.webllm`)
@@ -40,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `VoiceCommandService.startListening` against re-entrant push-to-talk / wake-word starts; download
   modal progress is now an accessible `role="progressbar"` with a polite live region (`Progress`
   atom + `VoiceModelDownloadModal`).
+- **i18n:** 2 594 keys × 11 locales (+62 keys for AI Execution Modes, OpenRouter settings, Copilot v2 actions).
+
+### Fixed
+
+- **PWA blank screen on update:** SW `APP_VERSION` bumped `1.20.0 → 1.21.2` so the activate handler correctly prunes the stale `storycraft-static-v1.20.0` cache after deployment.
+
+---
 
 ## [1.21.0] — 2026-06-10
 
