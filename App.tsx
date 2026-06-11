@@ -674,7 +674,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
               {featureFlags.enableGlobalCopilot && (
                 <ErrorBoundary onReset={() => {}}>
                   <Suspense fallback={null}>
-                    <CopilotLauncher currentView={currentView} />
+                    <CopilotLauncher currentView={currentView} onNavigate={handleNavigate} />
                   </Suspense>
                 </ErrorBoundary>
               )}

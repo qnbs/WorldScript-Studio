@@ -15,6 +15,21 @@ export interface CopilotContext {
   wordCount: number;
   /** UI language code — the assistant replies in this language. */
   language: string;
+  // --- enriched fields (Phase 1) ---
+  /** Number of chapters/scenes in the manuscript. */
+  chapterCount: number;
+  /** Number of character profiles in the project. */
+  characterCount: number;
+  /** Number of world entries. */
+  worldEntryCount: number;
+  /** 0–1 completeness of the outline (filled sections / total). */
+  outlineCompleteness: number;
+  /** Currently active chapter ID when in the manuscript view. */
+  activeChapterId?: string;
+  /** Selected text from the manuscript editor (empty string if none). */
+  selectedText: string;
+  /** Number of open proactive heuristic findings. */
+  openInsightCount: number;
 }
 
 /** Short, capability-oriented descriptions per view to ground the assistant's "what can I do here?". */
@@ -44,9 +59,27 @@ const VIEW_HINTS: Record<string, string> = {
 /** Build the system prompt that primes the Copilot to be a helpful, location-aware guide. */
 export function buildSystemPrompt(ctx: CopilotContext): string {
   const hint = VIEW_HINTS[ctx.view] ?? 'this screen';
-  const projectLine = ctx.projectTitle
-    ? `The user is working on a project titled "${ctx.projectTitle}" (~${ctx.wordCount} words).`
-    : 'The user has not added much content yet.';
+
+  const projectLines: string[] = [];
+  if (ctx.projectTitle) {
+    projectLines.push(
+      `The user is working on a project titled "${ctx.projectTitle}" (~${ctx.wordCount} words, ${ctx.chapterCount} chapters).`,
+    );
+    if (ctx.characterCount > 0) projectLines.push(`Characters: ${ctx.characterCount}.`);
+    if (ctx.worldEntryCount > 0) projectLines.push(`World entries: ${ctx.worldEntryCount}.`);
+    if (ctx.outlineCompleteness > 0)
+      projectLines.push(`Outline completeness: ${Math.round(ctx.outlineCompleteness * 100)}%.`);
+    if (ctx.openInsightCount > 0)
+      projectLines.push(
+        `There are ${ctx.openInsightCount} active narrative insights the user may want to address.`,
+      );
+    if (ctx.selectedText)
+      projectLines.push(
+        `The user has selected this text: "${ctx.selectedText.slice(0, 200)}${ctx.selectedText.length > 200 ? '…' : ''}"`,
+      );
+  } else {
+    projectLines.push('The user has not added much content yet.');
+  }
 
   return [
     'You are the StoryCraft Studio Copilot — a warm, encouraging writing assistant for beginners.',
@@ -54,7 +87,7 @@ export function buildSystemPrompt(ctx: CopilotContext): string {
     'Keep answers short, concrete, and jargon-free. Prefer numbered steps for how-to questions.',
     'When the user asks "what can I do here", explain the current screen specifically.',
     `The user is currently on the "${ctx.viewLabel}" screen, which is ${hint}.`,
-    projectLine,
+    ...projectLines,
     `Always respond in this language code: ${ctx.language}.`,
     'If a request needs a feature elsewhere in the app, name the screen and offer to open it.',
     'Never invent app features that were not described to you.',

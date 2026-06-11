@@ -1,17 +1,21 @@
 /**
  * useGlobalCopilot — business logic for the Global AI Copilot live assistant.
  * QNBS-v3: Streams replies via useStoryCraftAI (honours the privacy/local-first AI policy), is
- * context-aware (current view + project), and bridges to ProForge through the Core Capability Layer.
+ * context-aware (current view + project), bridges to ProForge through the Core Capability Layer,
+ * drives the heuristic insight generator, and supports a heuristics-only offline mode.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useCommandExecutor } from '../contexts/CommandExecutorContext';
 import {
   copilotActions,
   selectCopilotError,
+  selectCopilotHeuristicsOnly,
+  selectCopilotInsightStatus,
   selectCopilotIsOpen,
   selectCopilotMessages,
+  selectCopilotProactiveInsights,
   selectCopilotStatus,
 } from '../features/copilot/copilotSlice';
 import { selectEnableProForge } from '../features/featureFlags/featureFlagsSlice';
@@ -23,6 +27,10 @@ import {
   buildSystemPrompt,
   type CopilotContext,
 } from '../services/copilot/copilotContextService';
+import {
+  cancelInsightGeneration,
+  scheduleInsightGeneration,
+} from '../services/copilot/insightGenerator';
 import { createBrowserProForgeCapability } from '../services/proForge/adapters/browserProForgeCapability';
 import type { ProForgeProjectSnapshot } from '../services/proForge/proForgeCapabilityCore';
 import { viewNavigationLabelKey } from '../services/viewNavigationLabels';
@@ -70,6 +78,9 @@ export function useGlobalCopilot(currentView: View) {
   const messages = useAppSelector(selectCopilotMessages);
   const status = useAppSelector(selectCopilotStatus);
   const error = useAppSelector(selectCopilotError);
+  const proactiveInsights = useAppSelector(selectCopilotProactiveInsights);
+  const heuristicsOnly = useAppSelector(selectCopilotHeuristicsOnly);
+  const insightStatus = useAppSelector(selectCopilotInsightStatus);
   const project = useAppSelector(selectProjectData);
   const enableProForge = useAppSelector(selectEnableProForge);
 
@@ -95,9 +106,37 @@ export function useGlobalCopilot(currentView: View) {
       projectTitle: project?.title ?? '',
       wordCount: approximateManuscriptWordCount(project),
       language,
+      // QNBS-v3: Enriched context for smarter AI prompting and dynamic suggestions.
+      chapterCount: project?.manuscript?.length ?? 0,
+      characterCount: Object.keys(project?.characters?.entities ?? {}).length,
+      worldEntryCount: Object.keys(project?.worlds?.entities ?? {}).length,
+      outlineCompleteness:
+        project?.outline && project.outline.length > 0
+          ? project.outline.filter((o) => o.description && o.description.trim().length > 5).length /
+            project.outline.length
+          : 0,
+      // QNBS-v3: activeChapterId is omitted here (populated by Manuscript view in Phase 2).
+      selectedText: '',
+      openInsightCount: proactiveInsights.length,
     }),
-    [currentView, t, project, language],
+    [currentView, t, project, language, proactiveInsights.length],
   );
+
+  // QNBS-v3: Schedule proactive insight generation whenever project or language changes.
+  // Cancelled on unmount / Copilot clear so we never dispatch into an unmounted component.
+  useEffect(() => {
+    if (!project) return;
+    dispatch(copilotActions.setInsightStatus('running'));
+    scheduleInsightGeneration(project, buildContext(), (findings) => {
+      dispatch(copilotActions.setProactiveInsights(findings));
+      dispatch(copilotActions.setInsightStatus('idle'));
+    });
+    return () => {
+      cancelInsightGeneration();
+    };
+    // QNBS-v3: `language` is already captured inside `buildContext` (its own dep), so removing
+    // it from this array prevents the exhaustive-deps lint warning for a redundant dependency.
+  }, [project, dispatch, buildContext]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -106,6 +145,22 @@ export function useGlobalCopilot(currentView: View) {
 
       dispatch(copilotActions.setError(null));
       dispatch(copilotActions.addMessage('user', trimmed));
+
+      // QNBS-v3: Heuristics-only mode — skip all AI calls and reply with a summary of
+      // current insights (offline, privacy-maximal).
+      if (heuristicsOnly) {
+        const reply =
+          proactiveInsights.length > 0
+            ? [
+                t('copilot.heuristicsOnlyReply'),
+                ...proactiveInsights.map(
+                  (f) => `• ${t(f.titleKey, f.params)}: ${t(f.descriptionKey, f.params)}`,
+                ),
+              ].join('\n')
+            : t('copilot.heuristicsOnlyNoFindings');
+        dispatch(copilotActions.addMessage('assistant', reply));
+        return;
+      }
 
       // QNBS-v3: ProForge bridge — a "run a diagnostic" intent runs the intake stage via the
       // Core Capability Layer instead of a plain chat completion.
@@ -139,7 +194,18 @@ export function useGlobalCopilot(currentView: View) {
       );
       await runCompletion(prompt);
     },
-    [status, dispatch, project, enableProForge, t, buildContext, messages, runCompletion],
+    [
+      status,
+      dispatch,
+      project,
+      enableProForge,
+      t,
+      buildContext,
+      messages,
+      runCompletion,
+      heuristicsOnly,
+      proactiveInsights,
+    ],
   );
 
   const open = useCallback(() => dispatch(copilotActions.setOpen(true)), [dispatch]);
@@ -160,15 +226,56 @@ export function useGlobalCopilot(currentView: View) {
     stop();
     dispatch(copilotActions.clear());
   }, [dispatch, stop]);
+  const toggleHeuristicsOnly = useCallback(
+    () => dispatch(copilotActions.setHeuristicsOnly(!heuristicsOnly)),
+    [dispatch, heuristicsOnly],
+  );
 
-  const suggestions = useMemo(
-    () => [
+  // QNBS-v3: Dynamic view + project-aware suggestions replace the static 3-string list.
+  // Falls back to defaults when no project is loaded.
+  const suggestions = useMemo((): string[] => {
+    const defaults = [
       t('copilot.suggestionExplainView'),
       t('copilot.suggestionDiagnostic'),
       t('copilot.suggestionImprove'),
-    ],
-    [t],
-  );
+    ];
+
+    if (!project?.title) return defaults;
+
+    const ctx = buildContext();
+    const dynamic: string[] = [];
+
+    // View-specific suggestions
+    if (
+      currentView === 'sceneboard' &&
+      proactiveInsights.some((f) => f.ruleId === 'tension-drop')
+    ) {
+      dynamic.push(t('copilot.suggestionTensionGap'));
+    }
+    if (currentView === 'characters' && ctx.characterCount > 0) {
+      dynamic.push(t('copilot.suggestionCharacterArc'));
+    }
+    if (currentView === 'manuscript' && ctx.wordCount > 500) {
+      dynamic.push(t('copilot.suggestionImproveOpening'));
+    }
+    if (currentView === 'dashboard' && proactiveInsights.length > 0) {
+      dynamic.push(t('copilot.suggestionTopInsight'));
+    }
+    if (currentView === 'world') {
+      dynamic.push(t('copilot.suggestionWorldBuilding'));
+    }
+
+    // Fill remaining slots with defaults (avoid duplicates)
+    const all = [...dynamic, ...defaults];
+    const seen = new Set<string>();
+    return all
+      .filter((s) => {
+        if (seen.has(s)) return false;
+        seen.add(s);
+        return true;
+      })
+      .slice(0, 6);
+  }, [t, project, currentView, proactiveInsights, buildContext]);
 
   return {
     t,
@@ -178,11 +285,15 @@ export function useGlobalCopilot(currentView: View) {
     error,
     isLoading,
     suggestions,
+    proactiveInsights,
+    heuristicsOnly,
+    insightStatus,
     sendMessage,
     open,
     close,
     toggle,
     clear,
+    toggleHeuristicsOnly,
     executeCommand,
   };
 }

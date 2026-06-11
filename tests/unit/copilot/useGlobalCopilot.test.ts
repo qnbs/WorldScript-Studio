@@ -14,6 +14,11 @@ const { mockDispatch, mockStop, state } = vi.hoisted(() => ({
       messages: [
         { id: 'a1', role: 'assistant', content: 'partial…', pending: true, createdAt: '' },
       ],
+      // QNBS-v3: Phase 1 fields — must be present to avoid undefined.length errors.
+      proactiveInsights:
+        [] as import('../../../features/copilot/copilotSlice').CopilotState['proactiveInsights'],
+      heuristicsOnly: false,
+      insightStatus: 'idle' as 'idle' | 'running',
     },
   },
 }));
@@ -51,6 +56,11 @@ vi.mock('../../../services/proForge/adapters/browserProForgeCapability', () => (
 }));
 vi.mock('../../../services/viewNavigationLabels', () => ({
   viewNavigationLabelKey: () => 'nav.writer',
+}));
+// QNBS-v3: mock insight generator so scheduleInsightGeneration doesn't fire timers in tests.
+vi.mock('../../../services/copilot/insightGenerator', () => ({
+  scheduleInsightGeneration: vi.fn(),
+  cancelInsightGeneration: vi.fn(),
 }));
 
 import { useGlobalCopilot } from '../../../hooks/useGlobalCopilot';
