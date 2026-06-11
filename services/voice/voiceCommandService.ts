@@ -303,6 +303,24 @@ export class VoiceCommandService {
       this.listeningTimer = setTimeout(() => {
         this.stopListening();
       }, this.config.listeningTimeoutSeconds * 1000);
+    } catch (err) {
+      // QNBS-v3: CodeAnt — roll back the 'listening' mode if startup fails after we set it, so the
+      //          UI/Redux don't stay stuck in listening when capture never actually started.
+      this.d(setVoiceMode('inactive'));
+      this.d(setVoiceError(err instanceof Error ? err.message : 'Voice start failed'));
+      if (this.listeningTimer) {
+        clearTimeout(this.listeningTimer);
+        this.listeningTimer = null;
+      }
+      if (this.coordinator) {
+        try {
+          await this.coordinator.dispose();
+        } catch {
+          /* best-effort teardown */
+        }
+        this.coordinator = null;
+      }
+      throw err;
     } finally {
       this.isStarting = false;
     }
@@ -641,13 +659,24 @@ export class VoiceCommandService {
   ): Promise<void> {
     const steps = Math.max(1, hook.steps ?? 5);
     const delay = hook.stepDelayMs ?? 50;
+    // QNBS-v3: CodeAnt — on abort, reset progress to 0 so the modal's auto-start (which only fires
+    //          when progress === 0) can re-run on reopen/retry after a cancel.
+    const resetProgress = (): void => {
+      this.d(settingsActions.setVoiceSettings({ wasmModelDownloadProgress: 0 }));
+    };
 
     this.d(settingsActions.setVoiceSettings({ wasmModelDownloadProgress: 0.05 }));
 
     for (let i = 1; i <= steps; i++) {
-      if (signal?.aborted) return;
+      if (signal?.aborted) {
+        resetProgress();
+        return;
+      }
       await new Promise((resolve) => setTimeout(resolve, delay));
-      if (signal?.aborted) return;
+      if (signal?.aborted) {
+        resetProgress();
+        return;
+      }
       this.d(
         settingsActions.setVoiceSettings({
           wasmModelDownloadProgress: Math.min(0.95, i / steps),
@@ -655,7 +684,10 @@ export class VoiceCommandService {
       );
     }
 
-    if (signal?.aborted) return;
+    if (signal?.aborted) {
+      resetProgress();
+      return;
+    }
 
     if (hook.mode === 'error') {
       const message = hook.errorMessage ?? 'Simulated download failure';

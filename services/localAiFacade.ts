@@ -11,6 +11,7 @@ import {
 import { adaptiveAiEngine } from './ai/adaptiveAiEngine';
 import { gpuResourceManager } from './ai/gpuResourceManager';
 import { inferenceProgressEmitter } from './ai/inferenceProgressEmitter';
+import type { ComputeBackend } from './ai/localAiDeviceProfiler';
 // QNBS-v3: C2 — lazy-import telemetry to avoid blocking cold start
 import { logger } from './logger';
 import { ensureWebLlmPool } from './workerBusManager';
@@ -23,6 +24,15 @@ const localWorkerBus = new WorkerBus();
 //          A generous task timeout avoids premature cancellation; the main-thread fallback covers
 //          genuine worker failures fast (spawn error / NO_WEBGPU), so this ceiling is rarely hit.
 const WEBLLM_TASK_TIMEOUT_MS = 180_000;
+
+// QNBS-v3: CodeAnt — map the executed LocalAiResponse.layer to the adaptive engine's ComputeBackend
+//          so recorded latency reflects what ACTUALLY ran (a fallback must not be logged as the plan).
+const LAYER_TO_COMPUTE_BACKEND: Record<string, ComputeBackend> = {
+  webllm: 'webllm-webgpu',
+  onnx: 'onnx-wasm',
+  transformers: 'transformers-wasm',
+  heuristic: 'heuristic',
+};
 
 interface WebLlmWorkerResult {
   text: string;
@@ -88,7 +98,12 @@ async function tryWebLlmWorker(
     if (!text) return null;
     return { layer: 'webllm', text };
   } catch (err) {
-    // QNBS-v3: Worker unavailable/failed → fall back to the main-thread multi-layer orchestrator.
+    // QNBS-v3: CodeAnt — a caller-initiated abort/cancel must short-circuit, NOT trigger a second
+    //          main-thread generation or emit a WebLLM error. Rethrow so generateLocalText unwinds.
+    if (signal?.aborted || (err instanceof Error && /abort|cancel/i.test(err.message))) {
+      throw err instanceof Error ? err : new Error('Aborted');
+    }
+    // QNBS-v3: genuine worker failure → fall back to the main-thread multi-layer orchestrator.
     inferenceProgressEmitter.reportWebLlmError(
       err instanceof Error ? err.message : 'WebLLM worker error',
     );
@@ -122,17 +137,20 @@ export async function generateLocalText(
       : null;
 
     let usedBackend: string = adaptiveConfig?.backend ?? 'heuristic';
-    const usedModel = adaptiveConfig?.modelId ?? modelId ?? 'unknown';
+    let usedModel = adaptiveConfig?.modelId ?? modelId ?? 'unknown';
     const fallbackModelId = adaptiveConfig?.modelId ?? modelId;
+    const workerModelId = fallbackModelId ?? WEBLLM_SUPPORTED_MODELS[0].id;
 
     let result: LocalAiResponse | null = null;
 
     // QNBS-v3: P1-1 — Worker-first WebLLM. Only attempt when WebGPU is present AND the runtime has
     //          Workers (real browsers); otherwise skip straight to the main-thread orchestrator.
     if (needsGpu && typeof Worker !== 'undefined') {
-      const workerModelId = fallbackModelId ?? WEBLLM_SUPPORTED_MODELS[0].id;
       result = await tryWebLlmWorker(prompt, workerModelId, loraAdapterId, onProgress, signal);
-      if (result) usedBackend = 'webllm';
+      if (result) {
+        usedBackend = 'webllm';
+        usedModel = workerModelId;
+      }
     }
 
     // QNBS-v3: Fallback — full main-thread chain (WebLLM no-ops without GPU, then ONNX → Transformers
@@ -140,18 +158,21 @@ export async function generateLocalText(
     if (!result) {
       result = await runLocalTextGeneration(prompt, fallbackModelId, onProgress, signal);
       usedBackend = result.layer;
-    }
-
-    if (adaptiveConfig) {
-      adaptiveAiEngine.recordTaskLatency(
-        'text-gen-short',
-        adaptiveConfig.backend,
-        adaptiveConfig.modelId,
-        performance.now() - startedAt,
-      );
+      usedModel = fallbackModelId ?? usedModel;
     }
 
     const elapsedMs = performance.now() - startedAt;
+
+    // QNBS-v3: CodeAnt — record latency against the ACTUAL backend/model that produced the response
+    //          (not the adaptively-planned one), so a fallback doesn't poison adaptive history.
+    if (adaptiveConfig) {
+      adaptiveAiEngine.recordTaskLatency(
+        'text-gen-short',
+        LAYER_TO_COMPUTE_BACKEND[usedBackend] ?? 'heuristic',
+        usedModel,
+        elapsedMs,
+      );
+    }
     localWorkerBus.recordResult(elapsedMs, true);
 
     // QNBS-v3: C2 — record telemetry asynchronously (non-blocking, fire-and-forget)

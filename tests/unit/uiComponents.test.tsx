@@ -58,17 +58,17 @@ describe('Progress', () => {
   }
 
   it('renders a bar with the correct width for 50%', () => {
-    const { container } = render(<Progress value={50} />);
+    const { container } = render(<Progress aria-label="Progress" value={50} />);
     expect(getBar(container).style.width).toBe('50%');
   });
 
   it('clamps value below 0 to 0%', () => {
-    const { container } = render(<Progress value={-10} />);
+    const { container } = render(<Progress aria-label="Progress" value={-10} />);
     expect(getBar(container).style.width).toBe('0%');
   });
 
   it('clamps value above 100 to 100%', () => {
-    const { container } = render(<Progress value={150} />);
+    const { container } = render(<Progress aria-label="Progress" value={150} />);
     expect(getBar(container).style.width).toBe('100%');
   });
 });

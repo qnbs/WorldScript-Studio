@@ -1,27 +1,24 @@
 import type React from 'react';
 
-interface ProgressProps {
+// QNBS-v3: C-P1 / CodeAnt — an accessible name is MANDATORY for role="progressbar" (WCAG 2.2 AA
+//          4.1.2 name/role/value). The union forces every caller to supply either `aria-label` or
+//          `aria-labelledby`, so a progress indicator can never render unnamed for screen readers.
+type ProgressProps = {
   value: number; // 0 to 100
   className?: string;
-  /** QNBS-v3: C-P1 — accessible name for the progressbar (WCAG 2.2 AA: name, role, value). */
-  'aria-label'?: string;
-}
+} & ({ 'aria-label': string } | { 'aria-labelledby': string });
 
-export const Progress: React.FC<ProgressProps> = ({
-  value,
-  className,
-  'aria-label': ariaLabel,
-}) => {
+export const Progress: React.FC<ProgressProps> = ({ value, className, ...aria }) => {
   const progress = Math.max(0, Math.min(100, value));
 
   return (
     <div
-      // QNBS-v3: C-P1 — expose role + value so screen readers announce determinate progress.
+      // QNBS-v3: role + value + a required name (spread from `aria`) — full name/role/value support.
       role="progressbar"
       aria-valuenow={Math.round(progress)}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-label={ariaLabel}
+      {...aria}
       className={`h-2 w-full overflow-hidden rounded-full bg-[var(--sc-surface-overlay)] ${className}`}
     >
       <div

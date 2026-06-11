@@ -61,7 +61,7 @@ const BreakdownBar: FC<{ label: string; value: number }> = ({ label, value }) =>
       </span>
       <span className="shrink-0 text-xs tabular-nums text-[var(--sc-text-muted)]">{value}%</span>
     </div>
-    <Progress value={value} className="h-1.5" />
+    <Progress value={value} className="h-1.5" aria-label={label} />
   </div>
 );
 

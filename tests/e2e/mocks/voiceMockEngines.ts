@@ -25,6 +25,18 @@ export async function installVoiceSttMock(page: Page, opts: VoiceMockSttOptions)
     w.__voiceTestHarness = w.__voiceTestHarness ?? {};
     const transcripts = arg.transcripts ?? [];
     let idx = 0;
+    // QNBS-v3: CodeAnt — honor the STT contract: a pending emission MUST be cancellable by
+    //          stop()/dispose() so a transcript can't fire (and dispatch a command) after listening
+    //          has stopped. Each start() re-arms; stop()/dispose() clear the pending timer.
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    const clearPending = (): void => {
+      stopped = true;
+      if (pending !== null) {
+        clearTimeout(pending);
+        pending = null;
+      }
+    };
     w.__voiceTestHarness['stt'] = {
       id: 'webSpeech',
       name: 'Mock STT (E2E)',
@@ -35,16 +47,23 @@ export async function installVoiceSttMock(page: Page, opts: VoiceMockSttOptions)
       start: (
         onResult: (r: { transcript: string; isFinal: boolean; confidence: number }) => void,
       ) => {
+        stopped = false;
         const transcript = transcripts[idx] ?? transcripts[transcripts.length - 1] ?? '';
         idx += 1;
-        setTimeout(
-          () => onResult({ transcript, isFinal: true, confidence: 0.95 }),
-          arg.emitDelayMs ?? 30,
-        );
+        pending = setTimeout(() => {
+          pending = null;
+          if (!stopped) onResult({ transcript, isFinal: true, confidence: 0.95 });
+        }, arg.emitDelayMs ?? 30);
         return Promise.resolve();
       },
-      stop: () => Promise.resolve(),
-      dispose: () => Promise.resolve(),
+      stop: () => {
+        clearPending();
+        return Promise.resolve();
+      },
+      dispose: () => {
+        clearPending();
+        return Promise.resolve();
+      },
     };
   }, opts);
 }

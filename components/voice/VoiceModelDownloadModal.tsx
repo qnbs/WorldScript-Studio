@@ -71,8 +71,10 @@ export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadMod
     abortRef.current?.abort();
     abortRef.current = null;
     setIsDownloading(false);
+    // QNBS-v3: CodeAnt — reset progress so a reopened modal auto-starts (it only fires at progress 0).
+    dispatch(settingsActions.setVoiceSettings({ wasmModelDownloadProgress: 0 }));
     onClose();
-  }, [onClose]);
+  }, [dispatch, onClose]);
 
   useEffect(() => {
     // QNBS-v3: P1-2 — guard on !error so a failed download (which resets progress to 0) does NOT

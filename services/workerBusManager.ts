@@ -10,7 +10,9 @@ const log = createLogger('workerBusManager');
 
 let _bus: WorkerBus | null = null;
 let _adapter: LegacyWorkerBusAdapter | null = null;
-let _initializing = false;
+// QNBS-v3: CodeAnt — hold the in-flight init promise so concurrent callers AWAIT it instead of
+//          returning early while `_bus` is still null (which caused sporadic main-thread fallback).
+let _initPromise: Promise<void> | null = null;
 
 /** Returns the active WorkerBus v2 instance, or null if not yet initialized. */
 export function getWorkerBus(): WorkerBus | null {
@@ -32,9 +34,19 @@ export function isWorkerBusReady(): boolean {
  * Idempotent — concurrent/repeated calls are no-ops.
  */
 export async function initWorkerBus(): Promise<void> {
-  if (_bus !== null || _initializing) return;
-  _initializing = true;
+  if (_bus !== null) return;
+  // QNBS-v3: CodeAnt — concurrent callers share the single in-flight init promise (and await it),
+  //          so none returns before `_bus` is set.
+  if (_initPromise) return _initPromise;
+  _initPromise = doInitWorkerBus();
+  try {
+    await _initPromise;
+  } finally {
+    _initPromise = null;
+  }
+}
 
+async function doInitWorkerBus(): Promise<void> {
   try {
     const {
       WorkerBus,
@@ -138,8 +150,6 @@ export async function initWorkerBus(): Promise<void> {
       'WorkerBus v2 initialization failed',
       err instanceof Error ? err : new Error(String(err)),
     );
-  } finally {
-    _initializing = false;
   }
 }
 
