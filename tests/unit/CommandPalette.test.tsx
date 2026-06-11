@@ -12,12 +12,25 @@ vi.mock('../../app/hooks', () => ({
     selector({
       settings: {
         theme: 'dark',
+        appearancePreset: 'default',
+        aiMode: 'hybrid',
         editorFont: 'serif',
         fontSize: 16,
         lineSpacing: 1.5,
         aiCreativity: 'Balanced',
         advancedAi: {},
-        accessibility: { liveRegionVerbosity: 'full' },
+        accessibility: {
+          liveRegionVerbosity: 'full',
+          highContrast: false,
+          reducedMotion: false,
+          largeText: false,
+        },
+        advancedEditor: {
+          distractionFree: false,
+          typewriterMode: false,
+          zenMode: false,
+          focusMode: false,
+        },
         collaboration: { webrtcSignalingUrls: [] },
         featureFlags: {},
       },
