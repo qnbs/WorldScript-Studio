@@ -85,6 +85,12 @@ function worldCompleteness(w: { description: string; geography: string; culture:
   return filled / fields.length;
 }
 
+// QNBS-v3: Escape regex metacharacters before interpolating names into RegExp — characters
+// like "C++" or "Dr. J." would otherwise corrupt the pattern or throw.
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** Jaccard similarity between word-sets of two strings. */
 function jaccardSimilarity(a: string, b: string): number {
   const setA = new Set(
@@ -182,7 +188,7 @@ const UnderdevelopedCharacterRule: HeuristicRule = {
       const nameWords = c.name.toLowerCase().split(/\s+/).filter(Boolean);
       const primaryName = nameWords[0] ?? '';
       if (!primaryName || primaryName.length < 2) continue;
-      const regex = new RegExp(`\\b${primaryName}\\b`, 'g');
+      const regex = new RegExp(`\\b${escapeRegExp(primaryName)}\\b`, 'g');
       const appearances = (manuscriptText.match(regex) ?? []).length;
       if (appearances < 2) continue;
 
@@ -366,7 +372,7 @@ const PlotHoleRule: HeuristicRule = {
       if (!char) continue;
       const primaryName = char.name.split(/\s+/)[0]?.toLowerCase() ?? '';
       if (!primaryName || primaryName.length < 2) continue;
-      const regex = new RegExp(`\\b${primaryName}\\b`);
+      const regex = new RegExp(`\\b${escapeRegExp(primaryName)}\\b`);
       for (let j = 0; j < introIdx; j++) {
         const s = sections[j];
         if (!s) continue;
@@ -423,7 +429,8 @@ const MissingWorldContextRule: HeuristicRule = {
       // Only flag if name appears in the manuscript
       const nameLC = w.name.toLowerCase().split(/\s+/)[0] ?? '';
       if (nameLC.length < 3) continue;
-      if (!manuscriptText.includes(nameLC)) continue;
+      // QNBS-v3: word-boundary match prevents "london" matching inside "londoner"
+      if (!new RegExp(`\\b${escapeRegExp(nameLC)}\\b`).test(manuscriptText)) continue;
       findings.push({
         id: `missing-world-${w.id}`,
         ruleId: 'missing-world-context',

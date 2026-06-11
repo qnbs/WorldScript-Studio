@@ -11,7 +11,9 @@ import type { View } from '../../types';
 
 interface InsightCardProps {
   finding: HeuristicFinding;
-  copilot: Pick<UseGlobalCopilotReturn, 't' | 'sendMessage'>;
+  // QNBS-v3: heuristicsOnly added — in that mode sendMessage returns a generic summary, so
+  // card-specific context is lost; hide "Tell me more" instead of silently mis-behaving.
+  copilot: Pick<UseGlobalCopilotReturn, 't' | 'sendMessage' | 'heuristicsOnly'>;
   onNavigate?: (view: View) => void;
 }
 
@@ -43,7 +45,7 @@ function SeverityDot({ severity }: { severity: HeuristicSeverity }) {
 }
 
 export const InsightCard: FC<InsightCardProps> = ({ finding, copilot, onNavigate }) => {
-  const { t, sendMessage } = copilot;
+  const { t, sendMessage, heuristicsOnly } = copilot;
 
   const title = t(finding.titleKey, finding.params);
   const desc = t(finding.descriptionKey, finding.params);
@@ -68,13 +70,17 @@ export const InsightCard: FC<InsightCardProps> = ({ finding, copilot, onNavigate
           <p className="font-medium text-[var(--sc-text-primary)]">{title}</p>
           <p className="mt-0.5 text-[var(--sc-text-secondary)]">{desc}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={handleTellMore}
-              className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-2 py-0.5 text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
-            >
-              {t('copilot.insightTellMore')}
-            </button>
+            {/* QNBS-v3: hidden in heuristics-only mode — sendMessage would return a generic
+                summary instead of card-specific context, misleading the user */}
+            {!heuristicsOnly && (
+              <button
+                type="button"
+                onClick={handleTellMore}
+                className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-2 py-0.5 text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+              >
+                {t('copilot.insightTellMore')}
+              </button>
+            )}
             {finding.actionable && onNavigate && (
               <button
                 type="button"

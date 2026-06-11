@@ -5,7 +5,7 @@
  * drives the heuristic insight generator, and supports a heuristics-only offline mode.
  */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { useCommandExecutor } from '../contexts/CommandExecutorContext';
@@ -78,6 +78,10 @@ export function useGlobalCopilot(currentView: View) {
   const error = useAppSelector(selectCopilotError);
   // QNBS-v3: panel-only overlay state lives in transientUiStore, not Redux (CodeAnt findings)
   const proactiveInsights = useTransientUiStore((s) => s.copilotInsights);
+  // QNBS-v3: Ref tracks latest insight count without triggering buildContext re-identity —
+  // prevents the feedback loop: insights update → buildContext changes → useEffect refires.
+  const proactiveInsightsRef = useRef(proactiveInsights);
+  proactiveInsightsRef.current = proactiveInsights;
   const heuristicsOnly = useTransientUiStore((s) => s.copilotHeuristicsOnly);
   const insightStatus = useTransientUiStore((s) => s.copilotInsightStatus);
   const setCopilotInsights = useTransientUiStore((s) => s.setCopilotInsights);
@@ -119,15 +123,22 @@ export function useGlobalCopilot(currentView: View) {
           : 0,
       // QNBS-v3: activeChapterId is omitted here (populated by Manuscript view in Phase 2).
       selectedText: '',
-      openInsightCount: proactiveInsights.length,
+      openInsightCount: proactiveInsightsRef.current.length,
     }),
-    [currentView, t, project, language, proactiveInsights.length],
+    // QNBS-v3: proactiveInsights excluded — reading via ref breaks the feedback loop where
+    // insight updates re-trigger generation. Biome correctly exempts ref.current from deps.
+    [currentView, t, project, language],
   );
 
   // QNBS-v3: Schedule proactive insight generation whenever project or language changes.
   // Cancelled on unmount / Copilot clear so we never dispatch into an unmounted component.
   useEffect(() => {
-    if (!project) return;
+    if (!project) {
+      // QNBS-v3: reset so status never stays stuck as 'running' after a project is unloaded
+      setCopilotInsightStatus('idle');
+      setCopilotInsights([]);
+      return;
+    }
     setCopilotInsightStatus('running');
     scheduleInsightGeneration(project, buildContext(), (findings) => {
       setCopilotInsights(findings);
@@ -226,6 +237,9 @@ export function useGlobalCopilot(currentView: View) {
   const toggle = useCallback(() => dispatch(copilotActions.toggle()), [dispatch]);
   const clear = useCallback(() => {
     stop();
+    // QNBS-v3: cancel pending debounce so the scheduled insight callback can't fire after clear
+    // and immediately repopulate insights (generation-token-free guard via direct cancel)
+    cancelInsightGeneration();
     dispatch(copilotActions.clear());
     // QNBS-v3: reset panel overlay state in Zustand on clear (insights + status, not heuristicsOnly)
     setCopilotInsights([]);
