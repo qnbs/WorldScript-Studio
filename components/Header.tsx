@@ -2,6 +2,7 @@ import type React from 'react';
 import { ActionCreators as UndoAction } from 'redux-undo';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
+import { selectEnableVoiceSupport } from '../features/featureFlags/featureFlagsSlice';
 import { selectCanRedo, selectCanUndo } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
 import { useVoice } from '../hooks/useVoice';
@@ -28,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   const dispatch = useAppDispatch();
   const canUndo = useAppSelector(selectCanUndo);
   const canRedo = useAppSelector(selectCanRedo);
+  const voiceEnabled = useAppSelector(selectEnableVoiceSupport);
   const { startListening, stopListening, isListening } = useVoice();
 
   const handleUndo = () => {
@@ -148,37 +150,40 @@ export const Header: React.FC<HeaderProps> = ({
           </svg>
         </button>
 
-        {/* Voice Control Button */}
-        <button
-          type="button"
-          id="voice-control-button"
-          className={`sm:hidden p-2 ${isListening ? 'text-[var(--sc-text-danger)]' : 'text-[var(--sc-text-secondary)]'} hover:text-[var(--sc-text-primary)]`}
-          aria-label={t('voice.control')}
-          aria-pressed={isListening}
-          onClick={() => {
-            if (isListening) {
-              stopListening();
-            } else {
-              startListening();
-            }
-          }}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-6 h-6"
-            aria-hidden="true"
+        {/* Voice Control Button — only shown when voice is enabled in feature flags */}
+        {voiceEnabled && (
+          <button
+            type="button"
+            id="voice-control-button"
+            className={`sm:hidden p-2 ${isListening ? 'text-[var(--sc-text-danger)]' : 'text-[var(--sc-text-secondary)]'} hover:text-[var(--sc-text-primary)]`}
+            aria-label={t('voice.control')}
+            aria-pressed={isListening}
+            onClick={() => {
+              if (isListening) {
+                stopListening();
+              } else {
+                startListening();
+              }
+            }}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 15v3m3 0l-3-3-3 3h3V5a2.002 2.002 0 00-2-2H5a2.002 2.002 0 00-2 2v10a2.002 2.002 0 002 2h5a2.002 2.002 0 002-2 2.002 2.002 0 012 2v6a2.002 2.002 0 01-2 2H5a2.002 2.002 0 01-2-2v-5a2.002 2.002 0 002-2h2.5"
-            />
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-6 h-6"
+              aria-hidden="true"
+            >
+              {/* QNBS-v3: Heroicons microphone icon — replaces incorrect bookmark-shaped placeholder */}
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
+              />
+            </svg>
+          </button>
+        )}
 
         <SaveStatusIndicator />
 
