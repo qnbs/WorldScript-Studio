@@ -101,12 +101,13 @@ services/         → External adapters; key sub-dirs:
 packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui,
                      collab-transport (vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption),
                      worker-bus (typed worker pool, circuit breakers, dead-letter queue — see § WorkerBus below)
-locales/          → i18n source JSON (de/en/es/fr/it/ar/he/el/ja/pt/zh × 15 modules); runtime: public/locales/<lang>/bundle.json
+locales/          → i18n source JSON (de/en/es/fr/it/ar/he/el/ja/pt/zh × 20 modules); runtime: public/locales/<lang>/bundle.json
                      ar/ + he/ — RTL stubs behind enableRtlLayout; el/ja/pt/zh — Beta locales (P1-5)
 tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
 types/            → Supplemental TypeScript definitions (duckdb-wasm-worker.d.ts, tauri-plugins.d.ts)
 types.ts          → Core shared interfaces and types (root level)
 workers/          → inference.worker.ts (@huggingface/transformers v3), duckdbWorker.ts (DuckDB-WASM)
+                     v2/ → WorkerBus v2 workers: inference.worker.ts, duckdb.worker.ts, webllm.worker.ts (P1-1, @mlc-ai/web-llm)
 infra/low-end-ci/ → Local CI stack: Forgejo + act + systemd units + bash scripts
 scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, graphify-update, etc.)
 ```
@@ -172,7 +173,7 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 `services/ai/aiRetry.ts` — `withTransientRetry(fn, opts)` wraps any AI call with transient-error retries. Use this instead of ad-hoc retry logic.
 
-**WebLLM / local inference:** `services/localAiFacade.ts` wraps `@mlc-ai/web-llm` (via `packages/ai-core`). Supported models: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B. Tab-leader election via BroadcastChannel prevents multi-tab GPU contention.
+**WebLLM / local inference:** `services/localAiFacade.ts` wraps `@mlc-ai/web-llm` (via `packages/ai-core`). Supported models: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B. Tab-leader election via BroadcastChannel prevents multi-tab GPU contention. **WebLLM offload (P1-1, ADR-0005):** inference runs in the dedicated WorkerBus v2 `webllm` pool (`workers/v2/webllm.worker.ts`, capability `inference.webllm`), NOT on the main thread. `generateLocalText` is worker-first via `ensureWebLlmPool()` (decoupled from `enableWorkerBusV2`) with an automatic main-thread fallback (`runLocalTextGeneration`) on `NO_WEBGPU` / worker-spawn failure / circuit-open. GPU mutex (`gpuResourceManager`) + tab election stay main-thread, acquired before enqueue.
 
 **Local RAG:** `services/localRagIndex.ts` + `localRagService.ts` — hybrid retrieval (60% semantic MiniLM-L6-v2 + 30% lexical + 10% recency). `ragMode: 'hybrid' | 'lexical'` in `settings.advancedAi` (default `'hybrid'`).
 
@@ -244,7 +245,7 @@ Key flags: `enableDuckDbAnalytics`, `enableVoiceSupport`, `enableProForge`, `ena
 
 ### i18n
 
-Custom React Context in `I18nContext.tsx` — not i18next. Source locales: **de, en, es, fr, it** (core), **ar, he** (RTL stubs, B-5), **el, ja, pt, zh** (Beta, P1-5). All 12 ship as `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` or auto via `pnpm run i18n:check`. All user-facing strings must use `t('key.path')` from `useTranslation()`. New keys: add to **all 12** locale trees (`node scripts/check-i18n-keys.mjs --fix`), then `pnpm run i18n:bundle`. The `/i18n-key` skill targets the **5 core** locales only; update Beta/RTL locales manually afterward.
+Custom React Context in `I18nContext.tsx` — not i18next. Source locales: **de, en, es, fr, it** (core), **ar, he** (RTL stubs, B-5), **el, ja, pt, zh** (Beta, P1-5). All 11 ship as `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` or auto via `pnpm run i18n:check`. All user-facing strings must use `t('key.path')` from `useTranslation()`. New keys: add to **all 11** locale trees (`node scripts/check-i18n-keys.mjs --fix`), then `pnpm run i18n:bundle`. The `/i18n-key` skill targets the **5 core** locales only; update Beta/RTL locales manually afterward.
 
 **RTL stubs (B-5):** `locales/ar/` + `locales/he/` are English-fallback stubs behind `enableRtlLayout`. Full content is v2.0 community task.
 
@@ -347,7 +348,9 @@ All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Docu
 
 Engines defined in `services/voice/voiceTypes.ts` (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`). Contract: `isAvailable()` → `initialize()` → use → `dispose()`. Web Speech API fallbacks: `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine` (zero downloads). WASM path (B-2, `enableVoiceWasm`): `WasmSttEngine` (Whisper.cpp) + `SileroVadEngine`; model download via `VoiceModelDownloadModal` + `VoiceCommandService.preloadModel(modelType)`.
 
-**Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact match → fuzzy Jaccard + slot extraction. **Orchestrator:** `VoiceCommandService` singleton (state machine), dispatches via `runCommandById`, `appStoreRef` for Redux outside React. **Hooks:** `useVoice`, `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation`, `useVoiceAccessibility`. **Gating:** `settings.voice.enabled && featureFlags.enableVoiceSupport`.
+**Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact match → fuzzy Jaccard + slot extraction. **Orchestrator:** `VoiceCommandService` singleton (state machine), dispatches via `runCommandById`, `appStoreRef` for Redux outside React. **Hooks:** `useVoice`, `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation`, `useVoiceAccessibility`. **Gating:** `settings.voice.enabled && featureFlags.enableVoiceSupport`. **Never log transcripts** (PII → IDB log sink); `startListening` has a single-flight guard (C-P1).
+
+**Voice E2E seam (P1-2):** `services/voice/voiceTestSeam.ts` — `getVoiceTestHarness()` reads `window.__voiceTestHarness` (only ever set by Playwright `addInitScript`; undefined in production). `createSttEngine`/`createVadEngine` return injected mock engines, and `downloadVoiceModels` runs a simulated download, when the harness is present. Installers: `tests/e2e/mocks/voiceMockEngines.ts`. Deterministic suite: `tests/e2e/deep/voice/whisper-stt.spec.ts` (e2e-deep); real-inference nightly: `whisper-real.spec.ts` + `voice-nightly.yml` (`RUN_REAL_VOICE_E2E=1`). Chromium fake-media flags live in `playwright.config.ts`.
 
 ### Local inference
 

@@ -59,8 +59,7 @@ describe('rustTaskSupervisor — analyzeTextViaRust', () => {
     vi.mocked(routeTask).mockResolvedValue({
       taskId: 't1',
       result: Promise.resolve(ANALYSIS),
-      // biome-ignore lint/suspicious/noExplicitAny: test stub for TaskHandle progress/cancel
-      progress: (async function* () {})() as any,
+      progress: (async function* () {})(),
       cancel: vi.fn(),
     });
     const { analyzeTextViaRust } = await import('../../services/rustTaskSupervisor');
@@ -94,8 +93,7 @@ describe('rustTaskSupervisor — analyzeTextViaRust', () => {
     vi.mocked(routeTask).mockResolvedValue({
       taskId: 't2',
       result: Promise.reject(new Error('rust boom')),
-      // biome-ignore lint/suspicious/noExplicitAny: test stub for TaskHandle progress/cancel
-      progress: (async function* () {})() as any,
+      progress: (async function* () {})(),
       cancel: vi.fn(),
     });
     const { analyzeTextViaRust } = await import('../../services/rustTaskSupervisor');

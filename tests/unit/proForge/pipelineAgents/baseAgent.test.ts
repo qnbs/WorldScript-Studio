@@ -101,8 +101,7 @@ function makeContext(overrides: Partial<OrchestratorContext> = {}): Orchestrator
   };
   return {
     projectId: 'proj-test',
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
-    dispatch: vi.fn() as any,
+    dispatch: vi.fn() as unknown as OrchestratorContext['dispatch'],
     getState: vi.fn().mockReturnValue({
       project: {
         present: {
@@ -118,8 +117,7 @@ function makeContext(overrides: Partial<OrchestratorContext> = {}): Orchestrator
           },
         },
       },
-      // biome-ignore lint/suspicious/noExplicitAny: partial test state
-    } as any),
+    } as unknown as ReturnType<OrchestratorContext['getState']>),
     manuscript: [],
     characters: [],
     worlds: [],
@@ -159,8 +157,7 @@ describe('BaseAgent', () => {
 
     it('falls back to module singleton when context.gateway is undefined', async () => {
       const ctx = makeContext();
-      // biome-ignore lint/suspicious/noExplicitAny: test access
-      (ctx as any).gateway = undefined;
+      (ctx as { gateway?: unknown }).gateway = undefined;
       const a = new StubAgent(ctx);
       // QNBS-v3: lazily imports the (mocked) inferenceGateway singleton when none injected.
       await expect(a['getGateway']()).resolves.toBeDefined();
@@ -230,8 +227,12 @@ describe('BaseAgent', () => {
     });
 
     it('falls back to gemini-2.5-flash for unknown provider', () => {
-      // biome-ignore lint/suspicious/noExplicitAny: test unknown provider
-      const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'unknown' as any } });
+      const ctx = makeContext({
+        config: {
+          ...DEFAULT_CONFIG,
+          aiProvider: 'unknown' as unknown as (typeof DEFAULT_CONFIG)['aiProvider'],
+        },
+      });
       const a = new StubAgent(ctx);
       expect(a.publicBuildAiOpts().model).toBe('gemini-2.5-flash');
     });

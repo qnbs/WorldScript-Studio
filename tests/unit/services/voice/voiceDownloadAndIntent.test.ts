@@ -3,7 +3,7 @@
  * QNBS-v3: Covers uncovered branches in the download pipeline and intent processing.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Hoisted mock references (vi.hoisted → safe to use in vi.mock factories) ───
 const { mockSetVoiceSettings, mockPipeline, mockDispose, mockParse } = vi.hoisted(() => {
@@ -216,6 +216,57 @@ describe('downloadVoiceModels', () => {
   });
 });
 
+// ── Tests: downloadVoiceModels — simulated (E2E test seam) ──────────────────────
+
+describe('downloadVoiceModels — simulated (E2E seam)', () => {
+  type HarnessWindow = { __voiceTestHarness?: unknown };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete (window as HarnessWindow).__voiceTestHarness;
+  });
+  afterEach(() => {
+    delete (window as HarnessWindow).__voiceTestHarness;
+  });
+
+  it('success mode: marks ready and never calls the real pipeline', async () => {
+    (window as HarnessWindow).__voiceTestHarness = {
+      download: { mode: 'success', steps: 2, stepDelayMs: 0 },
+    };
+    const { service } = makeService();
+    await service.downloadVoiceModels('stt');
+    expect(mockPipeline).not.toHaveBeenCalled();
+    expect(mockSetVoiceSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ wasmModelDownloadProgress: 1.0, wasmModelsReady: true }),
+    );
+  });
+
+  it('error mode: dispatches voiceWasmDownloadError and throws', async () => {
+    (window as HarnessWindow).__voiceTestHarness = {
+      download: { mode: 'error', steps: 1, stepDelayMs: 0, errorMessage: 'boom' },
+    };
+    const { service } = makeService();
+    await expect(service.downloadVoiceModels('stt')).rejects.toThrow('boom');
+    expect(mockPipeline).not.toHaveBeenCalled();
+    expect(mockSetVoiceSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ voiceWasmDownloadError: 'boom' }),
+    );
+  });
+
+  it('pre-aborted signal: returns early without marking ready', async () => {
+    (window as HarnessWindow).__voiceTestHarness = {
+      download: { mode: 'success', steps: 5, stepDelayMs: 5 },
+    };
+    const controller = new AbortController();
+    controller.abort();
+    const { service } = makeService();
+    await service.downloadVoiceModels('stt', controller.signal);
+    const readyCalls = vi
+      .mocked(mockSetVoiceSettings)
+      .mock.calls.filter(([arg]) => arg?.wasmModelsReady === true);
+    expect(readyCalls).toHaveLength(0);
+  });
+});
+
 // ── Tests: handleDictationResult ──────────────────────────────────────────────
 
 describe('handleDictationResult via startDictation callback', () => {
@@ -238,6 +289,29 @@ describe('handleDictationResult via startDictation callback', () => {
       service as unknown as { handleDictationResult: (r: { transcript: string }) => void }
     ).handleDictationResult({ transcript: '   ' });
     expect(dispatched).toHaveLength(0);
+  });
+});
+
+// ── Tests: startListening single-flight guard (C-P1) ───────────────────────────
+
+describe('startListening single-flight guard', () => {
+  type PrivateState = { listeningTimer: ReturnType<typeof setTimeout> | null; isStarting: boolean };
+  it('returns early when listening is already active (listeningTimer set)', async () => {
+    const { service } = makeService();
+    const initSpy = vi.spyOn(service, 'initialize');
+    const priv = service as unknown as PrivateState;
+    priv.listeningTimer = setTimeout(() => {}, 10_000);
+    await service.startListening();
+    expect(initSpy).not.toHaveBeenCalled();
+    if (priv.listeningTimer) clearTimeout(priv.listeningTimer);
+  });
+
+  it('returns early when a start is already in flight (isStarting)', async () => {
+    const { service } = makeService();
+    const initSpy = vi.spyOn(service, 'initialize');
+    (service as unknown as PrivateState).isStarting = true;
+    await service.startListening();
+    expect(initSpy).not.toHaveBeenCalled();
   });
 });
 

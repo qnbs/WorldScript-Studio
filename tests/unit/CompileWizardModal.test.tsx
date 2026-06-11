@@ -23,8 +23,9 @@ const makeStoreState = (compileWizardOpen: boolean) => ({
 });
 
 vi.mock('../../app/transientUiStore', () => ({
-  // biome-ignore lint/suspicious/noExplicitAny: mock selector — TransientUiState is not exported
-  useTransientUiStore: vi.fn((selector: (s: any) => unknown) => selector(makeStoreState(false))),
+  useTransientUiStore: vi.fn((selector: (s: ReturnType<typeof makeStoreState>) => unknown) =>
+    selector(makeStoreState(false)),
+  ),
 }));
 
 const mockExportContext = {
@@ -57,30 +58,27 @@ describe('CompileWizardModal', () => {
 
   it('shows modal content when compileWizardOpen is true', async () => {
     const { useTransientUiStore } = await import('../../app/transientUiStore');
-    vi.mocked(useTransientUiStore).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: TransientUiState is not exported
-      (selector: (s: any) => unknown) => selector(makeStoreState(true)),
-    );
+    vi.mocked(useTransientUiStore).mockImplementation(((
+      selector: (s: ReturnType<typeof makeStoreState>) => unknown,
+    ) => selector(makeStoreState(true))) as unknown as typeof useTransientUiStore);
     render(<CompileWizardModal />);
     expect(screen.getByText('export.compileWizard.title')).toBeTruthy();
   });
 
   it('shows step label when open', async () => {
     const { useTransientUiStore } = await import('../../app/transientUiStore');
-    vi.mocked(useTransientUiStore).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: TransientUiState is not exported
-      (selector: (s: any) => unknown) => selector(makeStoreState(true)),
-    );
+    vi.mocked(useTransientUiStore).mockImplementation(((
+      selector: (s: ReturnType<typeof makeStoreState>) => unknown,
+    ) => selector(makeStoreState(true))) as unknown as typeof useTransientUiStore);
     render(<CompileWizardModal />);
     expect(screen.getByText('export.compileWizard.stepPreset')).toBeTruthy();
   });
 
   it('shows next button on step 0', async () => {
     const { useTransientUiStore } = await import('../../app/transientUiStore');
-    vi.mocked(useTransientUiStore).mockImplementation(
-      // biome-ignore lint/suspicious/noExplicitAny: TransientUiState is not exported
-      (selector: (s: any) => unknown) => selector(makeStoreState(true)),
-    );
+    vi.mocked(useTransientUiStore).mockImplementation(((
+      selector: (s: ReturnType<typeof makeStoreState>) => unknown,
+    ) => selector(makeStoreState(true))) as unknown as typeof useTransientUiStore);
     render(<CompileWizardModal />);
     expect(screen.getByText('export.compileWizard.next')).toBeTruthy();
   });

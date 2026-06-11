@@ -62,7 +62,7 @@ const GoalRow: FC<{ label: string; current: number; goal: number; progress: numb
           })}
         </span>
       </div>
-      <Progress value={progress} className="h-2.5" />
+      <Progress value={progress} className="h-2.5" aria-label={t('dashboard.momentum.title')} />
     </div>
   );
 };

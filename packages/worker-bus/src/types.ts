@@ -26,6 +26,8 @@ export type WorkerCapability =
   | 'inference.text'
   | 'inference.embed'
   | 'inference.vision'
+  // QNBS-v3: P1-1 — dedicated WebLLM (WebGPU) off-thread inference capability.
+  | 'inference.webllm'
   | 'db.duckdb'
   | 'voice.stt'
   | 'voice.tts'

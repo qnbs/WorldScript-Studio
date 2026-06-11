@@ -3,8 +3,19 @@ import { defineConfig, devices } from '@playwright/test';
 const isCi = process.env['CI'] === 'true';
 const runMobileLocal = process.env['RUN_MOBILE_E2E'] === '1';
 
-const desktopChrome = { name: 'chromium', use: { ...devices['Desktop Chrome'] } };
-const mobileChrome = { name: 'Mobile Chrome', use: { ...devices['Pixel 5'] } };
+// QNBS-v3: P1-2 — fake-media flags so getUserMedia auto-grants a mic + a synthetic audio device.
+//          Required by the voice deep specs (VoiceCommandService.initialize requests the mic) and
+//          by the nightly real-inference suite (--use-file-for-fake-audio-capture can be added there).
+const chromiumVoiceArgs = ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'];
+
+const desktopChrome = {
+  name: 'chromium',
+  use: { ...devices['Desktop Chrome'], launchOptions: { args: chromiumVoiceArgs } },
+};
+const mobileChrome = {
+  name: 'Mobile Chrome',
+  use: { ...devices['Pixel 5'], launchOptions: { args: chromiumVoiceArgs } },
+};
 
 // QNBS-v3: CI = Desktop + Mobile Chromium (one browser install); locally mobile is optional via RUN_MOBILE_E2E=1 for low-end machines.
 const e2eProjects = isCi

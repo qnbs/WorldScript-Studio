@@ -317,11 +317,9 @@ describe('useWriterView', () => {
     const foundThunkInMock = mockDispatch.mock.calls.some(
       ([action]) => isDispatcherAction(action) && action.type === 'streamGenerationThunk',
     );
-    // biome-ignore lint/suspicious/noExplicitAny: globalThis introspection for thunk detection
-    const foundThunkInGlobal = ((globalThis as any).__dispatchCalls || []).some(
-      // biome-ignore lint/suspicious/noExplicitAny: dispatched action is untyped at test boundary
-      (a: any) => a && a.type === 'streamGenerationThunk',
-    );
+    const foundThunkInGlobal = (
+      (globalThis as { __dispatchCalls?: Array<{ type?: string }> }).__dispatchCalls || []
+    ).some((a) => a && a.type === 'streamGenerationThunk');
     expect(foundThunkInMock || foundThunkInGlobal).toBe(true);
   });
 

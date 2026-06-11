@@ -243,30 +243,32 @@ describe('Tooltip', () => {
 // ---------------------------------------------------------------------------
 describe('Progress', () => {
   it('renders a progress bar container', () => {
-    const { container } = render(<Progress value={50} />);
+    const { container } = render(<Progress aria-label="Progress" value={50} />);
     expect(container.firstChild).toBeInTheDocument();
   });
 
   it('sets bar width to the given percentage', () => {
-    const { container } = render(<Progress value={75} />);
+    const { container } = render(<Progress aria-label="Progress" value={75} />);
     const bar = container.querySelector('[style]') as HTMLElement;
     expect(bar.style.width).toBe('75%');
   });
 
   it('clamps value below 0 to 0%', () => {
-    const { container } = render(<Progress value={-10} />);
+    const { container } = render(<Progress aria-label="Progress" value={-10} />);
     const bar = container.querySelector('[style]') as HTMLElement;
     expect(bar.style.width).toBe('0%');
   });
 
   it('clamps value above 100 to 100%', () => {
-    const { container } = render(<Progress value={150} />);
+    const { container } = render(<Progress aria-label="Progress" value={150} />);
     const bar = container.querySelector('[style]') as HTMLElement;
     expect(bar.style.width).toBe('100%');
   });
 
   it('applies custom className to the outer element', () => {
-    const { container } = render(<Progress value={50} className="my-progress" />);
+    const { container } = render(
+      <Progress aria-label="Progress" value={50} className="my-progress" />,
+    );
     expect((container.firstChild as HTMLElement).className).toContain('my-progress');
   });
 });

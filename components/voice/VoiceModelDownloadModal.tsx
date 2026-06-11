@@ -71,14 +71,18 @@ export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadMod
     abortRef.current?.abort();
     abortRef.current = null;
     setIsDownloading(false);
+    // QNBS-v3: CodeAnt — reset progress so a reopened modal auto-starts (it only fires at progress 0).
+    dispatch(settingsActions.setVoiceSettings({ wasmModelDownloadProgress: 0 }));
     onClose();
-  }, [onClose]);
+  }, [dispatch, onClose]);
 
   useEffect(() => {
-    if (isOpen && !isDownloading && progress === 0) {
+    // QNBS-v3: P1-2 — guard on !error so a failed download (which resets progress to 0) does NOT
+    //          auto-retry in a loop; the user retries via the explicit Retry button instead.
+    if (isOpen && !isDownloading && !error && progress === 0) {
       void handleDownload();
     }
-  }, [isOpen, isDownloading, progress, handleDownload]);
+  }, [isOpen, isDownloading, error, progress, handleDownload]);
 
   const modelName = modelType === 'stt' ? 'Whisper (STT)' : 'Kokoro (TTS)';
   const modelSize = modelType === 'stt' ? MODEL_SIZES.whisper : MODEL_SIZES.kokoro;
@@ -97,8 +101,12 @@ export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadMod
 
         {isDownloading && (
           <>
-            <Progress value={Math.round(progress * 100)} />
-            <p className="text-xs text-[var(--sc-text-tertiary)]">
+            {/* QNBS-v3: C-P1 — labelled progressbar + polite live region so the percentage is announced. */}
+            <Progress
+              value={Math.round(progress * 100)}
+              aria-label={t('voice.modelDownload.title')}
+            />
+            <p className="text-xs text-[var(--sc-text-tertiary)]" aria-live="polite">
               {t('voice.modelDownload.progress', { percent: String(Math.round(progress * 100)) })}
             </p>
           </>

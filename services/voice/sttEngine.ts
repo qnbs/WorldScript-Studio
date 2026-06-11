@@ -5,6 +5,7 @@
 
 import type { VoiceSttEngine } from '../../types';
 import { logger } from '../logger';
+import { getVoiceTestHarness } from './voiceTestSeam';
 import type { AudioStreamConfig, SttEngine, SttResult } from './voiceTypes';
 
 /** Thrown when Web Speech API is requested but the user has not granted GDPR Art. 13 consent. */
@@ -146,6 +147,13 @@ export interface SttEngineFactoryOptions {
 }
 
 export async function createSttEngine(options: SttEngineFactoryOptions = {}): Promise<SttEngine> {
+  // QNBS-v3: P1-2 — E2E seam. Returns the injected mock STT verbatim (undefined in production).
+  const harness = getVoiceTestHarness();
+  if (harness?.stt) {
+    logger.info('[createSttEngine] using injected test STT engine');
+    return harness.stt;
+  }
+
   const {
     preferredEngine = 'auto',
     webSpeechConsentGranted = false,

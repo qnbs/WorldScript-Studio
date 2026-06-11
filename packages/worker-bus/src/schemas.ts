@@ -20,6 +20,9 @@ export const WorkerCapabilitySchema = z.enum([
   'inference.text',
   'inference.embed',
   'inference.vision',
+  // QNBS-v3: P1-1 — dedicated WebLLM (WebGPU) capability so heavy MLC inference runs off the
+  //          main thread in its own pool, isolated from the transformers.js inference pool.
+  'inference.webllm',
   'db.duckdb',
   'voice.stt',
   'voice.tts',

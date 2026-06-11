@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RootState } from '../../app/store';
 import type { MindMap } from '../../types';
 
 const mockDispatch = vi.fn();
@@ -21,10 +22,8 @@ const makeMockState = (mindMaps: MindMap[] = []) => ({
       data: {
         title: '',
         logline: '',
-        // biome-ignore lint/suspicious/noExplicitAny: test mock
-        characters: { ids: [], entities: {} } as any,
-        // biome-ignore lint/suspicious/noExplicitAny: test mock
-        worlds: { ids: [], entities: {} } as any,
+        characters: { ids: [], entities: {} },
+        worlds: { ids: [], entities: {} },
         outline: [],
         manuscript: [],
         mindMaps,
@@ -49,10 +48,12 @@ let mockState = makeMockState();
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => mockDispatch),
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  useAppSelector: vi.fn((selector: (s: any) => unknown) => selector(mockState as any)),
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  useAppSelectorShallow: vi.fn((selector: (s: any) => unknown) => selector(mockState as any)),
+  useAppSelector: vi.fn((selector: (s: RootState) => unknown) =>
+    selector(mockState as unknown as RootState),
+  ),
+  useAppSelectorShallow: vi.fn((selector: (s: RootState) => unknown) =>
+    selector(mockState as unknown as RootState),
+  ),
 }));
 
 vi.mock('../../hooks/useTranslation', () => ({
