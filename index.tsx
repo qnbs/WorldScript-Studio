@@ -215,6 +215,19 @@ function StorageErrorScreen({ message, onReset }: { message: string; onReset: ()
     const store = setupStore(preloadedState);
     appStoreRef.current = store as unknown as { getState(): RootState; dispatch: AppDispatch };
 
+    // QNBS-v3: Seed aiModeService + OpenRouter config from persisted settings immediately after
+    // store hydration. The listenerMiddleware listeners only fire on Redux state *changes* —
+    // without this seed, singletons stay at defaults until the user changes a setting (G1 cold-start fix).
+    const persistedAiMode = (store.getState() as RootState).settings?.aiMode ?? 'hybrid';
+    const persistedOpenRouter = (store.getState() as RootState).settings?.openRouter;
+    void import('./services/ai/aiModeService').then(({ setActiveAiMode, setOpenRouterConfig }) => {
+      setActiveAiMode(persistedAiMode);
+      setOpenRouterConfig(
+        persistedOpenRouter?.enabled ?? false,
+        persistedOpenRouter?.preferredModel ?? 'deepseek/deepseek-r1:free',
+      );
+    });
+
     // QNBS-v3: RootState cast — configureStore mit PersistedRootState ergibt sonst zu breites getState().
     const pdata = (store.getState() as RootState).project.present?.data;
     if (pdata?.persistedVersionControl?.branches?.length) {
