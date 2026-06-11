@@ -130,10 +130,12 @@ ${prompt}`;
       anthropic: 'claude-haiku-4-5',
       grok: 'grok-3-mini',
     };
-    // QNBS-v3: eco mode forces the smallest local model to conserve resources.
-    const model: AiModel = isEcoMode()
-      ? (getLocalFallbackModel() as AiModel)
-      : (modelMap[provider] ?? 'gemini-2.5-flash');
+    // QNBS-v3: eco mode OR local routing override → use the local fallback model.
+    const routingOverrideActive = shouldRouteLocally() && !LOCAL_PROVIDERS.has(configuredProvider);
+    const model: AiModel =
+      isEcoMode() || routingOverrideActive
+        ? (getLocalFallbackModel() as AiModel)
+        : (modelMap[provider] ?? 'gemini-2.5-flash');
 
     return {
       model,
