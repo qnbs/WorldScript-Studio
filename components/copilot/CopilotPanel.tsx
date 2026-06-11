@@ -2,17 +2,33 @@ import type { FC } from 'react';
 import { useEffect, useRef } from 'react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import type { UseGlobalCopilotReturn } from '../../hooks/useGlobalCopilot';
+import type { View } from '../../types';
 import { CopilotComposer } from './CopilotComposer';
 import { CopilotMessageList } from './CopilotMessageList';
+import { HeuristicsModeToggle } from './HeuristicsModeToggle';
+import { InsightSection } from './InsightSection';
 
 interface CopilotPanelProps {
   copilot: UseGlobalCopilotReturn;
   contextLabel: string;
+  onNavigate?: (view: View) => void;
 }
 
 /** The Copilot dialog — focus-trapped, Escape-to-close, design-system tokens only. */
-export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel }) => {
-  const { t, messages, status, error, suggestions, sendMessage, close, clear } = copilot;
+export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel, onNavigate }) => {
+  const {
+    t,
+    messages,
+    status,
+    error,
+    suggestions,
+    proactiveInsights,
+    heuristicsOnly,
+    sendMessage,
+    close,
+    clear,
+    toggleHeuristicsOnly,
+  } = copilot;
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useFocusTrap(panelRef, { isActive: true, restoreFocus: true });
@@ -56,6 +72,12 @@ export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel }) =
           <p className="text-xs text-[var(--sc-text-muted)]">{contextLabel}</p>
         </div>
         <div className="flex items-center gap-1">
+          {/* QNBS-v3: Heuristics-only toggle — privacy/offline mode. */}
+          <HeuristicsModeToggle
+            heuristicsOnly={heuristicsOnly}
+            onToggle={toggleHeuristicsOnly}
+            t={t}
+          />
           <button
             type="button"
             onClick={clear}
@@ -94,6 +116,14 @@ export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel }) =
           </button>
         </div>
       </header>
+
+      {/* QNBS-v3: Proactive heuristic insights — collapsed by default, expands on user click. */}
+      <InsightSection
+        insights={proactiveInsights}
+        copilot={copilot}
+        // QNBS-v3: exactOptionalPropertyTypes — only spread when defined.
+        {...(onNavigate ? { onNavigate } : {})}
+      />
 
       <CopilotMessageList
         messages={messages}
