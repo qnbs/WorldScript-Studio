@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { HeuristicFinding } from '../services/copilot/heuristicEngine';
 
 interface TransientUiState {
   isCommandPaletteOpen: boolean;
@@ -13,6 +14,10 @@ interface TransientUiState {
   flowMode: boolean;
   // QNBS-v3: B-1 — shown on startup when enableIdbAtRestEncryption is on but key not yet in session
   isIdbUnlockOpen: boolean;
+  // QNBS-v3: Copilot overlay state — ephemeral panel-only data lives here, not in Redux
+  copilotInsights: HeuristicFinding[];
+  copilotHeuristicsOnly: boolean;
+  copilotInsightStatus: 'idle' | 'running';
   setCommandPaletteOpen: (value: boolean) => void;
   setInspectorPanelWidth: (value: number) => void;
   setCompileWizardOpen: (value: boolean) => void;
@@ -21,6 +26,9 @@ interface TransientUiState {
   setCrossProjectSearchOpen: (value: boolean) => void;
   setFlowMode: (value: boolean) => void;
   setIdbUnlockOpen: (value: boolean) => void;
+  setCopilotInsights: (findings: HeuristicFinding[]) => void;
+  setCopilotHeuristicsOnly: (value: boolean) => void;
+  setCopilotInsightStatus: (status: 'idle' | 'running') => void;
 }
 
 export const useTransientUiStore = create<TransientUiState>((set) => ({
@@ -32,6 +40,9 @@ export const useTransientUiStore = create<TransientUiState>((set) => ({
   isCrossProjectSearchOpen: false,
   flowMode: false,
   isIdbUnlockOpen: false,
+  copilotInsights: [],
+  copilotHeuristicsOnly: false,
+  copilotInsightStatus: 'idle',
   setCommandPaletteOpen: (value) => set({ isCommandPaletteOpen: value }),
   setInspectorPanelWidth: (value) => set({ inspectorPanelWidth: value }),
   setCompileWizardOpen: (value) => set({ compileWizardOpen: value }),
@@ -40,4 +51,7 @@ export const useTransientUiStore = create<TransientUiState>((set) => ({
   setCrossProjectSearchOpen: (value) => set({ isCrossProjectSearchOpen: value }),
   setFlowMode: (value) => set({ flowMode: value }),
   setIdbUnlockOpen: (value) => set({ isIdbUnlockOpen: value }),
+  setCopilotInsights: (findings) => set({ copilotInsights: findings }),
+  setCopilotHeuristicsOnly: (value) => set({ copilotHeuristicsOnly: value }),
+  setCopilotInsightStatus: (status) => set({ copilotInsightStatus: status }),
 }));

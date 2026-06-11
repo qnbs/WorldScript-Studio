@@ -134,8 +134,9 @@ const TensionDropRule: HeuristicRule = {
       const drop = prev.score - curr.score;
       const recovers = next.score > curr.score;
       if (drop >= 2 && !recovers) {
-        const from = prev.sectionTitle || `Ch.${i}`;
-        const to = next.sectionTitle || `Ch.${i + 2}`;
+        // QNBS-v3: use 1-based numeric index as language-neutral fallback (no English "Ch." prefix)
+        const from = prev.sectionTitle || String(i);
+        const to = next.sectionTitle || String(i + 2);
         findings.push({
           id: `tension-drop-${i}`,
           ruleId: 'tension-drop',
@@ -299,7 +300,9 @@ const HighRepetitionRule: HeuristicRule = {
   detect(project) {
     // Cap to first 10 sections for performance on low-end hardware
     const sections = project.manuscript.slice(0, 10);
-    for (const section of sections) {
+    for (let si = 0; si < sections.length; si++) {
+      const section = sections[si];
+      if (!section) continue;
       const content = section.content ?? '';
       const paragraphs = content.split(/\n\n+/).filter((p) => p.trim().split(/\s+/).length > 15);
       if (paragraphs.length < 3) continue;
@@ -315,7 +318,8 @@ const HighRepetitionRule: HeuristicRule = {
               severity: 'warning',
               titleKey: 'copilot.insight.highRepetition.title',
               descriptionKey: 'copilot.insight.highRepetition.desc',
-              params: { chapter: section.title || 'Untitled chapter' },
+              // QNBS-v3: 1-based numeric index as language-neutral fallback — no English "Untitled"
+              params: { chapter: section.title || String(si + 1) },
               targetView: 'manuscript',
               actionable: true,
             },
@@ -375,8 +379,9 @@ const PlotHoleRule: HeuristicRule = {
             descriptionKey: 'copilot.insight.plotHole.desc',
             params: {
               character: char.name,
-              chapterA: s.title || `Ch.${j + 1}`,
-              chapterB: sections[introIdx]?.title || `Ch.${introIdx + 1}`,
+              // QNBS-v3: 1-based numeric index as language-neutral fallback
+              chapterA: s.title || String(j + 1),
+              chapterB: sections[introIdx]?.title || String(introIdx + 1),
             },
             targetView: 'manuscript',
             actionable: false,
@@ -464,7 +469,8 @@ const OverlengthSceneRule: HeuristicRule = {
           severity: 'info',
           titleKey: 'copilot.insight.overlengthScene.title',
           descriptionKey: 'copilot.insight.overlengthScene.desc',
-          params: { title: s.title || `Ch.${i + 1}`, times: Math.round(c / mean) },
+          // QNBS-v3: 1-based numeric index as language-neutral fallback
+          params: { title: s.title || String(i + 1), times: Math.round(c / mean) },
           targetView: 'manuscript',
           actionable: false,
         });

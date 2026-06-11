@@ -14,11 +14,6 @@ const { mockDispatch, mockStop, state } = vi.hoisted(() => ({
       messages: [
         { id: 'a1', role: 'assistant', content: 'partial…', pending: true, createdAt: '' },
       ],
-      // QNBS-v3: Phase 1 fields — must be present to avoid undefined.length errors.
-      proactiveInsights:
-        [] as import('../../../features/copilot/copilotSlice').CopilotState['proactiveInsights'],
-      heuristicsOnly: false,
-      insightStatus: 'idle' as 'idle' | 'running',
     },
   },
 }));
@@ -26,6 +21,18 @@ const { mockDispatch, mockStop, state } = vi.hoisted(() => ({
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
   useAppSelector: (selector: (s: unknown) => unknown) => selector(state),
+}));
+// QNBS-v3: mock transientUiStore — copilot overlay state now lives in Zustand, not Redux
+vi.mock('../../../app/transientUiStore', () => ({
+  useTransientUiStore: (selector: (s: unknown) => unknown) =>
+    selector({
+      copilotInsights: [],
+      copilotHeuristicsOnly: false,
+      copilotInsightStatus: 'idle' as const,
+      setCopilotInsights: vi.fn(),
+      setCopilotHeuristicsOnly: vi.fn(),
+      setCopilotInsightStatus: vi.fn(),
+    }),
 }));
 vi.mock('../../../hooks/useStoryCraftAI', () => ({
   useStoryCraftAI: () => ({ runCompletion: vi.fn(), stop: mockStop, isLoading: false }),
