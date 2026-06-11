@@ -67,12 +67,13 @@ test.describe('Global AI Copilot (feature-flag explicit)', () => {
     const dialog = page.getByRole('dialog', { name: /AI Copilot/i });
     await expect(dialog).toBeVisible();
 
-    const toggle = dialog.getByRole('button', { name: /Heuristics Only/i });
+    // QNBS-v3: element has role="switch" + aria-checked (ARIA switch pattern, not button+aria-pressed)
+    const toggle = dialog.getByRole('switch', { name: /Heuristics only/i });
     await expect(toggle).toBeVisible();
-    // Default state: not pressed.
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    // Default state: not checked.
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
     await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
   });
 
   test('sidebar mode toggle is present on desktop viewport', async ({ page }) => {
