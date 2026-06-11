@@ -59,6 +59,13 @@ vi.mock('../../../app/hooks', () => ({
     fontSize: 16,
     lineSpacing: 1.6,
   })),
+  useAppDispatch: vi.fn(() => vi.fn()),
+}));
+
+// QNBS-v3: stub InlineAnnotationLayer — it depends on transientUiStore + Redux dispatch
+// which are beyond the scope of ManuscriptEditor unit tests.
+vi.mock('../../../components/copilot/InlineAnnotationLayer', () => ({
+  InlineAnnotationLayer: () => null,
 }));
 
 // Stub DebouncedInput so title changes are testable
