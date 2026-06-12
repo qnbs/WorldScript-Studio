@@ -28,6 +28,7 @@ pnpm install --frozen-lockfile
 pnpm run lint
 pnpm run i18n:check
 pnpm run typecheck
+pnpm run build-storybook
 
 if [[ "${WITH_UNIT}" == true ]]; then
   if [[ "${WITH_COVERAGE}" == true ]]; then

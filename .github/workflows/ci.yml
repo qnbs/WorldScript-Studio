@@ -102,6 +102,9 @@ jobs:
       - name: Typecheck (tsgo)
         run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
 
+      - name: Build Storybook
+        run: pnpm run build-storybook
+
       # QNBS-v3: Vitest mit --retry=2 für stabile Runs + NODE_OPTIONS für Node 24 Kompatibilität.
       # --no-experimental-webstorage deaktiviert native Node 24+ Web Storage API (verhindert localStorage.clear() Fehler).
       # Best Practice 2026: Retry-Logik fängt transiente Fehler ab, die bei CI-Runner-Überlastung auftreten können.

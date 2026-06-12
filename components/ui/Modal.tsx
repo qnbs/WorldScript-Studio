@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useId, useRef } from 'react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from './Icon';
 
 interface ModalProps {
   isOpen: boolean;
@@ -104,17 +105,7 @@ export const Modal: React.FC<ModalProps> = ({
               className="p-2 -me-2 text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] transition-colors rounded-sc-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               aria-label={t('common.close')}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-6 h-6"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" size="lg" aria-hidden />
             </button>
           )}
         </div>
