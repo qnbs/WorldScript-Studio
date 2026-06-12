@@ -145,4 +145,13 @@ describe('planAcceptedManuscriptEdits', () => {
     ]);
     expect(updates).toHaveLength(0);
   });
+
+  it('rejects proposed text containing null bytes', () => {
+    const content = 'The quick brown fox.';
+    expect(() =>
+      applyReviewEditsToSection(content, [
+        item({ original: 'quick', proposed: 'slow\0malicious' }),
+      ]),
+    ).toThrow('Invalid UTF-8');
+  });
 });

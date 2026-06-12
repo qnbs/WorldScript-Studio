@@ -130,14 +130,16 @@ interface CopilotMessageListProps {
 
 // QNBS-v3: useEffect+innerHTML avoids dangerouslySetInnerHTML (eliminates biome suppression debt);
 // DOMPurify sanitisation identical — the rule only flags the JSX prop, not direct DOM writes.
-const ALLOWED_MD_TAGS = ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'h3', 'span'];
+// QNBS-v3: Security-hardened tag list - removed 'span' to prevent style injection vectors.
+const ALLOWED_MD_TAGS = ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'h3'];
+const ALLOWED_MD_ATTR = ['class'];
 const MarkdownContent: FC<{ content: string }> = ({ content }) => {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (ref.current) {
       ref.current.innerHTML = DOMPurify.sanitize(renderMarkdown(content), {
         ALLOWED_TAGS: ALLOWED_MD_TAGS,
-        ALLOWED_ATTR: ['class'],
+        ALLOWED_ATTR: ALLOWED_MD_ATTR,
       });
     }
   }, [content]);

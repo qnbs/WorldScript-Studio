@@ -25,7 +25,7 @@ export const sceneAppenderDescriptor: PluginDescriptor = {
   description: 'Appends a configurable text snippet to the active scene and tracks usage count.',
 };
 
-const STORAGE_KEY = 'storecraft.scene-appender.run-count';
+const STORAGE_KEY = 'plugin:storecraft.scene-appender:run-count';
 const DEFAULT_SNIPPET = '\n\n---\n*[Scene break appended by Scene Appender plugin]*';
 
 /** Plugin entry-point — called by pluginRegistry.executeAsync(). */

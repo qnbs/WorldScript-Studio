@@ -12,8 +12,10 @@ export async function run(api: PluginSandboxedApi): Promise<void> {
   api.log(`[word-counter] Found ${titles.length} scenes`);
 
   // Persist scene count for later retrieval.
-  await api.storageWrite('word-counter:scene-count', titles.length);
-  const saved = await api.storageRead('word-counter:scene-count');
+  // QNBS-v3: Storage keys must be namespaced to prevent cross-plugin access.
+  const storageKey = `plugin:example-word-counter:scene-count`;
+  await api.storageWrite(storageKey, titles.length);
+  const saved = await api.storageRead(storageKey);
   api.log(`[word-counter] Stored scene count = ${String(saved)}`);
 }
 

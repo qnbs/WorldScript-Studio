@@ -100,6 +100,17 @@ const PERMISSION_API_MAP: Record<keyof PluginSandboxedApi, PluginPermission | nu
   storageWrite: 'storage.write',
 };
 
+// QNBS-v3: Plugin storage keys must be namespaced to prevent cross-plugin data access.
+// Keys must start with `plugin:${pluginId}:` to ensure isolation.
+function validatePluginStorageKey(key: string, pluginId: string): string {
+  if (!key.startsWith(`plugin:${pluginId}:`)) {
+    throw new Error(
+      `Invalid storage key: must start with "plugin:${pluginId}:". Got: "${key.slice(0, 32)}..."`,
+    );
+  }
+  return key;
+}
+
 // ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
@@ -187,10 +198,14 @@ export class PluginRegistry {
       },
       storageRead: (key) => {
         if (!granted.has('storage.read')) deny('storage.read');
+        // QNBS-v3: Enforce plugin storage key namespacing to prevent cross-plugin data access.
+        validatePluginStorageKey(key, descriptor.id);
         return rawApi.storageRead(key);
       },
       storageWrite: (key, value) => {
         if (!granted.has('storage.write')) deny('storage.write');
+        // QNBS-v3: Enforce plugin storage key namespacing to prevent cross-plugin data access.
+        validatePluginStorageKey(key, descriptor.id);
         return rawApi.storageWrite(key, value);
       },
     };

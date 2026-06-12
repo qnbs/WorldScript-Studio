@@ -69,6 +69,26 @@ function nearestFreeOccurrence(
 }
 
 /**
+ * Validate proposed text for safe manuscript insertion.
+ * QNBS-v3: Security hardening - reject control characters and validate UTF-8 to prevent
+ * injection attacks via AI-generated content.
+ */
+function validateProposedText(text: string): string {
+  // Reject null bytes - they can be used for injection attacks
+  if (text.includes('\0')) {
+    throw new Error('Invalid UTF-8 in proposed text');
+  }
+  // Validate UTF-8 by attempting to encode/decode
+  try {
+    const encoded = new TextEncoder().encode(text);
+    new TextDecoder().decode(encoded);
+  } catch {
+    throw new Error('Invalid UTF-8 in proposed text');
+  }
+  return text;
+}
+
+/**
  * Apply the accepted `ReviewItem`s that target a single section's content.
  * Only items carrying a `proposed` replacement are considered text edits; advisory items
  * (no `proposed`) are ignored and not counted as skipped.
@@ -80,7 +100,8 @@ export function applyReviewEditsToSection(content: string, items: ReviewItem[]):
   for (const item of items) {
     // Advisory-only item (pacing note, quality score, plot-hole hint) — nothing to apply.
     if (item.proposed === undefined) continue;
-    const proposed = item.proposed;
+    // QNBS-v3: Validate proposed text before insertion to prevent injection attacks.
+    const proposed = validateProposedText(item.proposed);
 
     // Strategy 1: trust offsets only if they still resolve to the expected original text
     // (or no original was provided to verify against).

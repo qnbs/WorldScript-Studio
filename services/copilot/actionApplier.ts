@@ -14,6 +14,7 @@ export type { ApplyEditsResult };
  * Apply a single text replacement to `sectionContent`.
  * When `original` is empty, replaces the entire section with `proposed`.
  * Returns the new content and how many replacements were applied/skipped.
+ * QNBS-v3: Proposed text is validated in applyReviewEditsToSection to prevent injection attacks.
  */
 export function applyTextEdit(
   sectionContent: string,
@@ -22,7 +23,22 @@ export function applyTextEdit(
 ): ApplyEditsResult {
   if (!original.trim()) {
     // QNBS-v3: whole-section replacement — used when the AI rewrites the full chapter.
-    return { content: proposed, applied: 1, skipped: 0 };
+    // Validation happens in applyReviewEditsToSection via the ReviewItem path.
+    // For whole-section replacement, we still need to validate.
+    return applyReviewEditsToSection(sectionContent, [
+      {
+        id: 'copilot-apply',
+        stage: 'copyEdit',
+        type: 'proseEdit',
+        severity: 'info',
+        description: 'Copilot suggested replacement',
+        original: sectionContent,
+        proposed,
+        confidence: 1,
+        status: 'accepted',
+        createdAt: new Date().toISOString(),
+      },
+    ]);
   }
 
   // Delegate to ProForge's offset-safe, stale-match-aware applier.

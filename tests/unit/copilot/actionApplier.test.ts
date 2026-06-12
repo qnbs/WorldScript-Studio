@@ -30,6 +30,14 @@ describe('applyTextEdit', () => {
     expect(result.content).toBe('new text');
     expect(result.applied).toBe(1);
   });
+
+  it('rejects proposed text containing null bytes', () => {
+    expect(() => applyTextEdit('content', 'old', 'new\0malicious')).toThrow('Invalid UTF-8');
+  });
+
+  it('rejects whole-section replacement with null bytes', () => {
+    expect(() => applyTextEdit('old', '', 'new\0malicious')).toThrow('Invalid UTF-8');
+  });
 });
 
 describe('extractCodeBlock', () => {
