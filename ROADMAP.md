@@ -27,11 +27,11 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 **Status:** 🔄 In Progress — P0-Audit-Follow-up vom 12. Juni 2026. Ziel-Release: 2026-06-20.
 
 **P0 (Release-Blocker):**
-- ROADMAP.md/TODO.md synchron zu v1.22.0 bringen und v1.23-Ziele definieren.
-- Tauri Desktop Pipeline final verifizieren (Test-Release, signed Artifacts, In-App-Updater, Window-State, Open Data Folder).
-- Dependency-Hygiene abschließen (`pnpm audit`, `pnpm outdated`, `.npmrc`-Hardening dokumentieren, Known Overrides in AUDIT.md).
-- i18n Parity für `ja/zh/pt/el` + RTL (`ar/he`) auf <5 % EN-Placeholders halten.
-- Manuelles Smoke-Test-Protokoll für v1.22-Features auf Live-Demo + lokalem Tauri-Build.
+- ✅ ROADMAP.md/TODO.md synchron zu v1.22.0 bringen und v1.23-Ziele definieren.
+- 🔄 Tauri Desktop Pipeline final verifizieren (Test-Release, signed Artifacts, In-App-Updater, Window-State, Open Data Folder).
+- ✅ Dependency-Hygiene abschließen (`pnpm audit`, `pnpm outdated`, `.npmrc`-Hardening dokumentieren, Known Overrides in AUDIT.md).
+- ✅ i18n Parity für `ja/zh/pt/el` + RTL (`ar/he`) auf <5 % EN-Placeholders halten (`pnpm run i18n:check` grün, 2590 Keys × 11 Locales).
+- ✅ Manuelles Smoke-Test-Protokoll für v1.22-Features auf Live-Demo + lokalem Tauri-Build (`docs/V1.22-SMOKE-TEST.md`).
 
 **P1 (Diese Woche):**
 - Coverage-Ziele erreichen (L≥85 %, B≥75 %, F≥80 %) — Fokus auf AI-Routing, Voice, Copilot.
