@@ -13,6 +13,7 @@ import type { OrchestratorContext } from '../../../services/proForge/proForgeOrc
 
 vi.mock('../../../services/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  createLogger: vi.fn(() => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })),
 }));
 
 // Mock all 8 agent modules

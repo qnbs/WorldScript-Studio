@@ -82,7 +82,7 @@ describe('sceneAppender plugin', () => {
     api.storageRead.mockResolvedValue(null);
     await sceneAppenderRun(api);
     expect(api.appendToCurrentScene).toHaveBeenCalledWith(expect.stringContaining('Scene break'));
-    expect(api.storageWrite).toHaveBeenCalledWith('storecraft.scene-appender.run-count', 1);
+    expect(api.storageWrite).toHaveBeenCalledWith('plugin:storecraft.scene-appender:run-count', 1);
     expect(api.log).toHaveBeenCalledWith(expect.stringContaining('run #1'));
   });
 
@@ -90,7 +90,7 @@ describe('sceneAppender plugin', () => {
     const api = makeMockApi();
     api.storageRead.mockResolvedValue(5);
     await sceneAppenderRun(api);
-    expect(api.storageWrite).toHaveBeenCalledWith('storecraft.scene-appender.run-count', 6);
+    expect(api.storageWrite).toHaveBeenCalledWith('plugin:storecraft.scene-appender:run-count', 6);
     expect(api.log).toHaveBeenCalledWith(expect.stringContaining('run #6'));
   });
 
