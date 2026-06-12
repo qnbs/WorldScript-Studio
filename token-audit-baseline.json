@@ -1,12 +1,12 @@
 {
-  "total": 330,
+  "total": 297,
   "summary": {
-    "raw-hex": 145,
+    "raw-hex": 141,
     "raw-rgb": 1,
     "raw-hsl": 0,
-    "dark-prefix": 2,
+    "dark-prefix": 0,
     "hardcoded-shadow": 4,
-    "inline-svg": 178
+    "inline-svg": 151
   },
-  "updatedAt": "2026-06-12T22:01:45.124Z"
+  "updatedAt": "2026-06-12T22:31:37.368Z"
 }

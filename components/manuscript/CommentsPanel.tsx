@@ -35,7 +35,8 @@ const CommentThread: FC<{ comment: SceneComment }> = ({ comment }) => {
       id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       createdAt: Date.now(),
       authorName: t('comments.you'),
-      authorColor: '#6366f1',
+      // QNBS-v3: reply author color uses a data-viz token so it adapts to all themes.
+      authorColor: 'var(--sc-data-2)',
       body: replyDraft.trim(),
     };
     dispatch(sceneCommentsActions.addReply({ commentId: comment.id, reply }));
@@ -160,7 +161,8 @@ export const CommentsPanel: FC<{ sectionId: string }> = ({ sectionId }) => {
       sectionId,
       createdAt: Date.now(),
       authorName: t('comments.you'),
-      authorColor: '#6366f1',
+      // QNBS-v3: comment author color uses a data-viz token so it adapts to all themes.
+      authorColor: 'var(--sc-data-2)',
       body: newComment.trim(),
       resolved: false,
       replies: [],

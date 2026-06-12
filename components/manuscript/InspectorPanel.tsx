@@ -1,6 +1,5 @@
 import React from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { ICONS } from '../../constants';
 import { useManuscriptViewContext } from '../../contexts/ManuscriptViewContext';
 import { projectActions } from '../../features/project/projectSlice';
 import { partialStorySectionFromSnapshot } from '../../features/project/sectionRestoreHelpers';
@@ -13,6 +12,7 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { DebouncedInput } from '../ui/DebouncedInput';
 import { DebouncedTextarea } from '../ui/DebouncedTextarea';
+import { Icon } from '../ui/Icon';
 import { Modal } from '../ui/Modal';
 import { Spinner } from '../ui/Spinner';
 
@@ -98,17 +98,7 @@ export const InspectorPanel = React.memo(() => {
             {isAiLoading ? (
               <Spinner className="mr-2" />
             ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-5 h-5 mr-2"
-                aria-hidden="true"
-              >
-                {ICONS.SPARKLES}
-              </svg>
+              <Icon name="sparkles" size="md" className="me-2" aria-hidden />
             )}
             {t('dashboard.details.aiLoglineButton')}
           </Button>
@@ -219,21 +209,7 @@ export const InspectorPanel = React.memo(() => {
               {isSceneVisualizing ? (
                 <Spinner className="mr-2" />
               ) : (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-5 h-5 mr-2"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008H15V10.5z"
-                  />
-                </svg>
+                <Icon name="photo" size="md" className="me-2" aria-hidden />
               )}
               {t('manuscript.visualize.button')}
             </Button>
@@ -253,24 +229,7 @@ export const InspectorPanel = React.memo(() => {
           </CardHeader>
           <CardContent className="space-y-3">
             <Button onClick={handleProofread} disabled={isProofreading} className="w-full">
-              {isProofreading ? (
-                <Spinner />
-              ) : (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-5 h-5 mr-2"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              )}
+              {isProofreading ? <Spinner /> : <Icon name="check" size="md" className="me-2" />}
               {t('manuscript.grammar.checkButton')}
             </Button>
             {proofreadSuggestions.length > 0 && (

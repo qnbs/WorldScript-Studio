@@ -1,12 +1,12 @@
 import type { FC, ReactNode } from 'react';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/hooks';
-import { ICONS } from '../../constants';
 import { useManuscriptViewContext } from '../../contexts/ManuscriptViewContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useVoiceDictation } from '../../hooks/useVoiceDictation';
 import { InlineAnnotationLayer } from '../copilot/InlineAnnotationLayer';
 import { DebouncedInput } from '../ui/DebouncedInput';
+import { Icon } from '../ui/Icon';
 import { Textarea } from '../ui/Textarea';
 
 // Mock Dictionary for simple spell check (English)
@@ -340,31 +340,27 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
                     <div
                       className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-[var(--glass-bg-hover)]' : 'bg-[var(--sc-info-bg)]'}`}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={1.5}
-                        stroke="currentColor"
-                        className={`w-4 h-4 ${index === selectedMentionIndex ? 'text-white' : 'text-[var(--sc-info-fg)]'}`}
-                      >
-                        {ICONS.CHARACTERS}
-                      </svg>
+                      <Icon
+                        name="characters"
+                        size="sm"
+                        className={
+                          index === selectedMentionIndex ? 'text-white' : 'text-[var(--sc-info-fg)]'
+                        }
+                      />
                     </div>
                   ) : (
                     <div
                       className={`p-1 rounded flex-shrink-0 ${index === selectedMentionIndex ? 'bg-[var(--glass-bg-hover)]' : 'bg-[var(--sc-success-bg)]'}`}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={1.5}
-                        stroke="currentColor"
-                        className={`w-4 h-4 ${index === selectedMentionIndex ? 'text-white' : 'text-[var(--sc-success-fg)]'}`}
-                      >
-                        {ICONS.WORLD}
-                      </svg>
+                      <Icon
+                        name="world"
+                        size="sm"
+                        className={
+                          index === selectedMentionIndex
+                            ? 'text-white'
+                            : 'text-[var(--sc-success-fg)]'
+                        }
+                      />
                     </div>
                   )}
                   <span className="font-medium truncate">{item.name}</span>

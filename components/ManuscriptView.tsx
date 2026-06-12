@@ -18,6 +18,7 @@ import { Button } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { Drawer } from './ui/Drawer';
 import { EmptyState } from './ui/EmptyState';
+import { Icon } from './ui/Icon';
 import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 
@@ -118,20 +119,7 @@ const ManuscriptViewUI: FC = () => {
             className="min-h-[44px] min-w-[44px]"
             aria-label={t('manuscript.leftPanel.openDrawer')}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-6 h-6"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-              />
-            </svg>
+            <Icon name="menu" size="lg" />
           </Button>
         </div>
         <h1 className="text-sm font-bold truncate px-2 text-center flex-grow text-[var(--sc-text-primary)]">
@@ -144,20 +132,7 @@ const ManuscriptViewUI: FC = () => {
           className="min-h-[44px] min-w-[44px]"
           aria-label={t('manuscript.inspector.title')}
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-6 h-6"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
-            />
-          </svg>
+          <Icon name="info" size="lg" />
         </Button>
       </header>
 
@@ -170,28 +145,11 @@ const ManuscriptViewUI: FC = () => {
           className={`transition-colors ${isFocusMode ? 'text-[var(--sc-accent)] bg-[var(--sc-accent)]/10' : 'text-[var(--sc-text-muted)]'}`}
           title={isFocusMode ? t('manuscript.zenMode.exit') : t('manuscript.zenMode.enter')}
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-5 h-5 mr-2"
-          >
-            {isFocusMode ? (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5M15 15l5.25 5.25"
-              />
-            ) : (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
-              />
-            )}
-          </svg>
+          <Icon
+            name={isFocusMode ? 'fullscreen-exit' : 'fullscreen-enter'}
+            size="md"
+            className="me-2"
+          />
           {isFocusMode ? t('manuscript.zenMode.exit') : t('manuscript.zenMode.label')}
         </Button>
       </div>

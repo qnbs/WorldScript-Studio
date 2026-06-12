@@ -131,9 +131,31 @@ function findViolations(files) {
     const relative = path.relative(root, file);
     const fileViolations = [];
 
+    let inBlockComment = false;
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      const line = lines[lineIndex];
-      if (line.trim().startsWith('//')) continue; // skip comments
+      const rawLine = lines[lineIndex];
+      if (rawLine.trim().startsWith('//')) continue; // skip line comments
+
+      // QNBS-v3: track /* ... */ block comments (including JSX {/* ... */}) so tokens
+      // mentioned inside explanatory comments are not counted as violations.
+      let line = rawLine;
+      if (inBlockComment) {
+        const endIdx = line.indexOf('*/');
+        if (endIdx === -1) continue;
+        line = line.slice(endIdx + 2);
+        inBlockComment = false;
+      }
+      while (line.includes('/*')) {
+        const startIdx = line.indexOf('/*');
+        const endIdx = line.indexOf('*/', startIdx + 2);
+        if (endIdx === -1) {
+          inBlockComment = true;
+          line = line.slice(0, startIdx);
+          break;
+        }
+        line = line.slice(0, startIdx) + line.slice(endIdx + 2);
+      }
+      if (line.trim().length === 0) continue;
 
       for (const pattern of PATTERNS) {
         if (pattern.shouldSkip(file)) continue;
