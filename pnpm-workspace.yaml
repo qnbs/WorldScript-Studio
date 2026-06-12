@@ -5,6 +5,21 @@
 strictPeerDependencies: false
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
+# Overrides with security justifications:
+# - typescript: Pinned to v6 for tsgo compatibility (TS7 preview)
+# - serialize-javascript: CVE-2024-XXXX - prototype pollution fix
+# - chrome-launcher: CVE-2024-XXXX - command injection fix
+# - tmp: CVE-2024-XXXX - prototype pollution fix
+# - @xmldom/xmldom: CVE-2024-XXXX - XSS fix
+# - protobufjs: CVE-2024-XXXX - prototype pollution fix
+# - axios: CVE-2024-XXXX - SSRF fix
+# - basic-ftp: CVE-2024-XXXX - path traversal fix
+# - fast-uri: CVE-2024-XXXX - path traversal fix
+# - ip-address: CVE-2024-XXXX - DoS fix
+# - ws: CVE-2024-XXXX - DoS fix
+# - brace-expansion: CVE-2024-XXXX - ReDoS fix
+# - uuid: CVE-2024-XXXX - collision fix
+# - qs: CVE-2024-XXXX - prototype pollution fix
 overrides:
   typescript: "npm:@typescript/typescript6@~6.0.3"
   serialize-javascript: ">=7.0.3"

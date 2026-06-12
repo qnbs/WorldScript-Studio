@@ -2,9 +2,13 @@
  * Plugin registry — lightweight service for discovering and managing StoryCraft Studio extensions.
  * QNBS-v3: Plugins declare a capability manifest; execute() validates permissions before dispatch.
  *          v2: Worker-scope isolation via routeTask to plugin.worker.ts (P0-2).
+ *          Telemetry: All plugin executions are logged to the structured logger for observability.
  */
 
 import { z } from 'zod';
+import { createLogger } from './logger';
+
+const log = createLogger('PluginRegistry');
 
 // ---------------------------------------------------------------------------
 // Types
@@ -251,7 +255,9 @@ export class PluginRegistry {
     descriptor: PluginDescriptor,
     _rawApi: PluginSandboxedApi,
   ): Promise<PluginExecuteResult> {
+    const startTime = Date.now();
     if (!this._enabled) {
+      log.warn('Plugin load rejected: system disabled', { pluginId: descriptor.id });
       return { ok: false, error: 'Plugin system is disabled (enablePluginSystem flag is off)' };
     }
     this.register(descriptor);
@@ -259,6 +265,7 @@ export class PluginRegistry {
       // Fetch plugin code for worker execution
       const response = await fetch(descriptor.entrypoint);
       if (!response.ok) {
+        log.error('Plugin fetch failed', { pluginId: descriptor.id, status: response.status });
         return {
           ok: false,
           error: `Failed to fetch plugin '${descriptor.id}': ${response.status}`,
@@ -275,16 +282,29 @@ export class PluginRegistry {
       });
 
       if (!handle) {
+        log.error('Plugin execution failed: WorkerBus not initialized', {
+          pluginId: descriptor.id,
+        });
         return { ok: false, error: 'WorkerBus not initialized' };
       }
 
       try {
         await handle.result;
+        const duration = Date.now() - startTime;
+        log.info('Plugin executed successfully', { pluginId: descriptor.id, durationMs: duration });
         return { ok: true };
       } catch (e) {
+        const duration = Date.now() - startTime;
+        log.error('Plugin execution failed', {
+          pluginId: descriptor.id,
+          error: e,
+          durationMs: duration,
+        });
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
     } catch (err) {
+      const duration = Date.now() - startTime;
+      log.error('Plugin load threw', { pluginId: descriptor.id, error: err, durationMs: duration });
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   }

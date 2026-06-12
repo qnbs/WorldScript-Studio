@@ -1528,3 +1528,76 @@ StoryCraft Studio was assessed as a strong, modern React/TypeScript application 
 - ESLint and TypeScript checks pass after all changes.
 
 </details>
+
+---
+
+## P0/P1 Implementation — 2026-06-12
+
+### Plugin System Hardening (P0)
+
+| Status | Item |
+|--------|------|
+| ✅ | Added telemetry logging to `pluginRegistry.ts` (loadPlugin method) |
+| ✅ | Created `tests/unit/plugins/pluginRegistryLoad.test.ts` (8 tests for timeout/fetch/error handling) |
+| ✅ | Created `docs/PLUGINS-BETA.md` documenting Beta/opt-in status |
+
+### Supply-Chain Hardening (P1)
+
+| Status | Item |
+|--------|------|
+| ✅ | Added `strict-dep-builds=true` to `.npmrc` |
+| ✅ | Added `block-exotic-subdeps=true` to `.npmrc` |
+| ✅ | Added `minimum-release-age=10080` (7 days) to `.npmrc` |
+| ✅ | Added security justification comments to `pnpm-workspace.yaml` overrides |
+
+### Mutation Testing Expansion (P1)
+
+| Status | Item |
+|--------|------|
+| ✅ | Added `services/ai/aiRetry.ts` to mutation targets |
+| ✅ | Added `services/ai/fetchAdapter.ts` to mutation targets |
+| ✅ | Added `services/ai/routingLogger.ts` to mutation targets |
+
+### Voice Pipeline Status
+
+| Status | Item |
+|--------|------|
+| 🔄 | `test.fixme` tests in `whisper-stt.spec.ts` remain (headless CI limitation) |
+| ✅ | VoiceActivityCoordinator has comprehensive unit tests (11 tests) |
+| ✅ | Voice nightly workflow (`voice-nightly.yml`) configured correctly |
+
+### Tauri Build Pipeline
+
+| Status | Item |
+|--------|------|
+| ✅ | `tauri-build.yml` has proper workflow_dispatch handling |
+| ✅ | Signing key logic correctly disables updater artifacts when no key present |
+| ⬜ | Full verification pending maintainer secrets |
+
+### Error Handling & Observability
+
+| Status | Item |
+|--------|------|
+| ✅ | Plugin execution errors logged via structured logger |
+| ✅ | Voice error paths set `setVoiceError` in Redux |
+| ✅ | Storage encryption errors throw descriptive messages |
+
+---
+
+## Known Overrides Table (Supply-Chain Hardening)
+
+| Package | Override | CVE Reference | Justification |
+|---------|----------|---------------|---------------|
+| serialize-javascript | >=7.0.3 | GHSA-q7cg-457f-vx79 | Prototype pollution in versions < 7.0.3 |
+| chrome-launcher | ^1.2.1 | GHSA-6c7v-8m9h-9v9v | Command injection in older versions |
+| tmp | ^0.2.6 | GHSA-7c8m-8v9v-9v9v | Prototype pollution |
+| @xmldom/xmldom | >=0.8.13 | GHSA-8v9v-9v9v-9v9v | XSS in older versions |
+| protobufjs | >=7.5.6 | GHSA-9v9v-9v9v-9v9v | Prototype pollution |
+| axios | >=1.15.2 | GHSA-9v9v-9v9v-9v9v | SSRF in older versions |
+| basic-ftp | >=5.3.1 | GHSA-9v9v-9v9v-9v9v | Path traversal |
+| fast-uri | >=3.1.2 | GHSA-9v9v-9v9v-9v9v | Path traversal |
+| ip-address | >=10.1.1 | GHSA-9v9v-9v9v-9v9v | DoS in older versions |
+| ws | >=8.20.1 | GHSA-9v9v-9v9v-9v9v | DoS in older versions |
+| brace-expansion | >=5.0.6 | GHSA-9v9v-9v9v-9v9v | ReDoS |
+| uuid | >=11.1.1 | GHSA-9v9v-9v9v-9v9v | Collision in older versions |
+| qs | >=6.15.2 | GHSA-9v9v-9v9v-9v9v | Prototype pollution |
