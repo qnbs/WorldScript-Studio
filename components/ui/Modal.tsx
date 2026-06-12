@@ -71,10 +71,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   // QNBS-v3: Dialog-Rolle nur auf dem Panel; Backdrop bleibt presentation-only (klarere SR-Hierarchie).
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center sm:items-center justify-center p-0 sm:p-4 pointer-events-none"
-      style={{ animation: 'fade-in 0.2s ease-out' }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center sm:items-center justify-center p-0 sm:p-4 pointer-events-none animate-modal-backdrop">
       {/* QNBS-v3: non-dismissible modals hide backdrop from keyboard and AT — it announces
           as "Close" but does nothing, which is misleading for screen reader users. */}
       <button
@@ -92,8 +89,7 @@ export const Modal: React.FC<ModalProps> = ({
         role={variant}
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative z-10 pointer-events-auto bg-[var(--sc-surface-base)] sm:rounded-sc-lg shadow-[var(--sc-shadow-xl)] border-0 sm:border border-[var(--sc-border-subtle)] w-full ${sizeClasses[size]} h-full sm:h-auto sm:max-h-[90vh] flex flex-col`}
-        style={{ animation: 'scale-in 0.2s ease-out' }}
+        className={`relative z-10 pointer-events-auto bg-[var(--sc-surface-base)] sm:rounded-sc-lg shadow-[var(--sc-shadow-xl)] border-0 sm:border border-[var(--sc-border-subtle)] w-full ${sizeClasses[size]} h-full sm:h-auto sm:max-h-[90vh] flex flex-col animate-modal-panel`}
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--sc-border-subtle)] flex-shrink-0">
           <h2 id={titleId} className="text-xl font-semibold text-[var(--sc-text-primary)]">

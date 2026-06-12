@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/motion.css";
 
 /* ── Fonts (self-hosted via @fontsource — see index.tsx) ── */
 
@@ -80,6 +81,11 @@
   --sc-info-bg: rgba(59, 130, 246, 0.12);
   --sc-info-fg: #60a5fa;
 
+  /* QNBS-v3: DS-5 — button-specific aliases so components never hard-code indigo shadows/borders. */
+  --sc-button-primary-shadow: 0 4px 14px 0 color-mix(in srgb, var(--sc-accent) 39%, transparent);
+  --sc-button-primary-shadow-hover: 0 6px 20px color-mix(in srgb, var(--sc-accent) 23%, transparent);
+  --sc-button-primary-border: color-mix(in srgb, var(--sc-accent) 20%, transparent);
+
   /* QNBS-v3: Data-viz categorical palette — for graphs, charts, type badges. Hue meaning preserved across themes. */
   --sc-data-1: #ef4444;
   --sc-data-2: #6366f1;
@@ -155,6 +161,11 @@
   --sc-warning-fg: #c2410c;
   --sc-info-bg: rgba(37, 99, 235, 0.1);
   --sc-info-fg: #1d4ed8;
+
+  /* QNBS-v3: DS-5 — button-specific aliases so components never hard-code indigo shadows/borders. */
+  --sc-button-primary-shadow: 0 4px 14px 0 color-mix(in srgb, var(--sc-accent) 20%, transparent);
+  --sc-button-primary-shadow-hover: 0 6px 20px color-mix(in srgb, var(--sc-accent) 14%, transparent);
+  --sc-button-primary-border: color-mix(in srgb, var(--sc-accent) 20%, transparent);
 
   /* QNBS-v3: Data-viz categorical palette — for graphs, charts, type badges. Hue meaning preserved across themes. */
   --sc-data-1: #dc2626;
@@ -244,6 +255,11 @@
   --sc-info-fg: #1d4ed8;
   --sc-info-bg: rgba(29, 78, 216, 0.08);
 
+  /* QNBS-v3: DS-5 — button-specific aliases so components never hard-code amber/brown shadows/borders. */
+  --sc-button-primary-shadow: 0 4px 14px 0 color-mix(in srgb, var(--sc-accent) 22%, transparent);
+  --sc-button-primary-shadow-hover: 0 6px 20px color-mix(in srgb, var(--sc-accent) 15%, transparent);
+  --sc-button-primary-border: color-mix(in srgb, var(--sc-accent) 20%, transparent);
+
   /* QNBS-v3: Data-viz categorical palette — sepia-adjusted for warmth. */
   --sc-data-1: #dc2626;
   --sc-data-2: #4f46e5;
@@ -329,6 +345,11 @@
   --sc-warning-bg: rgba(251, 191, 36, 0.1);
   --sc-info-fg: #93c5fd;
   --sc-info-bg: rgba(147, 197, 253, 0.1);
+
+  /* QNBS-v3: DS-5 — button-specific aliases so components never hard-code amber shadows/borders. */
+  --sc-button-primary-shadow: 0 4px 14px 0 color-mix(in srgb, var(--sc-accent) 28%, transparent);
+  --sc-button-primary-shadow-hover: 0 6px 20px color-mix(in srgb, var(--sc-accent) 18%, transparent);
+  --sc-button-primary-border: color-mix(in srgb, var(--sc-accent) 20%, transparent);
 
   /* Shadows — heavy dark (same as :root; explicit for clarity) */
   --sc-shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.45);
@@ -596,6 +617,59 @@ body {
   }
   50% {
     opacity: 0.7;
+  }
+}
+
+/* QNBS-v3: Toast motion — centralized so components don't ship inline <style> tags. */
+.animate-toast-slide-up {
+  animation: toast-slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes toast-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-toast-progress {
+  animation: toast-progress-shrink 5s linear forwards;
+}
+@keyframes toast-progress-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* QNBS-v3: Modal enter/exit motion — centralized so Modal.tsx can avoid inline style={{ animation }}. */
+.animate-modal-backdrop {
+  animation: modal-fade-in 0.2s ease-out forwards;
+}
+.animate-modal-panel {
+  animation: modal-scale-in 0.2s ease-out forwards;
+}
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes modal-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

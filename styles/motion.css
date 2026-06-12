@@ -1,0 +1,89 @@
+/* QNBS-v3: Shared motion system.
+ * All component enter/exit animations live here so they can be gated by reduced-motion
+ * in one place. Import after index.css so variables are available.
+ */
+
+/* Enter animations */
+.animate-fade-in {
+  animation: fade-in var(--sc-duration-normal) var(--sc-ease-standard) forwards;
+}
+
+.animate-scale-in {
+  animation: scale-in var(--sc-duration-fast) var(--sc-ease-emphasized) forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up var(--sc-duration-normal) var(--sc-ease-emphasized) forwards;
+}
+
+.animate-slide-from-end {
+  animation: slide-from-end var(--sc-duration-normal) var(--sc-ease-emphasized) forwards;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-from-end {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Reduced motion: disable all motion utilities */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-slide-up,
+  .animate-slide-from-end,
+  .animate-modal-backdrop,
+  .animate-modal-panel,
+  .animate-toast-slide-up,
+  .animate-toast-progress {
+    animation: none;
+  }
+}
+
+/* App-level reduced-motion toggle mirrors the media query */
+.storycraft-reduced-motion .animate-fade-in,
+.storycraft-reduced-motion .animate-scale-in,
+.storycraft-reduced-motion .animate-slide-up,
+.storycraft-reduced-motion .animate-slide-from-end,
+.storycraft-reduced-motion .animate-modal-backdrop,
+.storycraft-reduced-motion .animate-modal-panel,
+.storycraft-reduced-motion .animate-toast-slide-up,
+.storycraft-reduced-motion .animate-toast-progress {
+  animation: none;
+}

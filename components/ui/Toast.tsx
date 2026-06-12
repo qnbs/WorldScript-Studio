@@ -162,22 +162,8 @@ const ToastItem: FC<{
         </div>
       </div>
       <div
-        className={`absolute bottom-0 start-0 h-1 ${progressClasses[message.type]}`}
-        style={{ animation: 'shrink-width 5s linear forwards' }}
-      ></div>
-      <style>{`
-        @keyframes toast-slide-up {
-            from { opacity: 0; transform: translateY(12px) scale(0.97); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes shrink-width {
-            from { width: 100%; }
-            to { width: 0%; }
-        }
-        .animate-toast-slide-up {
-            animation: toast-slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-      `}</style>
+        className={`absolute bottom-0 start-0 h-1 animate-toast-progress ${progressClasses[message.type]}`}
+      />
     </div>
   );
 };

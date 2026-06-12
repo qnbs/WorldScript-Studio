@@ -15,10 +15,11 @@ export const Button = React.memo(
 
       const variantClasses = {
         primary:
-          // Include legacy utility name `background-interactive` for test compatibility
-          'background-interactive bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-white shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] border border-indigo-500/20',
+          // QNBS-v3: Include legacy utility name `background-interactive` for test compatibility;
+          // all real colors are now token-driven via --sc-button-primary-* and --sc-text-on-accent.
+          'background-interactive bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-[var(--sc-text-on-accent)] shadow-[var(--sc-button-primary-shadow)] hover:shadow-[var(--sc-button-primary-shadow-hover)] border border-[var(--sc-button-primary-border)]',
         secondary:
-          // Include legacy utility name `background-tertiary` for test compatibility
+          // QNBS-v3: Include legacy utility name `background-tertiary` for test compatibility.
           'background-tertiary bg-[var(--sc-surface-overlay)] hover:bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] border border-[var(--sc-border-subtle)] shadow-sm hover:shadow-md hover:border-[var(--sc-text-muted)]/30',
         // QNBS-v3: --sc-danger-* tokens replace dark: prefix — color adapts to appearance presets correctly.
         danger:

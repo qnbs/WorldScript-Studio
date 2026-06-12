@@ -35,5 +35,5 @@
     }
   },
   "include": ["."],
-  "exclude": ["node_modules", "dist", ".storybook", ".mcp"]
+  "exclude": ["node_modules", "dist", ".storybook", ".mcp", "storybook-static"]
 }
