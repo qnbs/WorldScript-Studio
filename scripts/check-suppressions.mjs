@@ -9,8 +9,10 @@
  *
  * Run:    node scripts/check-suppressions.mjs            # gate (exit 1 if total > baseline)
  *         node scripts/check-suppressions.mjs --update   # rewrite baseline to current (after abatement)
+ *         node scripts/check-suppressions.mjs --details  # gate + per-file breakdown
  *
  * Writes a full per-rule breakdown to `reports/suppressions.json`.
+ * With --details, also writes a per-file breakdown to `reports/suppressions-details.json`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -54,6 +56,8 @@ function collect(dir, out) {
 const files = collect(root, []);
 /** @type {Record<string, number>} */
 const byRule = {};
+/** @type {Record<string, Record<string, number>>} */
+const byFile = {};
 let total = 0;
 for (const file of files) {
   const text = fs.readFileSync(file, 'utf8');
@@ -63,6 +67,8 @@ for (const file of files) {
     const rule = m ? m[1] : 'unknown';
     byRule[rule] = (byRule[rule] ?? 0) + 1;
     total++;
+    if (!byFile[file]) byFile[file] = {};
+    byFile[file][rule] = (byFile[file][rule] ?? 0) + 1;
   }
 }
 
@@ -79,6 +85,35 @@ fs.writeFileSync(
   path.join(reportsDir, 'suppressions.json'),
   `${JSON.stringify(report, null, 2)}\n`,
 );
+
+const showDetails = process.argv.includes('--details');
+if (showDetails) {
+  const details = Object.entries(byFile)
+    .filter(([, rules]) => Object.keys(rules).length > 0)
+    .sort((a, b) => {
+      const countA = Object.values(a[1]).reduce((sum, n) => sum + n, 0);
+      const countB = Object.values(b[1]).reduce((sum, n) => sum + n, 0);
+      return countB - countA;
+    })
+    .map(([file, rules]) => ({ file, rules }));
+  fs.writeFileSync(
+    path.join(reportsDir, 'suppressions-details.json'),
+    `${JSON.stringify({ total, files: details.length, details, generatedAt: new Date().toISOString() }, null, 2)}\n`,
+  );
+  console.log('\n[suppressions] per-file breakdown:');
+  for (const { file, rules } of details.slice(0, 20)) {
+    const fileTotal = Object.values(rules).reduce((sum, n) => sum + n, 0);
+    console.log(`  ${fileTotal}  ${path.relative(root, file)}`);
+    for (const [rule, n] of Object.entries(rules).sort((a, b) => b[1] - a[1])) {
+      console.log(`       ${n}  ${rule}`);
+    }
+  }
+  if (details.length > 20) {
+    console.log(
+      `  ... and ${details.length - 20} more files (see reports/suppressions-details.json)`,
+    );
+  }
+}
 
 const baselinePath = path.join(root, 'suppressions-baseline.json');
 
@@ -106,6 +141,9 @@ if (total > baseline.total) {
   console.error(
     `\n[suppressions] FAIL — ${total} > baseline ${baseline.total} (+${total - baseline.total}). ` +
       'Remove a suppression or fix the root cause; do not raise the baseline (ratchet-only).',
+  );
+  console.error(
+    'Tip: run `node scripts/check-suppressions.mjs --details` for a per-file breakdown.',
   );
   process.exit(1);
 }

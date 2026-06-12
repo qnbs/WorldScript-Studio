@@ -122,8 +122,21 @@ function computeBackoffMs(attempt: number, retryAfterHeader?: string | null): nu
   return Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
 }
 
+let _delayProvider: (ms: number) => Promise<void> = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return _delayProvider(ms);
+}
+
+/** Test-only hook to swap the retry delay provider (e.g. fake timers). */
+export function __setTestDelayProvider(provider: (ms: number) => Promise<void>): void {
+  _delayProvider = provider;
+}
+
+/** Reset the retry delay provider to the default setTimeout implementation. */
+export function __resetTestDelayProvider(): void {
+  _delayProvider = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ─── Request builder ─────────────────────────────────────────────────────────

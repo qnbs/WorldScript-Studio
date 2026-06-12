@@ -15,6 +15,12 @@ const { mockDispatch, mockStop, state } = vi.hoisted(() => ({
         { id: 'a1', role: 'assistant', content: 'partial…', pending: true, createdAt: '' },
       ],
     },
+    activeSectionId: null as string | null,
+    project: null as {
+      id: string;
+      title: string;
+      manuscript: Array<{ id: string; title?: string; content?: string }>;
+    } | null,
   },
 }));
 
@@ -33,7 +39,7 @@ vi.mock('../../../app/transientUiStore', () => ({
       setCopilotHeuristicsOnly: vi.fn(),
       setCopilotInsightStatus: vi.fn(),
       // QNBS-v3: Phase 2 additions
-      activeSectionId: null,
+      activeSectionId: state.activeSectionId,
       setActiveSectionId: vi.fn(),
       // QNBS-v3: CodeAnt fix — badge-to-insights-expand bridge
       copilotInsightExpanded: false,
@@ -49,7 +55,9 @@ vi.mock('../../../hooks/useTranslation', () => ({
 vi.mock('../../../contexts/CommandExecutorContext', () => ({
   useCommandExecutor: () => vi.fn(),
 }));
-vi.mock('../../../features/project/projectSelectors', () => ({ selectProjectData: () => null }));
+vi.mock('../../../features/project/projectSelectors', () => ({
+  selectProjectData: () => state.project,
+}));
 vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
   selectEnableProForge: () => false,
 }));
@@ -82,6 +90,9 @@ beforeEach(() => {
   mockDispatch.mockClear();
   mockStop.mockClear();
   state.copilot.status = 'streaming';
+  state.project = null;
+  state.activeSectionId = null;
+  vi.useRealTimers();
 });
 
 describe('useGlobalCopilot.close (CodeAnt #7)', () => {
@@ -112,5 +123,99 @@ describe('useGlobalCopilot.close (CodeAnt #7)', () => {
     expect(mockDispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'copilot/setStatus' }),
     );
+  });
+});
+
+describe('useGlobalCopilot.applyLastSuggestion', () => {
+  function setupProject(content: string, activeId: string | null = 's1') {
+    state.project = {
+      id: 'p1',
+      title: 'Test Project',
+      manuscript: [
+        { id: 's1', title: 'Chapter 1', content },
+        { id: 's2', title: 'Chapter 2', content: 'Other chapter content.' },
+      ],
+    };
+    state.activeSectionId = activeId;
+  }
+
+  it('does nothing when there is no active section id', () => {
+    setupProject('Existing content', null);
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    act(() => result.current.applyLastSuggestion('replacement'));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/updateManuscriptSection' }),
+    );
+  });
+
+  it('does nothing when the active section is not found', () => {
+    setupProject('Existing content', 'missing');
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    act(() => result.current.applyLastSuggestion('replacement'));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/updateManuscriptSection' }),
+    );
+  });
+
+  it('rejects a block shorter than 70% of the existing content', () => {
+    setupProject('This is a fairly long piece of existing chapter content.');
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    act(() => result.current.applyLastSuggestion('short'));
+    expect(result.current.applyStatus).toBe('error');
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/updateManuscriptSection' }),
+    );
+  });
+
+  it('accepts a rewrite of an empty section regardless of length', () => {
+    setupProject('');
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    act(() => result.current.applyLastSuggestion('New scene text'));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'project/updateManuscriptSection',
+        payload: expect.objectContaining({ id: 's1', changes: { content: 'New scene text' } }),
+      }),
+    );
+  });
+
+  it('accepts a block that is at least 70% of the existing content and dispatches an update', () => {
+    const existing =
+      'This is the original chapter text that we want to replace with a full rewrite.';
+    setupProject(existing);
+    const replacement =
+      'This is the rewritten chapter text that is clearly a full rewrite of the scene.';
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    act(() => result.current.applyLastSuggestion(replacement));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'project/updateManuscriptSection',
+        payload: expect.objectContaining({ id: 's1', changes: { content: replacement } }),
+      }),
+    );
+  });
+
+  it('cycles applyStatus through applying -> success -> idle', async () => {
+    vi.useFakeTimers();
+    setupProject('Old content');
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    act(() =>
+      result.current.applyLastSuggestion(
+        'Completely rewritten chapter content that is much longer than the original text so it passes the gate.',
+      ),
+    );
+    expect(result.current.applyStatus).toBe('success');
+    act(() => vi.advanceTimersByTime(3000));
+    await vi.waitFor(() => expect(result.current.applyStatus).toBe('idle'));
+  });
+
+  it('cycles applyStatus through applying -> error -> idle when the block is too short', async () => {
+    vi.useFakeTimers();
+    setupProject('This is a fairly long piece of existing chapter content.');
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    act(() => result.current.applyLastSuggestion('short'));
+    expect(result.current.applyStatus).toBe('error');
+    act(() => vi.advanceTimersByTime(3000));
+    await vi.waitFor(() => expect(result.current.applyStatus).toBe('idle'));
   });
 });

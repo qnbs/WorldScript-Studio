@@ -31,7 +31,6 @@ export type PluginPermission =
   | 'storage.write'
   | 'ai.invoke'
   | 'project.read'
-  | 'project.write'
   | 'scene.read'
   | 'scene.write';
 
@@ -45,7 +44,7 @@ export interface PluginDescriptor {
   /** Declared permission scopes the plugin requires (capability manifest). */
   permissions: PluginPermission[];
   /** Human-readable description shown in the Plugin Registry UI. */
-  description?: string;
+  description?: string | undefined;
 }
 
 /**
@@ -80,7 +79,6 @@ const PLUGIN_PERMISSIONS = [
   'storage.write',
   'ai.invoke',
   'project.read',
-  'project.write',
   'scene.read',
   'scene.write',
 ] as const;
@@ -211,7 +209,7 @@ export class PluginRegistry {
   /** Register with Zod schema validation — throws ZodError on invalid descriptor. */
   registerWithValidation(raw: unknown): void {
     const descriptor = PluginDescriptorSchema.parse(raw);
-    this.plugins.set(descriptor.id, descriptor as PluginDescriptor);
+    this.plugins.set(descriptor.id, descriptor);
   }
 
   unregister(id: string): boolean {
@@ -247,35 +245,39 @@ export class PluginRegistry {
       throw new Error(`Permission denied: ${perm}`);
     };
 
-    // Silence PERMISSION_API_MAP from dead-code elimination — documents the mapping.
-    void PERMISSION_API_MAP;
+    // QNBS-v3: Helper that reads the single source-of-truth permission map and throws
+    // when the plugin descriptor does not declare the required permission.
+    const guard = (method: keyof PluginSandboxedApi): void => {
+      const perm = PERMISSION_API_MAP[method];
+      if (perm && !granted.has(perm)) deny(perm);
+    };
 
     return {
       getProjectTitle: () => {
-        if (!granted.has('project.read')) deny('project.read');
+        guard('getProjectTitle');
         return rawApi.getProjectTitle();
       },
       getSceneTitles: () => {
-        if (!granted.has('scene.read')) deny('scene.read');
+        guard('getSceneTitles');
         return rawApi.getSceneTitles();
       },
       appendToCurrentScene: (text) => {
-        if (!granted.has('scene.write')) deny('scene.write');
+        guard('appendToCurrentScene');
         rawApi.appendToCurrentScene(text);
       },
       log: rawApi.log,
       generateText: (prompt, opts) => {
-        if (!granted.has('ai.invoke')) deny('ai.invoke');
+        guard('generateText');
         return rawApi.generateText(prompt, opts);
       },
       storageRead: (key) => {
-        if (!granted.has('storage.read')) deny('storage.read');
+        guard('storageRead');
         // QNBS-v3: Enforce plugin storage key namespacing to prevent cross-plugin data access.
         validatePluginStorageKey(key, descriptor.id);
         return rawApi.storageRead(key);
       },
       storageWrite: (key, value) => {
-        if (!granted.has('storage.write')) deny('storage.write');
+        guard('storageWrite');
         // QNBS-v3: Enforce plugin storage key namespacing and value size limits to prevent
         // cross-plugin data access and storage DoS.
         validatePluginStorageKey(key, descriptor.id);
@@ -337,12 +339,16 @@ export class PluginRegistry {
 
   /**
    * Dynamically load a plugin by entrypoint URL and execute its run() export.
-   * QNBS-v3: P0-2 — Routes to plugin.worker.ts for isolated execution.
+   * QNBS-v3: P0-1..P0-3 — Routes to plugin.worker.ts for isolated execution.
    * The entrypoint module must export `run(api: PluginSandboxedApi): Promise<void>`.
+   * Read-only API data is passed as a snapshot; side effects (appendToCurrentScene, log)
+   * are collected by the worker and applied back on the main thread after successful run.
+   * Async APIs that need main-thread state (generateText, storage) are unavailable inside
+   * the worker sandbox; use executeAsync() for those permissions instead.
    */
   async loadPlugin(
     descriptor: PluginDescriptor,
-    _rawApi: PluginSandboxedApi,
+    rawApi: PluginSandboxedApi,
   ): Promise<PluginExecuteResult> {
     const startTime = Date.now();
     if (!this._enabled) {
@@ -362,12 +368,22 @@ export class PluginRegistry {
       }
       const code = await response.text();
 
+      // QNBS-v3: Pass a read-only snapshot of the sandboxed API into the worker.
+      // The worker cannot receive function references over postMessage, so we serialize
+      // only the data and let the worker collect side effects to apply back here.
+      const readApiSnapshot = {
+        projectTitle: rawApi.getProjectTitle(),
+        sceneTitles: rawApi.getSceneTitles(),
+      };
+
       // Route to worker for isolated execution
       const { routeTask } = await import('./hybridRouter');
       const handle = await routeTask('plugin.execute', {
         pluginId: descriptor.id,
         code,
         timeoutMs: 30000,
+        grantedPermissions: descriptor.permissions,
+        readApiSnapshot,
       });
 
       if (!handle) {
@@ -378,9 +394,27 @@ export class PluginRegistry {
       }
 
       try {
-        await handle.result;
+        const result = (await handle.result) as {
+          pluginId: string;
+          sideEffects?: Array<{ kind: 'append' | 'log'; payload: unknown }>;
+          logs?: string[];
+        };
+        const sideEffects = result?.sideEffects ?? [];
+        for (const effect of sideEffects) {
+          if (effect.kind === 'append' && typeof effect.payload === 'string') {
+            rawApi.appendToCurrentScene(effect.payload);
+          }
+          // QNBS-v3: 'log' side effects are intentionally not replayed through rawApi.log
+          // to avoid log loops; they are included in the telemetry entry below.
+        }
+
         const duration = Date.now() - startTime;
-        log.info('Plugin executed successfully', { pluginId: descriptor.id, durationMs: duration });
+        log.info('Plugin executed successfully', {
+          pluginId: descriptor.id,
+          durationMs: duration,
+          sideEffects: sideEffects.length,
+          logs: result?.logs?.length ?? 0,
+        });
         return { ok: true };
       } catch (e) {
         const duration = Date.now() - startTime;

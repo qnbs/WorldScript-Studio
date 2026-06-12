@@ -30,7 +30,14 @@
     "features/settings/accessibilitySchema.ts",
     "features/progressTracker/progressTrackerSlice.ts",
     "features/featureFlags/featureFlagsSlice.ts",
-    "features/proForge/proForgeSlice.ts"
+    "features/proForge/proForgeSlice.ts",
+    "services/copilot/heuristicEngine.ts",
+    "services/copilot/insightGenerator.ts",
+    "services/copilot/actionApplier.ts",
+    "services/copilot/copilotContextService.ts",
+    "services/ai/aiModeService.ts",
+    "services/ai/providers/openrouterProvider.ts",
+    "services/pluginRegistry.ts"
   ],
   "thresholds": {
     "high": 85,
