@@ -1633,3 +1633,10 @@ StoryCraft Studio was assessed as a strong, modern React/TypeScript application 
 | brace-expansion | >=5.0.6 | GHSA-9v9v-9v9v-9v9v | ReDoS |
 | uuid | >=11.1.1 | GHSA-9v9v-9v9v-9v9v | Collision in older versions |
 | qs | >=6.15.2 | GHSA-9v9v-9v9v-9v9v | Prototype pollution |
+| wait-on (transitive via `@storybook/test-runner` → `jest-process-manager`) | joi ^18.2.1 in lockfile | transitive hardening (dev-only) | `wait-on@7.2.0` originally pulled an older `joi` revision; lockfile pins `joi@18.2.1` for both `wait-on@7.2.0` and `wait-on@9.0.10`. Only used in dev/test toolchain, never shipped to users. |
+
+**Dependency hygiene status (2026-06-12):**
+- `pnpm audit --audit-level=high` → 0 vulnerabilities.
+- `pnpm audit --audit-level=moderate` → 0 vulnerabilities.
+- `.npmrc` hardening active: `strict-dep-builds=true`, `block-exotic-subdeps=true`, `minimum-release-age=10080`.
+- Outdated packages (non-critical patch/minor): `@ai-sdk/*`, `ai`, `@storybook/*`, `docx`, `dompurify`, `lint-staged`, `turbo`, `yjs`, `zustand`, `wrangler`, `@types/node`. No major versions; `@duckdb/duckdb-wasm` and `@typescript/native-preview` are dev/pre-release tracks and intentionally pinned.
