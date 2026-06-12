@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Icon } from './Icon';
 
 export interface SelectOption {
   value: string;
@@ -95,17 +96,12 @@ export const Select = React.memo(
           >
             <span>{opt.label}</span>
             {isActive && (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={2}
-                stroke="currentColor"
-                className="w-4 h-4 text-[var(--sc-accent)] flex-shrink-0"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+              <Icon
+                name="check"
+                size="sm"
+                className="text-[var(--sc-accent)] flex-shrink-0"
+                aria-hidden
+              />
             )}
           </button>
         </li>
@@ -127,17 +123,12 @@ export const Select = React.memo(
           <span className={selectedLabel ? '' : 'text-[var(--sc-text-muted)]'}>
             {selectedLabel ?? placeholder ?? ''}
           </span>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            className={`w-4 h-4 text-[var(--sc-text-muted)] transition-transform duration-sc-fast flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <Icon
+            name="chevron-down"
+            size="sm"
+            className={`text-[var(--sc-text-muted)] transition-transform duration-sc-fast flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
         </button>
 
         {isOpen && (
