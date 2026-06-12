@@ -49,25 +49,24 @@ and packaged successfully. The **ubuntu** and **macOS** jobs are the meaningful 
 **Windows** job currently fails earlier in the `./.github/actions/setup` composite (self-installer
 exit `3221226505`) — an environment/infra issue, not Rust.
 
-## Build health & known blockers (2026-06-03)
+## Build health & known blockers (2026-06-12)
 
-`tauri-build.yml` had been **red since 2026-05-30** until a Phase 3 dispatch traced and fixed two
-root causes that broke the build at the dependency-resolution / compile stage (so it never reached
-bundling — see [`AUDIT.md`](../AUDIT.md) § WorkerBus v2 Phase 3):
+`tauri-build.yml` history:
+
+- **2026-05-30 → 2026-06-03:** Red due to two compile-stage blockers (see [`AUDIT.md`](../AUDIT.md) § WorkerBus v2 Phase 3).
+- **2026-06-03 → 2026-06-12:** Ubuntu bundles `.deb` / `.rpm` / `.AppImage` successfully; macOS/Windows still failed.
+- **2026-06-12:** `src-tauri/src/lib.rs` updated — removed obsolete `Builder::on_event()` and `RunEvent::Opened`/`SecondInstance` handlers that conflicted with `tauri_plugin_single_instance`. The plugin already emits `"deep-link://new-url"` for second-instance/file-open events.
 
 | Issue | Status |
 |-------|--------|
-| `src-tauri/Cargo.toml` — unused, unresolvable `specta = "2"` / `tauri-specta = "2"` (only `2.0.0-rc.*` exist) failed `cargo` resolution | **Fixed** — both removed |
-| `src-tauri/src/lora.rs` — `LoraEnvReport` deserialized but derived only `Serialize` (`E0277`) | **Fixed** — `Deserialize` added |
+| `src-tauri/Cargo.toml` — unused `specta = "2"` / `tauri-specta = "2"` | **Fixed** — both removed |
+| `src-tauri/src/lora.rs` — `LoraEnvReport` missing `Deserialize` | **Fixed** — `Deserialize` added |
+| `src-tauri/src/lib.rs` — obsolete `Builder::on_event()` + `RunEvent::Opened`/`SecondInstance` | **Fixed** — handlers removed; single-instance plugin handles deep links |
 
-The crate now compiles cleanly and bundles `.deb` / `.rpm` / `.AppImage` on ubuntu. **Two
-non-code blockers remain** for a fully green run / signed release:
+**Remaining non-code blockers for a fully green signed release:**
 
-- **Updater signing secret** — the run currently exits non-zero at the end with
-  `incorrect updater private key password: Missing comment in secret key`. The
-  `TAURI_SIGNING_PRIVATE_KEY` repo secret is malformed; regenerate per *First-release checklist*
-  below. Until then the app + bundles build, but the signing step fails.
-- **Windows `setup` composite** — see above; a runner/installer issue to revisit.
+- **Updater signing secret** — for `v*` tag releases, `TAURI_SIGNING_PRIVATE_KEY` must be a valid minisign key. `workflow_dispatch` test builds unset the secret and disable updater artifacts (`createUpdaterArtifacts = false`), so they build without signing. Regenerate per *First-release checklist* when ready to publish.
+- **Windows `setup` composite** — earlier failures were an environment/infra issue (`exit 3221226505` in the setup composite), not Rust code. Re-check after the `on_event()` fix propagates.
 
 ## Desktop UX (v1.9)
 
