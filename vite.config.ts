@@ -8,6 +8,12 @@ import { VitePWA } from 'vite-plugin-pwa';
 const isAnalyze = process.env['ANALYZE'] === 'true';
 
 function resolveBase(): string {
+  // QNBS-v3: Tauri builds need relative paths for local file:// loading
+  // TAURI_PLATFORM is set by Tauri CLI during desktop builds
+  const isTauri = process.env['TAURI_PLATFORM'] !== undefined;
+  if (isTauri) {
+    return './';
+  }
   const viteBase = process.env['VITE_BASE']?.trim();
   if (viteBase) {
     return viteBase.endsWith('/') ? viteBase : `${viteBase}/`;
