@@ -21,169 +21,110 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 
 ---
 
-## v1.19 — Phase 2: Security, Voice WASM, Collab Transport, A11y Gate, RTL Beta (2026-05-28)
 
-**Status:** ✅ Released — see [`CHANGELOG.md`](CHANGELOG.md) `[1.19.0]` and [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md).
+## v1.23 — Stabilisation & Verification (ACTIVE)
 
-**B-1 — IDB At-Rest Encryption:**
-- `services/storage/storageEncryptionService.ts` — AES-256-GCM passphrase-derived encryption for IndexedDB stores
-- PBKDF2 (600 000 iterations, SHA-256), 32-byte random salt, `{ extractable: false }` CryptoKey
-- Feature flag `enableIdbAtRestEncryption` (off by default); Tauri path via `tauri-plugin-stronghold`
-
-**B-2 — Voice WASM Scaffold:**
-- `services/voice/wasmSttEngine.ts` — Whisper.cpp WASM STT engine interface scaffold
-- `services/voice/sileroVadEngine.ts` — Silero VAD v4 via ONNX Runtime Web
-- Feature flag `enableVoiceWasm` (off by default); falls back to Web Speech API when off
-
-**B-3 — collab-transport Vendor Fork:**
-- `packages/collab-transport` — vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption baked in
-- Replaces pnpm patch approach; encryption patch is now part of the package source
-
-**B-4 — axe-core E2E Accessibility Gate:**
-- 8-view axe-core WCAG 2.2 AA scan in Playwright (CI gate, `tests/e2e/a11y-axe.spec.ts`)
-- Zero violations enforced across Dashboard, Writer, SceneBoard, Characters, Worlds, Preview, Progress, Settings
-
-**B-5 — RTL Layout Beta:**
-- `ar` (Arabic) and `he` (Hebrew) locale stubs added to `locales/`
-- `enableRtlLayout` flag activates `html[dir="rtl"]` and BiDi context provider
-
-**B-6 — StructuredLogger:**
-- `services/logger.ts` rewritten — IDB sink (`storycraft-logs-db`, 1 000-entry LRU), Tauri JSONL sink (`storycraft-YYYY-MM-DD.jsonl`), GDPR sanitization (`sanitizeLogContext`)
-- New API: `createLogger(module)` → `ModuleLogger`; `.withContext(ctx)` for structured context injection
-- Backward-compat `logger` default export retained
-
-**B-7 — Coverage Thresholds Raised:**
-- Vitest gate: Lines 71% / Functions 63% / Branches 57% / Statements 69%
-- Measured: 73.06% L / 65.18% F / 58.79% B / 71.29% S
-
-**B-8 — Stryker Gate Raised:**
-- `break` threshold: 70 → 75; `mutate` targets expanded from 34 → 40 files
-
----
-
-## v1.20 — Phase 3: Release Hardening (ACTIVE — 2026-06-06)
-
-**Status:** 🔄 In Progress — Deep Correction Plan aktiviert. Ziel-Release: 2026-06-20.
+**Status:** 🔄 In Progress — P0-Audit-Follow-up vom 12. Juni 2026. Ziel-Release: 2026-06-20.
 
 **P0 (Release-Blocker):**
-- Tauri Desktop Pipeline vollständig repariert
-- Coverage C-7 erreicht (L85/B75/F80)
-- Alle Quality Gates 100% grün
+- ROADMAP.md/TODO.md synchron zu v1.22.0 bringen und v1.23-Ziele definieren.
+- Tauri Desktop Pipeline final verifizieren (Test-Release, signed Artifacts, In-App-Updater, Window-State, Open Data Folder).
+- Dependency-Hygiene abschließen (`pnpm audit`, `pnpm outdated`, `.npmrc`-Hardening dokumentieren, Known Overrides in AUDIT.md).
+- i18n Parity für `ja/zh/pt/el` + RTL (`ar/he`) auf <5 % EN-Placeholders halten.
+- Manuelles Smoke-Test-Protokoll für v1.22-Features auf Live-Demo + lokalem Tauri-Build.
 
-**P1 (AI Resilience + Global Readiness):**
-- WebLLM Worker Offload
-- Whisper WASM STT End-to-End
-- Rust TaskSupervisor UI-Consumer
-- Beta-Sprachen finalisiert
-- RTL Edge-Cases poliert
+**P1 (Diese Woche):**
+- Coverage-Ziele erreichen (L≥85 %, B≥75 %, F≥80 %) — Fokus auf AI-Routing, Voice, Copilot.
+- Local AI & Voice abschließen/härten (Whisper/Kokoro auf Low-End, Model-Integrity, Eco-Mode).
+- Error Boundaries + strukturiertes Logging für AI/Worker-Failures verbessern.
+- Accessibility Deep-Dive (manuelle Keyboard + Screen-Reader Tests).
 
-**P2 (v2.0 Foundation):**
-- Cloud-Sync Conflict Resolution
-- Plugin Registry Beta
-- Bundle-Budget verschärft
-- Error Boundaries + Logging konsistent
-
----
-
-## v1.20 — Phase 3: v2.0 Foundation (COMPLETED — 2026-05-28)
-
-**Status:** ✅ C-1..C-7 all addressed; C-6 blocked on translator; Local AI Perfection Phase 1+2.1 complete (2026-05-31).
-
-**C-1 — collab-transport security peer review** ✅ Done (2026-05-28)
-- 3 findings fixed in `packages/collab-transport/src/crypto.js`: PBKDF2 100k→600k, extractable:true→false, missing `return` on promise.reject(). Documented in AUDIT.md.
-
-**C-2 — Plugin System Beta** ✅ Done (2026-05-28/29)
-- Registry + sandboxed API + Zod validation (v1.19.0) + 2 reference plugins
-- Runtime flag gate added (2026-05-29): `PluginRegistry.setEnabled()` + `App.tsx` sync; `execute/executeAsync/loadPlugin` disabled until `enablePluginSystem` is on
-
-**C-3 — LoRA Inference Wired** ✅ Done (2026-05-28/29)
-- `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag` selector
-- **Parity fix (2026-05-29):** `selectActiveLoraOllamaTag` was a dead selector — now imported by `useStoryCraftAI`; `loraModelPath` flows through `completionBodySchema` → `storyCraftCompletionFetch` Ollama override. Full Vercel AI SDK path now wired.
-
-**C-4 — Cloud-Sync (Cloudflare R2)** ✅ Done (pre-existing)
-- `services/cloudSync/` — full `StorageBackend` impl, AES-256-GCM E2E encryption, 39 tests; `enableCloudSync` flag
-
-**C-5 — Community Readiness** ✅ Done (2026-05-28)
-- GitHub Issue Templates: `bug_report.yml`, `feature_request.yml`, `translation_pr.yml`
-- `AGENTS.md` updated with v1.19.0 references (collab-transport, StructuredLogger)
-
-**C-6 — RTL: Arabic + Hebrew Locale Scaffolding** ⬜ Requires native translator
-- Stubs exist (`locales/ar/`, `locales/he/`); full translation content needs community contribution
-- RTL-specific Tailwind utilities + E2E tests deferred until translation content is ready
-
-**C-7 — Coverage → Lines ≥ 85%, Branches ≥ 75%, Functions ≥ 80%** 🔄 Ongoing
-- Baseline (2026-05-26 CI): 73%L / 65%F / 59%B
-- +130 new tests (2026-05-28): supervisorAgent, baseAgent, geminiService streaming, helpCatalog, idbCore, loraThunks; thresholds raised L73/F65/B58/S71
-- Gap remaining: ~12%L / ~15%F / ~16%B to reach targets — CI will report actuals
-- Stryker `break`: raise 75 → 80 after CI score confirms ≥ 80
-
-**Feature Parity Audit** ✅ Done (2026-05-29) — see `docs/FEATURE-PARITY.md`
-- 8 critical runtime-gate drifts fixed; `features/featureCatalog.ts` + `scripts/audit-feature-parity.ts` added
-- `enablePlotBoardV2` deprecated (v1 board removed in v1.6; toggle hidden, slice retained for localStorage compat)
-
-**Local AI Perfection Sprint** 🔄 Phases 1–2.4 complete (2026-06-03)
-- **Build:** `@xenova/transformers@2.17.2` → `@huggingface/transformers@3.8.1` (v3 ESM); resolves vitest broken blocker
-- **Phase 1.1:** IDB session lock + atomic key rotation (`reEncryptAllAppData`/`reEncryptAllSnapshots`); brute-force rate limiting
-- **Phase 1.2:** All voice engines async; `SileroVadEngine` (ONNX LSTM); `KokoroTtsEngine` (ONNX PCM)
-- **Phase 1.3:** GPU fallback reason tracking; worker restart cap (MAX=5); RAM-pressure eco-mode; AdaptiveAiHardwarePanel
-- **Phase 2.1:** Real `text-generation` pipelines (WebLLM: SmolLM2-135M; Transformers.js: distilgpt2); AbortSignal end-to-end
-- **Phase 2.2:** ✅ Done (2026-06-02) — LoRA view productionized: `LoraView` container + gated `lora` route + conditional sidebar nav (`enableLoraAdapters`); `lora-wizard.spec.ts` re-enabled. Also `aiRetry` exponential backoff/jitter/Retry-After (P1-F5) + `fetchAdapter` opt-in timeout (P1-F6).
-- **Phase 2.3** ✅ Done (merged PR #69, 2026-06-03) — Pipeline LRU cache unified into `services/ai/pipelineLruCache.ts` (dispose-on-evict + dispose-on-replace close a VRAM/RAM leak; in-flight load dedup; centralized `safeDispose`); duplication across the two inference workers removed; + `aiRetry` property tests, `useLoraView` selector fix, ADR 0001/0002.
-- **Phase 2.4** ✅ Done (PR #69) — `kokoroTtsEngine` cancel/pause/resume/dispose + no-WASM coverage; thresholds ratcheted to CI-measured floor L74/B60/F66/S72.
-- **Remaining:** Phase 2.3 stretch (WebLLM full worker offload — own sprint, higher risk). _Separate track:_ **WorkerBus v2 Phase 3** (Rust TaskSupervisor + `text.analyze`) ✅ landed 2026-06-03 (PR #70) — see ADR 0003.
-
-**CI: Cloud-first Storybook** ✅ Done (2026-05-31)
-- Playwright browser cache in `storybook` CI job; `**/screenshots/` in artifact upload
-- New `.github/workflows/storybook-debug.yml` — manually triggered debug workflow with configurable workers/retries
-
-**CI Hardening + CodeAnt AI Fixes** ✅ Done (2026-06-01)
-- 14 CodeAnt AI issues fixed: webllm dispose on eviction, releaseWebLlm both variants, await releaseAllOnnxSessions, computeShaderFactory race condition, adaptive engine startup gate, localAiDeviceProfiler backend fix, WarmedModelEntry task field, telemetryService feature flag gate, window guards, AiSections flag gate, AdaptiveAiHardwarePanel i18n
-- E2E stabilisation: 24 failures → ~0 (VRT baselines, WelcomePortal contrast, theme-wait, role=switch, SceneBoard ARIA, ActSwimlane li-wrapper, LoRA skip)
-- prune-deployments.yml: all-environment pruning (156 records deleted); github-script v7→v9 (node24)
-- All 18 GitHub Actions on node24; Scorecard pip hash pinned (graphifyy)
+**P2 (Nächster Sprint / v2.0 Foundation):**
+- Collaboration E2E-Encryption finalisieren & testen.
+- Plugin Registry Beta aus der Sandbox-Härtung herausführen.
+- Bundle-Optimierung + Code-Splitting für schwere Chunks.
+- Data-Migration/Backup/CloudSync LWW E2E-Tests erweitern.
 
 ---
 
-## v1.18 — ProForge Humanization & Refinement Sprint (2026-05-27)
+## v1.22.0 — Phase 5: AI Execution Modes, OpenRouter & Copilot v2 (RELEASED 2026-06-11)
 
-**Status:** ✅ Released — commit `60f12fd`, see [`CHANGELOG.md`](CHANGELOG.md) `[1.18.0]` and [`docs/SPRINT-HANDOFF-2026-05-27.md`](docs/SPRINT-HANDOFF-2026-05-27.md).
+**Status:** ✅ Released — siehe [`CHANGELOG.md`](CHANGELOG.md) `[1.22.0]`.
 
-**Phase H — UX Polish:**
-- Author-facing stage labels and loading messages (no implementation jargon in UI)
-- RAG chunk count renamed to "context passages" throughout
-- Feature flag descriptions rewritten for non-technical readers
-- Behavioral tests replacing implementation-detail assertions across 8 agent test files
-
-**Phase A — Architecture Cleanup:**
-- `BaseAgent` abstract class — ~200 LOC removed from 8 pipeline agents
-- `services/ai/aiConstants.ts` — single source for `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS`
-- `addDebouncedListener` factory in `listenerMiddleware.ts`
-
-**Phase P — Quality Supervision:**
-- `SupervisorAgent` — heuristic quality gates, fallback detection, retry orchestration (no AI calls)
-- `executeStageWithSupervision` retry loop; hard intake quality gate (`qualityScore < 30`)
-- `BaseAgent.selfReflect()` — self-evaluation loop for DiagnosticAgent and StructuralAgent
-- Honest fallback reports: 0 scores + `isFallback: true` everywhere
-- `PipelineReviewPanel` redesign: Critical Actions card, severity-grouped view, Quick Accept button
-
-**Phase X — Settings & UX:**
-- Settings nav semantic grouping (`NAV_GROUPS` + `NavGroupHeader`)
-- Flow Mode — distraction-free writing (Zustand + `Escape` key exit)
-- Empty states for Characters, World, SceneBoard, and ProForge views
-- i18n: 2055 keys × 5 locales
+- **OpenRouter provider (Cloud 5):** Unified Gateway zu 100+ Open-Source-Modellen mit Circuit-Breaker, RPM-Tracking und Free-Tier-Katalog.
+- **AI Execution Modes:** `hybrid` | `cloud` | `local` | `eco` — vier Routing-Strategien in Settings → AI & Models; `AiModeIndicator` im Copilot-Header.
+- **Ultimate Copilot AI v2:** Markdown-Rendering (DOMPurify), Sidebar/Dialog-Mode, Apply-to-Chapter (Undo), `InlineAnnotationLayer`, ProForge Ask-Copilot-Chip.
+- **WebLLM Worker Offload:** `@mlc-ai/web-llm` läuft im dedizierten WorkerBus-v2-Pool mit automatischem Main-Thread-Fallback.
+- **Whisper WASM STT End-to-End:** Deterministische Deep-E2E-Suite für Model-Download, STT→Intent→Command und Stop-Listening.
+- **Prompt-Injection & Plugin-Isolation Hardening (PR #114):** C0-Control-Character-Filter, DOMPurify-Härtung, Plugin-Storage-Key-Validierung, Worker-Sandbox mit `Function`/`eval`/`WebAssembly`-Guards.
+- **i18n:** 2 594 Keys × 11 Locales.
 
 ---
 
-## v1.8 — RAG Prompt Assembly + UX (2026-05-21)
+## v1.21.0 — Integrity & Hardening Cycle (RELEASED 2026-06-10)
 
-**Status:** Implemented in tree — see [`docs/SPRINT-V1.8.md`](docs/SPRINT-V1.8.md), [`CHANGELOG.md`](CHANGELOG.md) `[Unreleased]`.
+**Status:** ✅ Released — siehe [`CHANGELOG.md`](CHANGELOG.md) `[1.21.0]`.
 
-- RAG-aware prompts for Writer (continue/brainstorm/critic) and Plot Board beat suggestions
-- DuckDB semantic embedding column + migration from BoW dual-write
-- PWA audit doc; design-token touch-ups; expanded settings search hints for RAG
-- Local CI pack: [`infra/low-end-ci/`](infra/low-end-ci/)
+- **CSP `connect-src` Option B:** redundante Cloud-Endpoints entfernt, intentional `https:` für BYOK behalten; ADR-0004 + Regressionstest.
+- **Suppression-Debt Ratchet Gate:** `scripts/check-suppressions.mjs` mit Baseline 159 in CI; erste Abatement-Tranche (22 `noExplicitAny`).
+- **Bundle-Budget Single Source of Truth:** `package.json` `bundle:budget` = `--max-kb 6500 --max-entry-kb 4000`.
+- **Whisper WASM STT Download UI + VAD→Whisper Bridge:** `VoiceModelDownloadModal`, `VoiceActivityCoordinator`.
+- **Sepia Dark Mode — "Candlelit Manuscript"** als vierter Theme-Variant.
+- **Deep E2E Coverage Layer:** Feature-Flag-Matrix + Error-Path-Specs.
+- **Coverage Batches A–C:** Thresholds gehalten bei L74/B60/F67/S72.
 
 ---
+
+## v1.20.0 — Deep Correction & Release Hardening (RELEASED 2026-06-07)
+
+**Status:** ✅ Released — siehe [`CHANGELOG.md`](CHANGELOG.md) `[1.20.0]`.
+
+- **Tauri Desktop Pipeline repariert:** pnpm-Config-Migration, Signing-Fix, Native File Associations (`.storycraft`/`.scst`), Single-Instance, Deep-Link-Handler.
+- **UI Modernization Phase 1:** `LanguageSelector`, `RadioGroup`, `Tabs`, `ToggleSwitch`.
+- **Phase 3 i18n Expansion:** `ja/zh/pt/el` Beta-Sprachen + Intl APIs (`PluralRules`, `NumberFormat`, `RelativeTimeFormat`, `Collator`, `ListFormat`, `DisplayNames`).
+- **Coverage C-7:** +96 Tests; Thresholds angehoben.
+- **Quality Gates stabil:** lint ✅ · typecheck ✅ · i18n:check ✅ · parity:check ✅ · bundle:budget ✅ · smoke:prod ✅.
+
+---
+
+## v1.19.0 — Phase 2: Security, Voice WASM, Collab Transport, A11y Gate, RTL Beta (RELEASED 2026-05-28)
+
+**Status:** ✅ Released — siehe [`CHANGELOG.md`](CHANGELOG.md) `[1.19.0]` und [`docs/SPRINT-HANDOFF-2026-05-28.md`](docs/SPRINT-HANDOFF-2026-05-28.md).
+
+- **B-1 — IDB At-Rest Encryption:** AES-256-GCM passphrase-derived encryption, PBKDF2 600k iter, `{ extractable: false }`.
+- **B-2 — Voice WASM Scaffold:** Whisper.cpp WASM STT + Silero VAD v4 via ONNX Runtime Web.
+- **B-3 — collab-transport Vendor Fork:** y-webrtc 10.3.0 mit RTCDataChannel E2E encryption.
+- **B-4 — axe-core E2E Accessibility Gate:** 8-view WCAG 2.2 AA Scan, zero violations.
+- **B-5 — RTL Layout Beta:** `ar`/`he` Locale Stubs + `enableRtlLayout` Flag.
+- **B-6 — StructuredLogger:** IDB + Tauri JSONL sinks, GDPR `sanitizeLogContext`.
+- **B-7 — Coverage Thresholds Raised:** L71/F63/B57/S69; gemessen L73/F65/B59/S71.
+- **B-8 — Stryker Gate Raised:** `break` 70 → 75; 40 Mutations-Targets.
+
+---
+
+## v1.18.0 — ProForge Humanization & Refinement Sprint (RELEASED 2026-05-27)
+
+**Status:** ✅ Released — commit `60f12fd`, siehe [`CHANGELOG.md`](CHANGELOG.md) `[1.18.0]`.
+
+- **Phase H:** Author-facing Labels, "context passages" Rename, Feature-Flag-Beschreibungen, behavioral tests.
+- **Phase A:** `BaseAgent` Abstract Class, `aiConstants.ts`, `addDebouncedListener` Factory.
+- **Phase P:** `SupervisorAgent`, `executeStageWithSupervision`, `BaseAgent.selfReflect()`, Honest Fallbacks, `PipelineReviewPanel` Redesign.
+- **Phase X:** Settings-Nav Semantische Gruppierung, Flow Mode, Empty States.
+
+---
+
+## v1.17.0 — Voice Full Support Foundation (RELEASED 2026-05-24)
+
+**Status:** ✅ Released — siehe [`CHANGELOG.md`](CHANGELOG.md) `[1.17.0]`.
+
+- Engine-Abstraktionen (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`).
+- Web Speech API Fallbacks, Hybrid Intent Engine, `VoiceCommandService`, `voiceSlice`.
+- React Hooks (`useVoice`, `usePushToTalk`, `useVoiceDictation`, `useVoiceAccessibility`).
+- UI Components (`VoiceIndicator`, `VoiceControlPanel`, `VoiceSettingsSection`).
+- Audio Navigator + Feedback Service; 83 Voice-Unit-Tests.
+
+---
+
 
 ## v1.1 — Stabilization & Hardening
 
