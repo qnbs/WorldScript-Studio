@@ -20,7 +20,9 @@ strictPeerDependencies: false
 # - brace-expansion: CVE-2024-XXXX - ReDoS fix
 # - uuid: CVE-2024-XXXX - collision fix
 # - qs: CVE-2024-XXXX - prototype pollution fix
+# - esbuild: GHSA-67mh-4wv8-2f99 / GHSA-9j49-mf9f-jxg2 - missing binary integrity verification + arbitrary file read
 overrides:
+  esbuild: ">=0.28.1"
   typescript: "npm:@typescript/typescript6@~6.0.3"
   serialize-javascript: ">=7.0.3"
   chrome-launcher: "^1.2.1"
