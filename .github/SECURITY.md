@@ -44,6 +44,8 @@ Phase 0 and Phase 2 hardening complete as of v1.19.0. Remaining open items:
 | SEC-6 | Storage | DuckDB OPFS at-rest encryption — WAL and data files outside IDB; requires separate encryption layer | ⬜ Phase 3 (P0-4) |
 | SEC-7 | Plugin System | Worker isolation for plugin execution — prevent main-thread access, enforce timeouts | ⬜ Phase 3 (P0-2) |
 | SEC-8 | Voice | WASM model download UX — progress feedback, cancel/retry controls for Whisper/Kokoro models | ⬜ Phase 3 (P0-5) |
+| SEC-9 | ProForge / Copilot | Prompt-injection hardening — reject C0 control chars, null bytes, lone surrogates in AI-proposed edits; per-item graceful skip instead of batch abort | ✅ Complete (PR #114) |
+| SEC-10 | Plugin System | Storage key isolation hardening — length limit, allowed-character suffix validation, anti-traversal (`..`), value size cap | ✅ Complete (PR #114) |
 
 ## Threat Model
 

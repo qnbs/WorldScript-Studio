@@ -279,7 +279,7 @@ export class ProForgeOrchestrator {
           decisions.filter((d) => d.status === 'accepted').map((d) => d.itemId),
         );
         const acceptedItems = stageResult.reviewItems.filter((ri) => acceptedIds.has(ri.id));
-        const { updates, applied, skipped } = planAcceptedManuscriptEdits(
+        const { updates, applied, skipped, invalid } = planAcceptedManuscriptEdits(
           project.manuscript,
           acceptedItems,
         );
@@ -294,9 +294,9 @@ export class ProForgeOrchestrator {
             );
           }
         }
-        if (skipped > 0) {
+        if (skipped > 0 || invalid > 0) {
           logger.warn(
-            `ProForge submitReview: stage ${stage} applied ${applied} edit(s), skipped ${skipped} stale/unanchorable edit(s).`,
+            `ProForge submitReview: stage ${stage} applied ${applied} edit(s), skipped ${skipped} stale/unanchorable edit(s), rejected ${invalid} invalid edit(s).`,
           );
         }
       }

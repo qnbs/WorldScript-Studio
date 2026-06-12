@@ -128,16 +128,22 @@ interface CopilotMessageListProps {
   applyingLabel: string;
 }
 
-// QNBS-v3: useEffect+innerHTML avoids dangerouslySetInnerHTML (eliminates biome suppression debt);
-// DOMPurify sanitisation identical — the rule only flags the JSX prop, not direct DOM writes.
-const ALLOWED_MD_TAGS = ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'h3', 'span'];
+// QNBS-v3: Assistant markdown is rendered through DOMPurify with a strict allowlist. The content
+// is still inserted via innerHTML (necessary for the micro-markdown output), but DOMPurify strips
+// all tags and attributes outside the allowlist before insertion, so script/style/event handlers
+// cannot survive. 'span' is intentionally excluded to prevent style-injection vectors.
+const ALLOWED_MD_TAGS = ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'h3'];
+const ALLOWED_MD_ATTR = ['class'];
 const MarkdownContent: FC<{ content: string }> = ({ content }) => {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (ref.current) {
       ref.current.innerHTML = DOMPurify.sanitize(renderMarkdown(content), {
         ALLOWED_TAGS: ALLOWED_MD_TAGS,
-        ALLOWED_ATTR: ['class'],
+        ALLOWED_ATTR: ALLOWED_MD_ATTR,
+        ALLOW_DATA_ATTR: false,
+        FORBID_ATTR: ['style'],
+        SANITIZE_DOM: true,
       });
     }
   }, [content]);

@@ -237,19 +237,32 @@ describe('PluginRegistry.executeAsync()', () => {
     if (!result.ok) expect(result.error).toMatch(/ai\.invoke/);
   });
 
-  it('allows storageRead when storage.read is declared', async () => {
+  it('allows storageRead when storage.read is declared and key is namespaced', async () => {
     registry.register(makePlugin({ permissions: ['storage.read'] }));
     const api = makeApi({ storageRead: vi.fn().mockResolvedValue(42) });
     let value: unknown;
     await registry.executeAsync(
       'test-plugin',
       async (sandboxed) => {
-        value = await sandboxed.storageRead('my-key');
+        value = await sandboxed.storageRead('plugin:test-plugin:my-key');
       },
       api,
     );
-    expect(api.storageRead).toHaveBeenCalledWith('my-key');
+    expect(api.storageRead).toHaveBeenCalledWith('plugin:test-plugin:my-key');
     expect(value).toBe(42);
+  });
+
+  it('rejects storageRead when key is not namespaced', async () => {
+    registry.register(makePlugin({ permissions: ['storage.read'] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageRead('my-key');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/must start with/);
   });
 
   it('denies storageRead without storage.read', async () => {
@@ -265,17 +278,30 @@ describe('PluginRegistry.executeAsync()', () => {
     if (!result.ok) expect(result.error).toMatch(/storage\.read/);
   });
 
-  it('allows storageWrite when storage.write is declared', async () => {
+  it('allows storageWrite when storage.write is declared and key is namespaced', async () => {
     registry.register(makePlugin({ permissions: ['storage.write'] }));
     const api = makeApi();
     await registry.executeAsync(
       'test-plugin',
       async (sandboxed) => {
-        await sandboxed.storageWrite('scene-count', 5);
+        await sandboxed.storageWrite('plugin:test-plugin:scene-count', 5);
       },
       api,
     );
-    expect(api.storageWrite).toHaveBeenCalledWith('scene-count', 5);
+    expect(api.storageWrite).toHaveBeenCalledWith('plugin:test-plugin:scene-count', 5);
+  });
+
+  it('rejects storageWrite when key is not namespaced', async () => {
+    registry.register(makePlugin({ permissions: ['storage.write'] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageWrite('key', 'value');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/must start with/);
   });
 
   it('denies storageWrite without storage.write', async () => {
@@ -302,6 +328,73 @@ describe('PluginRegistry.executeAsync()', () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe('async crash');
+  });
+
+  it('rejects storageRead when key suffix is empty', async () => {
+    registry.register(makePlugin({ permissions: ['storage.read'] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageRead('plugin:test-plugin:');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/suffix must not be empty/);
+  });
+
+  it('rejects storageRead when key suffix contains traversal dots', async () => {
+    registry.register(makePlugin({ permissions: ['storage.read'] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageRead('plugin:test-plugin:..secret');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/must not contain "\.\./);
+  });
+
+  it('rejects storageRead when key suffix contains path separators', async () => {
+    registry.register(makePlugin({ permissions: ['storage.read'] }));
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageRead('plugin:test-plugin:foo/bar');
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/suffix may only contain/);
+  });
+
+  it('rejects storageRead when key exceeds maximum length', async () => {
+    registry.register(makePlugin({ permissions: ['storage.read'] }));
+    const longSuffix = 'a'.repeat(300);
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageRead(`plugin:test-plugin:${longSuffix}`);
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/exceeds maximum length/);
+  });
+
+  it('rejects storageWrite when value exceeds maximum size', async () => {
+    registry.register(makePlugin({ permissions: ['storage.write'] }));
+    const huge = 'x'.repeat(3 * 1024 * 1024);
+    const result = await registry.executeAsync(
+      'test-plugin',
+      async (sandboxed) => {
+        await sandboxed.storageWrite('plugin:test-plugin:big', huge);
+      },
+      makeApi(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/exceeds maximum size/);
   });
 });
 

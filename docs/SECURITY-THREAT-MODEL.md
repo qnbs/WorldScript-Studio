@@ -24,6 +24,7 @@ This document provides a formal STRIDE threat analysis for StoryCraft Studio, ma
 | Collaboration payload tampering | RTCDataChannel E2E encryption | `packages/collab-transport/src/crypto.js` |
 | Settings corruption | Schema validation on load | `features/settings/settingsSlice.ts:normalizePersistedSettings()` |
 | Plugin code injection | Content guard script | `scripts/content-guard.mjs` |
+| AI-proposed manuscript corruption | Control-character / lone-surrogate rejection with per-item skip | `services/proForge/applyReviewEdits.ts:validateProposedText()` |
 
 ### R - Repudiation (Non-repudiation)
 
@@ -42,6 +43,7 @@ This document provides a formal STRIDE threat analysis for StoryCraft Studio, ma
 | Voice audio to cloud | Web Speech API consent gate | `components/voice/VoicePrivacyConsentModal.tsx` |
 | DuckDB analytics unencrypted | OPFS encryption (planned) | `services/duckdb/duckdbEncryption.ts` (P0-4) |
 | Prompt injection exposing context | Prompt sanitization | `services/ai/ragPromptAssembly.ts:sanitizePromptBlock()` |
+| Prompt injection via AI-proposed edits | Control-character / lone-surrogate validation; per-item skip | `services/proForge/applyReviewEdits.ts:validateProposedText()` |
 
 ### D - Denial of Service
 
@@ -57,6 +59,8 @@ This document provides a formal STRIDE threat analysis for StoryCraft Studio, ma
 | Threat | Mitigation | Code Location |
 |--------|------------|-------------|
 | Plugin accessing unauthorized APIs | Permission gate in sandboxed API | `services/pluginRegistry.ts:PERMISSION_API_MAP` |
+| Plugin cross-storage access | Namespace prefix + length/character/traversal validation | `services/pluginRegistry.ts:validatePluginStorageKey()` |
+| Plugin storage DoS | Serialized value size cap (2 MiB) | `services/pluginRegistry.ts:validatePluginStorageValue()` |
 | Collaboration without password | CollabEncryptionRequiredError | `services/collaborationService.ts:connect()` |
 | Feature flag bypass | Runtime gate checks | `features/featureFlags/featureFlagsSlice.ts` |
 
@@ -73,8 +77,10 @@ Goal: Inject malicious prompt to extract/manipulate manuscript data
 │  │  └─ Mitigation: RAG source validation, embedding integrity
 │  └─ Lexical index poisoning
 │     └─ Mitigation: Index sanitization on write
-└─ OR: Plugin-generated prompts
-   └─ Mitigation: Plugin sandboxed API, no direct prompt access
+├─ OR: Plugin-generated prompts
+│  └─ Mitigation: Plugin sandboxed API, no direct prompt access
+└─ OR: AI-proposed edits carrying malicious control characters
+   └─ Mitigation: validateProposedText() rejects C0 controls, null bytes, lone surrogates
 ```
 
 ### Plugin Sandbox Escape Attack Tree
@@ -87,6 +93,10 @@ Goal: Access app state outside plugin permissions
 │  └─ Mitigation: Zod validation, frozen globals
 ├─ OR: Resource exhaustion
 │  └─ Mitigation: Worker timeout, circuit breaker
+├─ OR: Cross-plugin storage access
+│  └─ Mitigation: `plugin:${id}:` prefix + length/char/traversal validation
+├─ OR: Plugin storage DoS
+│  └─ Mitigation: 2 MiB serialized value size cap
 └─ OR: Crypto key extraction
    └─ Mitigation: Non-extractable CryptoKey, no key export
 ```

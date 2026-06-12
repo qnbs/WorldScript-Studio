@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Prompt injection & plugin isolation hardening (PR #114):**
+  - `services/proForge/applyReviewEdits.ts` now rejects C0 control characters (except `\t`, `\n`, `\r`), null bytes, and lone surrogates in AI-proposed edits; invalid items are skipped individually instead of aborting the whole batch.
+  - `services/copilot/actionApplier.ts` whole-section replacement on empty chapters now works by passing an explicit full-range edit.
+  - `services/pluginRegistry.ts` enforces stricter storage-key validation: maximum length, allowed suffix characters, anti-traversal (`..`), and a 2 MiB serialized value size cap.
+  - `components/copilot/CopilotMessageList.tsx` DOMPurify config hardened with `ALLOW_DATA_ATTR: false`, `FORBID_ATTR: ['style']`, and `SANITIZE_DOM: true`.
 - **PWA blank screen on update:** SW `APP_VERSION` bumped `1.20.0 → 1.21.2` so the activate handler correctly prunes the stale `storycraft-static-v1.20.0` cache after deployment.
 
 ---
