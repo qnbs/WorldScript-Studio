@@ -54,19 +54,20 @@ exit `3221226505`) — an environment/infra issue, not Rust.
 `tauri-build.yml` history:
 
 - **2026-05-30 → 2026-06-03:** Red due to two compile-stage blockers (see [`AUDIT.md`](../AUDIT.md) § WorkerBus v2 Phase 3).
-- **2026-06-03 → 2026-06-12:** Ubuntu bundles `.deb` / `.rpm` / `.AppImage` successfully; macOS/Windows still failed.
+- **2026-06-03 → 2026-06-12:** Ubuntu bundles `.deb` / `.rpm` / `.AppImage` successfully; macOS/Windows still failed on `Builder::on_event()` / `RunEvent::Opened`/`SecondInstance`.
 - **2026-06-12:** `src-tauri/src/lib.rs` updated — removed obsolete `Builder::on_event()` and `RunEvent::Opened`/`SecondInstance` handlers that conflicted with `tauri_plugin_single_instance`. The plugin already emits `"deep-link://new-url"` for second-instance/file-open events.
+- **2026-06-12 (post-fix):** Full workflow dispatch run green on **Ubuntu** (`.deb`, `.rpm`, `.AppImage`), **macOS** (`.dmg`), and **Windows** (`.msi`, `.exe`).
 
 | Issue | Status |
 |-------|--------|
 | `src-tauri/Cargo.toml` — unused `specta = "2"` / `tauri-specta = "2"` | **Fixed** — both removed |
 | `src-tauri/src/lora.rs` — `LoraEnvReport` missing `Deserialize` | **Fixed** — `Deserialize` added |
 | `src-tauri/src/lib.rs` — obsolete `Builder::on_event()` + `RunEvent::Opened`/`SecondInstance` | **Fixed** — handlers removed; single-instance plugin handles deep links |
+| Ubuntu/macOS/Windows bundle jobs | **Green** on `workflow_dispatch` |
 
-**Remaining non-code blockers for a fully green signed release:**
+**Remaining non-code blocker for a fully signed release:**
 
 - **Updater signing secret** — for `v*` tag releases, `TAURI_SIGNING_PRIVATE_KEY` must be a valid minisign key. `workflow_dispatch` test builds unset the secret and disable updater artifacts (`createUpdaterArtifacts = false`), so they build without signing. Regenerate per *First-release checklist* when ready to publish.
-- **Windows `setup` composite** — earlier failures were an environment/infra issue (`exit 3221226505` in the setup composite), not Rust code. Re-check after the `on_event()` fix propagates.
 
 ## Desktop UX (v1.9)
 

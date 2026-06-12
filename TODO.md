@@ -16,7 +16,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ### P0 — Release-Blocker
 - ⬜ **ROADMAP/TODO sync** — `ROADMAP.md` auf v1.22.0 + v1.23-Ziele bringen; `TODO.md` widerspruchsfrei zu `.npmrc`.
-- ⬜ **Tauri Desktop Pipeline final verifizieren** — `gh workflow run tauri-build.yml --ref main`, Artifacts prüfen, Signing-Secret/Updater klären.
+- ✅ **Tauri Desktop Pipeline final verifizieren** — `tauri-build.yml` grün auf Ubuntu/macOS/Windows (Run #27439443241). Signing-Secret/Updater bleibt offen für `v*` Releases (kein Secret für workflow_dispatch).
 - ⬜ **Dependency-Hygiene** — `pnpm audit --audit-level=high`, `pnpm outdated`, `AUDIT.md` Known Overrides dokumentieren.
 - ✅ **i18n Parity** — `pnpm run i18n:check` grün (2590 Keys × 11 Locales). `ja/zh/pt/el` + `ar/he` erreichen Projekt-Ziel ≤5 % EN-Placeholders; `ar/he` UI vollständig übersetzt, native Review offen. `--quality` Scan zeigt zusätzliche "likely untranslated" Einträge (v.a. technische Begriffe), die kein CI-Gate blockieren — siehe `docs/V1.22-SMOKE-TEST.md` für manuelle Locale-Prüfung.
 - ⬜ **Smoke-Test-Protokoll** — `docs/V1.22-SMOKE-TEST.md` mit manuellen Szenarien für v1.22-Features.
