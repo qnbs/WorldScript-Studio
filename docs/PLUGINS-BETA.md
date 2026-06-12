@@ -13,6 +13,8 @@ The StoryCraft Studio Plugin System allows extending the application with custom
 - All plugin code executes in `workers/plugin.worker.ts` (Web Worker)
 - Plugins cannot access the main thread directly
 - No direct access to Redux store, DOM, or browser APIs
+- Plugin code runs inside a function-scope sandbox: dangerous globals (`fetch`, `indexedDB`, `WebSocket`, `self`, `globalThis`, etc.) are shadowed with `undefined`. This closes the most common sandbox-escape vectors while keeping the architecture lightweight. It is **not** the same as process-level isolation; future releases may add iframe or ShadowRealm isolation (Phase 3).
+- The worker does **not** receive live API objects. It gets a read-only project snapshot and returns serializable side effects (`appendToCurrentScene`, `log`) that the main thread applies after verifying permissions.
 
 ### Permission Gating
 Plugins declare required permissions in their manifest. The registry enforces these at runtime:
@@ -28,14 +30,14 @@ Plugins declare required permissions in their manifest. The registry enforces th
 
 ### Execution Timeout
 - Default timeout: 30 seconds
-- Plugins exceeding timeout are terminated
-- Timeout is enforced in the worker context
+- A timeout `AbortSignal` is propagated into the worker task, but `import()` of dynamic URLs and long-running synchronous plugin loops are only partially abortable today. Endless synchronous loops can still block the worker until the task is forcibly cancelled by the WorkerBus timeout/circuit breaker.
 
 ### Telemetry
 All plugin executions are logged to the structured logger:
 - Plugin ID and execution duration
 - Success/failure status
 - Error messages (sanitized)
+- No plugin data is sent to the cloud; telemetry is on-device only.
 
 ## API Reference
 
@@ -118,6 +120,10 @@ Two reference plugins are included in `services/plugins/`:
 ## Known Limitations
 
 - Plugin system must be explicitly enabled via feature flag
+- Worker sandbox uses function-scope shadowing, not process or iframe isolation
+- Async APIs (`generateText`, `storageRead`, `storageWrite`) inside the worker sandbox currently throw; asynchronous plugin features require a future proxy-to-main design
+- Timeout/abort covers the WorkerBus task boundary but does not yet forcibly interrupt in-flight dynamic `import()` or synchronous infinite loops
+- Side effects are limited to `appendToCurrentScene` and `log`; other mutations must be added explicitly on the main thread
 - No plugin discovery mechanism (manual registration only)
 - No plugin update mechanism
 - Storage access is namespaced but not project-scoped

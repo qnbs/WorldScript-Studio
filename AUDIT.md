@@ -1537,9 +1537,14 @@ StoryCraft Studio was assessed as a strong, modern React/TypeScript application 
 
 | Status | Item |
 |--------|------|
+| ✅ | Replaced unsafe Worker global eval with function-scope sandbox in `workers/plugin.worker.ts` |
+| ✅ | Added read-only project snapshot + side-effect bridge in `services/pluginRegistry.ts` |
+| ✅ | Added `plugin.sandbox` capability to WorkerBus v2 schema |
 | ✅ | Added telemetry logging to `pluginRegistry.ts` (loadPlugin method) |
-| ✅ | Created `tests/unit/plugins/pluginRegistryLoad.test.ts` (8 tests for timeout/fetch/error handling) |
-| ✅ | Created `docs/PLUGINS-BETA.md` documenting Beta/opt-in status |
+| ✅ | Created/extended `tests/unit/workers/plugin.worker.test.ts` (13 tests) |
+| ✅ | Created/extended `tests/unit/plugins/pluginRegistryLoad.test.ts` (8 tests) |
+| ✅ | Updated `docs/PLUGINS-BETA.md` with accurate sandbox/limitations description |
+| ⬜ | Full timeout/abort coupling for dynamic `import()` and sync loops (P0-2) |
 
 ### Supply-Chain Hardening (P1)
 
@@ -1550,6 +1555,19 @@ StoryCraft Studio was assessed as a strong, modern React/TypeScript application 
 | ✅ | Added `minimum-release-age=10080` (7 days) to `.npmrc` |
 | ✅ | Added security justification comments to `pnpm-workspace.yaml` overrides |
 
+### OpenRouter Provider Hardening (P1)
+
+| Status | Item |
+|--------|------|
+| ✅ | Expanded `tests/unit/ai/openrouterProvider.test.ts` to 19 tests covering streaming, 429 retry, Retry-After, circuit breaker, non-OK errors, AbortSignal, malformed SSE, RPM tracking |
+| ✅ | Added test-only delay provider hook to keep retry tests fast and deterministic |
+
+### Copilot Apply-Flow Hardening (P1)
+
+| Status | Item |
+|--------|------|
+| ✅ | Extended `tests/unit/copilot/useGlobalCopilot.test.ts` with 7 `applyLastSuggestion` tests (70% gate, empty section, missing section, status lifecycle, dispatch verification) |
+
 ### Mutation Testing Expansion (P1)
 
 | Status | Item |
@@ -1557,6 +1575,8 @@ StoryCraft Studio was assessed as a strong, modern React/TypeScript application 
 | ✅ | Added `services/ai/aiRetry.ts` to mutation targets |
 | ✅ | Added `services/ai/fetchAdapter.ts` to mutation targets |
 | ✅ | Added `services/ai/routingLogger.ts` to mutation targets |
+| ✅ | Added `services/copilot/heuristicEngine.ts`, `insightGenerator.ts`, `actionApplier.ts`, `copilotContextService.ts` to mutation targets |
+| ✅ | Added `services/ai/aiModeService.ts`, `services/ai/providers/openrouterProvider.ts`, `services/pluginRegistry.ts` to mutation targets |
 
 ### Voice Pipeline Status
 
