@@ -30,15 +30,18 @@ const mockApi = {} as unknown as PluginSandboxedApi;
 
 describe('PluginRegistry.loadPlugin()', () => {
   let registry: PluginRegistry;
+  let originalFetch: typeof global.fetch;
 
   beforeEach(() => {
     vi.resetModules();
     registry = new PluginRegistry();
     registry.setEnabled(true);
     mockRouteTask.mockReset();
+    originalFetch = global.fetch;
   });
 
   afterEach(() => {
+    global.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
@@ -50,8 +53,6 @@ describe('PluginRegistry.loadPlugin()', () => {
   });
 
   it('returns error when fetch fails with non-OK status', async () => {
-    // Mock fetch to fail
-    const originalFetch = global.fetch;
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
@@ -64,14 +65,9 @@ describe('PluginRegistry.loadPlugin()', () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/Failed to fetch plugin/);
-
-    // Restore fetch
-    global.fetch = originalFetch;
   });
 
   it('returns error when WorkerBus returns null (not initialized)', async () => {
-    // Mock fetch to succeed
-    const originalFetch = global.fetch;
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       text: () => Promise.resolve('export async function run(api) {}'),
@@ -82,12 +78,9 @@ describe('PluginRegistry.loadPlugin()', () => {
     const result = await registry.loadPlugin(makePlugin(), mockApi);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/WorkerBus not initialized/);
-
-    global.fetch = originalFetch;
   });
 
   it('returns ok:true when plugin executes successfully', async () => {
-    const originalFetch = global.fetch;
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       text: () => Promise.resolve('export async function run(api) { api.log("hello"); }'),
@@ -102,12 +95,9 @@ describe('PluginRegistry.loadPlugin()', () => {
 
     const result = await registry.loadPlugin(makePlugin(), mockApi);
     expect(result.ok).toBe(true);
-
-    global.fetch = originalFetch;
   });
 
   it('returns error when plugin execution throws', async () => {
-    const originalFetch = global.fetch;
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       text: () =>
@@ -124,12 +114,9 @@ describe('PluginRegistry.loadPlugin()', () => {
     const result = await registry.loadPlugin(makePlugin(), mockApi);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/plugin crash/);
-
-    global.fetch = originalFetch;
   });
 
   it('passes timeoutMs to routeTask', async () => {
-    const originalFetch = global.fetch;
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       text: () => Promise.resolve('export async function run(api) {}'),
@@ -148,18 +135,13 @@ describe('PluginRegistry.loadPlugin()', () => {
         timeoutMs: 30000,
       }),
     );
-
-    global.fetch = originalFetch;
   });
 
   it('handles network error during fetch', async () => {
-    const originalFetch = global.fetch;
     global.fetch = vi.fn().mockRejectedValue(new Error('Network error')) as unknown as typeof fetch;
 
     const result = await registry.loadPlugin(makePlugin(), mockApi);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/Network error/);
-
-    global.fetch = originalFetch;
   });
 });

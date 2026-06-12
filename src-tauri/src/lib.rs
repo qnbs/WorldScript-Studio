@@ -78,19 +78,18 @@ pub fn run() {
       let id = event.id().0.clone();
       let _ = app.emit("menu-action", id);
     })
-    // QNBS-v3: RunEvent handlers for lifecycle logging and deep-link support
-    .on_event(|app, event| {
+    // QNBS-v3: RunEvent handlers for lifecycle logging
+    // Note: deep-link plugin already emits "deep-link://new-url" on SecondInstance
+    .on_event(|_app, event| {
       match event {
         tauri::RunEvent::Ready { .. } => {
           log::info!("Tauri app ready");
         }
-        tauri::RunEvent::Opened { args, .. } => {
-          log::info!("Main window opened with args: {:?}", args);
+        tauri::RunEvent::Opened { .. } => {
+          log::info!("Main window opened");
         }
-        tauri::RunEvent::SecondInstance { args, .. } => {
-          log::info!("Second instance started: {:?}", args);
-          // Emit deep-link event for deep-link plugin to handle
-          let _ = app.emit("deep-link://new-url", args);
+        tauri::RunEvent::SecondInstance { .. } => {
+          log::info!("Second instance started");
         }
         _ => {}
       }
