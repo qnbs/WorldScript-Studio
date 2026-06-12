@@ -10,6 +10,15 @@ import { createLogger } from './logger';
 
 const log = createLogger('PluginRegistry');
 
+// QNBS-v3: Defense-in-depth limits for plugin storage to prevent DoS and cross-plugin leakage.
+const MAX_PLUGIN_STORAGE_KEY_LENGTH = 256;
+const MAX_PLUGIN_STORAGE_VALUE_BYTES = 2 * 1024 * 1024; // 2 MiB
+const PLUGIN_STORAGE_KEY_SUFFIX_RE = /^[a-zA-Z0-9_.:-]+$/;
+
+// QNBS-v3: Plugin ids are validated by Zod on registration; this regex is an extra guard against
+// ids that could be used to craft confusing storage namespaces (e.g. containing ':' or '..' ).
+const SAFE_PLUGIN_ID_RE = /^[a-zA-Z0-9_.-]+$/;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -100,15 +109,78 @@ const PERMISSION_API_MAP: Record<keyof PluginSandboxedApi, PluginPermission | nu
   storageWrite: 'storage.write',
 };
 
-// QNBS-v3: Plugin storage keys must be namespaced to prevent cross-plugin data access.
-// Keys must start with `plugin:${pluginId}:` to ensure isolation.
+/**
+ * Validate a plugin storage key for namespace isolation and structural safety.
+ * QNBS-v3: Enforces prefix, length, allowed characters, and anti-traversal checks to prevent
+ * cross-plugin data access and storage abuse.
+ */
 function validatePluginStorageKey(key: string, pluginId: string): string {
-  if (!key.startsWith(`plugin:${pluginId}:`)) {
+  const expectedPrefix = `plugin:${pluginId}:`;
+
+  if (!SAFE_PLUGIN_ID_RE.test(pluginId)) {
+    log.error('Plugin id contains unsafe characters', { pluginId });
+    throw new Error('Invalid plugin id: contains unsafe characters');
+  }
+  if (key.length > MAX_PLUGIN_STORAGE_KEY_LENGTH) {
+    log.warn('Plugin storage key exceeds maximum length', {
+      pluginId,
+      length: key.length,
+      max: MAX_PLUGIN_STORAGE_KEY_LENGTH,
+    });
+    throw new Error(
+      `Invalid storage key: exceeds maximum length of ${MAX_PLUGIN_STORAGE_KEY_LENGTH}`,
+    );
+  }
+  if (!key.startsWith(expectedPrefix)) {
+    log.warn('Plugin storage key missing namespace prefix', {
+      pluginId,
+      keyPreview: key.slice(0, 32),
+    });
     throw new Error(
       `Invalid storage key: must start with "plugin:${pluginId}:". Got: "${key.slice(0, 32)}..."`,
     );
   }
+
+  const suffix = key.slice(expectedPrefix.length);
+  if (suffix.length === 0) {
+    throw new Error('Invalid storage key: suffix must not be empty');
+  }
+  if (!PLUGIN_STORAGE_KEY_SUFFIX_RE.test(suffix)) {
+    log.warn('Plugin storage key suffix contains disallowed characters', {
+      pluginId,
+      suffixPreview: suffix.slice(0, 32),
+    });
+    throw new Error(
+      'Invalid storage key: suffix may only contain letters, digits, underscores, dots, hyphens, and colons',
+    );
+  }
+  if (suffix.includes('..')) {
+    log.warn('Plugin storage key suffix contains traversal pattern', { pluginId, suffix });
+    throw new Error('Invalid storage key: suffix must not contain ".."');
+  }
+
   return key;
+}
+
+/**
+ * Validate the serialized size of a plugin storage value to prevent storage DoS.
+ * QNBS-v3: Values are serialized to structured-clone / JSON before IDB storage; we approximate
+ * the size by JSON-stringifying. Complex objects with circular references will throw and be
+ * rejected, which is the safe default.
+ */
+function validatePluginStorageValue(value: unknown): void {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    throw new Error('Invalid storage value: cannot be serialized (circular or unsupported)');
+  }
+  const byteLength = new TextEncoder().encode(serialized).length;
+  if (byteLength > MAX_PLUGIN_STORAGE_VALUE_BYTES) {
+    throw new Error(
+      `Invalid storage value: exceeds maximum size of ${MAX_PLUGIN_STORAGE_VALUE_BYTES} bytes`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -204,8 +276,10 @@ export class PluginRegistry {
       },
       storageWrite: (key, value) => {
         if (!granted.has('storage.write')) deny('storage.write');
-        // QNBS-v3: Enforce plugin storage key namespacing to prevent cross-plugin data access.
+        // QNBS-v3: Enforce plugin storage key namespacing and value size limits to prevent
+        // cross-plugin data access and storage DoS.
         validatePluginStorageKey(key, descriptor.id);
+        validatePluginStorageValue(value);
         return rawApi.storageWrite(key, value);
       },
     };

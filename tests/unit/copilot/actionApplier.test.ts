@@ -10,6 +10,13 @@ describe('applyTextEdit', () => {
     expect(result.skipped).toBe(0);
   });
 
+  it('whole-section replacement when section content is already empty', () => {
+    const result = applyTextEdit('', '', 'brand new content');
+    expect(result.content).toBe('brand new content');
+    expect(result.applied).toBe(1);
+    expect(result.skipped).toBe(0);
+  });
+
   it('partial replacement when original is provided and found', () => {
     const result = applyTextEdit('The fox jumped.', 'fox', 'cat');
     expect(result.content).toBe('The cat jumped.');
@@ -31,12 +38,27 @@ describe('applyTextEdit', () => {
     expect(result.applied).toBe(1);
   });
 
-  it('rejects proposed text containing null bytes', () => {
-    expect(() => applyTextEdit('content', 'old', 'new\0malicious')).toThrow('Invalid UTF-8');
+  it('skips proposed text containing null bytes and marks invalid', () => {
+    const result = applyTextEdit('content', 'old', 'new\0malicious');
+    expect(result.applied).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.invalid).toBe(1);
+    expect(result.content).toBe('content');
   });
 
-  it('rejects whole-section replacement with null bytes', () => {
-    expect(() => applyTextEdit('old', '', 'new\0malicious')).toThrow('Invalid UTF-8');
+  it('skips whole-section replacement with null bytes and marks invalid', () => {
+    const result = applyTextEdit('old', '', 'new\0malicious');
+    expect(result.applied).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.invalid).toBe(1);
+    expect(result.content).toBe('old');
+  });
+
+  it('skips proposed text containing disallowed control characters', () => {
+    const result = applyTextEdit('content', 'old', 'new\u0001text');
+    expect(result.applied).toBe(0);
+    expect(result.invalid).toBe(1);
+    expect(result.content).toBe('content');
   });
 });
 

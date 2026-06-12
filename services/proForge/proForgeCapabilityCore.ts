@@ -92,6 +92,8 @@ export interface ApplyEditsResultSummary {
   updates: Array<{ id: string; content: string }>;
   applied: number;
   skipped: number;
+  /** Number of edits rejected for security/integrity reasons (e.g. control characters). */
+  invalid: number;
   dryRun: boolean;
 }
 
@@ -111,8 +113,8 @@ export function applyEditsPure(
   items: ReadonlyArray<ReviewItem>,
   dryRun: boolean,
 ): ApplyEditsResultSummary {
-  const { updates, applied, skipped } = planAcceptedManuscriptEdits(manuscript, items);
-  return { updates, applied, skipped, dryRun };
+  const { updates, applied, skipped, invalid } = planAcceptedManuscriptEdits(manuscript, items);
+  return { updates, applied, skipped, invalid, dryRun };
 }
 
 /**

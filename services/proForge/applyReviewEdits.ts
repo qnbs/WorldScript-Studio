@@ -7,6 +7,9 @@
  */
 
 import type { ReviewItem } from '../../features/proForge/types';
+import { createLogger } from '../logger';
+
+const log = createLogger('applyReviewEdits');
 
 export interface SectionContentUpdate {
   id: string;
@@ -20,6 +23,8 @@ export interface ApplyEditsResult {
   applied: number;
   /** Number of edits that could not be anchored (stale/overlapping) and were skipped. */
   skipped: number;
+  /** Number of edits rejected for security/integrity reasons (e.g. control characters). */
+  invalid?: number;
 }
 
 interface PlannedEdit {
@@ -27,6 +32,21 @@ interface PlannedEdit {
   end: number;
   proposed: string;
 }
+
+/** Maximum length of a single proposed edit to prevent memory DoS from AI output. */
+const MAX_PROPOSED_LENGTH = 1_048_576; // 1 MiB
+
+// QNBS-v3: C0 control characters that are dangerous in manuscript content or may be used for
+// injection. We allow HT (\u0009), LF (\u000A), and CR (\u000D) because they are legitimate
+// whitespace. Built from a string to avoid literal control characters in the source regexp,
+// which Biome's noControlCharactersInRegex rule forbids.
+// biome-ignore lint/complexity/useRegexLiterals: required to avoid literal control characters
+const CONTROL_CHAR_RE = new RegExp('[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]');
+
+// QNBS-v3: Lone surrogates are not valid Unicode scalar values and can break serialization,
+// indexing, and downstream exports (PDF/EPUB). JavaScript strings can contain them, so we
+// reject lone surrogates while allowing valid surrogate pairs (e.g. emoji).
+const LONE_SURROGATE_RE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 function isValidRange(range: { start: number; end: number }, len: number): boolean {
   return (
@@ -68,24 +88,38 @@ function nearestFreeOccurrence(
   return best;
 }
 
+/** Validation result for proposed replacement text. */
+export type ProposedTextValidationResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: string };
+
 /**
  * Validate proposed text for safe manuscript insertion.
- * QNBS-v3: Security hardening - reject control characters and validate UTF-8 to prevent
- * injection attacks via AI-generated content.
+ * QNBS-v3: Security hardening — reject control characters and malformed Unicode at the string
+ * level. JavaScript strings are already valid UTF-16, but they may contain lone surrogates and
+ * dangerous C0 control characters. A TextEncoder/TextDecoder round-trip is pointless for normal
+ * JS strings (it always succeeds), so we enforce explicit character-level constraints instead.
  */
-function validateProposedText(text: string): string {
-  // Reject null bytes - they can be used for injection attacks
+export function validateProposedText(text: string): ProposedTextValidationResult {
+  if (typeof text !== 'string') {
+    return { ok: false, reason: 'Proposed text must be a string' };
+  }
+  if (text.length > MAX_PROPOSED_LENGTH) {
+    return {
+      ok: false,
+      reason: `Proposed text exceeds maximum length of ${MAX_PROPOSED_LENGTH} characters`,
+    };
+  }
   if (text.includes('\0')) {
-    throw new Error('Invalid UTF-8 in proposed text');
+    return { ok: false, reason: 'Proposed text contains null bytes' };
   }
-  // Validate UTF-8 by attempting to encode/decode
-  try {
-    const encoded = new TextEncoder().encode(text);
-    new TextDecoder().decode(encoded);
-  } catch {
-    throw new Error('Invalid UTF-8 in proposed text');
+  if (CONTROL_CHAR_RE.test(text)) {
+    return { ok: false, reason: 'Proposed text contains disallowed control characters' };
   }
-  return text;
+  if (LONE_SURROGATE_RE.test(text)) {
+    return { ok: false, reason: 'Proposed text contains invalid Unicode (lone surrogates)' };
+  }
+  return { ok: true, text };
 }
 
 /**
@@ -95,16 +129,31 @@ function validateProposedText(text: string): string {
  */
 export function applyReviewEditsToSection(content: string, items: ReviewItem[]): ApplyEditsResult {
   let skipped = 0;
+  let invalid = 0;
   const planned: PlannedEdit[] = [];
 
   for (const item of items) {
     // Advisory-only item (pacing note, quality score, plot-hole hint) — nothing to apply.
     if (item.proposed === undefined) continue;
+
     // QNBS-v3: Validate proposed text before insertion to prevent injection attacks.
-    const proposed = validateProposedText(item.proposed);
+    // Invalid proposals are skipped individually so one bad suggestion cannot abort a whole batch.
+    const validation = validateProposedText(item.proposed);
+    if (!validation.ok) {
+      log.warn('Skipping invalid proposed edit', {
+        sectionId: item.sectionId,
+        itemId: item.id,
+        reason: validation.reason,
+      });
+      invalid++;
+      skipped++;
+      continue;
+    }
+    const proposed = validation.text;
 
     // Strategy 1: trust offsets only if they still resolve to the expected original text
-    // (or no original was provided to verify against).
+    // (or no original was provided to verify against). Empty original ('') is a valid anchor
+    // when paired with an explicit range, enabling whole-section replacement on blank sections.
     if (item.range && isValidRange(item.range, content.length)) {
       const slice = content.slice(item.range.start, item.range.end);
       if (item.original === undefined || slice === item.original) {
@@ -116,7 +165,8 @@ export function applyReviewEditsToSection(content: string, items: ReviewItem[]):
     // Strategy 2: offsets missing or stale — locate the original text directly. To stay
     // deterministic when the same phrase appears multiple times, pick the occurrence nearest the
     // (stale) original range and skip occurrences already claimed by another planned edit.
-    if (item.original) {
+    // An empty original string is intentionally excluded here because it would match everywhere.
+    if (item.original && item.original.length > 0) {
       const target = nearestFreeOccurrence(content, item.original, item.range?.start, planned);
       if (target !== -1) {
         planned.push({ start: target, end: target + item.original.length, proposed });
@@ -144,7 +194,7 @@ export function applyReviewEditsToSection(content: string, items: ReviewItem[]):
     applied++;
   }
 
-  return { content: next, applied, skipped };
+  return { content: next, applied, skipped, invalid };
 }
 
 /**
@@ -154,7 +204,7 @@ export function applyReviewEditsToSection(content: string, items: ReviewItem[]):
 export function planAcceptedManuscriptEdits(
   manuscript: ReadonlyArray<{ id: string; content?: string }>,
   acceptedItems: ReadonlyArray<ReviewItem>,
-): { updates: SectionContentUpdate[]; applied: number; skipped: number } {
+): { updates: SectionContentUpdate[]; applied: number; skipped: number; invalid: number } {
   const bySection = new Map<string, ReviewItem[]>();
   for (const item of acceptedItems) {
     if (!item.sectionId || item.proposed === undefined) continue;
@@ -166,6 +216,7 @@ export function planAcceptedManuscriptEdits(
   const updates: SectionContentUpdate[] = [];
   let applied = 0;
   let skipped = 0;
+  let invalid = 0;
 
   for (const [sectionId, items] of bySection) {
     const section = manuscript.find((s) => s.id === sectionId);
@@ -177,10 +228,11 @@ export function planAcceptedManuscriptEdits(
     const result = applyReviewEditsToSection(section.content ?? '', items);
     applied += result.applied;
     skipped += result.skipped;
+    invalid += result.invalid ?? 0;
     if (result.content !== (section.content ?? '')) {
       updates.push({ id: sectionId, content: result.content });
     }
   }
 
-  return { updates, applied, skipped };
+  return { updates, applied, skipped, invalid };
 }

@@ -3,6 +3,7 @@ import type { ReviewItem } from '../../../features/proForge/types';
 import {
   applyReviewEditsToSection,
   planAcceptedManuscriptEdits,
+  validateProposedText,
 } from '../../../services/proForge/applyReviewEdits';
 
 // QNBS-v3: Minimal ReviewItem factory — only the fields the applier reads.
@@ -29,6 +30,7 @@ describe('applyReviewEditsToSection', () => {
     expect(result.content).toBe('The slow brown fox.');
     expect(result.applied).toBe(1);
     expect(result.skipped).toBe(0);
+    expect(result.invalid).toBe(0);
   });
 
   it('applies multiple edits back-to-front so offsets stay valid', () => {
@@ -103,6 +105,118 @@ describe('applyReviewEditsToSection', () => {
     expect(result.applied).toBe(2);
     expect(result.content).toBe('A B go');
   });
+
+  it('replaces an empty section when a full-range edit with empty original is provided', () => {
+    const result = applyReviewEditsToSection('', [
+      item({
+        id: 'empty-section',
+        original: '',
+        proposed: 'Once upon a time.',
+        range: { start: 0, end: 0 },
+      }),
+    ]);
+    expect(result.content).toBe('Once upon a time.');
+    expect(result.applied).toBe(1);
+    expect(result.skipped).toBe(0);
+  });
+
+  it('skips proposed text containing null bytes and counts it as invalid', () => {
+    const content = 'The quick brown fox.';
+    const result = applyReviewEditsToSection(content, [
+      item({ original: 'quick', proposed: 'slow\0malicious' }),
+    ]);
+    expect(result.content).toBe(content);
+    expect(result.applied).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.invalid).toBe(1);
+  });
+
+  it('skips proposed text containing disallowed control characters', () => {
+    const content = 'The quick brown fox.';
+    const result = applyReviewEditsToSection(content, [
+      item({ original: 'quick', proposed: 'slow\u0001malicious' }),
+      item({ original: 'brown', proposed: 'red\u007Ftail' }),
+    ]);
+    expect(result.content).toBe(content);
+    expect(result.applied).toBe(0);
+    expect(result.skipped).toBe(2);
+    expect(result.invalid).toBe(2);
+  });
+
+  it('allows tab, newline, and carriage return in proposed text', () => {
+    const content = 'Line one.';
+    const result = applyReviewEditsToSection(content, [
+      item({ original: 'Line one.', proposed: 'Line one.\n\tLine two.\r\n' }),
+    ]);
+    expect(result.applied).toBe(1);
+    expect(result.content).toBe('Line one.\n\tLine two.\r\n');
+    expect(result.invalid).toBe(0);
+  });
+
+  it('skips proposed text containing lone surrogates', () => {
+    const content = 'The quick brown fox.';
+    const result = applyReviewEditsToSection(content, [
+      item({ original: 'quick', proposed: 'slow\uD800malicious' }),
+    ]);
+    expect(result.content).toBe(content);
+    expect(result.applied).toBe(0);
+    expect(result.invalid).toBe(1);
+  });
+
+  it('skips oversized proposed text', () => {
+    const content = 'The quick brown fox.';
+    const huge = 'x'.repeat(1_048_577);
+    const result = applyReviewEditsToSection(content, [
+      item({ original: 'quick', proposed: huge }),
+    ]);
+    expect(result.content).toBe(content);
+    expect(result.applied).toBe(0);
+    expect(result.invalid).toBe(1);
+  });
+
+  it('applies valid edits in a batch even when one edit is invalid', () => {
+    const content = 'The quick brown fox.';
+    const result = applyReviewEditsToSection(content, [
+      item({ id: 'bad', original: 'quick', proposed: 'slow\0malicious' }),
+      item({ id: 'good', original: 'brown', proposed: 'red' }),
+    ]);
+    expect(result.content).toBe('The quick red fox.');
+    expect(result.applied).toBe(1);
+    expect(result.skipped).toBe(1);
+    expect(result.invalid).toBe(1);
+  });
+});
+
+describe('validateProposedText', () => {
+  it('accepts plain Unicode text', () => {
+    expect(validateProposedText('Hello, world!')).toEqual({ ok: true, text: 'Hello, world!' });
+  });
+
+  it('rejects null bytes', () => {
+    expect(validateProposedText('a\0b').ok).toBe(false);
+  });
+
+  it('rejects C0 control characters except tab/newline/cr', () => {
+    expect(validateProposedText('a\x01b').ok).toBe(false);
+    expect(validateProposedText('a\x08b').ok).toBe(false);
+    expect(validateProposedText('a\x0Bb').ok).toBe(false);
+    expect(validateProposedText('a\x7Fb').ok).toBe(false);
+  });
+
+  it('allows tab, newline, and carriage return', () => {
+    expect(validateProposedText('a\tb').ok).toBe(true);
+    expect(validateProposedText('a\nb').ok).toBe(true);
+    expect(validateProposedText('a\rb').ok).toBe(true);
+  });
+
+  it('rejects lone surrogates', () => {
+    expect(validateProposedText('a\uD800b').ok).toBe(false);
+    expect(validateProposedText('a\uDFFFb').ok).toBe(false);
+  });
+
+  it('accepts valid surrogate pairs (real emoji)', () => {
+    expect(validateProposedText('Hello 👋 world').ok).toBe(true);
+  });
 });
 
 describe('planAcceptedManuscriptEdits', () => {
@@ -112,7 +226,7 @@ describe('planAcceptedManuscriptEdits', () => {
   ];
 
   it('returns only sections that changed, with aggregate counts', () => {
-    const { updates, applied, skipped } = planAcceptedManuscriptEdits(manuscript, [
+    const { updates, applied, skipped, invalid } = planAcceptedManuscriptEdits(manuscript, [
       item({
         id: 'a',
         sectionId: 's1',
@@ -127,6 +241,7 @@ describe('planAcceptedManuscriptEdits', () => {
     expect(updates.find((u) => u.id === 's2')?.content).toBe('Jumped over the sleepy dog.');
     expect(applied).toBe(2);
     expect(skipped).toBe(0);
+    expect(invalid).toBe(0);
   });
 
   it('counts edits for a deleted section as skipped', () => {
@@ -146,12 +261,14 @@ describe('planAcceptedManuscriptEdits', () => {
     expect(updates).toHaveLength(0);
   });
 
-  it('rejects proposed text containing null bytes', () => {
-    const content = 'The quick brown fox.';
-    expect(() =>
-      applyReviewEditsToSection(content, [
-        item({ original: 'quick', proposed: 'slow\0malicious' }),
-      ]),
-    ).toThrow('Invalid UTF-8');
+  it('aggregates invalid counts across sections', () => {
+    const { applied, skipped, invalid } = planAcceptedManuscriptEdits(manuscript, [
+      item({ id: 'a', sectionId: 's1', original: 'quick', proposed: 'slow\0bad' }),
+      item({ id: 'b', sectionId: 's2', original: 'lazy', proposed: 'sleepy' }),
+      item({ id: 'c', sectionId: 's1', original: 'fox', proposed: 'cat\x08bad' }),
+    ]);
+    expect(applied).toBe(1);
+    expect(invalid).toBe(2);
+    expect(skipped).toBe(2);
   });
 });
