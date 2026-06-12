@@ -37,11 +37,12 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 ## Dependency-Hygiene Backlog (carried forward)
 
 > `.npmrc` Hardening (`strict-dep-builds=true`, `block-exotic-subdeps=true`, `minimum-release-age=10080`) ist bereits aktiv.
+> `pnpm audit --audit-level=high` → 0 vulnerabilities; `pnpm audit --audit-level=moderate` → 0 vulnerabilities.
+> Aktueller Status in `AUDIT.md` § *Known Overrides Table*.
 
 - ⬜ **pnpm override housekeeping** — nach `@storybook/test-runner` Upgrade auf jest-process-manager 1.x (drops wait-on@7), direkten Lockfile-Patch auf `joi` entfernen.
 - ⬜ **Renovate grouping** — `@storybook/*` bumps atomisch upgraden.
 - ⬜ **Moderate audit threshold** — CI `pnpm audit --audit-level` von `high` auf `moderate` anheben, sobald joi/wait-on aus dem dep tree sind.
-- ⬜ **AUDIT.md "Known Overrides" table** — `wait-on@7.2.0 → joi@18.2.1` Lockfile-Patch mit GHSA-q7cg-457f-vx79 dokumentieren.
 
 ---
 
