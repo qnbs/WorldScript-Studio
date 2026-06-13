@@ -95,6 +95,8 @@ import { useGlobalCopilot } from '../../../hooks/useGlobalCopilot';
 beforeEach(() => {
   mockDispatch.mockClear();
   mockStop.mockClear();
+  // QNBS-v3: reset captured AI options so each test starts from clean shared state.
+  aiOptions.current = null;
   state.copilot.status = 'streaming';
   state.project = null;
   state.activeSectionId = null;
