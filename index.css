@@ -447,7 +447,7 @@ body.storycraft-screen-reader {
   line-height: 1.65;
 }
 
-/* Tailwind v4 theme bridge → utilities bg-sc-* / text-sc-* */
+/* Tailwind v4 theme bridge → utilities bg-sc-* / text-sc-* / icon-sc-* */
 @theme inline {
   --color-sc-bg: var(--sc-bg);
   --color-sc-fg: var(--sc-fg);
@@ -476,6 +476,32 @@ body.storycraft-screen-reader {
   --ease-sc-emphasized: var(--sc-ease-emphasized);
   --duration-sc-fast: var(--sc-duration-fast);
   --duration-sc-normal: var(--sc-duration-normal);
+  /* QNBS-v3: fluid type scale used by text-sc-* utilities */
+  --font-size-sc-xs: var(--text-sc-xs);
+  --font-size-sc-xs--line-height: 1.5;
+  --font-size-sc-sm: var(--text-sc-sm);
+  --font-size-sc-sm--line-height: 1.5;
+  --font-size-sc-base: var(--text-sc-base);
+  --font-size-sc-base--line-height: 1.6;
+  --font-size-sc-lg: var(--text-sc-lg);
+  --font-size-sc-lg--line-height: 1.5;
+  --font-size-sc-xl: var(--text-sc-xl);
+  --font-size-sc-xl--line-height: 1.4;
+  --font-size-sc-2xl: var(--text-sc-2xl);
+  --font-size-sc-2xl--line-height: 1.3;
+  --font-size-sc-3xl: var(--text-sc-3xl);
+  --font-size-sc-3xl--line-height: 1.25;
+  --font-size-sc-4xl: var(--text-sc-4xl);
+  --font-size-sc-4xl--line-height: 1.1;
+  /* QNBS-v3: icon size utilities used by the centralized <Icon /> component */
+  --width-icon-sc-sm: var(--icon-sc-sm);
+  --width-icon-sc-md: var(--icon-sc-md);
+  --width-icon-sc-lg: var(--icon-sc-lg);
+  --width-icon-sc-xl: var(--icon-sc-xl);
+  --height-icon-sc-sm: var(--icon-sc-sm);
+  --height-icon-sc-md: var(--icon-sc-md);
+  --height-icon-sc-lg: var(--icon-sc-lg);
+  --height-icon-sc-xl: var(--icon-sc-xl);
 }
 
 /* ── Base ──────────────────────────────────────────────── */

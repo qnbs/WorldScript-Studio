@@ -15,11 +15,12 @@ import { selectEnableGlobalCopilot } from '../../features/featureFlags/featureFl
 import { proForgeActions } from '../../features/proForge/proForgeSlice';
 import type { ReviewItem, ReviewItemStatus } from '../../features/proForge/types';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from '../ui/Icon';
 
-const SEVERITY_ICONS: Record<string, string> = {
-  critical: '🔴',
-  warning: '🟡',
-  info: '🔵',
+const SEVERITY_ICONS: Record<string, React.ReactNode> = {
+  critical: <Icon name="error" size="sm" aria-hidden="true" data-testid="severity-icon-critical" />,
+  warning: <Icon name="warning" size="sm" aria-hidden="true" data-testid="severity-icon-warning" />,
+  info: <Icon name="info" size="sm" aria-hidden="true" data-testid="severity-icon-info" />,
 };
 
 const SEVERITY_GROUPS = [
@@ -203,8 +204,8 @@ export const PipelineReviewPanel: React.FC = () => {
       {criticalPending.length > 0 && (
         <div className="mx-4 mt-3 p-3 rounded-sc-md border border-[var(--sc-error-muted)] bg-[var(--sc-error-muted)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[var(--sc-error)]">
-              <span aria-hidden="true">🔴 </span>
+            <span className="text-xs font-semibold text-[var(--sc-error)] flex items-center gap-1">
+              <Icon name="error" size="sm" aria-hidden="true" />
               {t(
                 criticalPending.length === 1
                   ? 'proforge.review.criticalHeadingOne'
@@ -215,7 +216,7 @@ export const PipelineReviewPanel: React.FC = () => {
             <button
               type="button"
               onClick={handleAcceptAllCritical}
-              className="px-2 py-0.5 text-xs rounded-sc-sm bg-[var(--sc-error)] text-white hover:opacity-80 transition-opacity"
+              className="px-2 py-0.5 text-xs rounded-sc-sm bg-[var(--sc-error)] text-[var(--sc-text-on-accent)] hover:opacity-80 transition-opacity"
             >
               {t('proforge.review.acceptAllCritical')}
             </button>
@@ -248,7 +249,7 @@ export const PipelineReviewPanel: React.FC = () => {
               aria-pressed={filter === f}
               className={`px-2.5 py-1 text-xs rounded-sc-md transition-colors ${
                 filter === f
-                  ? 'bg-[var(--sc-accent)] text-white'
+                  ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
                   : 'bg-[var(--sc-surface-base)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'
               }`}
             >
@@ -305,7 +306,7 @@ export const PipelineReviewPanel: React.FC = () => {
           type="button"
           onClick={() => void handleSubmit()}
           disabled={pendingCount > 0}
-          className="px-4 py-1.5 text-xs font-medium rounded-sc-md text-white disabled:opacity-50 transition-opacity"
+          className="px-4 py-1.5 text-xs font-medium rounded-sc-md text-[var(--sc-text-on-accent)] disabled:opacity-50 transition-opacity"
           style={{ backgroundColor: 'var(--sc-accent)' }}
         >
           {pendingCount > 0
@@ -402,7 +403,7 @@ function ReviewItemCard({
                 aria-pressed={item.status === btn.status}
                 className={`px-2 py-0.5 text-xs rounded-sc-sm border transition-all ${
                   item.status === btn.status
-                    ? 'text-white'
+                    ? 'text-[var(--sc-text-on-accent)]'
                     : 'bg-[var(--sc-surface-elevated)] text-[var(--sc-text-secondary)] border-[var(--sc-border-subtle)] hover:text-[var(--sc-text-primary)]'
                 }`}
                 style={

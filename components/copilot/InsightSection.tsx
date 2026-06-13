@@ -10,6 +10,7 @@ import { useAnnounce } from '../../contexts/LiveRegionContext';
 import type { UseGlobalCopilotReturn } from '../../hooks/useGlobalCopilot';
 import type { HeuristicFinding } from '../../services/copilot/heuristicEngine';
 import type { View } from '../../types';
+import { Icon } from '../ui/Icon';
 import { InsightCard } from './InsightCard';
 
 interface InsightSectionProps {
@@ -58,20 +59,15 @@ export const InsightSection: FC<InsightSectionProps> = ({ insights, copilot, onN
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
         aria-controls={sectionId}
-        className="flex w-full items-center justify-between gap-1 text-xs font-medium text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+        className="flex w-full items-center justify-between gap-1 text-xs font-medium text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
       >
         <span>{t('copilot.insightSection', { count: insights.length })}</span>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
+        <Icon
+          name="chevron-down"
+          size="sm"
           className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          aria-hidden="true"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+          aria-hidden
+        />
       </button>
 
       {expanded && (

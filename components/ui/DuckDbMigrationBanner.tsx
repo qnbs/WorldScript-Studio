@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAppSelector } from '../../app/hooks';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from './Icon';
 import { Progress } from './Progress';
 
 export function DuckDbMigrationBanner() {
@@ -97,13 +98,11 @@ export function DuckDbMigrationBanner() {
               hover:bg-[var(--sc-surface-raised)]
               hover:text-[var(--sc-text-primary)]
               focus-visible:ring-2
-              focus-visible:ring-[var(--sc-border-focus)]
+              focus-visible:ring-[var(--sc-ring-focus)]
               focus-visible:outline-none
             "
           >
-            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-              <path d="M2.293 2.293a1 1 0 0 1 1.414 0L7 5.586l3.293-3.293a1 1 0 1 1 1.414 1.414L8.414 7l3.293 3.293a1 1 0 0 1-1.414 1.414L7 8.414l-3.293 3.293a1 1 0 0 1-1.414-1.414L5.586 7 2.293 3.707a1 1 0 0 1 0-1.414z" />
-            </svg>
+            <Icon name="close" size="sm" className="h-3.5 w-3.5" aria-hidden />
           </button>
         )}
       </div>
@@ -117,7 +116,7 @@ function IndeterminateProgress() {
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--sc-surface-overlay)]">
       <div
-        className="h-full w-1/2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
+        className="h-full w-1/2 rounded-full bg-[var(--sc-accent)]"
         style={{ animation: 'duckdb-indeterminate 1.5s ease-in-out infinite' }}
       />
       <style>{`

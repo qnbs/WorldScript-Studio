@@ -36,14 +36,15 @@ interface CanvasCardProps {
 const CanvasCard: FC<CanvasCardProps> = React.memo(
   ({ section, x, y, t, isDrawing, onPointerDown, onCardClick, onCardLongPress }) => {
     const longPress = useLongPress(() => onCardLongPress(section.id), 550);
+    // QNBS-v3: status colors use the design-system data-viz palette so they adapt to theme/sepia.
     const statusColors: Record<string, string> = {
-      draft: '#6b7280',
-      outline: '#f59e0b',
-      'first-draft': '#3b82f6',
-      revised: '#8b5cf6',
-      final: '#10b981',
+      draft: 'var(--sc-text-muted)',
+      outline: 'var(--sc-data-4)',
+      'first-draft': 'var(--sc-data-2)',
+      revised: 'var(--sc-data-6)',
+      final: 'var(--sc-data-3)',
     };
-    const statusColor = statusColors[section.status || 'draft'] || '#6b7280';
+    const statusColor = statusColors[section.status || 'draft'] || 'var(--sc-text-muted)';
 
     return (
       <div
@@ -76,7 +77,7 @@ const CanvasCard: FC<CanvasCardProps> = React.memo(
         <div className="flex items-center gap-1.5 mb-1">
           <div
             className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{ backgroundColor: section.color || '#3b82f6' }}
+            style={{ backgroundColor: section.color || 'var(--sc-data-2)' }}
           />
           {/* QNBS-v3: RTL beta — board wrapper is .rtl-keep-ltr for pointer geometry, but user
               text must read per its own script; dir="auto" restores RTL/BiDi for Arabic/Hebrew. */}

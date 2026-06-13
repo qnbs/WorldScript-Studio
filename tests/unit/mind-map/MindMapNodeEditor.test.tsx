@@ -21,7 +21,7 @@ const mockNode = {
   textNotes: 'Some notes',
   type: 'free' as const,
   shape: 'rectangle' as const,
-  color: '#6366f1',
+  color: 'var(--sc-data-2)',
   linkedEntityType: undefined,
 };
 
@@ -107,7 +107,7 @@ describe('MindMapNodeEditor', () => {
     mockNode.textNotes = 'Some notes';
     mockNode.type = 'free';
     mockNode.shape = 'rectangle';
-    mockNode.color = '#6366f1';
+    mockNode.color = 'var(--sc-data-2)';
     mockNode.linkedEntityType = undefined;
   });
 
@@ -164,7 +164,7 @@ describe('MindMapNodeEditor', () => {
   it('marks current color swatch as pressed', () => {
     render(<MindMapNodeEditor />);
     const colorGroup = screen.getByRole('group', { name: 'mindmap.nodeColor' });
-    const accentSwatch = within(colorGroup).getByLabelText('#6366f1');
+    const accentSwatch = within(colorGroup).getByLabelText('var(--sc-data-2)');
     expect(accentSwatch).toHaveAttribute('aria-pressed', 'true');
   });
 

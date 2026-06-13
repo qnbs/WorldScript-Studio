@@ -21,9 +21,11 @@ function ShapeBody({
   color: string;
   isSelected: boolean;
 }) {
-  const stroke = isSelected ? '#6366f1' : color;
+  // QNBS-v3: selection stroke uses the design-system accent token so it adapts to theme/sepia.
+  // Fill opacity replaces the old hex-alpha suffix so CSS variables (var(--sc-data-*)) remain valid.
+  const stroke = isSelected ? 'var(--sc-accent)' : color;
   const strokeW = isSelected ? 2.5 : 1.5;
-  const fill = `${color}22`;
+  const fillOpacity = 0.13;
 
   switch (shape) {
     case 'circle':
@@ -33,7 +35,8 @@ function ShapeBody({
           cy={H / 2}
           rx={R}
           ry={R}
-          fill={fill}
+          fill={color}
+          fillOpacity={fillOpacity}
           stroke={stroke}
           strokeWidth={strokeW}
         />
@@ -46,7 +49,8 @@ function ShapeBody({
           width={W - 4}
           height={H - 4}
           rx={4}
-          fill={fill}
+          fill={color}
+          fillOpacity={fillOpacity}
           stroke={stroke}
           strokeWidth={strokeW}
         />
@@ -57,7 +61,15 @@ function ShapeBody({
       const dx = W / 2 - 4;
       const dy = H / 2 - 2;
       const pts = `${cx},${cy - dy} ${cx + dx},${cy} ${cx},${cy + dy} ${cx - dx},${cy}`;
-      return <polygon points={pts} fill={fill} stroke={stroke} strokeWidth={strokeW} />;
+      return (
+        <polygon
+          points={pts}
+          fill={color}
+          fillOpacity={fillOpacity}
+          stroke={stroke}
+          strokeWidth={strokeW}
+        />
+      );
     }
     case 'ellipse':
       return (
@@ -66,7 +78,8 @@ function ShapeBody({
           cy={H / 2}
           rx={W / 2 - 4}
           ry={H / 2 - 4}
-          fill={fill}
+          fill={color}
+          fillOpacity={fillOpacity}
           stroke={stroke}
           strokeWidth={strokeW}
         />
@@ -86,7 +99,15 @@ function ShapeBody({
       ]
         .map((p) => p.join(','))
         .join(' ');
-      return <polygon points={pts} fill={fill} stroke={stroke} strokeWidth={strokeW} />;
+      return (
+        <polygon
+          points={pts}
+          fill={color}
+          fillOpacity={fillOpacity}
+          stroke={stroke}
+          strokeWidth={strokeW}
+        />
+      );
     }
     default:
       return (
@@ -96,7 +117,8 @@ function ShapeBody({
           width={W - 4}
           height={H - 4}
           rx={4}
-          fill={fill}
+          fill={color}
+          fillOpacity={fillOpacity}
           stroke={stroke}
           strokeWidth={strokeW}
         />

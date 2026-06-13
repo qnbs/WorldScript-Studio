@@ -453,8 +453,8 @@ describe('PipelineReviewPanel', () => {
         currentStageReviewItems: [makeItem('item-1', 'pending', { severity: 'critical' })],
       });
       render(<PipelineReviewPanel />);
-      // 🔴 appears in the item card and (for critical items) the summary card; both are aria-hidden.
-      expect(screen.getAllByText('🔴').length).toBeGreaterThanOrEqual(1);
+      // QNBS-v3: critical items render the design-system error icon (decorative; testid is stable).
+      expect(screen.getByTestId('severity-icon-critical')).toBeInTheDocument();
     });
 
     it('shows sectionTitle when present', () => {

@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from '../ui/Icon';
 
 interface EnvStatus {
   loaded: boolean;
@@ -35,7 +36,7 @@ function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail?:
         className={ok ? 'text-[var(--sc-success-fg)]' : 'text-[var(--sc-danger-fg)]'}
         aria-hidden="true"
       >
-        {ok ? '✓' : '✗'}
+        <Icon name={ok ? 'check' : 'error'} size="sm" />
       </span>
       <span className="text-[var(--sc-text-primary)]">{label}</span>
       {detail && <span className="text-xs text-[var(--sc-text-secondary)]">({detail})</span>}
@@ -122,7 +123,7 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
       <button
         type="button"
         onClick={onDismiss}
-        className="self-end rounded-sc-md bg-[var(--sc-interactive-primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+        className="self-end rounded-sc-md bg-[var(--sc-interactive-primary)] px-5 py-2 text-sm font-medium text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
       >
         {t('lora.onboarding.getStarted')}
       </button>

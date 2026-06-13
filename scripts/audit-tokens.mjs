@@ -39,6 +39,8 @@ const EXCLUDED_FILES = new Set([
   path.join(root, '.storybook', 'preview.tsx'),
   // The icon component is the central registry for SVG paths.
   path.join(root, 'components', 'ui', 'Icon.tsx'),
+  // SectionIcon renders icons from the APP_SECTIONS central config, not duplicated inline SVGs.
+  path.join(root, 'components', 'ui', 'SectionIcon.tsx'),
 ]);
 
 const SOURCE_EXTENSIONS = new Set(['.tsx', '.jsx', '.ts', '.js']);

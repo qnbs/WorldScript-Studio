@@ -3,18 +3,29 @@ import { useDashboardContext } from '../../contexts/DashboardContext';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { BookOpenIcon } from './dashboardIcons';
 
-// QNBS-v3: Scene status taxonomy mirrors StorySection['status'] + an "untracked" bucket for
-// scenes that never had a status set. Order = narrative maturity (outline → final).
+// QNBS-v3: status colors use the design-system data-viz palette so they adapt to theme/sepia.
 const STATUS_META: { key: string; labelKey: string; color: string }[] = [
-  { key: 'outline', labelKey: 'dashboard.composition.status.outline', color: 'bg-slate-400' },
-  { key: 'draft', labelKey: 'dashboard.composition.status.draft', color: 'bg-amber-500' },
+  {
+    key: 'outline',
+    labelKey: 'dashboard.composition.status.outline',
+    color: 'bg-[var(--sc-data-4)]',
+  },
+  {
+    key: 'draft',
+    labelKey: 'dashboard.composition.status.draft',
+    color: 'bg-[var(--sc-text-muted)]',
+  },
   {
     key: 'first-draft',
     labelKey: 'dashboard.composition.status.firstDraft',
-    color: 'bg-blue-500',
+    color: 'bg-[var(--sc-data-2)]',
   },
-  { key: 'revised', labelKey: 'dashboard.composition.status.revised', color: 'bg-violet-500' },
-  { key: 'final', labelKey: 'dashboard.composition.status.final', color: 'bg-emerald-500' },
+  {
+    key: 'revised',
+    labelKey: 'dashboard.composition.status.revised',
+    color: 'bg-[var(--sc-data-6)]',
+  },
+  { key: 'final', labelKey: 'dashboard.composition.status.final', color: 'bg-[var(--sc-data-3)]' },
   {
     key: 'untracked',
     labelKey: 'dashboard.composition.status.untracked',

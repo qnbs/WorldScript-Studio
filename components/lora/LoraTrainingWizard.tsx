@@ -9,6 +9,7 @@ import { useLoraViewContext } from '../../contexts/LoraViewContext';
 import type { LoraWizardStep, PresetId } from '../../features/lora/types';
 import { HYPERPARAM_PRESETS } from '../../features/lora/types';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from '../ui/Icon';
 
 // ---------------------------------------------------------------------------
 // Step indicator
@@ -30,14 +31,14 @@ function StepIndicator({ current }: { current: LoraWizardStep }) {
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
                   active
-                    ? 'bg-[var(--sc-interactive-primary)] text-white'
+                    ? 'bg-[var(--sc-interactive-primary)] text-[var(--sc-text-on-accent)]'
                     : done
-                      ? 'bg-[var(--sc-success-fg)] text-white'
+                      ? 'bg-[var(--sc-success-fg)] text-[var(--sc-text-on-accent)]'
                       : 'bg-[var(--sc-surface-raised)] text-[var(--sc-text-secondary)]'
                 }`}
                 aria-current={active ? 'step' : undefined}
               >
-                {done ? '✓' : i + 1}
+                {done ? <Icon name="check" size="sm" aria-hidden="true" /> : i + 1}
               </span>
               <span className="ml-1.5 hidden text-xs sm:inline text-[var(--sc-text-secondary)]">
                 {t(`lora.wizard.steps.${step}`)}
@@ -252,7 +253,7 @@ export default React.memo(function LoraTrainingWizard() {
             type="button"
             onClick={next}
             disabled={!canProceed || isTraining}
-            className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] disabled:opacity-50"
+            className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-4 py-2 text-sm font-medium text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] disabled:opacity-50"
           >
             {t('common.next')}
           </button>

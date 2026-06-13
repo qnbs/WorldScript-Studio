@@ -124,7 +124,7 @@ export const ShortcutsSection: FC = () => {
           {conflicts.length > 0 ? (
             <div
               role="alert"
-              className="rounded-sc-md border border-amber-500/40 bg-[var(--sc-warning-bg)] px-3 py-2 text-sm text-[var(--sc-warning-fg)]"
+              className="rounded-sc-md border border-[var(--sc-warning-border)] bg-[var(--sc-warning-bg)] px-3 py-2 text-sm text-[var(--sc-warning-fg)]"
             >
               {t('settings.shortcuts.conflictWarning')}
               <ul className="list-disc ml-5 mt-1">
@@ -146,7 +146,7 @@ export const ShortcutsSection: FC = () => {
                   key={def.action}
                   className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border px-3 py-3 ${
                     hasConflict
-                      ? 'border-amber-500/50 bg-amber-500/5'
+                      ? 'border-[var(--sc-warning-border)] bg-[var(--sc-warning-bg)]'
                       : 'border-[var(--sc-border-subtle)] bg-[var(--glass-bg)]'
                   }`}
                 >
@@ -160,7 +160,9 @@ export const ShortcutsSection: FC = () => {
                     type="button"
                     variant={isRecording ? 'secondary' : 'ghost'}
                     size="sm"
-                    className={isRecording ? 'ring-2 ring-indigo-500 animate-pulse' : ''}
+                    className={
+                      isRecording ? 'ring-2 ring-[var(--sc-ring-focus)] animate-pulse' : ''
+                    }
                     onClick={() => setRecordingAction(isRecording ? null : def.action)}
                   >
                     {isRecording

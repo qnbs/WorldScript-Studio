@@ -70,7 +70,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
               onMoveUp(index);
             }}
             disabled={isFirst}
-            className="p-2 md:p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="p-2 md:p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
             title={t('common.moveUp')}
             aria-label={t('outline.moveUp', { title: section.title })}
           >
@@ -83,7 +83,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
               onMoveDown(index);
             }}
             disabled={isLast}
-            className="p-2 md:p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="p-2 md:p-1 rounded-md hover:bg-[var(--sc-surface-raised)] disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
             title={t('common.moveDown')}
             aria-label={t('outline.moveDown', { title: section.title })}
           >
@@ -105,7 +105,7 @@ const NavigatorItem: FC<NavigatorItemProps> = React.memo(
           )}
           <div
             aria-hidden="true"
-            className={`cursor-move p-1 ${isActive ? 'text-[var(--sc-accent)] group-hover:text-white' : 'text-[var(--sc-text-muted)] group-hover:text-[var(--sc-text-primary)]'}`}
+            className={`cursor-move p-1 ${isActive ? 'text-[var(--sc-accent)] group-hover:text-[var(--sc-text-primary)]' : 'text-[var(--sc-text-muted)] group-hover:text-[var(--sc-text-primary)]'}`}
           >
             <Icon name="grip-horizontal" size="sm" />
           </div>
@@ -200,7 +200,7 @@ export const StoryNavigator: FC<{ onSectionSelect?: () => void }> = React.memo(
               aria-label={t('manuscript.navigator.largeManuscriptDismiss')}
               className="shrink-0 hover:text-[var(--sc-text-primary)] transition-colors"
             >
-              ×
+              <Icon name="close" size="sm" aria-hidden="true" />
             </button>
           </div>
         )}

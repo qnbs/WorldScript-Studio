@@ -72,7 +72,7 @@ export const PlotMinimap: FC<PlotMinimapProps> = ({
             width={CARD_W * scaleX}
             height={CARD_H * scaleY}
             rx={2}
-            fill={s.color || '#3b82f6'}
+            fill={s.color || 'var(--sc-data-2)'}
             opacity={0.7}
           />
         );
@@ -83,7 +83,7 @@ export const PlotMinimap: FC<PlotMinimapProps> = ({
         width={Math.max(vpW, 4)}
         height={Math.max(vpH, 4)}
         fill="none"
-        stroke="var(--sc-ring-focus, #6366f1)"
+        stroke="var(--sc-ring-focus)"
         strokeWidth={1}
         opacity={0.8}
       />

@@ -504,7 +504,7 @@ export const AdvancedAiSection: FC = () => {
                 <button
                   type="button"
                   onClick={applyCustomModel}
-                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--sc-accent)] text-white hover:opacity-90 transition-opacity"
+                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] hover:opacity-90 transition-opacity"
                 >
                   {t('settings.ai.save')}
                 </button>
@@ -518,7 +518,7 @@ export const AdvancedAiSection: FC = () => {
                   type="button"
                   onClick={() => void handleWebllmDownload()}
                   disabled={webllmProgress !== null}
-                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--sc-accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="px-3 py-2 rounded-md text-sm font-medium bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] hover:opacity-90 transition-opacity disabled:opacity-50"
                   aria-label={t('settings.ai.webllm.downloading')}
                 >
                   {webllmProgress !== null
