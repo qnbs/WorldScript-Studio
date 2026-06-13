@@ -4,7 +4,7 @@
   "testRunner": "vitest",
   "vitest": {
     "configFile": "vitest.config.ts",
-    "disableRelatedTests": true
+    "related": false
   },
   "coverageAnalysis": "perTest",
   "ignoreStatic": true,
