@@ -10,6 +10,7 @@ import {
 import { selectPlotSubplots } from '../../features/project/projectSelectors';
 import { projectActions } from '../../features/project/projectSlice';
 import type { StorySection, Subplot } from '../../types';
+import { Icon } from '../ui/Icon';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ const AssignPopover: FC<AssignPopoverProps> = ({ subplot, sections, onClose, t }
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggle(s.id)}
-                    className="accent-[var(--sc-accent-primary,#6366f1)]"
+                    className="accent-[var(--sc-accent)]"
                     aria-label={s.title}
                   />
                   <span className="truncate text-[var(--sc-text-primary)]">{s.title}</span>
@@ -138,7 +139,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
         {/* Color swatch */}
         <button
           type="button"
-          className="w-3 h-3 rounded-full flex-shrink-0 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--sc-accent-primary,#6366f1)]"
+          className="w-3 h-3 rounded-full flex-shrink-0 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--sc-accent)]"
           style={{ backgroundColor: subplot.color }}
           aria-label={t('sceneboard.subplot.changeColor')}
           onClick={onFilterToggle}
@@ -187,7 +188,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
           aria-label={t('sceneboard.subplot.assignScenes')}
           aria-expanded={showAssign}
         >
-          ⊕
+          <Icon name="plus" size="sm" aria-hidden="true" />
         </button>
 
         {/* Delete button */}
@@ -197,7 +198,7 @@ const SubplotRow: FC<SubplotRowProps> = ({
           className="opacity-0 group-hover:opacity-100 text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)] text-xs px-0.5"
           aria-label={`${t('sceneboard.subplot.delete')} ${subplot.name}`}
         >
-          ×
+          <Icon name="close" size="sm" aria-hidden="true" />
         </button>
       </div>
 
@@ -227,7 +228,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState(PRESET_COLORS[0] ?? '#6366f1');
+  const [newColor, setNewColor] = useState(PRESET_COLORS[0]!);
   const colorInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddSubplot = useCallback(() => {
@@ -270,7 +271,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
           aria-label={t('sceneboard.subplot.expandPanel')}
           title={t('sceneboard.subplot.expandPanel')}
         >
-          ▶
+          <Icon name="chevron-right" size="sm" aria-hidden="true" />
         </button>
         {subplots.map((sp) => (
           <div
@@ -300,7 +301,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
           className="text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] text-xs"
           aria-label={t('sceneboard.subplot.collapsePanel')}
         >
-          ◀
+          <Icon name="chevron-left" size="sm" aria-hidden="true" />
         </button>
       </div>
 
@@ -337,7 +338,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
                 if (e.key === 'Enter') handleAddSubplot();
                 if (e.key === 'Escape') setAdding(false);
               }}
-              className="w-full text-xs px-2 py-1 bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] rounded text-[var(--sc-text-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--sc-accent-primary,#6366f1)]"
+              className="w-full text-xs px-2 py-1 bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] rounded text-[var(--sc-text-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--sc-accent)]"
               aria-label={t('sceneboard.subplot.editName')}
             />
             {/* Preset color swatches */}
@@ -349,7 +350,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
                   className="w-4 h-4 rounded-full border-2 transition-transform hover:scale-110"
                   style={{
                     backgroundColor: c,
-                    borderColor: newColor === c ? 'white' : 'transparent',
+                    borderColor: newColor === c ? 'var(--sc-surface-inverse)' : 'transparent',
                   }}
                   onClick={() => setNewColor(c)}
                   aria-label={c}
@@ -377,7 +378,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
               <button
                 type="button"
                 onClick={handleAddSubplot}
-                className="flex-1 text-xs py-0.5 rounded bg-[var(--sc-accent-primary,#6366f1)] text-white"
+                className="flex-1 text-xs py-0.5 rounded bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]"
               >
                 {t('common.add')}
               </button>
@@ -397,7 +398,7 @@ export const SubplotPanel: FC<SubplotPanelProps> = ({ sections, t }) => {
             className="w-full text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--sc-surface-overlay)] transition-colors"
             aria-label={t('sceneboard.subplot.addSubplot')}
           >
-            <span aria-hidden="true">+</span>
+            <Icon name="plus" size="sm" aria-hidden="true" />
             {t('sceneboard.subplot.addSubplot')}
           </button>
         )}

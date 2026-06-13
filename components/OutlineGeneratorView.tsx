@@ -10,6 +10,7 @@ import type { View } from '../types';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Checkbox } from './ui/Checkbox';
+import { Icon } from './ui/Icon';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { SectionIcon } from './ui/SectionIcon';
@@ -171,17 +172,7 @@ const IdeaForm: FC = () => {
           {isLoading ? (
             <Spinner />
           ) : (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5 mr-2"
-              aria-hidden="true"
-            >
-              {ICONS.SPARKLES}
-            </svg>
+            <Icon name="sparkles" size="md" className="me-2" aria-hidden="true" />
           )}
           {t('outline.idea.generateButton')}
         </Button>
@@ -275,7 +266,7 @@ const OutlineResult: FC = () => {
                 onDragOver={(e) => e.preventDefault()}
               >
                 <div
-                  className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${section.isTwist ? 'bg-[var(--accent-1-background)]/20 border-[var(--accent-1-border)]' : 'bg-transparent border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-raised)]/30'} ${draggingIndex === index ? 'opacity-60 scale-[1.02] shadow-2xl shadow-indigo-500/50' : ''}`}
+                  className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${section.isTwist ? 'bg-[var(--accent-1-background)]/20 border-[var(--accent-1-border)]' : 'bg-transparent border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-raised)]/30'} ${draggingIndex === index ? 'opacity-60 scale-[1.02] shadow-2xl shadow-[var(--sc-accent)]/50' : ''}`}
                 >
                   <div className="p-4 border-b border-[var(--sc-border-subtle)]/50 flex justify-between items-start gap-2 bg-white/[0.01]">
                     <div className="flex-grow flex items-center gap-2">
@@ -325,18 +316,7 @@ const OutlineResult: FC = () => {
                         title={t('common.moveUp')}
                         aria-label={t('common.moveUp')}
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+                        <Icon name="chevron-up" size="md" />
                       </button>
                       <button
                         type="button"
@@ -346,18 +326,7 @@ const OutlineResult: FC = () => {
                         title={t('common.moveDown')}
                         aria-label={t('common.moveDown')}
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+                        <Icon name="chevron-down" size="md" />
                       </button>
                       <Button
                         variant="ghost"
@@ -389,16 +358,7 @@ const OutlineResult: FC = () => {
                         title={t('outline.result.addTooltip')}
                         aria-label={t('outline.result.addTooltip')}
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          className="w-5 h-5"
-                        >
-                          {ICONS.ADD}
-                        </svg>
+                        <Icon name="plus" size="md" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -408,16 +368,7 @@ const OutlineResult: FC = () => {
                         aria-label={t('outline.result.deleteTooltip')}
                         className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          className="w-5 h-5"
-                        >
-                          {ICONS.TRASH}
-                        </svg>
+                        <Icon name="trash" size="md" />
                       </Button>
                     </div>
                   </div>

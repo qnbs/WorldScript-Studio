@@ -21,12 +21,12 @@ function MessageBubble({
       <div
         className={`max-w-[80%] rounded-sc-xl px-4 py-3 ${
           isUser
-            ? 'bg-[var(--sc-accent)] text-white'
+            ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
             : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)]'
         }`}
       >
         <p
-          className={`mb-1 text-xs font-medium ${isUser ? 'text-white/70' : 'text-[var(--sc-text-muted)]'}`}
+          className={`mb-1 text-xs font-medium ${isUser ? 'text-[var(--sc-text-on-accent)]/70' : 'text-[var(--sc-text-muted)]'}`}
         >
           {label}
         </p>

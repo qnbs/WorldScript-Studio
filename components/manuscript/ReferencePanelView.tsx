@@ -12,6 +12,7 @@ import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
 import { rebuildHybridRagIndex } from '../../services/localRagService';
 import type { StorySection } from '../../types';
+import { Icon } from '../ui/Icon';
 import { CommentsPanel } from './CommentsPanel';
 import { SceneRevisionPanel } from './SceneRevisionPanel';
 
@@ -43,7 +44,7 @@ const CharactersTab: FC<{ section: StorySection }> = ({ section }) => {
         >
           {c.hasAvatar ? (
             <div
-              className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--sc-accent)] text-white text-sm font-bold"
+              className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] text-sm font-bold"
               aria-hidden="true"
             >
               {c.name.slice(0, 1).toUpperCase()}
@@ -53,7 +54,7 @@ const CharactersTab: FC<{ section: StorySection }> = ({ section }) => {
               className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--sc-surface-overlay)] text-lg"
               aria-hidden="true"
             >
-              👤
+              <Icon name="characters" size="md" className="text-[var(--sc-text-muted)]" />
             </div>
           )}
           <div className="min-w-0">

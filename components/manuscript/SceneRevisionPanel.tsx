@@ -6,6 +6,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { deleteRevision, listRevisions, saveRevision } from '../../services/sceneRevisionService';
 import { diffTokensToOps, tokenizeWordsAndSpaces } from '../../services/wordDiff';
 import type { SceneRevision, StorySection } from '../../types';
+import { Icon } from '../ui/Icon';
 
 // ── Word-level diff view ──────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ const RevisionItem: FC<{
               <button
                 type="button"
                 onClick={handleRestore}
-                className="text-xs px-2 py-1 rounded bg-amber-500 text-white hover:bg-amber-600"
+                className="text-xs px-2 py-1 rounded bg-[var(--sc-warning-fg)] text-[var(--sc-text-on-accent)] hover:opacity-80"
               >
                 {t('revisions.confirmRestore')}
               </button>
@@ -117,7 +118,7 @@ const RevisionItem: FC<{
             <button
               type="button"
               onClick={() => setConfirmRestore(true)}
-              className="text-xs px-2 py-1 rounded bg-[var(--sc-accent)] text-[white] hover:opacity-90"
+              className="text-xs px-2 py-1 rounded bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] hover:opacity-90"
             >
               {t('revisions.restore')}
             </button>
@@ -128,7 +129,7 @@ const RevisionItem: FC<{
             className="text-xs px-2 py-1 rounded text-[var(--sc-danger-fg)] hover:text-[var(--sc-danger-fg)]/80"
             aria-label={t('revisions.delete')}
           >
-            ✕
+            <Icon name="close" size="sm" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -192,7 +193,7 @@ export const SceneRevisionPanel: FC<{ section: StorySection }> = ({ section }) =
           type="button"
           onClick={() => void handleSaveNamed()}
           disabled={isSaving}
-          className="px-2 py-1 rounded bg-[var(--sc-accent)] text-[white] text-xs disabled:opacity-50"
+          className="px-2 py-1 rounded bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] text-xs disabled:opacity-50"
         >
           {isSaving ? '…' : t('revisions.saveNamed')}
         </button>

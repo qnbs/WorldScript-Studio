@@ -7,22 +7,23 @@ import { collaborationService } from '../services/collaborationService';
 import type { CollaborationUser } from '../types';
 import { Button } from './ui/Button';
 import { EmptyState } from './ui/EmptyState';
+import { Icon } from './ui/Icon';
 import { Input } from './ui/Input';
 
-// Preset user colors for avatar display
+// QNBS-v3: preset user colors use the design-system data-viz palette so avatars adapt to theme/sepia.
 const USER_COLORS = [
-  '#6366f1',
-  '#14b8a6',
-  '#f59e0b',
-  '#ec4899',
-  '#10b981',
-  '#3b82f6',
-  '#f97316',
-  '#84cc16',
+  'var(--sc-data-2)',
+  'var(--sc-data-7)',
+  'var(--sc-data-4)',
+  'var(--sc-data-5)',
+  'var(--sc-data-3)',
+  'var(--sc-data-2)',
+  'var(--sc-data-4)',
+  'var(--sc-data-3)',
 ];
 
 const getRandomColor = () =>
-  USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)] ?? '#6366f1';
+  USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)] ?? 'var(--sc-data-2)';
 
 // Persistent user identity for the session
 function getLocalUser(): CollaborationUser {
@@ -57,7 +58,7 @@ const UserAvatar: FC<{ user: CollaborationUser; size?: 'sm' | 'md' }> = ({ user,
   const dim = size === 'sm' ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm';
   return (
     <div
-      className={`${dim} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}
+      className={`${dim} rounded-full flex items-center justify-center text-[var(--sc-text-on-accent)] font-bold flex-shrink-0`}
       style={{ backgroundColor: user.color }}
       title={user.name}
       role="img"
@@ -277,7 +278,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
               className="p-2 rounded-md hover:bg-[var(--sc-surface-raised)] text-[var(--sc-text-secondary)] transition-colors"
               aria-label={t('collab.close')}
             >
-              <span aria-hidden="true">✕</span>
+              <Icon name="close" size="sm" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -403,7 +404,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
             <div
               role="alert"
               aria-live="polite"
-              className="p-3 rounded-sc-md bg-[var(--sc-warning-bg)] border border-amber-500/30 text-sm text-[var(--sc-warning-fg)] space-y-1"
+              className="p-3 rounded-sc-md bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)] space-y-1"
             >
               <p className="font-semibold">{t('collab.securityWarning')}</p>
               <p>{t('collab.securityWarningDetail')}</p>
@@ -411,7 +412,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
                 href="https://github.com/yjs/y-webrtc#signaling"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
+                className="underline focus-visible:ring-2 focus-visible:ring-[var(--sc-warning-fg)] rounded"
               >
                 {t('collab.selfHostLinkLabel')}
               </a>

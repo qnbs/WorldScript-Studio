@@ -20,7 +20,7 @@ export const CollaborationSection: FC = () => {
           <div
             role="alert"
             aria-live="polite"
-            className="p-3 rounded-sc-md bg-[var(--sc-warning-bg)] border border-amber-500/30 text-sm text-[var(--sc-warning-fg)] space-y-1"
+            className="p-3 rounded-sc-md bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)] space-y-1"
           >
             <p className="font-semibold">{t('collab.securityWarning')}</p>
             <p>{t('collab.securityWarningDetail')}</p>

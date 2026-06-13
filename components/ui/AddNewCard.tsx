@@ -29,7 +29,7 @@ export const AddNewCard: React.FC<AddNewCardProps> = ({
     default:
       'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] group-hover:scale-110 group-hover:bg-[var(--sc-surface-raised)] group-hover:text-[var(--sc-text-primary)] group-hover:shadow-md',
     primary:
-      'bg-[var(--sc-accent)]/10 text-[var(--sc-accent)] group-hover:scale-110 group-hover:bg-[var(--sc-accent)] group-hover:text-white shadow-sm group-hover:shadow-[0_0_15px_var(--sc-accent)]',
+      'bg-[var(--sc-accent)]/10 text-[var(--sc-accent)] group-hover:scale-110 group-hover:bg-[var(--sc-accent)] group-hover:text-[var(--sc-text-on-accent)] shadow-sm group-hover:shadow-[0_0_15px_var(--sc-accent)]',
   };
 
   const titleClasses = 'text-lg font-bold text-[var(--sc-text-primary)] mb-2 tracking-tight';
@@ -61,7 +61,7 @@ export const AddNewCard: React.FC<AddNewCardProps> = ({
       <p className={descriptionClasses[variant]}>{description}</p>
 
       {/* Subtle highlight overlay */}
-      <div className="absolute inset-0 bg-white/0 group-hover:bg-[var(--glass-bg)] transition-colors duration-sc-normal pointer-events-none" />
+      <div className="absolute inset-0 bg-[var(--sc-surface-base)]/0 group-hover:bg-[var(--glass-bg)] transition-colors duration-sc-normal pointer-events-none" />
     </button>
   );
 };

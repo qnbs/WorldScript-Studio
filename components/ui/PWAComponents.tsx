@@ -9,6 +9,7 @@
 import type { FC } from 'react';
 import { usePWA } from '../../hooks/usePWA';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from './Icon';
 
 // ────────────────────────────────────────────────────────────
 // OfflineIndicator
@@ -29,8 +30,8 @@ export const OfflineIndicator: FC = () => {
         flex flex-col gap-1
         px-4 py-3
         rounded-xl
-        bg-amber-500/20 border border-amber-500/40
-        text-amber-400 text-xs font-medium
+        bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)]
+        text-[var(--sc-warning-fg)] text-xs font-medium
         shadow-lg backdrop-blur-sm
         animate-fade-in-up
         max-w-xs
@@ -38,12 +39,12 @@ export const OfflineIndicator: FC = () => {
     >
       <div className="flex items-center gap-2">
         <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-ping" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+          <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--sc-warning-fg)] opacity-75 animate-ping" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--sc-warning-fg)]" />
         </span>
         <span className="font-semibold">{t('pwa.offlineBadgeTitle')}</span>
       </div>
-      <p className="text-amber-300/80 leading-tight">
+      <p className="text-[var(--sc-warning-fg)]/80 leading-tight">
         {t('pwa.offlineAiUnavailable')}
         <br />
         {t('pwa.offlineWorksContinue')}
@@ -79,20 +80,8 @@ export const PWAInstallBanner: FC = () => {
       "
       >
         {/* Icon */}
-        <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md">
-          <svg
-            className="w-5 h-5 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-            />
-          </svg>
+        <div className="shrink-0 w-10 h-10 rounded-xl bg-[var(--sc-accent)] flex items-center justify-center shadow-md">
+          <Icon name="download" size="md" className="text-[var(--sc-text-on-accent)]" aria-hidden />
         </div>
 
         {/* Text */}
@@ -118,15 +107,7 @@ export const PWAInstallBanner: FC = () => {
             transition-colors
           "
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" size="sm" aria-hidden />
           </button>
           <button
             type="button"
@@ -135,10 +116,10 @@ export const PWAInstallBanner: FC = () => {
             px-3 py-1.5
             rounded-xl
             bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)]
-            text-white text-xs font-semibold
-            shadow-[0_4px_14px_0_rgba(99,102,241,0.35)]
-            hover:shadow-[0_6px_20px_rgba(99,102,241,0.25)]
-            border border-indigo-500/20
+            text-[var(--sc-text-on-accent)] text-xs font-semibold
+            shadow-[0_4px_14px_0_var(--sc-accent-subtle)]
+            hover:shadow-[0_6px_20px_var(--sc-accent-subtle)]
+            border border-[var(--sc-accent)]/20
             transition-all active:scale-95
           "
           >
@@ -176,19 +157,7 @@ export const PWAUpdateToast: FC = () => {
     >
       {/* Update icon */}
       <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--sc-accent)]/20 border border-[var(--sc-accent)]/30 flex items-center justify-center mt-0.5">
-        <svg
-          className="w-4 h-4 text-[var(--sc-accent)]"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-          />
-        </svg>
+        <Icon name="refresh" size="sm" className="text-[var(--sc-accent)]" aria-hidden />
       </div>
 
       {/* Content */}
@@ -207,7 +176,7 @@ export const PWAUpdateToast: FC = () => {
               px-3 py-1.5
               rounded-lg
               bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)]
-              text-white text-xs font-semibold
+              text-[var(--sc-text-on-accent)] text-xs font-semibold
               transition-all active:scale-95
             "
           >
@@ -242,15 +211,7 @@ export const PWAUpdateToast: FC = () => {
           transition-colors
         "
       >
-        <svg
-          className="w-3.5 h-3.5"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2.5}
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
+        <Icon name="close" size="sm" aria-hidden />
       </button>
     </div>
   );

@@ -7,6 +7,7 @@ import { selectPlotTensionOverrides } from '../../features/project/projectSelect
 import { projectActions } from '../../features/project/projectSlice';
 import { computeTensionCurve } from '../../services/plotBoardService';
 import type { StorySection } from '../../types';
+import { Icon } from '../ui/Icon';
 import { Select } from '../ui/Select';
 
 // ── Beat sheet presets ────────────────────────────────────────────────────────
@@ -17,42 +18,43 @@ interface Beat {
   color: string;
 }
 
+// QNBS-v3: beat colors use the design-system data-viz palette so they adapt to theme/sepia.
 const BEAT_SHEETS: Record<string, Beat[]> = {
   'three-act': [
-    { label: 'Act 1 End', pct: 0.25, color: '#6366f1' },
-    { label: 'Midpoint', pct: 0.5, color: '#a855f7' },
-    { label: 'Act 2 End', pct: 0.75, color: '#6366f1' },
+    { label: 'Act 1 End', pct: 0.25, color: 'var(--sc-data-2)' },
+    { label: 'Midpoint', pct: 0.5, color: 'var(--sc-data-6)' },
+    { label: 'Act 2 End', pct: 0.75, color: 'var(--sc-data-2)' },
   ],
   'save-the-cat': [
-    { label: 'Opening Image', pct: 0.01, color: '#8b5cf6' },
-    { label: 'Theme Stated', pct: 0.05, color: '#8b5cf6' },
-    { label: 'Set-Up', pct: 0.1, color: '#8b5cf6' },
-    { label: 'Catalyst', pct: 0.12, color: '#ec4899' },
-    { label: 'Debate', pct: 0.2, color: '#8b5cf6' },
-    { label: 'Break into 2', pct: 0.25, color: '#6366f1' },
-    { label: 'B Story', pct: 0.3, color: '#8b5cf6' },
-    { label: 'Fun & Games', pct: 0.4, color: '#8b5cf6' },
-    { label: 'Midpoint', pct: 0.5, color: '#a855f7' },
-    { label: 'Bad Guys Close In', pct: 0.6, color: '#ef4444' },
-    { label: 'All Is Lost', pct: 0.75, color: '#ef4444' },
-    { label: 'Dark Night of Soul', pct: 0.8, color: '#ef4444' },
-    { label: 'Break into 3', pct: 0.85, color: '#6366f1' },
-    { label: 'Finale', pct: 0.9, color: '#10b981' },
-    { label: 'Final Image', pct: 0.99, color: '#10b981' },
+    { label: 'Opening Image', pct: 0.01, color: 'var(--sc-data-6)' },
+    { label: 'Theme Stated', pct: 0.05, color: 'var(--sc-data-6)' },
+    { label: 'Set-Up', pct: 0.1, color: 'var(--sc-data-6)' },
+    { label: 'Catalyst', pct: 0.12, color: 'var(--sc-data-5)' },
+    { label: 'Debate', pct: 0.2, color: 'var(--sc-data-6)' },
+    { label: 'Break into 2', pct: 0.25, color: 'var(--sc-data-2)' },
+    { label: 'B Story', pct: 0.3, color: 'var(--sc-data-6)' },
+    { label: 'Fun & Games', pct: 0.4, color: 'var(--sc-data-6)' },
+    { label: 'Midpoint', pct: 0.5, color: 'var(--sc-data-6)' },
+    { label: 'Bad Guys Close In', pct: 0.6, color: 'var(--sc-data-1)' },
+    { label: 'All Is Lost', pct: 0.75, color: 'var(--sc-data-1)' },
+    { label: 'Dark Night of Soul', pct: 0.8, color: 'var(--sc-data-1)' },
+    { label: 'Break into 3', pct: 0.85, color: 'var(--sc-data-2)' },
+    { label: 'Finale', pct: 0.9, color: 'var(--sc-data-3)' },
+    { label: 'Final Image', pct: 0.99, color: 'var(--sc-data-3)' },
   ],
   "hero's-journey": [
-    { label: 'Ordinary World', pct: 0.04, color: '#6366f1' },
-    { label: 'Call to Adventure', pct: 0.12, color: '#f59e0b' },
-    { label: 'Refusal', pct: 0.18, color: '#ef4444' },
-    { label: 'Mentor', pct: 0.25, color: '#10b981' },
-    { label: 'Crossing Threshold', pct: 0.33, color: '#6366f1' },
-    { label: 'Tests & Allies', pct: 0.42, color: '#8b5cf6' },
-    { label: 'Approach', pct: 0.5, color: '#a855f7' },
-    { label: 'Ordeal', pct: 0.62, color: '#ef4444' },
-    { label: 'Reward', pct: 0.7, color: '#10b981' },
-    { label: 'Road Back', pct: 0.8, color: '#6366f1' },
-    { label: 'Resurrection', pct: 0.9, color: '#a855f7' },
-    { label: 'Return', pct: 0.97, color: '#10b981' },
+    { label: 'Ordinary World', pct: 0.04, color: 'var(--sc-data-2)' },
+    { label: 'Call to Adventure', pct: 0.12, color: 'var(--sc-data-4)' },
+    { label: 'Refusal', pct: 0.18, color: 'var(--sc-data-1)' },
+    { label: 'Mentor', pct: 0.25, color: 'var(--sc-data-3)' },
+    { label: 'Crossing Threshold', pct: 0.33, color: 'var(--sc-data-2)' },
+    { label: 'Tests & Allies', pct: 0.42, color: 'var(--sc-data-6)' },
+    { label: 'Approach', pct: 0.5, color: 'var(--sc-data-6)' },
+    { label: 'Ordeal', pct: 0.62, color: 'var(--sc-data-1)' },
+    { label: 'Reward', pct: 0.7, color: 'var(--sc-data-3)' },
+    { label: 'Road Back', pct: 0.8, color: 'var(--sc-data-2)' },
+    { label: 'Resurrection', pct: 0.9, color: 'var(--sc-data-6)' },
+    { label: 'Return', pct: 0.97, color: 'var(--sc-data-3)' },
   ],
 };
 
@@ -141,7 +143,7 @@ const TensionDot: FC<TensionDotProps> = ({
       cx={cx}
       cy={cy}
       r={5}
-      fill={isOverridden ? 'var(--sc-accent-primary,#6366f1)' : 'var(--sc-text-muted,#9ca3af)'}
+      fill={isOverridden ? 'var(--sc-accent)' : 'var(--sc-text-muted)'}
       stroke="var(--sc-surface-raised)"
       strokeWidth={2}
       style={{ cursor: 'ns-resize', touchAction: 'none' }}
@@ -209,7 +211,12 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
         aria-controls="tension-curve-panel"
       >
         <span>{t('sceneboard.tension.title')}</span>
-        <span aria-hidden="true">{collapsed ? '▲' : '▼'}</span>
+        <Icon
+          name={collapsed ? 'chevron-up' : 'chevron-down'}
+          size="sm"
+          className="text-[var(--sc-text-muted)]"
+          aria-hidden="true"
+        />
       </button>
 
       {!collapsed && (
@@ -222,7 +229,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
                 type="checkbox"
                 checked={showBeats}
                 onChange={(e) => setShowBeats(e.target.checked)}
-                className="accent-[var(--sc-accent-primary,#6366f1)]"
+                className="accent-[var(--sc-accent)]"
               />
               {t('sceneboard.tension.showBeatSheet')}
             </label>
@@ -270,7 +277,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
                   y={yForScore(v) + 4}
                   textAnchor="end"
                   fontSize={9}
-                  fill="var(--sc-text-muted,#9ca3af)"
+                  fill="var(--sc-text-muted)"
                 >
                   {v}
                 </text>
@@ -321,7 +328,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
               <polyline
                 points={pointsToPolyline(autoPoints)}
                 fill="none"
-                stroke="var(--sc-text-muted,#9ca3af)"
+                stroke="var(--sc-text-muted)"
                 strokeWidth={1.5}
                 strokeDasharray="4,3"
                 opacity={0.5}
@@ -331,7 +338,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
               <polyline
                 points={pointsToPolyline(overriddenPoints)}
                 fill="none"
-                stroke="var(--sc-accent-primary,#6366f1)"
+                stroke="var(--sc-accent)"
                 strokeWidth={2}
                 opacity={0.9}
               />
@@ -358,7 +365,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
                       y={cy - 8}
                       textAnchor="middle"
                       fontSize={8}
-                      fill="var(--sc-text-muted,#9ca3af)"
+                      fill="var(--sc-text-muted)"
                       pointerEvents="none"
                     >
                       {p.score.toFixed(0)}
@@ -369,7 +376,7 @@ export const TensionCurvePanel: FC<TensionCurvePanelProps> = ({ sections, t }) =
                       y={PADDING_T + CHART_H + 18}
                       textAnchor="middle"
                       fontSize={8}
-                      fill="var(--sc-text-muted,#9ca3af)"
+                      fill="var(--sc-text-muted)"
                       pointerEvents="none"
                     >
                       {label}

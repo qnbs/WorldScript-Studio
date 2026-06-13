@@ -159,7 +159,7 @@ const PreviewModal: FC = () => {
                     viewBox="0 0 24 24"
                     strokeWidth={1.5}
                     stroke="currentColor"
-                    className="w-5 h-5 text-gray-500 flex-shrink-0 mt-1.5"
+                    className="w-5 h-5 text-[var(--sc-text-muted)] flex-shrink-0 mt-1.5"
                   >
                     {ICONS.GRIP_VERTICAL}
                   </svg>
@@ -349,7 +349,7 @@ const CommunityTemplateCard: FC<{
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-xl font-bold text-[var(--sc-text-primary)]">{template.name}</h3>
           {template.stars != null && (
-            <span className="flex items-center gap-1 text-xs text-amber-400 flex-shrink-0">
+            <span className="flex items-center gap-1 text-xs text-[var(--sc-warning-fg)] flex-shrink-0">
               ★ {template.stars}
             </span>
           )}
@@ -478,7 +478,7 @@ const CommunityTab: FC = () => {
   return (
     <div>
       {isFallback && (
-        <div className="mb-6 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
+        <div className="mb-6 p-3 rounded-lg bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)]">
           {_t('templates.offlineFallback')}
         </div>
       )}

@@ -14,6 +14,7 @@ import { storageService } from '../../services/storageService';
 import type { AdvancedAiSettings, AIProvider, LocalBackendPreset } from '../../types';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
+import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
@@ -160,7 +161,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 onProviderChange(p.id);
                 setTestStatus('idle');
               }}
-              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${provider === p.id ? 'bg-[var(--sc-accent)] border-[var(--sc-accent)] text-white' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:border-[var(--border-interactive)]'}`}
+              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${provider === p.id ? 'bg-[var(--sc-accent)] border-[var(--sc-accent)] text-[var(--sc-text-on-accent)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:border-[var(--border-interactive)]'}`}
             >
               {p.label}
             </button>
@@ -268,8 +269,11 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         {provider === 'ollama' && (
           <div className="space-y-3">
             {!isDesktop && (
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
-                <p className="font-semibold mb-1">⚠️ {t('settings.ai.corsRestriction')}</p>
+              <div className="p-3 rounded-lg bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)]">
+                <p className="font-semibold mb-1 flex items-center gap-1">
+                  <Icon name="warning" size="sm" aria-hidden="true" />
+                  {t('settings.ai.corsRestriction')}
+                </p>
                 <p>{t('settings.ai.ollamaBrowserNote')}</p>
               </div>
             )}
@@ -366,7 +370,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                       type="button"
                       key={m}
                       onClick={() => onModelSelect?.(`ollama/${m}`)}
-                      className="px-2 py-1 text-xs rounded-full bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-accent)] hover:text-white transition-colors"
+                      className="px-2 py-1 text-xs rounded-full bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] hover:bg-[var(--sc-accent)] hover:text-[var(--sc-text-on-accent)] transition-colors"
                     >
                       {m}
                     </button>
@@ -495,8 +499,11 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         )}
 
         {provider === 'anthropic' && (
-          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-400">
-            <p className="font-semibold mb-1">⚠️ {t('settings.ai.corsRestriction')}</p>
+          <div className="p-3 rounded-lg bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)]">
+            <p className="font-semibold mb-1 flex items-center gap-1">
+              <Icon name="warning" size="sm" aria-hidden="true" />
+              {t('settings.ai.corsRestriction')}
+            </p>
             <p>{t('settings.ai.anthropicCorsNote')}</p>
           </div>
         )}
@@ -511,12 +518,16 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               )}
             </Button>
             {testStatus === 'ok' && (
-              <span className="text-sm text-[var(--sc-success-fg)]">
-                ✓ {t('settings.ai.connectionSuccess')}
+              <span className="text-sm text-[var(--sc-success-fg)] flex items-center gap-1">
+                <Icon name="success" size="sm" aria-hidden="true" />
+                {t('settings.ai.connectionSuccess')}
               </span>
             )}
             {testStatus === 'error' && (
-              <span className="text-sm text-[var(--sc-danger-fg)]">✗ {testError}</span>
+              <span className="text-sm text-[var(--sc-danger-fg)] flex items-center gap-1">
+                <Icon name="error" size="sm" aria-hidden="true" />
+                {testError}
+              </span>
             )}
           </div>
         )}

@@ -4,16 +4,18 @@ import type { FC } from 'react';
 import React, { useState } from 'react';
 import type { Character, StorySection } from '../../types';
 import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
 
+// QNBS-v3: status colors use the design-system data-viz palette so they adapt to theme/sepia.
 const STATUS_COLORS: Record<string, string> = {
-  draft: '#6b7280',
-  outline: '#f59e0b',
-  'first-draft': '#3b82f6',
-  revised: '#8b5cf6',
-  final: '#10b981',
+  draft: 'var(--sc-text-muted)',
+  outline: 'var(--sc-data-4)',
+  'first-draft': 'var(--sc-data-2)',
+  revised: 'var(--sc-data-6)',
+  final: 'var(--sc-data-3)',
 };
 
 interface SceneCardProps {
@@ -47,7 +49,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
     const [editData, setEditData] = useState({
       title: section.title,
       summary: section.summary || '',
-      color: section.color || '#3b82f6',
+      color: section.color || 'var(--sc-data-2)',
       status: section.status || 'draft',
       act: section.act || 1,
       sceneStart: section.sceneStart ?? '',
@@ -83,7 +85,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
     };
 
     const linkedChars = (characters || []).filter((c) => section.characterIds?.includes(c.id));
-    const statusColor = STATUS_COLORS[section.status || 'draft'] || '#6b7280';
+    const statusColor = STATUS_COLORS[section.status || 'draft'] || 'var(--sc-text-muted)';
 
     return (
       <div
@@ -208,7 +210,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
               <div className="flex items-center gap-1.5">
                 <div
                   className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: section.color || '#3b82f6' }}
+                  style={{ backgroundColor: section.color || 'var(--sc-data-2)' }}
                 />
                 <h4 className="text-sm font-semibold text-[var(--sc-text-primary)] line-clamp-1">
                   {section.title}
@@ -222,7 +224,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                   setEditData({
                     title: section.title,
                     summary: section.summary || '',
-                    color: section.color || '#3b82f6',
+                    color: section.color || 'var(--sc-data-2)',
                     status: section.status || 'draft',
                     act: section.act || 1,
                     sceneStart: section.sceneStart ?? '',
@@ -303,7 +305,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                   onReorderInAct(section.id, 'up');
                 }}
               >
-                ↑
+                <Icon name="chevron-up" size="sm" aria-hidden="true" />
               </Button>
               <Button
                 type="button"
@@ -317,7 +319,7 @@ export const SceneCard: FC<SceneCardProps> = React.memo(
                   onReorderInAct(section.id, 'down');
                 }}
               >
-                ↓
+                <Icon name="chevron-down" size="sm" aria-hidden="true" />
               </Button>
             </div>
           </div>

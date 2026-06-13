@@ -12,6 +12,7 @@ import { copilotActions } from '../../features/copilot/copilotSlice';
 import { selectEnableGlobalCopilot } from '../../features/featureFlags/featureFlagsSlice';
 import { useTranslation } from '../../hooks/useTranslation';
 import type { HeuristicFinding } from '../../services/copilot/heuristicEngine';
+import { Icon } from '../ui/Icon';
 
 interface InlineAnnotationLayerProps {
   sectionTitle: string;
@@ -72,21 +73,9 @@ export const InlineAnnotationLayer: FC<InlineAnnotationLayerProps> = ({ sectionT
       type="button"
       onClick={handleClick}
       aria-label={t('copilot.annotationCount', { count: relevant.length })}
-      className={`absolute bottom-2 end-2 z-10 flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium shadow-sm backdrop-blur-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] ${severityColor(topSeverity)}`}
+      className={`absolute bottom-2 end-2 z-10 flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium shadow-sm backdrop-blur-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] ${severityColor(topSeverity)}`}
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        className="h-3 w-3"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
-      </svg>
+      <Icon name="info" size="sm" className="h-3 w-3" aria-hidden />
       {t('copilot.annotationCount', { count: relevant.length })}
     </button>
   );

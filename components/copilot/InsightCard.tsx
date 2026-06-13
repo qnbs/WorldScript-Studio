@@ -76,7 +76,7 @@ export const InsightCard: FC<InsightCardProps> = ({ finding, copilot, onNavigate
               <button
                 type="button"
                 onClick={handleTellMore}
-                className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-2 py-0.5 text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+                className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-2 py-0.5 text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               >
                 {t('copilot.insightTellMore')}
               </button>
@@ -85,7 +85,7 @@ export const InsightCard: FC<InsightCardProps> = ({ finding, copilot, onNavigate
               <button
                 type="button"
                 onClick={handleOpenView}
-                className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-2 py-0.5 text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+                className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-2 py-0.5 text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               >
                 {t('copilot.insightOpenView', { view: finding.targetView })}
               </button>

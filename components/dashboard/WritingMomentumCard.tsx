@@ -101,7 +101,7 @@ export const WritingMomentumCard: FC = () => {
           <div
             className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border ${
               streakDays > 0
-                ? 'border-orange-500/30 bg-orange-500/10 text-orange-500'
+                ? 'border-[var(--sc-data-4)]/30 bg-[var(--sc-data-4)]/10 text-[var(--sc-data-4)]'
                 : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)]'
             }`}
           >

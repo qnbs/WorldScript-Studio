@@ -39,7 +39,8 @@ export function MindMapEdgeLayer({ nodes, edges, selectedEdgeId, onSelectEdge }:
         const isDotted = edge.style === 'dotted';
         const isBi = edge.direction === 'bi';
         const d = cubicPath(src.x, src.y, tgt.x, tgt.y);
-        const stroke = isSelected ? '#818cf8' : edge.color;
+        // QNBS-v3: selected edge uses the design-system accent token so it adapts to theme/sepia.
+        const stroke = isSelected ? 'var(--sc-accent)' : edge.color;
 
         return (
           // QNBS-v3: the <g> is the interactive element; role=button with keyboard support for a11y

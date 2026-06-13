@@ -27,6 +27,7 @@ import {
 } from '../services/commands/palettePreferences';
 import { approximateManuscriptWordCount } from '../services/commands/wordCountApprox';
 import type { View } from '../types';
+import { Icon } from './ui/Icon';
 
 const CATEGORY_SORT: CommandCategory[] = [
   'navigation',
@@ -374,20 +375,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           {paletteLiveStatus}
         </div>
         <div className="flex items-center px-4 py-4 border-b border-[var(--sc-border-subtle)]/50">
-          <svg
-            className="w-5 h-5 text-[var(--sc-text-muted)] me-3 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            aria-hidden
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 001.061 1.061z"
-            />
-          </svg>
+          <Icon
+            name="search"
+            size="md"
+            className="text-[var(--sc-text-muted)] me-3 shrink-0"
+            aria-hidden="true"
+          />
           <input
             ref={inputRef}
             type="search"
@@ -422,27 +415,23 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             aria-label={isListening ? t('palette.voice.stop') : t('palette.voice.start')}
             aria-pressed={isListening}
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              {isListening ? (
+            {isListening ? (
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   d="M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z"
                 />
-              ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
-                />
-              )}
-            </svg>
+              </svg>
+            ) : (
+              <Icon name="microphone" size="md" />
+            )}
           </button>
           <div className="hidden sm:flex items-center gap-1">
             <kbd className="px-2 py-1 text-xs font-semibold text-[var(--sc-text-muted)] bg-[var(--sc-surface-overlay)] rounded border border-[var(--sc-border-subtle)]">
@@ -537,7 +526,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       <div className="flex items-center gap-2 shrink-0">
                         {prefs.pinnedIds.includes(cmd.id) ? (
                           <span
-                            // QNBS-v3: text-white/70 fails WCAG AA contrast on --sc-accent background; use full-opacity white.
+                            // QNBS-v3: text-[var(--sc-text-on-accent)]/70 fails WCAG AA contrast on --sc-accent background; use full-opacity white.
                             className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
                           >
                             {t('palette.pin.badge')}

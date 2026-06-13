@@ -10,6 +10,7 @@ import {
 import { selectPlotConnections } from '../../features/project/projectSelectors';
 import { projectActions } from '../../features/project/projectSlice';
 import type { PlotConnectionType } from '../../types';
+import { Icon } from '../ui/Icon';
 
 const CONNECTION_TYPE_OPTIONS: { value: PlotConnectionType; icon: string }[] = [
   { value: 'cause-effect', icon: '→' },
@@ -88,7 +89,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
             onClick={() => handleTypeChange(value)}
             className={`w-7 h-7 rounded text-sm transition-colors ${
               selected.type === value
-                ? 'bg-[var(--sc-accent-primary,#6366f1)] text-white'
+                ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
                 : 'text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-overlay)]'
             }`}
             title={t(`sceneboard.connectionType.${value}`)}
@@ -116,7 +117,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
           }
         }}
         placeholder={t('sceneboard.connectionToolbar.labelPlaceholder')}
-        className="w-28 text-xs px-2 py-0.5 bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] rounded text-[var(--sc-text-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--sc-accent-primary,#6366f1)]"
+        className="w-28 text-xs px-2 py-0.5 bg-[var(--sc-surface-base)] border border-[var(--sc-border-subtle)] rounded text-[var(--sc-text-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--sc-accent)]"
         aria-label={t('sceneboard.connectionToolbar.labelInput')}
       />
 
@@ -130,7 +131,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
         aria-label={t('sceneboard.connectionToolbar.delete')}
         title={t('sceneboard.connectionToolbar.delete')}
       >
-        🗑
+        <Icon name="trash" size="sm" aria-hidden="true" />
       </button>
 
       {/* Deselect */}
@@ -140,7 +141,7 @@ export const ConnectionToolbar: FC<ConnectionToolbarProps> = ({ t }) => {
         className="text-xs text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] px-1"
         aria-label={t('sceneboard.connectionToolbar.close')}
       >
-        ×
+        <Icon name="close" size="sm" aria-hidden="true" />
       </button>
     </div>
   );

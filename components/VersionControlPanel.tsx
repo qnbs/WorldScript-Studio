@@ -26,6 +26,7 @@ const MAX_DIFF_VIEW_LINES = 450;
 
 import { Button } from './ui/Button';
 import { EmptyState } from './ui/EmptyState';
+import { Icon } from './ui/Icon';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 
@@ -109,7 +110,7 @@ const BranchBadge: FC<{ branch: VersionBranch; isActive?: boolean }> = ({ branch
   <span
     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${
       isActive
-        ? 'bg-[var(--sc-accent)] text-white'
+        ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
         : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
     }`}
   >
@@ -146,7 +147,7 @@ const SnapshotCard: FC<{
               {snapshot.label}
             </span>
             {isHead && (
-              <span className="px-1.5 py-0.5 text-xs bg-[var(--sc-accent)] text-white rounded">
+              <span className="px-1.5 py-0.5 text-xs bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] rounded">
                 HEAD
               </span>
             )}
@@ -190,7 +191,7 @@ const SnapshotCard: FC<{
             aria-label={t('vc.deleteSnapshot', { label: snapshot.label })}
             className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
           >
-            ✕
+            <Icon name="close" size="sm" aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -397,7 +398,7 @@ export const VersionControlPanel: FC = () => {
             className="p-2 rounded-md hover:bg-[var(--sc-surface-raised)] text-[var(--sc-text-secondary)] transition-colors"
             aria-label={t('vc.close')}
           >
-            <span aria-hidden="true">✕</span>
+            <Icon name="close" size="sm" aria-hidden="true" />
           </button>
         </div>
 
@@ -533,7 +534,7 @@ export const VersionControlPanel: FC = () => {
                         className="text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)]"
                         aria-label={t('vc.deleteBranch', { name: branch.name })}
                       >
-                        ✕
+                        <Icon name="close" size="sm" aria-hidden="true" />
                       </Button>
                     )}
                   </div>
@@ -621,7 +622,10 @@ export const VersionControlPanel: FC = () => {
             <strong className="text-[var(--sc-text-primary)]">„{pendingRestore?.label}“</strong> (
             {pendingRestore && new Date(pendingRestore.timestamp).toLocaleString()})
           </p>
-          <p className="text-sm text-amber-400">⚠️ {t('vc.restoreWarning')}</p>
+          <p className="text-sm text-[var(--sc-warning-fg)] flex items-center gap-1">
+            <Icon name="warning" size="sm" aria-hidden="true" />
+            {t('vc.restoreWarning')}
+          </p>
           <div className="flex gap-3 justify-end">
             <Button
               variant="secondary"

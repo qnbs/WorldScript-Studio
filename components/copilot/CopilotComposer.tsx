@@ -1,6 +1,7 @@
 import type { FC, FormEvent, KeyboardEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { useTransientUiStore } from '../../app/transientUiStore';
+import { Icon } from '../ui/Icon';
 
 interface CopilotComposerProps {
   placeholder: string;
@@ -59,23 +60,15 @@ export const CopilotComposer: FC<CopilotComposerProps> = ({
         placeholder={placeholder}
         aria-label={placeholder}
         rows={1}
-        className="flex-1 resize-none rounded-sc-lg bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm px-3 py-2 max-h-28 overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+        className="flex-1 resize-none rounded-sc-lg bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)] text-sm px-3 py-2 max-h-28 overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
       />
       <button
         type="submit"
         disabled={isStreaming || !value.trim()}
         aria-label={sendLabel}
-        className="shrink-0 rounded-sc-lg bg-[var(--sc-accent)] text-white p-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+        className="shrink-0 rounded-sc-lg bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] p-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className="w-icon-sc-sm h-icon-sc-sm"
-          aria-hidden="true"
-        >
-          <path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z" />
-        </svg>
+        <Icon name="send" size="sm" aria-hidden />
       </button>
     </form>
   );

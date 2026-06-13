@@ -8,6 +8,7 @@ import { writerActions } from '../../features/writer/writerSlice';
 import { useTranslation } from '../../hooks/useTranslation';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
+import { Icon } from '../ui/Icon';
 import { Select } from '../ui/Select';
 import { ToolInputs } from './ToolInputs';
 
@@ -91,7 +92,7 @@ const ToolsPanel: FC = React.memo(() => {
                 onClick={() => dispatch(writerActions.setActiveTool(tool.id as WriterTool))}
                 className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] active:scale-95 touch-manipulation min-h-[44px] min-w-[44px] ${
                   activeTool === tool.id
-                    ? 'bg-[var(--sc-accent)] text-white shadow-md transform scale-[1.02]'
+                    ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] shadow-md transform scale-[1.02]'
                     : 'bg-[var(--glass-bg)] text-[var(--sc-text-secondary)] hover:bg-[var(--glass-bg-hover)] border border-[var(--sc-border-subtle)]'
                 }`}
                 aria-label={tool.title}
@@ -195,16 +196,7 @@ const ToolsPanel: FC = React.memo(() => {
                 disabled={isGenerateDisabled()}
                 className="w-full py-3 text-base shadow-lg"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-5 h-5 mr-2"
-                >
-                  {ICONS.SPARKLES}
-                </svg>
+                <Icon name="sparkles" size="md" className="me-2" aria-hidden="true" />
                 {t('common.generate')}
               </Button>
             )}

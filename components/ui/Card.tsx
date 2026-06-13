@@ -21,22 +21,22 @@ export const Card: React.FC<CardProps> = ({
         relative group rounded-sc-xl
         bg-[var(--sc-surface-raised)]/60 backdrop-blur-3xl
         border border-[var(--glass-border)]
-        shadow-[0_8px_30px_rgb(0,0,0,0.04)]
+        shadow-[var(--sc-shadow-lg)]
         transition-all duration-sc-normal ease-out
-        ${isInteractive ? 'hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(0,0,0,0.1)] hover:bg-[var(--sc-surface-raised)]/80 cursor-pointer active:scale-[0.99]' : ''} 
+        ${isInteractive ? 'hover:-translate-y-1 hover:shadow-[var(--sc-shadow-xl)] hover:bg-[var(--sc-surface-raised)]/80 cursor-pointer active:scale-[0.99]' : ''} 
         ${className ?? ''}
       `}
       {...props}
     >
       {/* Inner Border Gradient - gives a subtle high-end look */}
       <div className="absolute inset-0 rounded-sc-xl border border-[var(--glass-border)] pointer-events-none" />
-      <div className="absolute inset-0 rounded-sc-xl border border-transparent group-hover:border-indigo-500/20 transition-colors duration-500 pointer-events-none" />
+      <div className="absolute inset-0 rounded-sc-xl border border-transparent group-hover:border-[var(--sc-accent)]/20 transition-colors duration-500 pointer-events-none" />
 
       {/* Specular Highlight - Simulates light hitting the top edge of glass */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--glass-highlight)] to-transparent opacity-50 pointer-events-none" />
 
       {/* Spotlight Effect */}
-      <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-500/5 to-indigo-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-lg pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[var(--sc-accent)]/0 via-[var(--sc-accent)]/5 to-[var(--sc-accent)]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-lg pointer-events-none" />
 
       <div className="relative z-10 h-full flex flex-col">{children}</div>
     </Component>
@@ -60,7 +60,7 @@ interface CardHeaderProps {
 export const CardHeader: React.FC<CardHeaderProps> = ({ children, className }) => {
   return (
     <div
-      className={`p-6 border-b border-[var(--sc-border-subtle)]/50 bg-white/[0.02] ${className ?? ''}`}
+      className={`p-6 border-b border-[var(--sc-border-subtle)]/50 bg-[var(--sc-surface-raised)]/[0.02] ${className ?? ''}`}
     >
       {children}
     </div>

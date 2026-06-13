@@ -176,7 +176,7 @@ const ManuscriptViewUI: FC = () => {
                     aria-selected={leftNavTab === 'chapters'}
                     className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
                       leftNavTab === 'chapters'
-                        ? 'bg-[var(--sc-accent)] text-white'
+                        ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
                         : 'text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-overlay)]'
                     }`}
                     onClick={() => setLeftNavTab('chapters')}
@@ -189,7 +189,7 @@ const ManuscriptViewUI: FC = () => {
                     aria-selected={leftNavTab === 'binder'}
                     className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
                       leftNavTab === 'binder'
-                        ? 'bg-[var(--sc-accent)] text-white'
+                        ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
                         : 'text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-overlay)]'
                     }`}
                     onClick={() => setLeftNavTab('binder')}

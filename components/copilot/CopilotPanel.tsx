@@ -10,6 +10,7 @@ import { useTransientUiStore } from '../../app/transientUiStore';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import type { UseGlobalCopilotReturn } from '../../hooks/useGlobalCopilot';
 import type { View } from '../../types';
+import { Icon } from '../ui/Icon';
 import { AiModeIndicator } from './AiModeIndicator';
 import { CopilotComposer } from './CopilotComposer';
 import { CopilotMessageList } from './CopilotMessageList';
@@ -134,34 +135,7 @@ export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel, onN
             title={isSidebar ? t('copilot.dialogMode') : t('copilot.sidebarMode')}
             className="hidden rounded-sc-lg p-1.5 text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] md:flex"
           >
-            {isSidebar ? (
-              /* dock→dialog icon */
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-icon-sc-sm w-icon-sc-sm"
-                aria-hidden="true"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M15 3v18" />
-              </svg>
-            ) : (
-              /* float icon */
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-icon-sc-sm w-icon-sc-sm"
-                aria-hidden="true"
-              >
-                <path d="M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h3M16 3h3a2 2 0 012 2v14a2 2 0 01-2 2h-3" />
-              </svg>
-            )}
+            <Icon name={isSidebar ? 'panel-dock' : 'panel-float'} size="sm" aria-hidden />
           </button>
           <button
             type="button"
@@ -169,17 +143,7 @@ export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel, onN
             aria-label={t('copilot.clear')}
             className="rounded-sc-lg p-1.5 text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="h-icon-sc-sm w-icon-sc-sm"
-              aria-hidden="true"
-            >
-              <path d="M3 6h18M8 6V4h8v2m-9 0v14a2 2 0 002 2h6a2 2 0 002-2V6" />
-            </svg>
+            <Icon name="trash" size="sm" aria-hidden />
           </button>
           <button
             type="button"
@@ -187,17 +151,7 @@ export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel, onN
             aria-label={t('copilot.closeLabel')}
             className="rounded-sc-lg p-1.5 text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="h-icon-sc-sm w-icon-sc-sm"
-              aria-hidden="true"
-            >
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            <Icon name="close" size="sm" aria-hidden />
           </button>
         </div>
       </header>

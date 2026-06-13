@@ -2,10 +2,20 @@ import { useCallback, useEffect, useState } from 'react';
 import { useMindMapViewContext } from '../../contexts/MindMapViewContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import type { MindMapLinkedEntityType, MindMapNodeShape, MindMapNodeType } from '../../types';
+import { Icon } from '../ui/Icon';
 import { Select } from '../ui/Select';
 
 const SHAPES: MindMapNodeShape[] = ['circle', 'rectangle', 'diamond', 'ellipse', 'hexagon'];
-const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444'];
+// QNBS-v3: node color presets use the design-system data-viz palette so they adapt to theme/sepia.
+const COLORS = [
+  'var(--sc-data-2)',
+  'var(--sc-data-5)',
+  'var(--sc-data-4)',
+  'var(--sc-data-3)',
+  'var(--sc-data-6)',
+  'var(--sc-data-1)',
+  'var(--sc-data-8)',
+];
 const LINKED_TYPES: MindMapLinkedEntityType[] = ['character', 'world', 'object', 'group', 'scene'];
 
 const SHAPE_KEY: Record<MindMapNodeShape, string> = {
@@ -34,7 +44,7 @@ export function MindMapNodeEditor() {
   const [textNotes, setTextNotes] = useState('');
   const [type, setType] = useState<MindMapNodeType>('free');
   const [shape, setShape] = useState<MindMapNodeShape>('rectangle');
-  const [color, setColor] = useState('#6366f1');
+  const [color, setColor] = useState('var(--sc-data-2)');
   const [linkedEntityType, setLinkedEntityType] = useState<MindMapLinkedEntityType | ''>('');
 
   useEffect(() => {
@@ -102,18 +112,7 @@ export function MindMapNodeEditor() {
           aria-label={t('mindmap.cancel')}
           className="p-1 rounded-sc-sm hover:bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)]"
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden="true"
-          >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <Icon name="close" size="sm" aria-hidden="true" />
         </button>
       </div>
 
@@ -260,7 +259,7 @@ export function MindMapNodeEditor() {
           <button
             type="button"
             onClick={handleSave}
-            className="text-xs px-3 py-1.5 rounded-sc-sm bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-white"
+            className="text-xs px-3 py-1.5 rounded-sc-sm bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-[var(--sc-text-on-accent)]"
           >
             {t('mindmap.save')}
           </button>

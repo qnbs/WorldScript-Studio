@@ -231,7 +231,7 @@ describe('TensionCurvePanel', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /sceneboard.tension.title/i }));
     // Overridden dot should use accent fill
-    const accentDot = container.querySelector('circle[fill*="--sc-accent-primary"]');
+    const accentDot = container.querySelector('circle[fill*="--sc-accent"]');
     expect(accentDot).toBeTruthy();
   });
 });

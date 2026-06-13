@@ -224,7 +224,7 @@ const WeeklyBars: FC<{ history: { date: string; words: number }[]; goalPerDay: n
             className="w-full rounded-t"
             style={{
               height: `${Math.round((d.words / max) * 40)}px`,
-              background: d.words >= goalPerDay ? '#4ade80' : 'var(--sc-accent)',
+              background: d.words >= goalPerDay ? 'var(--sc-success-fg)' : 'var(--sc-accent)',
               minHeight: d.words > 0 ? 2 : 0,
             }}
           />

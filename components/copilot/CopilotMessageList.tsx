@@ -215,7 +215,7 @@ export const CopilotMessageList: FC<CopilotMessageListProps> = ({
             <div
               className={`max-w-[85%] rounded-sc-lg px-3 py-2 text-sm ${
                 isUser
-                  ? 'bg-[var(--sc-accent)] text-white'
+                  ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
                   : 'bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]'
               }`}
             >
@@ -235,7 +235,7 @@ export const CopilotMessageList: FC<CopilotMessageListProps> = ({
                   const block = extractCodeBlock(msg.content);
                   if (block) onApply(block);
                 }}
-                className="mt-1 rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-2.5 py-1 text-xs text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+                className="mt-1 rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-2.5 py-1 text-xs text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               >
                 {applyStatus === 'applying' ? applyingLabel : applyLabel}
               </button>

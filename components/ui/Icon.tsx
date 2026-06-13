@@ -26,7 +26,13 @@ export type IconName =
   | 'photo'
   | 'characters'
   | 'world'
-  | 'grip-horizontal';
+  | 'grip-horizontal'
+  | 'send'
+  | 'shield'
+  | 'panel-dock'
+  | 'panel-float'
+  | 'download'
+  | 'refresh';
 
 interface IconProps extends React.SVGAttributes<SVGSVGElement> {
   name: IconName;
@@ -177,6 +183,31 @@ const PATHS: Record<IconName, React.ReactNode> = {
   ),
   'grip-horizontal': (
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.25h16.5" />
+  ),
+  send: <path d="M3.4 20.4L21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z" />,
+  shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+  'panel-dock': (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M15 3v18" />
+    </>
+  ),
+  'panel-float': (
+    <path d="M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h3M16 3h3a2 2 0 012 2v14a2 2 0 01-2 2h-3" />
+  ),
+  download: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+    />
+  ),
+  refresh: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+    />
   ),
 };
 

@@ -369,7 +369,7 @@ export const VoiceSettingsSection: FC = () => {
                     setDownloadModelType('stt');
                     setDownloadModalOpen(true);
                   }}
-                  className="rounded-md bg-[var(--sc-accent)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--sc-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] focus-visible:outline-none"
+                  className="rounded-md bg-[var(--sc-accent)] px-3 py-1.5 text-sm font-medium text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] focus-visible:outline-none"
                 >
                   {t('settings.voice.downloadSttModel')}
                 </button>
