@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **v1.23 P0 tracker reconciliation (docs):** `ROADMAP.md`, `TODO.md`, and `AUDIT.md` brought into agreement after a drift where ROADMAP marked all v1.23 P0 items done while TODO still listed three as open. Each item is now evidence-backed (audit output, CI run, file existence). The manual smoke-test *run* is split out as a tracked human-only step (the protocol document itself is complete).
 - **AUDIT.md Known Overrides table refreshed:** added the just-merged `esbuild >=0.28.1` override (GHSA-67mh-4wv8-2f99, dev-server CORS), replaced placeholder advisory strings with verified GitHub Advisory IDs (re-checked 2026-06-13), and labelled preventive-only pins honestly. Dependency hygiene re-verified: `pnpm audit` high **and** moderate → 0 vulnerabilities.
 
+## [1.22.0] — 2026-06-11
+
 ### Added
 
 - **OpenRouter provider (Cloud 5):** Unified gateway to 100+ open-source models. `services/ai/providers/openrouterProvider.ts` — circuit breaker (4 × 429 → 5 min pause), RPM tracking, free-tier catalog (`deepseek/deepseek-r1:free`, `meta-llama/llama-3.3-70b-instruct:free`, `qwen/qwen2.5-72b-instruct:free`, `google/gemma-3-27b-it:free`, `mistralai/mistral-7b-instruct:free`). Settings → OpenRouter panel with enable toggle, API key (AES-encrypted), model selector. Sign up at openrouter.ai/keys — no credit card for `:free` models.
