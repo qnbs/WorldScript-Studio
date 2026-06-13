@@ -82,7 +82,7 @@ const CASES: readonly Case[] = [
   },
   {
     name: 'ENOTFOUND message',
-    err: new Error('getaddrinfo ENOTFOUND api.openai.com'),
+    err: new Error('getaddrinfo ENOTFOUND api.example.invalid'),
     category: 'network',
     retryable: true,
   },
