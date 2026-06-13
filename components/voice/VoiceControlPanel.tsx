@@ -6,6 +6,7 @@
 import React, { useCallback } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useVoice } from '../../hooks/useVoice';
+import { Icon } from '../ui/Icon';
 
 export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
   const { t } = useTranslation();
@@ -60,27 +61,14 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
         onClick={handleToggleListening}
         className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
           isActive
-            ? 'bg-[var(--sc-accent)] text-white'
+            ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
             : 'bg-[var(--sc-surface-subtle)] text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-hover)]'
         }`}
         aria-pressed={isActive}
         aria-label={isListening ? t('voice.stopListening') : t('voice.startListening')}
         title={isListening ? t('voice.stopListening') : t('voice.startListening')}
       >
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-        >
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-          <line x1="12" y1="19" x2="12" y2="23" />
-          <line x1="8" y1="23" x2="16" y2="23" />
-        </svg>
+        <Icon name="microphone" size="md" aria-hidden="true" />
       </button>
 
       <button
@@ -88,7 +76,7 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
         onClick={handleToggleDictation}
         className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
           dictationActive
-            ? 'bg-[var(--sc-success)] text-white'
+            ? 'bg-[var(--sc-success-fg)] text-[var(--sc-text-on-accent)]'
             : 'bg-[var(--sc-surface-subtle)] text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-hover)]'
         }`}
         aria-pressed={dictationActive}

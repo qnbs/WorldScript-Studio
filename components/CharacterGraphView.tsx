@@ -44,11 +44,21 @@ const CharacterForceGraph: FC = () => {
   const appearancePreset = useAppSelector((s) => s.settings?.appearancePreset ?? 'default');
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
-  const [paintColors, setPaintColors] = useState({
-    fill: '#6366f1',
-    stroke: '#a5b4fc',
-    label: '#e2e8f0',
-  });
+  // QNBS-v3: initial paint colors resolved from design-system CSS variables so the first canvas frame
+  //          already matches the active theme; SSR falls back to hard-coded indigo equivalents.
+  function resolvePaintColors(): { fill: string; stroke: string; label: string } {
+    if (typeof document === 'undefined') {
+      return { fill: '#6366f1', stroke: '#a5b4fc', label: '#e2e8f0' };
+    }
+    const body = document.body;
+    return {
+      fill: getComputedStyle(body).getPropertyValue('--sc-accent').trim() || '#6366f1',
+      stroke: getComputedStyle(body).getPropertyValue('--sc-text-secondary').trim() || '#a5b4fc',
+      label: getComputedStyle(body).getPropertyValue('--sc-text-secondary').trim() || '#e2e8f0',
+    };
+  }
+
+  const [paintColors, setPaintColors] = useState(resolvePaintColors);
 
   // QNBS-v3: Canvas nodes follow DS accent — refresh after body theme/preset classes update.
   // biome-ignore lint/correctness/useExhaustiveDependencies: theme/preset are intentional triggers; effect reads computed CSS after App updates body.
@@ -111,7 +121,9 @@ const CharacterForceGraph: FC = () => {
       ctx.stroke();
 
       const initials = n.name.slice(0, 2).toUpperCase();
-      ctx.fillStyle = '#fff';
+      // QNBS-v3: initials use the on-accent token so they remain readable across themes.
+      ctx.fillStyle =
+        getComputedStyle(document.body).getPropertyValue('--sc-text-on-accent').trim() || '#fff';
       ctx.font = `bold ${Math.max(8, 13 / globalScale)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -356,7 +368,7 @@ const CharacterGraphUI: FC = () => {
                                       strength: parseInt(e.target.value, 10),
                                     })
                                   }
-                                  className="w-full accent-indigo-500"
+                                  className="w-full accent-[var(--sc-accent)]"
                                 />
                               </td>
                             </tr>
@@ -435,7 +447,7 @@ const CharacterGraphUI: FC = () => {
                           onChange={(e) =>
                             onUpdateRelationship(rel.id, { strength: parseInt(e.target.value, 10) })
                           }
-                          className="flex-1 h-1 accent-indigo-500"
+                          className="flex-1 h-1 accent-[var(--sc-accent)]"
                         />
                         <span className="text-[var(--sc-text-muted)] w-4 text-right">
                           {rel.strength || 5}

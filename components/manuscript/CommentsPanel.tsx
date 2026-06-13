@@ -178,7 +178,7 @@ export const CommentsPanel: FC<{ sectionId: string }> = ({ sectionId }) => {
           {t('comments.title')}
         </span>
         {unresolvedCount > 0 && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+          <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]">
             {t('comments.unresolved', { n: String(unresolvedCount) })}
           </span>
         )}

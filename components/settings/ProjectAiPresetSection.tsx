@@ -189,7 +189,7 @@ export const ProjectAiPresetSection: FC = () => {
               >
                 {t('settings.projectAi.temperature')}
                 {preset?.temperature !== undefined && (
-                  <span className="ml-2 font-mono text-xs text-gray-500">
+                  <span className="ml-2 font-mono text-xs text-[var(--sc-text-muted)]">
                     {preset.temperature.toFixed(2)}
                   </span>
                 )}
@@ -204,7 +204,7 @@ export const ProjectAiPresetSection: FC = () => {
                 onChange={(e) => patch({ temperature: Number.parseFloat(e.target.value) })}
                 className="w-full accent-[var(--sc-accent)]"
               />
-              <div className="flex justify-between text-xs text-gray-400">
+              <div className="flex justify-between text-xs text-[var(--sc-text-muted)]">
                 <span>0 — precise</span>
                 <span>2 — creative</span>
               </div>
@@ -263,7 +263,7 @@ export const ProjectAiPresetSection: FC = () => {
 
             {/* LoRA section — preparatory, only for local inference providers */}
             {showLoraFields && (
-              <div className="space-y-4 rounded-sc-md border border-dashed border-amber-500/40 bg-[var(--sc-warning-bg)] p-4">
+              <div className="space-y-4 rounded-sc-md border border-dashed border-[var(--sc-warning-border)] bg-[var(--sc-warning-bg)] p-4">
                 <p className="text-xs font-semibold uppercase tracking-wider text-[var(--sc-warning-fg)]">
                   {t('settings.projectAi.loraSection')}
                 </p>
@@ -291,7 +291,7 @@ export const ProjectAiPresetSection: FC = () => {
                     className="block text-sm font-medium text-[var(--sc-text-primary)]"
                   >
                     {t('settings.projectAi.loraScale')}
-                    <span className="ml-2 font-mono text-xs text-gray-500">
+                    <span className="ml-2 font-mono text-xs text-[var(--sc-text-muted)]">
                       {(preset?.loraScale ?? 1.0).toFixed(2)}
                     </span>
                   </label>
@@ -303,7 +303,7 @@ export const ProjectAiPresetSection: FC = () => {
                     step="0.05"
                     value={preset?.loraScale ?? 1.0}
                     onChange={(e) => patch({ loraScale: Number.parseFloat(e.target.value) })}
-                    className="w-full accent-amber-500"
+                    className="w-full accent-[var(--sc-warning-fg)]"
                   />
                   <p className="text-xs text-[var(--sc-text-muted)]">
                     {t('settings.projectAi.loraScaleHint')}

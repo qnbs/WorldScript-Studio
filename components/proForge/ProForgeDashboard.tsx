@@ -82,7 +82,7 @@ export const ProForgeDashboard: React.FC = () => {
             className="w-8 h-8 rounded-sc-md flex items-center justify-center"
             style={{ backgroundColor: 'var(--sc-accent)' }}
           >
-            <span className="text-white font-bold text-sm">P</span>
+            <span className="text-[var(--sc-text-on-accent)] font-bold text-sm">P</span>
           </div>
           <div>
             <h2 className="text-base font-semibold">{t('proforge.pipeline.title')}</h2>
@@ -96,7 +96,7 @@ export const ProForgeDashboard: React.FC = () => {
             <button
               type="button"
               onClick={handleAbort}
-              className="px-3 py-1.5 text-sm rounded-sc-md bg-[var(--sc-error)] text-white hover:opacity-90 transition-opacity"
+              className="px-3 py-1.5 text-sm rounded-sc-md bg-[var(--sc-error)] text-[var(--sc-text-on-accent)] hover:opacity-90 transition-opacity"
               aria-label={t('proforge.dashboard.abortAria')}
             >
               {t('common.abort')}
@@ -148,7 +148,7 @@ export const ProForgeDashboard: React.FC = () => {
                 type="button"
                 onClick={handleStart}
                 disabled={isLoading}
-                className="w-full px-4 py-2.5 text-sm font-medium rounded-sc-md text-white transition-opacity disabled:opacity-50"
+                className="w-full px-4 py-2.5 text-sm font-medium rounded-sc-md text-[var(--sc-text-on-accent)] transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: 'var(--sc-accent)' }}
               >
                 {isLoading ? t('proforge.dashboard.starting') : t('proforge.dashboard.start')}

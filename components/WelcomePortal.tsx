@@ -29,7 +29,7 @@ const NewProjectOption: React.FC<{
     <button
       type="button"
       onClick={onClick}
-      className="bg-[var(--sc-surface-raised)]/80 p-6 rounded-lg border border-[var(--sc-border-subtle)] hover:border-indigo-500 hover:bg-[var(--sc-surface-raised)] transition-all cursor-pointer flex items-start space-x-4 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+      className="bg-[var(--sc-surface-raised)]/80 p-6 rounded-lg border border-[var(--sc-border-subtle)] hover:border-[var(--sc-accent)] hover:bg-[var(--sc-surface-raised)] transition-all cursor-pointer flex items-start space-x-4 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
     >
       <div className="flex-shrink-0 bg-[var(--sc-surface-overlay)] p-3 rounded-lg">
         <svg

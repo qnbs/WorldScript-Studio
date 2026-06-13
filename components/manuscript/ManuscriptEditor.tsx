@@ -334,7 +334,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
                     e.preventDefault();
                     handleMentionSelect(item);
                   }}
-                  className={`px-3 py-3 rounded-md text-sm cursor-pointer flex items-center space-x-3 transition-colors ${index === selectedMentionIndex ? 'bg-[var(--sc-accent)] text-white' : 'text-[var(--sc-text-primary)] hover:bg-[var(--sc-accent)] hover:text-white'}`}
+                  className={`px-3 py-3 rounded-md text-sm cursor-pointer flex items-center space-x-3 transition-colors ${index === selectedMentionIndex ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-primary)] hover:bg-[var(--sc-accent)] hover:text-[var(--sc-text-on-accent)]'}`}
                 >
                   {item.type === 'character' ? (
                     <div
@@ -344,7 +344,9 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
                         name="characters"
                         size="sm"
                         className={
-                          index === selectedMentionIndex ? 'text-white' : 'text-[var(--sc-info-fg)]'
+                          index === selectedMentionIndex
+                            ? 'text-[var(--sc-text-on-accent)]'
+                            : 'text-[var(--sc-info-fg)]'
                         }
                       />
                     </div>
@@ -357,7 +359,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
                         size="sm"
                         className={
                           index === selectedMentionIndex
-                            ? 'text-white'
+                            ? 'text-[var(--sc-text-on-accent)]'
                             : 'text-[var(--sc-success-fg)]'
                         }
                       />
@@ -388,7 +390,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           <button
             type="button"
             onClick={applyCorrection}
-            className="block w-full text-left px-3 py-2 min-h-[44px] rounded hover:bg-[var(--sc-accent)] hover:text-white text-[var(--sc-text-primary)] font-medium flex items-center"
+            className="block w-full text-left px-3 py-2 min-h-[44px] rounded hover:bg-[var(--sc-accent)] hover:text-[var(--sc-text-on-accent)] text-[var(--sc-text-primary)] font-medium flex items-center"
           >
             {spellCheckPopover.suggestion}
           </button>

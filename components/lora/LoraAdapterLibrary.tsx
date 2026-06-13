@@ -8,6 +8,7 @@ import React from 'react';
 import { useLoraViewContext } from '../../contexts/LoraViewContext';
 import type { LoraAdapter } from '../../features/lora/types';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from '../ui/Icon';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '—';
@@ -54,7 +55,7 @@ function AdapterCard({ adapter }: { adapter: LoraAdapter }) {
           <div className="flex items-center gap-2">
             <h3 className="truncate font-medium text-[var(--sc-text-primary)]">{adapter.name}</h3>
             {adapter.isActive && (
-              <span className="shrink-0 rounded-full bg-[var(--sc-interactive-primary)] px-2 py-0.5 text-xs text-white">
+              <span className="shrink-0 rounded-full bg-[var(--sc-interactive-primary)] px-2 py-0.5 text-xs text-[var(--sc-text-on-accent)]">
                 {t('lora.adapter.active')}
               </span>
             )}
@@ -86,9 +87,7 @@ function AdapterCard({ adapter }: { adapter: LoraAdapter }) {
             className="rounded-sc-md p-1.5 text-[var(--sc-text-secondary)] hover:text-[var(--sc-status-error)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
             aria-label={t('lora.adapter.delete')}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M6 2h4a1 1 0 0 1 1 1v1H5V3a1 1 0 0 1 1-1zM3 5h10l-1 9H4L3 5zm3 2v5h1V7H6zm3 0v5h1V7H9z" />
-            </svg>
+            <Icon name="trash" size="sm" />
           </button>
         </div>
       </div>
@@ -113,7 +112,7 @@ export default React.memo(function LoraAdapterLibrary() {
           type="button"
           onClick={openWizard}
           disabled={isTraining}
-          className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] disabled:opacity-50"
+          className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-4 py-2 text-sm font-medium text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] disabled:opacity-50"
         >
           {t('lora.wizard.startFirstTraining')}
         </button>
@@ -131,7 +130,7 @@ export default React.memo(function LoraAdapterLibrary() {
           type="button"
           onClick={openWizard}
           disabled={isTraining}
-          className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] disabled:opacity-50"
+          className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-3 py-1.5 text-sm font-medium text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] disabled:opacity-50"
         >
           {t('lora.wizard.trainNew')}
         </button>

@@ -125,7 +125,7 @@ export const SceneTimelinePanel: FC<SceneTimelinePanelProps> = ({ sections, t })
                   </span>
                   <div className="flex-1 h-6 rounded-md bg-[var(--sc-surface-overlay)] overflow-hidden flex">
                     <div
-                      className="h-full bg-violet-500/45 border-r border-violet-400/30"
+                      className="h-full bg-[var(--sc-data-6)]/45 border-r border-[var(--sc-data-6)]/30"
                       style={{ width: `${pct}%` }}
                       title={`${words} ${t('sceneboard.words')}`}
                     />

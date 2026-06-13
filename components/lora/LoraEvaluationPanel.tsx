@@ -112,7 +112,7 @@ export default React.memo(function LoraEvaluationPanel() {
           type="button"
           onClick={handleEvaluate}
           disabled={isEvaluating}
-          className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+          className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-4 py-2 text-sm font-medium text-[var(--sc-text-on-accent)] disabled:opacity-50 hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
         >
           {isEvaluating ? t('lora.evaluation.evaluating') : t('lora.evaluation.run')}
         </button>

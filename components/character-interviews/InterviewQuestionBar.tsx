@@ -64,7 +64,7 @@ export function InterviewQuestionBar() {
           type="button"
           onClick={handleSend}
           disabled={isStreaming || !customQuestion.trim()}
-          className="rounded-sc-md bg-[var(--sc-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--sc-accent-hover)] disabled:opacity-50"
+          className="rounded-sc-md bg-[var(--sc-accent)] px-4 py-2 text-sm font-medium text-[var(--sc-text-on-accent)] transition-colors hover:bg-[var(--sc-accent-hover)] disabled:opacity-50"
         >
           {t('characterInterviews.sendQuestion')}
         </button>

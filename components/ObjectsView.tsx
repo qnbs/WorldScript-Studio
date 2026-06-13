@@ -4,19 +4,20 @@ import { ObjectsViewContext, useObjectsViewContext } from '../contexts/ObjectsVi
 import { useObjectsView } from '../hooks/useObjectsView';
 import type { ObjectGroup, StoryObject, StoryObjectType } from '../types';
 import { EmptyState } from './ui/EmptyState';
+import { Icon } from './ui/Icon';
 import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 
 // ── Object Type Badge ─────────────────────────────────────────────────────────
 
-// QNBS-v3: Replaced dark: Tailwind prefixes with alpha-bg pattern — works on all appearance presets.
+// QNBS-v3: type badge colors use the design-system data-viz palette so they adapt to theme/sepia.
 const TYPE_COLORS: Record<StoryObjectType, string> = {
-  prop: 'bg-blue-500/15 text-blue-600',
-  weapon: 'bg-red-500/15 text-red-600',
-  vehicle: 'bg-orange-500/15 text-orange-600',
-  artifact: 'bg-purple-500/15 text-purple-600',
-  document: 'bg-yellow-500/15 text-yellow-600',
-  'place-item': 'bg-green-500/15 text-green-600',
+  prop: 'bg-[var(--sc-data-2)]/15 text-[var(--sc-data-2)]',
+  weapon: 'bg-[var(--sc-data-1)]/15 text-[var(--sc-data-1)]',
+  vehicle: 'bg-[var(--sc-data-4)]/15 text-[var(--sc-data-4)]',
+  artifact: 'bg-[var(--sc-data-6)]/15 text-[var(--sc-data-6)]',
+  document: 'bg-[var(--sc-data-4)]/15 text-[var(--sc-data-4)]',
+  'place-item': 'bg-[var(--sc-data-3)]/15 text-[var(--sc-data-3)]',
   other: 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-muted)]',
 };
 
@@ -150,7 +151,7 @@ const ObjectForm: FC = () => {
         <button
           type="submit"
           disabled={!name.trim()}
-          className="px-4 py-2 text-sm rounded-lg bg-stone-600 text-white hover:bg-stone-700 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+          className="px-4 py-2 text-sm rounded-lg bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-accent-hover)] disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
           {t('objects.save')}
         </button>
@@ -161,15 +162,16 @@ const ObjectForm: FC = () => {
 
 // ── Group Form ────────────────────────────────────────────────────────────────
 
+// QNBS-v3: group color presets use the design-system data-viz palette so they adapt to theme/sepia.
 const GROUP_COLORS = [
-  '#78716c',
-  '#6366f1',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
+  'var(--sc-text-muted)',
+  'var(--sc-data-2)',
+  'var(--sc-data-3)',
+  'var(--sc-data-4)',
+  'var(--sc-data-1)',
+  'var(--sc-data-6)',
+  'var(--sc-data-5)',
+  'var(--sc-data-7)',
 ];
 
 const GroupForm: FC = () => {
@@ -256,7 +258,7 @@ const GroupForm: FC = () => {
         <button
           type="submit"
           disabled={!name.trim()}
-          className="px-4 py-2 text-sm rounded-lg bg-stone-600 text-white hover:bg-stone-700 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+          className="px-4 py-2 text-sm rounded-lg bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-accent-hover)] disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
           {t('objects.save')}
         </button>
@@ -434,22 +436,9 @@ const ObjectsViewContent: FC = () => {
         <button
           type="button"
           onClick={activeTab === 'objects' ? handleAddObject : handleAddGroup}
-          className="flex items-center gap-1.5 px-3 py-2 bg-stone-600 hover:bg-stone-700 text-white text-sm font-medium rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)] text-[var(--sc-text-on-accent)] text-sm font-medium rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] transition-colors"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4.5v15m7.5-7.5h-15"
-            />
-          </svg>
+          <Icon name="plus" size="sm" aria-hidden="true" />
           {activeTab === 'objects' ? t('objects.addObject') : t('objects.addGroup')}
         </button>
       </div>

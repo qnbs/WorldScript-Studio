@@ -7,6 +7,7 @@ import { useCharacterInterviewsView } from '../hooks/useCharacterInterviewsView'
 import { useTranslation } from '../hooks/useTranslation';
 import { ArchetypeSelector } from './character-interviews/ArchetypeSelector';
 import { InterviewPanel } from './character-interviews/InterviewPanel';
+import { Icon } from './ui/Icon';
 import { Select } from './ui/Select';
 
 function CharacterInterviewsViewContent() {
@@ -100,7 +101,7 @@ function CharacterInterviewsViewContent() {
                           setNewTitle('');
                           setShowNewForm(false);
                         }}
-                        className="flex-1 rounded-sc-md bg-[var(--sc-accent)] py-1 text-sm text-white hover:bg-[var(--sc-accent-hover)]"
+                        className="flex-1 rounded-sc-md bg-[var(--sc-accent)] py-1 text-sm text-[var(--sc-text-on-accent)] hover:bg-[var(--sc-accent-hover)]"
                       >
                         {t('characterInterviews.startInterview')}
                       </button>
@@ -182,7 +183,7 @@ function CharacterInterviewsViewContent() {
                       }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sc-sm p-2 text-[var(--sc-text-muted)] hover:text-[var(--sc-danger-fg)] md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                     >
-                      ×
+                      <Icon name="close" size="sm" aria-hidden="true" />
                     </button>
                   )}
                 </div>

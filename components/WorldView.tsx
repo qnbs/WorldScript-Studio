@@ -64,7 +64,7 @@ const TabButton: FC<{
     aria-selected={active}
     aria-controls={controls}
     onClick={onClick}
-    className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${active ? 'border-indigo-500 text-[var(--sc-text-primary)]' : 'border-transparent text-[var(--sc-text-muted)] hover:border-[var(--sc-border-subtle)] hover:text-[var(--sc-text-secondary)]'}`}
+    className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${active ? 'border-[var(--sc-accent)] text-[var(--sc-text-primary)]' : 'border-transparent text-[var(--sc-text-muted)] hover:border-[var(--sc-border-subtle)] hover:text-[var(--sc-text-secondary)]'}`}
   >
     {children}
   </button>

@@ -21,7 +21,8 @@ function ShapeBody({
   color: string;
   isSelected: boolean;
 }) {
-  const stroke = isSelected ? '#6366f1' : color;
+  // QNBS-v3: selection stroke uses the design-system accent token so it adapts to theme/sepia.
+  const stroke = isSelected ? 'var(--sc-accent)' : color;
   const strokeW = isSelected ? 2.5 : 1.5;
   const fill = `${color}22`;
 

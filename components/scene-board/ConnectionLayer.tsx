@@ -17,12 +17,13 @@ const CARD_H = 130;
 
 // ── Connection type visual metadata ───────────────────────────────────────────
 
+// QNBS-v3: connection type colors use the design-system data-viz palette so they adapt to theme/sepia.
 const TYPE_COLORS: Record<PlotConnectionType, string> = {
-  'cause-effect': '#ef4444',
-  parallel: '#3b82f6',
-  subplot: '#8b5cf6',
-  temporal: '#f59e0b',
-  'character-arc': '#10b981',
+  'cause-effect': 'var(--sc-data-1)',
+  parallel: 'var(--sc-data-2)',
+  subplot: 'var(--sc-data-6)',
+  temporal: 'var(--sc-data-4)',
+  'character-arc': 'var(--sc-data-3)',
 };
 
 const CONNECTION_TYPES: PlotConnectionType[] = [
@@ -87,7 +88,7 @@ const ArrowMarkers: FC = () => (
       markerHeight="6"
       orient="auto-start-reverse"
     >
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--sc-accent-primary,#6366f1)" />
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--sc-accent)" />
     </marker>
     <marker
       id="pb-arrow-preview"
@@ -98,7 +99,7 @@ const ArrowMarkers: FC = () => (
       markerHeight="6"
       orient="auto-start-reverse"
     >
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--sc-text-muted,#9ca3af)" />
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--sc-text-muted)" />
     </marker>
   </defs>
 );
@@ -182,7 +183,7 @@ export const ConnectionLayer: FC<ConnectionLayerProps> = ({
         const isHovered = conn.id === hoveredId;
         const typeColor = TYPE_COLORS[conn.type];
         const strokeColor = isSelected
-          ? 'var(--sc-accent-primary,#6366f1)'
+          ? 'var(--sc-accent)'
           : conn.subplotId
             ? (subplotColorMap.get(conn.subplotId) ?? typeColor)
             : typeColor;
@@ -246,7 +247,7 @@ export const ConnectionLayer: FC<ConnectionLayerProps> = ({
         <path
           d={`M ${drawFromCenter.x},${drawFromCenter.y} L ${cursorCanvasPos.x},${cursorCanvasPos.y}`}
           fill="none"
-          stroke="var(--sc-text-muted,#9ca3af)"
+          stroke="var(--sc-text-muted)"
           strokeWidth={2}
           strokeDasharray="8,4"
           markerEnd="url(#pb-arrow-preview)"

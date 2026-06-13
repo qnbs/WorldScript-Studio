@@ -84,7 +84,7 @@ export default React.memo(function LoraDatasetBuilder() {
             type="button"
             onClick={() => buildDataset()}
             disabled={isBuilding}
-            className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+            className="rounded-sc-md bg-[var(--sc-interactive-primary)] px-3 py-1.5 text-sm font-medium text-[var(--sc-text-on-accent)] disabled:opacity-50 hover:bg-[var(--sc-interactive-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
           >
             {isBuilding ? t('lora.dataset.extracting') : t('lora.dataset.extract')}
           </button>

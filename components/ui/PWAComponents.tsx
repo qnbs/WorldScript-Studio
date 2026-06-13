@@ -176,7 +176,7 @@ export const PWAUpdateToast: FC = () => {
               px-3 py-1.5
               rounded-lg
               bg-[var(--sc-accent)] hover:bg-[var(--sc-accent-hover)]
-              text-white text-xs font-semibold
+              text-[var(--sc-text-on-accent)] text-xs font-semibold
               transition-all active:scale-95
             "
           >
