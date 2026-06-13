@@ -230,6 +230,22 @@ export function createLogger(module: string): ModuleLogger {
   };
 }
 
+// --- Correlation IDs --------------------------------------------------------
+
+let _correlationSeq = 0;
+
+/**
+ * Short, opaque id to correlate the log lines of one logical operation (e.g. an AI request)
+ * across async boundaries. QNBS-v3 (Phase 1): never derived from user content — safe to log.
+ */
+export function newCorrelationId(prefix = 'cid'): string {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().slice(0, 8)
+      : (++_correlationSeq).toString(36).padStart(4, '0');
+  return `${prefix}-${uuid}`;
+}
+
 // --- Backward-compat default logger -----------------------------------------
 // QNBS-v3: Module auto-extracted from [bracket] prefix in first string arg
 

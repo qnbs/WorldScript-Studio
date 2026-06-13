@@ -78,5 +78,6 @@
   "writer.tts.start": "הקראה בקול",
   "writer.tts.stop": "עצירת הקראה",
   "writer.versionControl.label": "גרסאות",
-  "writer.versionControl.tooltip": "בקרת גרסאות (ענפים ותמונות מצב)"
+  "writer.versionControl.tooltip": "בקרת גרסאות (ענפים ותמונות מצב)",
+  "writer.cancelledTag": "Cancelled"
 }

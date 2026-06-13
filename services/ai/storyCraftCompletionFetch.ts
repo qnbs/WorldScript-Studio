@@ -2,7 +2,7 @@ import { streamText } from 'ai';
 import { z } from 'zod';
 
 import type { AIProvider, AiCreativity, AiModel } from '../../types';
-import { logger } from '../logger';
+import { createLogger } from '../logger';
 import { storageService } from '../storageService';
 import { assertCloudAiAllowed } from './aiPolicy';
 import { CREATIVITY_TO_TEMPERATURE } from './creativityTemperature';
@@ -42,7 +42,21 @@ const completionBodySchema = z.object({
   // QNBS-v3: C-3 LoRA wiring — when enableLoraAdapters is on and an adapter has ollamaModelTag,
   // useStoryCraftAI passes it here so the Ollama model identifier is overridden at inference time.
   loraModelPath: z.string().optional(),
+  // QNBS-v3 (Phase 1): opaque per-request correlation id propagated from useStoryCraftAI so the
+  // client request log and this fetch-side failure log share one id. Never user-derived.
+  correlationId: z.string().optional(),
 });
+
+const log = createLogger('ai.completion');
+
+/** Best-effort correlation-id read from the raw body so it is available even if schema parse fails. */
+function readCorrelationId(raw: unknown): string | undefined {
+  if (raw && typeof raw === 'object') {
+    const v = (raw as Record<string, unknown>)['correlationId'];
+    if (typeof v === 'string') return v;
+  }
+  return undefined;
+}
 
 /** Virtuelle URL — nur für `useCompletion`; der echte Transport läuft über `storyCraftCompletionFetch`. */
 export const STORYCRAFT_COMPLETION_URL = 'storycraft-internal://completion';
@@ -118,11 +132,13 @@ export async function storyCraftCompletionFetch(
   _input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  let correlationId: string | undefined;
   try {
     if (!init?.body || typeof init.body !== 'string') {
       throw new Error('Invalid StoryCraft AI request body.');
     }
     const raw: unknown = JSON.parse(init.body);
+    correlationId = readCorrelationId(raw);
     const parsed = completionBodySchema.parse(raw);
     const signal = init.signal ?? undefined;
 
@@ -187,7 +203,7 @@ export async function storyCraftCompletionFetch(
       });
     }
     // QNBS-v3: never expose err.message in response body — may contain internal paths or tokens (CodeQL js/stack-trace-exposure)
-    logger.error('storyCraftCompletionFetch failed', err);
+    log.withContext({ correlationId }).error('storyCraftCompletionFetch failed', err);
     return new Response(JSON.stringify({ error: 'StoryCraft AI request failed.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

@@ -24,6 +24,20 @@ vi.mock('@ai-sdk/react', () => ({
   })),
 }));
 
+// QNBS-v3: stub the logger so request-lifecycle logging stays silent/deterministic; the
+// correlation id is fixed so assertions are stable.
+vi.mock('../../../services/logger', () => {
+  const noop = (): void => {};
+  const make = (): Record<string, unknown> => ({
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    withContext: () => make(),
+  });
+  return { createLogger: () => make(), newCorrelationId: () => 'ai-test123' };
+});
+
 vi.mock('../../../app/hooks', () => ({
   useAppSelector: vi.fn((selector: (s: unknown) => unknown) =>
     selector({
@@ -113,12 +127,18 @@ describe('useStoryCraftAI — return shape', () => {
 // runCompletion
 // ---------------------------------------------------------------------------
 describe('runCompletion', () => {
-  it('calls complete with the user prompt', async () => {
+  it('calls complete with the user prompt and a propagated correlationId', async () => {
     const { result } = renderHook(() => useStoryCraftAI({ onIncremental: vi.fn() }));
     await act(async () => {
       await result.current.runCompletion('Write a story.');
     });
-    expect(mockComplete).toHaveBeenCalledWith('Write a story.');
+    // QNBS-v3 (Phase 1): per-call body carries the correlation id propagated to the fetch layer.
+    expect(mockComplete).toHaveBeenCalledWith(
+      'Write a story.',
+      expect.objectContaining({
+        body: expect.objectContaining({ correlationId: expect.stringMatching(/^ai-/) }),
+      }),
+    );
   });
 
   it('calls setCompletion to reset before running', async () => {

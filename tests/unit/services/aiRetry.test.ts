@@ -7,7 +7,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: aiRetry now emits structured logs on retry decisions — stub the logger so tests stay
-// deterministic and free of IDB/console side effects.
+// deterministic and free of IDB/console side effects. `withContextSpy` captures the log context
+// so we can assert correlation-id propagation.
+const { withContextSpy } = vi.hoisted(() => ({ withContextSpy: vi.fn() }));
 vi.mock('../../../services/logger', () => {
   const noop = (): void => {};
   const make = (): Record<string, unknown> => ({
@@ -15,7 +17,10 @@ vi.mock('../../../services/logger', () => {
     info: noop,
     warn: noop,
     error: noop,
-    withContext: () => make(),
+    withContext: (ctx: unknown) => {
+      withContextSpy(ctx);
+      return make();
+    },
   });
   return { createLogger: () => make() };
 });
@@ -266,6 +271,27 @@ describe('aiRetry', () => {
         await vi.runAllTimersAsync();
         await check;
         expect(fn).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('uses a provided correlationId in retry logs (Phase 1)', async () => {
+      vi.useFakeTimers();
+      try {
+        withContextSpy.mockClear();
+        const fn = vi
+          .fn()
+          .mockRejectedValueOnce(new Error('socket hang up'))
+          .mockResolvedValueOnce('ok');
+        const check = expect(
+          withTransientRetry(fn, { attempts: 2, baseDelayMs: 10, correlationId: 'req-xyz' }),
+        ).resolves.toBe('ok');
+        await vi.runAllTimersAsync();
+        await check;
+        expect(withContextSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ correlationId: 'req-xyz' }),
+        );
       } finally {
         vi.useRealTimers();
       }
