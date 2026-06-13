@@ -78,5 +78,6 @@
   "writer.tts.start": "Leggi ad alta voce",
   "writer.tts.stop": "Interrompi lettura",
   "writer.versionControl.label": "Versioni",
-  "writer.versionControl.tooltip": "Controllo versione (rami e istantanee)"
+  "writer.versionControl.tooltip": "Controllo versione (rami e istantanee)",
+  "writer.cancelledTag": "Annullato"
 }

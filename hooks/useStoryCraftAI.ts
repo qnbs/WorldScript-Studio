@@ -9,6 +9,11 @@ import {
   STORYCRAFT_COMPLETION_URL,
   storyCraftCompletionFetch,
 } from '../services/ai/storyCraftCompletionFetch';
+import { createLogger, newCorrelationId } from '../services/logger';
+
+// QNBS-v3 (Phase 1): one correlation id per AI generation, shared by the request-start log here,
+// the fetch-side failure log, and the retry seam — for end-to-end traceability (no PII logged).
+const log = createLogger('ai.completion');
 
 export type StoryCraftIncrementalHandler = (fullText: string, delta: string) => void;
 
@@ -75,6 +80,7 @@ export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
   }, [options.onIncremental, options.onFinish, options.onError]);
 
   const prevLenRef = useRef(0);
+  const correlationIdRef = useRef('');
 
   const { completion, complete, stop, isLoading, error, setCompletion } = useCompletion({
     api: STORYCRAFT_COMPLETION_URL,
@@ -85,6 +91,9 @@ export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
       finishRef.current?.(prompt, text);
     },
     onError: (err) => {
+      log
+        .withContext({ correlationId: correlationIdRef.current, provider })
+        .warn('AI completion request failed');
       errorRef.current?.(err);
     },
   });
@@ -107,9 +116,14 @@ export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
     async (userPrompt: string) => {
       prevLenRef.current = 0;
       setCompletion('');
-      await complete(userPrompt);
+      const correlationId = newCorrelationId('ai');
+      correlationIdRef.current = correlationId;
+      // QNBS-v3: log lifecycle (no prompt/keys) + propagate the id into the request body so the
+      // fetch-side failure log shares it.
+      log.withContext({ correlationId, provider }).info('AI completion request started');
+      await complete(userPrompt, { body: { correlationId } });
     },
-    [complete, setCompletion],
+    [complete, setCompletion, provider],
   );
 
   return {

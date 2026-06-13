@@ -983,6 +983,7 @@
   "writer.studio.controls.custom": "Custom...",
   "writer.studio.controls.customTonePlaceholder": "e.g., Sarcastic, Melancholic, Fast-paced",
   "writer.versionControl.tooltip": "Version Control (Branches & Snapshots)",
+  "writer.cancelledTag": "Cancelled",
   "templates.adventure.arc": "Journey, obstacles, triumph.",
   "templates.adventure.description": "Danger, discovery, courage.",
   "templates.adventure.name": "Adventure",

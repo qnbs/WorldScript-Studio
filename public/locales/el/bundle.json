@@ -983,6 +983,7 @@
   "writer.tts.stop": "Σταμάτα να διαβάζεις",
   "writer.versionControl.label": "εκδόσεις",
   "writer.versionControl.tooltip": "Έλεγχος έκδοσης (Κλάδοι και στιγμιότυπα)",
+  "writer.cancelledTag": "Cancelled",
   "templates.adventure.arc": "Ταξίδι, εμπόδια, θρίαμβος.",
   "templates.adventure.description": "Κίνδυνος, ανακάλυψη, θάρρος.",
   "templates.adventure.name": "Περιπέτεια",

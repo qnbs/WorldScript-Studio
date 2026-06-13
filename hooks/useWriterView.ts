@@ -9,6 +9,7 @@ import {
 import { projectActions } from '../features/project/projectSlice';
 import { streamGenerationThunk } from '../features/project/thunks/writingThunks';
 import { writerActions } from '../features/writer/writerSlice';
+import { getAiErrorMessage } from '../services/ai/aiErrorTaxonomy';
 import { isOrchestrationReadyProvider } from '../services/ai/orchestrationProviders';
 import { logger } from '../services/logger';
 import { assembleRAGPrompt } from '../services/ragPromptAssembly';
@@ -261,13 +262,15 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
         (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'));
       if (!isAbort) {
         logger.error('Generation failed', err);
+        // QNBS-v3 (Phase 1): classified, localized recovery hint instead of a hardcoded English
+        // string — mirrors the Copilot (Batch 1.2).
+        dispatch(writerActions.updateCurrentHistoryItem(getAiErrorMessage(err, t)));
+      } else {
         dispatch(
           writerActions.updateCurrentHistoryItem(
-            'Error generating content. Please try again later or check your API key.',
+            `${fullStreamRef.current} [${t('writer.cancelledTag')}]`,
           ),
         );
-      } else {
-        dispatch(writerActions.updateCurrentHistoryItem(`${fullStreamRef.current} [Cancelled]`));
       }
     };
 
@@ -315,6 +318,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     selection.start,
     style,
     activeTool,
+    t,
   ]);
 
   const handleNavigateHistory = useCallback(

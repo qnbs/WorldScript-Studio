@@ -230,6 +230,25 @@ export function createLogger(module: string): ModuleLogger {
   };
 }
 
+// --- Correlation IDs --------------------------------------------------------
+
+let _correlationSeq = 0;
+
+/**
+ * Short, opaque id to correlate the log lines of one logical operation (e.g. an AI request)
+ * across async boundaries. QNBS-v3 (Phase 1): never derived from user content — safe to log.
+ * A monotonic session counter guarantees uniqueness *within* a session (no merged operations
+ * even if the random fragment collides); the random fragment adds entropy across sessions/tabs.
+ */
+export function newCorrelationId(prefix = 'cid'): string {
+  const seq = (++_correlationSeq).toString(36);
+  const rand =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10);
+  return `${prefix}-${seq}-${rand}`;
+}
+
 // --- Backward-compat default logger -----------------------------------------
 // QNBS-v3: Module auto-extracted from [bracket] prefix in first string arg
 

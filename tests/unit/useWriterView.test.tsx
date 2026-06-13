@@ -500,12 +500,46 @@ describe('useWriterView', () => {
       view.handleGenerate();
     });
 
+    // QNBS-v3 (Phase 1): error is now classified + localized via getAiErrorMessage. The mocked
+    // `t` returns the key, so a generic failure → `error.ai.transient` (no hardcoded English).
     await waitFor(() =>
       expect(mockDispatch).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'updateCurrentHistoryItem',
-          payload: 'Error generating content. Please try again later or check your API key.',
+          payload: 'error.ai.transient',
         }),
+      ),
+    );
+
+    if (originalImplementation) {
+      mockDispatch.mockImplementation(originalImplementation);
+    }
+  });
+
+  it('classifies an auth error to the actionable error.ai.auth message', async () => {
+    mockDispatch.mockClear();
+    const originalImplementation = mockDispatch.getMockImplementation();
+    mockDispatch.mockImplementation((action) => {
+      if (isStreamGenerationThunk(action)) {
+        return {
+          unwrap: async () => {
+            throw Object.assign(new Error('Unauthorized'), { status: 401 });
+          },
+        };
+      }
+      return originalImplementation?.(action) ?? { unwrap: () => Promise.resolve('') };
+    });
+
+    mockState.writer.activeTool = 'continue';
+    mockState.writer.isLoading = false;
+    const view = await createHookWrapper();
+    await act(async () => {
+      view.handleGenerate();
+    });
+
+    await waitFor(() =>
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'updateCurrentHistoryItem', payload: 'error.ai.auth' }),
       ),
     );
 

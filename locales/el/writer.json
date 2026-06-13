@@ -78,5 +78,6 @@
   "writer.tts.start": "Διαβάστε δυνατά",
   "writer.tts.stop": "Σταμάτα να διαβάζεις",
   "writer.versionControl.label": "εκδόσεις",
-  "writer.versionControl.tooltip": "Έλεγχος έκδοσης (Κλάδοι και στιγμιότυπα)"
+  "writer.versionControl.tooltip": "Έλεγχος έκδοσης (Κλάδοι και στιγμιότυπα)",
+  "writer.cancelledTag": "Cancelled"
 }

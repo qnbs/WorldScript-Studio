@@ -78,5 +78,6 @@
   "writer.tts.start": "Vorlesen",
   "writer.tts.stop": "Vorlesen stoppen",
   "writer.versionControl.label": "Versionen",
-  "writer.versionControl.tooltip": "Versionskontrolle (Zweige & Schnappschüsse)"
+  "writer.versionControl.tooltip": "Versionskontrolle (Zweige & Schnappschüsse)",
+  "writer.cancelledTag": "Abgebrochen"
 }

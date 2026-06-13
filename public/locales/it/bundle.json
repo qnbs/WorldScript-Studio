@@ -983,6 +983,7 @@
   "writer.tts.stop": "Interrompi lettura",
   "writer.versionControl.label": "Versioni",
   "writer.versionControl.tooltip": "Controllo versione (rami e istantanee)",
+  "writer.cancelledTag": "Annullato",
   "templates.adventure.arc": "Viaggio, ostacoli, trionfo.",
   "templates.adventure.description": "Pericolo, scoperta, coraggio.",
   "templates.adventure.name": "Avventura",

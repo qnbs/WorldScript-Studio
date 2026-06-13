@@ -78,5 +78,6 @@
   "writer.tts.start": "قراءة بصوت عالٍ",
   "writer.tts.stop": "إيقاف القراءة",
   "writer.versionControl.label": "الإصدارات",
-  "writer.versionControl.tooltip": "التحكم بالإصدارات (الفروع واللقطات)"
+  "writer.versionControl.tooltip": "التحكم بالإصدارات (الفروع واللقطات)",
+  "writer.cancelledTag": "Cancelled"
 }

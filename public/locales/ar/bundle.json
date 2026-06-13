@@ -983,6 +983,7 @@
   "writer.tts.stop": "إيقاف القراءة",
   "writer.versionControl.label": "الإصدارات",
   "writer.versionControl.tooltip": "التحكم بالإصدارات (الفروع واللقطات)",
+  "writer.cancelledTag": "Cancelled",
   "templates.adventure.arc": "رحلة، عقبات، انتصار.",
   "templates.adventure.description": "خطر، اكتشاف، شجاعة.",
   "templates.adventure.name": "مغامرة",
