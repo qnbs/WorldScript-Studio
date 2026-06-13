@@ -91,7 +91,14 @@ function normalizeModel(raw: unknown): OpenRouterModel | null {
     id,
     name: typeof r['name'] === 'string' ? r['name'] : undefined,
     description: typeof r['description'] === 'string' ? r['description'] : undefined,
-    contextLength: typeof r['context_length'] === 'number' ? r['context_length'] : undefined,
+    // QNBS-v3: Accept both the raw API key (`context_length`) and the already-normalized
+    // shape (`contextLength`) so re-normalizing cached models doesn't drop the field.
+    contextLength:
+      typeof r['context_length'] === 'number'
+        ? r['context_length']
+        : typeof r['contextLength'] === 'number'
+          ? r['contextLength']
+          : undefined,
     pricing:
       r['pricing'] && typeof r['pricing'] === 'object'
         ? (r['pricing'] as OpenRouterModel['pricing'])

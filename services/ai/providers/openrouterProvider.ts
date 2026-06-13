@@ -272,11 +272,11 @@ function enrichErrorWithStatus(err: unknown, status: number): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
 
-function notifyError(callbacks: AIStreamCallbacks | undefined, err: Error): void {
-  callbacks?.onError?.(err);
-}
-
 // ─── Streaming generation ─────────────────────────────────────────────────────
+// QNBS-v3: streamOpenRouter intentionally does NOT invoke callbacks.onError — it only
+// throws. The orchestration layer (aiProviderService.streamText) owns the onError contract
+// and fires it once, after the whole fallback chain is exhausted, so callers never receive
+// a terminal error callback while a fallback provider is still about to succeed.
 
 /** SSE-streaming OpenRouter completion with retry + backoff + circuit breaker. */
 export async function streamOpenRouter(
@@ -289,7 +289,6 @@ export async function streamOpenRouter(
     const err = new Error(
       'OPENROUTER_CIRCUIT_OPEN: Provider temporarily paused due to repeated rate limits. Using fallback provider.',
     );
-    notifyError(callbacks, err);
     throw err;
   }
 
@@ -310,7 +309,6 @@ export async function streamOpenRouter(
         const err = new Error(
           'OPENROUTER_RATE_LIMITED: Rate limit persistent after retries. Falling back to next provider.',
         );
-        notifyError(callbacks, err);
         throw err;
       }
       const backoff = computeBackoffMs(attempt, res.headers.get('retry-after'));
@@ -328,14 +326,12 @@ export async function streamOpenRouter(
         new Error(`OpenRouter API Error ${res.status}: ${msg}`),
         res.status,
       );
-      notifyError(callbacks, err);
       throw err;
     }
 
     const reader = res.body?.getReader();
     if (!reader) {
       const err = new Error('OpenRouter: No response body');
-      notifyError(callbacks, err);
       throw err;
     }
 
@@ -367,7 +363,6 @@ export async function streamOpenRouter(
       }
     } catch (readErr) {
       const err = readErr instanceof Error ? readErr : new Error(String(readErr));
-      notifyError(callbacks, err);
       throw err;
     }
 

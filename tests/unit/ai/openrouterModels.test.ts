@@ -3,7 +3,7 @@
  * QNBS-v3: Cache validation, policy gating, model fetching, and key validation.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearOpenRouterModelCache,
   fetchOpenRouterModels,
@@ -11,6 +11,8 @@ import {
 } from '../../../services/ai/openrouterModels';
 
 const CACHE_KEY = 'storycraft-openrouter-models';
+// QNBS-v3: Freeze the clock so cache TTL assertions never depend on real wall-clock time.
+const FIXED_NOW = 1_700_000_000_000;
 
 const mockAssertCloudAiAllowed = vi.fn().mockResolvedValue(undefined);
 
@@ -20,10 +22,16 @@ vi.mock('../../../services/ai/aiPolicy', () => ({
 
 describe('openrouterModels', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
     localStorage.clear();
     vi.clearAllMocks();
     mockAssertCloudAiAllowed.mockResolvedValue(undefined);
     global.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('readCache', () => {
@@ -43,7 +51,7 @@ describe('openrouterModels', () => {
     it('returns valid cached entries without fetching', async () => {
       localStorage.setItem(
         CACHE_KEY,
-        JSON.stringify({ fetchedAt: Date.now(), models: [{ id: 'cached/model:free' }] }),
+        JSON.stringify({ fetchedAt: FIXED_NOW, models: [{ id: 'cached/model:free' }] }),
       );
 
       const models = await fetchOpenRouterModels();
@@ -51,10 +59,26 @@ describe('openrouterModels', () => {
       expect(models).toEqual([{ id: 'cached/model:free' }]);
     });
 
+    it('preserves contextLength across a cache round-trip', async () => {
+      // QNBS-v3: Regression — cached models are stored in the normalized `contextLength` shape,
+      // so re-normalizing them on read must accept that key and not drop the field to undefined.
+      localStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          fetchedAt: FIXED_NOW,
+          models: [{ id: 'cached/model:free', contextLength: 8192 }],
+        }),
+      );
+
+      const models = await fetchOpenRouterModels();
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(models[0]?.contextLength).toBe(8192);
+    });
+
     it('ignores stale cached entries', async () => {
       localStorage.setItem(
         CACHE_KEY,
-        JSON.stringify({ fetchedAt: Date.now() - 3_600_001, models: [{ id: 'stale/model:free' }] }),
+        JSON.stringify({ fetchedAt: FIXED_NOW - 3_600_001, models: [{ id: 'stale/model:free' }] }),
       );
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
         ok: true,
@@ -147,7 +171,7 @@ describe('openrouterModels', () => {
 
   describe('clearOpenRouterModelCache', () => {
     it('removes the cache entry', () => {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), models: [] }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: FIXED_NOW, models: [] }));
       clearOpenRouterModelCache();
       expect(localStorage.getItem(CACHE_KEY)).toBeNull();
     });

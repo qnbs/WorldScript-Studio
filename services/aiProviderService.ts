@@ -577,11 +577,18 @@ export async function streamText(
       } catch (error) {
         lastError = error;
         if (i === chain.length - 1) {
-          throw error;
+          // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after
+          // the whole fallback chain is exhausted, so a failing provider never surfaces a terminal
+          // error callback while a subsequent fallback provider is still about to succeed.
+          const terminal = error instanceof Error ? error : new Error(String(error));
+          callbacks.onError?.(terminal);
+          throw terminal;
         }
       }
     }
-    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
+    callbacks.onError?.(terminal);
+    throw terminal;
   } finally {
     _cleanupPendingRequest(key, controller);
   }

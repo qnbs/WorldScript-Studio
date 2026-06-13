@@ -259,6 +259,10 @@ export const OpenRouterSection: FC = () => {
   const handleTestConnection = useCallback(async () => {
     setIsTesting(true);
     setTestResult(null);
+    // QNBS-v3: Clear any lingering save status (and its 4s timer) so the test-connection
+    // result isn't hidden behind the higher-priority saveMsg in the status renderer.
+    if (saveMsgTimer.current) clearTimeout(saveMsgTimer.current);
+    setSaveMsg(null);
     const allowed = await guardPolicy();
     if (!allowed) {
       setTestResult({ ok: false, text: t('settings.openRouter.policyBlocked') });
