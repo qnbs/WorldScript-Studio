@@ -361,13 +361,17 @@ describe('streamText ollama→gemini fallback', () => {
     ).rejects.toThrow('ECONNREFUSED');
   });
 
-  it('treats an aborted request as a cancellation — no fallback, no onError', async () => {
-    // QNBS-v3: A user cancel must not be mistaken for a provider failure: the chain must not fall
-    // back to gemini and the terminal onError callback must not fire.
+  it('treats a provider-thrown abort as a cancellation — no fallback, no onError', async () => {
+    // QNBS-v3: The signal is deliberately NOT pre-aborted, so the cancel path can only be reached
+    // via isAbortError() correctly classifying the thrown error. The provider throws a *plain* Error
+    // named 'AbortError' (not a DOMException) — the runtime variance the orchestrator must handle.
+    // A real provider throws on abort without invoking onError; the orchestrator must neither fall
+    // back to gemini nor fire the terminal onError.
     const { streamOllama } = await import('../../services/ollamaService');
-    vi.mocked(streamOllama).mockRejectedValueOnce(new DOMException('aborted', 'AbortError'));
-    const ac = new AbortController();
-    ac.abort();
+    const abortErr = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    vi.mocked(streamOllama).mockImplementationOnce(async () => {
+      throw abortErr;
+    });
     const onError = vi.fn();
 
     await expect(
@@ -376,7 +380,7 @@ describe('streamText ollama→gemini fallback', () => {
         'Balanced',
         { ...defaultOpts, provider: 'ollama', fallbackProviders: ['gemini'] },
         { onChunk: vi.fn(), onError },
-        ac.signal,
+        // no signal → the only abort signal is the thrown error's name
       ),
     ).rejects.toThrow(/abort/i);
 

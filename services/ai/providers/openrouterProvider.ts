@@ -51,8 +51,10 @@ const MAX_CONSECUTIVE_429 = 4;
 const CIRCUIT_OPEN_MS = 5 * 60 * 1000; // 5 minutes
 const CB_STORAGE_KEY = 'storycraft-or-cb-state';
 
+// QNBS-v3: Only the pause deadline is persisted. The "consecutive" 429 counter is deliberately
+// NOT persisted — restoring it would let a stale count survive a long idle period so that a single
+// later 429 trips the circuit as if the failures were contiguous. The counter is in-memory only.
 interface CircuitBreakerState {
-  consecutive429: number;
   circuitOpenUntil: number;
 }
 
@@ -70,10 +72,10 @@ function readCircuitStateFromStorage(): CircuitBreakerState | null {
     const raw = window.localStorage.getItem(CB_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CircuitBreakerState;
-    if (typeof parsed.consecutive429 !== 'number' || typeof parsed.circuitOpenUntil !== 'number') {
+    if (typeof parsed.circuitOpenUntil !== 'number') {
       return null;
     }
-    return parsed;
+    return { circuitOpenUntil: parsed.circuitOpenUntil };
   } catch {
     return null;
   }
@@ -82,10 +84,7 @@ function readCircuitStateFromStorage(): CircuitBreakerState | null {
 function writeCircuitStateToStorage(): void {
   if (!isBrowser()) return;
   try {
-    const state: CircuitBreakerState = {
-      consecutive429: _consecutive429,
-      circuitOpenUntil: _circuitOpenUntil,
-    };
+    const state: CircuitBreakerState = { circuitOpenUntil: _circuitOpenUntil };
     window.localStorage.setItem(CB_STORAGE_KEY, JSON.stringify(state));
   } catch (err) {
     logger.warn('Failed to persist OpenRouter circuit state', { error: String(err) });
@@ -97,7 +96,8 @@ function initCircuitState(): void {
   _cbInitialized = true;
   const stored = readCircuitStateFromStorage();
   if (stored) {
-    _consecutive429 = stored.consecutive429;
+    // QNBS-v3: Restore only the pause deadline; the consecutive counter stays at 0 so it can't
+    // carry stale non-contiguous failures across a reload.
     _circuitOpenUntil = stored.circuitOpenUntil;
   }
 }

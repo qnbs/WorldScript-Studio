@@ -172,6 +172,8 @@ export const OpenRouterSection: FC = () => {
   // response can never overwrite the result of a newer request, and a response that resolves after
   // unmount / key change is dropped instead of leaking state.
   const fetchSeqRef = useRef(0);
+  // QNBS-v3: Guards the async connection-test result against key changes mid-flight.
+  const testSeqRef = useRef(0);
 
   // QNBS-v3: Catalog fetch shared by the mount/key effect and the explicit post-save refresh.
   const fetchCatalog = useCallback(
@@ -182,7 +184,12 @@ export const OpenRouterSection: FC = () => {
       setModelFetchError(null);
       const allowed = await guardPolicy();
       if (!allowed) {
-        if (isLatest()) setIsModelsLoading(false);
+        if (isLatest()) {
+          // QNBS-v3: Cloud access is blocked — drop any previously loaded catalog so the Select
+          // doesn't keep offering stale paid options the user can no longer reach.
+          setModels([]);
+          setIsModelsLoading(false);
+        }
         return;
       }
       try {
@@ -205,7 +212,7 @@ export const OpenRouterSection: FC = () => {
   // Fetch model catalog when the section mounts or the stored key changes.
   useEffect(() => {
     void fetchCatalog(storedKey);
-    // QNBS-v3: Invalidate any in-flight fetch on unmount / key change so a late response can't apply.
+    // QNBS-v3: Invalidate any in-flight fetch on unmount / re-run so a late response can't apply.
     return () => {
       fetchSeqRef.current++;
     };
@@ -254,6 +261,8 @@ export const OpenRouterSection: FC = () => {
       // QNBS-v3: Clear model cache and in-memory list so the next fetch can include private models for this key.
       clearOpenRouterModelCache();
       setModels([]);
+      // QNBS-v3: Invalidate any in-flight connection test so its late result can't apply to this key.
+      testSeqRef.current++;
       // QNBS-v3: Only refetch explicitly when the key value is unchanged (effect won't re-run). When
       // the value changed, the storedKey effect performs the single refetch — avoids a double fetch
       // and the race it would create. The fetch sequence guard keeps either path last-wins.
@@ -282,6 +291,8 @@ export const OpenRouterSection: FC = () => {
       setTestResult(null);
       clearOpenRouterModelCache();
       setModels([]);
+      // QNBS-v3: Invalidate any in-flight connection test so its late result can't apply after clear.
+      testSeqRef.current++;
     } catch (err) {
       logger.error('OpenRouter: failed to clear API key', { error: String(err) });
       announceError(
@@ -292,6 +303,11 @@ export const OpenRouterSection: FC = () => {
   }, [t, announceError]);
 
   const handleTestConnection = useCallback(async () => {
+    // QNBS-v3: Sequence guard so a result is never applied for an outdated key — if the user
+    // changes/clears the key (or runs a newer test) while this request is in flight, testSeqRef is
+    // bumped and this invocation's late response is dropped instead of showing a stale ok/fail.
+    const seq = ++testSeqRef.current;
+    const isLatest = () => testSeqRef.current === seq;
     setIsTesting(true);
     setTestResult(null);
     // QNBS-v3: Clear any lingering save status (and its 4s timer) so the test-connection
@@ -299,6 +315,7 @@ export const OpenRouterSection: FC = () => {
     if (saveMsgTimer.current) clearTimeout(saveMsgTimer.current);
     setSaveMsg(null);
     const allowed = await guardPolicy();
+    if (!isLatest()) return;
     if (!allowed) {
       setTestResult({ ok: false, text: t('settings.openRouter.policyBlocked') });
       setIsTesting(false);
@@ -311,6 +328,7 @@ export const OpenRouterSection: FC = () => {
     }
     try {
       const result = await validateOpenRouterKey(storedKey);
+      if (!isLatest()) return;
       if (result.ok) {
         setTestResult({ ok: true, text: t('settings.openRouter.testConnectionOk') });
       } else if (result.error === 'INVALID_KEY') {
@@ -322,9 +340,10 @@ export const OpenRouterSection: FC = () => {
       }
     } catch (err) {
       logger.error('OpenRouter: connection test failed', { error: String(err) });
-      setTestResult({ ok: false, text: t('settings.openRouter.testConnectionFailed') });
+      if (isLatest())
+        setTestResult({ ok: false, text: t('settings.openRouter.testConnectionFailed') });
     } finally {
-      setIsTesting(false);
+      if (isLatest()) setIsTesting(false);
     }
   }, [guardPolicy, storedKey, t]);
 

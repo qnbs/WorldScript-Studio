@@ -81,13 +81,13 @@ describe('openrouterModels', () => {
     });
 
     it('does not reuse a cache from a different credential scope', async () => {
-      // QNBS-v3: Regression — an anonymously fetched catalog (keyHash '') must not be served to a
-      // request made with an API key; the differing scope forces a fresh fetch.
+      // QNBS-v3: Regression — an anonymously fetched catalog (authed:false) must not be served to a
+      // request made with an API key (authed:true); the differing scope forces a fresh fetch.
       localStorage.setItem(
         CACHE_KEY,
         JSON.stringify({
           fetchedAt: FIXED_NOW,
-          keyHash: '',
+          authed: false,
           models: [{ id: 'anon/model:free' }],
         }),
       );
