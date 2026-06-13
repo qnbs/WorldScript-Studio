@@ -154,6 +154,112 @@ describe('plugin.worker', () => {
 
       await expectRejects(handler, ctx, /AsyncFunction constructor is disabled/);
     });
+
+    it('blocks GeneratorFunction constructor escape', async () => {
+      const handler = registeredHandlers.get('plugin.execute');
+      if (!handler) throw new Error('plugin.execute handler not registered');
+
+      const ctx = makeContext({
+        payload: {
+          pluginId: 'generator-function-escape',
+          code: 'run = () => { (function*(){}).constructor("return globalThis")(); };',
+          grantedPermissions: [],
+          readApiSnapshot: { projectTitle: '', sceneTitles: [] },
+        },
+      });
+
+      await expectRejects(handler, ctx, /GeneratorFunction constructor is disabled/);
+    });
+
+    it('blocks AsyncGeneratorFunction constructor escape', async () => {
+      const handler = registeredHandlers.get('plugin.execute');
+      if (!handler) throw new Error('plugin.execute handler not registered');
+
+      const ctx = makeContext({
+        payload: {
+          pluginId: 'async-generator-function-escape',
+          code: 'run = () => { (async function*(){}).constructor("return globalThis")(); };',
+          grantedPermissions: [],
+          readApiSnapshot: { projectTitle: '', sceneTitles: [] },
+        },
+      });
+
+      await expectRejects(handler, ctx, /AsyncGeneratorFunction constructor is disabled/);
+    });
+
+    it('denies access to WebAssembly inside plugin code', async () => {
+      const handler = registeredHandlers.get('plugin.execute');
+      if (!handler) throw new Error('plugin.execute handler not registered');
+
+      const ctx = makeContext({
+        payload: {
+          pluginId: 'wasm-escape',
+          // QNBS-v3: WebAssembly is both shadowed in the sandbox scope and neutered on
+          // `self`, so any reference resolves to undefined and member access throws.
+          code: 'run = async () => { await WebAssembly.instantiate(new Uint8Array([0])); };',
+          grantedPermissions: [],
+          readApiSnapshot: { projectTitle: '', sceneTitles: [] },
+        },
+      });
+
+      await expectRejects(
+        handler,
+        ctx,
+        /WebAssembly is not defined|Cannot read properties of undefined|is not a function/,
+      );
+    });
+
+    it('restores the self global bindings after a plugin run completes', async () => {
+      const handler = registeredHandlers.get('plugin.execute');
+      if (!handler) throw new Error('plugin.execute handler not registered');
+
+      const selfRef = self as unknown as Record<string, unknown>;
+      const originalFunction = selfRef['Function'];
+      const originalEval = selfRef['eval'];
+      const originalWebAssembly = selfRef['WebAssembly'];
+
+      const ctx = makeContext({
+        payload: {
+          pluginId: 'benign',
+          code: 'run = (api) => { api.log("ok"); };',
+          grantedPermissions: [],
+          readApiSnapshot: { projectTitle: '', sceneTitles: [] },
+        },
+      });
+      await handler(ctx);
+
+      // QNBS-v3: install/restore must be balanced so the dedicated worker keeps a healthy
+      // global scope for subsequent tasks. The self.* bindings round-trip to their
+      // captured originals. (NOTE: Function.prototype.constructor does NOT round-trip to
+      // its pre-call value — tracked as a follow-up; benign because createSandboxedRunner
+      // compiles via the captured GlobalFunction, not Function.prototype.constructor.)
+      expect(selfRef['Function']).toBe(originalFunction);
+      expect(selfRef['eval']).toBe(originalEval);
+      expect(selfRef['WebAssembly']).toBe(originalWebAssembly);
+    });
+
+    it('restores the self global bindings even after a plugin throws', async () => {
+      const handler = registeredHandlers.get('plugin.execute');
+      if (!handler) throw new Error('plugin.execute handler not registered');
+
+      const selfRef = self as unknown as Record<string, unknown>;
+      const originalFunction = selfRef['Function'];
+      const originalWebAssembly = selfRef['WebAssembly'];
+
+      const ctx = makeContext({
+        payload: {
+          pluginId: 'crash-then-restore',
+          code: 'run = () => { throw new Error("boom"); };',
+          grantedPermissions: [],
+          readApiSnapshot: { projectTitle: '', sceneTitles: [] },
+        },
+      });
+      await expectRejects(handler, ctx, /boom/);
+
+      // QNBS-v3: the finally block restores guards on the error path too.
+      expect(selfRef['Function']).toBe(originalFunction);
+      expect(selfRef['WebAssembly']).toBe(originalWebAssembly);
+    });
   });
 
   describe('plugin execution', () => {

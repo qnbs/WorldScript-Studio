@@ -31,7 +31,7 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 - ✅ Tauri Desktop Pipeline final verifizieren — `tauri-build.yml` grün auf Ubuntu/macOS/Windows (Run #27439443241); `.deb`/`.rpm`/`.AppImage`/`.dmg`/`.msi`/`.exe` Artifacts erzeugt. Signing/Updater offen für `v*` Releases.
 - ✅ Dependency-Hygiene abschließen (`pnpm audit`, `pnpm outdated`, `.npmrc`-Hardening dokumentieren, Known Overrides in AUDIT.md).
 - ✅ i18n Parity für `ja/zh/pt/el` + RTL (`ar/he`) auf <5 % EN-Placeholders halten (`pnpm run i18n:check` grün, 2590 Keys × 11 Locales).
-- ✅ Manuelles Smoke-Test-Protokoll für v1.22-Features auf Live-Demo + lokalem Tauri-Build (`docs/V1.22-SMOKE-TEST.md`).
+- ✅ Smoke-Test-Protokoll für v1.22-Features verfasst (`docs/V1.22-SMOKE-TEST.md`) — Live-Demo + lokaler Tauri-Build. Manuelle Ausführung der Matrix (Sign-off) bleibt ein Human-only-Schritt, getrackt in `TODO.md`.
 
 **P1 (Diese Woche):**
 - Coverage-Ziele erreichen (L≥85 %, B≥75 %, F≥80 %) — Fokus auf AI-Routing, Voice, Copilot.

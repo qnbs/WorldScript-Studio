@@ -707,6 +707,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`ROADMAP.md`](ROADMAP.md) | Long-term features and quarterly planning |
 | [`TODO.md`](TODO.md) | Current sprint tasks and status |
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
+| [`docs/AUDIT-PERFECTION-PLAN-v1.23.md`](docs/AUDIT-PERFECTION-PLAN-v1.23.md) | Living master plan for the v1.23 audit/perfection engagement (phase status + batch log) |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
 | [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering, WorkerBus v2 hybrid routing |
 | [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
