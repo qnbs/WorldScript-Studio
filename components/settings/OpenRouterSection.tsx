@@ -259,16 +259,19 @@ export const OpenRouterSection: FC = () => {
       // QNBS-v3: Detect a same-value save BEFORE updating state — React skips a no-op setStoredKey,
       // so the storedKey effect wouldn't re-run in that case.
       const keyUnchanged = trimmed === storedKey;
-      // QNBS-v3: Mark the key as user-overridden so a still-in-flight initial load can't clobber it.
-      keyOverriddenRef.current = true;
       await storageService.saveApiKey('openrouter', trimmed);
+      // QNBS-v3: Mark the key as user-overridden only AFTER a successful save, so a failed save
+      // doesn't suppress a still-in-flight initial load (which would wrongly show "no stored key").
+      keyOverriddenRef.current = true;
       setApiKeyInput('');
       setStoredKey(trimmed);
       // QNBS-v3: Clear model cache and in-memory list so the next fetch can include private models for this key.
       clearOpenRouterModelCache();
       setModels([]);
-      // QNBS-v3: Invalidate any in-flight connection test so its late result can't apply to this key.
+      // QNBS-v3: Supersede any in-flight connection test (its late result can't apply to this key) AND
+      // clear isTesting so the superseded test's sequence-guard early-return can't leave the spinner stuck.
       testSeqRef.current++;
+      setIsTesting(false);
       // QNBS-v3: Only refetch explicitly when the key value is unchanged (effect won't re-run). When
       // the value changed, the storedKey effect performs the single refetch — avoids a double fetch
       // and the race it would create. The fetch sequence guard keeps either path last-wins.
@@ -290,17 +293,20 @@ export const OpenRouterSection: FC = () => {
 
   const handleClearKey = useCallback(async () => {
     try {
-      // QNBS-v3: Mark as user-overridden so a still-in-flight initial load can't re-populate the key.
-      keyOverriddenRef.current = true;
       await storageService.clearApiKey('openrouter');
+      // QNBS-v3: Mark as user-overridden only AFTER a successful clear, so a failed clear doesn't
+      // suppress a still-in-flight initial load.
+      keyOverriddenRef.current = true;
       setStoredKey(null);
       setApiKeyInput('');
       setSaveMsg(null);
       setTestResult(null);
       clearOpenRouterModelCache();
       setModels([]);
-      // QNBS-v3: Invalidate any in-flight connection test so its late result can't apply after clear.
+      // QNBS-v3: Supersede any in-flight connection test AND clear isTesting so the superseded test's
+      // sequence-guard early-return can't leave the spinner/disabled state stuck.
       testSeqRef.current++;
+      setIsTesting(false);
     } catch (err) {
       logger.error('OpenRouter: failed to clear API key', { error: String(err) });
       announceError(
