@@ -112,12 +112,20 @@ types.ts          → Core shared interfaces and types
 - **Branch-based development**: All changes MUST be made on feature branches (e.g., `fix/security-vulnerabilities-2026-06-06`). Never commit directly to `main`.
 - **CI verification**: Push to branch and wait for ALL CI jobs (security, quality, build, e2e, lighthouse) to pass before merging.
 - **PR merge**: Only merge to `main` when CI is fully green. Use "Squash and merge" for clean history.
-- **Inline comment handling**: Proactively address ALL inline PR review comments (CodeAnt AI, human reviewers) immediately:
-  1. Validate the finding against current code (comments may be stale)
-  2. Implement the real fix (root cause, fully worked out)
-  3. If already fixed or false positive, reply with evidence
-  4. Resolve the thread after fixing
-  5. Push and verify CI passes
+- **Inline comment handling — the CodeAnt Correction Loop (proactive, automatic, every PR):**
+  Address ALL inline review comments (CodeAnt AI + any bot/human) **without being asked**. Canonical
+  procedure: [`docs/CODEANT-REVIEW-LOOP.md`](../docs/CODEANT-REVIEW-LOOP.md). Each pass:
+  1. Fetch unresolved threads via GraphQL (`reviewThreads` → `isResolved:false`).
+  2. Validate each finding against the **current** code (anchors may be stale).
+  3. Implement the real **root-cause** fix (code **+ tests + i18n + docs**), or reply with evidence
+     if false-positive / by-design. **Never** add a new `biome-ignore` (suppression ratchet fails
+     CI — refactor instead; run `node scripts/check-suppressions.mjs`).
+  4. Local gate (sequential): lint + typecheck + targeted vitest green.
+  5. Commit + push; reply to **every** thread citing the resolving commit, then resolve it → **0 unresolved**.
+  6. Re-trigger: `gh pr comment <N> --body "@codeant-ai review"`.
+  - **Iron rule — loop until quiescent:** a push triggers a fresh review that often raises NEW
+    findings (a "wave"). Repeat until **BOTH** a fresh review yields **0 new comments** AND **0 threads
+    unresolved**. Never stop while comments still arrive.
 
 ### Test Stability Guidelines (QNBS-v3)
 

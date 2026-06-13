@@ -42,6 +42,14 @@ Inhalt des Kommentars: **warum** die Änderung, **was** sie verbessert, optional
 
 ---
 
+## PR-Review: CodeAnt Correction Loop (proaktiv, jede PR)
+
+Bei jeder offenen PR **alle** Inline-Review-Kommentare (CodeAnt AI + jeder Bot/Mensch) **proaktiv, ungefragt** abarbeiten. Pro Finding: gegen den **aktuellen** Code validieren (Anker oft veraltet), dann **Root-Cause-Fix** vollständig umsetzen (Code **+ Tests + i18n + Doku**) oder mit Begründung als False-Positive ablehnen. Jeden Thread mit Commit-Referenz beantworten, **resolven**, **0 unresolved** hinterlassen, committen + pushen.
+
+**Iron Rule — Loop bis Ruhe:** Nach jedem Push **Review erneut triggern** (`gh pr comment <N> --body "@codeant-ai review"`); eine frische Review bringt regelmäßig **neue** Findings (eine „Welle"). Zyklus wiederholen, bis **BEIDES** gilt: frische Review = **0 neue Kommentare** UND **0 offene Threads**. Niemals aufhören, solange noch Kommentare kommen. **Niemals ein neues `biome-ignore`/Suppression** einbauen, um ein Finding stummzuschalten — der Suppression-Ratchet-Gate lässt die CI scheitern; stattdessen sauber refaktorieren. Vollständige Prozedur: **`docs/CODEANT-REVIEW-LOOP.md`**.
+
+---
+
 ## Antwortformat nach substanziellen Vorschlägen oder Edits
 
 Kurz und konkret:
