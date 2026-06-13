@@ -67,24 +67,28 @@ a CodeAnt-caught regression.
   compatible (unknown errors still retry). +33 tests (`aiErrorTaxonomy.test.ts` table-driven,
   fail-fast cases in `aiRetry.test.ts`).
 - **i18n / UI mapping of `messageKey` deferred to Batch 1.2** (avoids 11-locale churn here).
-- **FU-1 split out of this batch** (see follow-ups).
+- **FU-1 split out of this batch** (fixed separately — see batch log).
+
+### Batch FU-1 — plugin-worker guard-restoration fix
+- **Root cause (confirmed by probe):** `installRuntimeGuards` reassigns the global
+  `self.Function = denied`, so `restoreRuntimeGuards`'s free `Function.prototype.constructor`
+  reference resolved to **`denied.prototype`** (the stub), patching the wrong object and leaving
+  the real `Function.prototype.constructor` denied. `self.*` restored fine because they use
+  explicit `self.X =` assignments; the async/generator paths use module-captured consts, so only
+  the bare `Function` identifier was poisoned.
+- **Fix:** use the module-captured `GlobalFunction` (native, never reassigned) for the three
+  `Function.prototype.constructor` touch-points (snapshot capture, install, restore). One-file
+  change in `workers/plugin.worker.ts`; isolation unchanged (denied stays active during runs).
+- **Tests:** re-enabled the `Function.prototype.constructor` round-trip assertions (success +
+  error path) and added a **cross-run** isolation test in `plugin.worker.test.ts` (24 green).
 
 ---
 
 ## 4. Decisions & follow-ups
 
-- **FU-1 (open — needs a dedicated fix; SPLIT from Batch 1.1):** `workers/plugin.worker.ts`
-  `restoreRuntimeGuards` restores `self.Function/eval/WebAssembly` correctly, but
-  `Function.prototype.constructor` does **not** round-trip — after a single isolated run it is
-  left as the **`Function`-variant `deniedConstructor`** (confirmed by probe:
-  `beforeIsNative=true`, `afterIsNative=false`, leaked message "Function constructor is
-  disabled"; the async/generator prototypes are genuinely distinct, ruling out shared-prototype
-  aliasing). A naive symmetric `Object.defineProperty` restore did **not** fix it, so the
-  mechanism is subtler (likely a snapshot-capture / property-attribute interaction) and needs a
-  focused fix with its own assertion. **Benign in production** — `createSandboxedRunner`
-  compiles via the captured `GlobalFunction`, not `Function.prototype.constructor` — so it does
-  not weaken isolation; it is a worker-hygiene leak. Timeboxed out of Batch 1.1 per plan to keep
-  the taxonomy PR clean.
+- **FU-1 — ✅ RESOLVED** (see Batch FU-1 above). The guard-restoration leak was a poisoned
+  global-binding bug, not a property-attribute issue; fixed by routing the three
+  `Function.prototype.constructor` touch-points through the captured `GlobalFunction`.
 
 ---
 

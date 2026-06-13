@@ -6,6 +6,11 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// QNBS-v3: capture the native constructor at module load — before any worker import or run — so
+// the cross-run assertion compares against an immutable, known-clean baseline rather than a
+// possibly-already-poisoned current value (which would mask cross-test leaks).
+const NATIVE_FN_CONSTRUCTOR = Function.prototype.constructor;
+
 // Capture registered handlers so we can invoke them directly.
 const registeredHandlers = new Map<string, (ctx: unknown) => Promise<unknown>>();
 const mockRegisterTaskHandler = vi.fn(
@@ -217,6 +222,7 @@ describe('plugin.worker', () => {
       const originalFunction = selfRef['Function'];
       const originalEval = selfRef['eval'];
       const originalWebAssembly = selfRef['WebAssembly'];
+      const originalFnProtoConstructor = Function.prototype.constructor;
 
       const ctx = makeContext({
         payload: {
@@ -229,13 +235,12 @@ describe('plugin.worker', () => {
       await handler(ctx);
 
       // QNBS-v3: install/restore must be balanced so the dedicated worker keeps a healthy
-      // global scope for subsequent tasks. The self.* bindings round-trip to their
-      // captured originals. (NOTE: Function.prototype.constructor does NOT round-trip to
-      // its pre-call value — tracked as a follow-up; benign because createSandboxedRunner
-      // compiles via the captured GlobalFunction, not Function.prototype.constructor.)
+      // global scope for subsequent tasks — both the self.* bindings and the patched
+      // Function.prototype.constructor round-trip to their captured originals (FU-1).
       expect(selfRef['Function']).toBe(originalFunction);
       expect(selfRef['eval']).toBe(originalEval);
       expect(selfRef['WebAssembly']).toBe(originalWebAssembly);
+      expect(Function.prototype.constructor).toBe(originalFnProtoConstructor);
     });
 
     it('restores the self global bindings even after a plugin throws', async () => {
@@ -245,6 +250,7 @@ describe('plugin.worker', () => {
       const selfRef = self as unknown as Record<string, unknown>;
       const originalFunction = selfRef['Function'];
       const originalWebAssembly = selfRef['WebAssembly'];
+      const originalFnProtoConstructor = Function.prototype.constructor;
 
       const ctx = makeContext({
         payload: {
@@ -259,6 +265,56 @@ describe('plugin.worker', () => {
       // QNBS-v3: the finally block restores guards on the error path too.
       expect(selfRef['Function']).toBe(originalFunction);
       expect(selfRef['WebAssembly']).toBe(originalWebAssembly);
+      expect(Function.prototype.constructor).toBe(originalFnProtoConstructor);
+    });
+
+    it('keeps Function.prototype.constructor native across sequential plugin runs', async () => {
+      const handler = registeredHandlers.get('plugin.execute');
+      if (!handler) throw new Error('plugin.execute handler not registered');
+
+      // QNBS-v3: anchor the immutable baseline to the real intrinsic so a leak can't be masked.
+      expect(NATIVE_FN_CONSTRUCTOR).toBe(Function);
+      const makeRun = () =>
+        makeContext({
+          payload: {
+            pluginId: 'sequential',
+            code: 'run = (api) => { api.log("x"); };',
+            grantedPermissions: [],
+            readApiSnapshot: { projectTitle: '', sceneTitles: [] },
+          },
+        });
+
+      // QNBS-v3 (FU-1): two runs in a row must each leave the real constructor restored — the
+      // guard previously leaked because restore went through the poisoned `self.Function`.
+      await handler(makeRun());
+      expect(Function.prototype.constructor).toBe(NATIVE_FN_CONSTRUCTOR);
+      await handler(makeRun());
+      expect(Function.prototype.constructor).toBe(NATIVE_FN_CONSTRUCTOR);
+    });
+
+    it('survives a plugin that locks Function.prototype.constructor without poisoning the worker', async () => {
+      const handler = registeredHandlers.get('plugin.execute');
+      if (!handler) throw new Error('plugin.execute handler not registered');
+
+      const selfRef = self as unknown as Record<string, unknown>;
+      const originalFunction = selfRef['Function'];
+
+      // QNBS-v3: a plugin reaches Function.prototype via the un-shadowed `Object` and makes
+      // `constructor` non-writable. A direct-assignment restore would throw a TypeError and skip
+      // self.* restoration; the hardened restore overwrites via defineProperty and stays
+      // resilient. (writable:false but configurable:true → reversible by restore.)
+      const ctx = makeContext({
+        payload: {
+          pluginId: 'descriptor-lock',
+          code: 'run = () => { Object.defineProperty(Object.getPrototypeOf(Object), "constructor", { value: function locked(){}, writable: false, configurable: true }); };',
+          grantedPermissions: [],
+          readApiSnapshot: { projectTitle: '', sceneTitles: [] },
+        },
+      });
+
+      await expect(handler(ctx)).resolves.toBeDefined();
+      expect(selfRef['Function']).toBe(originalFunction);
+      expect(Function.prototype.constructor).toBe(NATIVE_FN_CONSTRUCTOR);
     });
   });
 

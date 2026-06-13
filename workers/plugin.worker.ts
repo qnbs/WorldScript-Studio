@@ -89,8 +89,12 @@ function installRuntimeGuards(): GuardSnapshot {
   };
 
   // Snapshot originals before mutation.
+  // QNBS-v3 (FU-1): use the module-captured GlobalFunction, never the bare `Function`
+  // identifier — install reassigns the global `self.Function` to the denied stub below, so a
+  // later free `Function.prototype.constructor` reference would resolve to `denied.prototype`,
+  // not the real Function.prototype, and the constructor guard would never round-trip.
   const snapshot: GuardSnapshot = {
-    functionConstructor: Function.prototype.constructor,
+    functionConstructor: GlobalFunction.prototype.constructor,
     asyncFunctionConstructor: AsyncFunction.prototype.constructor,
     generatorFunctionConstructor: GeneratorFunction.prototype.constructor,
     asyncGeneratorFunctionConstructor: AsyncGeneratorFunction.prototype.constructor,
@@ -111,7 +115,7 @@ function installRuntimeGuards(): GuardSnapshot {
     });
   }
 
-  Function.prototype.constructor = denied;
+  GlobalFunction.prototype.constructor = denied;
   defineDenied(AsyncFunction.prototype, 'AsyncFunction');
   defineDenied(GeneratorFunction.prototype, 'GeneratorFunction');
   defineDenied(AsyncGeneratorFunction.prototype, 'AsyncGeneratorFunction');
@@ -126,29 +130,48 @@ function installRuntimeGuards(): GuardSnapshot {
   return snapshot;
 }
 
+// QNBS-v3 (FU-1 hardening): best-effort constructor restore. A plugin can reach
+// `Function.prototype` via the (un-shadowed) `Object` and make `constructor`
+// non-writable/non-configurable; a direct assignment would then throw a TypeError out of the
+// `finally` and skip the remaining restorations. `Object.defineProperty` (value overwrite) plus
+// a swallow keeps every restoration independent. Use the module-captured `GlobalFunction`, never
+// the bare `Function` identifier (still the denied stub until self.* is restored).
+function restoreConstructor(
+  proto: typeof Function.prototype,
+  value: GuardSnapshot['functionConstructor'],
+  writable: boolean,
+): void {
+  try {
+    Object.defineProperty(proto, 'constructor', {
+      value,
+      writable,
+      configurable: true,
+      enumerable: false,
+    });
+  } catch {
+    // Descriptor locked by untrusted plugin code — nothing safe to do here. The worker stays
+    // functional because it compiles via the captured GlobalFunction, not this property.
+  }
+}
+
 function restoreRuntimeGuards(snapshot: GuardSnapshot): void {
-  Function.prototype.constructor = snapshot.functionConstructor;
-  Object.defineProperty(AsyncFunction.prototype, 'constructor', {
-    value: snapshot.asyncFunctionConstructor,
-    writable: false,
-    configurable: true,
-    enumerable: false,
-  });
-  Object.defineProperty(GeneratorFunction.prototype, 'constructor', {
-    value: snapshot.generatorFunctionConstructor,
-    writable: false,
-    configurable: true,
-    enumerable: false,
-  });
-  Object.defineProperty(AsyncGeneratorFunction.prototype, 'constructor', {
-    value: snapshot.asyncGeneratorFunctionConstructor,
-    writable: false,
-    configurable: true,
-    enumerable: false,
-  });
-  (self as unknown as Record<string, unknown>)['Function'] = snapshot.selfFunction;
-  (self as unknown as Record<string, unknown>)['eval'] = snapshot.selfEval;
-  (self as unknown as Record<string, unknown>)['WebAssembly'] = snapshot.selfWebAssembly;
+  // QNBS-v3: restore the global self.* bindings FIRST and unconditionally — these un-poison the
+  // `Function`/`eval` identifiers and keep the dedicated worker usable even if a hostile plugin
+  // locked a constructor descriptor below.
+  const selfRef = self as unknown as Record<string, unknown>;
+  selfRef['Function'] = snapshot.selfFunction;
+  selfRef['eval'] = snapshot.selfEval;
+  selfRef['WebAssembly'] = snapshot.selfWebAssembly;
+
+  // Then restore the constructors (best-effort, native writability preserved).
+  restoreConstructor(GlobalFunction.prototype, snapshot.functionConstructor, true);
+  restoreConstructor(AsyncFunction.prototype, snapshot.asyncFunctionConstructor, false);
+  restoreConstructor(GeneratorFunction.prototype, snapshot.generatorFunctionConstructor, false);
+  restoreConstructor(
+    AsyncGeneratorFunction.prototype,
+    snapshot.asyncGeneratorFunctionConstructor,
+    false,
+  );
 }
 
 // ---------------------------------------------------------------------------
