@@ -5,10 +5,18 @@
  */
 
 import type { FC } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { settingsActions } from '../../features/settings/settingsSlice';
+import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
+import {
+  clearOpenRouterModelCache,
+  fetchOpenRouterModels,
+  isOpenRouterFreeModel,
+  type OpenRouterModel,
+  validateOpenRouterKey,
+} from '../../services/ai/openrouterModels';
 import {
   getApproxRpm,
   isCircuitOpen,
@@ -20,7 +28,19 @@ import { storageService } from '../../services/storageService';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
+
+// QNBS-v3: Human-readable labels for the built-in free-tier catalog.
+const FREE_MODEL_LABELS: Record<(typeof OPENROUTER_FREE_MODELS)[number], string> = {
+  'deepseek/deepseek-r1:free': 'DeepSeek R1 (free)',
+  'meta-llama/llama-3.3-70b-instruct:free': 'Llama 3.3 70B Instruct (free)',
+  'qwen/qwen2.5-72b-instruct:free': 'Qwen 2.5 72B Instruct (free)',
+  'google/gemma-3-27b-it:free': 'Gemma 3 27B IT (free)',
+  'mistralai/mistral-7b-instruct:free': 'Mistral 7B Instruct (free)',
+};
+
+const CUSTOM_MODEL_VALUE = '__custom__';
 
 // ─── Sub-component: circuit breaker status indicator ─────────────────────────
 
@@ -65,7 +85,12 @@ const CircuitBreakerStatus: FC<{ t: ReturnType<typeof useTranslation>['t'] }> = 
           </span>
         </div>
         {open && (
-          <Button variant="ghost" size="sm" onClick={handleReset}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleReset}
+            aria-label={t('settings.openRouter.resetCircuitAria')}
+          >
             {t('settings.openRouter.resetCircuit')}
           </Button>
         )}
@@ -83,15 +108,22 @@ export const OpenRouterSection: FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const openRouterSettings = useAppSelector((s) => s.settings.openRouter);
+  const aiMode = useAppSelector((s) => s.settings.aiMode);
+  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
 
   const enabled = openRouterSettings?.enabled ?? false;
   const preferredModel = openRouterSettings?.preferredModel ?? 'deepseek/deepseek-r1:free';
 
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [isKeyLoading, setIsKeyLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // QNBS-v3: Track if the model input is a custom (non-catalog) value.
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [models, setModels] = useState<OpenRouterModel[]>([]);
+  const [isModelsLoading, setIsModelsLoading] = useState(false);
+  const [modelFetchError, setModelFetchError] = useState<string | null>(null);
   const [isCustomModel, setIsCustomModel] = useState(
     !OPENROUTER_FREE_MODELS.includes(preferredModel as (typeof OPENROUTER_FREE_MODELS)[number]),
   );
@@ -100,48 +132,143 @@ export const OpenRouterSection: FC = () => {
 
   // Load stored key status on mount.
   useEffect(() => {
+    let cancelled = false;
     storageService
       .getApiKey('openrouter')
-      .then((k) => setHasStoredKey(Boolean(k)))
-      .catch(() => setHasStoredKey(false));
+      .then((k) => {
+        if (!cancelled) setHasStoredKey(Boolean(k));
+      })
+      .catch((err) => {
+        logger.error('OpenRouter: failed to read stored API key status', { error: String(err) });
+      })
+      .finally(() => {
+        if (!cancelled) setIsKeyLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // Fetch model catalog when the section mounts.
+  useEffect(() => {
+    let cancelled = false;
+    setIsModelsLoading(true);
+    setModelFetchError(null);
+    fetchOpenRouterModels()
+      .then((fetched) => {
+        if (!cancelled) setModels(fetched);
+      })
+      .catch((err) => {
+        logger.warn('OpenRouter: failed to fetch model catalog', { error: String(err) });
+        if (!cancelled) setModelFetchError(t('settings.openRouter.modelFetch.failed'));
+      })
+      .finally(() => {
+        if (!cancelled) setIsModelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  // Keep local custom-model state in sync with external Redux changes.
+  useEffect(() => {
+    const free = OPENROUTER_FREE_MODELS.includes(
+      preferredModel as (typeof OPENROUTER_FREE_MODELS)[number],
+    );
+    setIsCustomModel(!free);
+    if (free) setCustomModelInput('');
+    else setCustomModelInput(preferredModel);
+  }, [preferredModel]);
+
+  const showSaveMsg = useCallback((ok: boolean, text: string) => {
+    setSaveMsg({ ok, text });
+    if (saveMsgTimer.current) clearTimeout(saveMsgTimer.current);
+    saveMsgTimer.current = setTimeout(() => setSaveMsg(null), 4_000);
+  }, []);
+
+  const announceError = useCallback(
+    (title: string, description: string) => {
+      dispatch(statusActions.addNotification({ type: 'error', title, description }));
+    },
+    [dispatch],
+  );
 
   const handleSaveKey = useCallback(async () => {
     const trimmed = apiKeyInput.trim();
     if (!trimmed) {
-      setSaveMsg({ ok: false, text: t('settings.apiKey.errorEmpty') });
+      showSaveMsg(false, t('settings.openRouter.keyError.empty'));
       return;
     }
     setIsSaving(true);
     setSaveMsg(null);
+    setTestResult(null);
     try {
       await storageService.saveApiKey('openrouter', trimmed);
       setApiKeyInput('');
       setHasStoredKey(true);
-      setSaveMsg({ ok: true, text: t('settings.openRouter.keySaved') });
-      if (saveMsgTimer.current) clearTimeout(saveMsgTimer.current);
-      saveMsgTimer.current = setTimeout(() => setSaveMsg(null), 4_000);
+      // QNBS-v3: Clear model cache so the next fetch can include private models for this key.
+      clearOpenRouterModelCache();
+      showSaveMsg(true, t('settings.openRouter.keyStatus.saved'));
     } catch (err) {
       logger.error('OpenRouter: failed to save API key', { error: String(err) });
-      setSaveMsg({ ok: false, text: t('settings.apiKey.errorSave') });
+      showSaveMsg(false, t('settings.openRouter.keyError.saveFailed'));
+      announceError(
+        t('settings.openRouter.errors.generic'),
+        t('settings.openRouter.keyError.saveFailed'),
+      );
     } finally {
       setIsSaving(false);
     }
-  }, [apiKeyInput, t]);
+  }, [apiKeyInput, t, showSaveMsg, announceError]);
 
   const handleClearKey = useCallback(async () => {
     try {
       await storageService.clearApiKey('openrouter');
       setHasStoredKey(false);
+      setApiKeyInput('');
       setSaveMsg(null);
+      setTestResult(null);
+      clearOpenRouterModelCache();
     } catch (err) {
       logger.error('OpenRouter: failed to clear API key', { error: String(err) });
+      announceError(
+        t('settings.openRouter.errors.generic'),
+        t('settings.openRouter.keyError.saveFailed'),
+      );
     }
-  }, []);
+  }, [t, announceError]);
+
+  const handleTestConnection = useCallback(async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const key = await storageService.getApiKey('openrouter');
+      if (!key) {
+        setTestResult({ ok: false, text: t('settings.openRouter.keyError.empty') });
+        setIsTesting(false);
+        return;
+      }
+      const result = await validateOpenRouterKey(key);
+      if (result.ok) {
+        setTestResult({ ok: true, text: t('settings.openRouter.testConnectionOk') });
+      } else if (result.error === 'INVALID_KEY') {
+        setTestResult({ ok: false, text: t('settings.openRouter.keyError.invalid') });
+      } else if (result.error === 'TIMEOUT' || result.error === 'NETWORK_ERROR') {
+        setTestResult({ ok: false, text: t('settings.openRouter.keyError.network') });
+      } else {
+        setTestResult({ ok: false, text: t('settings.openRouter.testConnectionFailed') });
+      }
+    } catch (err) {
+      logger.error('OpenRouter: connection test failed', { error: String(err) });
+      setTestResult({ ok: false, text: t('settings.openRouter.testConnectionFailed') });
+    } finally {
+      setIsTesting(false);
+    }
+  }, [t]);
 
   const handleModelChange = useCallback(
     (value: string) => {
-      if (value === '__custom__') {
+      if (value === CUSTOM_MODEL_VALUE) {
         setIsCustomModel(true);
       } else {
         setIsCustomModel(false);
@@ -152,10 +279,24 @@ export const OpenRouterSection: FC = () => {
     [dispatch],
   );
 
-  const handleCustomModelBlur = useCallback(() => {
+  const commitCustomModel = useCallback(() => {
     const trimmed = customModelInput.trim();
     if (trimmed) dispatch(settingsActions.setOpenRouter({ preferredModel: trimmed }));
   }, [customModelInput, dispatch]);
+
+  const handleCustomModelBlur = useCallback(() => {
+    commitCustomModel();
+  }, [commitCustomModel]);
+
+  const handleCustomModelKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitCustomModel();
+      }
+    },
+    [commitCustomModel],
+  );
 
   // Cleanup timer on unmount.
   useEffect(() => {
@@ -164,11 +305,50 @@ export const OpenRouterSection: FC = () => {
     };
   }, []);
 
-  const selectValue = isCustomModel
-    ? '__custom__'
-    : OPENROUTER_FREE_MODELS.includes(preferredModel as (typeof OPENROUTER_FREE_MODELS)[number])
+  const selectValue = useMemo(() => {
+    if (isCustomModel) return CUSTOM_MODEL_VALUE;
+    return OPENROUTER_FREE_MODELS.includes(
+      preferredModel as (typeof OPENROUTER_FREE_MODELS)[number],
+    )
       ? preferredModel
-      : '__custom__';
+      : CUSTOM_MODEL_VALUE;
+  }, [isCustomModel, preferredModel]);
+
+  const modelOptions = useMemo(
+    () =>
+      OPENROUTER_FREE_MODELS.map((m) => ({
+        value: m,
+        label: FREE_MODEL_LABELS[m],
+      })),
+    [],
+  );
+
+  const fetchedPaidOptions = useMemo(() => {
+    const freeIds = new Set<string>(OPENROUTER_FREE_MODELS);
+    return models
+      .filter((m) => !freeIds.has(m.id) && !isOpenRouterFreeModel(m.id))
+      .map((m) => ({ value: m.id, label: m.name ?? m.id }));
+  }, [models]);
+
+  const modelGroups = useMemo(() => {
+    const groups: { label: string; options: { value: string; label: string }[] }[] = [
+      { label: t('settings.openRouter.freeTierNote'), options: modelOptions },
+    ];
+    if (fetchedPaidOptions.length > 0) {
+      groups.push({ label: t('settings.openRouter.paidModelNote'), options: fetchedPaidOptions });
+    }
+    groups.push({
+      label: t('settings.openRouter.customModelLabel'),
+      options: [{ value: CUSTOM_MODEL_VALUE, label: t('settings.openRouter.customModelLabel') }],
+    });
+    return groups;
+  }, [modelOptions, fetchedPaidOptions, t]);
+
+  const modeWarning = useMemo(() => {
+    if (aiMode === 'local') return t('settings.openRouter.modeWarning.local');
+    if (isOffline) return t('settings.openRouter.modeWarning.offline');
+    return null;
+  }, [aiMode, isOffline, t]);
 
   return (
     <div className="space-y-6">
@@ -184,30 +364,41 @@ export const OpenRouterSection: FC = () => {
 
         <CardContent className="space-y-5">
           {/* Enable toggle */}
-          <div className="flex items-center justify-between gap-4">
-            <label
-              htmlFor="openrouter-enabled"
-              className="text-sm font-medium text-[var(--sc-text-secondary)]"
-            >
-              {t('settings.openRouter.enabled')}
-            </label>
-            <button
-              id="openrouter-enabled"
-              type="button"
-              role="switch"
-              aria-checked={enabled}
-              onClick={() => dispatch(settingsActions.setOpenRouter({ enabled: !enabled }))}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] ${
-                enabled ? 'bg-[var(--sc-accent)]' : 'bg-[var(--sc-surface-raised)]'
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-[var(--sc-surface-inverse)] shadow-lg ring-0 transition-transform duration-200 ${
-                  enabled ? 'translate-x-5' : 'translate-x-0'
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-4">
+              <label
+                htmlFor="openrouter-enabled"
+                className="text-sm font-medium text-[var(--sc-text-secondary)]"
+              >
+                {t('settings.openRouter.enabled')}
+              </label>
+              <button
+                id="openrouter-enabled"
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                aria-describedby="openrouter-enabled-hint"
+                onClick={() => dispatch(settingsActions.setOpenRouter({ enabled: !enabled }))}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] ${
+                  enabled ? 'bg-[var(--sc-accent)]' : 'bg-[var(--sc-surface-raised)]'
                 }`}
-              />
-            </button>
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-[var(--sc-surface-inverse)] shadow-lg ring-0 transition-transform duration-200 ${
+                    enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <p id="openrouter-enabled-hint" className="text-xs text-[var(--sc-text-muted)]">
+              {t('settings.openRouter.enabledHint')}
+            </p>
+            {modeWarning && (
+              <p className="text-xs text-[var(--sc-warning-fg)]" role="status" aria-live="polite">
+                {modeWarning}
+              </p>
+            )}
           </div>
 
           {/* API Key */}
@@ -218,20 +409,30 @@ export const OpenRouterSection: FC = () => {
             >
               {t('settings.openRouter.apiKey')}
             </label>
-            {hasStoredKey && (
-              <p className="text-xs text-[var(--sc-success-fg)]">
-                {t('settings.openRouter.keySet')}
+            {isKeyLoading ? (
+              <div className="flex items-center gap-2 text-xs text-[var(--sc-text-muted)]">
+                <Spinner className="h-3 w-3" />
+                {t('settings.openRouter.keyStatus.saving')}
+              </div>
+            ) : hasStoredKey ? (
+              <p className="text-xs text-[var(--sc-success-fg)]" id="openrouter-key-status">
+                {t('settings.openRouter.keyStatus.set')}
+              </p>
+            ) : (
+              <p className="text-xs text-[var(--sc-text-muted)]" id="openrouter-key-status">
+                {t('settings.openRouter.keyStatus.unset')}
               </p>
             )}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Input
                 id="openrouter-api-key"
                 type="password"
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
                 placeholder={t('settings.openRouter.apiKeyPlaceholder')}
-                className="flex-1"
+                className="flex-1 min-w-[12rem]"
                 autoComplete="new-password"
+                aria-describedby="openrouter-api-key-hint openrouter-key-status"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void handleSaveKey();
                 }}
@@ -245,22 +446,48 @@ export const OpenRouterSection: FC = () => {
               >
                 {isSaving ? <Spinner className="h-4 w-4" /> : t('settings.openRouter.saveKey')}
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleTestConnection()}
+                disabled={isTesting || isKeyLoading || !hasStoredKey}
+                aria-busy={isTesting}
+              >
+                {isTesting ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  t('settings.openRouter.testConnection')
+                )}
+              </Button>
               {hasStoredKey && (
                 <Button variant="ghost" size="sm" onClick={() => void handleClearKey()}>
                   {t('settings.openRouter.clearKey')}
                 </Button>
               )}
             </div>
-            {saveMsg && (
+            {(saveMsg || testResult) && (
               <p
-                className={`text-xs ${saveMsg.ok ? 'text-[var(--sc-success-fg)]' : 'text-[var(--sc-danger-fg)]'}`}
+                className={`text-xs ${
+                  (saveMsg?.ok ?? testResult?.ok)
+                    ? 'text-[var(--sc-success-fg)]'
+                    : 'text-[var(--sc-danger-fg)]'
+                }`}
                 role="status"
+                aria-live="polite"
               >
-                {saveMsg.text}
+                {saveMsg?.text ?? testResult?.text}
               </p>
             )}
-            <p className="text-xs text-[var(--sc-text-muted)]">
-              {t('settings.openRouter.getKeyLink')}
+            <p id="openrouter-api-key-hint" className="text-xs text-[var(--sc-text-muted)]">
+              {t('settings.openRouter.apiKeyHint')}{' '}
+              <a
+                href="https://openrouter.ai/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-[var(--sc-text-secondary)]"
+              >
+                {t('settings.openRouter.getKeyLink')}
+              </a>
             </p>
           </div>
 
@@ -272,27 +499,36 @@ export const OpenRouterSection: FC = () => {
             >
               {t('settings.openRouter.preferredModel')}
             </label>
-            <select
-              id="openrouter-model"
-              value={selectValue}
-              onChange={(e) => handleModelChange(e.target.value)}
-              className="w-full rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] px-3 py-2 text-sm text-[var(--sc-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--sc-border-focus)]"
-            >
-              {OPENROUTER_FREE_MODELS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-              <option value="__custom__">{t('settings.openRouter.customModelLabel')}</option>
-            </select>
+            {isModelsLoading ? (
+              <div className="flex items-center gap-2 text-xs text-[var(--sc-text-muted)]">
+                <Spinner className="h-3 w-3" />
+                {t('settings.openRouter.modelFetch.loading')}
+              </div>
+            ) : modelFetchError ? (
+              <p className="text-xs text-[var(--sc-danger-fg)]" role="alert">
+                {modelFetchError}
+              </p>
+            ) : (
+              <Select
+                id="openrouter-model"
+                value={selectValue}
+                onChange={handleModelChange}
+                groups={modelGroups}
+                placeholder={t('settings.openRouter.modelPlaceholder')}
+                ariaLabel={t('settings.openRouter.modelAriaLabel')}
+                searchable
+                searchPlaceholder={t('settings.openRouter.modelPlaceholder')}
+              />
+            )}
             {isCustomModel && (
               <Input
                 type="text"
                 value={customModelInput}
                 onChange={(e) => setCustomModelInput(e.target.value)}
                 onBlur={handleCustomModelBlur}
-                placeholder={t('settings.openRouter.modelPlaceholder')}
-                aria-label={t('settings.openRouter.customModelLabel')}
+                onKeyDown={handleCustomModelKeyDown}
+                placeholder={t('settings.openRouter.customModelPlaceholder')}
+                aria-label={t('settings.openRouter.customModelAriaLabel')}
               />
             )}
             <p className="text-xs text-[var(--sc-text-muted)]">

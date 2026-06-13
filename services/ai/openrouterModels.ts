@@ -1,0 +1,174 @@
+/**
+ * openrouterModels.ts
+ * -------------------
+ * Model catalog + key validation for OpenRouter.
+ * QNBS-v3: Fetches the public /models endpoint, caches results locally for 1 h,
+ * and provides a lightweight key probe so the Settings UI can validate a key
+ * before the first inference call.
+ */
+
+import { createLogger } from '../logger';
+
+const logger = createLogger('openrouter-models');
+
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+const MODELS_URL = `${OPENROUTER_BASE_URL}/models`;
+const CACHE_KEY = 'storycraft-openrouter-models';
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+export interface OpenRouterModel {
+  id: string;
+  name?: string | undefined;
+  description?: string | undefined;
+  contextLength?: number | undefined;
+  pricing?:
+    | {
+        prompt?: number | undefined;
+        completion?: number | undefined;
+        image?: number | undefined;
+        request?: number | undefined;
+      }
+    | undefined;
+}
+
+interface CacheEntry {
+  fetchedAt: number;
+  models: OpenRouterModel[];
+}
+
+function isBrowser(): boolean {
+  return typeof window !== 'undefined' && window.localStorage !== undefined;
+}
+
+function readCache(): CacheEntry | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CacheEntry;
+    if (Date.now() - parsed.fetchedAt > CACHE_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(models: OpenRouterModel[]): void {
+  if (!isBrowser()) return;
+  try {
+    const entry: CacheEntry = { fetchedAt: Date.now(), models };
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+  } catch (err) {
+    logger.warn('Failed to write OpenRouter model cache', { error: String(err) });
+  }
+}
+
+function normalizeModel(raw: unknown): OpenRouterModel | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = r['id'];
+  if (typeof id !== 'string' || !id.trim()) return null;
+  return {
+    id,
+    name: typeof r['name'] === 'string' ? r['name'] : undefined,
+    description: typeof r['description'] === 'string' ? r['description'] : undefined,
+    contextLength: typeof r['context_length'] === 'number' ? r['context_length'] : undefined,
+    pricing:
+      r['pricing'] && typeof r['pricing'] === 'object'
+        ? (r['pricing'] as OpenRouterModel['pricing'])
+        : undefined,
+  };
+}
+
+/** QNBS-v3: Fetch the OpenRouter model catalog. Uses a 1h localStorage cache. */
+export async function fetchOpenRouterModels(
+  apiKey?: string | undefined,
+): Promise<OpenRouterModel[]> {
+  const cached = readCache();
+  if (cached) {
+    logger.debug('OpenRouter model cache hit');
+    return cached.models;
+  }
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+  if (apiKey?.trim()) {
+    headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+  }
+
+  const res = await fetch(MODELS_URL, {
+    method: 'GET',
+    headers,
+  });
+
+  if (!res.ok) {
+    throw new Error(`OpenRouter models API error ${res.status}: ${res.statusText}`);
+  }
+
+  const json = (await res.json()) as { data?: unknown[] };
+  const rawModels = Array.isArray(json.data) ? json.data : [];
+  const models = rawModels
+    .map(normalizeModel)
+    .filter((m): m is OpenRouterModel => m !== null)
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  writeCache(models);
+  return models;
+}
+
+/** QNBS-v3: Returns cached models immediately if available, otherwise fetches. */
+export async function getOpenRouterModelCatalog(
+  apiKey?: string | undefined,
+): Promise<OpenRouterModel[]> {
+  return fetchOpenRouterModels(apiKey);
+}
+
+/** QNBS-v3: Lightweight key probe — a 401 means the key is invalid. */
+export async function validateOpenRouterKey(
+  apiKey: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = apiKey.trim();
+  if (!trimmed) {
+    return { ok: false, error: 'EMPTY_KEY' };
+  }
+
+  try {
+    const res = await fetch(MODELS_URL, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${trimmed}`,
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (res.status === 401) {
+      return { ok: false, error: 'INVALID_KEY' };
+    }
+    if (!res.ok) {
+      return { ok: false, error: `HTTP_${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { ok: false, error: 'TIMEOUT' };
+    }
+    logger.warn('OpenRouter key validation failed', { error: String(err) });
+    return { ok: false, error: 'NETWORK_ERROR' };
+  }
+}
+
+/** QNBS-v3: Clear the local model cache (e.g. after key change). */
+export function clearOpenRouterModelCache(): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.removeItem(CACHE_KEY);
+  } catch (err) {
+    logger.warn('Failed to clear OpenRouter model cache', { error: String(err) });
+  }
+}
+
+export function isOpenRouterFreeModel(modelId: string): boolean {
+  return modelId.endsWith(':free');
+}

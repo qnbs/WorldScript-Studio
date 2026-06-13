@@ -1,4 +1,5 @@
 {
+  "writer.cancelledTag": "Cancelled",
   "writer.chapter.label": "الفصل: {{title}}",
   "writer.context.hide": "إخفاء السياق",
   "writer.context.label": "السياق",
@@ -78,6 +79,5 @@
   "writer.tts.start": "قراءة بصوت عالٍ",
   "writer.tts.stop": "إيقاف القراءة",
   "writer.versionControl.label": "الإصدارات",
-  "writer.versionControl.tooltip": "التحكم بالإصدارات (الفروع واللقطات)",
-  "writer.cancelledTag": "Cancelled"
+  "writer.versionControl.tooltip": "التحكم بالإصدارات (الفروع واللقطات)"
 }

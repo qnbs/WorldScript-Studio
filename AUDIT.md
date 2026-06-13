@@ -6,6 +6,38 @@
 
 **Quality gate (2026-06-11 — v1.22.0):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2594 keys × 11 locales**) · unit tests ✅ (5 475+ / 449 files) · coverage thresholds L74/B60/F67/S72 ✅. Toolchain: Node 22/24, **pnpm 11**, Vite 8, TypeScript 7 (tsgo).
 
+## v1.23 OpenRouter Settings Section — Localization, Modern UI & Hardening (2026-06-13)
+
+**Scope:** Harden the OpenRouter provider settings panel (`components/settings/OpenRouterSection.tsx`) with full i18n coverage, the design-system searchable `Select`, API-key validation, model-catalog fetching/caching, AI-mode awareness, and error-boundary wrapping.
+**Branch:** `feat/openrouter-section-perfection`
+
+**Quality gate (2026-06-13):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2626 keys × 11 locales**) · targeted unit tests ✅ (`Select` 7, `OpenRouterSection` 7, `openrouterProvider` 19).
+
+### Delivered
+
+| # | Area | What shipped |
+|---|------|-------------|
+| i18n | `locales/en/settings.json` + `locales/en/common.json` | 32 new keys for OpenRouter UI and generic search/no-results labels; propagated to all 10 non-EN locales and rebuilt bundles. |
+| UI primitive | `components/ui/Select.tsx` | Optional `searchable` prop with case-insensitive filtering across options and groups; keyboard closure and ARIA listbox behavior retained. |
+| Model catalog | `services/ai/openrouterModels.ts` | New service: fetches OpenRouter `/models`, caches in `localStorage` (1 h TTL), validates API keys, normalizes pricing/context-length fields. |
+| Provider hardening | `services/ai/providers/openrouterProvider.ts` | Shared request builder; timestamp-array trimming on every RPM record; `callbacks.onError` invoked before stream throws; optional circuit-breaker `localStorage` persistence. |
+| Settings panel | `components/settings/OpenRouterSection.tsx` | Rewritten with searchable `Select`, key save/remove/test-connection flows, model fetch loading/error states, AI-mode warnings (local/offline), inline status badges, and screen-reader alerts. |
+| Error boundary | `components/SettingsView.tsx` | `OpenRouterSection` wrapped in `ViewErrorBoundary` with translated `viewLabel`. |
+| Tests | `tests/unit/settings/OpenRouterSection.test.tsx` | 7 new tests covering toggle, key save/remove, model selection, custom model commit, and circuit reset. |
+
+### Files changed (non-locale)
+
+| File | Change |
+|------|--------|
+| `components/ui/Select.tsx` | Added `searchable` prop and search input filtering |
+| `tests/unit/Select.test.tsx` | +3 tests for searchable filtering and empty state |
+| `services/ai/openrouterModels.ts` | New model catalog + key validation service |
+| `services/ai/providers/openrouterProvider.ts` | Shared builder, RPM trimming, error callback, CB persistence |
+| `tests/unit/ai/openrouterProvider.test.ts` | +4 tests for models, validation, CB persistence, RPM trimming |
+| `components/settings/OpenRouterSection.tsx` | Full rewrite with modern Select and validation flows |
+| `components/SettingsView.tsx` | `ViewErrorBoundary` wrapper for `case 'openrouter'` |
+| `tests/unit/settings/OpenRouterSection.test.tsx` | New 7-test suite |
+
 **Quality gate (2026-06-03 — RTL/i18n Beta, C-6):** lint ✅ (1097 files, 0 warnings) · typecheck ✅ · i18n:check ✅ (**2259 keys × 7 locales** — `ar`/`he` now in the parity gate, no longer English stubs) · build + smoke:prod (font/index.css change — verified). **ar/he UI fully translated** across all 18 modules (help.json English fallback for Beta); **Noto Sans Arabic/Hebrew + Naskh** fonts wired (`index.tsx`, `--font-ui-rtl`/`--font-editor-rtl` tokens); **RTL layout**: `[dir="rtl"]` CSS net (text-align/float flips, `.rtl-auto-mirror`, `.rtl-keep-ltr`), shell logical-property conversion (Sidebar/Modal/CommandPalette/Toast), canvas LTR islands (PlotCanvas/CharacterGraphView keep coordinate math LTR), WelcomePortal ar/he selectors. "(Beta)" labels retained in language pickers. Glossary: `docs/I18N-GLOSSARY-RTL.md`. Remaining (community): native-speaker review + help-prose translation.
 
 ## v1.21 Deep Audit Correction — 2026-06-09 (PR #89)

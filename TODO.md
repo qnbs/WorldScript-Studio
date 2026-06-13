@@ -31,7 +31,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ⬜ Command Palette Integration für OpenRouter (`ai.mode.openrouter.toggle`, `ai.mode.openrouter.resetCircuit`).
 
 ### P2 — Nächster Sprint
-- ⬜ `tests/unit/settings/openRouterSection.test.tsx` — toggle, key input, model selector.
+- ✅ `tests/unit/settings/openRouterSection.test.tsx` — toggle, key input, model selector. (Delivered 2026-06-13 in `feat/openrouter-section-perfection`)
 - ⬜ `pnpm exec tsx scripts/audit-feature-parity.ts` — 0 drifts.
 
 ---
@@ -117,6 +117,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **AI retry/fetch hardening** (2026-06-02) — `aiRetry` exponential backoff + jitter + Retry-After (P1-F5); `fetchAdapter` opt-in streaming-safe timeout (P1-F6)
 - 🔄 **Local AI Perfection Phase 2.3** — Performance hardening. ✅ (2026-06-02) Pipeline LRU cache unified into `services/ai/pipelineLruCache.ts` (was duplicated in `workers/inference.worker.ts` + `workers/v2/inference.worker.ts`); adds **dispose-on-evict** (closes VRAM/RAM leak) + **in-flight load dedup**; 9 deterministic tests. ⬜ Remaining: WebLLM worker offload, LRU result-pipeline warmup tuning
 - 🔄 **Local AI Perfection Phase 2.4** — Coverage. Correction: `sileroVadEngine.ts` (5 tests) + `kokoroTtsEngine.ts` already had tests since 2026-05-31 (TODO "0 tests" was stale). ✅ (2026-06-02) Filled real Kokoro gaps — `cancel()`/`pause()`/`resume()`/`dispose()` + no-WebAssembly branch (+4 tests → 10). Inference-worker LRU now covered via `pipelineLruCache.test.ts` (13). ⬜ Remaining: threshold bump to CI-measured floor
+- ✅ **OpenRouter Settings Section hardening** (2026-06-13) — searchable design-system `Select`, model catalog fetch/cache, key validation/test-connection, full i18n (32 new keys × 11 locales), `ViewErrorBoundary` wrapping, 7 `OpenRouterSection` unit tests + 4 provider tests. PR `feat/openrouter-section-perfection`.
 - ✅ **WorkerBus v2 Phase 1** — `@domain/worker-bus` package: typed worker pool, circuit breakers, dead-letter queue, priority task queue, progress emitter, protocol handler; 123 tests / 12 suites; 84.5% coverage
 - ✅ **WorkerBus v2 Phase 2** — runtime wiring complete (2026-06-02): `workerBusManager` (singleton lifecycle), `hybridRouter` (web/Rust routing), `legacyWorkerBusAdapter` (ai-core shim), `tauriTaskBridge` (Tauri invoke); feature flag UI exposed; listenerMiddleware listeners; 154 combined tests; Rust backend stub deferred to Phase 3
 - 🔄 **WorkerBus v2 Phase 3** — Rust TaskSupervisor. ✅ (2026-06-03) `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs`; `storycraft_task_supervisor_ping` (version) + `storycraft_task_supervisor_submit` (taskType dispatcher, honest `success:false` on unknown/bad payload) registered in `lib.rs`. First real compute task `text.analyze` (word/char/sentence/syllable counts + Flesch Reading Ease, pure-Rust, 8 `#[cfg(test)]` tests). TS front-end `services/rustTaskSupervisor.ts` (`analyzeTextViaRust` — probes `isRustComputeAvailable` before routing so a Rust-only task never hits the web pool; null → JS fallback) + 5 unit tests. ⬜ Remaining: full `cargo build`/desktop verification (CI/Tauri — heavy locally); wire a real UI consumer (analytics/progress health); add more native tasks; `candle` `rust-compute` feature inference path
@@ -257,7 +258,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **Tabs** — WAI-ARIA compliant tabs component
 - ✅ **ToggleSwitch** — RTL-aware with reduced-motion support
 - ✅ **WelcomePortal** — Updated to use new LanguageSelector
-- ⬜ **Select/Combobox** — Replace native `<select>` in Settings/AI sections
+- 🔄 **Select/Combobox** — Design-system `Select` extended with optional `searchable` filtering; OpenRouter section migrated. Remaining: replace native `<select>` in other Settings/AI sections incrementally.
 - ⬜ **Dropdown Menu** — Action menus with icons and keyboard navigation
 - ⬜ **Unit tests** — Add tests for LanguageSelector, RadioGroup, Tabs
 - ⬜ **Storybook stories** — Add stories for new components
