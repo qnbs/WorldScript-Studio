@@ -29,7 +29,7 @@ the following are already shipped — do **not** re-plan them as gaps:
 | Phase | Theme | Status |
 |---|---|---|
 | **0** | v1.23 foundation: tracker sync, dependency hygiene, plugin sandbox validation | ✅ **Merged** (PR #118 → `8f94178`) |
-| **1** | Reliability/Observability + Local-AI/Voice low-end hardening | 🔄 **In progress** (Batch 1.1) |
+| **1** | Reliability/Observability + Local-AI/Voice low-end hardening | 🔄 **In progress** (1.1 ✅, FU-1 ✅, 1.2 ✅ merged; correlation-ID / Writer-error-UI remain) |
 | 2 | Coverage elevation (L≥85 / B≥75 / F≥80) in AI routing, Copilot v2, Voice, collab, PlotBoard | ⬜ Planned |
 | 3 | Tauri desktop: signing / notarization / updater pipeline + UX | ⬜ Planned |
 | 4 | WCAG 2.2 AA manual audit + i18n sustainability (<2% placeholders) | ⬜ Planned |
@@ -90,6 +90,14 @@ a CodeAnt-caught regression.
   shows an actionable, localized message (e.g. "Invalid API key — open Settings → AI…") instead
   of the generic `copilot.error`. +helper test + 2 onError tests.
 - Out of scope (later): action buttons; Writer/other AI call sites (helper is ready).
+
+### Batch CP-i18n — Command Palette localization (i18n completeness)
+- Root cause: palette infra is correct (`titleKey` + `t()`), but ~20 `palette.*` keys per core
+  locale were untranslated English fallback (AI-mode/editor/appearance/accessibility commands +
+  5 category headers). Keys existed → parity passed → values were never translated.
+- Translated for **de/es/fr/it** (values-only, no key churn); bundles rebuilt; `i18n:check` green.
+- Guard: `tests/unit/i18n/paletteLocalization.test.ts` fails if a `palette.*` key reverts to the
+  English value in a core locale (allowlist for loanwords: Navigation/Editor). Beta/RTL unchanged.
 
 ---
 
