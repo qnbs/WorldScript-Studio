@@ -539,12 +539,21 @@ Central orchestration layer for all background worker tasks. Messages use short 
 - **Branch-based development**: All changes MUST be made on feature branches (e.g., `fix/security-vulnerabilities-2026-06-06`). Never commit directly to `main`.
 - **CI verification**: Push to branch and wait for ALL CI jobs (security, quality, build, e2e, lighthouse) to pass before merging.
 - **PR merge**: Only merge to `main` when CI is fully green. Use "Squash and merge" for clean history.
-- **Inline comment handling**: Proactively address ALL inline PR review comments (CodeAnt AI, human reviewers) immediately:
-  1. Validate the finding against current code (comments may be stale)
-  2. Implement the real fix (root cause, not suppression)
-  3. If already fixed or false positive, reply with evidence
-  4. Resolve the thread after fixing
-  5. Push and verify CI passes
+- **Inline comment handling — the CodeAnt Correction Loop (proactive, automatic, every PR):**
+  Address ALL inline review comments (CodeAnt AI + any bot/human) **without being asked**. Full
+  canonical procedure: [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md). Each pass:
+  1. Fetch unresolved threads via GraphQL (`reviewThreads` → `isResolved:false`).
+  2. Validate each finding against the **current** code (anchors may be stale).
+  3. Implement the real **root-cause** fix (code **+ tests + i18n + docs**), or reply with evidence
+     if it's a false positive / by-design. **Never** add a new `biome-ignore` (suppression ratchet
+     fails CI — refactor instead; run `node scripts/check-suppressions.mjs`).
+  4. Local gate (sequential): lint + typecheck + targeted vitest green.
+  5. Commit + push (one wave = one commit).
+  6. Reply to **every** thread citing the resolving commit, then resolve it → **0 unresolved**.
+  7. Re-trigger: `gh pr comment <N> --body "@codeant-ai review"`.
+  - **Iron rule — loop until quiescent:** a push triggers a fresh review that often raises NEW
+    findings (a "wave"). Repeat the cycle until **BOTH**: a fresh review yields **0 new comments**
+    AND **0 threads unresolved**. Only then is the PR done. Do not stop while comments still arrive.
 
 ### Test Stability Guidelines (QNBS-v3)
 
@@ -560,6 +569,7 @@ Central orchestration layer for all background worker tasks. Messages use short 
 - `TODO.md` — Sprint-level task tracker
 - `CONTRIBUTING.md` — Contributor guide (setup, PR process, how to add AI providers/tools)
 - `docs/CI.md` — Full CI reference (job graph, local simulation, E2E authoring)
+- `docs/CODEANT-REVIEW-LOOP.md` — **Canonical PR review correction loop** (CodeAnt + any bot): fetch → fix/justify → reply+resolve → re-trigger → loop until 0 new comments & 0 unresolved
 - `docs/DEPLOYMENT.md` — GitHub Pages, Vercel, Cloudflare Pages, Tauri
 - `docs/BEST-PRACTICES.md` — Architecture summary, content rules, testing expectations
 - `docs/ACCESSIBILITY.md` — Live regions, focus traps, Lighthouse / axe / Storybook a11y
