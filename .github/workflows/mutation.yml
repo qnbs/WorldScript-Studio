@@ -20,14 +20,10 @@ on:
           - incremental
           - force
           - force-all-modules
-      break_threshold:
-        description: 'Break threshold (empty = use stryker.conf.json value)'
-        required: false
-        default: ''
       per_job_concurrency:
-        description: 'Concurrency per job (default: 3)'
+        description: 'Concurrency per job (default: 2)'
         required: false
-        default: '3'
+        default: '2'
 
 concurrency:
   group: mutation-${{ github.ref }}
@@ -43,7 +39,7 @@ jobs:
   stryker:
     name: 🧬 Stryker ${{ matrix.name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -51,13 +47,17 @@ jobs:
           - name: services-commands
             mutate: "services/commands/**/*.ts"
           - name: services-core
-            mutate: "services/{helpDocRetrieval,plotBoardService,promptLibrary,deepLinkService}.ts"
-          - name: services-ai
-            mutate: "services/ai/**/*.ts"
+            mutate: "services/{help/helpDocRetrieval,plotBoardService,promptLibrary,deepLinkService}.ts"
+          - name: services-ai-core
+            mutate: "services/ai/{modelRecommendations,aiPolicy,aiRetry,fetchAdapter,routingLogger,aiModeService}.ts"
+          - name: services-ai-providers
+            mutate: "services/ai/providers/openrouterProvider.ts"
           - name: features-project
             mutate: "features/project/**/*.ts"
           - name: features-misc
             mutate: "features/{settings,progressTracker,featureFlags,proForge}/**/*.ts"
+          - name: copilot
+            mutate: "services/copilot/**/*.ts"
 
     permissions:
       contents: read
@@ -98,12 +98,7 @@ jobs:
             FORCE_FLAG="--force"
           fi
 
-          CONCURRENCY="${{ github.event.inputs.per_job_concurrency || '3' }}"
-
-          BREAK_ARG=""
-          if [ -n "${{ github.event.inputs.break_threshold }}" ]; then
-            BREAK_ARG="--breakAt ${{ github.event.inputs.break_threshold }}"
-          fi
+          CONCURRENCY="${{ github.event.inputs.per_job_concurrency || '2' }}"
 
           echo "▶️ Module: ${{ matrix.name }}"
           echo "   Pattern: ${{ matrix.mutate }}"
@@ -117,8 +112,7 @@ jobs:
             $FORCE_FLAG \
             --concurrency "$CONCURRENCY" \
             --mutate "${{ matrix.mutate }}" \
-            --reporters progress,json \
-            $BREAK_ARG
+            --reporters progress,json,html
         env:
           STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
 
@@ -181,6 +175,6 @@ jobs:
           done
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "> Mode: \`${{ github.event.inputs.mode || 'incremental' }}\` | Concurrency: \`${{ github.event.inputs.per_job_concurrency || '3' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Mode: \`${{ github.event.inputs.mode || 'incremental' }}\` | Concurrency: \`${{ github.event.inputs.per_job_concurrency || '2' }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "> Threshold: break ≥ 75 | low ≥ 70 | high ≥ 85" >> "$GITHUB_STEP_SUMMARY"
           echo "> Individual HTML/JSON reports are available as artifacts." >> "$GITHUB_STEP_SUMMARY"

@@ -3,15 +3,15 @@
   "packageManager": "pnpm",
   "testRunner": "vitest",
   "vitest": {
-    "configFile": "vitest.config.ts"
+    "configFile": "vitest.config.ts",
+    "related": false
   },
   "coverageAnalysis": "perTest",
   "ignoreStatic": true,
   "incremental": true,
   "incrementalFile": "reports/stryker-incremental.json",
-  "plugins": ["@stryker-mutator/vitest-runner", "@stryker-mutator/typescript-checker"],
-  "checkers": ["typescript"],
-  "//mutate": "QNBS-v3: curated to fast, pure/synchronous logic only. Files with Web Workers, GPU/WebGPU, IDB async, real timers, crypto, or collaboration transport were removed — under an active mutant their tests can never settle, stalling the Stryker vitest runner at 0/N (it neither completes nor hits the per-mutant timeout), which caused the 20-min CI job timeout. This set runs hang-free and well within budget; the weekly standalone mutation.yml exercises the broader surface.",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "checkers": [],
   "mutate": [
     "services/commands/fuzzyScore.ts",
     "services/commands/palettePreferences.ts",
@@ -44,7 +44,7 @@
     "low": 70,
     "break": 75
   },
-  "reporters": ["progress", "json"],
+  "reporters": ["progress", "json", "html"],
   "htmlReporter": {
     "fileName": "reports/mutation/mutation.html"
   },
@@ -52,8 +52,8 @@
     "fileName": "reports/mutation/mutation.json"
   },
   "timeoutMS": 60000,
-  "timeoutFactor": 1.5,
-  "concurrency": 3,
+  "timeoutFactor": 2.0,
+  "concurrency": 2,
   "tempDirName": ".stryker-tmp",
   "warnings": {
     "slow": true
