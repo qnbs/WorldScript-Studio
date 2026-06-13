@@ -154,29 +154,35 @@ export const OpenRouterSection: FC = () => {
     }
   }, []);
 
-  // QNBS-v3: Catalog fetch extracted so both the mount effect and an explicit post-save refresh can
-  // call it. `isActive` lets the mount effect drop stale results without leaking state after unmount.
+  // QNBS-v3: Monotonic guard so concurrent catalog fetches are last-wins — a slower or failing
+  // response can never overwrite the result of a newer request, and a response that resolves after
+  // unmount / key change is dropped instead of leaking state.
+  const fetchSeqRef = useRef(0);
+
+  // QNBS-v3: Catalog fetch shared by the mount/key effect and the explicit post-save refresh.
   const fetchCatalog = useCallback(
-    async (key: string | null, isActive: () => boolean) => {
+    async (key: string | null) => {
+      const seq = ++fetchSeqRef.current;
+      const isLatest = () => fetchSeqRef.current === seq;
       setIsModelsLoading(true);
       setModelFetchError(null);
       const allowed = await guardPolicy();
       if (!allowed) {
-        if (isActive()) setIsModelsLoading(false);
+        if (isLatest()) setIsModelsLoading(false);
         return;
       }
       try {
         const fetched = await fetchOpenRouterModels(key ?? undefined);
-        if (isActive()) setModels(fetched);
+        if (isLatest()) setModels(fetched);
       } catch (err) {
         logger.warn('OpenRouter: failed to fetch model catalog', { error: String(err) });
-        if (isActive()) {
+        if (isLatest()) {
           setModelFetchError(t('settings.openRouter.modelFetch.failed'));
           // QNBS-v3: Drop stale paid models on error so the Select only offers guaranteed options.
           setModels([]);
         }
       } finally {
-        if (isActive()) setIsModelsLoading(false);
+        if (isLatest()) setIsModelsLoading(false);
       }
     },
     [guardPolicy, t],
@@ -184,10 +190,10 @@ export const OpenRouterSection: FC = () => {
 
   // Fetch model catalog when the section mounts or the stored key changes.
   useEffect(() => {
-    let cancelled = false;
-    void fetchCatalog(storedKey, () => !cancelled);
+    void fetchCatalog(storedKey);
+    // QNBS-v3: Invalidate any in-flight fetch on unmount / key change so a late response can't apply.
     return () => {
-      cancelled = true;
+      fetchSeqRef.current++;
     };
   }, [fetchCatalog, storedKey]);
 
@@ -225,15 +231,21 @@ export const OpenRouterSection: FC = () => {
     setSaveMsg(null);
     setTestResult(null);
     try {
+      // QNBS-v3: Detect a same-value save BEFORE updating state — React skips a no-op setStoredKey,
+      // so the storedKey effect wouldn't re-run in that case.
+      const keyUnchanged = trimmed === storedKey;
       await storageService.saveApiKey('openrouter', trimmed);
       setApiKeyInput('');
       setStoredKey(trimmed);
       // QNBS-v3: Clear model cache and in-memory list so the next fetch can include private models for this key.
       clearOpenRouterModelCache();
       setModels([]);
-      // QNBS-v3: Explicitly refetch the catalog. setStoredKey above is a no-op for React when the key
-      // value is unchanged, so the mount effect wouldn't re-run — an explicit call guarantees a refresh.
-      void fetchCatalog(trimmed, () => true);
+      // QNBS-v3: Only refetch explicitly when the key value is unchanged (effect won't re-run). When
+      // the value changed, the storedKey effect performs the single refetch — avoids a double fetch
+      // and the race it would create. The fetch sequence guard keeps either path last-wins.
+      if (keyUnchanged) {
+        void fetchCatalog(trimmed);
+      }
       showSaveMsg(true, t('settings.openRouter.keyStatus.saved'));
     } catch (err) {
       logger.error('OpenRouter: failed to save API key', { error: String(err) });
@@ -245,7 +257,7 @@ export const OpenRouterSection: FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [apiKeyInput, t, showSaveMsg, announceError, fetchCatalog]);
+  }, [apiKeyInput, storedKey, t, showSaveMsg, announceError, fetchCatalog]);
 
   const handleClearKey = useCallback(async () => {
     try {

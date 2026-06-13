@@ -360,6 +360,29 @@ describe('streamText ollama→gemini fallback', () => {
       ),
     ).rejects.toThrow('ECONNREFUSED');
   });
+
+  it('treats an aborted request as a cancellation — no fallback, no onError', async () => {
+    // QNBS-v3: A user cancel must not be mistaken for a provider failure: the chain must not fall
+    // back to gemini and the terminal onError callback must not fire.
+    const { streamOllama } = await import('../../services/ollamaService');
+    vi.mocked(streamOllama).mockRejectedValueOnce(new DOMException('aborted', 'AbortError'));
+    const ac = new AbortController();
+    ac.abort();
+    const onError = vi.fn();
+
+    await expect(
+      streamText(
+        'prompt',
+        'Balanced',
+        { ...defaultOpts, provider: 'ollama', fallbackProviders: ['gemini'] },
+        { onChunk: vi.fn(), onError },
+        ac.signal,
+      ),
+    ).rejects.toThrow(/abort/i);
+
+    expect(geminiService.streamText).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
 });
 
 // ─── Streaming abort mid-flow (P0-D branch coverage) ─────────────────────────
