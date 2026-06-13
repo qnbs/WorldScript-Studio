@@ -8,32 +8,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TauriApis } from '../../../../services/fs/fsCore';
 
-// biome-ignore lint/suspicious/noExplicitAny: test holder for the per-test fake FS
-const { fsHolder } = vi.hoisted(() => ({ fsHolder: { current: null as any } }));
+// QNBS-v3: typed via `unknown` (not `any`) so the mock factories see a non-null TauriApis; the
+// real value is set in beforeEach before any mock is invoked.
+const { fsHolder } = vi.hoisted(() => ({ fsHolder: { current: null as unknown as TauriApis } }));
 
 // QNBS-v3: mock the @tauri-apps plugin modules so the REAL loadTauriApis assembles a TauriApis
 // whose methods delegate to the per-test in-memory fake FS (memoization-safe — each call reads
 // fsHolder.current). This exercises the real store logic AND loadTauriApis itself.
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (...a: unknown[]) => fsHolder.current.invoke(...a),
+  invoke: (cmd: string, args?: Record<string, unknown>) => fsHolder.current.invoke(cmd, args),
 }));
 vi.mock('@tauri-apps/plugin-fs', () => ({
-  readTextFile: (...a: unknown[]) => fsHolder.current.readTextFile(...a),
-  writeTextFile: (...a: unknown[]) => fsHolder.current.writeTextFile(...a),
-  readFile: (...a: unknown[]) => fsHolder.current.readFile(...a),
-  writeFile: (...a: unknown[]) => fsHolder.current.writeFile(...a),
-  mkdir: (...a: unknown[]) => fsHolder.current.mkdir(...a),
-  exists: (...a: unknown[]) => fsHolder.current.exists(...a),
-  readDir: (...a: unknown[]) => fsHolder.current.readDir(...a),
-  remove: (...a: unknown[]) => fsHolder.current.remove(...a),
+  readTextFile: (p: string) => fsHolder.current.readTextFile(p),
+  writeTextFile: (p: string, c: string) => fsHolder.current.writeTextFile(p, c),
+  readFile: (p: string) => fsHolder.current.readFile(p),
+  writeFile: (p: string, d: Uint8Array) => fsHolder.current.writeFile(p, d),
+  mkdir: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.mkdir(p, opts),
+  exists: (p: string) => fsHolder.current.exists(p),
+  readDir: (p: string) => fsHolder.current.readDir(p),
+  remove: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.remove(p, opts),
 }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({
-  open: (...a: unknown[]) => fsHolder.current.open(...a),
-  save: (...a: unknown[]) => fsHolder.current.save(...a),
+  open: (opts?: Record<string, unknown>) => fsHolder.current.open(opts),
+  save: (opts?: Record<string, unknown>) => fsHolder.current.save(opts),
 }));
 vi.mock('@tauri-apps/api/path', () => ({
-  appDataDir: (...a: unknown[]) => fsHolder.current.appDataDir(...a),
-  join: (...a: unknown[]) => fsHolder.current.join(...a),
+  appDataDir: () => fsHolder.current.appDataDir(),
+  join: (...parts: string[]) => fsHolder.current.join(...parts),
 }));
 
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
@@ -109,8 +110,7 @@ afterEach(() => {
 });
 
 describe('FsProjectStore — projects', () => {
-  // biome-ignore lint/suspicious/noExplicitAny: minimal project fixture
-  const project: any = {
+  const project = {
     id: 'p1',
     title: 'My Novel',
     logline: 'A tale',
@@ -121,7 +121,7 @@ describe('FsProjectStore — projects', () => {
   };
 
   it('round-trips save/load and lists/deletes a project', async () => {
-    await store.saveProject(project);
+    await store.saveProject(project as never);
     const loaded = await store.loadProject('p1');
     expect(loaded?.title).toBe('My Novel');
 
@@ -241,8 +241,7 @@ describe('FsAssetStore — images + binder assets', () => {
 });
 
 describe('FsProjectStore — export / import', () => {
-  // biome-ignore lint/suspicious/noExplicitAny: minimal exportable fixture
-  const exportable: any = {
+  const exportable = {
     title: 'My Novel',
     logline: 'tale',
     characters: [
@@ -261,13 +260,13 @@ describe('FsProjectStore — export / import', () => {
 
   it('exports to JSON via the save dialog', async () => {
     fake.apis.save = () => Promise.resolve('/app/out.json');
-    await store.exportProject(exportable, 'json');
+    await store.exportProject(exportable as never, 'json');
     expect(fake.text.get('/app/out.json')).toContain('"title": "My Novel"');
   });
 
   it('exports to Markdown (characters + worlds sections)', async () => {
     fake.apis.save = () => Promise.resolve('/app/out.md');
-    await store.exportProject(exportable, 'markdown');
+    await store.exportProject(exportable as never, 'markdown');
     const md = fake.text.get('/app/out.md') ?? '';
     expect(md).toContain('# My Novel');
     expect(md).toContain('### Alice');
@@ -276,7 +275,7 @@ describe('FsProjectStore — export / import', () => {
 
   it('does nothing when the save dialog is cancelled', async () => {
     fake.apis.save = () => Promise.resolve(null);
-    await store.exportProject(exportable, 'json');
+    await store.exportProject(exportable as never, 'json');
     expect([...fake.text.keys()]).toHaveLength(0);
   });
 
