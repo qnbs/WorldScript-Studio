@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { assertCloudAiAllowed, assertCloudAiAllowedSync } from '../../../services/ai/aiPolicy';
+import { setActiveAiMode } from '../../../services/ai/aiModeService';
+import {
+  assertCloudAiAllowed,
+  assertCloudAiAllowedSync,
+  assertLoraLocalOnly,
+} from '../../../services/ai/aiPolicy';
 import type { PrivacySettings } from '../../../types';
 
 // ---------------------------------------------------------------------------
@@ -22,6 +27,28 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 // assertCloudAiAllowedSync
 // ---------------------------------------------------------------------------
+describe('assertLoraLocalOnly', () => {
+  it('allows local provider names', () => {
+    expect(() => assertLoraLocalOnly('ollama')).not.toThrow();
+    expect(() => assertLoraLocalOnly('webllm')).not.toThrow();
+    expect(() => assertLoraLocalOnly('onnx')).not.toThrow();
+    expect(() => assertLoraLocalOnly('transformers')).not.toThrow();
+  });
+
+  it('allows Unsloth model IDs', () => {
+    expect(() => assertLoraLocalOnly('unsloth/llama-3-8b')).not.toThrow();
+  });
+
+  it('allows HuggingFace IDs without cloud markers', () => {
+    expect(() => assertLoraLocalOnly('HuggingFaceTB/SmolLM2-135M-Instruct')).not.toThrow();
+  });
+
+  it('throws for Google/OpenAI cloud markers', () => {
+    expect(() => assertLoraLocalOnly('models/googleapis/gemini')).toThrow('cloud-hosted');
+    expect(() => assertLoraLocalOnly('openai/gpt-4')).toThrow('cloud-hosted');
+  });
+});
+
 describe('assertCloudAiAllowedSync', () => {
   it('does not throw for ollama (local provider)', () => {
     expect(() => assertCloudAiAllowedSync('ollama', undefined)).not.toThrow();
@@ -87,6 +114,20 @@ describe('assertCloudAiAllowedSync', () => {
     expect(() => assertCloudAiAllowedSync('grok', privacy)).toThrow(
       'Cloud provider blocked by EU residency policy: grok',
     );
+  });
+
+  it('throws for cloud provider when AI mode is local', () => {
+    setActiveAiMode('local');
+    const privacy: PrivacySettings = {
+      localStorageOnly: false,
+      euDataResidency: false,
+      analyticsEnabled: false,
+      crashReporting: false,
+      dataEncryption: true,
+      shareUsageData: false,
+    };
+    expect(() => assertCloudAiAllowedSync('gemini', privacy)).toThrow('local-only');
+    setActiveAiMode('hybrid');
   });
 
   it('does not throw for gemini when only euDataResidency is true', () => {
