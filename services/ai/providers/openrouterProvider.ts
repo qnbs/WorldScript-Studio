@@ -366,6 +366,13 @@ export async function streamOpenRouter(
       throw err;
     }
 
+    // QNBS-v3: A request cancelled mid-stream is NOT a successful completion — exit via the abort
+    // error path instead of recording success / firing onDone, so callers don't run downstream
+    // completion flows for a request the user (or a newer request) cancelled.
+    if (opts.signal?.aborted) {
+      throw new DOMException('OpenRouter stream aborted', 'AbortError');
+    }
+
     recordSuccess();
     callbacks.onDone?.();
     return; // success

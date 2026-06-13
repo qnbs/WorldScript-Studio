@@ -13,6 +13,9 @@ import {
 const CACHE_KEY = 'storycraft-openrouter-models';
 // QNBS-v3: Freeze the clock so cache TTL assertions never depend on real wall-clock time.
 const FIXED_NOW = 1_700_000_000_000;
+// QNBS-v3: Capture the real fetch so teardown can restore it — these tests overwrite global.fetch
+// and must not leak the stub into unrelated suites.
+const originalFetch = global.fetch;
 
 const mockAssertCloudAiAllowed = vi.fn().mockResolvedValue(undefined);
 
@@ -32,6 +35,8 @@ describe('openrouterModels', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    // QNBS-v3: Guaranteed restore of the global fetch so a failing test can't leak the stub.
+    global.fetch = originalFetch;
   });
 
   describe('readCache', () => {
@@ -73,6 +78,28 @@ describe('openrouterModels', () => {
       const models = await fetchOpenRouterModels();
       expect(global.fetch).not.toHaveBeenCalled();
       expect(models[0]?.contextLength).toBe(8192);
+    });
+
+    it('does not reuse a cache from a different credential scope', async () => {
+      // QNBS-v3: Regression — an anonymously fetched catalog (keyHash '') must not be served to a
+      // request made with an API key; the differing scope forces a fresh fetch.
+      localStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          fetchedAt: FIXED_NOW,
+          keyHash: '',
+          models: [{ id: 'anon/model:free' }],
+        }),
+      );
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ id: 'authed/model' }] }),
+      } as unknown as Response);
+
+      const models = await fetchOpenRouterModels('sk-or-v1-secret-key');
+      expect(global.fetch).toHaveBeenCalled();
+      expect(models).toEqual([{ id: 'authed/model' }]);
     });
 
     it('ignores stale cached entries', async () => {

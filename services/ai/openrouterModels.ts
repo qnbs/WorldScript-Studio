@@ -35,10 +35,31 @@ export interface OpenRouterModel {
 interface CacheEntry {
   fetchedAt: number;
   models: OpenRouterModel[];
+  // QNBS-v3: Non-reversible fingerprint of the API key that produced this catalog ('' = anonymous).
+  // Cached catalogs are bucketed per credential scope so an anonymous (or key-A) fetch is never
+  // reused for a request with a different key — preventing stale/cross-scope model availability.
+  keyHash?: string;
 }
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && window.localStorage !== undefined;
+}
+
+// QNBS-v3: Short, non-reversible SHA-256 fingerprint (8 bytes) used only to bucket the cache per
+// credential scope. Never the key itself — the digest can't be reversed to the original key.
+async function hashApiKey(apiKey?: string): Promise<string> {
+  const trimmed = apiKey?.trim();
+  if (!trimmed) return '';
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(trimmed));
+    return Array.from(new Uint8Array(digest).slice(0, 8))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch {
+    // QNBS-v3: No WebCrypto available — fall back to a distinct non-empty bucket so an
+    // authenticated catalog is still never served to an anonymous request.
+    return 'authed';
+  }
 }
 
 function isValidCacheEntry(parsed: unknown): parsed is CacheEntry {
@@ -54,7 +75,7 @@ function isValidCacheEntry(parsed: unknown): parsed is CacheEntry {
   );
 }
 
-function readCache(): CacheEntry | null {
+function readCache(expectedKeyHash: string): CacheEntry | null {
   if (!isBrowser()) return null;
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
@@ -62,6 +83,9 @@ function readCache(): CacheEntry | null {
     const parsed = JSON.parse(raw) as unknown;
     if (!isValidCacheEntry(parsed)) return null;
     if (Date.now() - parsed.fetchedAt > CACHE_TTL_MS) return null;
+    // QNBS-v3: Only reuse a cached catalog within the same credential scope. A legacy entry without
+    // keyHash is treated as anonymous ('') so it's reused only for anonymous requests.
+    if ((parsed.keyHash ?? '') !== expectedKeyHash) return null;
     // QNBS-v3: Normalize cached items so malformed entries cannot leak bad field types downstream.
     const normalized = (parsed.models as unknown[])
       .map(normalizeModel)
@@ -72,10 +96,10 @@ function readCache(): CacheEntry | null {
   }
 }
 
-function writeCache(models: OpenRouterModel[]): void {
+function writeCache(models: OpenRouterModel[], keyHash: string): void {
   if (!isBrowser()) return;
   try {
-    const entry: CacheEntry = { fetchedAt: Date.now(), models };
+    const entry: CacheEntry = { fetchedAt: Date.now(), models, keyHash };
     window.localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
   } catch (err) {
     logger.warn('Failed to write OpenRouter model cache', { error: String(err) });
@@ -110,7 +134,10 @@ function normalizeModel(raw: unknown): OpenRouterModel | null {
 export async function fetchOpenRouterModels(
   apiKey?: string | undefined,
 ): Promise<OpenRouterModel[]> {
-  const cached = readCache();
+  // QNBS-v3: Bucket the cache by credential scope so a catalog fetched with one key (or none) is
+  // never reused for a request with a different key.
+  const keyHash = await hashApiKey(apiKey);
+  const cached = readCache(keyHash);
   if (cached) {
     logger.debug('OpenRouter model cache hit');
     return cached.models;
@@ -143,7 +170,7 @@ export async function fetchOpenRouterModels(
     .filter((m): m is OpenRouterModel => m !== null)
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  writeCache(models);
+  writeCache(models, keyHash);
   return models;
 }
 

@@ -154,36 +154,42 @@ export const OpenRouterSection: FC = () => {
     }
   }, []);
 
-  // Fetch model catalog when the section mounts.
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
+  // QNBS-v3: Catalog fetch extracted so both the mount effect and an explicit post-save refresh can
+  // call it. `isActive` lets the mount effect drop stale results without leaking state after unmount.
+  const fetchCatalog = useCallback(
+    async (key: string | null, isActive: () => boolean) => {
       setIsModelsLoading(true);
       setModelFetchError(null);
       const allowed = await guardPolicy();
       if (!allowed) {
-        if (!cancelled) setIsModelsLoading(false);
+        if (isActive()) setIsModelsLoading(false);
         return;
       }
       try {
-        const fetched = await fetchOpenRouterModels(storedKey ?? undefined);
-        if (!cancelled) setModels(fetched);
+        const fetched = await fetchOpenRouterModels(key ?? undefined);
+        if (isActive()) setModels(fetched);
       } catch (err) {
         logger.warn('OpenRouter: failed to fetch model catalog', { error: String(err) });
-        if (!cancelled) {
+        if (isActive()) {
           setModelFetchError(t('settings.openRouter.modelFetch.failed'));
           // QNBS-v3: Drop stale paid models on error so the Select only offers guaranteed options.
           setModels([]);
         }
       } finally {
-        if (!cancelled) setIsModelsLoading(false);
+        if (isActive()) setIsModelsLoading(false);
       }
-    };
-    void run();
+    },
+    [guardPolicy, t],
+  );
+
+  // Fetch model catalog when the section mounts or the stored key changes.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchCatalog(storedKey, () => !cancelled);
     return () => {
       cancelled = true;
     };
-  }, [guardPolicy, storedKey, t]);
+  }, [fetchCatalog, storedKey]);
 
   // Keep local custom-model state in sync with external Redux changes.
   useEffect(() => {
@@ -225,6 +231,9 @@ export const OpenRouterSection: FC = () => {
       // QNBS-v3: Clear model cache and in-memory list so the next fetch can include private models for this key.
       clearOpenRouterModelCache();
       setModels([]);
+      // QNBS-v3: Explicitly refetch the catalog. setStoredKey above is a no-op for React when the key
+      // value is unchanged, so the mount effect wouldn't re-run — an explicit call guarantees a refresh.
+      void fetchCatalog(trimmed, () => true);
       showSaveMsg(true, t('settings.openRouter.keyStatus.saved'));
     } catch (err) {
       logger.error('OpenRouter: failed to save API key', { error: String(err) });
@@ -236,7 +245,7 @@ export const OpenRouterSection: FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [apiKeyInput, t, showSaveMsg, announceError]);
+  }, [apiKeyInput, t, showSaveMsg, announceError, fetchCatalog]);
 
   const handleClearKey = useCallback(async () => {
     try {
