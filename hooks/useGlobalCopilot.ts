@@ -19,6 +19,7 @@ import {
 import { selectEnableProForge } from '../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
+import { getAiErrorMessage } from '../services/ai/aiErrorTaxonomy';
 import { approximateManuscriptWordCount } from '../services/commands/wordCountApprox';
 import { applyTextEdit } from '../services/copilot/actionApplier';
 import { detectCopilotIntent, runCopilotDiagnostic } from '../services/copilot/copilotActions';
@@ -104,7 +105,9 @@ export function useGlobalCopilot(currentView: View) {
       dispatch(copilotActions.setStatus('idle'));
     },
     onError: (err) => {
-      dispatch(copilotActions.setLastAssistantContent(t('copilot.error')));
+      // QNBS-v3 (Batch 1.2): show an actionable, classified message (e.g. "Invalid API key —
+      // open Settings → AI…") instead of the generic copilot.error fallback.
+      dispatch(copilotActions.setLastAssistantContent(getAiErrorMessage(err, t)));
       dispatch(copilotActions.finishLastAssistant());
       dispatch(copilotActions.setError(err.message));
     },

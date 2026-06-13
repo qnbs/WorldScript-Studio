@@ -4,7 +4,11 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { type AiErrorCategory, classifyAiError } from '../../../services/ai/aiErrorTaxonomy';
+import {
+  type AiErrorCategory,
+  classifyAiError,
+  getAiErrorMessage,
+} from '../../../services/ai/aiErrorTaxonomy';
 
 interface Case {
   readonly name: string;
@@ -134,7 +138,7 @@ describe('classifyAiError', () => {
       const result = classifyAiError(c.err);
       expect(result.category).toBe(c.category);
       expect(result.retryable).toBe(c.retryable);
-      expect(result.messageKey).toBe(`errors.ai.${c.category}`);
+      expect(result.messageKey).toBe(`error.ai.${c.category}`);
     });
   }
 
@@ -155,7 +159,19 @@ describe('classifyAiError', () => {
       const result = classifyAiError({ status: 429 });
       expect(result.category).toBe('offline');
       expect(result.retryable).toBe(false);
-      expect(result.messageKey).toBe('errors.ai.offline');
+      expect(result.messageKey).toBe('error.ai.offline');
     });
+  });
+});
+
+describe('getAiErrorMessage', () => {
+  const t = (key: string): string => `t:${key}`;
+
+  it('resolves a classified error to its error.ai.* message via t', () => {
+    expect(getAiErrorMessage({ status: 401 }, t)).toBe('t:error.ai.auth');
+    expect(getAiErrorMessage(new Error('Cloud provider blocked: local-only mode'), t)).toBe(
+      't:error.ai.policy',
+    );
+    expect(getAiErrorMessage(new Error('socket hang up'), t)).toBe('t:error.ai.transient');
   });
 });
