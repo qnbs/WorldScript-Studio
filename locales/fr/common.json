@@ -638,5 +638,14 @@
   "voice.stopDictation": "Arrêter la dictée",
   "voice.stopListening": "Arrêter l’écoute",
   "worlds.emptyState.description": "Construisez les lieux, les règles et les histoires dans lesquels votre récit prend vie. Commencez par un lieu.",
-  "worlds.emptyState.title": "Le monde vous attend"
+  "worlds.emptyState.title": "Le monde vous attend",
+  "error.ai.transient": "Le service d'IA a rencontré un problème temporaire. Réessaie.",
+  "error.ai.rateLimit": "Le fournisseur d'IA limite les requêtes. Patiente un instant et réessaie.",
+  "error.ai.auth": "Clé API invalide ou manquante. Ouvre Paramètres → IA et modèles pour l'ajouter ou la mettre à jour.",
+  "error.ai.network": "Impossible de joindre le fournisseur d'IA. Vérifie ta connexion et réessaie.",
+  "error.ai.offline": "Tu sembles hors ligne. Reconnecte-toi ou passe à un modèle local dans Paramètres → IA et modèles.",
+  "error.ai.policy": "Cette requête est bloquée par tes paramètres de confidentialité ou de mode IA. Ajuste-les dans Paramètres → IA et modèles.",
+  "error.ai.invalidRequest": "La requête d'IA a été rejetée car invalide. Reformule ou raccourcis ton invite.",
+  "error.ai.canceled": "La requête d'IA a été annulée.",
+  "error.ai.permanent": "La requête d'IA a échoué. Réessaie plus tard."
 }

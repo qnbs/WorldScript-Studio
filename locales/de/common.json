@@ -638,5 +638,14 @@
   "voice.stopDictation": "Diktat stoppen",
   "voice.stopListening": "Zuhören stoppen",
   "worlds.emptyState.description": "Baue die Orte, Regeln und Geschichten auf, in denen deine Geschichte lebt. Beginne mit einem Ort.",
-  "worlds.emptyState.title": "Die Welt wartet"
+  "worlds.emptyState.title": "Die Welt wartet",
+  "error.ai.transient": "Beim KI-Dienst ist ein vorübergehendes Problem aufgetreten. Bitte versuche es erneut.",
+  "error.ai.rateLimit": "Der KI-Anbieter drosselt die Anfragen. Warte einen Moment und versuche es erneut.",
+  "error.ai.auth": "Ungültiger oder fehlender API-Schlüssel. Öffne Einstellungen → KI & Modelle, um ihn hinzuzufügen oder zu aktualisieren.",
+  "error.ai.network": "Der KI-Anbieter konnte nicht erreicht werden. Prüfe deine Verbindung und versuche es erneut.",
+  "error.ai.offline": "Du scheinst offline zu sein. Stelle die Verbindung wieder her oder wechsle in Einstellungen → KI & Modelle zu einem lokalen Modell.",
+  "error.ai.policy": "Diese Anfrage wird durch deine Datenschutz- oder KI-Modus-Einstellungen blockiert. Passe sie in Einstellungen → KI & Modelle an.",
+  "error.ai.invalidRequest": "Die KI-Anfrage wurde als ungültig abgelehnt. Formuliere sie um oder kürze deinen Prompt.",
+  "error.ai.canceled": "Die KI-Anfrage wurde abgebrochen.",
+  "error.ai.permanent": "Die KI-Anfrage ist fehlgeschlagen. Bitte versuche es später erneut."
 }

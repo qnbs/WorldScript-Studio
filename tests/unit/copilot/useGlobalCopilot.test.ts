@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: controllable copilot state + dispatch/stop spies. The real copilotSlice action creators
 // run (so dispatched actions carry real types); only the React/AI/service surface is mocked.
-const { mockDispatch, mockStop, state } = vi.hoisted(() => ({
+const { mockDispatch, mockStop, state, aiOptions } = vi.hoisted(() => ({
   mockDispatch: vi.fn(),
   mockStop: vi.fn(),
+  // QNBS-v3 (Batch 1.2): capture the options the hook passes to useStoryCraftAI so tests can
+  // invoke its onError callback.
+  aiOptions: { current: null as null | { onError?: (err: Error) => void } },
   state: {
     copilot: {
       isOpen: true,
@@ -47,7 +50,10 @@ vi.mock('../../../app/transientUiStore', () => ({
     }),
 }));
 vi.mock('../../../hooks/useStoryCraftAI', () => ({
-  useStoryCraftAI: () => ({ runCompletion: vi.fn(), stop: mockStop, isLoading: false }),
+  useStoryCraftAI: (opts: { onError?: (err: Error) => void }) => {
+    aiOptions.current = opts;
+    return { runCompletion: vi.fn(), stop: mockStop, isLoading: false };
+  },
 }));
 vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
@@ -89,6 +95,8 @@ import { useGlobalCopilot } from '../../../hooks/useGlobalCopilot';
 beforeEach(() => {
   mockDispatch.mockClear();
   mockStop.mockClear();
+  // QNBS-v3: reset captured AI options so each test starts from clean shared state.
+  aiOptions.current = null;
   state.copilot.status = 'streaming';
   state.project = null;
   state.activeSectionId = null;
@@ -217,5 +225,41 @@ describe('useGlobalCopilot.applyLastSuggestion', () => {
     expect(result.current.applyStatus).toBe('error');
     act(() => vi.advanceTimersByTime(3000));
     await vi.waitFor(() => expect(result.current.applyStatus).toBe('idle'));
+  });
+});
+
+describe('useGlobalCopilot onError (Batch 1.2)', () => {
+  // QNBS-v3: the translation mock returns the key, so the dispatched content is the resolved
+  // `error.ai.*` key — proving the classified message replaces the generic copilot.error.
+  it('shows the classified auth message on a 401, not the generic error', () => {
+    renderHook(() => useGlobalCopilot('writer' as never));
+    const authErr = Object.assign(new Error('Unauthorized'), { status: 401 });
+    act(() => aiOptions.current?.onError?.(authErr));
+
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'copilot/setLastAssistantContent',
+        payload: 'error.ai.auth',
+      }),
+    );
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'copilot/setLastAssistantContent',
+        payload: 'copilot.error',
+      }),
+    );
+  });
+
+  it('classifies a policy block as error.ai.policy', () => {
+    renderHook(() => useGlobalCopilot('writer' as never));
+    act(() =>
+      aiOptions.current?.onError?.(new Error('Cloud provider blocked: local-only mode is active.')),
+    );
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'copilot/setLastAssistantContent',
+        payload: 'error.ai.policy',
+      }),
+    );
   });
 });

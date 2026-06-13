@@ -34,7 +34,7 @@ const RETRYABLE: ReadonlySet<AiErrorCategory> = new Set<AiErrorCategory>([
 ]);
 
 function classificationFor(category: AiErrorCategory): AiErrorClassification {
-  return { category, retryable: RETRYABLE.has(category), messageKey: `errors.ai.${category}` };
+  return { category, retryable: RETRYABLE.has(category), messageKey: `error.ai.${category}` };
 }
 
 /** Best-effort numeric HTTP status from common provider/SDK error shapes. */
@@ -129,4 +129,14 @@ export function classifyAiError(err: unknown): AiErrorClassification {
   if (e['name'] === 'TypeError' && /fetch/i.test(message)) return classificationFor('network');
 
   return classificationFor('transient');
+}
+
+/**
+ * Localized, actionable message for a thrown AI error.
+ * QNBS-v3 (Batch 1.2): pairs {@link classifyAiError} with the `error.ai.*` i18n keys so call
+ * sites surface a recovery hint (e.g. "open Settings → AI & Models") instead of a generic
+ * failure string. Pass the `t` from `useTranslation()`.
+ */
+export function getAiErrorMessage(err: unknown, t: (key: string) => string): string {
+  return t(classifyAiError(err).messageKey);
 }

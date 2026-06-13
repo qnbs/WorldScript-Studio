@@ -638,5 +638,14 @@
   "voice.stopDictation": "Σταματήστε την υπαγόρευση",
   "voice.stopListening": "Σταμάτα να ακούς",
   "worlds.emptyState.description": "Δημιουργήστε τα μέρη, τους κανόνες και τις ιστορίες στα οποία ζει η ιστορία σας. Ξεκινήστε με μια τοποθεσία.",
-  "worlds.emptyState.title": "Ο κόσμος περιμένει"
+  "worlds.emptyState.title": "Ο κόσμος περιμένει",
+  "error.ai.transient": "The AI service hit a temporary problem. Please try again.",
+  "error.ai.rateLimit": "The AI provider is rate-limiting requests. Wait a moment and try again.",
+  "error.ai.auth": "Invalid or missing API key. Open Settings → AI & Models to add or update it.",
+  "error.ai.network": "Couldn't reach the AI provider. Check your connection and try again.",
+  "error.ai.offline": "You appear to be offline. Reconnect, or switch to a local model in Settings → AI & Models.",
+  "error.ai.policy": "This request is blocked by your privacy or AI-mode settings. Adjust them in Settings → AI & Models.",
+  "error.ai.invalidRequest": "The AI request was rejected as invalid. Try rephrasing or shortening your prompt.",
+  "error.ai.canceled": "The AI request was cancelled.",
+  "error.ai.permanent": "The AI request failed. Please try again later."
 }
