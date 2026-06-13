@@ -1618,25 +1618,39 @@ StoryCraft Studio was assessed as a strong, modern React/TypeScript application 
 
 ## Known Overrides Table (Supply-Chain Hardening)
 
-| Package | Override | CVE Reference | Justification |
-|---------|----------|---------------|---------------|
-| serialize-javascript | >=7.0.3 | GHSA-q7cg-457f-vx79 | Prototype pollution in versions < 7.0.3 |
-| chrome-launcher | ^1.2.1 | GHSA-6c7v-8m9h-9v9v | Command injection in older versions |
-| tmp | ^0.2.6 | GHSA-7c8m-8v9v-9v9v | Prototype pollution |
-| @xmldom/xmldom | >=0.8.13 | GHSA-8v9v-9v9v-9v9v | XSS in older versions |
-| protobufjs | >=7.5.6 | GHSA-9v9v-9v9v-9v9v | Prototype pollution |
-| axios | >=1.15.2 | GHSA-9v9v-9v9v-9v9v | SSRF in older versions |
-| basic-ftp | >=5.3.1 | GHSA-9v9v-9v9v-9v9v | Path traversal |
-| fast-uri | >=3.1.2 | GHSA-9v9v-9v9v-9v9v | Path traversal |
-| ip-address | >=10.1.1 | GHSA-9v9v-9v9v-9v9v | DoS in older versions |
-| ws | >=8.20.1 | GHSA-9v9v-9v9v-9v9v | DoS in older versions |
-| brace-expansion | >=5.0.6 | GHSA-9v9v-9v9v-9v9v | ReDoS |
-| uuid | >=11.1.1 | GHSA-9v9v-9v9v-9v9v | Collision in older versions |
-| qs | >=6.15.2 | GHSA-9v9v-9v9v-9v9v | Prototype pollution |
-| wait-on (transitive via `@storybook/test-runner` → `jest-process-manager`) | joi ^18.2.1 in lockfile | transitive hardening (dev-only) | `wait-on@7.2.0` originally pulled an older `joi` revision; lockfile pins `joi@18.2.1` for both `wait-on@7.2.0` and `wait-on@9.0.10`. Only used in dev/test toolchain, never shipped to users. |
+Source of truth for the override floors is `pnpm-workspace.yaml` (`overrides:`). Advisory
+IDs below were re-verified against the GitHub Advisory Database on 2026-06-13. Floors are
+intentionally conservative (set above the patched version) as preventive supply-chain pins;
+several apply only to dev/test transitive deps and are never shipped to users.
 
-**Dependency hygiene status (2026-06-12):**
+| Package | Override | Advisory | Justification |
+|---------|----------|----------|---------------|
+| esbuild | >=0.28.1 | GHSA-67mh-4wv8-2f99 | Dev-server CORS let any website send requests to the esbuild dev server and read the response (≤0.24.2; fixed 0.25.0). Build-tool only, never shipped. Pinned in the 2026-06 security merge. |
+| serialize-javascript | >=7.0.3 | GHSA-76p7-773f-r4q5 / CVE-2024-11831 | Regex XSS in serialized output (<6.0.2). |
+| tmp | ^0.2.6 | GHSA-52f5-9888-hmc6 / CVE-2025-54798 | Arbitrary temp file/dir write via symlink `dir` parameter (≤0.2.3; fixed 0.2.4). |
+| @xmldom/xmldom | >=0.8.13 | GHSA-5fg8-2547-mr8q / CVE-2022-39353 | Misinterpretation of malicious XML input; floor sits above the 0.8.x fixes. |
+| protobufjs | >=7.5.6 | GHSA-h755-8qp9-cq85 / CVE-2023-36665 | Prototype pollution (6.10.0–7.2.3; fixed 7.2.4). |
+| axios | >=1.15.2 | GHSA-jr5f-v2jv-69x6 / CVE-2025-27152 | SSRF + credential leak via absolute URL. |
+| basic-ftp | >=5.3.1 | GHSA-5rq4-664w-9x2c / CVE-2026-27699 | Path traversal in `downloadToDir()` (<5.2.0). Dev/test transitive. |
+| fast-uri | >=3.1.2 | GHSA-q3j6-qgpj-74h6 / CVE-2026-6321 | Path traversal via percent-encoded dot segments (≤3.1.0). |
+| ws | >=8.20.1 | GHSA-3h5v-q93c-6h6q / CVE-2024-37890 | DoS when handling a request with many HTTP headers (fixed 8.17.1). |
+| brace-expansion | >=5.0.6 | GHSA-v6h2-p8h4-qcjw / CVE-2025-5889 | ReDoS in `expand()` (fixed 1.1.12 / 2.0.2 / 3.0.1 / 4.0.1). |
+| qs | >=6.15.2 | GHSA-hrpp-h998-j3pp / CVE-2022-24999 | Prototype pollution / DoS via crafted query strings (fixed in the ≥6.2.4 line). |
+| chrome-launcher | ^1.2.1 | preventive pin — no direct advisory | Lighthouse-CI dev transitive; conservative floor, dev-only. |
+| ip-address | >=10.1.1 | preventive pin — no direct advisory | Dev/test transitive hardening; no advisory matches this floor. |
+| uuid | >=11.1.1 | preventive pin — no direct advisory | Conservative version floor; no security advisory applies (the prior "collision" note was inaccurate). |
+| joi (transitive via `wait-on` ← `@storybook/test-runner` → `jest-process-manager`) | ^18.2.1 | transitive hardening (dev-only) | `wait-on@7.2.0` originally pulled an older `joi`; lockfile pins `joi@18.2.1` for both `wait-on@7.2.0` and `wait-on@9.0.10`. Dev/test toolchain only, never shipped. |
+
+**Dependency hygiene status (2026-06-13):**
 - `pnpm audit --audit-level=high` → 0 vulnerabilities.
 - `pnpm audit --audit-level=moderate` → 0 vulnerabilities.
 - `.npmrc` hardening active: `strict-dep-builds=true`, `block-exotic-subdeps=true`, `minimum-release-age=10080`.
-- Outdated packages (non-critical patch/minor): `@ai-sdk/*`, `ai`, `@storybook/*`, `docx`, `dompurify`, `lint-staged`, `turbo`, `yjs`, `zustand`, `wrangler`, `@types/node`. No major versions; `@duckdb/duckdb-wasm` and `@typescript/native-preview` are dev/pre-release tracks and intentionally pinned.
+- `pnpm outdated` (re-run 2026-06-13): only non-critical patch/minor drift — `@ai-sdk/google|openai|react`, `ai`, `@storybook/*` + `storybook` (10.4.2→10.4.4), `@types/node`, `docx`, `dompurify`, `lint-staged`, `turbo`, `yjs`, `zustand`, `wrangler`. No major versions. `@duckdb/duckdb-wasm` (1.32.0) and `@typescript/native-preview` are dev/pre-release tracks and intentionally pinned.
+
+**Plugin sandbox post-fix validation (2026-06-13):** The v1.22 plugin-isolation hardening
+(`workers/plugin.worker.ts`, `services/pluginRegistry.ts`) is covered by adversarial tests —
+WebAssembly denial, `Function`/`AsyncFunction`/`GeneratorFunction`/`AsyncGeneratorFunction`
+constructor-escape blocks, guard restoration on success + error paths
+(`tests/unit/workers/plugin.worker.test.ts`), and storage-key validation + 2 MiB value cap
+(`tests/unit/pluginRegistry.test.ts`). Open follow-up **FU-1** (Function.prototype.constructor
+restore asymmetry, low impact) tracked in `docs/AUDIT-PERFECTION-PLAN-v1.23.md`.

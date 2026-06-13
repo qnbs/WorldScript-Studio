@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **v1.23 P0 tracker reconciliation (docs):** `ROADMAP.md`, `TODO.md`, and `AUDIT.md` brought into agreement after a drift where ROADMAP marked all v1.23 P0 items done while TODO still listed three as open. Each item is now evidence-backed (audit output, CI run, file existence). The manual smoke-test *run* is split out as a tracked human-only step (the protocol document itself is complete).
+- **AUDIT.md Known Overrides table refreshed:** added the just-merged `esbuild >=0.28.1` override (GHSA-67mh-4wv8-2f99, dev-server CORS), replaced placeholder advisory strings with verified GitHub Advisory IDs (re-checked 2026-06-13), and labelled preventive-only pins honestly. Dependency hygiene re-verified: `pnpm audit` high **and** moderate → 0 vulnerabilities.
+
+### Added
+
+- **Plugin sandbox adversarial test coverage:** `tests/unit/workers/plugin.worker.test.ts` gains WebAssembly-denial, `GeneratorFunction`/`AsyncGeneratorFunction` constructor-escape, and guard-restoration (success + error path) tests for the v1.22 plugin-isolation hardening. New living audit artifact `docs/AUDIT-PERFECTION-PLAN-v1.23.md` tracks the 6-phase perfection engagement and its follow-ups.
+
 ## [1.22.0] — 2026-06-11
 
 ### Added

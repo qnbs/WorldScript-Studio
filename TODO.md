@@ -15,11 +15,13 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 > Archivierte v1.22-Aufgaben → [`docs/history/completed-v1.22.md`](docs/history/completed-v1.22.md).
 
 ### P0 — Release-Blocker
-- ⬜ **ROADMAP/TODO sync** — `ROADMAP.md` auf v1.22.0 + v1.23-Ziele bringen; `TODO.md` widerspruchsfrei zu `.npmrc`.
+- ✅ **ROADMAP/TODO sync** — `ROADMAP.md`, `TODO.md` und `AUDIT.md` widerspruchsfrei auf v1.22.0 + v1.23-Ziele gebracht (2026-06-13). Vorheriger Drift: ROADMAP markierte alle P0 ✅, TODO noch ⬜ — jetzt evidenzbasiert abgeglichen.
 - ✅ **Tauri Desktop Pipeline final verifizieren** — `tauri-build.yml` grün auf Ubuntu/macOS/Windows (Run #27439443241). Signing-Secret/Updater bleibt offen für `v*` Releases (kein Secret für workflow_dispatch).
-- ⬜ **Dependency-Hygiene** — `pnpm audit --audit-level=high`, `pnpm outdated`, `AUDIT.md` Known Overrides dokumentieren.
+- ✅ **Dependency-Hygiene** — `pnpm audit --audit-level=high` **und** `--audit-level=moderate` → 0 Vulnerabilities (verifiziert 2026-06-13). `pnpm outdated` neu erhoben: nur Patch/Minor-Drift, keine Majors. `AUDIT.md` *Known Overrides Table* aktualisiert: `esbuild >=0.28.1`-Row ergänzt, Platzhalter-CVE-Refs durch verifizierte Advisory-IDs ersetzt, Status-Datum auf 2026-06-13.
 - ✅ **i18n Parity** — `pnpm run i18n:check` grün (2590 Keys × 11 Locales). `ja/zh/pt/el` + `ar/he` erreichen Projekt-Ziel ≤5 % EN-Placeholders; `ar/he` UI vollständig übersetzt, native Review offen. `--quality` Scan zeigt zusätzliche "likely untranslated" Einträge (v.a. technische Begriffe), die kein CI-Gate blockieren — siehe `docs/V1.22-SMOKE-TEST.md` für manuelle Locale-Prüfung.
-- ⬜ **Smoke-Test-Protokoll** — `docs/V1.22-SMOKE-TEST.md` mit manuellen Szenarien für v1.22-Features.
+- ✅ **Smoke-Test-Protokoll authored** — `docs/V1.22-SMOKE-TEST.md` mit manuellen Szenarien für alle v1.22-Features (AI-Modi, OpenRouter, Copilot v2, Voice-Download, PWA, Core, Tauri).
+  - ⬜ **Manuelle Ausführung (Human-only):** Protokoll gegen beide Live-Demos (GH Pages + Vercel) + lokalen Tauri-Build durchspielen und Sign-off-Tabelle ausfüllen. Kein Code-Task — bleibt offen bis ein Tester die Matrix abhakt.
+- ✅ **Plugin Sandbox post-fix validation** — adversarial Worker-Tests ergänzt (WebAssembly-Denial, Generator/AsyncGenerator-Constructor-Escape, Guard-Restoration auf Success- **und** Error-Pfad) in `tests/unit/workers/plugin.worker.test.ts` (23 Tests grün). `pluginRegistry.test.ts` deckt Storage-Key-Validierung (Prefix/Länge/`..`-Traversal/Separatoren) + 2-MiB-Value-Cap bereits ab. Tracking + Follow-up **FU-1** (Function.prototype.constructor Restore-Asymmetrie, low impact) in `docs/AUDIT-PERFECTION-PLAN-v1.23.md`.
 
 ### P1 — Diese Woche
 - ⬜ Coverage-Ziele erreichen (L≥85 %, B≥75 %, F≥80 %) — Fokus AI-Routing, Voice, Copilot.
