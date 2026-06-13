@@ -5,6 +5,21 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// QNBS-v3: aiRetry now emits structured logs on retry decisions — stub the logger so tests stay
+// deterministic and free of IDB/console side effects.
+vi.mock('../../../services/logger', () => {
+  const noop = (): void => {};
+  const make = (): Record<string, unknown> => ({
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    withContext: () => make(),
+  });
+  return { createLogger: () => make() };
+});
+
 import {
   AI_RETRY_BASE_DELAY_MS,
   AI_RETRY_MAX_DELAY_MS,
@@ -190,6 +205,70 @@ describe('aiRetry', () => {
 
     it('clamps a hostile/huge server value to AI_RETRY_MAX_RETRY_AFTER_MS', () => {
       expect(parseRetryAfterMs({ retryAfter: 10 ** 6 })).toBe(AI_RETRY_MAX_RETRY_AFTER_MS);
+    });
+  });
+
+  describe('withTransientRetry — fail-fast classification', () => {
+    it('does not retry a non-retryable auth error (401)', async () => {
+      const err = Object.assign(new Error('Unauthorized'), { status: 401 });
+      const fn = vi.fn().mockRejectedValue(err);
+      await expect(withTransientRetry(fn, { attempts: 3, baseDelayMs: 0 })).rejects.toThrow(
+        'Unauthorized',
+      );
+      // QNBS-v3: classified as auth → fails fast; fn invoked exactly once, no backoff.
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry a policy-blocked error', async () => {
+      const fn = vi
+        .fn()
+        .mockRejectedValue(new Error('Cloud provider blocked: local-only mode is active.'));
+      await expect(withTransientRetry(fn, { attempts: 3, baseDelayMs: 0 })).rejects.toThrow(
+        /blocked/,
+      );
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('still retries a transient error by default classification', async () => {
+      vi.useFakeTimers();
+      try {
+        const fn = vi
+          .fn()
+          .mockRejectedValueOnce(new Error('socket hang up'))
+          .mockResolvedValueOnce('ok');
+        const check = expect(
+          withTransientRetry(fn, { attempts: 2, baseDelayMs: 10 }),
+        ).resolves.toBe('ok');
+        await vi.runAllTimersAsync();
+        await check;
+        expect(fn).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a custom shouldRetry=false short-circuits an otherwise-retryable error', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('socket hang up')); // transient → retryable
+      await expect(
+        withTransientRetry(fn, { attempts: 3, baseDelayMs: 0, shouldRetry: () => false }),
+      ).rejects.toThrow('socket hang up');
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('a custom shouldRetry=true forces retry of an otherwise-non-retryable error', async () => {
+      vi.useFakeTimers();
+      try {
+        const err = Object.assign(new Error('Unauthorized'), { status: 401 });
+        const fn = vi.fn().mockRejectedValueOnce(err).mockResolvedValueOnce('recovered');
+        const check = expect(
+          withTransientRetry(fn, { attempts: 2, baseDelayMs: 10, shouldRetry: () => true }),
+        ).resolves.toBe('recovered');
+        await vi.runAllTimersAsync();
+        await check;
+        expect(fn).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

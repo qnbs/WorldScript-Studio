@@ -1,4 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
+
+// QNBS-v3: aiRetry emits structured logs on retry decisions — stub the logger to keep test
+// output clean and deterministic.
+vi.mock('../../services/logger', () => {
+  const noop = (): void => {};
+  const make = (): Record<string, unknown> => ({
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    withContext: () => make(),
+  });
+  return { createLogger: () => make() };
+});
+
 import { withTransientRetry } from '../../services/ai/aiRetry';
 
 describe('withTransientRetry', () => {
