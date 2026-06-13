@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Plugin sandbox adversarial test coverage:** `tests/unit/workers/plugin.worker.test.ts` gains WebAssembly-denial, `GeneratorFunction`/`AsyncGeneratorFunction` constructor-escape, and guard-restoration (success + error path) tests for the v1.22 plugin-isolation hardening. New living audit artifact `docs/AUDIT-PERFECTION-PLAN-v1.23.md` tracks the 6-phase perfection engagement and its follow-ups.
+- **AI error taxonomy (`services/ai/aiErrorTaxonomy.ts`):** pure `classifyAiError(err)` → `{ category, retryable, messageKey }` across transient / rateLimit / auth / network / offline / policy / invalidRequest / canceled / permanent (cancellations via `AbortError` fail fast — never retried). Consumed by the retry layer; a stable `messageKey` is exposed for the upcoming UI recovery mapping (Batch 1.2).
+
+### Fixed
+
+- **AI retry no longer backs off doomed calls:** `withTransientRetry` now classifies the error and **fails fast** on non-retryable categories (invalid API key, policy block, malformed request, offline) instead of retrying with exponential backoff. Transient / rate-limit / network errors still retry (honoring `Retry-After`). Each retry decision emits a structured `ai.retry` log line with a per-call correlation id (no payloads or keys). A `shouldRetry` option allows callers to override the default.
 
 ## [1.22.0] — 2026-06-11
 

@@ -3,7 +3,17 @@
  * QNBS-v3: P1-F5 — exponential backoff with full jitter + `Retry-After` parsing (was linear).
  *          Cloud providers (429/503) get backed off with jitter to avoid thundering-herd;
  *          a server-supplied `Retry-After` always takes precedence over the computed delay.
+ *          P1 Batch 1.1 — fail fast on non-retryable errors (auth/policy/invalid request/offline)
+ *          via {@link classifyAiError}, instead of backing off a call that cannot succeed.
  */
+
+import { createLogger } from '../logger';
+import { classifyAiError } from './aiErrorTaxonomy';
+
+const log = createLogger('ai.retry');
+// QNBS-v3: Ties the log lines of one retry chain together. Per-call sequence id (no Date/random)
+// — full cross-thread correlation-id propagation is a later Phase 1 increment.
+let retrySeq = 0;
 
 export const DEFAULT_AI_RETRY_ATTEMPTS = 2;
 export const AI_RETRY_BASE_DELAY_MS = 400;
@@ -21,6 +31,12 @@ export interface RetryOptions {
   jitter?: boolean;
   /** Injectable RNG (0..1) — override for deterministic tests. Default Math.random. */
   rng?: () => number;
+  /**
+   * Predicate deciding whether a thrown error is worth retrying.
+   * Default: `classifyAiError(err).retryable` — auth/policy/invalid-request/offline fail fast,
+   * transient/rate-limit/network back off and retry. Pass a custom predicate to override.
+   */
+  shouldRetry?: (err: unknown) => boolean;
 }
 
 function delay(ms: number): Promise<void> {
@@ -103,18 +119,36 @@ function clampRetryAfter(ms: number): number {
 
 export async function withTransientRetry<T>(fn: () => Promise<T>, opts?: RetryOptions): Promise<T> {
   const attempts = opts?.attempts ?? DEFAULT_AI_RETRY_ATTEMPTS;
+  const shouldRetry = opts?.shouldRetry ?? ((err: unknown) => classifyAiError(err).retryable);
+  const correlationId = `air-${++retrySeq}`;
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (err) {
       lastError = err;
-      if (i < attempts - 1) {
-        // QNBS-v3: server Retry-After wins over the computed backoff.
-        const retryAfter = parseRetryAfterMs(err);
-        const waitMs = retryAfter ?? computeRetryDelayMs(i, opts);
-        await delay(waitMs);
+      if (i >= attempts - 1) break;
+      // QNBS-v3: fail fast — a non-retryable error (auth/policy/invalid request/offline) won't
+      // succeed on retry; surface it immediately instead of backing off a doomed call.
+      if (!shouldRetry(err)) {
+        log
+          .withContext({ correlationId, category: classifyAiError(err).category })
+          .info('AI error is non-retryable; failing fast');
+        break;
       }
+      // QNBS-v3: server Retry-After wins over the computed backoff.
+      const retryAfter = parseRetryAfterMs(err);
+      const waitMs = retryAfter ?? computeRetryDelayMs(i, opts);
+      log
+        .withContext({
+          correlationId,
+          attempt: i + 1,
+          of: attempts,
+          category: classifyAiError(err).category,
+          waitMs: Math.round(waitMs),
+        })
+        .info('retrying transient AI error');
+      await delay(waitMs);
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
