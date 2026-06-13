@@ -370,8 +370,19 @@ export const OpenRouterSection: FC = () => {
 
   const commitCustomModel = useCallback(() => {
     const trimmed = customModelInput.trim();
-    if (trimmed) dispatch(settingsActions.setOpenRouter({ preferredModel: trimmed }));
-  }, [customModelInput, dispatch]);
+    if (trimmed) {
+      dispatch(settingsActions.setOpenRouter({ preferredModel: trimmed }));
+      return;
+    }
+    // QNBS-v3: Empty custom input — revert the selection to the actually-configured model so the UI
+    // doesn't show "custom" selected while the stored model stays unchanged (keeps UI ↔ config in sync).
+    const free = OPENROUTER_FREE_MODELS.includes(
+      preferredModel as (typeof OPENROUTER_FREE_MODELS)[number],
+    );
+    const storedIsCustom = !free && !models.some((m) => m.id === preferredModel);
+    setIsCustomModel(storedIsCustom);
+    setCustomModelInput(storedIsCustom ? preferredModel : '');
+  }, [customModelInput, dispatch, preferredModel, models]);
 
   const handleCustomModelBlur = useCallback(() => {
     commitCustomModel();

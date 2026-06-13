@@ -286,6 +286,28 @@ describe('OpenRouterSection', () => {
     );
   });
 
+  it('reverts the custom selection when the custom input is left empty', async () => {
+    // QNBS-v3: Selecting custom then leaving it empty must not persist anything AND must not leave
+    // "custom" selected while the stored (free) model is unchanged — the UI reverts to the real model.
+    const user = userEvent.setup();
+    render(<OpenRouterSection />);
+    const select = await waitFor(() => screen.getByLabelText('settings.openRouter.modelAriaLabel'));
+    await user.selectOptions(select, '__custom__');
+    const customInput = screen.getByLabelText('settings.openRouter.customModelAriaLabel');
+
+    mocks.dispatch.mockClear();
+    await user.click(customInput);
+    await user.tab(); // blur with an empty custom value
+
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+    // Selection reverted to the configured free model → custom input no longer shown.
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText('settings.openRouter.customModelAriaLabel'),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
   it('test connection validates the stored key', async () => {
     mocks.getApiKey.mockResolvedValue('stored-key');
     const user = userEvent.setup();
