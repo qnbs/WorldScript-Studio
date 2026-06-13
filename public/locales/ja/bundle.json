@@ -983,6 +983,7 @@
   "writer.tts.stop": "読むのをやめる",
   "writer.versionControl.label": "バージョン",
   "writer.versionControl.tooltip": "バージョン管理 (ブランチとスナップショット)",
+  "writer.cancelledTag": "Cancelled",
   "templates.adventure.arc": "旅、障害、勝利。",
   "templates.adventure.description": "危険、発見、勇気。",
   "templates.adventure.name": "アドベンチャー",

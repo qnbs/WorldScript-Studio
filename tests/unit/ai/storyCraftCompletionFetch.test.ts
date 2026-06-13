@@ -39,9 +39,23 @@ vi.mock('../../../services/ai/providerFactory', () => ({
   providerToKind: (...args: unknown[]) => mockProviderToKind(...args),
 }));
 
-vi.mock('../../../services/logger', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
-}));
+const { logWithContextSpy } = vi.hoisted(() => ({ logWithContextSpy: vi.fn() }));
+vi.mock('../../../services/logger', () => {
+  const stub = (): Record<string, unknown> => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    withContext: (ctx: unknown) => {
+      logWithContextSpy(ctx);
+      return stub();
+    },
+  });
+  return {
+    logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+    createLogger: () => stub(),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -229,5 +243,17 @@ describe('storyCraftCompletionFetch — unexpected error', () => {
       makeInit(makeBody()),
     );
     expect(res.status).toBe(500);
+  });
+
+  it('logs the failure with the propagated correlationId (Phase 1)', async () => {
+    logWithContextSpy.mockClear();
+    mockAssertCloudAiAllowed.mockRejectedValue(new Error('Network error'));
+    await storyCraftCompletionFetch(
+      'storycraft-internal://completion',
+      makeInit(makeBody({ correlationId: 'ai-zzz999' })),
+    );
+    expect(logWithContextSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ correlationId: 'ai-zzz999' }),
+    );
   });
 });

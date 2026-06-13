@@ -29,7 +29,7 @@ the following are already shipped — do **not** re-plan them as gaps:
 | Phase | Theme | Status |
 |---|---|---|
 | **0** | v1.23 foundation: tracker sync, dependency hygiene, plugin sandbox validation | ✅ **Merged** (PR #118 → `8f94178`) |
-| **1** | Reliability/Observability + Local-AI/Voice low-end hardening | 🔄 **In progress** (1.1 ✅, FU-1 ✅, 1.2 ✅ merged; correlation-ID / Writer-error-UI remain) |
+| **1** | Reliability/Observability + Local-AI/Voice low-end hardening | ✅ **Complete** (1.1, FU-1, 1.2, CP-i18n, Writer-errors + correlation-IDs; action-buttons = optional future polish) |
 | 2 | Coverage elevation (L≥85 / B≥75 / F≥80) in AI routing, Copilot v2, Voice, collab, PlotBoard | ⬜ Planned |
 | 3 | Tauri desktop: signing / notarization / updater pipeline + UX | ⬜ Planned |
 | 4 | WCAG 2.2 AA manual audit + i18n sustainability (<2% placeholders) | ⬜ Planned |
@@ -98,6 +98,17 @@ a CodeAnt-caught regression.
 - Translated for **de/es/fr/it** (values-only, no key churn); bundles rebuilt; `i18n:check` green.
 - Guard: `tests/unit/i18n/paletteLocalization.test.ts` fails if a `palette.*` key reverts to the
   English value in a core locale (allowlist for loanwords: Navigation/Editor). Beta/RTL unchanged.
+
+### Batch P1-Finish — Writer error UX + correlation IDs (closes Phase 1)
+- `useWriterView.handleFailure` now uses `getAiErrorMessage(err, t)` (classified, localized)
+  instead of a hardcoded English string + localizes the `[Cancelled]` tag (`writer.cancelledTag`,
+  11 locales). Parity to the Copilot (Batch 1.2).
+- **Correlation IDs:** `newCorrelationId()` (`services/logger.ts`); `useStoryCraftAI` mints one per
+  request, logs the lifecycle, and propagates it via the per-call body; `storyCraftCompletionFetch`
+  reads it (schema) and logs it on failure (still never exposes `err.message`); `withTransientRetry`
+  accepts a propagated id. No prompts/keys logged.
+- **Phase 1 = ✅ complete.** Optional future polish: error action-buttons; correlation IDs through
+  the legacy `aiProviderService`/thunk path.
 
 ---
 

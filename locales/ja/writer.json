@@ -78,5 +78,6 @@
   "writer.tts.start": "声に出して読む",
   "writer.tts.stop": "読むのをやめる",
   "writer.versionControl.label": "バージョン",
-  "writer.versionControl.tooltip": "バージョン管理 (ブランチとスナップショット)"
+  "writer.versionControl.tooltip": "バージョン管理 (ブランチとスナップショット)",
+  "writer.cancelledTag": "Cancelled"
 }

@@ -37,6 +37,8 @@ export interface RetryOptions {
    * transient/rate-limit/network back off and retry. Pass a custom predicate to override.
    */
   shouldRetry?: (err: unknown) => boolean;
+  /** Propagated correlation id so retry logs join the originating request's id (Phase 1). */
+  correlationId?: string;
 }
 
 function delay(ms: number): Promise<void> {
@@ -120,7 +122,7 @@ function clampRetryAfter(ms: number): number {
 export async function withTransientRetry<T>(fn: () => Promise<T>, opts?: RetryOptions): Promise<T> {
   const attempts = opts?.attempts ?? DEFAULT_AI_RETRY_ATTEMPTS;
   const shouldRetry = opts?.shouldRetry ?? ((err: unknown) => classifyAiError(err).retryable);
-  const correlationId = `air-${++retrySeq}`;
+  const correlationId = opts?.correlationId ?? `air-${++retrySeq}`;
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
     try {

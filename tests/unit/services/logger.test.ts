@@ -11,8 +11,23 @@ import {
   formatLogsForReport,
   getRecentLogs,
   logger,
+  newCorrelationId,
   sanitizeLogContext,
 } from '../../../services/logger';
+
+describe('newCorrelationId', () => {
+  it('returns prefixed, unique, non-empty ids', () => {
+    const a = newCorrelationId();
+    const b = newCorrelationId();
+    expect(a).toMatch(/^cid-.+/);
+    expect(b).toMatch(/^cid-.+/);
+    expect(a).not.toBe(b);
+  });
+
+  it('honours a custom prefix', () => {
+    expect(newCorrelationId('ai')).toMatch(/^ai-.+/);
+  });
+});
 
 describe('sanitizeLogContext', () => {
   it('redacts keys matching sensitive pattern', () => {
