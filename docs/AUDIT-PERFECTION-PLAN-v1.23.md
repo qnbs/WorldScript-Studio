@@ -30,7 +30,7 @@ the following are already shipped — do **not** re-plan them as gaps:
 |---|---|---|
 | **0** | v1.23 foundation: tracker sync, dependency hygiene, plugin sandbox validation | ✅ **Merged** (PR #118 → `8f94178`) |
 | **1** | Reliability/Observability + Local-AI/Voice low-end hardening | ✅ **Complete** (1.1, FU-1, 1.2, CP-i18n, Writer-errors + correlation-IDs; action-buttons = optional future polish) |
-| 2 | Coverage elevation (L≥85 / B≥75 / F≥80) in AI routing, Copilot v2, Voice, collab, PlotBoard | ⬜ Planned |
+| **2** | Coverage elevation (L≥85 / B≥75 / F≥80) — multi-batch | 🔄 **In progress** (2.1 services/fs/ done; threshold ratchet pending CI floor) |
 | 3 | Tauri desktop: signing / notarization / updater pipeline + UX | ⬜ Planned |
 | 4 | WCAG 2.2 AA manual audit + i18n sustainability (<2% placeholders) | ⬜ Planned |
 | 5 | Performance / bundle / state-model clarity / ProForge isolation | ⬜ Planned |
@@ -109,6 +109,17 @@ a CodeAnt-caught regression.
   accepts a propagated id. No prompts/keys logged.
 - **Phase 1 = ✅ complete.** Optional future polish: error action-buttons; correlation IDs through
   the legacy `aiProviderService`/thunk path.
+
+### Batch 2.1 — Coverage: services/fs/ (Tauri FS backend)
+- `services/fs/` (project/snapshot/asset/settings/codex stores + `fsCore`) was 0% tested
+  (~1,000 lines). Now ~81% line / ~66% branch via 37 tests: `fsCore.test.ts` (pure utils) +
+  `fsStores.test.ts` (an in-memory fake `TauriApis` driving real round-trips — compression,
+  AES-GCM key encryption, JSON, import/export markdown/json). The whole store chain is exercised
+  through one `FsProjectStore` (linear inheritance).
+- **Threshold ratchet deferred** to a follow-up keyed to the new CI-measured global floor
+  (can't measure the global gate locally on this hardware).
+- Next: 2.2 ratchet + ProForge capability layer; 2.3+ storage/encryption stores, then
+  branch-coverage deepening toward L85/B75/F80.
 
 ---
 
