@@ -1,10 +1,10 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
-import { ICONS } from '../../constants';
 import { useTranslation } from '../../hooks/useTranslation';
 import { logger } from '../../services/logger';
 import { Button } from './Button';
 import { Card, CardContent, CardHeader } from './Card';
+import { Icon } from './Icon';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -23,16 +23,7 @@ function ErrorFallback({ onReset }: { onReset?: () => void }) {
       <Card className="max-w-lg w-full text-center animate-in">
         <CardHeader className="flex items-center justify-center space-x-2">
           <div className="text-[var(--sc-danger-fg)]">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-8 h-8"
-            >
-              {ICONS.LIGHTNING_BOLT}
-            </svg>
+            <Icon name="error" size="xl" aria-hidden />
           </div>
           <h1 className="text-xl font-bold text-[var(--sc-danger-fg)]">
             {t('error.boundary.title')}

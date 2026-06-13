@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import type { Language } from '../../contexts/I18nContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from './Icon';
 
 // QNBS-v3: Language metadata with flag emoji and native names for premium UX
 const LANGUAGE_METADATA: Record<
@@ -204,17 +205,7 @@ export const LanguageSelector = React.memo(
                     </span>
                   )}
                   {isActive && (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={2}
-                      stroke="currentColor"
-                      className="w-4 h-4 text-[var(--sc-accent)]"
-                      aria-hidden="true"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Icon name="check" size="sm" className="text-[var(--sc-accent)]" aria-hidden />
                   )}
                 </button>
               </li>
@@ -245,17 +236,12 @@ export const LanguageSelector = React.memo(
                 β
               </sup>
             )}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className={`w-3 h-3 text-[var(--sc-text-muted)] transition-transform duration-sc-fast ${isOpen ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
+            <Icon
+              name="chevron-down"
+              size="sm"
+              className={`text-[var(--sc-text-muted)] transition-transform duration-sc-fast ${isOpen ? 'rotate-180' : ''}`}
+              aria-hidden
+            />
           </button>
 
           {isOpen && createPortal(dropdown, document.body)}
@@ -285,17 +271,12 @@ export const LanguageSelector = React.memo(
               </span>
             )}
           </div>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            className={`w-4 h-4 text-[var(--sc-text-muted)] transition-transform duration-sc-fast ${isOpen ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <Icon
+            name="chevron-down"
+            size="sm"
+            className={`text-[var(--sc-text-muted)] transition-transform duration-sc-fast ${isOpen ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
         </button>
 
         {isOpen && createPortal(dropdown, document.body)}

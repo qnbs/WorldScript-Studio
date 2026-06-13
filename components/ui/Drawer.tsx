@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from './Icon';
 
 interface DrawerProps {
   isOpen: boolean;
@@ -128,17 +129,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             className="text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] transition-colors"
             aria-label={t('common.close')}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-6 h-6"
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" size="md" aria-hidden />
           </button>
         </div>
         <div className="flex-grow overflow-y-auto">{children}</div>
