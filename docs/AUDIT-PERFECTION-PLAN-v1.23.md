@@ -59,7 +59,8 @@ a CodeAnt-caught regression.
 ### Batch 1.1 — AI error taxonomy + fail-fast retry (Phase 1)
 - New `services/ai/aiErrorTaxonomy.ts` — pure `classifyAiError(err)` →
   `{category, retryable, messageKey}` over transient/rateLimit/auth/network/offline/policy/
-  invalidRequest/permanent (reuses the `aiPolicy.ts` "blocked" markers + HTTP status).
+  invalidRequest/canceled/permanent (reuses the `aiPolicy.ts` "blocked" markers + HTTP status;
+  `AbortError` cancellations fail fast — CodeAnt-flagged).
 - `services/ai/aiRetry.ts` `withTransientRetry` now **fails fast** on non-retryable errors
   (auth/policy/invalid-request/offline) via a `shouldRetry` default, and emits a structured
   `createLogger('ai.retry')` line per decision with a per-call correlation id. Backward

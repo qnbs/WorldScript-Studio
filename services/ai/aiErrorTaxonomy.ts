@@ -14,6 +14,7 @@ export type AiErrorCategory =
   | 'offline'
   | 'policy'
   | 'invalidRequest'
+  | 'canceled'
   | 'permanent';
 
 export interface AiErrorClassification {
@@ -70,7 +71,11 @@ function categoryFromMessage(message: string): AiErrorCategory | undefined {
   if (/(invalid request|bad request|unprocessable|\b400\b|\b404\b|\b422\b)/.test(m)) {
     return 'invalidRequest';
   }
-  if (/(timeout|timed out|etimedout|econnreset|socket hang up|\baborted\b)/.test(m)) {
+  // QNBS-v3: deliberate cancellation must fail fast — never retry a user/timeout abort.
+  if (/(\baborted\b|operation was aborted|\bcancell?ed\b)/.test(m)) {
+    return 'canceled';
+  }
+  if (/(timeout|timed out|etimedout|econnreset|socket hang up)/.test(m)) {
     return 'transient';
   }
   if (/(failed to fetch|networkerror|network error|enotfound|econnrefused|fetch failed)/.test(m)) {
@@ -101,6 +106,12 @@ export function classifyAiError(err: unknown): AiErrorClassification {
     return classificationFor('transient');
   }
   const e = err as Record<string, unknown>;
+
+  // QNBS-v3: a deliberate AbortController cancellation surfaces as DOMException 'AbortError'
+  // (or legacy code 20) — fail fast, retrying a cancelled request is never correct.
+  if (e['name'] === 'AbortError' || e['code'] === 20) {
+    return classificationFor('canceled');
+  }
 
   const status = extractStatus(e);
   if (status !== undefined) {

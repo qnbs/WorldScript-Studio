@@ -92,6 +92,31 @@ const CASES: readonly Case[] = [
     category: 'network',
     retryable: true,
   },
+  // --- cancellation (must fail fast, never retry) ---------------------------
+  {
+    name: 'AbortError by name',
+    err: Object.assign(new Error('signal aborted without reason'), { name: 'AbortError' }),
+    category: 'canceled',
+    retryable: false,
+  },
+  {
+    name: 'DOMException abort code 20',
+    err: { code: 20, message: 'aborted' },
+    category: 'canceled',
+    retryable: false,
+  },
+  {
+    name: 'operation was aborted message',
+    err: new Error('The operation was aborted'),
+    category: 'canceled',
+    retryable: false,
+  },
+  {
+    name: 'cancelled message',
+    err: new Error('Request cancelled by user'),
+    category: 'canceled',
+    retryable: false,
+  },
   // --- conservative defaults ------------------------------------------------
   {
     name: 'unknown Error → transient',
