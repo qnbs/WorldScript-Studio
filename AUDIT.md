@@ -11,7 +11,19 @@
 **Scope:** Harden the OpenRouter provider settings panel (`components/settings/OpenRouterSection.tsx`) with full i18n coverage, the design-system searchable `Select`, API-key validation, model-catalog fetching/caching, AI-mode awareness, and error-boundary wrapping.
 **Branch:** `feat/openrouter-section-perfection`
 
-**Quality gate (2026-06-13):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2626 keys × 11 locales**) · targeted unit tests ✅ (`Select` 7, `OpenRouterSection` 7, `openrouterProvider` 19).
+**Quality gate (2026-06-13):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2632 keys × 11 locales**) · targeted unit tests ✅ (`Select` 7, `OpenRouterSection` 10, `openrouterModels` 12, `openrouterProvider` 19).
+
+### CodeAnt AI review (7/7 addressed)
+
+| # | File | Comment | Fix |
+|---|------|---------|-----|
+| 1 | `components/settings/OpenRouterSection.tsx` | Hardcoded free-model labels | Replaced with i18n keys `settings.openRouter.freeModel.*` resolved via `t(...)` |
+| 2 | `components/settings/OpenRouterSection.tsx` | Model-catalog fetch ungated | Added `assertCloudAiAllowed('openrouter')` pre-flight; UI shows `settings.openRouter.policyBlocked` |
+| 3 | `components/settings/OpenRouterSection.tsx` | Test-connection ungated | Same policy gate; returns policy-blocked message if disallowed |
+| 4 | `components/ui/Select.tsx` | Search input stops all keydown propagation | Only `Escape` propagates to document listener; dropdown closes on Escape |
+| 5 | `services/ai/openrouterModels.ts` | `/models` fetch ungated | `assertCloudAiAllowed('openrouter')` before any outbound request |
+| 6 | `services/ai/openrouterModels.ts` | Key-validation probe ungated | Same policy gate before `validateOpenRouterKey` network call |
+| 7 | `services/ai/openrouterModels.ts` | Malformed localStorage cache cast | Added `isValidCacheEntry()` runtime shape check (`fetchedAt` number + `models` array) |
 
 ### Delivered
 

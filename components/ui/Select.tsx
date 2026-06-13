@@ -194,7 +194,10 @@ export const Select = React.memo(
                   aria-label={t('common.search')}
                   className="w-full px-3 py-1.5 text-sm rounded-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
                   onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    // QNBS-v3: Let Escape propagate to the document-level listener so the dropdown closes.
+                    if (e.key !== 'Escape') e.stopPropagation();
+                  }}
                 />
               </div>
             )}

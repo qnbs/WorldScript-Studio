@@ -10,6 +10,7 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
+import { assertCloudAiAllowed } from '../../services/ai/aiPolicy';
 import {
   clearOpenRouterModelCache,
   fetchOpenRouterModels,
@@ -30,15 +31,6 @@ import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
-
-// QNBS-v3: Human-readable labels for the built-in free-tier catalog.
-const FREE_MODEL_LABELS: Record<(typeof OPENROUTER_FREE_MODELS)[number], string> = {
-  'deepseek/deepseek-r1:free': 'DeepSeek R1 (free)',
-  'meta-llama/llama-3.3-70b-instruct:free': 'Llama 3.3 70B Instruct (free)',
-  'qwen/qwen2.5-72b-instruct:free': 'Qwen 2.5 72B Instruct (free)',
-  'google/gemma-3-27b-it:free': 'Gemma 3 27B IT (free)',
-  'mistralai/mistral-7b-instruct:free': 'Mistral 7B Instruct (free)',
-};
 
 const CUSTOM_MODEL_VALUE = '__custom__';
 
@@ -124,6 +116,7 @@ export const OpenRouterSection: FC = () => {
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [isModelsLoading, setIsModelsLoading] = useState(false);
   const [modelFetchError, setModelFetchError] = useState<string | null>(null);
+  const [policyBlocked, setPolicyBlocked] = useState(false);
   const [isCustomModel, setIsCustomModel] = useState(
     !OPENROUTER_FREE_MODELS.includes(preferredModel as (typeof OPENROUTER_FREE_MODELS)[number]),
   );
@@ -149,26 +142,43 @@ export const OpenRouterSection: FC = () => {
     };
   }, []);
 
+  const guardPolicy = useCallback(async () => {
+    try {
+      await assertCloudAiAllowed('openrouter');
+      setPolicyBlocked(false);
+      return true;
+    } catch {
+      setPolicyBlocked(true);
+      return false;
+    }
+  }, []);
+
   // Fetch model catalog when the section mounts.
   useEffect(() => {
     let cancelled = false;
-    setIsModelsLoading(true);
-    setModelFetchError(null);
-    fetchOpenRouterModels()
-      .then((fetched) => {
+    const run = async () => {
+      setIsModelsLoading(true);
+      setModelFetchError(null);
+      const allowed = await guardPolicy();
+      if (!allowed) {
+        if (!cancelled) setIsModelsLoading(false);
+        return;
+      }
+      try {
+        const fetched = await fetchOpenRouterModels();
         if (!cancelled) setModels(fetched);
-      })
-      .catch((err) => {
+      } catch (err) {
         logger.warn('OpenRouter: failed to fetch model catalog', { error: String(err) });
         if (!cancelled) setModelFetchError(t('settings.openRouter.modelFetch.failed'));
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setIsModelsLoading(false);
-      });
+      }
+    };
+    void run();
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [guardPolicy, t]);
 
   // Keep local custom-model state in sync with external Redux changes.
   useEffect(() => {
@@ -241,6 +251,12 @@ export const OpenRouterSection: FC = () => {
   const handleTestConnection = useCallback(async () => {
     setIsTesting(true);
     setTestResult(null);
+    const allowed = await guardPolicy();
+    if (!allowed) {
+      setTestResult({ ok: false, text: t('settings.openRouter.policyBlocked') });
+      setIsTesting(false);
+      return;
+    }
     try {
       const key = await storageService.getApiKey('openrouter');
       if (!key) {
@@ -264,7 +280,7 @@ export const OpenRouterSection: FC = () => {
     } finally {
       setIsTesting(false);
     }
-  }, [t]);
+  }, [guardPolicy, t]);
 
   const handleModelChange = useCallback(
     (value: string) => {
@@ -318,9 +334,19 @@ export const OpenRouterSection: FC = () => {
     () =>
       OPENROUTER_FREE_MODELS.map((m) => ({
         value: m,
-        label: FREE_MODEL_LABELS[m],
+        label: t(
+          `settings.openRouter.freeModel.${
+            {
+              'deepseek/deepseek-r1:free': 'deepseekR1',
+              'meta-llama/llama-3.3-70b-instruct:free': 'llama3370b',
+              'qwen/qwen2.5-72b-instruct:free': 'qwen2572b',
+              'google/gemma-3-27b-it:free': 'gemma327b',
+              'mistralai/mistral-7b-instruct:free': 'mistral7b',
+            }[m]
+          }`,
+        ),
       })),
-    [],
+    [t],
   );
 
   const fetchedPaidOptions = useMemo(() => {
@@ -397,6 +423,11 @@ export const OpenRouterSection: FC = () => {
             {modeWarning && (
               <p className="text-xs text-[var(--sc-warning-fg)]" role="status" aria-live="polite">
                 {modeWarning}
+              </p>
+            )}
+            {policyBlocked && (
+              <p className="text-xs text-[var(--sc-danger-fg)]" role="alert" aria-live="polite">
+                {t('settings.openRouter.policyBlocked')}
               </p>
             )}
           </div>

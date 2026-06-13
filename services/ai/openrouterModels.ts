@@ -8,6 +8,7 @@
  */
 
 import { createLogger } from '../logger';
+import { assertCloudAiAllowed } from './aiPolicy';
 
 const logger = createLogger('openrouter-models');
 
@@ -40,12 +41,19 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined' && window.localStorage !== undefined;
 }
 
+function isValidCacheEntry(parsed: unknown): parsed is CacheEntry {
+  if (!parsed || typeof parsed !== 'object') return false;
+  const p = parsed as Record<string, unknown>;
+  return typeof p['fetchedAt'] === 'number' && Array.isArray(p['models']);
+}
+
 function readCache(): CacheEntry | null {
   if (!isBrowser()) return null;
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as CacheEntry;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isValidCacheEntry(parsed)) return null;
     if (Date.now() - parsed.fetchedAt > CACHE_TTL_MS) return null;
     return parsed;
   } catch {
@@ -90,6 +98,9 @@ export async function fetchOpenRouterModels(
     return cached.models;
   }
 
+  // QNBS-v3: Enforce the cloud AI policy before any outbound OpenRouter request.
+  await assertCloudAiAllowed('openrouter');
+
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
@@ -132,6 +143,9 @@ export async function validateOpenRouterKey(
   if (!trimmed) {
     return { ok: false, error: 'EMPTY_KEY' };
   }
+
+  // QNBS-v3: Key validation is a cloud request; apply the same AI policy gate.
+  await assertCloudAiAllowed('openrouter');
 
   try {
     const res = await fetch(MODELS_URL, {
