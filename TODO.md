@@ -84,7 +84,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **P0-3** — Quality Gates stabil: lint ✅ · typecheck ✅ · i18n:check ✅ · parity:check + bundle:budget + smoke:prod green on `main` (CI confirmed through PR #103, merged 2026-06-09).
 
 ### P1 — AI Resilience & Core Reliability
-- ⬜ **P1-1** — WebLLM Worker Offload: Full GPU-Isolation in Dedicated Worker (nicht gestartet, 5–7 Tage)
+<!-- The WebLLM Worker Offload item (ADR-0005) is DONE — see its authoritative ✅ entry under "Carried over from v1.20.0" above; the stale ⬜ duplicate was removed 2026-06-14. -->
 - 🔄 **P1-2** — Whisper WASM STT end-to-end: **Download UI ✅ (v1.21, 2026-06-09)** · **VAD→STT bridge ✅ (2026-06-09)** — `VoiceActivityCoordinator` wires WebRtcVadEngine PCM frames into WasmSttEngine; MIN_SPEECH_CHUNKS gate + MAX_BUFFER_MS flush; voiceCommandService routes through coordinator when enableVoiceWasm + whisper active. 12 unit tests. Remaining: full E2E integration test (CI-only)
 - ✅ **P1-3** — Redux-Undo × Zustand Race Condition: `manuscriptPinnedBinderNodeId` reconciler in `listenerMiddleware.ts` — prüft nach project save/undo/redo/import ob pinned node noch existiert, reset auf `null` wenn stale. Commit `a799bc9`.
   - **Hinweis:** Rust TaskSupervisor UI (ManuscriptStatsPanel) ist separat in WorkerBus v2 Phase 3 (siehe unten).

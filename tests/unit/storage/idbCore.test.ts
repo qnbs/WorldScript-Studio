@@ -53,8 +53,7 @@ describe('compressData / decompressData', () => {
   });
 
   it('compressData returns data as-is when JSON.stringify fails', () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test circular ref
-    const circular: any = {};
+    const circular: { self?: unknown } = {};
     circular.self = circular;
     // Should not throw; returns the original (un-serialisable) value
     const result = compressData(circular);
