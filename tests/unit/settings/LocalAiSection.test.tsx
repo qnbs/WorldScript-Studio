@@ -67,6 +67,9 @@ vi.mock('../../../services/localAiFacade', () => ({
 vi.mock('../../../components/settings/LocalAiDownloadProgress', () => ({
   LocalAiDownloadProgress: () => null,
 }));
+vi.mock('../../../services/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { LocalAiSection } from '../../../components/settings/LocalAiSection';
 
@@ -147,6 +150,21 @@ describe('LocalAiSection', () => {
 
     // …but the badge is restored from the session source on the new mount.
     expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
+  });
+
+  it('surfaces a failure notification when a download throws (no unhandled rejection)', async () => {
+    mocks.preload.mockRejectedValue(new Error('boom'));
+    const user = userEvent.setup();
+    render(<LocalAiSection />);
+    await screen.findByText('settings.ai.localAi.webgpuAvailable');
+
+    await user.click(screen.getAllByText('settings.ai.localAi.downloadButton')[0]!);
+    await waitFor(() =>
+      expect(mocks.announce).toHaveBeenCalledWith('settings.ai.localAi.downloadFailed', 'polite'),
+    );
+    // downloadingId reset → buttons usable again, no Ready badge.
+    expect(screen.queryByText('settings.ai.localAi.readyBadge')).not.toBeInTheDocument();
+    expect(screen.getAllByText('settings.ai.localAi.downloadButton')[0]).not.toBeDisabled();
   });
 
   it('does NOT mark ready when preload falls back off WebLLM (e.g. no WebGPU)', async () => {

@@ -30,6 +30,7 @@ import {
   type LocalThroughputSample,
   preloadLocalModel,
 } from '../../services/localAiFacade';
+import { logger } from '../../services/logger';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Modal } from '../ui/Modal';
 import { LocalAiDownloadProgress } from './LocalAiDownloadProgress';
@@ -39,6 +40,18 @@ const DEVICE_CLASS_KEY: Record<DeviceClass, string> = {
   'mid-range': 'settings.ai.gpu.deviceMidRange',
   'low-end': 'settings.ai.gpu.deviceLowEnd',
   unknown: 'settings.ai.gpu.deviceUnknown',
+};
+
+// QNBS-v3: Localized display label per model id (descriptors like "eco"/"fast"/"high-end" are
+//          translatable; the raw @domain/ai-core label is the fallback for unknown ids).
+const MODEL_LABEL_KEY: Record<string, string> = {
+  'Qwen2.5-0.5B-Instruct-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.qwen25_05b',
+  'Llama-3.2-1B-Instruct-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.llama32_1b',
+  'Llama-3.2-3B-Instruct-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.llama32_3b',
+  'Phi-4-mini-instruct-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.phi4mini',
+  'gemma-3-1b-it-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.gemma3_1b',
+  'gemma-3-4b-it-q4f32_1-MLC': 'settings.ai.localAi.modelLabel.gemma3_4b',
+  'Llama-3.3-70B-Instruct-q3f16_1-MLC': 'settings.ai.localAi.modelLabel.llama33_70b',
 };
 
 // QNBS-v3: The four local-inference layers, in the exact order runLocalTextGeneration tries them.
@@ -83,6 +96,15 @@ export const LocalAiSection: FC = () => {
     [],
   );
 
+  // QNBS-v3: i18n-driven display label (falls back to the raw catalog label for unknown ids).
+  const labelOf = useCallback(
+    (id: string) => {
+      const key = MODEL_LABEL_KEY[id];
+      return key ? t(key) : modelLabel(id);
+    },
+    [t],
+  );
+
   // QNBS-v3: monotonic request id so an older, slower estimate can't overwrite a newer result
   //          (initial load vs post-download/post-clear refreshes can overlap).
   const storageReqId = useRef(0);
@@ -121,15 +143,20 @@ export const LocalAiSection: FC = () => {
         if (downloaded) {
           setReadyIds((prev) => new Set(prev).add(modelId));
           announce(
-            t('settings.ai.localAi.modelReadyAnnounce', { model: modelLabel(modelId) }),
+            t('settings.ai.localAi.modelReadyAnnounce', { model: labelOf(modelId) }),
             'polite',
           );
         }
+      } catch (err) {
+        // QNBS-v3: the click handler drops this promise (void), so swallow + surface here rather
+        //          than leak an unhandled rejection to the global handler.
+        logger.warn('LocalAiSection: model preload failed', { modelId, err: String(err) });
+        announce(t('settings.ai.localAi.downloadFailed'), 'polite');
       } finally {
         setDownloadingId(null);
       }
     },
-    [announce, t, refreshStorage],
+    [announce, t, labelOf, refreshStorage],
   );
 
   const handleClear = useCallback(async () => {
@@ -150,6 +177,9 @@ export const LocalAiSection: FC = () => {
         t('settings.ai.localAi.clearedAnnounce', { count: String(clearedCaches) }),
         'polite',
       );
+    } catch (err) {
+      logger.warn('LocalAiSection: clear local models failed', { err: String(err) });
+      announce(t('settings.ai.localAi.clearFailed'), 'polite');
     } finally {
       setClearing(false);
       setConfirmingClear(false);
@@ -203,7 +233,7 @@ export const LocalAiSection: FC = () => {
 
           {recommendedId && (
             <p className="text-sm text-[var(--sc-text-secondary)]">
-              {t('settings.ai.localAi.recommendedModel', { model: modelLabel(recommendedId) })}
+              {t('settings.ai.localAi.recommendedModel', { model: labelOf(recommendedId) })}
             </p>
           )}
 
@@ -240,7 +270,7 @@ export const LocalAiSection: FC = () => {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-[var(--sc-text-primary)]">
-                      {m.label}
+                      {labelOf(m.id)}
                     </p>
                     {tooLarge && (
                       <p className="mt-0.5 text-xs text-[var(--sc-warning-fg)]">

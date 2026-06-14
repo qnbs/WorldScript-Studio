@@ -788,5 +788,14 @@
   "settings.ai.localAi.perfNoData": "Download and run a model to measure throughput.",
   "settings.ai.localAi.docsLink": "Local AI setup & troubleshooting",
   "settings.ai.localAi.detecting": "Detecting…",
-  "settings.ai.localAi.clearBusy": "Local AI is busy right now — try clearing again once it finishes."
+  "settings.ai.localAi.clearBusy": "Local AI is busy right now — try clearing again once it finishes.",
+  "settings.ai.localAi.downloadFailed": "Download failed. Please try again.",
+  "settings.ai.localAi.clearFailed": "Could not clear local models. Please try again.",
+  "settings.ai.localAi.modelLabel.qwen25_05b": "Qwen 2.5 0.5B (eco, ~0.4 GB)",
+  "settings.ai.localAi.modelLabel.llama32_1b": "Llama 3.2 1B (fast, ~0.7 GB)",
+  "settings.ai.localAi.modelLabel.llama32_3b": "Llama 3.2 3B (~1.8 GB)",
+  "settings.ai.localAi.modelLabel.phi4mini": "Phi-4 Mini 3.8B (~2.3 GB)",
+  "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0.8 GB)",
+  "settings.ai.localAi.modelLabel.gemma3_4b": "Gemma 3 4B (~4.9 GB)",
+  "settings.ai.localAi.modelLabel.llama33_70b": "Llama 3.3 70B (high-end, ~35 GB)"
 }
