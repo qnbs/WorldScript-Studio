@@ -11,7 +11,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   announce: vi.fn(),
   detectWebGpu: vi.fn(() => true),
-  listCached: vi.fn(() => [] as { modelId: string }[]),
   estimate: vi.fn(),
   clear: vi.fn(),
   preload: vi.fn(),
@@ -28,7 +27,7 @@ const SUPPORTED_ESTIMATE = {
   freeMb: 600,
   usagePercent: 10,
   modelCacheCount: 1,
-  supported: true,
+  estimateAvailable: true,
 };
 
 vi.mock('../../../hooks/useTranslation', () => ({
@@ -39,7 +38,6 @@ vi.mock('../../../contexts/LiveRegionContext', () => ({
 }));
 vi.mock('@domain/ai-core', () => ({
   detectWebGpuSupport: () => mocks.detectWebGpu(),
-  listCachedWebLlmEngines: () => mocks.listCached(),
   WEBLLM_SUPPORTED_MODELS: [
     { id: 'm-small', label: 'Small (~0.4 GB)' },
     { id: 'm-big', label: 'Big (~5 GB)' },
@@ -67,10 +65,9 @@ import { LocalAiSection } from '../../../components/settings/LocalAiSection';
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.detectWebGpu.mockReturnValue(true);
-  mocks.listCached.mockReturnValue([]);
   mocks.estimate.mockResolvedValue(SUPPORTED_ESTIMATE);
   mocks.clear.mockResolvedValue({ clearedCaches: 2 });
-  mocks.preload.mockResolvedValue(true);
+  mocks.preload.mockResolvedValue({ layer: 'webllm', modelId: 'm-small', downloaded: true });
   mocks.lastThroughput.mockReturnValue(null);
   mocks.healthReport.mockResolvedValue({ deviceClass: 'mid-range', gpuVramTier: 'medium' });
   mocks.modelRec.mockReturnValue('m-small');
@@ -118,6 +115,24 @@ describe('LocalAiSection', () => {
     expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
   });
 
+  it('does NOT mark ready when preload falls back off WebLLM (e.g. no WebGPU)', async () => {
+    mocks.detectWebGpu.mockReturnValue(false);
+    mocks.preload.mockResolvedValue({ layer: 'onnx', modelId: 'm-small', downloaded: false });
+    const user = userEvent.setup();
+    render(<LocalAiSection />);
+    await screen.findByText('settings.ai.localAi.webgpuUnavailable');
+
+    await user.click(screen.getAllByText('settings.ai.localAi.downloadButton')[0]!);
+    expect(mocks.preload).toHaveBeenCalledWith('m-small');
+    await waitFor(() => expect(mocks.preload).toHaveBeenCalled());
+    // A non-WebLLM fallback is not a download of the requested model → no ready badge / announce.
+    expect(screen.queryByText('settings.ai.localAi.readyBadge')).not.toBeInTheDocument();
+    expect(mocks.announce).not.toHaveBeenCalledWith(
+      'settings.ai.localAi.modelReadyAnnounce',
+      'polite',
+    );
+  });
+
   it('clears local models through the confirm flow and announces the result', async () => {
     const user = userEvent.setup();
     render(<LocalAiSection />);
@@ -151,12 +166,12 @@ describe('LocalAiSection', () => {
 
   it('shows the unsupported message and disables Clear when storage estimates are unavailable', async () => {
     mocks.estimate.mockResolvedValue({
-      usageMb: 0,
-      quotaMb: 0,
-      freeMb: 0,
-      usagePercent: 0,
+      usageMb: null,
+      quotaMb: null,
+      freeMb: null,
+      usagePercent: null,
       modelCacheCount: 0,
-      supported: false,
+      estimateAvailable: false,
     });
     render(<LocalAiSection />);
     expect(await screen.findByText('settings.ai.localAi.storageUnsupported')).toBeInTheDocument();

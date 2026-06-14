@@ -74,8 +74,11 @@ describe('estimateLocalModelStorage', () => {
     vi.stubGlobal('caches', undefined);
     vi.stubGlobal('navigator', {}); // present, but no .storage.estimate
     const est = await estimateLocalModelStorage();
-    expect(est.supported).toBe(false);
-    expect(est).toMatchObject({ usageMb: 0, quotaMb: 0, freeMb: 0, modelCacheCount: 0 });
+    expect(est.estimateAvailable).toBe(false);
+    expect(est.quotaMb).toBeNull();
+    expect(est.freeMb).toBeNull();
+    expect(est.usagePercent).toBeNull();
+    expect(est.modelCacheCount).toBe(0);
   });
 
   it('computes usage/quota/free/percent and counts only model cache buckets', async () => {
@@ -83,7 +86,7 @@ describe('estimateLocalModelStorage', () => {
     installCaches(ALL_CACHE_NAMES);
 
     const est = await estimateLocalModelStorage();
-    expect(est.supported).toBe(true);
+    expect(est.estimateAvailable).toBe(true);
     expect(est.usageMb).toBe(100);
     expect(est.quotaMb).toBe(1000);
     expect(est.freeMb).toBe(900);
@@ -92,12 +95,15 @@ describe('estimateLocalModelStorage', () => {
     expect(est.modelCacheCount).toBe(3);
   });
 
-  it('stays supported (estimate-less) when only the Cache API is present', async () => {
+  it('reports estimate-unavailable (null sizes) when only the Cache API is present', async () => {
+    vi.stubGlobal('navigator', {}); // no StorageManager → quota unknown
     installCaches(['webllm/model']);
     const est = await estimateLocalModelStorage();
-    expect(est.supported).toBe(true);
-    expect(est.quotaMb).toBe(0);
-    expect(est.usagePercent).toBe(0);
+    expect(est.estimateAvailable).toBe(false);
+    expect(est.quotaMb).toBeNull();
+    expect(est.freeMb).toBeNull();
+    expect(est.usagePercent).toBeNull();
+    // …but the on-disk model cache is still counted, so Clear stays actionable.
     expect(est.modelCacheCount).toBe(1);
   });
 });

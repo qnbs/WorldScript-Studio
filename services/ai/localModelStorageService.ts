@@ -29,13 +29,15 @@ export const WEBLLM_MODEL_APPROX_MB: Readonly<Record<string, number>> = {
 };
 
 export interface LocalModelStorageEstimate {
-  usageMb: number;
-  quotaMb: number;
-  freeMb: number;
-  usagePercent: number;
+  // QNBS-v3: null when the StorageManager quota is unknown — callers MUST NOT treat that as "0 free",
+  //          which would falsely warn every model as too large on browsers without storage.estimate().
+  usageMb: number | null;
+  quotaMb: number | null;
+  freeMb: number | null;
+  usagePercent: number | null;
   modelCacheCount: number;
-  /** False when neither the StorageManager nor the Cache API is available (e.g. SSR / old browser). */
-  supported: boolean;
+  /** True only when the StorageManager returned a usable quota; sizes are non-null iff this is true. */
+  estimateAvailable: boolean;
 }
 
 export interface ClearLocalModelsResult {
@@ -71,35 +73,37 @@ async function listModelCacheNames(): Promise<string[]> {
  * estimate (the dominant contributor is the model weights) and `modelCacheCount` proves models exist.
  */
 export async function estimateLocalModelStorage(): Promise<LocalModelStorageEstimate> {
-  const supported = hasStorageEstimate() || hasCacheApi();
-  if (!supported) {
-    return {
-      usageMb: 0,
-      quotaMb: 0,
-      freeMb: 0,
-      usagePercent: 0,
-      modelCacheCount: 0,
-      supported: false,
-    };
-  }
+  const modelCacheCount = (await listModelCacheNames()).length;
 
-  let usageMb = 0;
-  let quotaMb = 0;
+  let usageMb: number | null = null;
+  let quotaMb: number | null = null;
   if (hasStorageEstimate()) {
     try {
       const { usage, quota } = await navigator.storage.estimate();
-      usageMb = typeof usage === 'number' ? Math.round(usage / 1_048_576) : 0;
-      quotaMb = typeof quota === 'number' ? Math.round(quota / 1_048_576) : 0;
+      if (typeof usage === 'number') usageMb = Math.round(usage / 1_048_576);
+      if (typeof quota === 'number') quotaMb = Math.round(quota / 1_048_576);
     } catch (err) {
       logger.warn('localModelStorage: storage.estimate() failed', { err: String(err) });
     }
   }
 
-  const freeMb = Math.max(0, quotaMb - usageMb);
-  const usagePercent = quotaMb > 0 ? Math.round((usageMb / quotaMb) * 100) : 0;
-  const modelCacheCount = (await listModelCacheNames()).length;
+  // QNBS-v3: free/percent are only meaningful with a real quota AND usage — otherwise stay null so
+  //          the UI shows "estimate unavailable" instead of a misleading 0 (which warns on every model).
+  let freeMb: number | null = null;
+  let usagePercent: number | null = null;
+  if (quotaMb !== null && quotaMb > 0 && usageMb !== null) {
+    freeMb = Math.max(0, quotaMb - usageMb);
+    usagePercent = Math.round((usageMb / quotaMb) * 100);
+  }
 
-  return { usageMb, quotaMb, freeMb, usagePercent, modelCacheCount, supported: true };
+  return {
+    usageMb,
+    quotaMb,
+    freeMb,
+    usagePercent,
+    modelCacheCount,
+    estimateAvailable: freeMb !== null,
+  };
 }
 
 /**
@@ -114,7 +118,9 @@ export async function clearLocalModels(): Promise<ClearLocalModelsResult> {
     logger.warn('localModelStorage: releaseAllWebLlmEngines failed', { err: String(err) });
   }
   try {
-    releaseAllOnnxSessions();
+    // QNBS-v3: releaseAllOnnxSessions is async — await so failures hit this catch and session
+    //          release fully completes before we start deleting the on-disk caches.
+    await releaseAllOnnxSessions();
   } catch (err) {
     logger.warn('localModelStorage: releaseAllOnnxSessions failed', { err: String(err) });
   }

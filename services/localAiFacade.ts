@@ -1,5 +1,6 @@
 import {
   detectWebGpuSupport,
+  type LocalAiLayer,
   type LocalAiResponse,
   runLocalTextGeneration,
   sanitizeForPrompt,
@@ -247,25 +248,43 @@ export function getLastLocalThroughput(): LocalThroughputSample | null {
   return lastLocalThroughput;
 }
 
+export interface PreloadResult {
+  /** The backend that actually served the warm-up (webllm / onnx / transformers / heuristic). */
+  layer: LocalAiLayer;
+  modelId: string;
+  /**
+   * True only when the REQUESTED WebLLM model genuinely warmed — i.e. the webllm layer ran and it
+   * was not the multi-tab lock message. An ONNX/Transformers fallback (e.g. no WebGPU) is NOT a
+   * download of the requested model, so the UI must not mark it "ready".
+   */
+  downloaded: boolean;
+}
+
+// QNBS-v3: runLocalTextGeneration returns layer:'webllm' with this sentinel text when another tab
+//          holds the GPU lock — that is NOT a successful warm of the requested model.
+function isWebLlmLockMessage(text: string): boolean {
+  return text.startsWith('WebLLM: Another');
+}
+
 /**
  * QNBS-v3: Explicitly download/warm a local model so users can prepare offline use from Settings.
  * Routes through generateLocalText (worker-first) so it reuses the GPU mutex, inferenceProgressEmitter,
  * and the global LocalAiDownloadProgress modal — the download UX is identical to a real inference.
- * Records best-effort tok/s for the perf indicator. Resolves true when a real inference layer
- * (not the heuristic stub) produced output; false otherwise.
+ * Records tok/s ONLY for a verified WebLLM warm of the requested model, so the perf indicator never
+ * reflects a fallback backend.
  */
 export async function preloadLocalModel(
   modelId: string,
   onProgress?: (report: WebLlmProgressReport) => void,
   signal?: AbortSignal,
-): Promise<boolean> {
+): Promise<PreloadResult> {
   const startedAt = performance.now();
   // QNBS-v3: A minimal prompt forces the weight download + a short warm-up generation.
   const res = await generateLocalText('Hi', modelId, onProgress, undefined, signal);
   const elapsedSec = (performance.now() - startedAt) / 1000;
 
-  const ready = res.layer !== 'heuristic';
-  if (ready && elapsedSec > 0) {
+  const downloaded = res.layer === 'webllm' && !isWebLlmLockMessage(res.text);
+  if (downloaded && elapsedSec > 0) {
     const approxTokens = Math.max(1, Math.round(res.text.length / 4));
     lastLocalThroughput = {
       tokensPerSecond: Math.round(approxTokens / elapsedSec),
@@ -273,5 +292,5 @@ export async function preloadLocalModel(
       at: Date.now(),
     };
   }
-  return ready;
+  return { layer: res.layer, modelId, downloaded };
 }

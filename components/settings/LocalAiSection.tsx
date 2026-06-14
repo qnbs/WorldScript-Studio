@@ -3,11 +3,7 @@
 //          management ("Clear Local Models"), the fallback chain, and last-measured throughput.
 //          Reuses existing services; the only new logic is localModelStorageService.
 
-import {
-  detectWebGpuSupport,
-  listCachedWebLlmEngines,
-  WEBLLM_SUPPORTED_MODELS,
-} from '@domain/ai-core';
+import { detectWebGpuSupport, WEBLLM_SUPPORTED_MODELS } from '@domain/ai-core';
 import type { FC } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useAnnounce } from '../../contexts/LiveRegionContext';
@@ -75,10 +71,6 @@ export const LocalAiSection: FC = () => {
     setStorage(await estimateLocalModelStorage());
   }, []);
 
-  const refreshReady = useCallback(() => {
-    setReadyIds(new Set(listCachedWebLlmEngines().map((e) => e.modelId)));
-  }, []);
-
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -86,22 +78,23 @@ export const LocalAiSection: FC = () => {
       if (active) setReport(r);
     })();
     void refreshStorage();
-    refreshReady();
     setThroughput(getLastLocalThroughput());
     return () => {
       active = false;
     };
-  }, [refreshStorage, refreshReady]);
+  }, [refreshStorage]);
 
   const handleDownload = useCallback(
     async (modelId: string) => {
       setDownloadingId(modelId);
       try {
-        const ready = await preloadLocalModel(modelId);
-        setReadyIds((prev) => (ready ? new Set(prev).add(modelId) : prev));
+        // QNBS-v3: Only a verified WebLLM warm of the REQUESTED model counts as "ready" — an
+        //          ONNX/Transformers fallback (e.g. no WebGPU) must not mark a WebLLM model ready.
+        const { downloaded } = await preloadLocalModel(modelId);
         setThroughput(getLastLocalThroughput());
         void refreshStorage();
-        if (ready) {
+        if (downloaded) {
+          setReadyIds((prev) => new Set(prev).add(modelId));
           announce(
             t('settings.ai.localAi.modelReadyAnnounce', { model: modelLabel(modelId) }),
             'polite',
@@ -118,7 +111,7 @@ export const LocalAiSection: FC = () => {
     setClearing(true);
     try {
       const { clearedCaches } = await clearLocalModels();
-      refreshReady();
+      setReadyIds(new Set());
       await refreshStorage();
       announce(
         t('settings.ai.localAi.clearedAnnounce', { count: String(clearedCaches) }),
@@ -128,7 +121,7 @@ export const LocalAiSection: FC = () => {
       setClearing(false);
       setConfirmingClear(false);
     }
-  }, [announce, t, refreshReady, refreshStorage]);
+  }, [announce, t, refreshStorage]);
 
   const recommendedId = report ? getModelRecommendation('text-gen', report) : null;
   const freeMb = storage?.freeMb ?? null;
@@ -262,18 +255,18 @@ export const LocalAiSection: FC = () => {
           </h3>
         </CardHeader>
         <CardContent className="space-y-3">
-          {storage?.supported ? (
+          {storage?.estimateAvailable ? (
             <>
               <p className="text-sm text-[var(--sc-text-secondary)]">
                 {t('settings.ai.localAi.storageUsage', {
-                  used: String(storage.usageMb),
-                  quota: String(storage.quotaMb),
-                  percent: String(storage.usagePercent),
+                  used: String(storage.usageMb ?? 0),
+                  quota: String(storage.quotaMb ?? 0),
+                  percent: String(storage.usagePercent ?? 0),
                 })}
               </p>
               <div
                 role="progressbar"
-                aria-valuenow={storage.usagePercent}
+                aria-valuenow={storage.usagePercent ?? 0}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-label={t('settings.ai.localAi.storageAriaLabel')}
@@ -281,26 +274,30 @@ export const LocalAiSection: FC = () => {
               >
                 <div
                   className="h-full rounded-full bg-[var(--sc-accent)]"
-                  style={{ width: `${Math.min(100, storage.usagePercent)}%` }}
+                  style={{ width: `${Math.min(100, storage.usagePercent ?? 0)}%` }}
                   aria-hidden="true"
                 />
               </div>
-              <p className="text-xs text-[var(--sc-text-muted)]">
-                {t('settings.ai.localAi.storageModelsCached', {
-                  count: String(storage.modelCacheCount),
-                })}
-              </p>
             </>
           ) : (
+            // QNBS-v3: no usable quota from the StorageManager — say so rather than render a bogus 0.
             <p className="text-sm text-[var(--sc-text-muted)]">
               {t('settings.ai.localAi.storageUnsupported')}
+            </p>
+          )}
+
+          {storage && (
+            <p className="text-xs text-[var(--sc-text-muted)]">
+              {t('settings.ai.localAi.storageModelsCached', {
+                count: String(storage.modelCacheCount),
+              })}
             </p>
           )}
 
           <button
             type="button"
             onClick={() => setConfirmingClear(true)}
-            disabled={!storage?.supported || storage.modelCacheCount === 0}
+            disabled={!storage || storage.modelCacheCount === 0}
             className="rounded-lg border border-[var(--sc-danger-border)] px-3 py-1.5 text-xs font-medium text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
           >
             {t('settings.ai.localAi.clearButton')}
