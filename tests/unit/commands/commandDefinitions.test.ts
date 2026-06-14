@@ -45,6 +45,15 @@ vi.mock('../../../services/spotlightTour', () => ({
   startSpotlightTour: vi.fn(),
 }));
 
+// QNBS-v3: OpenRouter circuit state is module-level in the provider — mock for determinism.
+// `mock`-prefixed names are allowed inside the hoisted vi.mock factory.
+const mockIsCircuitOpen = vi.fn(() => false);
+const mockResetOpenRouterCircuit = vi.fn();
+vi.mock('../../../services/ai/providers/openrouterProvider', () => ({
+  isCircuitOpen: () => mockIsCircuitOpen(),
+  resetOpenRouterCircuit: () => mockResetOpenRouterCircuit(),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -93,6 +102,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableGlobalCopilot: false,
   },
   aiMode: 'hybrid',
+  openRouterEnabled: false,
   appearancePreset: 'default',
   advancedEditor: {
     distractionFree: false,
@@ -214,6 +224,69 @@ describe('getStaticCommandDefinitions', () => {
     const cmd = cmds.find((c) => c.id === 'labs-cross-project-search');
     cmd?.run(baseDeps);
     expect(mockSetCrossProjectSearchOpen).toHaveBeenCalledWith(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OpenRouter commands (TODO v1.23 P1)
+// ---------------------------------------------------------------------------
+describe('OpenRouter palette commands', () => {
+  it('exposes toggle + resetCircuit with aiActions category', () => {
+    const cmds = getStaticCommandDefinitions();
+    const byId = Object.fromEntries(cmds.map((c) => [c.id, c]));
+    expect(byId['ai.mode.openrouter.toggle']?.category).toBe('aiActions');
+    expect(byId['ai.mode.openrouter.resetCircuit']?.category).toBe('aiActions');
+  });
+
+  it('toggle enables OpenRouter when currently disabled', () => {
+    const cmd = getStaticCommandDefinitions().find((c) => c.id === 'ai.mode.openrouter.toggle');
+    cmd?.run({ ...baseDeps, openRouterEnabled: false });
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: { enabled: true } }),
+    );
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ title: 'palette.openRouter.enabledToast' }),
+      }),
+    );
+  });
+
+  it('toggle disables OpenRouter when currently enabled', () => {
+    const cmd = getStaticCommandDefinitions().find((c) => c.id === 'ai.mode.openrouter.toggle');
+    cmd?.run({ ...baseDeps, openRouterEnabled: true });
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: { enabled: false } }),
+    );
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ title: 'palette.openRouter.disabledToast' }),
+      }),
+    );
+  });
+
+  it('resetCircuit is hidden unless OpenRouter is enabled AND the circuit is open', () => {
+    const cmd = getStaticCommandDefinitions().find(
+      (c) => c.id === 'ai.mode.openrouter.resetCircuit',
+    );
+    mockIsCircuitOpen.mockReturnValue(false);
+    expect(cmd?.when?.({ ...baseDeps, openRouterEnabled: true })).toBe(false);
+    expect(cmd?.when?.({ ...baseDeps, openRouterEnabled: false })).toBe(false);
+    mockIsCircuitOpen.mockReturnValue(true);
+    expect(cmd?.when?.({ ...baseDeps, openRouterEnabled: false })).toBe(false);
+    expect(cmd?.when?.({ ...baseDeps, openRouterEnabled: true })).toBe(true);
+  });
+
+  it('resetCircuit clears the breaker and announces it', () => {
+    const cmd = getStaticCommandDefinitions().find(
+      (c) => c.id === 'ai.mode.openrouter.resetCircuit',
+    );
+    cmd?.run({ ...baseDeps, openRouterEnabled: true });
+    expect(mockResetOpenRouterCircuit).toHaveBeenCalledTimes(1);
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ title: 'palette.openRouter.resetToast' }),
+      }),
+    );
   });
 });
 

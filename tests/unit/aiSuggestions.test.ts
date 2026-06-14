@@ -16,6 +16,7 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
     navigate: () => undefined,
     theme: 'dark' as const,
     aiMode: 'hybrid',
+    openRouterEnabled: false,
     appearancePreset: 'default',
     advancedEditor: {
       distractionFree: false,

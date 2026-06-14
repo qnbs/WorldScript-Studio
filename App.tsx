@@ -455,6 +455,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         wordCountApprox,
         featureFlags,
         aiMode: settings.aiMode ?? 'hybrid',
+        openRouterEnabled: settings.openRouter?.enabled ?? false,
         appearancePreset: settings.appearancePreset,
         advancedEditor: {
           distractionFree: settings.advancedEditor.distractionFree,
@@ -475,6 +476,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       t,
       settings.theme,
       settings.aiMode,
+      settings.openRouter?.enabled,
       settings.appearancePreset,
       settings.advancedEditor,
       settings.accessibility,

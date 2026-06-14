@@ -99,6 +99,7 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableGlobalCopilot: false,
     },
     aiMode: 'hybrid',
+    openRouterEnabled: false,
     appearancePreset: 'default',
     advancedEditor: {
       distractionFree: false,

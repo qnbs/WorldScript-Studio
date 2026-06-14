@@ -4,6 +4,7 @@ import { ICONS } from '../../constants';
 import { projectActions } from '../../features/project/projectSlice';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
+import { isCircuitOpen, resetOpenRouterCircuit } from '../ai/providers/openrouterProvider';
 import type { CommandDefinition, CommandRuntimeDeps } from './commandTypes';
 
 const SparkIcon = () => (
@@ -530,6 +531,79 @@ export function getStaticCommandDefinitions(): CommandDefinition[] {
     },
   ];
 
+  // ── OpenRouter provider commands ──────────────────────────────────────────
+  // QNBS-v3: surface the v1.22 OpenRouter provider in the palette — toggle + circuit reset
+  // were the last AI-mode actions missing a keyboard-driven entry point (TODO v1.23 P1).
+  const openRouterCmds: CommandDefinition[] = [
+    {
+      id: 'ai.mode.openrouter.toggle',
+      category: 'aiActions',
+      titleKey: 'palette.openRouter.toggle',
+      keywords: [
+        'openrouter',
+        'open router',
+        'provider',
+        'ai',
+        'cloud',
+        'free',
+        'models',
+        'gateway',
+      ],
+      icon: iconBtn(
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"
+        />,
+      ),
+      run: (deps) => {
+        const next = !deps.openRouterEnabled;
+        deps.dispatch(settingsActions.setOpenRouter({ enabled: next }));
+        deps.dispatch(
+          statusActions.addNotification({
+            type: 'success',
+            title: deps.t(
+              next ? 'palette.openRouter.enabledToast' : 'palette.openRouter.disabledToast',
+            ),
+          }),
+        );
+      },
+    },
+    {
+      id: 'ai.mode.openrouter.resetCircuit',
+      category: 'aiActions',
+      titleKey: 'palette.openRouter.resetCircuit',
+      keywords: [
+        'openrouter',
+        'reset',
+        'circuit',
+        'breaker',
+        'rate limit',
+        '429',
+        'resume',
+        'pause',
+      ],
+      icon: iconBtn(
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M16.023 9.348h4.992V4.356m0 4.992l-3.181-3.183a8.25 8.25 0 00-13.803 3.7M2.985 14.652h4.992m-4.992 0v4.992m0-4.992l3.181 3.183a8.25 8.25 0 0013.803-3.7"
+        />,
+      ),
+      // QNBS-v3: only meaningful when OpenRouter is on AND the breaker is currently open.
+      when: (deps) => deps.openRouterEnabled && isCircuitOpen(),
+      run: (deps) => {
+        resetOpenRouterCircuit();
+        deps.dispatch(
+          statusActions.addNotification({
+            type: 'success',
+            title: deps.t('palette.openRouter.resetToast'),
+          }),
+        );
+      },
+    },
+  ];
+
   const helpCmds: CommandDefinition[] = [
     {
       id: 'help-open',
@@ -615,6 +689,7 @@ export function getStaticCommandDefinitions(): CommandDefinition[] {
     ...editorModeCmds,
     ...editorFontCmds,
     ...aiModeCmds,
+    ...openRouterCmds,
     ...helpCmds,
     ...globalCmds,
   ];
