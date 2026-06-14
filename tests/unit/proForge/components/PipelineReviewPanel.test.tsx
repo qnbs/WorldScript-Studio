@@ -397,8 +397,7 @@ describe('PipelineReviewPanel', () => {
       render(<PipelineReviewPanel />);
 
       const btn = screen.getByText('1 Pending');
-      // biome-ignore lint/suspicious/noExplicitAny: test cast
-      expect((btn as any).disabled).toBe(true);
+      expect((btn as HTMLButtonElement).disabled).toBe(true);
     });
 
     it('enables Submit button and shows "Submit & Continue" when no items are pending', () => {
@@ -413,8 +412,7 @@ describe('PipelineReviewPanel', () => {
       render(<PipelineReviewPanel />);
 
       const btn = screen.getByText('Submit & Continue');
-      // biome-ignore lint/suspicious/noExplicitAny: test cast
-      expect((btn as any).disabled).toBe(false);
+      expect((btn as HTMLButtonElement).disabled).toBe(false);
     });
 
     it('calls submitReview and setActiveView("dashboard") on Submit click', async () => {

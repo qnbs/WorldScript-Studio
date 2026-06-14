@@ -55,8 +55,7 @@ describe('loraTrainingService — Tauri desktop build', () => {
   });
 
   afterEach(() => {
-    // biome-ignore lint/suspicious/noExplicitAny: test teardown
-    delete (window as any).__TAURI_INTERNALS__;
+    delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   });
 
   it('generateOllamaModelfile calls generate_ollama_modelfile via Tauri', async () => {

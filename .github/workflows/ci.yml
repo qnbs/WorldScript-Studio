@@ -93,6 +93,9 @@ jobs:
       - name: Suppression-debt ratchet (biome-ignore count)
         run: node scripts/check-suppressions.mjs
 
+      - name: Token-audit ratchet (raw-color/inline-svg count)
+        run: pnpm run token:audit
+
       - name: i18n key parity (vs en)
         run: pnpm run i18n:check
 
