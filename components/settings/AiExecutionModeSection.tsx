@@ -1,8 +1,14 @@
+import { detectWebGpuSupport } from '@domain/ai-core';
 import type { FC } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { useAnnounce } from '../../contexts/LiveRegionContext';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { useTranslation } from '../../hooks/useTranslation';
 import type { AiMode } from '../../types';
+import { Card, CardContent, CardHeader } from '../ui/Card';
+
+const RADIO_GROUP_NAME = 'ai-execution-mode';
 
 interface ModeCardProps {
   mode: AiMode;
@@ -13,19 +19,26 @@ interface ModeCardProps {
   onSelect: (mode: AiMode) => void;
 }
 
+// QNBS-v3: A native radio input (visually hidden, shared `name`) backs each card — this gives free
+// roving-tabindex + arrow-key navigation + correct AT semantics, with the card as its styled label.
 const ModeCard: FC<ModeCardProps> = ({ mode, active, icon, titleKey, descKey, onSelect }) => {
   const { t } = useTranslation();
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(mode)}
-      aria-pressed={active}
-      className={`relative w-full rounded-xl border-2 p-4 text-start transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] ${
+    <label
+      className={`relative block w-full cursor-pointer rounded-xl border-2 p-4 text-start transition-all duration-200 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--sc-border-focus)] ${
         active
           ? 'border-[var(--sc-accent)] bg-[var(--sc-accent)]/10 shadow-md'
           : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-elevated)] hover:border-[var(--sc-accent)]/50 hover:bg-[var(--sc-surface-overlay)]'
       }`}
     >
+      <input
+        type="radio"
+        name={RADIO_GROUP_NAME}
+        value={mode}
+        checked={active}
+        onChange={() => onSelect(mode)}
+        className="sr-only"
+      />
       {active && (
         <span
           className="absolute end-3 top-3 h-2.5 w-2.5 rounded-full bg-[var(--sc-accent)]"
@@ -41,7 +54,7 @@ const ModeCard: FC<ModeCardProps> = ({ mode, active, icon, titleKey, descKey, on
       <p className="text-center text-xs leading-relaxed text-[var(--sc-text-secondary)]">
         {t(descKey)}
       </p>
-    </button>
+    </label>
   );
 };
 ModeCard.displayName = 'ModeCard';
@@ -141,35 +154,108 @@ const MODES: {
 export const AiExecutionModeSection: FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
-  const aiMode = useAppSelector((s) => s.settings.aiMode ?? 'hybrid');
+  const announce = useAnnounce();
+  const aiMode = (useAppSelector((s) => s.settings.aiMode) ?? 'hybrid') as AiMode;
 
-  const handleSelect = (mode: AiMode) => {
-    dispatch(settingsActions.setAiMode(mode));
-  };
+  // QNBS-v3: WebGPU presence is a synchronous capability check (`'gpu' in navigator`); read once.
+  const [hasWebGpu] = useState<boolean>(() => {
+    try {
+      return detectWebGpuSupport();
+    } catch {
+      return false;
+    }
+  });
+
+  // QNBS-v3: Track connectivity via online/offline events (not a one-shot navigator.onLine read) so
+  // the per-mode hint stays accurate without a stale value — same pattern as OpenRouterSection.
+  const [isOffline, setIsOffline] = useState(
+    () => typeof navigator !== 'undefined' && navigator.onLine === false,
+  );
+  useEffect(() => {
+    const update = () =>
+      setIsOffline(typeof navigator !== 'undefined' && navigator.onLine === false);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
+
+  const selectMode = useCallback(
+    (mode: AiMode) => {
+      if (mode === aiMode) return;
+      dispatch(settingsActions.setAiMode(mode));
+      // QNBS-v3: Announce the new mode to screen readers (reuses settings.aiMode.activeLabel).
+      announce(
+        t('settings.aiMode.activeLabel', {
+          mode: t(`settings.aiMode.${mode}` as Parameters<typeof t>[0]),
+        }),
+        'polite',
+      );
+    },
+    [aiMode, dispatch, announce, t],
+  );
+
+  // QNBS-v3: Contextual capability hint for the active mode — surfaces real runtime constraints
+  // (WebGPU absent for on-device modes, offline for cloud/hybrid) instead of silently mis-routing.
+  const hint = useMemo<{ tone: 'warning' | 'info'; text: string } | null>(() => {
+    if ((aiMode === 'local' || aiMode === 'eco') && !hasWebGpu) {
+      return { tone: 'warning', text: t('settings.aiMode.hint.webgpuMissing') };
+    }
+    if (aiMode === 'cloud' && isOffline) {
+      return { tone: 'warning', text: t('settings.aiMode.hint.cloudOffline') };
+    }
+    if (aiMode === 'hybrid' && isOffline) {
+      return { tone: 'info', text: t('settings.aiMode.hint.hybridOffline') };
+    }
+    return null;
+  }, [aiMode, hasWebGpu, isOffline, t]);
 
   return (
-    <section aria-labelledby="ai-mode-heading" className="space-y-4">
-      <div>
-        <h3 id="ai-mode-heading" className="text-base font-semibold text-[var(--sc-text-primary)]">
+    <Card>
+      <CardHeader>
+        <h2 id="ai-mode-heading" className="text-base font-semibold text-[var(--sc-text-primary)]">
           {t('settings.aiMode.title')}
-        </h3>
+        </h2>
         <p className="mt-1 text-sm text-[var(--sc-text-secondary)]">
           {t('settings.aiMode.description')}
         </p>
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {MODES.map(({ mode, titleKey, descKey, icon }) => (
-          <ModeCard
-            key={mode}
-            mode={mode}
-            active={aiMode === mode}
-            icon={icon}
-            titleKey={titleKey}
-            descKey={descKey}
-            onSelect={handleSelect}
-          />
-        ))}
-      </div>
-    </section>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div
+          role="radiogroup"
+          aria-labelledby="ai-mode-heading"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+        >
+          {MODES.map(({ mode, titleKey, descKey, icon }) => (
+            <ModeCard
+              key={mode}
+              mode={mode}
+              active={aiMode === mode}
+              icon={icon}
+              titleKey={titleKey}
+              descKey={descKey}
+              onSelect={selectMode}
+            />
+          ))}
+        </div>
+
+        {hint && (
+          <p
+            role="status"
+            aria-live="polite"
+            className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${
+              hint.tone === 'warning'
+                ? 'bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]'
+                : 'bg-[var(--sc-info-bg)] text-[var(--sc-info-fg)]'
+            }`}
+          >
+            {hint.text}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 };
