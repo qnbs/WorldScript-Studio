@@ -9,6 +9,9 @@ module.exports = {
       url: ['http://127.0.0.1:4173/StoryCraft-Studio/'],
       numberOfRuns: 2,
       settings: {
+        // QNBS-v3: same /dev/shm crash hardening as the mobile config (.lighthouserc.cjs) —
+        // --disable-dev-shm-usage prevents the "Execution context was destroyed" CI flake.
+        chromeFlags: '--no-sandbox --disable-dev-shm-usage --disable-gpu',
         preset: 'desktop',
         throttlingMethod: 'simulate',
       },

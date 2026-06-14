@@ -6,6 +6,12 @@ module.exports = {
       url: ['http://127.0.0.1:4173/StoryCraft-Studio/'],
       numberOfRuns: 3,
       settings: {
+        // QNBS-v3: harden Chrome launch on CI runners. `--disable-dev-shm-usage` is the fix for the
+        // intermittent "Protocol error (Runtime.evaluate): Execution context was destroyed" flake —
+        // GitHub runners have a tiny /dev/shm, so the renderer crashes mid-collect and aborts the
+        // whole `lhci autorun` (numberOfRuns can't recover a crashed run). --no-sandbox/--disable-gpu
+        // are standard headless-CI hygiene.
+        chromeFlags: '--no-sandbox --disable-dev-shm-usage --disable-gpu',
         emulatedFormFactor: 'mobile',
         throttlingMethod: 'simulate',
         screenEmulation: {
