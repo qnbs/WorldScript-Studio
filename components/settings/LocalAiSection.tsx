@@ -297,7 +297,9 @@ export const LocalAiSection: FC = () => {
           <button
             type="button"
             onClick={() => setConfirmingClear(true)}
-            disabled={!storage || storage.modelCacheCount === 0}
+            // QNBS-v3: never clear while a download is in flight — that would race clearLocalModels()
+            //          against active worker preload/download work and corrupt the cache state.
+            disabled={!storage || storage.modelCacheCount === 0 || downloadingId !== null}
             className="rounded-lg border border-[var(--sc-danger-border)] px-3 py-1.5 text-xs font-medium text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
           >
             {t('settings.ai.localAi.clearButton')}
@@ -328,7 +330,7 @@ export const LocalAiSection: FC = () => {
               <button
                 type="button"
                 onClick={() => void handleClear()}
-                disabled={clearing}
+                disabled={clearing || downloadingId !== null}
                 className="rounded-lg bg-[var(--sc-danger-fg)] px-4 py-2 text-sm font-medium text-[var(--sc-text-on-accent)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               >
                 {clearing

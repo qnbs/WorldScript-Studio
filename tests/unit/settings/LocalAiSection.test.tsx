@@ -149,6 +149,30 @@ describe('LocalAiSection', () => {
     );
   });
 
+  it('disables Clear while a download is in flight (no clear/download race)', async () => {
+    let resolvePreload: (v: { layer: string; modelId: string; downloaded: boolean }) => void =
+      () => {};
+    mocks.preload.mockReturnValue(
+      new Promise((res) => {
+        resolvePreload = res;
+      }),
+    );
+    const user = userEvent.setup();
+    render(<LocalAiSection />);
+    await screen.findByText('settings.ai.localAi.storageModelsCached');
+
+    const clearBtn = screen.getByText('settings.ai.localAi.clearButton').closest('button');
+    expect(clearBtn).not.toBeDisabled();
+
+    // Start (but don't finish) a download → Clear must lock out.
+    await user.click(screen.getAllByText('settings.ai.localAi.downloadButton')[0]!);
+    expect(clearBtn).toBeDisabled();
+
+    // Settle to avoid act warnings.
+    resolvePreload({ layer: 'webllm', modelId: 'm-small', downloaded: true });
+    await waitFor(() => expect(clearBtn).not.toBeDisabled());
+  });
+
   it('renders the four-layer fallback chain and the no-data perf line by default', async () => {
     render(<LocalAiSection />);
     expect(await screen.findByText('settings.ai.localAi.fallbackLayer1')).toBeInTheDocument();
