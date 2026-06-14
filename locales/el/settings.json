@@ -140,7 +140,7 @@
   "settings.ai.localAi.cancelAriaLabel": "Ακύρωση model download",
   "settings.ai.localAi.cancelButton": "Ακύρωση",
   "settings.ai.localAi.downloadCancelled": "Η λήψη ακυρώθηκε",
-  "settings.ai.localAi.downloadEta": "περίπου. Απομένουν {seconds}s",
+  "settings.ai.localAi.downloadEta": "περίπου. Απομένουν {{seconds}}s",
   "settings.ai.localAi.downloadTitle": "Λήψη μοντέλου AI…",
   "settings.ai.localAi.downloadedLabel": "κατεβάσει",
   "settings.ai.localAi.progressAriaLabel": "Πρόοδος λήψης μοντέλου",

@@ -6,6 +6,17 @@
 
 **Quality gate (2026-06-11 — v1.22.0):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2594 keys × 11 locales**) · unit tests ✅ (5 475+ / 449 files) · coverage thresholds L74/B60/F67/S72 ✅. Toolchain: Node 22/24, **pnpm 11**, Vite 8, TypeScript 7 (tsgo).
 
+## v1.23 i18n Interpolation Bug-Class Fix + Regression Guard (2026-06-14)
+
+**Scope:** Two user-reported runtime i18n bugs traced to a whole **bug class** that `i18n:check` (parity-only) structurally cannot catch.
+
+- **Bug 1 — single-brace placeholders never interpolate.** `contexts/I18nContext.tsx` only substitutes `{{token}}`; the entire `copilot.json` module plus 2 keys each in `objects.json`/`settings.json` were authored with **single-brace** `{token}`, so they rendered literally (user saw `Du bist hier: {view}`). Converted **292 occurrences → `{{…}}`** across all 11 locales. `copilot.contextLabel` already passes a localized view name (`t(viewNavigationLabelKey(currentView))`), so the brace fix alone makes it render the real page name.
+- **Bug 1b — translated placeholder NAMES.** es/pt had localized the *param names* (`{count}`→`{contar}`, `{seconds}`→`{segundos}`, and pt `roster.resultCount` `{{count}}`→`{{contagem}}`), which never match the names the code passes. Reverted to canonical English tokens.
+- **Bug 2 — missing `common.abort` key.** `ProForgeDashboard.tsx` calls `t('common.abort')` but the key existed in **no** locale, so the raw key rendered as the pipeline abort button. Added to all 11 (de "Abbrechen", es "Interrumpir", fr "Interrompre", it "Interrompi", pt "Interromper", ja/zh "中止", el "Διακοπή"; ar/he EN fallback per RTL-stub policy).
+- **Systemic guard.** New `tests/unit/i18nPlaceholders.test.ts` scans every shipped bundle and fails CI on (a) any single-brace placeholder and (b) any locale placeholder name absent from the English source — closing the gap that let all of the above ship green. The token-consistency check **caught the third bug** (pt `contagem`) that manual greps missed.
+
+**Quality gate (2026-06-14):** lint ✅ (1329 files) · typecheck ✅ · i18n:check ✅ (2646 keys × 11) · placeholder guard ✅ (21) · copilot + proForge suites green.
+
 ## v1.23 Bundle Split & AI-Settings i18n Fix (2026-06-14)
 
 **Scope:** Reduce precache weight and tighten the bundle gate (PR #130); fix AI-settings localization regression (PR #129).
