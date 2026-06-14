@@ -226,7 +226,7 @@ Central orchestration layer for all background tasks. Key files: `workerBus.ts` 
 
 All 22 views are lazy-loaded in `App.tsx` via `React.lazy()`. Heavy libraries (export: `docx`, `jszip`, `jsPDF`; collaboration: Yjs; graphs: `react-force-graph-2d`) live in separate Vite manual chunks. `listenerMiddleware.ts` and `aiApi.ts` use dynamic imports for DuckDB/RAG/provider init. Keep export/collaboration dependencies lazy.
 
-**SW-excluded chunks** (in `vite.config.ts` `globIgnores` — never precache): `vendor-duckdb` (~2 MB gzip), `vendor-ai-onnx` (ONNX + @xenova/transformers), `vendor-webllm` (~6 MB). When adding a new heavy optional chunk, add it to both `manualChunks` and `globIgnores`.
+**SW-excluded chunks** (in `vite.config.ts` `globIgnores` — never precache): `vendor-duckdb` (~2 MB gzip), `vendor-onnx` (ONNX Runtime Web), `vendor-transformers` (@huggingface/transformers), `vendor-webllm` (~4-5 MB). `vendor-ai-core` is the small orchestration layer and is precached. When adding a new heavy optional chunk, add it to both `manualChunks` and `globIgnores`.
 
 ### Build & bundler gotchas (Vite 8 + rolldown)
 
