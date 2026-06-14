@@ -88,7 +88,7 @@ export async function getWebLlmEngine(
   }
 
   try {
-    const mod = (await import('@mlc-ai/web-llm')) as unknown as MLCModule;
+    const mod = (await import('./vendor-webllm')) as unknown as MLCModule;
     const CreateMLCEngine = mod.CreateMLCEngine;
     if (typeof CreateMLCEngine !== 'function') {
       return null;
