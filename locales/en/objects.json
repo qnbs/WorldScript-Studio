@@ -46,6 +46,6 @@
   "objects.filterByGroup": "Filter by group",
   "objects.allGroups": "All Groups",
   "objects.ungrouped": "Ungrouped",
-  "objects.objectCount": "{count} object",
-  "objects.objectCountPlural": "{count} objects"
+  "objects.objectCount": "{{count}} object",
+  "objects.objectCountPlural": "{{count}} objects"
 }
