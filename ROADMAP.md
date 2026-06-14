@@ -67,7 +67,7 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 
 - **CSP `connect-src` Option B:** redundante Cloud-Endpoints entfernt, intentional `https:` für BYOK behalten; ADR-0004 + Regressionstest.
 - **Suppression-Debt Ratchet Gate:** `scripts/check-suppressions.mjs` mit Baseline 159 in CI; erste Abatement-Tranche (22 `noExplicitAny`).
-- **Bundle-Budget Single Source of Truth:** `package.json` `bundle:budget` = `--max-kb 6500 --max-entry-kb 4000`.
+- **Bundle-Budget Single Source of Truth:** `package.json` `bundle:budget` = `--max-kb 6500 --max-entry-kb 4000` _(later tightened to `6200 / 2500` in PR #130, 2026-06-14)_.
 - **Whisper WASM STT Download UI + VAD→Whisper Bridge:** `VoiceModelDownloadModal`, `VoiceActivityCoordinator`.
 - **Sepia Dark Mode — "Candlelit Manuscript"** als vierter Theme-Variant.
 - **Deep E2E Coverage Layer:** Feature-Flag-Matrix + Error-Path-Specs.

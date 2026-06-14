@@ -47,6 +47,8 @@ export interface CommandRuntimeDeps {
   featureFlags: FeatureFlagsState;
   /** Current AI execution mode — used by AI mode switch commands. */
   aiMode: AiMode;
+  /** Whether the OpenRouter provider is enabled — drives the OpenRouter palette toggle label/action. */
+  openRouterEnabled: boolean;
   /** Current appearance preset — used by preset switch commands. */
   appearancePreset: AppearancePreset;
   /** Current advanced-editor settings snapshot (distractionFree, typewriterMode, etc.). */

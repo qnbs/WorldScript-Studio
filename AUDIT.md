@@ -6,6 +6,14 @@
 
 **Quality gate (2026-06-11 — v1.22.0):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2594 keys × 11 locales**) · unit tests ✅ (5 475+ / 449 files) · coverage thresholds L74/B60/F67/S72 ✅. Toolchain: Node 22/24, **pnpm 11**, Vite 8, TypeScript 7 (tsgo).
 
+## v1.23 Bundle Split & AI-Settings i18n Fix (2026-06-14)
+
+**Scope:** Reduce precache weight and tighten the bundle gate (PR #130); fix AI-settings localization regression (PR #129).
+
+- **Bundle budget tightened (PR #130, `4bc237d`):** ceilings lowered **`--max-kb 6500 --max-entry-kb 4000` → `--max-kb 6200 --max-entry-kb 2500`** in both `package.json` `bundle:budget` and `scripts/check-bundle-budget.mjs` defaults (still single-source-of-truth, just new values). **This supersedes every `6500/4000` figure in earlier (dated) AUDIT/TODO/ROADMAP entries.**
+- **ai-core runtime chunks split (PR #130):** new `vendor-webllm` / `vendor-transformers` / `vendor-onnx` proxy modules give Vite stable lazy-chunk names (replacing generic `lib-*`). Heavy-runtime `manualChunks` branches now match **before** the `vendor-ai-core` catch-all (a CodeAnt-flagged ordering bug had swept WebLLM/ONNX/Transformers back into the precached `vendor-ai-core` chunk). Verified sizes: `vendor-webllm` ≈ 6.0 MB, `vendor-onnx` ≈ 401 KB — both **excluded from SW precache**; the small `vendor-ai-core` orchestration layer stays precached. The largest chunk (`vendor-webllm`) is the binding constraint against the 6200 KB per-chunk ceiling (tight margin). `bundle:report` script added for CI trend tracking. `smoke:prod` mounts clean.
+- **AI-settings localization (PR #129, `c3fcf12`):** `settings.openRouter.*` + `settings.aiMode.*` keys were shipping as **English placeholders in all non-EN locales** (i18n:check verifies key *parity*, not translation quality, so the gate stayed green). Translated across all 11 locales; bundles rebuilt. Regression guard added to the smoke-test protocol (step 1.9).
+
 ## v1.23 AI Execution Mode Section — Localization, Modern UI & A11y Hardening (2026-06-14)
 
 **Scope:** Lift the AI Execution Mode picker (`components/settings/AiExecutionModeSection.tsx`, Settings → AI & Models) to the modern design system: finish localization (the only hardcoded strings lived in the related `components/copilot/AiModeIndicator.tsx` chip), adopt the `Card` shell + a native **radiogroup**, add dynamic per-mode capability hints, and add the missing component tests.

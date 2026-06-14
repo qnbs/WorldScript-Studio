@@ -99,6 +99,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       wordCountApprox,
       featureFlags,
       aiMode: settings.aiMode,
+      openRouterEnabled: settings.openRouter?.enabled ?? false,
       appearancePreset: settings.appearancePreset,
       advancedEditor: {
         distractionFree: settings.advancedEditor.distractionFree,
@@ -125,6 +126,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       wordCountApprox,
       featureFlags,
       settings.aiMode,
+      settings.openRouter?.enabled,
       settings.appearancePreset,
       settings.advancedEditor,
       settings.accessibility,
