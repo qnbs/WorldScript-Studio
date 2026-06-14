@@ -70,6 +70,7 @@ function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {
     wordCountApprox: 0,
     featureFlags: { ...defaultFeatureFlags },
     aiMode: 'hybrid',
+    openRouterEnabled: false,
     appearancePreset: 'default',
     advancedEditor: {
       distractionFree: false,
