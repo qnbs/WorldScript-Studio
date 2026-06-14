@@ -6,6 +6,20 @@
 
 **Quality gate (2026-06-11 — v1.22.0):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2594 keys × 11 locales**) · unit tests ✅ (5 475+ / 449 files) · coverage thresholds L74/B60/F67/S72 ✅. Toolchain: Node 22/24, **pnpm 11**, Vite 8, TypeScript 7 (tsgo).
 
+## v1.23 AI Execution Mode Section — Localization, Modern UI & A11y Hardening (2026-06-14)
+
+**Scope:** Lift the AI Execution Mode picker (`components/settings/AiExecutionModeSection.tsx`, Settings → AI & Models) to the modern design system: finish localization (the only hardcoded strings lived in the related `components/copilot/AiModeIndicator.tsx` chip), adopt the `Card` shell + a native **radiogroup**, add dynamic per-mode capability hints, and add the missing component tests.
+**Branch:** `feat/ai-execution-mode-perfection`
+
+**Quality gate (2026-06-14):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2639 keys × 11 locales**, +7 `settings.aiMode.*`) · suppression-ratchet ✅ (no new `biome-ignore`) · targeted unit tests ✅ (`AiExecutionModeSection` 10, `aiModeService` 25).
+
+### Changes
+- **Localization:** `AiModeIndicator` no longer hardcodes `OpenRouter` / `OpenRouter Free` / `OR ⚠` / `/20 RPM` — replaced with i18n keys `settings.aiMode.indicator.openRouter[Free]`, `…orShort`, `…rpm` (`{{count}}` locale-formatted). Added across all 11 locales.
+- **Modern UI:** section wrapped in `Card` / `CardHeader` / `CardContent` (consistent with `OpenRouterSection`); kept `--sc-*` tokens, no `dark:` prefixes, no new colors.
+- **A11y:** mode cards are now a true ARIA radio group — native `<input type="radio">` (visually-hidden, shared `name`) inside styled `<label>`s, giving free arrow-key/Home/End navigation + roving tabindex + `focus-visible` ring; container `role="radiogroup"` + `aria-labelledby`; mode change announced via `useAnnounce()` (reuses `settings.aiMode.activeLabel`).
+- **Edge-case hardening (dynamic hints):** synchronous `detectWebGpuSupport()` drives a WebGPU-absent warning for Local/Eco; `online`/`offline` event listeners drive a Cloud-offline warning and a Hybrid-offline info note — `role="status"` + `aria-live="polite"`, `--sc-warning/info` tokens. New keys `settings.aiMode.hint.{webgpuMissing,cloudOffline,hybridOffline}`.
+- **Tests:** new `tests/unit/settings/AiExecutionModeSection.test.tsx` (radiogroup + checked state, click dispatch + announce, no-op on same mode, native grouping, all 3 capability hints). Service layer (`aiModeService`, `listenerMiddleware`) audited — routing/sync correct, unchanged.
+
 ## v1.23 OpenRouter Settings Section — Localization, Modern UI & Hardening (2026-06-13)
 
 **Scope:** Harden the OpenRouter provider settings panel (`components/settings/OpenRouterSection.tsx`) with full i18n coverage, the design-system searchable `Select`, API-key validation, model-catalog fetching/caching, AI-mode awareness, and error-boundary wrapping.

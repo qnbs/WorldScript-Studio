@@ -39,14 +39,19 @@ export const AiModeIndicator: FC = () => {
     : false;
 
   // Build label: "Hybrid · OpenRouter Free" or just "Local"
+  const modeLabel = t(`settings.aiMode.indicator.${mode}` as Parameters<typeof t>[0]);
   let label: string;
   if (isOpenRouterActive && circuitOpen) {
-    label = `${t(`settings.aiMode.indicator.${mode}` as Parameters<typeof t>[0])} · OR ⚠`;
+    // QNBS-v3: localized compact circuit-open suffix (was hardcoded "OR ⚠").
+    label = `${modeLabel} · ${t('settings.aiMode.indicator.orShort' as Parameters<typeof t>[0])}`;
   } else if (isOpenRouterActive) {
-    const orLabel = isFreeModel ? 'OpenRouter Free' : 'OpenRouter';
-    label = `${t(`settings.aiMode.indicator.${mode}` as Parameters<typeof t>[0])} · ${orLabel}`;
+    // QNBS-v3: localized OpenRouter label (was hardcoded "OpenRouter Free"/"OpenRouter").
+    const orLabel = isFreeModel
+      ? t('settings.aiMode.indicator.openRouterFree' as Parameters<typeof t>[0])
+      : t('settings.aiMode.indicator.openRouter' as Parameters<typeof t>[0]);
+    label = `${modeLabel} · ${orLabel}`;
   } else {
-    label = t(`settings.aiMode.indicator.${mode}` as Parameters<typeof t>[0]);
+    label = modeLabel;
   }
 
   // Tooltip
@@ -54,7 +59,11 @@ export const AiModeIndicator: FC = () => {
   if (isOpenRouterActive && circuitOpen) {
     tooltip = t('settings.aiMode.indicator.orCircuitOpen' as Parameters<typeof t>[0]);
   } else if (isOpenRouterActive) {
-    const rpmText = approxRpm > 0 ? ` (${approxRpm}/20 RPM)` : '';
+    // QNBS-v3: localized RPM hint (was hardcoded "/20 RPM"); count is locale-formatted by t().
+    const rpmText =
+      approxRpm > 0
+        ? ` (${t('settings.aiMode.indicator.rpm' as Parameters<typeof t>[0], { count: approxRpm })})`
+        : '';
     tooltip = `${t(`settings.aiMode.indicator.tooltip.${mode}` as Parameters<typeof t>[0])}${rpmText}`;
   } else {
     tooltip = t(`settings.aiMode.indicator.tooltip.${mode}` as Parameters<typeof t>[0]);
