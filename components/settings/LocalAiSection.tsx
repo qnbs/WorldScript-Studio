@@ -262,7 +262,10 @@ export const LocalAiSection: FC = () => {
               const tooLarge = freeMb !== null && approxMb > 0 && approxMb > freeMb;
               const isReady = readyIds.has(m.id);
               const isDownloading = downloadingId === m.id;
-              const disabled = isDownloading || downloadingId !== null || clearing;
+              // QNBS-v3: also block when a WebLLM download is running anywhere (externalLoading) so
+              //          preloads can't overlap and the single global cancel hook stays unambiguous.
+              const disabled =
+                isDownloading || downloadingId !== null || clearing || externalLoading;
               return (
                 <li
                   key={m.id}

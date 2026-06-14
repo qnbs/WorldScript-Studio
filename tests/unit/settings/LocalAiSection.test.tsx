@@ -4,9 +4,10 @@
  * warning, the Download → preload → ready-announce flow, the Clear-Local-Models confirm flow, and
  * the fallback-chain + throughput indicator. All services are mocked; the `t` mock returns the key.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { inferenceProgressEmitter } from '../../../services/ai/inferenceProgressEmitter';
 
 const mocks = vi.hoisted(() => ({
   announce: vi.fn(),
@@ -84,6 +85,11 @@ beforeEach(() => {
   mocks.lastThroughput.mockReturnValue(null);
   mocks.healthReport.mockResolvedValue({ deviceClass: 'mid-range', gpuVramTier: 'medium' });
   mocks.modelRec.mockReturnValue('m-small');
+});
+
+afterEach(() => {
+  // QNBS-v3: the progress emitter is a singleton — reset so a "loading" state can't leak across tests.
+  inferenceProgressEmitter.reset();
 });
 
 describe('LocalAiSection', () => {
@@ -223,6 +229,18 @@ describe('LocalAiSection', () => {
     // Settle to avoid act warnings.
     resolvePreload({ layer: 'webllm', modelId: 'm-small', downloaded: true });
     await waitFor(() => expect(clearBtn).not.toBeDisabled());
+  });
+
+  it('disables downloads while a WebLLM download runs elsewhere (externalLoading)', async () => {
+    render(<LocalAiSection />);
+    await screen.findByText('settings.ai.localAi.webgpuAvailable');
+    expect(screen.getAllByText('settings.ai.localAi.downloadButton')[0]).not.toBeDisabled();
+
+    // A WebLLM download starts somewhere else (Copilot/ProForge) → emitter goes "loading".
+    act(() => inferenceProgressEmitter.reportWebLlmProgress(0.3, 'loading'));
+    await waitFor(() =>
+      expect(screen.getAllByText('settings.ai.localAi.downloadButton')[0]).toBeDisabled(),
+    );
   });
 
   it('refuses to clear and announces when local AI is busy app-wide', async () => {
