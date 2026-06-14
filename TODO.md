@@ -28,6 +28,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ⬜ Local AI & Voice härten (Whisper/Kokoro Low-End, Eco-Mode, RAM/GPU-Monitoring).
 - ⬜ Error Boundaries + Logging für AI/Worker-Failures konsistent.
 - ⬜ Accessibility Deep-Dive (Keyboard + Screen-Reader).
+  - ✅ **AI Execution Mode section** — Card shell, native ARIA radiogroup (arrow-key nav + roving tabindex), live-region announce, dynamic WebGPU/offline capability hints, full localization (AiModeIndicator hardcodes → i18n, +7 keys × 11 locales), new `AiExecutionModeSection.test.tsx` (10). (Delivered 2026-06-14 in `feat/ai-execution-mode-perfection`)
 - ⬜ Command Palette Integration für OpenRouter (`ai.mode.openrouter.toggle`, `ai.mode.openrouter.resetCircuit`).
 
 ### P2 — Nächster Sprint
