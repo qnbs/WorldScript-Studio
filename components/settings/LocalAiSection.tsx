@@ -5,7 +5,7 @@
 
 import { detectWebGpuSupport, WEBLLM_SUPPORTED_MODELS } from '@domain/ai-core';
 import type { FC } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAnnounce } from '../../contexts/LiveRegionContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
@@ -21,7 +21,10 @@ import {
   WEBLLM_MODEL_APPROX_MB,
 } from '../../services/ai/localModelStorageService';
 import {
+  abortActivePreload,
+  clearReadyLocalModels,
   getLastLocalThroughput,
+  getReadyLocalModelIds,
   type LocalThroughputSample,
   preloadLocalModel,
 } from '../../services/localAiFacade';
@@ -67,8 +70,13 @@ export const LocalAiSection: FC = () => {
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [throughput, setThroughput] = useState<LocalThroughputSample | null>(null);
 
+  // QNBS-v3: monotonic request id so an older, slower estimate can't overwrite a newer result
+  //          (initial load vs post-download/post-clear refreshes can overlap).
+  const storageReqId = useRef(0);
   const refreshStorage = useCallback(async () => {
-    setStorage(await estimateLocalModelStorage());
+    const id = ++storageReqId.current;
+    const est = await estimateLocalModelStorage();
+    if (id === storageReqId.current) setStorage(est);
   }, []);
 
   useEffect(() => {
@@ -78,9 +86,13 @@ export const LocalAiSection: FC = () => {
       if (active) setReport(r);
     })();
     void refreshStorage();
+    // QNBS-v3: seed from the session-level ready set so badges survive section remounts on nav.
+    setReadyIds(new Set(getReadyLocalModelIds()));
     setThroughput(getLastLocalThroughput());
     return () => {
       active = false;
+      // QNBS-v3: navigating away cancels any in-flight download rather than leaking GPU work.
+      abortActivePreload();
     };
   }, [refreshStorage]);
 
@@ -111,6 +123,7 @@ export const LocalAiSection: FC = () => {
     setClearing(true);
     try {
       const { clearedCaches } = await clearLocalModels();
+      clearReadyLocalModels();
       setReadyIds(new Set());
       await refreshStorage();
       announce(

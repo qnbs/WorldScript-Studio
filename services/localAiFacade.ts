@@ -120,6 +120,9 @@ export async function generateLocalText(
   onProgress?: (report: WebLlmProgressReport) => void,
   loraAdapterId?: string,
   signal?: AbortSignal,
+  // QNBS-v3: bypassAdaptiveModel forces the caller's exact modelId (skips adaptive override) — used
+  //          by preloadLocalModel so a "Download model X" action always warms X, never a substitute.
+  options?: { bypassAdaptiveModel?: boolean },
 ): Promise<LocalAiResponse> {
   // QNBS-v3: Acquire GPU mutex before WebLLM/ONNX-WebGPU init to prevent VRAM races across
   //          concurrent callers (e.g. ProForge agents running multiple pipeline stages).
@@ -134,9 +137,11 @@ export async function generateLocalText(
       typeof window !== 'undefined' && window.__storycraft_adaptive_ai__ === true;
 
     // QNBS-v3: capture the typed adaptive config so recordTaskLatency keeps its ComputeBackend type.
-    const adaptiveConfig = adaptiveEnabled
-      ? await adaptiveAiEngine.getTaskConfig('text-gen-short')
-      : null;
+    //          Skipped entirely when the caller forces an exact model (explicit preload/download).
+    const adaptiveConfig =
+      adaptiveEnabled && !options?.bypassAdaptiveModel
+        ? await adaptiveAiEngine.getTaskConfig('text-gen-short')
+        : null;
 
     let usedBackend: string = adaptiveConfig?.backend ?? 'heuristic';
     let usedModel = adaptiveConfig?.modelId ?? modelId ?? 'unknown';
@@ -266,31 +271,70 @@ function isWebLlmLockMessage(text: string): boolean {
   return text.startsWith('WebLLM: Another');
 }
 
+// QNBS-v3: Session-level set of models verified-warmed this session. Module scope (not React state)
+//          so the "Ready" status survives the Settings section unmounting/remounting on navigation.
+const readyLocalModelIds = new Set<string>();
+
+export function getReadyLocalModelIds(): readonly string[] {
+  return Array.from(readyLocalModelIds);
+}
+
+/** Reset session readiness — call after the on-disk model caches are cleared. */
+export function clearReadyLocalModels(): void {
+  readyLocalModelIds.clear();
+}
+
+// QNBS-v3: Abort hook for the in-flight preload so the download modal's Cancel can truly stop it
+//          (not just hide the UI). Only one preload runs at a time (GPU mutex), so a single ref is safe.
+let activePreloadAbort: (() => void) | null = null;
+
+export function abortActivePreload(): void {
+  activePreloadAbort?.();
+}
+
 /**
  * QNBS-v3: Explicitly download/warm a local model so users can prepare offline use from Settings.
- * Routes through generateLocalText (worker-first) so it reuses the GPU mutex, inferenceProgressEmitter,
- * and the global LocalAiDownloadProgress modal — the download UX is identical to a real inference.
- * Records tok/s ONLY for a verified WebLLM warm of the requested model, so the perf indicator never
- * reflects a fallback backend.
+ * Routes through generateLocalText (worker-first, adaptive override bypassed) so it reuses the GPU
+ * mutex, inferenceProgressEmitter, and the global LocalAiDownloadProgress modal. The download is
+ * cancellable via abortActivePreload(). Records tok/s + marks ready ONLY for a verified WebLLM warm
+ * of the REQUESTED model, so neither the perf indicator nor the Ready badge reflects a fallback.
  */
 export async function preloadLocalModel(
   modelId: string,
   onProgress?: (report: WebLlmProgressReport) => void,
   signal?: AbortSignal,
 ): Promise<PreloadResult> {
-  const startedAt = performance.now();
-  // QNBS-v3: A minimal prompt forces the weight download + a short warm-up generation.
-  const res = await generateLocalText('Hi', modelId, onProgress, undefined, signal);
-  const elapsedSec = (performance.now() - startedAt) / 1000;
-
-  const downloaded = res.layer === 'webllm' && !isWebLlmLockMessage(res.text);
-  if (downloaded && elapsedSec > 0) {
-    const approxTokens = Math.max(1, Math.round(res.text.length / 4));
-    lastLocalThroughput = {
-      tokensPerSecond: Math.round(approxTokens / elapsedSec),
-      modelId,
-      at: Date.now(),
-    };
+  // QNBS-v3: own the AbortController so both the modal Cancel (abortActivePreload) and a caller
+  //          signal (e.g. unmount) can stop the underlying generation/worker task.
+  const controller = new AbortController();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
-  return { layer: res.layer, modelId, downloaded };
+  activePreloadAbort = () => controller.abort();
+
+  const startedAt = performance.now();
+  try {
+    // QNBS-v3: A minimal prompt forces the weight download + a short warm-up generation.
+    const res = await generateLocalText('Hi', modelId, onProgress, undefined, controller.signal, {
+      bypassAdaptiveModel: true,
+    });
+    const elapsedSec = (performance.now() - startedAt) / 1000;
+
+    const downloaded = res.layer === 'webllm' && !isWebLlmLockMessage(res.text);
+    if (downloaded) {
+      readyLocalModelIds.add(modelId);
+      if (elapsedSec > 0) {
+        const approxTokens = Math.max(1, Math.round(res.text.length / 4));
+        lastLocalThroughput = {
+          tokensPerSecond: Math.round(approxTokens / elapsedSec),
+          modelId,
+          at: Date.now(),
+        };
+      }
+    }
+    return { layer: res.layer, modelId, downloaded };
+  } finally {
+    activePreloadAbort = null;
+  }
 }

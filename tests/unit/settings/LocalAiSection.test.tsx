@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   lastThroughput: vi.fn(
     () => null as null | { tokensPerSecond: number; modelId: string; at: number },
   ),
+  getReady: vi.fn(() => [] as string[]),
+  clearReady: vi.fn(),
+  abortPreload: vi.fn(),
   healthReport: vi.fn(),
   modelRec: vi.fn(() => 'm-small'),
 }));
@@ -55,6 +58,9 @@ vi.mock('../../../services/ai/localModelStorageService', () => ({
 vi.mock('../../../services/localAiFacade', () => ({
   preloadLocalModel: (id: string) => mocks.preload(id),
   getLastLocalThroughput: () => mocks.lastThroughput(),
+  getReadyLocalModelIds: () => mocks.getReady(),
+  clearReadyLocalModels: () => mocks.clearReady(),
+  abortActivePreload: () => mocks.abortPreload(),
 }));
 vi.mock('../../../components/settings/LocalAiDownloadProgress', () => ({
   LocalAiDownloadProgress: () => null,
@@ -68,6 +74,7 @@ beforeEach(() => {
   mocks.estimate.mockResolvedValue(SUPPORTED_ESTIMATE);
   mocks.clear.mockResolvedValue({ clearedCaches: 2 });
   mocks.preload.mockResolvedValue({ layer: 'webllm', modelId: 'm-small', downloaded: true });
+  mocks.getReady.mockReturnValue([]);
   mocks.lastThroughput.mockReturnValue(null);
   mocks.healthReport.mockResolvedValue({ deviceClass: 'mid-range', gpuVramTier: 'medium' });
   mocks.modelRec.mockReturnValue('m-small');
@@ -112,6 +119,12 @@ describe('LocalAiSection', () => {
         'polite',
       ),
     );
+    expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
+  });
+
+  it('restores the Ready badge from session state on mount (survives remount)', async () => {
+    mocks.getReady.mockReturnValue(['m-small']);
+    render(<LocalAiSection />);
     expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
   });
 

@@ -9,6 +9,7 @@ import {
   inferenceProgressEmitter,
   type WebLlmLoadProgress,
 } from '../../services/ai/inferenceProgressEmitter';
+import { abortActivePreload } from '../../services/localAiFacade';
 
 export const LocalAiDownloadProgress: FC = () => {
   const { t } = useTranslation();
@@ -46,6 +47,8 @@ export const LocalAiDownloadProgress: FC = () => {
     : `${progressPct}%`;
 
   function handleCancel() {
+    // QNBS-v3: actually abort the in-flight preload/worker task — not just hide the modal.
+    abortActivePreload();
     gpuResourceManager.releaseGpu('webllm');
     inferenceProgressEmitter.reportWebLlmError(t<string>('settings.ai.localAi.downloadCancelled'));
   }
