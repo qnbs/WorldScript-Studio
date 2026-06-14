@@ -1,4 +1,5 @@
 {
+  "writer.cancelledTag": "Abgebrochen",
   "writer.chapter.label": "Kapitel: {{title}}",
   "writer.context.hide": "Kontext ausblenden",
   "writer.context.label": "Kontext",
@@ -78,6 +79,5 @@
   "writer.tts.start": "Vorlesen",
   "writer.tts.stop": "Vorlesen stoppen",
   "writer.versionControl.label": "Versionen",
-  "writer.versionControl.tooltip": "Versionskontrolle (Zweige & Schnappschüsse)",
-  "writer.cancelledTag": "Abgebrochen"
+  "writer.versionControl.tooltip": "Versionskontrolle (Zweige & Schnappschüsse)"
 }

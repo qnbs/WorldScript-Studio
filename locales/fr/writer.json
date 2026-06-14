@@ -1,4 +1,5 @@
 {
+  "writer.cancelledTag": "Annulé",
   "writer.chapter.label": "Chapitre : {{title}}",
   "writer.context.hide": "Masquer le contexte",
   "writer.context.label": "Contexte",
@@ -78,6 +79,5 @@
   "writer.tts.start": "Lire à haute voix",
   "writer.tts.stop": "Arrêter la lecture",
   "writer.versionControl.label": "Versions",
-  "writer.versionControl.tooltip": "Contrôle de version (branches et instantanés)",
-  "writer.cancelledTag": "Annulé"
+  "writer.versionControl.tooltip": "Contrôle de version (branches et instantanés)"
 }

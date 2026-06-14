@@ -1,4 +1,5 @@
 {
+  "writer.cancelledTag": "Cancelled",
   "writer.chapter.label": "Κεφάλαιο: {{title}}",
   "writer.context.hide": "Απόκρυψη περιβάλλοντος",
   "writer.context.label": "Συμφραζόμενα",
@@ -78,6 +79,5 @@
   "writer.tts.start": "Διαβάστε δυνατά",
   "writer.tts.stop": "Σταμάτα να διαβάζεις",
   "writer.versionControl.label": "εκδόσεις",
-  "writer.versionControl.tooltip": "Έλεγχος έκδοσης (Κλάδοι και στιγμιότυπα)",
-  "writer.cancelledTag": "Cancelled"
+  "writer.versionControl.tooltip": "Έλεγχος έκδοσης (Κλάδοι και στιγμιότυπα)"
 }

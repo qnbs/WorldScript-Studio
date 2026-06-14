@@ -1,4 +1,5 @@
 {
+  "writer.cancelledTag": "Cancelled",
   "writer.chapter.label": "章: {{title}}",
   "writer.context.hide": "コンテキストを隠す",
   "writer.context.label": "コンテクスト",
@@ -78,6 +79,5 @@
   "writer.tts.start": "声に出して読む",
   "writer.tts.stop": "読むのをやめる",
   "writer.versionControl.label": "バージョン",
-  "writer.versionControl.tooltip": "バージョン管理 (ブランチとスナップショット)",
-  "writer.cancelledTag": "Cancelled"
+  "writer.versionControl.tooltip": "バージョン管理 (ブランチとスナップショット)"
 }

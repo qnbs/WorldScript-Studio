@@ -34,6 +34,7 @@ import { VoiceSettingsSection } from './settings/VoiceSettingsSection';
 import { Input } from './ui/Input';
 import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
+import { ViewErrorBoundary } from './ui/ViewErrorBoundary';
 
 // --- SUB-COMPONENTS ---
 
@@ -304,7 +305,11 @@ const SettingsViewUI: FC = () => {
       case 'plugins':
         return <PluginsSection />;
       case 'openrouter':
-        return <OpenRouterSection />;
+        return (
+          <ViewErrorBoundary viewLabel={t('settings.categories.openrouter')}>
+            <OpenRouterSection />
+          </ViewErrorBoundary>
+        );
       case 'lora-adapters':
         return <LoraAdapterSection />;
       case 'project-ai':

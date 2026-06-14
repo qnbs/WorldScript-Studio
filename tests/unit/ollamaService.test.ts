@@ -115,17 +115,19 @@ describe('streamOllama', () => {
     expect(JSON.parse(bodyStr).model).toBe('mistral');
   });
 
-  it('calls onError and throws on fetch failure', async () => {
+  it('throws on fetch failure without firing onError (orchestrator owns onError)', async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError('ECONNREFUSED'));
 
+    // QNBS-v3: the provider only throws; aiProviderService.streamText fires onError once after the
+    // fallback chain is exhausted, so the provider must NOT call onError (avoids double-firing).
     const onError = vi.fn();
     await expect(
       streamOllama('prompt', { model: 'llama3' }, { onChunk: vi.fn(), onError }),
     ).rejects.toThrow('Ollama not reachable');
-    expect(onError).toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
   });
 
-  it('calls onError and throws on non-200 response', async () => {
+  it('throws on non-200 response without firing onError', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response('', { status: 404, statusText: 'Not Found' }),
     );
@@ -134,7 +136,7 @@ describe('streamOllama', () => {
     await expect(
       streamOllama('prompt', { model: 'llama3' }, { onChunk: vi.fn(), onError }),
     ).rejects.toThrow('404');
-    expect(onError).toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it('ignores malformed JSON lines without crashing', async () => {

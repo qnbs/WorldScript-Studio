@@ -92,6 +92,14 @@ export {
 } from './localNlpService';
 export { normalizeOllamaModelId, normalizeOpenAiCompatibleBaseUrl } from './modelNormalization';
 export {
+  clearOpenRouterModelCache,
+  fetchOpenRouterModels,
+  getOpenRouterModelCatalog,
+  isOpenRouterFreeModel,
+  type OpenRouterModel,
+  validateOpenRouterKey,
+} from './openrouterModels';
+export {
   createLanguageModelForStoryCraft,
   providerToKind,
   type StoryCraftLanguageModelConfig,
@@ -99,7 +107,6 @@ export {
 export {
   getApproxRpm,
   isCircuitOpen,
-  isOpenRouterFreeModel,
   OPENROUTER_FREE_MODELS,
   type OpenRouterFreeModel,
   resetOpenRouterCircuit,

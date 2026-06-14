@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { I18nContext } from '../../contexts/I18nContext';
 import { Icon } from './Icon';
 
 export interface SelectOption {
@@ -22,6 +23,9 @@ interface SelectProps {
   ariaLabel?: string;
   disabled?: boolean;
   className?: string;
+  /** QNBS-v3: When true, renders a search input to filter options by label. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }
 
 function useSelectDropdown() {
@@ -50,6 +54,12 @@ function useSelectDropdown() {
   return { isOpen, setIsOpen, containerRef };
 }
 
+function matchesSearch(label: string, query: string): boolean {
+  // QNBS-v3: Trim the query so leading/trailing whitespace doesn't produce a false "no results"
+  // state — a whitespace-only query matches everything (no filter) rather than nothing.
+  return label.toLowerCase().includes(query.trim().toLowerCase());
+}
+
 export const Select = React.memo(
   ({
     id,
@@ -61,8 +71,43 @@ export const Select = React.memo(
     ariaLabel,
     disabled,
     className = '',
+    searchable = false,
+    searchPlaceholder,
   }: SelectProps) => {
+    // QNBS-v3: Graceful fallback when rendered outside an I18nProvider (e.g. isolated unit tests).
+    const i18n = useContext(I18nContext);
+    const t = i18n?.t ?? ((key: string) => key);
     const { isOpen, setIsOpen, containerRef } = useSelectDropdown();
+    const [searchQuery, setSearchQuery] = useState('');
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // QNBS-v3: Reset search whenever the dropdown closes so reopening shows the full list.
+    useEffect(() => {
+      if (!isOpen) setSearchQuery('');
+    }, [isOpen]);
+
+    // QNBS-v3: Focus the search input when the dropdown opens (only when searchable).
+    useEffect(() => {
+      if (isOpen && searchable) {
+        searchInputRef.current?.focus();
+      }
+    }, [isOpen, searchable]);
+
+    const filteredOptions = useMemo(() => {
+      if (!searchable || !searchQuery.trim()) return options;
+      return options?.filter((o) => matchesSearch(o.label, searchQuery));
+    }, [options, searchable, searchQuery]);
+
+    const filteredGroups = useMemo(() => {
+      if (!searchable || !searchQuery.trim()) return groups;
+      return groups
+        ?.map((g) => ({
+          ...g,
+          options: g.options.filter((o) => matchesSearch(o.label, searchQuery)),
+        }))
+        .filter((g) => g.options.length > 0);
+    }, [groups, searchable, searchQuery]);
+
     const selectedLabel =
       options?.find((o) => o.value === value)?.label ??
       groups?.flatMap((g) => g.options).find((o) => o.value === value)?.label;
@@ -72,9 +117,12 @@ export const Select = React.memo(
         if (opt.disabled) return;
         onChange(opt.value);
         setIsOpen(false);
+        setSearchQuery('');
       },
       [onChange, setIsOpen],
     );
+
+    const hasResults = (filteredOptions?.length ?? 0) > 0 || (filteredGroups?.length ?? 0) > 0;
 
     const renderOption = (opt: SelectOption) => {
       const isActive = opt.value === value;
@@ -137,9 +185,28 @@ export const Select = React.memo(
             aria-label={ariaLabel}
             className="absolute top-full left-0 mt-2 w-full max-h-64 overflow-y-auto rounded-sc-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] shadow-[var(--sc-shadow-xl)] z-[var(--sc-z-sticky)]"
           >
+            {searchable && (
+              <div className="px-3 pt-3 pb-1">
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={searchPlaceholder ?? t('common.search')}
+                  aria-label={t('common.search')}
+                  className="w-full px-3 py-1.5 text-sm rounded-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            )}
             <ul className="py-1">
-              {options?.map(renderOption)}
-              {groups?.map((group) => (
+              {!hasResults && searchable && (
+                <li className="px-4 py-2 text-sm text-[var(--sc-text-muted)]">
+                  {t('common.noResults')}
+                </li>
+              )}
+              {filteredOptions?.map(renderOption)}
+              {filteredGroups?.map((group) => (
                 <React.Fragment key={group.label}>
                   <li className="px-4 py-1.5 text-xs font-semibold text-[var(--sc-text-muted)] uppercase tracking-wide">
                     {group.label}
