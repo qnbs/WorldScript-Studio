@@ -262,4 +262,33 @@ describe('localAiFacade', () => {
     await p;
     expect(isLocalAiBusy()).toBe(false);
   });
+
+  it('an older preload finishing does not clobber a newer preload cancel hook', async () => {
+    const { preloadLocalModel, abortActivePreload } = await import('../../services/localAiFacade');
+    const signals: AbortSignal[] = [];
+    const resolvers: Array<(v: { layer: string; text: string }) => void> = [];
+    // Capture each call's signal; keep both generations pending.
+    mockRunLocalTextGeneration.mockImplementation(
+      (_p: string, _m: string | undefined, _op: unknown, signal: AbortSignal) => {
+        signals.push(signal);
+        return new Promise((res) => resolvers.push(res));
+      },
+    );
+
+    const pA = preloadLocalModel('A');
+    await Promise.resolve();
+    const pB = preloadLocalModel('B'); // newer → owns the active cancel hook
+    await Promise.resolve();
+
+    // Older A resolves first; its finally must NOT clear B's still-active hook.
+    resolvers[0]?.({ layer: 'onnx', text: 'a' });
+    await pA;
+
+    expect(signals[1]?.aborted).toBe(false);
+    abortActivePreload(); // must still abort B
+    expect(signals[1]?.aborted).toBe(true);
+
+    resolvers[1]?.({ layer: 'onnx', text: 'b' });
+    await pB;
+  });
 });

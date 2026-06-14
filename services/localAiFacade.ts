@@ -331,7 +331,10 @@ export async function preloadLocalModel(
     if (signal.aborted) controller.abort();
     else signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
-  activePreloadAbort = () => controller.abort();
+  // QNBS-v3: capture our own hook so an older preload finishing later can't null out a newer
+  //          preload's cancel hook — only clear it in finally if it's still ours (identity guard).
+  const abortHook = () => controller.abort();
+  activePreloadAbort = abortHook;
 
   const startedAt = performance.now();
   try {
@@ -355,6 +358,6 @@ export async function preloadLocalModel(
     }
     return { layer: res.layer, modelId, downloaded };
   } finally {
-    activePreloadAbort = null;
+    if (activePreloadAbort === abortHook) activePreloadAbort = null;
   }
 }
