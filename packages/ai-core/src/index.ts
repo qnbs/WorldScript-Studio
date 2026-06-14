@@ -235,7 +235,7 @@ async function runWebLlmLayer(
   if (signal?.aborted) throw new Error('Aborted');
   // QNBS-v3: Only one tab loads WebLLM — avoids GPU/RAM collision across multiple StoryCraft tabs.
   if (!hasWebGpu || !gpuTabLeader) return null;
-  const mod = await import('@mlc-ai/web-llm');
+  const mod = await import('./vendor-webllm');
   type EngineModule = typeof mod & {
     CreateMLCEngine?: (
       model: string,
@@ -279,7 +279,7 @@ async function runTransformersLayer(
   signal?: AbortSignal,
 ): Promise<string | null> {
   if (signal?.aborted) throw new Error('Aborted');
-  const { pipeline, env } = await import('@huggingface/transformers');
+  const { pipeline, env } = await import('./vendor-transformers');
   if (typeof pipeline !== 'function') return null;
   interface XenovaEnv {
     backends?: { onnx?: { wasm?: { proxy?: boolean } } };

@@ -118,7 +118,7 @@ export async function getOnnxSession(
   }
 
   try {
-    const ort = (await import('onnxruntime-web')) as unknown as OrtModule;
+    const ort = (await import('./vendor-onnx')) as unknown as OrtModule;
 
     // Configure WASM for best performance
     ort.env.wasm.numThreads = 1; // Low-end safe: single thread to avoid jank
@@ -154,7 +154,7 @@ export async function runOnnxInference(
   inputShapes: Record<string, number[]>,
 ): Promise<Record<string, OrtTensor> | null> {
   try {
-    const ort = (await import('onnxruntime-web')) as unknown as OrtModule;
+    const ort = (await import('./vendor-onnx')) as unknown as OrtModule;
     const feeds: Record<string, OrtTensor> = {};
 
     for (const [name, data] of Object.entries(inputs)) {

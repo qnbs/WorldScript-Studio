@@ -72,11 +72,13 @@ export default defineConfig({
           'community-templates/**/*.json',
           'locales/**/bundle.json',
         ],
-        // QNBS-v3: Exclude DuckDB, WebLLM, AI-Core, and voice WASM chunks from SW precache — loaded lazily when flag=on.
+        // QNBS-v3: Exclude heavy optional chunks from SW precache — loaded lazily when flag=on.
+        // vendor-ai-core is now the small orchestration layer and can be precached.
         globIgnores: [
           '**/vendor-duckdb*',
           '**/vendor-webllm*',
-          '**/vendor-ai-core*',
+          '**/vendor-onnx*',
+          '**/vendor-transformers*',
           '**/vendor-voice-wasm*',
           '**/*.wasm',
         ],
@@ -128,7 +130,7 @@ export default defineConfig({
       resolveDependencies: (_filename: string, deps: string[]) =>
         deps.filter(
           (d) =>
-            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx|vendor-webllm|vendor-voice-wasm|vendor-ai-core/.test(
+            !/ai-vendor|ai-sdk-vendor|export-vendor|data-vendor|collaboration-vendor|plot-board|canvas-vendor|vendor-duckdb|vendor-ai-onnx|vendor-webllm|vendor-onnx|vendor-transformers|vendor-voice-wasm|vendor-ai-core/.test(
               d,
             ),
         ),
@@ -147,18 +149,40 @@ export default defineConfig({
         // Code splitting for better load times
         manualChunks: (id) => {
           // QNBS-v3: Workspace packages - handle before node_modules check
-          // @domain/ai-core contains WebLLM/ONNX/Transformers which are ~6 MB combined
-          // Match workspace source path and resolved pnpm paths
+          // Proxy entry files for heavy AI runtimes — route to dedicated chunks.
+          if (id.includes('packages/ai-core/src/vendor-webllm')) {
+            return 'vendor-webllm';
+          }
+          if (id.includes('packages/ai-core/src/vendor-transformers')) {
+            return 'vendor-transformers';
+          }
+          if (id.includes('packages/ai-core/src/vendor-onnx')) {
+            return 'vendor-onnx';
+          }
+          // QNBS-v3: Heavy AI runtimes route to dedicated lazy chunks. These MUST match BEFORE the
+          // @domain/ai-core source catch-all below — otherwise deps resolved under
+          // packages/ai-core/node_modules/* get swept into the precacheable vendor-ai-core chunk,
+          // re-bloating it and defeating lazy-loading (CodeAnt PR #130). The generic
+          // `node_modules/<pkg>` substring already covers the packages/ai-core/node_modules/<pkg> case.
+          // WebLLM runtime (~4-5 MB uncompressed) — lazy-loaded when local GPU inference is requested.
+          if (id.includes('.pnpm/@mlc-ai+web-llm') || id.includes('node_modules/@mlc-ai/web-llm')) {
+            return 'vendor-webllm';
+          }
+          // ONNX Runtime Web (~0.5 MB uncompressed) — shared by transformers.js and the ONNX engine.
+          if (id.includes('.pnpm/onnxruntime-web') || id.includes('node_modules/onnxruntime-web')) {
+            return 'vendor-onnx';
+          }
+          // Transformers.js (~1 MB uncompressed) — lazy-loaded for WASM text-generation fallback.
           if (
-            id.includes('packages/ai-core') ||
-            id.includes('.pnpm/@domain+ai-core') ||
-            id.includes('.pnpm/@mlc-ai+web-llm') ||
             id.includes('.pnpm/@huggingface+transformers') ||
-            id.includes('.pnpm/onnxruntime-web') ||
-            id.includes('node_modules/@mlc-ai/web-llm') ||
-            id.includes('node_modules/@huggingface/transformers') ||
-            id.includes('node_modules/onnxruntime-web')
+            id.includes('node_modules/@huggingface/transformers')
           ) {
+            return 'vendor-transformers';
+          }
+          // @domain/ai-core source code (orchestration, tab leader, model lists) — small and
+          // precacheable. Heavy runtimes are already routed above, so this only captures ai-core
+          // source plus any lightweight deps it pulls in.
+          if (id.includes('packages/ai-core') || id.includes('.pnpm/@domain+ai-core')) {
             return 'vendor-ai-core';
           }
           if (id.includes('packages/collab-transport')) {

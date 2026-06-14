@@ -3,8 +3,8 @@
  * Bundle-budget gate (audit finding F-8 — single source of truth).
  *
  * Two independent ceilings, both measured on RAW (uncompressed) per-file KB under dist/assets:
- *   --max-kb       (default 6500): any NON-entry JS chunk (`lib-*`, vendor, lazy views).
- *   --max-entry-kb (default 4000): the `index-*` entry chunk only.
+ *   --max-kb       (default 6200): any NON-entry JS chunk (`lib-*`, vendor, lazy views).
+ *   --max-entry-kb (default 2500): the `index-*` entry chunk only.
  *
  * The package.json `bundle:budget` script passes these same values explicitly — defaults and
  * invocation are kept in lockstep so there is ONE budget, not two. Do not diverge them.
@@ -26,8 +26,8 @@ const root = path.join(__dirname, '..');
 const assetsDir = path.join(root, 'dist', 'assets');
 
 const argv = process.argv.slice(2);
-let maxKb = 6500;
-let maxEntryKb = 4000;
+let maxKb = 6200;
+let maxEntryKb = 2500;
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--max-kb' && argv[i + 1]) {
     maxKb = Number(argv[i + 1]);
