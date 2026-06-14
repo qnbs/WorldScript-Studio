@@ -79,6 +79,19 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
   return { ...opts, signal };
 }
 
+// QNBS-v3: True for a user/abort-signal cancellation, regardless of how the provider surfaced it
+// (DOMException or a plain Error named 'AbortError'). Used to treat cancels as a silent stop, not
+// a provider failure that would trigger fallback + a terminal onError callback.
+function isAbortError(error: unknown): boolean {
+  // QNBS-v3: Match both Error and DOMException named 'AbortError' (DOMException is not always an
+  // instanceof Error across runtimes), so a thrown abort is recognized regardless of its class.
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 // QNBS-v3: Providers that run on-device — excluded from cloud-policy gate and ai-mode override.
 const _LOCAL_INFERENCE_PROVIDERS = new Set<string>(['webllm', 'onnx', 'transformers', 'ollama']);
 
@@ -575,13 +588,26 @@ export async function streamText(
         );
         return;
       } catch (error) {
+        // QNBS-v3: A user-cancelled request is NOT a provider failure. Don't fall back to the next
+        // provider and don't fire a terminal onError — surface the cancellation directly so callers
+        // run their silent cancel flow instead of an error path.
+        if (isAbortError(error) || o.signal?.aborted || signal?.aborted) {
+          throw error instanceof Error ? error : new Error(String(error));
+        }
         lastError = error;
         if (i === chain.length - 1) {
-          throw error;
+          // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after
+          // the whole fallback chain is exhausted, so a failing provider never surfaces a terminal
+          // error callback while a subsequent fallback provider is still about to succeed.
+          const terminal = error instanceof Error ? error : new Error(String(error));
+          callbacks.onError?.(terminal);
+          throw terminal;
         }
       }
     }
-    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
+    callbacks.onError?.(terminal);
+    throw terminal;
   } finally {
     _cleanupPendingRequest(key, controller);
   }

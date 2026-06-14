@@ -1,4 +1,5 @@
 {
+  "writer.cancelledTag": "Cancelled",
   "writer.chapter.label": "章节：{{title}}",
   "writer.context.hide": "隐藏上下文",
   "writer.context.label": "语境",
@@ -78,6 +79,5 @@
   "writer.tts.start": "大声朗读",
   "writer.tts.stop": "停止阅读",
   "writer.versionControl.label": "版本",
-  "writer.versionControl.tooltip": "版本控制（分支和快照）",
-  "writer.cancelledTag": "Cancelled"
+  "writer.versionControl.tooltip": "版本控制（分支和快照）"
 }

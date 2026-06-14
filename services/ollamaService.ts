@@ -96,20 +96,21 @@ export async function streamOllama(
       `Ollama not reachable (${baseUrl}). Make sure Ollama is running: ollama serve`,
       { cause: err as Error },
     );
-    callbacks.onError?.(error);
+    // QNBS-v3: Only throw — do NOT call callbacks.onError here. The orchestration layer
+    // (aiProviderService.streamText) owns the onError contract and fires it once after the whole
+    // fallback chain is exhausted, so a failing Ollama attempt that falls back doesn't double-fire
+    // (and a terminal failure isn't reported twice).
     throw error;
   }
 
   if (!response.ok) {
     const error = new Error(`Ollama API Error ${response.status}: ${response.statusText}`);
-    callbacks.onError?.(error);
     throw error;
   }
 
   const reader = response.body?.getReader();
   if (!reader) {
     const error = new Error('Ollama: Kein Response-Body');
-    callbacks.onError?.(error);
     throw error;
   }
 

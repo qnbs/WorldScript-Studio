@@ -196,17 +196,19 @@ describe('streamOpenRouter()', () => {
     );
   });
 
-  it('stops reading when signal is aborted', async () => {
-    const callbacks: AIStreamCallbacks = { onChunk: vi.fn() };
+  it('throws an abort error and does not complete when the signal is aborted', async () => {
+    const onDone = vi.fn();
+    const callbacks: AIStreamCallbacks = { onChunk: vi.fn(), onDone };
     global.fetch = vi.fn().mockResolvedValue(makeStreamResponse([sseLine('a'), sseLine('b')]));
 
     const controller = new AbortController();
     const opts: AIRequestOptions = { ...baseOpts, signal: controller.signal };
 
-    // Abort before reading starts
+    // Abort before reading starts — a cancelled request must not be reported as a success.
     controller.abort();
-    await streamOpenRouter('x', opts, callbacks, 'key');
+    await expect(streamOpenRouter('x', opts, callbacks, 'key')).rejects.toThrow(/abort/i);
     expect(callbacks.onChunk).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('skips malformed SSE chunks', async () => {

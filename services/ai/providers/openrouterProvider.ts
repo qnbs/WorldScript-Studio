@@ -11,6 +11,7 @@
  * - Circuit breaker: after 4 consecutive 429s → block for 5 min
  * - Usage counter: tracks RPM approximation for UX indicator
  * - Structured routing log on every decision
+ * - Circuit-breaker state mirrored to localStorage so a reload does not forget a rate-limit pause.
  *
  * Endpoint: https://openrouter.ai/api/v1/chat/completions
  * Headers: HTTP-Referer + X-Title (OpenRouter ranking / credits)
@@ -20,6 +21,7 @@
 import type { AIRequestOptions, AIStreamCallbacks } from '../../aiProviderService';
 import { sanitizePromptValue } from '../../aiUtils';
 import { createLogger } from '../../logger';
+import { isOpenRouterFreeModel } from '../openrouterModels';
 
 const logger = createLogger('openrouter-provider');
 
@@ -41,45 +43,113 @@ export const OPENROUTER_FREE_MODELS = [
 
 export type OpenRouterFreeModel = (typeof OPENROUTER_FREE_MODELS)[number];
 
-export function isOpenRouterFreeModel(model: string): boolean {
-  return model.endsWith(':free');
-}
+export { isOpenRouterFreeModel };
 
 // ─── Circuit breaker ─────────────────────────────────────────────────────────
 
 const MAX_CONSECUTIVE_429 = 4;
 const CIRCUIT_OPEN_MS = 5 * 60 * 1000; // 5 minutes
+const CB_STORAGE_KEY = 'storycraft-or-cb-state';
+
+// QNBS-v3: Only the pause deadline is persisted. The "consecutive" 429 counter is deliberately
+// NOT persisted — restoring it would let a stale count survive a long idle period so that a single
+// later 429 trips the circuit as if the failures were contiguous. The counter is in-memory only.
+interface CircuitBreakerState {
+  circuitOpenUntil: number;
+}
 
 let _consecutive429 = 0;
 let _circuitOpenUntil = 0;
+let _cbInitialized = false;
+
+function isBrowser(): boolean {
+  return typeof window !== 'undefined' && window.localStorage !== undefined;
+}
+
+function readCircuitStateFromStorage(): CircuitBreakerState | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(CB_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CircuitBreakerState;
+    if (typeof parsed.circuitOpenUntil !== 'number') {
+      return null;
+    }
+    return { circuitOpenUntil: parsed.circuitOpenUntil };
+  } catch {
+    return null;
+  }
+}
+
+function writeCircuitStateToStorage(): void {
+  if (!isBrowser()) return;
+  try {
+    const state: CircuitBreakerState = { circuitOpenUntil: _circuitOpenUntil };
+    window.localStorage.setItem(CB_STORAGE_KEY, JSON.stringify(state));
+  } catch (err) {
+    logger.warn('Failed to persist OpenRouter circuit state', { error: String(err) });
+  }
+}
+
+function initCircuitState(): void {
+  if (_cbInitialized) return;
+  _cbInitialized = true;
+  const stored = readCircuitStateFromStorage();
+  if (stored) {
+    // QNBS-v3: Restore only the pause deadline; the consecutive counter stays at 0 so it can't
+    // carry stale non-contiguous failures across a reload.
+    _circuitOpenUntil = stored.circuitOpenUntil;
+  }
+}
 
 export function isCircuitOpen(): boolean {
+  initCircuitState();
   if (_circuitOpenUntil === 0) return false;
   if (Date.now() >= _circuitOpenUntil) {
     // QNBS-v3: Auto-reset after cooldown.
     _circuitOpenUntil = 0;
     _consecutive429 = 0;
+    writeCircuitStateToStorage();
     return false;
   }
   return true;
 }
 
 function recordSuccess(): void {
+  initCircuitState();
   _consecutive429 = 0;
+  writeCircuitStateToStorage();
 }
 
 function recordRateLimit(): void {
+  initCircuitState();
   _consecutive429 += 1;
   if (_consecutive429 >= MAX_CONSECUTIVE_429) {
     _circuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
     logger.warn('OpenRouter circuit breaker OPEN — too many 429s; pausing for 5 minutes');
   }
+  writeCircuitStateToStorage();
 }
 
 /** Reset circuit breaker state (used by tests and Settings "Reset" action). */
 export function resetOpenRouterCircuit(): void {
   _consecutive429 = 0;
   _circuitOpenUntil = 0;
+  writeCircuitStateToStorage();
+}
+
+/** Test-only helper to clear the in-memory and persisted circuit state. */
+export function __resetOpenRouterCircuitForTest(): void {
+  _consecutive429 = 0;
+  _circuitOpenUntil = 0;
+  _cbInitialized = false;
+  if (isBrowser()) {
+    try {
+      window.localStorage.removeItem(CB_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 // ─── Usage approximation ──────────────────────────────────────────────────────
@@ -87,21 +157,31 @@ export function resetOpenRouterCircuit(): void {
 
 const _requestTimestamps: number[] = [];
 
-function recordRequest(): void {
-  const now = Date.now();
-  _requestTimestamps.push(now);
-  // Keep only timestamps within the last 60 seconds.
+function trimOldRequests(now: number): void {
   const cutoff = now - 60_000;
   while (_requestTimestamps.length > 0 && (_requestTimestamps[0] ?? 0) < cutoff) {
     _requestTimestamps.shift();
   }
 }
 
+function recordRequest(): void {
+  const now = Date.now();
+  _requestTimestamps.push(now);
+  // QNBS-v3: Trim on every request so the array cannot grow unbounded when
+  // getApproxRpm() is never called.
+  trimOldRequests(now);
+}
+
 /** Approximate requests-per-minute in the last 60 seconds. */
 export function getApproxRpm(): number {
   const now = Date.now();
-  const cutoff = now - 60_000;
-  return _requestTimestamps.filter((t) => t >= cutoff).length;
+  trimOldRequests(now);
+  return _requestTimestamps.length;
+}
+
+/** Test-only helper to clear the RPM window. */
+export function __resetRequestTimestampsForTest(): void {
+  _requestTimestamps.length = 0;
 }
 
 // ─── Retry + backoff helpers ─────────────────────────────────────────────────
@@ -163,7 +243,40 @@ function buildHeaders(apiKey: string): Record<string, string> {
   };
 }
 
+interface OpenRouterRequestBody {
+  model: string;
+  messages: Array<{ role: string; content: string }>;
+  temperature: number;
+  max_tokens: number;
+  stream: boolean;
+}
+
+function buildRequestBody(
+  prompt: string,
+  opts: AIRequestOptions,
+  stream: boolean,
+): OpenRouterRequestBody {
+  return {
+    model: opts.model,
+    messages: buildMessages(prompt, opts.systemPrompt),
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? 2048,
+    stream,
+  };
+}
+
+function enrichErrorWithStatus(err: unknown, status: number): Error {
+  if (err instanceof Error) {
+    (err as Error & { status?: number }).status = status;
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 // ─── Streaming generation ─────────────────────────────────────────────────────
+// QNBS-v3: streamOpenRouter intentionally does NOT invoke callbacks.onError — it only
+// throws. The orchestration layer (aiProviderService.streamText) owns the onError contract
+// and fires it once, after the whole fallback chain is exhausted, so callers never receive
+// a terminal error callback while a fallback provider is still about to succeed.
 
 /** SSE-streaming OpenRouter completion with retry + backoff + circuit breaker. */
 export async function streamOpenRouter(
@@ -173,34 +286,30 @@ export async function streamOpenRouter(
   apiKey: string,
 ): Promise<void> {
   if (isCircuitOpen()) {
-    throw new Error(
+    const err = new Error(
       'OPENROUTER_CIRCUIT_OPEN: Provider temporarily paused due to repeated rate limits. Using fallback provider.',
     );
+    throw err;
   }
 
-  const messages = buildMessages(prompt, opts.systemPrompt);
+  const body = buildRequestBody(prompt, opts, true);
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     recordRequest();
     const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: buildHeaders(apiKey),
-      body: JSON.stringify({
-        model: opts.model,
-        stream: true,
-        messages,
-        temperature: opts.temperature ?? 0.7,
-        max_tokens: opts.maxTokens ?? 2048,
-      }),
+      body: JSON.stringify(body),
       signal: opts.signal ?? null,
     });
 
     if (res.status === 429) {
       recordRateLimit();
       if (attempt === MAX_RETRIES) {
-        throw new Error(
+        const err = new Error(
           'OPENROUTER_RATE_LIMITED: Rate limit persistent after retries. Falling back to next provider.',
         );
+        throw err;
       }
       const backoff = computeBackoffMs(attempt, res.headers.get('retry-after'));
       logger.warn(
@@ -213,36 +322,55 @@ export async function streamOpenRouter(
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
       const msg = (errBody as { error?: { message?: string } })?.error?.message ?? res.statusText;
-      throw new Error(`OpenRouter API Error ${res.status}: ${msg}`);
+      const err = enrichErrorWithStatus(
+        new Error(`OpenRouter API Error ${res.status}: ${msg}`),
+        res.status,
+      );
+      throw err;
     }
 
     const reader = res.body?.getReader();
-    if (!reader) throw new Error('OpenRouter: No response body');
+    if (!reader) {
+      const err = new Error('OpenRouter: No response body');
+      throw err;
+    }
 
     const decoder = new TextDecoder();
     let buffer = '';
 
-    while (true) {
-      if (opts.signal?.aborted) break;
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+    try {
+      while (true) {
+        if (opts.signal?.aborted) break;
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
-      for (const line of lines) {
-        if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
-        try {
-          const json = JSON.parse(line.slice(6)) as {
-            choices?: Array<{ delta?: { content?: string } }>;
-          };
-          const delta = json?.choices?.[0]?.delta?.content ?? '';
-          if (delta) callbacks.onChunk(delta);
-        } catch {
-          // malformed SSE chunk — skip
+        for (const line of lines) {
+          if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+          try {
+            const json = JSON.parse(line.slice(6)) as {
+              choices?: Array<{ delta?: { content?: string } }>;
+            };
+            const delta = json?.choices?.[0]?.delta?.content ?? '';
+            if (delta) callbacks.onChunk(delta);
+          } catch {
+            // malformed SSE chunk — skip
+          }
         }
       }
+    } catch (readErr) {
+      const err = readErr instanceof Error ? readErr : new Error(String(readErr));
+      throw err;
+    }
+
+    // QNBS-v3: A request cancelled mid-stream is NOT a successful completion — exit via the abort
+    // error path instead of recording success / firing onDone, so callers don't run downstream
+    // completion flows for a request the user (or a newer request) cancelled.
+    if (opts.signal?.aborted) {
+      throw new DOMException('OpenRouter stream aborted', 'AbortError');
     }
 
     recordSuccess();
@@ -265,7 +393,7 @@ export async function generateOpenRouterText(
     );
   }
 
-  const messages = buildMessages(prompt, opts.systemPrompt);
+  const body = buildRequestBody(prompt, opts, false);
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const callStart = performance.now();
@@ -274,12 +402,7 @@ export async function generateOpenRouterText(
     const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: buildHeaders(apiKey),
-      body: JSON.stringify({
-        model: opts.model,
-        messages,
-        temperature: opts.temperature ?? 0.7,
-        max_tokens: opts.maxTokens ?? 2048,
-      }),
+      body: JSON.stringify(body),
       signal: opts.signal ?? null,
     });
 
