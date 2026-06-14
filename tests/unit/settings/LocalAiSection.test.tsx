@@ -125,9 +125,27 @@ describe('LocalAiSection', () => {
     expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
   });
 
-  it('restores the Ready badge from session state on mount (survives remount)', async () => {
+  it('restores the Ready badge from the session source across an unmount/remount', async () => {
+    const user = userEvent.setup();
+    // First visit: nothing ready yet.
+    mocks.getReady.mockReturnValue([]);
+    const { unmount } = render(<LocalAiSection />);
+    await screen.findByText('settings.ai.localAi.webgpuAvailable');
+    expect(screen.queryByText('settings.ai.localAi.readyBadge')).not.toBeInTheDocument();
+
+    // Download m-small → it becomes ready in this session.
+    await user.click(screen.getAllByText('settings.ai.localAi.downloadButton')[0]!);
+    expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
+
+    // The module-level session set now records it (what preloadLocalModel does in real code).
     mocks.getReady.mockReturnValue(['m-small']);
+
+    // Navigate away (unmount) and back (fresh remount) — local React state is gone…
+    unmount();
+    expect(screen.queryByText('settings.ai.localAi.readyBadge')).not.toBeInTheDocument();
     render(<LocalAiSection />);
+
+    // …but the badge is restored from the session source on the new mount.
     expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
   });
 
