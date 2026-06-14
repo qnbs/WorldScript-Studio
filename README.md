@@ -724,6 +724,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/history/sprints/SPRINT-V1.9.md`](docs/history/sprints/SPRINT-V1.9.md) | Sprint reference: v1.9 lazy loading, Help/Settings hub, Tauri desktop UX |
 | [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md) | Sprint reference: v1.10 mobile UX, coverage 55 %, deploy & help expansion |
 | [`docs/COPILOT.md`](docs/COPILOT.md) | Global AI Copilot v2 — panel modes, heuristics, Apply-to-chapter, ProForge integration |
+| [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md) | Local AI setup & troubleshooting — WebGPU/WASM requirements, model downloads, storage management, fallback chain |
 | [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md) | Heuristic Rules Reference — 8 built-in manuscript analysis rules, how-to-satisfy guidance |
 | [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge Ultimate Author Pipeline — 8-stage agentic editing system architecture |
 | [`docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0/v1.18.1 ProForge Humanization & Refinement + TypeScript strict-mode sweep |

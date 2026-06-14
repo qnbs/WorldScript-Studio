@@ -1,0 +1,376 @@
+// QNBS-v3: "Local AI" settings section — makes on-device inference legible & controllable.
+//          Surfaces device capability, per-model download with storage warnings, on-disk cache
+//          management ("Clear Local Models"), the fallback chain, and last-measured throughput.
+//          Reuses existing services; the only new logic is localModelStorageService.
+
+import {
+  detectWebGpuSupport,
+  listCachedWebLlmEngines,
+  WEBLLM_SUPPORTED_MODELS,
+} from '@domain/ai-core';
+import type { FC } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useAnnounce } from '../../contexts/LiveRegionContext';
+import { useTranslation } from '../../hooks/useTranslation';
+import {
+  type DeviceClass,
+  type DeviceHealthReport,
+  getHealthReport,
+  getModelRecommendation,
+} from '../../services/ai/deviceHealthService';
+import {
+  clearLocalModels,
+  estimateLocalModelStorage,
+  type LocalModelStorageEstimate,
+  WEBLLM_MODEL_APPROX_MB,
+} from '../../services/ai/localModelStorageService';
+import {
+  getLastLocalThroughput,
+  type LocalThroughputSample,
+  preloadLocalModel,
+} from '../../services/localAiFacade';
+import { Card, CardContent, CardHeader } from '../ui/Card';
+import { LocalAiDownloadProgress } from './LocalAiDownloadProgress';
+
+const DEVICE_CLASS_KEY: Record<DeviceClass, string> = {
+  'high-end': 'settings.ai.gpu.deviceHighEnd',
+  'mid-range': 'settings.ai.gpu.deviceMidRange',
+  'low-end': 'settings.ai.gpu.deviceLowEnd',
+  unknown: 'settings.ai.gpu.deviceUnknown',
+};
+
+// QNBS-v3: The four local-inference layers, in the exact order runLocalTextGeneration tries them.
+const FALLBACK_LAYER_KEYS = [
+  'settings.ai.localAi.fallbackLayer1',
+  'settings.ai.localAi.fallbackLayer2',
+  'settings.ai.localAi.fallbackLayer3',
+  'settings.ai.localAi.fallbackLayer4',
+] as const;
+
+function modelLabel(id: string): string {
+  return WEBLLM_SUPPORTED_MODELS.find((m) => m.id === id)?.label ?? id;
+}
+
+export const LocalAiSection: FC = () => {
+  const { t } = useTranslation();
+  const announce = useAnnounce();
+
+  const [hasWebGpu] = useState<boolean>(() => {
+    try {
+      return detectWebGpuSupport();
+    } catch {
+      return false;
+    }
+  });
+  const [report, setReport] = useState<DeviceHealthReport | null>(null);
+  const [storage, setStorage] = useState<LocalModelStorageEstimate | null>(null);
+  const [readyIds, setReadyIds] = useState<Set<string>>(new Set());
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const [throughput, setThroughput] = useState<LocalThroughputSample | null>(null);
+
+  const refreshStorage = useCallback(async () => {
+    setStorage(await estimateLocalModelStorage());
+  }, []);
+
+  const refreshReady = useCallback(() => {
+    setReadyIds(new Set(listCachedWebLlmEngines().map((e) => e.modelId)));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const r = await getHealthReport();
+      if (active) setReport(r);
+    })();
+    void refreshStorage();
+    refreshReady();
+    setThroughput(getLastLocalThroughput());
+    return () => {
+      active = false;
+    };
+  }, [refreshStorage, refreshReady]);
+
+  const handleDownload = useCallback(
+    async (modelId: string) => {
+      setDownloadingId(modelId);
+      try {
+        const ready = await preloadLocalModel(modelId);
+        setReadyIds((prev) => (ready ? new Set(prev).add(modelId) : prev));
+        setThroughput(getLastLocalThroughput());
+        void refreshStorage();
+        if (ready) {
+          announce(
+            t('settings.ai.localAi.modelReadyAnnounce', { model: modelLabel(modelId) }),
+            'polite',
+          );
+        }
+      } finally {
+        setDownloadingId(null);
+      }
+    },
+    [announce, t, refreshStorage],
+  );
+
+  const handleClear = useCallback(async () => {
+    setClearing(true);
+    try {
+      const { clearedCaches } = await clearLocalModels();
+      refreshReady();
+      await refreshStorage();
+      announce(
+        t('settings.ai.localAi.clearedAnnounce', { count: String(clearedCaches) }),
+        'polite',
+      );
+    } finally {
+      setClearing(false);
+      setConfirmingClear(false);
+    }
+  }, [announce, t, refreshReady, refreshStorage]);
+
+  const deviceClassText = report ? t(DEVICE_CLASS_KEY[report.deviceClass]) : '';
+  const recommendedId = report ? getModelRecommendation('text-gen', report) : null;
+  const freeMb = storage?.freeMb ?? null;
+
+  return (
+    <div className="space-y-6">
+      {/* QNBS-v3: mounted here too so the download modal overlays while on the Local AI page
+          (it subscribes to the singleton emitter; only one Settings category renders at a time). */}
+      <LocalAiDownloadProgress />
+
+      {/* ── Capability ─────────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-base font-semibold text-[var(--sc-text-primary)]">
+            {t('settings.ai.localAi.sectionTitle')}
+          </h2>
+          <p className="mt-1 text-sm text-[var(--sc-text-secondary)]">
+            {t('settings.ai.localAi.sectionDescription')}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="flex items-center justify-between rounded-lg bg-[var(--sc-surface-overlay)] px-3 py-2">
+              <dt className="text-xs text-[var(--sc-text-muted)]">
+                {t('settings.ai.localAi.webgpuLabel')}
+              </dt>
+              <dd
+                className={`text-sm font-medium ${hasWebGpu ? 'text-[var(--sc-success-fg)]' : 'text-[var(--sc-warning-fg)]'}`}
+              >
+                {hasWebGpu
+                  ? t('settings.ai.localAi.webgpuAvailable')
+                  : t('settings.ai.localAi.webgpuUnavailable')}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-[var(--sc-surface-overlay)] px-3 py-2">
+              <dt className="text-xs text-[var(--sc-text-muted)]">
+                {t('settings.ai.localAi.deviceClassLabel')}
+              </dt>
+              <dd className="text-sm font-medium text-[var(--sc-text-primary)]">
+                {deviceClassText || '—'}
+              </dd>
+            </div>
+          </dl>
+
+          {recommendedId && (
+            <p className="text-sm text-[var(--sc-text-secondary)]">
+              {t('settings.ai.localAi.recommendedModel', { model: modelLabel(recommendedId) })}
+            </p>
+          )}
+
+          {readyIds.size === 0 && (
+            <p className="rounded-lg bg-[var(--sc-info-bg)] px-3 py-2 text-xs leading-relaxed text-[var(--sc-info-fg)]">
+              {t('settings.ai.localAi.onboardingHint')}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Model manager ──────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <h3 className="text-base font-semibold text-[var(--sc-text-primary)]">
+            {t('settings.ai.localAi.modelsTitle')}
+          </h3>
+          <p className="mt-1 text-sm text-[var(--sc-text-secondary)]">
+            {t('settings.ai.localAi.modelsDescription')}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-2">
+            {WEBLLM_SUPPORTED_MODELS.map((m) => {
+              const approxMb = WEBLLM_MODEL_APPROX_MB[m.id] ?? 0;
+              const tooLarge = freeMb !== null && approxMb > 0 && approxMb > freeMb;
+              const isReady = readyIds.has(m.id);
+              const isDownloading = downloadingId === m.id;
+              const disabled = isDownloading || downloadingId !== null || clearing;
+              return (
+                <li
+                  key={m.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--sc-border-subtle)] px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-[var(--sc-text-primary)]">
+                      {m.label}
+                    </p>
+                    {tooLarge && (
+                      <p className="mt-0.5 text-xs text-[var(--sc-warning-fg)]">
+                        {t('settings.ai.localAi.sizeWarning', {
+                          size: String(approxMb),
+                          free: String(freeMb),
+                        })}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isReady && (
+                      <span className="rounded-full bg-[var(--sc-success-bg)] px-2 py-0.5 text-xs font-medium text-[var(--sc-success-fg)]">
+                        {t('settings.ai.localAi.readyBadge')}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleDownload(m.id)}
+                      disabled={disabled}
+                      className="rounded-lg border border-[var(--sc-border-subtle)] px-3 py-1.5 text-xs font-medium text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+                    >
+                      {isDownloading
+                        ? t('settings.ai.localAi.downloadingButton')
+                        : t('settings.ai.localAi.downloadButton')}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {!hasWebGpu && (
+            <p className="mt-3 text-xs text-[var(--sc-text-muted)]">
+              {t('settings.ai.localAi.requiresGpuNote')}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Storage management ─────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <h3 className="text-base font-semibold text-[var(--sc-text-primary)]">
+            {t('settings.ai.localAi.storageTitle')}
+          </h3>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {storage?.supported ? (
+            <>
+              <p className="text-sm text-[var(--sc-text-secondary)]">
+                {t('settings.ai.localAi.storageUsage', {
+                  used: String(storage.usageMb),
+                  quota: String(storage.quotaMb),
+                  percent: String(storage.usagePercent),
+                })}
+              </p>
+              <div
+                role="progressbar"
+                aria-valuenow={storage.usagePercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={t('settings.ai.localAi.storageAriaLabel')}
+                className="h-2 w-full overflow-hidden rounded-full bg-[var(--sc-surface-overlay)]"
+              >
+                <div
+                  className="h-full rounded-full bg-[var(--sc-accent)]"
+                  style={{ width: `${Math.min(100, storage.usagePercent)}%` }}
+                  aria-hidden="true"
+                />
+              </div>
+              <p className="text-xs text-[var(--sc-text-muted)]">
+                {t('settings.ai.localAi.storageModelsCached', {
+                  count: String(storage.modelCacheCount),
+                })}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-[var(--sc-text-muted)]">
+              {t('settings.ai.localAi.storageUnsupported')}
+            </p>
+          )}
+
+          {confirmingClear ? (
+            <div
+              role="alertdialog"
+              aria-label={t('settings.ai.localAi.clearButton')}
+              className="rounded-lg border border-[var(--sc-danger-border)] bg-[var(--sc-danger-bg)] p-3"
+            >
+              <p className="mb-3 text-xs text-[var(--sc-danger-fg)]">
+                {t('settings.ai.localAi.clearConfirm')}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleClear()}
+                  disabled={clearing}
+                  className="rounded-lg bg-[var(--sc-danger-fg)] px-3 py-1.5 text-xs font-medium text-[var(--sc-text-on-accent)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+                >
+                  {clearing
+                    ? t('settings.ai.localAi.clearingButton')
+                    : t('settings.ai.localAi.clearConfirmYes')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClear(false)}
+                  disabled={clearing}
+                  className="rounded-lg border border-[var(--sc-border-subtle)] px-3 py-1.5 text-xs font-medium text-[var(--sc-text-secondary)] hover:bg-[var(--sc-surface-overlay)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+                >
+                  {t('settings.ai.localAi.clearCancel')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(true)}
+              disabled={!storage?.supported || storage.modelCacheCount === 0}
+              className="rounded-lg border border-[var(--sc-danger-border)] px-3 py-1.5 text-xs font-medium text-[var(--sc-danger-fg)] hover:bg-[var(--sc-danger-bg)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+            >
+              {t('settings.ai.localAi.clearButton')}
+            </button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Fallback chain + perf ──────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <h3 className="text-base font-semibold text-[var(--sc-text-primary)]">
+            {t('settings.ai.localAi.fallbackTitle')}
+          </h3>
+          <p className="mt-1 text-sm text-[var(--sc-text-secondary)]">
+            {t('settings.ai.localAi.fallbackIntro')}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <ol className="list-decimal space-y-1 ps-5 text-sm text-[var(--sc-text-secondary)]">
+            {FALLBACK_LAYER_KEYS.map((k) => (
+              <li key={k}>{t(k)}</li>
+            ))}
+          </ol>
+          <p className="text-xs text-[var(--sc-text-muted)]">
+            {throughput
+              ? t('settings.ai.localAi.perfThroughput', {
+                  tps: String(throughput.tokensPerSecond),
+                })
+              : t('settings.ai.localAi.perfNoData')}
+          </p>
+          <a
+            href="https://github.com/qnbs/StoryCraft-Studio/blob/main/docs/LOCAL-AI.md"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block text-xs font-medium text-[var(--sc-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+          >
+            {t('settings.ai.localAi.docsLink')}
+          </a>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};

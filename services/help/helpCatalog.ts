@@ -148,7 +148,12 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
         contentKey: 'help.aiStudio.ragContext.content',
         tryActionId: 'nav-writer',
       },
-      { titleKey: 'help.aiStudio.localAi.title', contentKey: 'help.aiStudio.localAi.content' },
+      {
+        titleKey: 'help.aiStudio.localAi.title',
+        contentKey: 'help.aiStudio.localAi.content',
+        // QNBS-v3: jump to Settings so users can open the new Local AI section (download/storage).
+        tryActionId: 'nav-settings',
+      },
       {
         titleKey: 'help.aiStudio.critic.title',
         contentKey: 'help.aiStudio.critic.content',

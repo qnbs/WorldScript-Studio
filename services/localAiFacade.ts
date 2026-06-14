@@ -232,3 +232,46 @@ export async function generateLocalText(
 export function getLocalWorkerBusTelemetry() {
   return localWorkerBus.getTelemetry();
 }
+
+// QNBS-v3: Last measured local-inference throughput (tokens/sec), best-effort, for the Local AI
+//          settings perf indicator. Token count is approximated as chars/4 (typical English ratio).
+export interface LocalThroughputSample {
+  tokensPerSecond: number;
+  modelId: string;
+  at: number;
+}
+
+let lastLocalThroughput: LocalThroughputSample | null = null;
+
+export function getLastLocalThroughput(): LocalThroughputSample | null {
+  return lastLocalThroughput;
+}
+
+/**
+ * QNBS-v3: Explicitly download/warm a local model so users can prepare offline use from Settings.
+ * Routes through generateLocalText (worker-first) so it reuses the GPU mutex, inferenceProgressEmitter,
+ * and the global LocalAiDownloadProgress modal — the download UX is identical to a real inference.
+ * Records best-effort tok/s for the perf indicator. Resolves true when a real inference layer
+ * (not the heuristic stub) produced output; false otherwise.
+ */
+export async function preloadLocalModel(
+  modelId: string,
+  onProgress?: (report: WebLlmProgressReport) => void,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const startedAt = performance.now();
+  // QNBS-v3: A minimal prompt forces the weight download + a short warm-up generation.
+  const res = await generateLocalText('Hi', modelId, onProgress, undefined, signal);
+  const elapsedSec = (performance.now() - startedAt) / 1000;
+
+  const ready = res.layer !== 'heuristic';
+  if (ready && elapsedSec > 0) {
+    const approxTokens = Math.max(1, Math.round(res.text.length / 4));
+    lastLocalThroughput = {
+      tokensPerSecond: Math.round(approxTokens / elapsedSec),
+      modelId,
+      at: Date.now(),
+    };
+  }
+  return ready;
+}
