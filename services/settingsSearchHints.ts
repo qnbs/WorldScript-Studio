@@ -5,6 +5,18 @@ export const SETTINGS_CATEGORY_SEARCH_HINTS: Record<string, string[]> = {
   editor: ['font', 'spacing', 'paragraph', 'typography'],
   'advanced-editor': ['grammar', 'spell', 'dictionary', 'distraction', 'zen'],
   ai: ['creativity', 'gemini', 'model'],
+  'local-ai': [
+    'local',
+    'offline',
+    'webgpu',
+    'webllm',
+    'download',
+    'model',
+    'storage',
+    'clear models',
+    'on-device',
+    'tokens',
+  ],
   'advanced-ai': [
     'provider',
     'ollama',

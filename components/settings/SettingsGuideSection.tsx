@@ -22,6 +22,12 @@ const GUIDE_CATEGORIES: { id: string; titleKey: string; descKey: string }[] = [
     descKey: 'settings.guide.advancedEditor.desc',
   },
   { id: 'ai', titleKey: 'settings.guide.ai.title', descKey: 'settings.guide.ai.desc' },
+  // QNBS-v3: Local AI is a live AI-Models nav category — document on-device download/storage/fallback.
+  {
+    id: 'local-ai',
+    titleKey: 'settings.guide.localAi.title',
+    descKey: 'settings.guide.localAi.desc',
+  },
   {
     id: 'advanced-ai',
     titleKey: 'settings.guide.advancedAi.title',

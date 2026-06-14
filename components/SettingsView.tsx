@@ -12,6 +12,7 @@ import { DataSection } from './settings/DataSection';
 import { AdvancedEditorSection, EditorSection } from './settings/EditorSections';
 import { FeatureFlagsSection } from './settings/FeatureFlagsSection';
 import { AboutSection, AppearanceSection, GeneralSection } from './settings/GeneralSections';
+import { LocalAiSection } from './settings/LocalAiSection';
 import { LoraAdapterSection } from './settings/LoraAdapterSection';
 import { OpenRouterSection } from './settings/OpenRouterSection';
 import { PluginsSection } from './settings/PluginsSection';
@@ -76,7 +77,7 @@ NavGroupHeader.displayName = 'NavGroupHeader';
 // X-1: category IDs grouped for sidebar nav; internal section IDs and renderContent() switch unchanged.
 const NAV_GROUPS = [
   { key: 'writing', ids: ['editor', 'advanced-editor', 'project-ai'] },
-  { key: 'aiModels', ids: ['ai', 'advanced-ai', 'openrouter', 'lora-adapters'] },
+  { key: 'aiModels', ids: ['ai', 'local-ai', 'advanced-ai', 'openrouter', 'lora-adapters'] },
   { key: 'appearanceAccessibility', ids: ['appearance', 'accessibility'] },
   { key: 'privacyData', ids: ['privacy', 'data', 'backup'] },
   {
@@ -110,6 +111,14 @@ const SettingsViewUI: FC = () => {
         ),
       },
       { id: 'ai', label: t('settings.categories.ai'), icon: ICONS.SPARKLES },
+      {
+        id: 'local-ai',
+        label: t('settings.categories.localAi'),
+        // QNBS-v3: on-device chip icon — distinguishes Local AI from the cloud-leaning AI section.
+        icon: (
+          <path d="M9 3v2.25M15 3v2.25M9 18.75V21M15 18.75V21M5.25 9H3m2.25 6H3m18-6h-2.25M21 15h-2.25M6.75 6.75h10.5v10.5H6.75V6.75zM9.75 9.75h4.5v4.5h-4.5v-4.5z" />
+        ),
+      },
       {
         id: 'advanced-ai',
         label: t('settings.categories.advancedAi'),
@@ -298,6 +307,8 @@ const SettingsViewUI: FC = () => {
             <AiSection />
           </div>
         );
+      case 'local-ai':
+        return <LocalAiSection />;
       case 'advanced-ai':
         return <AdvancedAiSection />;
       case 'community':
