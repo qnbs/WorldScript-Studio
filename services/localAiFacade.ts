@@ -22,6 +22,11 @@ import { ensureWebLlmPool } from './workerBusManager';
 //          Heavy WebLLM inference now runs in the WorkerBus v2 `webllm` pool, not inline here.
 const localWorkerBus = new WorkerBus();
 
+// QNBS-v3: Count of in-flight generateLocalText calls (ANY layer — WebLLM worker, ONNX-WASM,
+//          Transformers.js, heuristic). ONNX/Transformers run without the GPU mutex or a WebLLM
+//          loading state, so this counter is what makes isLocalAiBusy() catch CPU/WASM inference too.
+let inFlightLocalInference = 0;
+
 // QNBS-v3: P1-1 — WebLLM model load + generation can be slow on first run (weights download).
 //          A generous task timeout avoids premature cancellation; the main-thread fallback covers
 //          genuine worker failures fast (spawn error / NO_WEBGPU), so this ceiling is rarely hit.
@@ -131,6 +136,7 @@ export async function generateLocalText(
   if (needsGpu) await gpuResourceManager.acquireGpu('webllm', 'high');
 
   const startedAt = performance.now();
+  inFlightLocalInference += 1;
   try {
     // QNBS-v3: When adaptive AI engine is enabled, use its task config for optimal backend/model.
     const adaptiveEnabled =
@@ -228,6 +234,7 @@ export async function generateLocalText(
 
     return { layer: 'heuristic', text: 'Heuristic fallback response' };
   } finally {
+    inFlightLocalInference = Math.max(0, inFlightLocalInference - 1);
     // QNBS-v3: Always release — gpuResourceManager has a 30s auto-release safety net too.
     if (needsGpu) gpuResourceManager.releaseGpu('webllm');
     // QNBS-v3: Surrender tab leader heartbeat so next inference cycle elects fairly.
@@ -299,6 +306,7 @@ export function abortActivePreload(): void {
  */
 export function isLocalAiBusy(): boolean {
   return (
+    inFlightLocalInference > 0 ||
     gpuResourceManager.getQueueState().current !== null ||
     inferenceProgressEmitter.getWebLlmLoadingSnapshot().state === 'loading'
   );

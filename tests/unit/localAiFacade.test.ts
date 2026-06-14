@@ -21,6 +21,7 @@ vi.mock('../../services/ai/gpuResourceManager', () => ({
   gpuResourceManager: {
     acquireGpu: mockAcquireGpu,
     releaseGpu: mockReleaseGpu,
+    getQueueState: () => ({ current: null, queue: [] }),
   },
 }));
 
@@ -241,4 +242,24 @@ describe('localAiFacade', () => {
       readySpy.mockRestore();
     }),
   );
+
+  it('isLocalAiBusy() is true while a generateLocalText call is in flight, false after', async () => {
+    const { generateLocalText, isLocalAiBusy } = await import('../../services/localAiFacade');
+    let resolveGen: (v: { layer: string; text: string }) => void = () => {};
+    // No WebGPU (default) → straight to the main-thread orchestrator, which we hold pending.
+    mockRunLocalTextGeneration.mockReturnValue(
+      new Promise((res) => {
+        resolveGen = res;
+      }),
+    );
+
+    expect(isLocalAiBusy()).toBe(false);
+    const p = generateLocalText('prompt'); // ONNX/Transformers-style run (no GPU mutex, no loading)
+    await Promise.resolve();
+    expect(isLocalAiBusy()).toBe(true);
+
+    resolveGen({ layer: 'onnx', text: 'done' });
+    await p;
+    expect(isLocalAiBusy()).toBe(false);
+  });
 });
