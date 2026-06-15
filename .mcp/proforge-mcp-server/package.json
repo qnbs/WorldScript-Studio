@@ -1,9 +1,9 @@
 {
-  "name": "@storycraft/proforge-mcp-server",
+  "name": "@worldscript/proforge-mcp-server",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "MCP server exposing the StoryCraft ProForge Core Capability Layer to external AI agents",
+  "description": "MCP server exposing the WorldScript ProForge Core Capability Layer to external AI agents",
   "bin": {
     "proforge-mcp-server": "src/index.ts"
   },
