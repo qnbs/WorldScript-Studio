@@ -15,6 +15,7 @@
 //   worlds      → Y.Map<id, plain> (EntityState rebuilt via worldsAdapter on read)
 //   meta        → Y.Map            (every other ProjectData field: title, logline, outline, goals…)
 
+import type { EntityState } from '@reduxjs/toolkit';
 import * as Y from 'yjs';
 import { charactersAdapter, worldsAdapter } from '../../features/project/adapters';
 import type { ProjectData } from '../../features/project/projectState';
@@ -36,6 +37,14 @@ function writeEntities(yMap: Y.Map<unknown>, entities: ReadonlyArray<{ id: strin
   for (const entity of entities) {
     yMap.set(entity.id, cloneJson(entity));
   }
+}
+
+// QNBS-v3 (CodeAnt): honor the canonical EntityState.ids order instead of dictionary key order, so
+// entities round-trip in a stable order (Object.values key order is not guaranteed to match `ids`).
+function entitiesInIdOrder<T extends { id: string }>(state: EntityState<T, string>): T[] {
+  return state.ids
+    .map((id) => state.entities[id])
+    .filter((entity): entity is T => entity !== undefined);
 }
 
 function readEntities<T>(yMap: Y.Map<unknown>): T[] {
@@ -74,12 +83,9 @@ export function applyProjectDataToDoc(doc: Y.Doc, project: ProjectData): void {
       }
     }
 
-    // --- characters / worlds: EntityState → Y.Map keyed by id ---
-    writeEntities(
-      doc.getMap(CHARACTERS),
-      Object.values(project.characters.entities) as Character[],
-    );
-    writeEntities(doc.getMap(WORLDS), Object.values(project.worlds.entities) as World[]);
+    // --- characters / worlds: EntityState → Y.Map keyed by id, written in canonical ids order ---
+    writeEntities(doc.getMap(CHARACTERS), entitiesInIdOrder(project.characters));
+    writeEntities(doc.getMap(WORLDS), entitiesInIdOrder(project.worlds));
 
     // --- meta: every remaining ProjectData field ---
     const yMeta = doc.getMap(META);

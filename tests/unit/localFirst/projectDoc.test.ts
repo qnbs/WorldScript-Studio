@@ -114,10 +114,13 @@ describe('B0.1 — ProjectData ↔ Y.Doc PoC', () => {
 
       sync(docA, docB);
 
-      const manuscript = readProjectDoc(docA).manuscript;
-      expect(manuscript[0]?.title).toBe('A renamed ch1');
-      expect(manuscript[1]?.title).toBe('B renamed ch2');
-      expect(readProjectDoc(docB).manuscript[0]?.title).toBe('A renamed ch1');
+      // Assert BOTH peers converged on BOTH edits (true two-way convergence, not one-sided).
+      const manuscriptA = readProjectDoc(docA).manuscript;
+      const manuscriptB = readProjectDoc(docB).manuscript;
+      expect(manuscriptA[0]?.title).toBe('A renamed ch1');
+      expect(manuscriptA[1]?.title).toBe('B renamed ch2');
+      expect(manuscriptB[0]?.title).toBe('A renamed ch1');
+      expect(manuscriptB[1]?.title).toBe('B renamed ch2');
     });
   });
 

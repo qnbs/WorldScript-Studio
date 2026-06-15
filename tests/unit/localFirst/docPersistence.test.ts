@@ -25,6 +25,19 @@ async function readPersisted(projectId: string): Promise<string> {
   }
 }
 
+// QNBS-v3 (CodeAnt): wipe a project's persisted state so a fixed-id test starts from a clean slate
+// and can never be satisfied by stale data left by a prior run.
+async function clearPersisted(projectId: string): Promise<void> {
+  const doc = new Y.Doc();
+  const persistence = persistProjectDoc(projectId, doc);
+  try {
+    await persistence.whenSynced;
+    await persistence.clearData();
+  } finally {
+    await persistence.destroy();
+  }
+}
+
 describe('B1.1 — docPersistence (y-indexeddb)', () => {
   it('dbNameForProject namespaces by project id', () => {
     expect(dbNameForProject('abc')).toBe('storycraft-localfirst-abc');
@@ -46,6 +59,7 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
 
   it('persists doc updates and reloads them into a fresh doc', async () => {
     const projectId = 'roundtrip';
+    await clearPersisted(projectId); // isolation: start from a clean slate
     const docA = new Y.Doc();
     const pA = persistProjectDoc(projectId, docA);
     try {
@@ -68,6 +82,7 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
 
   it('clearData wipes persisted state', async () => {
     const projectId = 'wipe';
+    await clearPersisted(projectId); // isolation: start from a clean slate
     const docA = new Y.Doc();
     const pA = persistProjectDoc(projectId, docA);
     try {

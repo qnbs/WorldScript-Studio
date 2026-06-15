@@ -621,13 +621,20 @@ function teardownLocalFirst(): Promise<void> {
 }
 
 // Shared shadow-sync run — used by both the debounced edit listener and the OFF→ON enable listener.
-async function runLocalFirstShadowSync(state: RootState): Promise<void> {
+// `stillEnabled` is re-evaluated AFTER the async handle init so a sync that was in flight when the
+// user disabled the flag aborts instead of resurrecting a torn-down binding.
+async function runLocalFirstShadowSync(
+  state: RootState,
+  stillEnabled: () => boolean,
+): Promise<void> {
   if (state.featureFlags?.enableLocalFirstSync !== true) return;
   const projectState = state.project as ProjectStateWithHistory;
   const presentData = projectState.present?.data ?? projectState.data;
   if (!presentData || presentData.title === undefined) return;
   try {
     const handle = await getLocalFirstHandle(presentData);
+    // QNBS-v3 (CodeAnt): flag may have flipped off during the await — re-check before mutating.
+    if (!stillEnabled()) return;
     handle.binding.syncFromProject(presentData);
     const result = handle.binding.verify(presentData);
     if (!result.ok) {
@@ -648,7 +655,10 @@ addDebouncedListener(
     curr.project?.present !== prev.project?.present,
   1200,
   async (api) => {
-    await runLocalFirstShadowSync(api.getState());
+    await runLocalFirstShadowSync(
+      api.getState(),
+      () => api.getState().featureFlags?.enableLocalFirstSync === true,
+    );
   },
 );
 
@@ -659,7 +669,10 @@ listenerMiddleware.startListening({
     (curr as RootState).featureFlags?.enableLocalFirstSync === true &&
     (prev as RootState).featureFlags?.enableLocalFirstSync !== true,
   effect: async (_action, listenerApi) => {
-    await runLocalFirstShadowSync(listenerApi.getState() as RootState);
+    await runLocalFirstShadowSync(
+      listenerApi.getState() as RootState,
+      () => (listenerApi.getState() as RootState).featureFlags?.enableLocalFirstSync === true,
+    );
   },
 });
 
