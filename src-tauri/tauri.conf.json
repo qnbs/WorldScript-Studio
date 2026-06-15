@@ -84,7 +84,7 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["worldscript"]
+        "schemes": ["worldscript", "storycraft"]
       }
     }
   }

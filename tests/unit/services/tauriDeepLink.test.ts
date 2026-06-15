@@ -32,9 +32,18 @@ describe('tauriDeepLink', () => {
       }
     });
 
-    it('normalizes a Windows drive-letter path (two-slash form)', () => {
+    it('normalizes Windows drive-letter paths (two-slash and canonical triple-slash forms)', () => {
+      // Two-slash form: scheme strip already removes all slashes before the drive letter.
       expect(deepLinkUrlToPath('worldscript://C:/Users/me/novel.worldscript')).toBe(
         'C:/Users/me/novel.worldscript',
+      );
+      // Canonical triple-slash form (file-URL style) leaves a leading slash (/C:/...) that
+      // must still be stripped so Tauri `exists()` resolves the real Windows path.
+      expect(deepLinkUrlToPath('worldscript:///C:/Users/me/novel.worldscript')).toBe(
+        'C:/Users/me/novel.worldscript',
+      );
+      expect(deepLinkUrlToPath('storycraft:///D:/Docs/book.storycraft')).toBe(
+        'D:/Docs/book.storycraft',
       );
     });
 

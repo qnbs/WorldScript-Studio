@@ -126,8 +126,9 @@ export function deepLinkUrlToPath(url: string): string {
   // Strip the scheme prefix (with 0–2 slashes, e.g. `worldscript:`, `worldscript://`,
   // or Windows-style `worldscript:///C:/...`).
   const filePath = url.replace(/^(?:worldscript|storycraft):\/{0,2}/i, '');
-  if (/^[A-Za-z]:/.test(filePath)) {
-    // Windows drive-letter path like /C:/... — drop the leading slash(es).
+  if (/^\/*[A-Za-z]:/.test(filePath)) {
+    // Windows drive-letter path, incl. the canonical triple-slash form `worldscript:///C:/...`
+    // which leaves a leading slash after the scheme strip — drop any leading slash(es).
     return filePath.replace(/^\/+/, '');
   }
   // POSIX path — collapse any leading slashes to a single root slash.
