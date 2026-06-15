@@ -52,7 +52,10 @@ export default defineConfig({
       name: 'worldscript-deploy-base-html',
       transformIndexHtml(html) {
         if (deployBase === '/WorldScript-Studio/') return html;
-        return html.replaceAll('/WorldScript-Studio/', deployBase);
+        // QNBS-v3: only rewrite app-relative paths (preceded by quote/space) so
+        // absolute URLs like https://worldscript-studio.app/WorldScript-Studio/
+        // are not corrupted when deployBase is './'.
+        return html.replace(/(?<=["'\s])\/WorldScript-Studio\//g, deployBase);
       },
     },
     VitePWA({

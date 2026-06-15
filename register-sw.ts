@@ -160,7 +160,7 @@ const registerServiceWorker = async (): Promise<void> => {
         });
         if (status.state === 'granted') {
           // @ts-expect-error — periodicSync not in TS lib yet
-          await registration.periodicSync.register('storycraft-refresh', {
+          await registration.periodicSync.register('worldscript-refresh', {
             minInterval: 24 * 60 * 60 * 1000, // once per day
           });
         }
