@@ -118,7 +118,7 @@ const baseSettings = (): Settings => ({
     speechVolume: 1.0,
     allowCloudSttFallback: false,
     listeningTimeoutSeconds: 8,
-    wakeWordPhrase: 'Hey StoryCraft',
+    wakeWordPhrase: 'Hey WorldScript',
     pttShortcutId: 'voice-push-to-talk',
     ttsMuted: false,
     dictationAutoPunctuation: true,

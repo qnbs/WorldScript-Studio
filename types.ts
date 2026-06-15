@@ -628,7 +628,7 @@ export interface VoiceSettings {
   allowCloudSttFallback: boolean;
   /** Continuous listening timeout in seconds (5-30) */
   listeningTimeoutSeconds: number;
-  /** Wake-word phrase (default: "Hey StoryCraft") */
+  /** Wake-word phrase (default: "Hey WorldScript") */
   wakeWordPhrase: string;
   /** Push-to-talk keyboard shortcut (stored as action id) */
   pttShortcutId: string;
