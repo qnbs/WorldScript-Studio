@@ -3,7 +3,7 @@
 // QNBS-v3: B1.1 — proves the y-indexeddb persistence layer round-trips a Y.Doc across reloads
 // (fake-indexeddb in the test env). This is the offline-store half of the shadow binding.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import {
   dbNameForProject,
@@ -11,8 +11,16 @@ import {
   persistProjectDoc,
 } from '../../../services/localFirst/docPersistence';
 
-// y-indexeddb flushes update events to IndexedDB asynchronously; give it a beat before reload.
-const flush = () => new Promise((resolve) => setTimeout(resolve, 100));
+// Open a fresh provider, read the persisted 'greeting' text, and tear it down. Used to probe what
+// has actually reached IndexedDB without depending on wall-clock delays.
+async function readPersisted(projectId: string): Promise<string> {
+  const doc = new Y.Doc();
+  const persistence = persistProjectDoc(projectId, doc);
+  await persistence.whenSynced;
+  const value = doc.getText('greeting').toString();
+  await persistence.destroy();
+  return value;
+}
 
 describe('B1.1 — docPersistence (y-indexeddb)', () => {
   it('dbNameForProject namespaces by project id', () => {
@@ -36,15 +44,17 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
     const pA = persistProjectDoc(projectId, docA);
     await pA.whenSynced;
     docA.getText('greeting').insert(0, 'hello world');
-    await flush();
-    await pA.destroy();
 
-    const docB = new Y.Doc();
-    const pB = persistProjectDoc(projectId, docB);
-    await pB.whenSynced;
-    expect(docB.getText('greeting').toString()).toBe('hello world');
-    await pB.clearData();
-    await pB.destroy();
+    // QNBS-v3 (CodeAnt): poll a fresh provider until the update has propagated to IndexedDB —
+    // condition-driven, no wall-clock guess. (Fake timers can't advance fake-indexeddb's async
+    // IDBRequest resolution, so vi.waitFor polling is the deterministic mechanism here.)
+    await vi.waitFor(
+      async () => {
+        expect(await readPersisted(projectId)).toBe('hello world');
+      },
+      { timeout: 2000, interval: 50 },
+    );
+    await pA.destroy();
   });
 
   it('clearData wipes persisted state', async () => {
@@ -53,14 +63,15 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
     const pA = persistProjectDoc(projectId, docA);
     await pA.whenSynced;
     docA.getText('greeting').insert(0, 'temporary');
-    await flush();
+    await vi.waitFor(
+      async () => {
+        expect(await readPersisted(projectId)).toBe('temporary');
+      },
+      { timeout: 2000, interval: 50 },
+    );
     await pA.clearData();
     await pA.destroy();
 
-    const docB = new Y.Doc();
-    const pB = persistProjectDoc(projectId, docB);
-    await pB.whenSynced;
-    expect(docB.getText('greeting').toString()).toBe('');
-    await pB.destroy();
+    expect(await readPersisted(projectId)).toBe('');
   });
 });

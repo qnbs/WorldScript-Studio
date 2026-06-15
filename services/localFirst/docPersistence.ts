@@ -4,6 +4,14 @@
 // database per project (separate from the main app DBs) so the experimental local-first store is
 // isolated and trivially wipeable. Guarded for non-browser / no-IndexedDB environments (SSR, some
 // Tauri webviews) — there it degrades to a no-op rather than throwing.
+//
+// QNBS-v3 (CodeAnt — raw-IndexedDB rule): this module IS the centralized abstraction for local-first
+// persistence — the single chokepoint that touches IndexedDB for this feature, mirroring the existing
+// per-subsystem IDB wrappers (services/logger.ts log sink, services/proForge/proForgeMemoryBank.ts,
+// services/ai/aiInferenceCacheService.ts). It deliberately does NOT route through StorageBackend:
+// that interface is a high-level project/key-value API (saveProject/saveSettings/saveRagVectors…),
+// whereas y-indexeddb's IndexeddbPersistence owns a Yjs CRDT *update-log* store and must manage its
+// own connection — there is no StorageBackend method it could use.
 
 import { IndexeddbPersistence } from 'y-indexeddb';
 import type * as Y from 'yjs';
