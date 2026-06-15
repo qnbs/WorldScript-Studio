@@ -628,7 +628,7 @@ export interface VoiceSettings {
   allowCloudSttFallback: boolean;
   /** Continuous listening timeout in seconds (5-30) */
   listeningTimeoutSeconds: number;
-  /** Wake-word phrase (default: "Hey StoryCraft") */
+  /** Wake-word phrase (default: "Hey WorldScript") */
   wakeWordPhrase: string;
   /** Push-to-talk keyboard shortcut (stored as action id) */
   pttShortcutId: string;
@@ -887,7 +887,7 @@ declare global {
     webkitSpeechRecognition: ISpeechRecognitionConstructor;
     // QNBS-v3: cross-service gate set by listenerMiddleware (adaptive-AI ON/OFF) and read by
     // localAiFacade — typed here so call sites avoid `(window as any)` casts (F-4 abatement).
-    __storycraft_adaptive_ai__?: boolean;
+    __worldscript_adaptive_ai__?: boolean;
   }
 }
 

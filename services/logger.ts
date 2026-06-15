@@ -28,7 +28,7 @@ export function sanitizeLogContext(ctx: Record<string, unknown>): Record<string,
 
 // --- IDB sink ---------------------------------------------------------------
 
-const IDB_DB_NAME = 'storycraft-logs-db';
+const IDB_DB_NAME = 'worldscript-logs-db';
 const IDB_STORE = 'logs';
 const IDB_CAP = 1_000;
 
@@ -140,7 +140,7 @@ function writeToTauri(entry: LogEntry): void {
         await mods.mkdir(_tauriLogDir, { recursive: true });
       }
       const date = new Date(entry.ts).toISOString().slice(0, 10);
-      const path = await mods.path.join(_tauriLogDir, `storycraft-${date}.jsonl`);
+      const path = await mods.path.join(_tauriLogDir, `worldscript-${date}.jsonl`);
       await mods.fs(path, `${JSON.stringify(entry)}\n`, { append: true, create: true });
     })
     .catch(() => {
@@ -152,7 +152,7 @@ function writeToTauri(entry: LogEntry): void {
 
 function writeToConsole(entry: LogEntry): void {
   if (!isDev) return;
-  const tag = `[StoryCraft:${entry.level.toUpperCase()}:${entry.module}]`;
+  const tag = `[WorldScript:${entry.level.toUpperCase()}:${entry.module}]`;
   const ctx = entry.context ? ` ${JSON.stringify(entry.context)}` : '';
   const msg = entry.message + ctx;
   switch (entry.level) {

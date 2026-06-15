@@ -12,13 +12,13 @@ import { logger } from './logger';
 
 /** All IDB databases the app may have created. */
 const KNOWN_DB_NAMES = [
-  'storycraft-db', // legacy — migrated to storycraft-data-db
-  'storycraft-state-db',
-  'storycraft-data-db',
-  'storycraft-logs-db',
-  'storycraft-revisions-db',
-  'storycraft-lora-db',
-  'storycraft-inference-cache-db',
+  'worldscript-db', // legacy — migrated to worldscript-data-db
+  'worldscript-state-db',
+  'worldscript-data-db',
+  'worldscript-logs-db',
+  'worldscript-revisions-db',
+  'worldscript-lora-db',
+  'worldscript-inference-cache-db',
   'proforge-memory-bank',
 ];
 

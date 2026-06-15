@@ -1,5 +1,5 @@
 /**
- * Plugin registry — lightweight service for discovering and managing StoryCraft Studio extensions.
+ * Plugin registry — lightweight service for discovering and managing WorldScript Studio extensions.
  * QNBS-v3: Plugins declare a capability manifest; execute() validates permissions before dispatch.
  *          v2: Worker-scope isolation via routeTask to plugin.worker.ts (P0-2).
  *          Telemetry: All plugin executions are logged to the structured logger for observability.

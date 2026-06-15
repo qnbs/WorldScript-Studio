@@ -103,7 +103,7 @@ const mockState: {
       localBackendPreset: 'ollama_default',
       openAiCompatibleBaseUrl: '',
       openAiSiteUrl: '',
-      openAiSiteTitle: 'StoryCraft Studio',
+      openAiSiteTitle: 'WorldScript Studio',
       hybridFallbackEnabled: false,
       hybridFallbackChain: [],
     },
@@ -135,8 +135,8 @@ vi.mock('../../app/hooks', () => ({
 vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (key: string) => key, language: 'en' }),
 }));
-vi.mock('../../hooks/useStoryCraftAI', () => ({
-  useStoryCraftAI: () => ({
+vi.mock('../../hooks/useWorldScriptAI', () => ({
+  useWorldScriptAI: () => ({
     runCompletion: vi.fn(() => Promise.resolve()),
     stop: vi.fn(),
     completion: '',

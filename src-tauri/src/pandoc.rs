@@ -19,7 +19,7 @@ pub fn pandoc_markdown_to_epub(markdown: String) -> Result<PandocEpubResponse, S
         .map_err(|e| e.to_string())?
         .as_millis();
 
-    let tmp = std::env::temp_dir().join(format!("storycraft-pandoc-{millis}"));
+    let tmp = std::env::temp_dir().join(format!("worldscript-pandoc-{millis}"));
     fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
 
     let md_path = tmp.join("book.md");

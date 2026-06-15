@@ -33,10 +33,10 @@ export interface NodeGatewayOptions {
 /** Resolve the API key from common env vars; throws a clear error when missing. */
 export function resolveNodeApiKey(env: NodeJS.ProcessEnv = process.env): string {
   const key =
-    env['GEMINI_API_KEY'] ?? env['STORYCRAFT_API_KEY'] ?? env['GOOGLE_GENERATIVE_AI_API_KEY'];
+    env['GEMINI_API_KEY'] ?? env['WORLDSCRIPT_API_KEY'] ?? env['GOOGLE_GENERATIVE_AI_API_KEY'];
   if (!key) {
     throw new Error(
-      'Missing API key. Set GEMINI_API_KEY (or STORYCRAFT_API_KEY) to enable AI-backed ProForge stages.',
+      'Missing API key. Set GEMINI_API_KEY (or WORLDSCRIPT_API_KEY) to enable AI-backed ProForge stages.',
     );
   }
   return key;

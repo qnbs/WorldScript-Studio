@@ -15,9 +15,9 @@ import {
 
 describe('dbConstants', () => {
   it('exports correct DB names', () => {
-    expect(LEGACY_DB_NAME).toBe('storycraft-db');
-    expect(STATE_DB_NAME).toBe('storycraft-state-db');
-    expect(DATA_DB_NAME).toBe('storycraft-data-db');
+    expect(LEGACY_DB_NAME).toBe('worldscript-db');
+    expect(STATE_DB_NAME).toBe('worldscript-state-db');
+    expect(DATA_DB_NAME).toBe('worldscript-data-db');
   });
 
   it('exports DB version as a positive number', () => {

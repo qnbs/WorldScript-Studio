@@ -1,6 +1,6 @@
 // QNBS-v3: Pub/sub progress emitter for WebLLM model downloads — decoupled from Redux so
 //          the UI can subscribe without dispatching on every 1% progress tick.
-//          Adapted from CannaGuide-2025 progressEmitter.ts for StoryCraft context.
+//          Adapted from CannaGuide-2025 progressEmitter.ts for WorldScript context.
 
 export type WebLlmLoadingState = 'idle' | 'loading' | 'ready' | 'error';
 

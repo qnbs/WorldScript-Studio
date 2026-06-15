@@ -8,7 +8,7 @@ import { logger as log } from '../logger';
 import { type AiTaskType, adaptiveAiEngine } from './adaptiveAiEngine';
 import type { ComputeBackend } from './localAiDeviceProfiler';
 
-const BENCHMARK_STORAGE_KEY = 'storycraft-benchmarks';
+const BENCHMARK_STORAGE_KEY = 'worldscript-benchmarks';
 const MAX_STORED_RESULTS = 50;
 // Number of benchmark runs per task (first run discarded as warm-up)
 const BENCHMARK_RUNS = 3;

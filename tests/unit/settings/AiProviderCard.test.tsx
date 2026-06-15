@@ -42,7 +42,7 @@ const mockAdvancedAi = {
   localBackendPreset: 'ollama_default' as const,
   openAiCompatibleBaseUrl: '',
   openAiSiteUrl: '',
-  openAiSiteTitle: 'StoryCraft Studio',
+  openAiSiteTitle: 'WorldScript Studio',
   hybridFallbackEnabled: false,
   hybridFallbackChain: [] as import('../../../types').AIProvider[],
   ragMode: 'hybrid' as const,

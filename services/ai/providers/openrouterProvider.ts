@@ -26,8 +26,8 @@ import { isOpenRouterFreeModel } from '../openrouterModels';
 const logger = createLogger('openrouter-provider');
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-const SITE_URL = 'https://github.com/qnbs/StoryCraft-Studio';
-const SITE_TITLE = 'StoryCraft Studio';
+const SITE_URL = 'https://github.com/qnbs/WorldScript-Studio';
+const SITE_TITLE = 'WorldScript Studio';
 
 // ─── Free-tier model catalog ─────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ export { isOpenRouterFreeModel };
 
 const MAX_CONSECUTIVE_429 = 4;
 const CIRCUIT_OPEN_MS = 5 * 60 * 1000; // 5 minutes
-const CB_STORAGE_KEY = 'storycraft-or-cb-state';
+const CB_STORAGE_KEY = 'worldscript-or-cb-state';
 
 // QNBS-v3: Only the pause deadline is persisted. The "consecutive" 429 counter is deliberately
 // NOT persisted — restoring it would let a stale count survive a long idle period so that a single

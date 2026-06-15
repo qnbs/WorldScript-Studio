@@ -211,7 +211,7 @@ describe('AboutSection', () => {
   it('renders app version information', async () => {
     render(<AboutSection />);
     // App name should be present
-    expect(screen.getByText(/StoryCraft/i)).toBeInTheDocument();
+    expect(screen.getByText(/WorldScript/i)).toBeInTheDocument();
   });
 });
 

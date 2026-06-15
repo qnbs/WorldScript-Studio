@@ -1,5 +1,5 @@
 /**
- * Centralised prompt template registry for StoryCraft Studio.
+ * Centralised prompt template registry for WorldScript Studio.
  * QNBS-v3: Single source of truth for all AI prompts — enables versioning, A/B testing,
  *          export/import, and future locale-aware overrides without touching geminiService.
  */
@@ -318,7 +318,7 @@ register({
   category: 'proforge-diagnostic',
   localeKey: 'promptLibrary.diagnosticReport',
   template: (v) =>
-    `You are the StoryCraft ProForge Diagnostic Agent. Analyze this manuscript comprehensively.\n\nTITLE: ${v['title'] ?? ''}\nLOGLINE: ${v['logline'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\nWORD COUNT: ${v['wordCount'] ?? '0'}\nSECTIONS: ${v['sectionCount'] ?? '0'}\nAVG SECTION LENGTH: ${v['avgSectionLength'] ?? '0'}\n\nOUTLINE:\n${v['outline'] ?? ''}\n\nMANUSCRIPT EXCERPT:\n${v['manuscriptExcerpt'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return a JSON object conforming to the DiagnosticReport schema with: profile, consistencyIssues (max 20), structuralGaps (max 15), qualityScore (overall 0-100 with sub-scores), recommendedConfig, and summary (max 500 words).`,
+    `You are the WorldScript ProForge Diagnostic Agent. Analyze this manuscript comprehensively.\n\nTITLE: ${v['title'] ?? ''}\nLOGLINE: ${v['logline'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\nWORD COUNT: ${v['wordCount'] ?? '0'}\nSECTIONS: ${v['sectionCount'] ?? '0'}\nAVG SECTION LENGTH: ${v['avgSectionLength'] ?? '0'}\n\nOUTLINE:\n${v['outline'] ?? ''}\n\nMANUSCRIPT EXCERPT:\n${v['manuscriptExcerpt'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return a JSON object conforming to the DiagnosticReport schema with: profile, consistencyIssues (max 20), structuralGaps (max 15), qualityScore (overall 0-100 with sub-scores), recommendedConfig, and summary (max 500 words).`,
 });
 
 register({
@@ -328,7 +328,7 @@ register({
   category: 'proforge-structural',
   localeKey: 'promptLibrary.structuralEditPlan',
   template: (v) =>
-    `You are the StoryCraft ProForge Structural Agent. Analyze macro-structure, pacing, and arcs.\n\nTITLE: ${v['title'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\n\nSECTION LIST:\n${v['sectionList'] ?? ''}\n\nMANUSCRIPT EXCERPT:\n${v['manuscriptExcerpt'] ?? ''}\n\nPRIOR DIAGNOSTIC:\n${v['diagnosticSummary'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: edits array (max 50, each with id, sectionId, category, original, proposed, rationale, confidence 0-1), pacingReport (sectionPacing with tensionScore 0-10, recommendedAction), overallPacing, suggestions, and summary.`,
+    `You are the WorldScript ProForge Structural Agent. Analyze macro-structure, pacing, and arcs.\n\nTITLE: ${v['title'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\n\nSECTION LIST:\n${v['sectionList'] ?? ''}\n\nMANUSCRIPT EXCERPT:\n${v['manuscriptExcerpt'] ?? ''}\n\nPRIOR DIAGNOSTIC:\n${v['diagnosticSummary'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: edits array (max 50, each with id, sectionId, category, original, proposed, rationale, confidence 0-1), pacingReport (sectionPacing with tensionScore 0-10, recommendedAction), overallPacing, suggestions, and summary.`,
 });
 
 register({
@@ -338,7 +338,7 @@ register({
   category: 'proforge-prose',
   localeKey: 'promptLibrary.proseEditBatch',
   template: (v) =>
-    `You are the StoryCraft ProForge Prose Agent. Perform line-level editing for: show-don't-tell, filter words, dialogue tags, POV consistency, sensory details, weak verbs, adverbs.\n\nSECTION: ${v['sectionTitle'] ?? ''}\nWORD COUNT: ${v['wordCount'] ?? '0'}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\n\nCONTENT:\n${v['sectionContent'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: edits array (max 30 per section, each with id, sectionId, startOffset, endOffset, category, original, proposed, rationale, confidence), beforeMetrics (adverbDensity, filterWordDensity, dialogueRatio, sensoryScore, showDontTellScore, povConsistencyScore), and summary.`,
+    `You are the WorldScript ProForge Prose Agent. Perform line-level editing for: show-don't-tell, filter words, dialogue tags, POV consistency, sensory details, weak verbs, adverbs.\n\nSECTION: ${v['sectionTitle'] ?? ''}\nWORD COUNT: ${v['wordCount'] ?? '0'}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\n\nCONTENT:\n${v['sectionContent'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: edits array (max 30 per section, each with id, sectionId, startOffset, endOffset, category, original, proposed, rationale, confidence), beforeMetrics (adverbDensity, filterWordDensity, dialogueRatio, sensoryScore, showDontTellScore, povConsistencyScore), and summary.`,
 });
 
 register({
@@ -348,7 +348,7 @@ register({
   category: 'proforge-copyedit',
   localeKey: 'promptLibrary.copyEditPlan',
   template: (v) =>
-    `You are the StoryCraft ProForge Copy Editor. Fix grammar, spelling, punctuation, style consistency, repetition, and formatting.\n\nSECTION: ${v['sectionTitle'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nSTYLE GUIDE: ${v['styleGuide'] ?? 'Standard'}\nLANGUAGE: ${v['language'] ?? 'English'}\n\nCONTENT:\n${v['sectionContent'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: grammarEdits (max 20, with ruleId, ruleName, original, proposed, explanation), styleEdits (max 15, category: register/tone/formality/redundancy), repetitionHits (max 10, wordOrPhrase, occurrences, count), formatIssues (max 10), and summary.`,
+    `You are the WorldScript ProForge Copy Editor. Fix grammar, spelling, punctuation, style consistency, repetition, and formatting.\n\nSECTION: ${v['sectionTitle'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nSTYLE GUIDE: ${v['styleGuide'] ?? 'Standard'}\nLANGUAGE: ${v['language'] ?? 'English'}\n\nCONTENT:\n${v['sectionContent'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: grammarEdits (max 20, with ruleId, ruleName, original, proposed, explanation), styleEdits (max 15, category: register/tone/formality/redundancy), repetitionHits (max 10, wordOrPhrase, occurrences, count), formatIssues (max 10), and summary.`,
 });
 
 register({
@@ -358,7 +358,7 @@ register({
   category: 'proforge-proof',
   localeKey: 'promptLibrary.qualityGateReport',
   template: (v) =>
-    `You are the StoryCraft ProForge Quality Gate Agent. Perform final proofreading, technical validation, legal scan, and readability assessment.\n\nTITLE: ${v['title'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\n\nMANUSCRIPT:\n${v['manuscript'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: overallPass (boolean), grammar {pass, score, issues}, style {pass, score, issues}, technical {pass, score, issues}, legal {pass, score, warnings (type: trademark/realPerson/sensitiveContent/copyright/defamation, severity: critical/warning)}, readability {pass, score, metrics (fleschKincaid, fleschReadingEase, targetAgeMin, targetAgeMax, appropriateForGenre)}, and summary.`,
+    `You are the WorldScript ProForge Quality Gate Agent. Perform final proofreading, technical validation, legal scan, and readability assessment.\n\nTITLE: ${v['title'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\n\nMANUSCRIPT:\n${v['manuscript'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: overallPass (boolean), grammar {pass, score, issues}, style {pass, score, issues}, technical {pass, score, issues}, legal {pass, score, warnings (type: trademark/realPerson/sensitiveContent/copyright/defamation, severity: critical/warning)}, readability {pass, score, metrics (fleschKincaid, fleschReadingEase, targetAgeMin, targetAgeMax, appropriateForGenre)}, and summary.`,
 });
 
 register({
@@ -368,7 +368,7 @@ register({
   category: 'proforge-publishing',
   localeKey: 'promptLibrary.publishingPackage',
   template: (v) =>
-    `You are the StoryCraft ProForge Publishing Agent. Generate all publishing metadata and marketing assets.\n\nTITLE: ${v['title'] ?? ''}\nLOGLINE: ${v['logline'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\nWORD COUNT: ${v['wordCount'] ?? '0'}\n\nEXCERPT:\n${v['excerpt'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: metadata (title, subtitle, author, description, keywords[10], genre, bisacCodes[5], language, pageCount, wordCount), blurbs (backCover, amazonDescription, tagline, elevatorPitch, socialMediaPosts[5]), audiobookGuide (chapterMarks with estimatedDurationMinutes, narratorNotes, pronunciationNotes), marketingAssets (socialMediaPosts, newsletterText, adCopyVariants[5], authorBioSuggestion), and rightsPage.`,
+    `You are the WorldScript ProForge Publishing Agent. Generate all publishing metadata and marketing assets.\n\nTITLE: ${v['title'] ?? ''}\nLOGLINE: ${v['logline'] ?? ''}\nGENRE: ${v['genre'] ?? 'general-fiction'}\nLANGUAGE: ${v['language'] ?? 'English'}\nWORD COUNT: ${v['wordCount'] ?? '0'}\n\nEXCERPT:\n${v['excerpt'] ?? ''}\n\n${v['memoryContext'] ? `MEMORY CONTEXT:\n${v['memoryContext']}\n\n` : ''}Return JSON with: metadata (title, subtitle, author, description, keywords[10], genre, bisacCodes[5], language, pageCount, wordCount), blurbs (backCover, amazonDescription, tagline, elevatorPitch, socialMediaPosts[5]), audiobookGuide (chapterMarks with estimatedDurationMinutes, narratorNotes, pronunciationNotes), marketingAssets (socialMediaPosts, newsletterText, adCopyVariants[5], authorBioSuggestion), and rightsPage.`,
 });
 
 // ---------------------------------------------------------------------------

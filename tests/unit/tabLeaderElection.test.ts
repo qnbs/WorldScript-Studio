@@ -20,7 +20,7 @@ class MockBroadcastChannel {
   close = mockClose;
 }
 
-const HEARTBEAT_KEY = 'storycraft-ai-leader-heartbeat';
+const HEARTBEAT_KEY = 'worldscript-ai-leader-heartbeat';
 
 beforeEach(() => {
   vi.useFakeTimers();

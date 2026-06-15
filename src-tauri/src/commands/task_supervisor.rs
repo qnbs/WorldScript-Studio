@@ -2,7 +2,7 @@
 //!
 //! QNBS-v3: Native compute backend for the hybrid router. The TS side
 //! (`services/tauriTaskBridge.ts` + `services/hybridRouter.ts`) already routes to
-//! `storycraft_task_supervisor_submit` / `storycraft_task_supervisor_ping` when
+//! `worldscript_task_supervisor_submit` / `worldscript_task_supervisor_ping` when
 //! `enableRustCompute` is on and a Tauri runtime is detected. This module supplies
 //! the missing native half: a deterministic, dependency-light task dispatcher plus
 //! one real CPU-bound task (`text.analyze`) that is genuinely worth offloading the
@@ -71,7 +71,7 @@ pub struct TextAnalysis {
 /// Health-check command. Any non-error response signals the supervisor is reachable;
 /// the TS bridge treats a successful resolve as "Rust compute available".
 #[tauri::command]
-pub fn storycraft_task_supervisor_ping() -> Result<String, String> {
+pub fn worldscript_task_supervisor_ping() -> Result<String, String> {
     Ok(SUPERVISOR_VERSION.to_string())
 }
 
@@ -81,7 +81,7 @@ pub fn storycraft_task_supervisor_ping() -> Result<String, String> {
 /// tasks; reserves `Err` for transport-level problems (none currently). This keeps
 /// the router's fallback logic driven by `result.success`, not by a thrown error.
 #[tauri::command]
-pub fn storycraft_task_supervisor_submit(request: RustTaskRequest) -> Result<RustTaskResultEvent, String> {
+pub fn worldscript_task_supervisor_submit(request: RustTaskRequest) -> Result<RustTaskResultEvent, String> {
     let started = Instant::now();
     let task_id = request.task_id.clone();
 
@@ -266,7 +266,7 @@ mod tests {
             timeout_ms: 1000,
             retry_policy: None,
         };
-        let res = storycraft_task_supervisor_submit(req).unwrap();
+        let res = worldscript_task_supervisor_submit(req).unwrap();
         assert!(!res.success);
         assert!(res.error.is_some());
         assert_eq!(res.payload, Value::Null);
@@ -283,7 +283,7 @@ mod tests {
             timeout_ms: 1000,
             retry_policy: None,
         };
-        let res = storycraft_task_supervisor_submit(req).unwrap();
+        let res = worldscript_task_supervisor_submit(req).unwrap();
         assert!(res.success);
         assert!(res.error.is_none());
         assert_eq!(res.payload["wordCount"], json!(5));
@@ -301,7 +301,7 @@ mod tests {
             timeout_ms: 1000,
             retry_policy: None,
         };
-        let res = storycraft_task_supervisor_submit(req).unwrap();
+        let res = worldscript_task_supervisor_submit(req).unwrap();
         assert!(!res.success);
         assert!(res.error.unwrap().contains("payload.text"));
     }

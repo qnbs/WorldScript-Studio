@@ -260,7 +260,7 @@ export const evaluateAdapterThunk = createAsyncThunk<
         const { testOllamaAdapterPrompt } = await import('../../services/lora/loraOllamaService');
         try {
           adapted = await testOllamaAdapterPrompt(
-            `storycraft-${adapterId.slice(0, 8)}`,
+            `worldscript-${adapterId.slice(0, 8)}`,
             prompt,
             AbortSignal.timeout(30_000),
           );

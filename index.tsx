@@ -68,7 +68,7 @@ function renderStartupError(message: string) {
   const rootEl = document.getElementById('root');
   if (!rootEl || rootEl.childElementCount > 0) return;
   const safe = String(message).replace(/[<>&]/g, (c) => `&#${c.charCodeAt(0)};`);
-  rootEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#f1f5f9;text-align:center;padding:2rem;flex-direction:column;gap:1rem"><h1 style="font-size:1.5rem;font-weight:700">StoryCraft Studio</h1><p style="color:#94a3b8">A critical startup error occurred. Please reload the page.</p><pre style="background:#1e293b;border-radius:.5rem;padding:.75rem 1rem;font-size:.8rem;color:#fca5a5;max-width:36rem;overflow:auto;text-align:left">${safe}</pre><button onclick="location.reload()" style="padding:.5rem 1.25rem;border-radius:.5rem;border:1px solid #334155;background:#1e293b;color:#f1f5f9;cursor:pointer;font-family:inherit">Reload</button></div>`;
+  rootEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#f1f5f9;text-align:center;padding:2rem;flex-direction:column;gap:1rem"><h1 style="font-size:1.5rem;font-weight:700">WorldScript Studio</h1><p style="color:#94a3b8">A critical startup error occurred. Please reload the page.</p><pre style="background:#1e293b;border-radius:.5rem;padding:.75rem 1rem;font-size:.8rem;color:#fca5a5;max-width:36rem;overflow:auto;text-align:left">${safe}</pre><button onclick="location.reload()" style="padding:.5rem 1.25rem;border-radius:.5rem;border:1px solid #334155;background:#1e293b;color:#f1f5f9;cursor:pointer;font-family:inherit">Reload</button></div>`;
 }
 
 window.addEventListener('error', (event) => {
@@ -102,7 +102,7 @@ function StorageErrorScreen({ message, onReset }: { message: string; onReset: ()
         gap: '1rem',
       }}
     >
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>StoryCraft Studio</h1>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>WorldScript Studio</h1>
       <p style={{ color: '#94a3b8', maxWidth: '32rem' }}>
         The local database could not be opened. This can happen after a browser update or when
         storage is full.

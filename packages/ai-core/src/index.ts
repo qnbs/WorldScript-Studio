@@ -233,7 +233,7 @@ async function runWebLlmLayer(
   signal?: AbortSignal,
 ): Promise<string | null> {
   if (signal?.aborted) throw new Error('Aborted');
-  // QNBS-v3: Only one tab loads WebLLM — avoids GPU/RAM collision across multiple StoryCraft tabs.
+  // QNBS-v3: Only one tab loads WebLLM — avoids GPU/RAM collision across multiple WorldScript tabs.
   if (!hasWebGpu || !gpuTabLeader) return null;
   const mod = await import('./vendor-webllm');
   type EngineModule = typeof mod & {
@@ -344,7 +344,7 @@ export async function runLocalTextGeneration(
     return {
       layer: 'webllm',
       text:
-        'WebLLM: Another StoryCraft tab holds the local inference lock. Close extra tabs or use Ollama. Preview: ' +
+        'WebLLM: Another WorldScript tab holds the local inference lock. Close extra tabs or use Ollama. Preview: ' +
         sanitizedPrompt.slice(0, 160) +
         (sanitizedPrompt.length > 160 ? '…' : ''),
     };

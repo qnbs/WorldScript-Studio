@@ -8,7 +8,7 @@ import { logger } from './logger';
 
 export interface InitStorageResult {
   success: boolean;
-  /** Whether a legacy storycraft-db migration was performed. */
+  /** Whether a legacy worldscript-db migration was performed. */
   migrated: boolean;
   /** Human-readable error message when success === false. */
   error?: string;
@@ -106,8 +106,8 @@ export async function resetAllDatabases(): Promise<void> {
   await Promise.all([deleteIdb(STATE_DB_NAME), deleteIdb(DATA_DB_NAME)]);
 
   // Remove localStorage markers that guard migration idempotency + any plotBoard viewport state.
-  // QNBS-v3: Only storycraft-specific keys; avoids wiping unrelated site storage.
-  const prefix = ['storycraft', 'plotBoard', 'schemaVersion', '__legacy_storycraft'];
+  // QNBS-v3: Only worldscript-specific keys; avoids wiping unrelated site storage.
+  const prefix = ['worldscript', 'plotBoard', 'schemaVersion', '__legacy_worldscript'];
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
     if (key && prefix.some((p) => key.startsWith(p))) {

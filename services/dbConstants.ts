@@ -1,9 +1,9 @@
 /** Shared IndexedDB names and store identifiers — keep in sync with upgrade paths in `dbService.ts`. */
 
-export const LEGACY_DB_NAME = 'storycraft-db';
+export const LEGACY_DB_NAME = 'worldscript-db';
 
-export const STATE_DB_NAME = 'storycraft-state-db';
-export const DATA_DB_NAME = 'storycraft-data-db';
+export const STATE_DB_NAME = 'worldscript-state-db';
+export const DATA_DB_NAME = 'worldscript-data-db';
 
 /** Current schema version for both state and data DBs. */
 // QNBS-v3: v8 — projects-index-store for Cross-Project-Search v2; backwards-compatible addStore migration.
@@ -21,4 +21,4 @@ export const CODEX_STORE = 'codex-store';
 export const BINDER_ASSETS_STORE = 'binder-assets-store';
 
 /** Written to `APP_DATA_STORE` after a successful legacy → dual-DB copy (idempotency). */
-export const LEGACY_DB_MIGRATION_MARKER_KEY = '__legacy_storycraft_db_migrated__';
+export const LEGACY_DB_MIGRATION_MARKER_KEY = '__legacy_worldscript_db_migrated__';

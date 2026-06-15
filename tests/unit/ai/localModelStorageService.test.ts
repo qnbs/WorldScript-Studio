@@ -29,7 +29,7 @@ const ALL_CACHE_NAMES = [
   'webllm/model',
   'webllm/wasm',
   'transformers-cache',
-  'storycraft-logs-db', // not a model cache
+  'worldscript-logs-db', // not a model cache
   'workbox-precache', // not a model cache
 ];
 
@@ -63,7 +63,7 @@ describe('LOCAL_MODEL_CACHE_PATTERNS', () => {
     expect(matches('mlc-chat-config')).toBe(true);
     expect(matches('tvmjs')).toBe(true);
     expect(matches('transformers-cache')).toBe(true);
-    expect(matches('storycraft-logs-db')).toBe(false);
+    expect(matches('worldscript-logs-db')).toBe(false);
     expect(matches('workbox-precache')).toBe(false);
   });
 });
@@ -120,7 +120,7 @@ describe('clearLocalModels', () => {
     expect(del).toHaveBeenCalledWith('webllm/model');
     expect(del).toHaveBeenCalledWith('transformers-cache');
     // Non-model buckets are never deleted.
-    expect(del).not.toHaveBeenCalledWith('storycraft-logs-db');
+    expect(del).not.toHaveBeenCalledWith('worldscript-logs-db');
   });
 
   it('does not throw and counts only successful deletes when one bucket fails', async () => {

@@ -1,5 +1,5 @@
 // QNBS-v3: Two-layer inference cache — in-memory LRU for hot paths, IndexedDB for persistence.
-//          Adapted from CannaGuide-2025 cacheService.ts patterns for StoryCraft creative context.
+//          Adapted from CannaGuide-2025 cacheService.ts patterns for WorldScript creative context.
 
 const IN_MEMORY_MAX = 64;
 const IDB_MAX_ENTRIES = 256;
@@ -7,7 +7,7 @@ const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // QNBS-v3: Skip caching for long prompts — they're likely unique streaming contexts.
 const SKIP_CACHE_PROMPT_LENGTH = 512;
 const IDB_STORE = 'inference-cache';
-const IDB_DB_NAME = 'storycraft-inference-cache-db';
+const IDB_DB_NAME = 'worldscript-inference-cache-db';
 const IDB_DB_VERSION = 1;
 
 interface CacheEntry {

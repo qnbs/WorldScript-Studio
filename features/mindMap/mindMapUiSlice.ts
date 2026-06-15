@@ -13,7 +13,7 @@ export interface MindMapUiState {
   editingNodeId: string | null;
 }
 
-const STORAGE_KEY = 'storycraft-mind-map-ui';
+const STORAGE_KEY = 'worldscript-mind-map-ui';
 
 const defaultState: MindMapUiState = {
   activeMindMapId: null,

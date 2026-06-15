@@ -148,7 +148,7 @@ const handlerFlags = extractHandlerFlags(hookSrc);
 let errors = 0;
 let warnings = 0;
 
-console.log(bold('\n=== StoryCraft Studio — Feature Parity Audit ===\n'));
+console.log(bold('\n=== WorldScript Studio — Feature Parity Audit ===\n'));
 console.log(`Found ${sliceFlags.length} flags in FeatureFlagsState\n`);
 
 const rows: Array<{

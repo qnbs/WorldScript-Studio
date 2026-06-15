@@ -4,8 +4,8 @@
  * QNBS-v3: localStorage heartbeat for fast-path detection of alive leaders across reloads.
  */
 
-const CHANNEL_NAME = 'storycraft-local-ai-tab-leader-v1';
-const HEARTBEAT_KEY = 'storycraft-ai-leader-heartbeat';
+const CHANNEL_NAME = 'worldscript-local-ai-tab-leader-v1';
+const HEARTBEAT_KEY = 'worldscript-ai-leader-heartbeat';
 // QNBS-v3: Heartbeat refreshed every 5s; leader considered stale after 2.4× that (12s),
 //          giving enough slack for background-throttled tabs.
 const HEARTBEAT_INTERVAL_MS = 5_000;

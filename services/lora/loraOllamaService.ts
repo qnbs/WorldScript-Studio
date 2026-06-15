@@ -136,6 +136,6 @@ export async function testOllamaAdapterPrompt(
 /** List only adapter-capable models (those tagged with LoRA style in metadata). */
 export async function listOllamaAdapterModels(baseUrl?: string): Promise<OllamaModel[]> {
   const all = await listOllamaModels(baseUrl);
-  // Filter by name convention: storycraft-lora-* or any user-created lora models
-  return all.filter((m) => m.name.includes('lora') || m.name.startsWith('storycraft-'));
+  // Filter by name convention: worldscript-lora-* or any user-created lora models
+  return all.filter((m) => m.name.includes('lora') || m.name.startsWith('worldscript-'));
 }

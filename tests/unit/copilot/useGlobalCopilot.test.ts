@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { mockDispatch, mockStop, state, aiOptions } = vi.hoisted(() => ({
   mockDispatch: vi.fn(),
   mockStop: vi.fn(),
-  // QNBS-v3 (Batch 1.2): capture the options the hook passes to useStoryCraftAI so tests can
+  // QNBS-v3 (Batch 1.2): capture the options the hook passes to useWorldScriptAI so tests can
   // invoke its onError callback.
   aiOptions: { current: null as null | { onError?: (err: Error) => void } },
   state: {
@@ -49,8 +49,8 @@ vi.mock('../../../app/transientUiStore', () => ({
       setCopilotInsightExpanded: vi.fn(),
     }),
 }));
-vi.mock('../../../hooks/useStoryCraftAI', () => ({
-  useStoryCraftAI: (opts: { onError?: (err: Error) => void }) => {
+vi.mock('../../../hooks/useWorldScriptAI', () => ({
+  useWorldScriptAI: (opts: { onError?: (err: Error) => void }) => {
     aiOptions.current = opts;
     return { runCompletion: vi.fn(), stop: mockStop, isLoading: false };
   },

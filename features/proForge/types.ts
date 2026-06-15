@@ -1,5 +1,5 @@
 /**
- * Core types for the StoryCraft ProForge Ultimate Author Pipeline.
+ * Core types for the WorldScript ProForge Ultimate Author Pipeline.
  * QNBS-v3: Strict typing for the 8-stage agentic pipeline with Human-in-the-Loop gates.
  */
 

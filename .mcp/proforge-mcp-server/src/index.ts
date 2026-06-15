@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ProForge MCP Server — exposes the StoryCraft ProForge Core Capability Layer to external AI agents.
+ * ProForge MCP Server — exposes the WorldScript ProForge Core Capability Layer to external AI agents.
  * QNBS-v3: A thin stdio MCP adapter. All business logic lives in the repo's Core Capability Layer
  * (services/proForge/proForgeCapabilityLayer.ts) via the Node adapter — this file only registers the
  * 5 tools and connects the transport.

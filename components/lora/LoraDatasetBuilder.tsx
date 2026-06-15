@@ -66,7 +66,7 @@ export default React.memo(function LoraDatasetBuilder() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `storycraft-dataset-${format}-${Date.now()}.jsonl`;
+      a.download = `worldscript-dataset-${format}-${Date.now()}.jsonl`;
       a.click();
       URL.revokeObjectURL(url);
     },

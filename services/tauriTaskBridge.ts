@@ -1,5 +1,5 @@
 // QNBS-v3: Phase 2 — Tauri bridge for Rust TaskSupervisor. Requires Tauri 2 + the Rust command
-//          `storycraft_task_supervisor_submit` and `storycraft_task_supervisor_ping` registered in
+//          `worldscript_task_supervisor_submit` and `worldscript_task_supervisor_ping` registered in
 //          src-tauri/src/commands/task_supervisor.rs. Gracefully unavailable in web-browser context.
 
 import type { RustTaskRequest, RustTaskResultEvent } from '@domain/worker-bus';
@@ -18,7 +18,7 @@ export async function invokeRustTask(request: RustTaskRequest): Promise<RustTask
   }
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const result = await invoke<RustTaskResultEvent>('storycraft_task_supervisor_submit', {
+    const result = await invoke<RustTaskResultEvent>('worldscript_task_supervisor_submit', {
       request,
     });
     log.info('Rust TaskSupervisor completed task', {
@@ -48,7 +48,7 @@ export async function isRustComputeAvailable(): Promise<boolean> {
   }
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('storycraft_task_supervisor_ping');
+    await invoke('worldscript_task_supervisor_ping');
     _rustAvailableCache = { value: true, checkedAt: now };
     return true;
   } catch {
