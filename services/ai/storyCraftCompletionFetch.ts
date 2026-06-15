@@ -12,7 +12,7 @@ import {
   normalizeOpenAiCompatibleBaseUrl,
 } from './modelNormalization';
 import {
-  createLanguageModelForStoryCraft,
+  createLanguageModelForWorldScript,
   providerToKind,
   type StoryCraftLanguageModelConfig,
 } from './providerFactory';
@@ -179,7 +179,7 @@ export async function storyCraftCompletionFetch(
       });
     }
 
-    const model = createLanguageModelForStoryCraft(resolved);
+    const model = createLanguageModelForWorldScript(resolved);
     const temperature = CREATIVITY_TO_TEMPERATURE[parsed.creativity as AiCreativity];
     const maxOutputTokens = parsed.maxOutputTokens ?? 2048;
 
