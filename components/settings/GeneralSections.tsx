@@ -421,7 +421,9 @@ export const AboutSection: FC = React.memo(() => {
           >
             {ICONS.WRITER}
           </svg>
-          <h3 className="text-2xl font-bold text-[var(--sc-text-primary)]">WorldScript Studio</h3>
+          <h3 className="text-2xl font-bold text-[var(--sc-text-primary)]">
+            {t('settings.about.productName')}
+          </h3>
           <p>
             {t('settings.about.versionLabel')} {packageJson.version}
           </p>

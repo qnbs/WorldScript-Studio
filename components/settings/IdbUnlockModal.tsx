@@ -12,43 +12,68 @@ interface Props {
 
 const ATTEMPT_STORAGE_KEY = 'worldscript-idb-unlock-attempts';
 const LOCKOUT_STORAGE_KEY = 'worldscript-idb-unlock-lockout';
+const LEGACY_ATTEMPT_STORAGE_KEY = 'storycraft-idb-unlock-attempts';
+const LEGACY_LOCKOUT_STORAGE_KEY = 'storycraft-idb-unlock-lockout';
 
-function getAttemptCount(): number {
+function readInt(key: string, legacyKey: string): number {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
   try {
-    return Number.parseInt(localStorage.getItem(ATTEMPT_STORAGE_KEY) ?? '0', 10);
+    let raw = window.localStorage.getItem(key);
+    // QNBS-v3: Rebrand migration — read legacy StoryCraft lockout state once, then move to the new key.
+    if (raw === null) {
+      raw = window.localStorage.getItem(legacyKey);
+      if (raw !== null) {
+        window.localStorage.setItem(key, raw);
+        window.localStorage.removeItem(legacyKey);
+      }
+    }
+    return Number.parseInt(raw ?? '0', 10);
   } catch {
     return 0;
   }
 }
 
+function getAttemptCount(): number {
+  return readInt(ATTEMPT_STORAGE_KEY, LEGACY_ATTEMPT_STORAGE_KEY);
+}
+
 function setAttemptCount(n: number): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   try {
-    localStorage.setItem(ATTEMPT_STORAGE_KEY, String(n));
+    window.localStorage.setItem(ATTEMPT_STORAGE_KEY, String(n));
   } catch {
     /* storage blocked */
   }
 }
 
 function getLockoutUntil(): number {
-  try {
-    return Number.parseInt(localStorage.getItem(LOCKOUT_STORAGE_KEY) ?? '0', 10);
-  } catch {
-    return 0;
-  }
+  return readInt(LOCKOUT_STORAGE_KEY, LEGACY_LOCKOUT_STORAGE_KEY);
 }
 
 function setLockoutUntil(ts: number): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   try {
-    localStorage.setItem(LOCKOUT_STORAGE_KEY, String(ts));
+    window.localStorage.setItem(LOCKOUT_STORAGE_KEY, String(ts));
   } catch {
     /* storage blocked */
   }
 }
 
 function clearAttemptTracking(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   try {
-    localStorage.removeItem(ATTEMPT_STORAGE_KEY);
-    localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+    window.localStorage.removeItem(ATTEMPT_STORAGE_KEY);
+    window.localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_ATTEMPT_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_LOCKOUT_STORAGE_KEY);
   } catch {
     /* storage blocked */
   }

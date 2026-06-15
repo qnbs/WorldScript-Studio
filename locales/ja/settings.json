@@ -797,5 +797,6 @@
   "voice.modelDownload.error": "ダウンロードに失敗しました: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% 完了",
   "voice.modelDownload.retry": "リトライ",
-  "voice.modelDownload.title": "音声モデルのダウンロード"
+  "voice.modelDownload.title": "音声モデルのダウンロード",
+  "settings.about.productName": "WorldScript Studio"
 }

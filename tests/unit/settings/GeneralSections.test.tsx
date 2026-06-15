@@ -30,7 +30,7 @@ const defaultMockSettings = () => ({
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
-    t: (k: string) => k,
+    t: (k: string) => (k === 'settings.about.productName' ? 'WorldScript Studio' : k),
     language: 'en',
     handleLanguageChange: mockHandleLanguageChange,
     settings: { ...defaultMockSettings(), ...settingsRef.current },
@@ -211,7 +211,7 @@ describe('AboutSection', () => {
   it('renders app version information', async () => {
     render(<AboutSection />);
     // App name should be present
-    expect(screen.getByText(/StoryCraft/i)).toBeInTheDocument();
+    expect(screen.getByText(/WorldScript/i)).toBeInTheDocument();
   });
 });
 

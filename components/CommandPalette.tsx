@@ -588,7 +588,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </span>
             <span>{t('palette.footer.pinHint')}</span>
           </div>
-          <span>WorldScript Studio</span>
+          <span>{t('settings.about.productName')}</span>
         </div>
       </div>
     </div>

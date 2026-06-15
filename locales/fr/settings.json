@@ -797,5 +797,6 @@
   "voice.modelDownload.error": "Échec du téléchargement : {{error}}",
   "voice.modelDownload.progress": "{{percent}}% terminé",
   "voice.modelDownload.retry": "Réessayer",
-  "voice.modelDownload.title": "Téléchargement du modèle vocal"
+  "voice.modelDownload.title": "Téléchargement du modèle vocal",
+  "settings.about.productName": "WorldScript Studio"
 }
