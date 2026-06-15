@@ -51,7 +51,8 @@ export interface FeatureFlagsState {
   enableGlobalCopilot: boolean;
 }
 
-const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
+const FEATURE_FLAGS_STORAGE_KEY = 'worldscript-feature-flags';
+const LEGACY_FEATURE_FLAGS_STORAGE_KEY = 'worldscript-feature-flags';
 
 const defaultFeatureFlagsState: FeatureFlagsState = {
   // QNBS-v3: all flags on by default so new installs get the full feature set immediately
@@ -89,7 +90,18 @@ const loadFeatureFlagsState = (): FeatureFlagsState => {
   }
 
   try {
-    const stored = localStorage.getItem(FEATURE_FLAGS_STORAGE_KEY);
+    let stored = localStorage.getItem(FEATURE_FLAGS_STORAGE_KEY);
+
+    // QNBS-v3: Rebrand migration — migrate legacy WorldScript feature flags once, then drop the old key.
+    if (!stored) {
+      const legacy = localStorage.getItem(LEGACY_FEATURE_FLAGS_STORAGE_KEY);
+      if (legacy) {
+        localStorage.setItem(FEATURE_FLAGS_STORAGE_KEY, legacy);
+        localStorage.removeItem(LEGACY_FEATURE_FLAGS_STORAGE_KEY);
+        stored = legacy;
+      }
+    }
+
     if (!stored) {
       return defaultFeatureFlagsState;
     }
