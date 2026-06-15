@@ -29,7 +29,10 @@ function readInt(key: string, legacyKey: string): number {
         window.localStorage.removeItem(legacyKey);
       }
     }
-    return Number.parseInt(raw ?? '0', 10);
+    // QNBS-v3: corrupt/non-numeric storage values parse to NaN, which would poison the lockout
+    // math (Date.now() + NaN) and the countdown UI — normalize any invalid parse to 0.
+    const parsed = Number.parseInt(raw ?? '0', 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
   } catch {
     return 0;
   }
