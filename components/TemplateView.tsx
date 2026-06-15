@@ -455,7 +455,7 @@ const CommunityTab: FC = () => {
       title: s.title,
       content: s.description ? `# ${s.title}\n\n${s.description}` : '',
     }));
-    const event = new CustomEvent('storycraft:applyTemplate', {
+    const event = new CustomEvent('worldscript:applyTemplate', {
       detail: { title: ct.name, sections },
     });
     window.dispatchEvent(event);

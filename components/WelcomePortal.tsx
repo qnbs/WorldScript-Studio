@@ -170,7 +170,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       projectGoals: { totalWordCount: 15000, targetDate: null },
       writingHistory: [] as const,
     };
-    return new File([JSON.stringify(payload)], 'storycraft-demo.json', {
+    return new File([JSON.stringify(payload)], 'worldscript-demo.json', {
       type: 'application/json',
     });
   };

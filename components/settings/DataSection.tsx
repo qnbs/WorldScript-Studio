@@ -44,7 +44,7 @@ export const DataSection: FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `storycraft-library-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `worldscript-library-${new Date().toISOString().slice(0, 10)}.zip`;
       a.click();
       URL.revokeObjectURL(url);
       dispatch(
@@ -75,7 +75,7 @@ export const DataSection: FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'storycraft-settings.json';
+    a.download = 'worldscript-settings.json';
     a.click();
     URL.revokeObjectURL(url);
   };

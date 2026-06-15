@@ -30,7 +30,7 @@ export const CommunitySection: React.FC = () => {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <a
-              href="https://github.com/qnbs/StoryCraft-Studio/discussions"
+              href="https://github.com/qnbs/WorldScript-Studio/discussions"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-4 py-3 hover:bg-[var(--sc-surface-overlay)] transition-colors group min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
@@ -61,7 +61,7 @@ export const CommunitySection: React.FC = () => {
             </a>
 
             <a
-              href="https://github.com/qnbs/StoryCraft-Studio/issues"
+              href="https://github.com/qnbs/WorldScript-Studio/issues"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-4 py-3 hover:bg-[var(--sc-surface-overlay)] transition-colors group min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
