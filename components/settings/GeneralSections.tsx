@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ICONS } from '../../constants';
+import { APP_NAME, ICONS } from '../../constants';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { defaultThemeCustomization } from '../../features/settings/settingsSlice';
@@ -421,7 +421,7 @@ export const AboutSection: FC = React.memo(() => {
           >
             {ICONS.WRITER}
           </svg>
-          <h3 className="text-2xl font-bold text-[var(--sc-text-primary)]">WorldScript Studio</h3>
+          <h3 className="text-2xl font-bold text-[var(--sc-text-primary)]">{APP_NAME}</h3>
           <p>
             {t('settings.about.versionLabel')} {packageJson.version}
           </p>

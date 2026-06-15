@@ -1,5 +1,8 @@
 /** Shared IndexedDB names and store identifiers — keep in sync with upgrade paths in `dbService.ts`. */
 
+// QNBS-v3: pre-release rebrand — no shipped installs / no existing users, so there is no legacy
+// storycraft-* database to migrate from. `worldscript-*` are the canonical names going forward;
+// the LEGACY_DB_NAME path simply no-ops (it never finds a pre-dual-DB database).
 export const LEGACY_DB_NAME = 'worldscript-db';
 
 export const STATE_DB_NAME = 'worldscript-state-db';
