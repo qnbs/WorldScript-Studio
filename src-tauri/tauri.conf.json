@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "StoryCraft Studio",
+  "productName": "WorldScript Studio",
   "version": "1.23.0",
-  "identifier": "com.storycraft.studio",
+  "identifier": "com.worldscript.studio",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "StoryCraft Studio",
+        "title": "WorldScript Studio",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
@@ -34,8 +34,8 @@
     "category": "Productivity",
     "publisher": "QNBS",
     "copyright": "© 2026 QNBS. Licensed under MIT.",
-    "shortDescription": "AI-powered creative writing application",
-    "longDescription": "StoryCraft Studio is an offline-first, AI-powered creative writing application with local LLM inference, plot boards, character management, and manuscript export.",
+    "shortDescription": "AI-powered creative writing and world-building application",
+    "longDescription": "WorldScript Studio is an offline-first, AI-powered creative writing application with local LLM inference, plot boards, character management, and manuscript export.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -45,17 +45,17 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["storycraft"],
-        "name": "StoryCraft Project",
-        "description": "StoryCraft Studio creative writing project",
-        "mimeType": "application/x-storycraft-project",
+        "ext": ["worldscript"],
+        "name": "WorldScript Project",
+        "description": "WorldScript Studio creative writing project",
+        "mimeType": "application/x-worldscript-project",
         "role": "Editor"
       },
       {
-        "ext": ["scst"],
-        "name": "StoryCraft Project",
-        "description": "StoryCraft Studio creative writing project (short extension)",
-        "mimeType": "application/x-storycraft-project",
+        "ext": ["wsst"],
+        "name": "WorldScript Project",
+        "description": "WorldScript Studio creative writing project (short extension)",
+        "mimeType": "application/x-worldscript-project",
         "role": "Editor"
       }
     ],
@@ -74,8 +74,8 @@
     "updater": {
       "active": true,
       "endpoints": [
-        "https://github.com/qnbs/StoryCraft-Studio/releases/latest/download/latest.json",
-        "https://qnbs.github.io/StoryCraft-Studio/updater/latest.json"
+        "https://github.com/qnbs/WorldScript-Studio/releases/latest/download/latest.json",
+        "https://qnbs.github.io/WorldScript-Studio/updater/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZBOTlDOEIxNUYyQzA5RUEKUldUcUNTeGZzY2laYW8yU21QNldMbzZQcTFmUDNTdVZ5RHhNenFkSTVGNTRoTllTRXpBcjJyVVMK",
       "windows": {
@@ -84,7 +84,7 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["storycraft"]
+        "schemes": ["worldscript"]
       }
     }
   }
