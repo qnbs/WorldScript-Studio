@@ -14,14 +14,16 @@ function getItem(key: string): string | null {
   }
 }
 
-function setItem(key: string, value: string): void {
+function setItem(key: string, value: string): boolean {
   if (typeof window === 'undefined') {
-    return;
+    return false;
   }
   try {
     window.localStorage.setItem(key, value);
+    return true;
   } catch {
-    // localStorage may be blocked or unavailable.
+    // localStorage may be blocked or unavailable (quota / private mode).
+    return false;
   }
 }
 
@@ -44,8 +46,12 @@ export function loadFeatureFlags(): string | null {
   if (!stored) {
     const legacy = getItem(LEGACY_FEATURE_FLAGS_STORAGE_KEY);
     if (legacy) {
-      setItem(FEATURE_FLAGS_STORAGE_KEY, legacy);
-      removeItem(LEGACY_FEATURE_FLAGS_STORAGE_KEY);
+      // QNBS-v3: only drop the legacy key once the new key is confirmed written. setItem can
+      // fail silently (quota/private-storage), and an unconditional delete would erase the saved
+      // flags. If the write fails we keep the legacy key and still use its value this session.
+      if (setItem(FEATURE_FLAGS_STORAGE_KEY, legacy)) {
+        removeItem(LEGACY_FEATURE_FLAGS_STORAGE_KEY);
+      }
       stored = legacy;
     }
   }

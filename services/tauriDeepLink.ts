@@ -131,7 +131,9 @@ export async function initTauriDeepLink(
  */
 export function isWorldScriptProjectFile(filePath: string): boolean {
   const ext = filePath.split('.').pop()?.toLowerCase();
-  return ext === 'worldscript' || ext === 'wsst' || filePath.endsWith('.json');
+  // QNBS-v3: compare the lowercased ext for every extension (incl. json) so uppercase forms
+  // like `.JSON` / `.WORLDSCRIPT` are accepted, not just lowercase.
+  return ext === 'worldscript' || ext === 'wsst' || ext === 'json';
 }
 
 /**
@@ -140,5 +142,6 @@ export function isWorldScriptProjectFile(filePath: string): boolean {
 export function getProjectIdFromPath(filePath: string): string {
   const lastSegment = filePath.split(/[/\\]/).pop();
   if (!lastSegment) return 'unknown';
-  return lastSegment.replace(/\.(worldscript|wsst|json)$/, '') || 'unknown';
+  // QNBS-v3: case-insensitive so uppercase extensions (.WORLDSCRIPT/.WSST/.JSON) are stripped too.
+  return lastSegment.replace(/\.(worldscript|wsst|json)$/i, '') || 'unknown';
 }

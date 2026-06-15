@@ -28,6 +28,9 @@ describe('tauriDeepLink', () => {
     it('handles mixed case extensions', () => {
       expect(isWorldScriptProjectFile('/path/to/project.WORLDSCRIPT')).toBe(true);
       expect(isWorldScriptProjectFile('/path/to/project.Wsst')).toBe(true);
+      // QNBS-v3: .json must also be case-insensitive (was a case-sensitive endsWith).
+      expect(isWorldScriptProjectFile('/path/to/project.JSON')).toBe(true);
+      expect(isWorldScriptProjectFile('/path/to/project.Json')).toBe(true);
     });
   });
 
@@ -50,6 +53,12 @@ describe('tauriDeepLink', () => {
 
     it('handles path without extension', () => {
       expect(getProjectIdFromPath('/path/to/project')).toBe('project');
+    });
+
+    it('strips uppercase extensions (case-insensitive)', () => {
+      expect(getProjectIdFromPath('/path/to/my-novel.WORLDSCRIPT')).toBe('my-novel');
+      expect(getProjectIdFromPath('/path/to/my-novel.WSST')).toBe('my-novel');
+      expect(getProjectIdFromPath('/path/to/my-novel.JSON')).toBe('my-novel');
     });
   });
 });
