@@ -11,7 +11,7 @@
 - **Primary deploy target:** Static SPA on GitHub Pages (`/WorldScript-Studio/` base path)
 - **Secondary targets:** Vercel (root base) and Cloudflare Pages via edge builds (`pnpm run build:edge`)
 - **Desktop:** Tauri 2 bundles for Linux (AppImage), macOS (DMG), and Windows (MSI); auto-updater enabled via `latest.json`
-- **Version:** `1.22.0`
+- **Version:** `1.23.0`
 - **License:** MIT
 
 The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRouter, Ollama, WebLLM, ONNX Runtime Web, Transformers.js), four AI execution modes (Hybrid / Cloud / Local / Eco), real-time collaboration with E2E encryption, a Plot Board v2 with swimlane/canvas/timeline modes, character/world management, manuscript export, voice dictation, and an 11-locale i18n layer.
