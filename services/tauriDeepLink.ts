@@ -62,7 +62,7 @@ export async function initTauriDeepLink(
             // On Windows, the URL might be worldscript:///C:/path/to/file.worldscript
             // On Linux, it might be worldscript:///home/user/file.worldscript
             // QNBS-v3: Strip worldscript:// prefix and normalize Windows drive-letter paths
-            filePath = url.replace(/^worldscript:\/\/?/, '');
+            filePath = url.replace(/^worldscript:\/{0,2}/, '');
             // Windows paths like /C:/... need the leading slash removed
             if (/^[A-Za-z]:/.test(filePath)) {
               filePath = filePath.replace(/^\/+/, '');
