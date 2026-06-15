@@ -129,7 +129,7 @@ WorldScript Studio registers `.worldscript` and `.wsst` file extensions for nati
 ### Configuration
 
 - `tauri.conf.json` → `bundle.fileAssociations` registers both extensions with `role: "Editor"`
-- `tauri.conf.json` → `app.deepLink.protocols` enables `worldscript://` protocol
+- `tauri.conf.json` → `plugins.deep-link.desktop.schemes` enables `worldscript://` (and legacy `storycraft://`) protocol
 - `src-tauri/src/lib.rs` → `RunEvent::Opened` and `RunEvent::SecondInstance` handlers
 - `services/tauriDeepLink.ts` → Frontend event listener for `open-project-file`
 
