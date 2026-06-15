@@ -13,13 +13,16 @@ import {
 
 // Open a fresh provider, read the persisted 'greeting' text, and tear it down. Used to probe what
 // has actually reached IndexedDB without depending on wall-clock delays.
+// QNBS-v3 (CodeAnt): teardown in `finally` so a throw never leaks the provider / IDB connection.
 async function readPersisted(projectId: string): Promise<string> {
   const doc = new Y.Doc();
   const persistence = persistProjectDoc(projectId, doc);
-  await persistence.whenSynced;
-  const value = doc.getText('greeting').toString();
-  await persistence.destroy();
-  return value;
+  try {
+    await persistence.whenSynced;
+    return doc.getText('greeting').toString();
+  } finally {
+    await persistence.destroy();
+  }
 }
 
 describe('B1.1 — docPersistence (y-indexeddb)', () => {
@@ -32,45 +35,54 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
     expect(isIndexedDbAvailable()).toBe(true);
     const doc = new Y.Doc();
     const persistence = persistProjectDoc('availability', doc);
-    expect(persistence.active).toBe(true);
-    await persistence.whenSynced; // resolves without throwing
-    await persistence.clearData();
-    await persistence.destroy();
+    try {
+      expect(persistence.active).toBe(true);
+      await persistence.whenSynced; // resolves without throwing
+      await persistence.clearData();
+    } finally {
+      await persistence.destroy();
+    }
   });
 
   it('persists doc updates and reloads them into a fresh doc', async () => {
     const projectId = 'roundtrip';
     const docA = new Y.Doc();
     const pA = persistProjectDoc(projectId, docA);
-    await pA.whenSynced;
-    docA.getText('greeting').insert(0, 'hello world');
+    try {
+      await pA.whenSynced;
+      docA.getText('greeting').insert(0, 'hello world');
 
-    // QNBS-v3 (CodeAnt): poll a fresh provider until the update has propagated to IndexedDB —
-    // condition-driven, no wall-clock guess. (Fake timers can't advance fake-indexeddb's async
-    // IDBRequest resolution, so vi.waitFor polling is the deterministic mechanism here.)
-    await vi.waitFor(
-      async () => {
-        expect(await readPersisted(projectId)).toBe('hello world');
-      },
-      { timeout: 2000, interval: 50 },
-    );
-    await pA.destroy();
+      // QNBS-v3 (CodeAnt): poll a fresh provider until the update has propagated to IndexedDB —
+      // condition-driven, no wall-clock guess and no fixed-delay race. (Fake timers can't advance
+      // fake-indexeddb's async IDBRequest resolution, so vi.waitFor is the deterministic mechanism.)
+      await vi.waitFor(
+        async () => {
+          expect(await readPersisted(projectId)).toBe('hello world');
+        },
+        { timeout: 2000, interval: 50 },
+      );
+    } finally {
+      await pA.destroy();
+    }
   });
 
   it('clearData wipes persisted state', async () => {
     const projectId = 'wipe';
     const docA = new Y.Doc();
     const pA = persistProjectDoc(projectId, docA);
-    await pA.whenSynced;
-    docA.getText('greeting').insert(0, 'temporary');
-    await vi.waitFor(
-      async () => {
-        expect(await readPersisted(projectId)).toBe('temporary');
-      },
-      { timeout: 2000, interval: 50 },
-    );
-    await pA.clearData();
-    await pA.destroy();
+    try {
+      await pA.whenSynced;
+      docA.getText('greeting').insert(0, 'temporary');
+      await vi.waitFor(
+        async () => {
+          expect(await readPersisted(projectId)).toBe('temporary');
+        },
+        { timeout: 2000, interval: 50 },
+      );
+      await pA.clearData();
+    } finally {
+      await pA.destroy();
+    }
 
     expect(await readPersisted(projectId)).toBe('');
   });
