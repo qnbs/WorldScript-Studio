@@ -1,5 +1,5 @@
 # ============================================================
-# StoryCraft Studio – CI/CD Pipeline
+# WorldScript Studio – CI/CD Pipeline
 # security → quality (lint, i18n, tsgo, vitest+coverage) → build (+chunk budget, rollup analyze)
 #   ├→ e2e | storybook (parallel) ; lighthouse after build
 # deploy (main): needs build + e2e → GitHub Pages
@@ -460,10 +460,10 @@ jobs:
         env:
           CI: true
         run: |
-          # QNBS-v3: The GitHub Pages build has base=/StoryCraft-Studio/. Mirror that structure
+          # QNBS-v3: The GitHub Pages build has base=/WorldScript-Studio/. Mirror that structure
           # so http-server serves assets at the expected paths matching playwright.config baseURL.
-          mkdir -p serve_root/StoryCraft-Studio
-          cp -r dist/. serve_root/StoryCraft-Studio/
+          mkdir -p serve_root/WorldScript-Studio
+          cp -r dist/. serve_root/WorldScript-Studio/
           pnpm exec http-server serve_root -p 3000 -s &
           pnpm exec wait-on http://127.0.0.1:3000 --timeout 30000
           pnpm run test:vrt

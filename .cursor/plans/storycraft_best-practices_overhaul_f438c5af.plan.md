@@ -1,6 +1,6 @@
 ---
-name: StoryCraft Best-Practices Overhaul
-overview: "Systematisches Qualitäts- und Content-Programm für StoryCraft-Studio: Audit-Matrix aller Dimensionen, messbare Best-Practices-Spezifikation (besonders App-Inhalte), dann priorisierte Umsetzung in Phasen — ohne bestehende Funktionalität zu brechen und mit realistischen Gates statt unmessbarer „100 %-Perfektion“."
+name: WorldScript Best-Practices Overhaul
+overview: "Systematisches Qualitäts- und Content-Programm für WorldScript-Studio: Audit-Matrix aller Dimensionen, messbare Best-Practices-Spezifikation (besonders App-Inhalte), dann priorisierte Umsetzung in Phasen — ohne bestehende Funktionalität zu brechen und mit realistischen Gates statt unmessbarer „100 %-Perfektion“."
 todos:
   - id: phase1-content-audit
     content: "Phase 1: Glossar + String-Pass (portal/help/tour/settings/commands) + Community-Templates-Strategie/Schema + Demo-Flow Toast statt alert + FR/ES/IT Qualität"
@@ -20,7 +20,7 @@ todos:
 isProject: false
 ---
 
-# StoryCraft Studio — Global Audit & Best-Practices-Programm
+# WorldScript Studio — Global Audit & Best-Practices-Programm
 
 ## Prämisse (messbar statt absolut)
 

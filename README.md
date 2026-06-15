@@ -1,6 +1,6 @@
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/qnbs/StoryCraft-Studio)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/qnbs/WorldScript-Studio)
 
-# ✨ StoryCraft Studio: Your AI-Powered Narrative Universe ✨
+# ✨ WorldScript Studio: Your AI-Powered Narrative Universe ✨
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
@@ -14,12 +14,12 @@
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-11_locales-2706_keys-0EA5E9" alt="i18n 11 locales — 2706 keys">
   <img src="https://img.shields.io/badge/Tests-5807%2B_%2F_481_files-22C55E" alt="5807+ tests / 481 files">
-  <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
+  <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
-  <img src="https://img.shields.io/github/actions/workflow/status/qnbs/StoryCraft-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
-  <img src="https://img.shields.io/codecov/c/github/qnbs/StoryCraft-Studio?logo=codecov" alt="Codecov Coverage">
+  <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
+  <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/Lighthouse-90%2B-brightgreen" alt="Lighthouse Score">
-  <a href="https://qnbs.github.io/StoryCraft-Studio/"><img src="https://img.shields.io/badge/▶_Launch_Live-GitHub_Pages-22C55E?logo=github&logoColor=white" alt="Launch live on GitHub Pages"></a>
+  <a href="https://qnbs.github.io/WorldScript-Studio/"><img src="https://img.shields.io/badge/▶_Launch_Live-GitHub_Pages-22C55E?logo=github&logoColor=white" alt="Launch live on GitHub Pages"></a>
   <!-- CII Best Practices badge — register project at https://bestpractices.coreinfrastructure.org/ to activate -->
   <a href="https://bestpractices.coreinfrastructure.org/projects/XXXX"><img src="https://bestpractices.coreinfrastructure.org/projects/XXXX/badge" alt="CII Best Practices"></a>
 </p>
@@ -28,7 +28,7 @@
 
 ## ⚠️ Legal Disclaimer
 
-> **Educational & Personal Use**: StoryCraft Studio is a creative writing tool for educational and personal use. It does not provide professional, medical, legal, or financial advice. Users are solely responsible for the content they create and must comply with all applicable local laws and platform policies.
+> **Educational & Personal Use**: WorldScript Studio is a creative writing tool for educational and personal use. It does not provide professional, medical, legal, or financial advice. Users are solely responsible for the content they create and must comply with all applicable local laws and platform policies.
 
 ---
 
@@ -38,10 +38,10 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 | | Host | Link |
 |---|---|---|
-| 🟢 | **GitHub Pages** _(always-on mirror — auto-deployed from `main` on every green build)_ | **🚀 <https://qnbs.github.io/StoryCraft-Studio/> 🚀** |
-| ▲ | **Vercel** _(primary)_ | <https://storycraft-studio-indol.vercel.app/> |
+| 🟢 | **GitHub Pages** _(always-on mirror — auto-deployed from `main` on every green build)_ | **🚀 <https://qnbs.github.io/WorldScript-Studio/> 🚀** |
+| ▲ | **Vercel** _(primary)_ | <https://worldscript-studio.vercel.app/> |
 
-> **Tip:** If the Vercel build is ever rate-limited, the **[GitHub Pages mirror](https://qnbs.github.io/StoryCraft-Studio/)** is always live and current.
+> **Tip:** If the Vercel build is ever rate-limited, the **[GitHub Pages mirror](https://qnbs.github.io/WorldScript-Studio/)** is always live and current.
 
 ✨ _Try it right now — no installation, no account required. All data is saved securely in your browser's IndexedDB._ ✨
 
@@ -52,7 +52,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 ---
 
-**StoryCraft Studio is a cutting-edge, AI-enhanced application meticulously engineered for authors, screenwriters, and creators.** It transforms the daunting task of writing into a seamless, inspiring journey from a fleeting idea to a polished manuscript. By integrating a multi-provider AI stack — including Google Gemini, OpenAI, OpenRouter, Grok, Claude, Ollama, and a fully browser-native 4-layer local inference engine — with an intuitive, offline-first interface, StoryCraft Studio acts as your all-in-one creative co-pilot, empowering you to build, write, and refine your narrative universe without compromise. Four **AI Execution Modes** (Hybrid · Cloud · Local · Eco) let you choose the right balance between quality, privacy, and battery life at any moment.
+**WorldScript Studio is a cutting-edge, AI-enhanced application meticulously engineered for authors, screenwriters, and creators.** It transforms the daunting task of writing into a seamless, inspiring journey from a fleeting idea to a polished manuscript. By integrating a multi-provider AI stack — including Google Gemini, OpenAI, OpenRouter, Grok, Claude, Ollama, and a fully browser-native 4-layer local inference engine — with an intuitive, offline-first interface, WorldScript Studio acts as your all-in-one creative co-pilot, empowering you to build, write, and refine your narrative universe without compromise. Four **AI Execution Modes** (Hybrid · Cloud · Local · Eco) let you choose the right balance between quality, privacy, and battery life at any moment.
 
 ---
 
@@ -60,7 +60,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 **The fastest path to value — no install, no account, no API key:**
 
-1. **Open the Live Demo** — [GitHub Pages (always-on)](https://qnbs.github.io/StoryCraft-Studio/) or [Vercel](https://storycraft-studio-indol.vercel.app/) → click **"Try Demo Project"** on the Welcome screen to load a populated story instantly.
+1. **Open the Live Demo** — [GitHub Pages (always-on)](https://qnbs.github.io/WorldScript-Studio/) or [Vercel](https://worldscript-studio.vercel.app/) → click **"Try Demo Project"** on the Welcome screen to load a populated story instantly.
 2. Open the **Manuscript** view (sidebar) and start typing. Press **`⌘K` / `Ctrl-K`** anytime for the Command Palette — every action is reachable from there.
 3. Want AI without a cloud key? **Settings → AI Provider → WebLLM** runs a model entirely in your browser (WebGPU; auto-falls back to ONNX/WASM on any device). Prefer cloud? Paste a Gemini/OpenAI key — it's encrypted at rest in your browser and only ever sent to that provider.
 
@@ -73,7 +73,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 ## 📖 Table of Contents
 
 - [Quick Start (60 seconds)](#-quick-start-60-seconds)
-- [Why StoryCraft Studio?](#-why-storycraft-studio)
+- [Why WorldScript Studio?](#-why-worldscript-studio)
 - [Features: A Comprehensive Creative Suite](#-features-a-comprehensive-creative-suite)
 - [AI Provider Stack](#-ai-provider-stack)
 - [Technology Deep Dive](#️-technology-deep-dive)
@@ -83,17 +83,17 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 - [A Creative Workflow](#-a-creative-workflow)
 - [Contributing](#-contributing)
 - [Documentation Hub](#-documentation-hub)
-- [Deutsche Version (German)](#-storycraft-studio-deutsch)
+- [Deutsche Version (German)](#-worldscript-studio-deutsch)
 
 ---
 
-## 🤔 Why StoryCraft Studio?
+## 🤔 Why WorldScript Studio?
 
-In a world of generic text editors and bloated writing software, StoryCraft Studio carves its own niche by focusing on a holistic, AI-augmented narrative design process.
+In a world of generic text editors and bloated writing software, WorldScript Studio carves its own niche by focusing on a holistic, AI-augmented narrative design process.
 
 - **✍️ From Macro to Micro:** Most tools focus only on writing. We cover the _entire_ creative lifecycle — from high-level plot structure and world-building down to sentence-by-sentence prose refinement.
 - **🧠 Intelligent Partnership:** The AI is not a ghostwriter — it's a Socratic partner, a tireless brainstormer, and a creative muse. It's designed to break blocks and expand your own potential, not replace it.
-- **🔒 Ultimate Privacy & Ownership:** Your manuscript and project data stay on this device by default (IndexedDB in the browser, or local files in the desktop app). Cloud AI features send only the prompts and context you trigger to the provider you configure. Use local/Ollama/WebLLM mode if you want AI without sending text to any cloud API. There is no StoryCraft account — you stay in control of exports and backups.
+- **🔒 Ultimate Privacy & Ownership:** Your manuscript and project data stay on this device by default (IndexedDB in the browser, or local files in the desktop app). Cloud AI features send only the prompts and context you trigger to the provider you configure. Use local/Ollama/WebLLM mode if you want AI without sending text to any cloud API. There is no WorldScript account — you stay in control of exports and backups.
 - **🔬 Built-in Quality Tools:** Go beyond writing with the AI Critic, Plot-Hole Detector, and RAG Consistency Checker — tools that help you catch narrative weaknesses before your readers do.
 - **⚡ Browser-Native AI:** A 4-layer local inference stack (WebGPU → ONNX WASM → Transformers.js → heuristics) means local AI works even without Ollama — entirely in-browser, no server, no download manager.
 
@@ -375,7 +375,7 @@ All eleven trees stay in key parity (`pnpm run i18n:check`). Language selection 
 
 ## 🧠 AI Provider Stack
 
-StoryCraft Studio supports **9 distinct AI execution paths**, automatically routing to the best available option based on the active **[AI Execution Mode](#-ai-execution-modes)**.
+WorldScript Studio supports **9 distinct AI execution paths**, automatically routing to the best available option based on the active **[AI Execution Mode](#-ai-execution-modes)**.
 
 | Layer | Provider | Requires | Notes |
 |-------|----------|----------|-------|
@@ -461,7 +461,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 ## 📂 Project Structure
 
 ```text
-StoryCraft-Studio/
+WorldScript-Studio/
 ├── packages/
 │   ├── ai-core/          # Local AI facade: 4-layer stack (WebLLM → ONNX → Transformers.js → heuristic)
 │   ├── collab-transport/ # Vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption baked in
@@ -510,7 +510,7 @@ For local development: **Node ≥ 22**, **pnpm 11** (`npm install -g pnpm`). For
 
 ### 🔐 Setting Up AI
 
-StoryCraft Studio supports local-only AI (no API key) as well as BYOK cloud providers:
+WorldScript Studio supports local-only AI (no API key) as well as BYOK cloud providers:
 
 #### Option A: Google Gemini / OpenAI / Claude / Grok (BYOK cloud)
 
@@ -545,7 +545,7 @@ Access 100+ open-source models — including strong free-tier options — throug
 No installation, no server, no API key — AI runs directly in your browser:
 
 1. **Open Settings → AI Provider** → select **WebLLM**
-2. StoryCraft Studio auto-detects WebGPU support and displays your GPU adapter + VRAM tier
+2. WorldScript Studio auto-detects WebGPU support and displays your GPU adapter + VRAM tier
 3. **Choose a model** from the dropdown (Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B) and click pre-download
 4. If no WebGPU is available, the ONNX Runtime Web layer activates automatically (WASM, any device)
 5. Transformers.js serves as a further fallback — WebGPU or WASM backend, no manual config needed
@@ -557,7 +557,7 @@ No installation, no server, no API key — AI runs directly in your browser:
 1. **Fork** this repository
 2. **Enable GitHub Pages:** Settings → Pages → Source: **GitHub Actions**
 3. **Push to `main`** — deployment runs automatically via GitHub Actions
-4. **Access your app** at `https://YOUR-USERNAME.github.io/StoryCraft-Studio/`
+4. **Access your app** at `https://YOUR-USERNAME.github.io/WorldScript-Studio/`
 
 ### ☁️ Deploying to Vercel (alternative)
 
@@ -567,8 +567,8 @@ Vercel is a **first-class** hosting option alongside Pages: connect the repo, us
 
 ```bash
 # Clone the repository
-git clone https://github.com/qnbs/StoryCraft-Studio.git
-cd StoryCraft-Studio
+git clone https://github.com/qnbs/WorldScript-Studio.git
+cd WorldScript-Studio
 
 # Install dependencies (Node ≥ 22, pnpm 11)
 pnpm install
@@ -608,7 +608,7 @@ pnpm run tauri:dev
 1. Create a `CNAME` file in `public/` with your domain:
 
    ```bash
-   echo "storycraft.yourdomain.com" > public/CNAME
+   echo "worldscript.yourdomain.com" > public/CNAME
    ```
 
 2. Configure DNS at your registrar:

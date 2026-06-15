@@ -20,9 +20,9 @@ vector it appeared to close (an attacker forcing a `fetch` to an arbitrary HTTPS
 AI prompt injection) remained open for all HTTPS targets.
 
 The obvious "fix" — drop `https:` and keep only the explicit allowlist — **breaks a shipped
-feature**. StoryCraft ships **BYOK** (bring-your-own-key) with a user-configurable
+feature**. WorldScript ships **BYOK** (bring-your-own-key) with a user-configurable
 `openAiCompatibleBaseUrl` (Settings → AI → custom base URL; see `features/settings/settingsSlice.ts`,
-`components/settings/AiProviderCard.tsx`, `services/ai/storyCraftCompletionFetch.ts`,
+`components/settings/AiProviderCard.tsx`, `services/ai/worldScriptCompletionFetch.ts`,
 `services/aiProviderService.ts`, `types.ts`). Users point the app at arbitrary self-hosted or
 third-party OpenAI-compatible proxies. Those origins are user data — they cannot be statically
 enumerated in a `<meta>` CSP shipped in the bundle. A strict allowlist would silently break every

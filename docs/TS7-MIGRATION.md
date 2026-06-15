@@ -4,7 +4,7 @@
 
 ## Overview
 
-StoryCraft Studio migrated from TypeScript 6.0.3 to TypeScript 7.0 (Go-based `tsgo`) for improved type-checking performance.
+WorldScript Studio migrated from TypeScript 6.0.3 to TypeScript 7.0 (Go-based `tsgo`) for improved type-checking performance.
 
 ## Architecture
 

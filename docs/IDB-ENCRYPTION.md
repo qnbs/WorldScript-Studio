@@ -8,7 +8,7 @@
 
 ## Overview
 
-StoryCraft Studio stores all project data in IndexedDB. API keys were already encrypted at rest via `dbService.ts` using AES-256-GCM with a locally-generated `CryptoKey`. As of v1.19.0 (B-1), `services/storage/storageEncryptionService.ts` extends at-rest encryption to all IDB stores using a passphrase-derived key, protecting data against offline extraction (e.g. from a shared or compromised browser profile).
+WorldScript Studio stores all project data in IndexedDB. API keys were already encrypted at rest via `dbService.ts` using AES-256-GCM with a locally-generated `CryptoKey`. As of v1.19.0 (B-1), `services/storage/storageEncryptionService.ts` extends at-rest encryption to all IDB stores using a passphrase-derived key, protecting data against offline extraction (e.g. from a shared or compromised browser profile).
 
 The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` (off by default — enable in Settings → Privacy → "Encrypt project data at rest"). **Passphrase UX is complete as of 2026-05-31 (Phase 1.1):**
 - `IdbUnlockModal` — prompts for passphrase on cold start when flag is on; rate-limiting: 3 failures → 5 s lockout, 6 failures → 30 s lockout
@@ -112,12 +112,12 @@ Uint8Array from IDB
 
 | Store | DB | Priority | Notes |
 | --- | --- | --- | --- |
-| `app-data` | `storycraft-state-db` | P1 | Contains Redux state including settings |
-| `storycraft-snapshots` | `storycraft-state-db` | P1 | Manuscript snapshots |
-| `storycraft-data-images` | `storycraft-data-db` | P2 | Binary blobs |
-| `storycraft-rag-vectors` | `storycraft-data-db` | P2 | Float32 embeddings |
-| `storycraft-codex` | `storycraft-data-db` | P3 | Extracted entities |
-| `storycraft-binder-assets` | `storycraft-data-db` | P3 | Binder attachments |
+| `app-data` | `worldscript-state-db` | P1 | Contains Redux state including settings |
+| `worldscript-snapshots` | `worldscript-state-db` | P1 | Manuscript snapshots |
+| `worldscript-data-images` | `worldscript-data-db` | P2 | Binary blobs |
+| `worldscript-rag-vectors` | `worldscript-data-db` | P2 | Float32 embeddings |
+| `worldscript-codex` | `worldscript-data-db` | P3 | Extracted entities |
+| `worldscript-binder-assets` | `worldscript-data-db` | P3 | Binder attachments |
 
 Stores `proforge-memory-bank`, `scene-revisions`, `cross-project-index` are in separate IDB databases; Phase 2 will encrypt them using the same derived key via a shared `idbEncrypt` / `idbDecrypt` helper.
 

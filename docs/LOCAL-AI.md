@@ -1,6 +1,6 @@
 # Local AI — Setup & Troubleshooting
 
-StoryCraft Studio can run its AI Co-Pilot **entirely on your device** — no API key, no
+WorldScript Studio can run its AI Co-Pilot **entirely on your device** — no API key, no
 network, no data leaving the browser. This guide explains how to set it up, what hardware
 it needs, how to manage the model downloads, and how the offline fallback works.
 
@@ -103,7 +103,7 @@ fallback. In **Local** and **Eco** modes, only the on-device chain is used.
 |---|---|---|
 | Download never starts / "Not available" | No WebGPU **and** no WASM fallback | Update browser; try a smaller ONNX model; or use Ollama. |
 | Download stalls or fails midway | Network drop or storage eviction | Cancel and retry; free space via **Clear Local Models**. |
-| "Another StoryCraft tab holds the local inference lock" | Multi-tab GPU contention | Close other StoryCraft tabs (only one tab loads the GPU model). |
+| "Another WorldScript tab holds the local inference lock" | Multi-tab GPU contention | Close other WorldScript tabs (only one tab loads the GPU model). |
 | Very slow generation | Low-end device / CPU fallback | Pick a smaller model or use **Eco** mode. |
 | Storage estimate unavailable | Browser without StorageManager | Informational only; downloads still work. |
 

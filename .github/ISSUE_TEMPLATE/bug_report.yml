@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug or unexpected behavior in StoryCraft Studio
+description: Report a bug or unexpected behavior in WorldScript Studio
 title: "[Bug]: "
 labels: ["bug", "needs-triage"]
 body:
@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time to report a bug! Please fill in as much detail as possible.
-        **Do not report security vulnerabilities here** — use [GitHub Private Vulnerability Reporting](https://github.com/qnbs/StoryCraft-Studio/security/advisories/new) instead.
+        **Do not report security vulnerabilities here** — use [GitHub Private Vulnerability Reporting](https://github.com/qnbs/WorldScript-Studio/security/advisories/new) instead.
 
   - type: textarea
     id: description
@@ -59,7 +59,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: Which version of StoryCraft Studio? (shown in Settings → About or the v badge in README)
+      description: Which version of WorldScript Studio? (shown in Settings → About or the v badge in README)
       placeholder: "e.g. v1.19.0"
     validations:
       required: true

@@ -1,14 +1,14 @@
 <!-- This file is written for AI coding agents. It assumes you know nothing about the project. Every claim below is derived from the actual codebase — do not generalize beyond what is documented here. -->
 
-# StoryCraft Studio — Agent Guide
+# WorldScript Studio — Agent Guide
 
 ---
 
 ## Project Overview
 
-**StoryCraft Studio** is an offline-first, AI-powered creative writing application. It is a React 19 single-page application (SPA) that runs in the browser as a Progressive Web App (PWA) and can also be packaged as a desktop app via Tauri 2. There is no backend server; all project data lives locally (IndexedDB in the browser, filesystem in Tauri). Cloud AI providers are optional and user-triggered only.
+**WorldScript Studio** is an offline-first, AI-powered creative writing application. It is a React 19 single-page application (SPA) that runs in the browser as a Progressive Web App (PWA) and can also be packaged as a desktop app via Tauri 2. There is no backend server; all project data lives locally (IndexedDB in the browser, filesystem in Tauri). Cloud AI providers are optional and user-triggered only.
 
-- **Primary deploy target:** Static SPA on GitHub Pages (`/StoryCraft-Studio/` base path)
+- **Primary deploy target:** Static SPA on GitHub Pages (`/WorldScript-Studio/` base path)
 - **Secondary targets:** Vercel (root base) and Cloudflare Pages via edge builds (`pnpm run build:edge`)
 - **Desktop:** Tauri 2 bundles for Linux (AppImage), macOS (DMG), and Windows (MSI); auto-updater enabled via `latest.json`
 - **Version:** `1.22.0`
@@ -65,7 +65,7 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
 ## Project Structure
 
 ```text
-StoryCraft-Studio/
+WorldScript-Studio/
 ├── app/                    # Redux store setup, typed hooks, listener middleware, Zustand transient store
 ├── components/             # React view components; components/ui/ = design-system primitives
 │   ├── ui/                 # Atoms: Button, Modal, Toast, Input, etc.
@@ -275,7 +275,7 @@ Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks
 ### E2E Tests (Playwright)
 
 - **CI-only by policy:** `CI=true` is required (`pnpm run test:e2e`). CI runs Chromium desktop + Pixel 5 mobile emulation. Locally, Firefox is included; mobile only with `RUN_MOBILE_E2E=1`.
-- **Base URL:** `http://127.0.0.1:3000/StoryCraft-Studio`
+- **Base URL:** `http://127.0.0.1:3000/WorldScript-Studio`
 - **Do NOT use `networkidle`** against the Vite dev server (HMR keeps WebSocket open). Use `waitForSpaReady()` from `tests/e2e/helpers.ts`.
 - **Helpers:** `ensureBlankProject()`, `selectEnglish()`, `sidebar(page)` (scopes to `#sidebar`).
 - **Accessibility smoke:** `tests/e2e/a11y.spec.ts` runs axe-core on welcome route and Settings → Accessibility.
@@ -337,7 +337,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 | Target | Build Command | Vite Base |
 |--------|---------------|-----------|
-| GitHub Pages (canonical) | `pnpm run build` | `/StoryCraft-Studio/` |
+| GitHub Pages (canonical) | `pnpm run build` | `/WorldScript-Studio/` |
 | Vercel | `pnpm run build:edge` | `/` |
 | Cloudflare Pages | `pnpm run build:edge` | `/` |
 
@@ -410,11 +410,11 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 - `services/ai/index.ts` — canonical entry; exports orchestration layer built on `@ai-sdk/google`, `@ai-sdk/openai`, and the `ai` package.
 - `providerFactory.ts` — `LanguageModel` factory.
-- `storyCraftCompletionFetch.ts` — custom fetch adapter.
+- `worldScriptCompletionFetch.ts` — custom fetch adapter.
 - `aiPolicy.ts` — `assertCloudAiAllowed` gates all cloud AI calls.
 - `aiRetry.ts` — `withTransientRetry(fn, opts)` wraps provider calls with transient-error retries.
 - `services/ai/providers/openrouterProvider.ts` — OpenRouter gateway with circuit breaker and free-tier catalog.
-- `hooks/useStoryCraftAI.ts` — wraps `useCompletion` from `@ai-sdk/react`.
+- `hooks/useWorldScriptAI.ts` — wraps `useCompletion` from `@ai-sdk/react`.
 
 ### AI Execution Modes
 
@@ -497,7 +497,7 @@ Central orchestration layer for all background worker tasks. Messages use short 
 
 ## Desktop (Tauri)
 
-- `src-tauri/tauri.conf.json` configures the window, CSP, updater, deep links (`storycraft://`), and file associations (`.storycraft`, `.scst`).
+- `src-tauri/tauri.conf.json` configures the window, CSP, updater, deep links (`worldscript://`), and file associations (`.worldscript`, `.scst`).
 - `src-tauri/Cargo.toml` defines the Rust crate; `rust-compute` feature optionally includes `candle-core` + `candle-nn` for Rust-side inference.
 - `vite.config.ts` externalizes all `@tauri-apps/*` modules for web builds.
 - Tauri plugins: log, fs, http, dialog, shell, updater, window-state, deep-link, single-instance.

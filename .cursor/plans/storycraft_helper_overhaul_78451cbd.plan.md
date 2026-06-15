@@ -1,5 +1,5 @@
 ---
-name: StoryCraft Helper Overhaul
+name: WorldScript Helper Overhaul
 overview: "Schritt-1-Audit und Spezifikation: Feature-Mapping vom Ist-Zustand (Redux/Zustand, monolithische Palette, fehlende Shortcut-UI) zu einem kohärenten „Creative OS“-Layer mit Weltklasse-Command-Palette, durchsuchbarem Settings-Hub, RAG-gestütztem Help und vereinheitlichten sekundären UI-Hilfen – ohne bestehende Kernfunktionen zu brechen."
 todos:
   - id: registry-shortcuts
@@ -23,7 +23,7 @@ todos:
 isProject: false
 ---
 
-# StoryCraft Studio: Helper-Layer & Command-Center (Audit + Spezifikation)
+# WorldScript Studio: Helper-Layer & Command-Center (Audit + Spezifikation)
 
 ## Kontext aus dem Code (relevant für das Mapping)
 

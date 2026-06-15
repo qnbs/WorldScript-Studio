@@ -1,10 +1,10 @@
-# Copilot Instructions — StoryCraft Studio
+# Copilot Instructions — WorldScript Studio
 
 ## Project Overview
 
-StoryCraft Studio is an AI-powered creative writing application built as an offline-first PWA. It combines a React 19 SPA with Google Gemini AI integration, IndexedDB persistence, and optional Tauri desktop packaging.
+WorldScript Studio is an AI-powered creative writing application built as an offline-first PWA. It combines a React 19 SPA with Google Gemini AI integration, IndexedDB persistence, and optional Tauri desktop packaging.
 
-**Live:** `https://qnbs.github.io/StoryCraft-Studio/`
+**Live:** `https://qnbs.github.io/WorldScript-Studio/`
 
 **Documentation map:** [`README.md`](../README.md#-documentation-hub) § Documentation Hub lists every maintainer `.md` guide (see also [`AUDIT.md`](../AUDIT.md)).
 

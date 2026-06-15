@@ -1,6 +1,6 @@
 # i18n — Intl.RelativeTimeFormat
 
-> **Binding reference.** StoryCraft Studio uses native `Intl.RelativeTimeFormat` for relative time formatting.
+> **Binding reference.** WorldScript Studio uses native `Intl.RelativeTimeFormat` for relative time formatting.
 
 ## Overview
 

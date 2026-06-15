@@ -1,12 +1,12 @@
-# StoryCraft Studio Design System
+# WorldScript Studio Design System
 
 Runtime styling is **CSS-first** (`index.css`); TypeScript mirrors live in `@domain/ui` (`packages/ui/src/tokens.ts`).
 
 ## Principles
 
 - **Single vocabulary**: Use `--sc-*` variables exclusively. The bridge aliases below are **DEPRECATED** — kept only in `index.css` for backward compatibility until DS-5 removes them.
-- **No `dark:` Tailwind prefix in components**: StoryCraft uses body-class theming (`.light-theme` / `.dark-theme`), not Tailwind's `dark:` media-query mechanism. Using `dark:` bypasses appearance presets and will break sepia/fantasy/romance themes.
-- **Accessibility**: High contrast uses `.accessibility-high-contrast` on `body`; reduced motion uses `.storycraft-reduced-motion` plus `prefers-reduced-motion`.
+- **No `dark:` Tailwind prefix in components**: WorldScript uses body-class theming (`.light-theme` / `.dark-theme`), not Tailwind's `dark:` media-query mechanism. Using `dark:` bypasses appearance presets and will break sepia/fantasy/romance themes.
+- **Accessibility**: High contrast uses `.accessibility-high-contrast` on `body`; reduced motion uses `.worldscript-reduced-motion` plus `prefers-reduced-motion`.
 - **Internationalization**: User-facing labels for presets live in locale bundles (`settings.appearance.preset*`).
 
 ## Semantic tokens (overview)

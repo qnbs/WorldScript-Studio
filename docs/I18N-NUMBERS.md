@@ -1,6 +1,6 @@
 # i18n — Intl.NumberFormat
 
-> **Binding reference.** StoryCraft Studio uses native `Intl.NumberFormat` for locale-aware number formatting.
+> **Binding reference.** WorldScript Studio uses native `Intl.NumberFormat` for locale-aware number formatting.
 
 ## Overview
 

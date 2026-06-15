@@ -1,4 +1,4 @@
-# Accessibility (StoryCraft Studio)
+# Accessibility (WorldScript Studio)
 
 Maintainer reference: where accessibility is anchored in the app and how we verify it.
 

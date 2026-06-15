@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Plugin sandbox adversarial test coverage:** `tests/unit/workers/plugin.worker.test.ts` gains WebAssembly-denial, `GeneratorFunction`/`AsyncGeneratorFunction` constructor-escape, and guard-restoration (success + error path) tests for the v1.22 plugin-isolation hardening. New living audit artifact `docs/AUDIT-PERFECTION-PLAN-v1.23.md` tracks the 6-phase perfection engagement and its follow-ups.
 - **AI error taxonomy (`services/ai/aiErrorTaxonomy.ts`):** pure `classifyAiError(err)` → `{ category, retryable, messageKey }` across transient / rateLimit / auth / network / offline / policy / invalidRequest / canceled / permanent (cancellations via `AbortError` fail fast — never retried). Consumed by the retry layer.
 - **Actionable AI error messages in the Copilot:** when an AI call fails, the Copilot now shows a localized, recovery-oriented message (e.g. "Invalid or missing API key — open Settings → AI & Models to add or update it.") instead of a generic "Something went wrong". Maps each taxonomy category to a new `error.ai.*` key (9 keys × 11 locales; translated in de/en/es/fr/it, English fallback in Beta/RTL) via a reusable `getAiErrorMessage(err, t)` helper.
-- **AI request correlation IDs:** each AI generation now gets one opaque correlation id (`newCorrelationId`, `services/logger.ts`) shared by the request-start log (`useStoryCraftAI`), the fetch-side failure log (`storyCraftCompletionFetch`, propagated via the request body), and the retry seam (`withTransientRetry`) — for end-to-end traceability. No prompts or keys are logged.
+- **AI request correlation IDs:** each AI generation now gets one opaque correlation id (`newCorrelationId`, `services/logger.ts`) shared by the request-start log (`useWorldScriptAI`), the fetch-side failure log (`worldScriptCompletionFetch`, propagated via the request body), and the retry seam (`withTransientRetry`) — for end-to-end traceability. No prompts or keys are logged.
+- **Rebrand to WorldScript Studio:** complete rename of StoryCraft Studio → WorldScript Studio across code, assets, PWA manifest, Tauri config, i18n (11 locales), docs, and CI/CD. New identifiers: `worldscript-studio` package, `com.worldscript.studio` Tauri identifier, `/WorldScript-Studio/` GitHub Pages base, `worldscript://` deep-link scheme, `.worldscript`/`.wsst` file associations. PWA service-worker cache names bumped to `worldscript-*` v1.23.0 to invalidate stale caches. Feature-Flags localStorage key migrated from `storycraft-feature-flags` to `worldscript-feature-flags`.
 - **Test coverage — Tauri filesystem backend (Phase 2):** `services/fs/` (the desktop FS storage chain — project/snapshot/asset/settings/codex stores + `fsCore`) went from **0% to ~81% line / ~66% branch** coverage via an in-memory fake-`TauriApis` harness that drives real round-trips (LZ-String compression, AES-GCM API-key encryption, JSON, import/export). 37 new tests (`tests/unit/services/fs/`).
 
 ### Fixed
@@ -994,24 +995,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTPS-only external API communication
 - Device-scoped encryption key derivation
 
-[1.20.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.19.0...v1.20.0
-[1.19.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.18.1...v1.19.0
-[1.18.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.18.0...v1.18.1
-[1.18.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.17.1...v1.18.0
-[1.17.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.17.0...v1.17.1
-[1.17.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.10.0...v1.17.0
-[1.11.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.10.0...v1.11.0
-[1.10.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.9.0...v1.10.0
-[1.9.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.8.0...v1.9.0
-[1.8.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.7.0...v1.8.0
-[1.7.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.6.0...v1.7.0
-[1.6.2]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.6.1...v1.6.2
-[1.6.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.6.0...v1.6.1
-[1.6.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.4.0...v1.6.0
-[1.5.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.4.0...v1.5.0
-[1.4.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.3.0...v1.4.0
-[1.3.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.2.0...v1.3.0
-[1.2.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.0.0...v1.2.0
-[1.1.1]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/qnbs/StoryCraft-Studio/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/qnbs/StoryCraft-Studio/releases/tag/v1.0.0
+[1.20.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.19.0...v1.20.0
+[1.19.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.18.1...v1.19.0
+[1.18.1]: https://github.com/qnbs/WorldScript-Studio/compare/v1.18.0...v1.18.1
+[1.18.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.17.1...v1.18.0
+[1.17.1]: https://github.com/qnbs/WorldScript-Studio/compare/v1.17.0...v1.17.1
+[1.17.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.10.0...v1.17.0
+[1.11.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.10.0...v1.11.0
+[1.10.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.6.0...v1.7.0
+[1.6.2]: https://github.com/qnbs/WorldScript-Studio/compare/v1.6.1...v1.6.2
+[1.6.1]: https://github.com/qnbs/WorldScript-Studio/compare/v1.6.0...v1.6.1
+[1.6.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.4.0...v1.6.0
+[1.5.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.0.0...v1.2.0
+[1.1.1]: https://github.com/qnbs/WorldScript-Studio/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/qnbs/WorldScript-Studio/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/qnbs/WorldScript-Studio/releases/tag/v1.0.0

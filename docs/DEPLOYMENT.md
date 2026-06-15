@@ -1,12 +1,12 @@
 # Deployment — GitHub Pages, Vercel & Cloudflare Pages
 
-StoryCraft Studio is a **static SPA** (Vite → `dist/`). API keys stay **client-side** in IndexedDB; do **not** put Gemini/OpenAI secrets in host **environment variables** for inference.
+WorldScript Studio is a **static SPA** (Vite → `dist/`). API keys stay **client-side** in IndexedDB; do **not** put Gemini/OpenAI secrets in host **environment variables** for inference.
 
 ## Base path matrix
 
 | Target | Build command | Vite `base` | Typical URL |
 |--------|---------------|-------------|---------------|
-| **GitHub Pages** (default CI) | `pnpm run build` | `/StoryCraft-Studio/` | `https://<user>.github.io/StoryCraft-Studio/` |
+| **GitHub Pages** (default CI) | `pnpm run build` | `/WorldScript-Studio/` | `https://<user>.github.io/WorldScript-Studio/` |
 | **Vercel** | `pnpm run build:edge` | `/` | `https://<project>.vercel.app/` |
 | **Cloudflare Pages** | `pnpm run build:edge` | `/` | `https://<project>.pages.dev/` |
 

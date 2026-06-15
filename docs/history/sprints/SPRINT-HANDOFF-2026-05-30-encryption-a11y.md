@@ -137,7 +137,7 @@
 - `ErrorBoundary` wraps views, so component errors would show retry UI, not blank screen
 
 **Likely candidates to investigate in Codespaces:**
-1. Browser DevTools console errors on `https://storycraft-studio-indol.vercel.app/`
+1. Browser DevTools console errors on `https://worldscript-studio.vercel.app/`
 2. Check if circular import caused by `storageEncryptionService → idbPassphraseSentinel → idbCore` creates a Vite bundle issue
 3. Check if the Vercel build uses edge/SSR config that fails at runtime with IDB access
 
@@ -174,7 +174,7 @@ The `deploy-cloudflare-pages.yml` fails on every push because the workflow file 
 **Investigation:**
 ```bash
 # Check if this was already failing before today
-gh api repos/qnbs/StoryCraft-Studio/deployments --jq '.[0:10] | .[].sha'
+gh api repos/qnbs/WorldScript-Studio/deployments --jq '.[0:10] | .[].sha'
 ```
 
 ### After CI is Green
@@ -256,7 +256,7 @@ pnpm exec vitest run tests/unit/THE_FAILING_FILE.test.ts
 
 # 6. Push and monitor CI
 git push origin main
-gh run watch  # or gh api repos/qnbs/StoryCraft-Studio/actions/runs
+gh run watch  # or gh api repos/qnbs/WorldScript-Studio/actions/runs
 
 # 7. Once CI green — run coverage + update badges
 pnpm run test:coverage

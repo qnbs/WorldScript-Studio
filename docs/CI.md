@@ -1,6 +1,6 @@
-# CI Reference — StoryCraft Studio
+# CI Reference — WorldScript Studio
 
-This document describes the **current** GitHub Actions pipeline (`/.github/workflows/ci.yml`) for StoryCraft Studio: job graph, tooling, and how to approximate runs locally.
+This document describes the **current** GitHub Actions pipeline (`/.github/workflows/ci.yml`) for WorldScript Studio: job graph, tooling, and how to approximate runs locally.
 
 For historical optimization notes (targets may predate the live workflow), see [`.github/ACTIONS-OPTIMIZATIONS.md`](../.github/ACTIONS-OPTIMIZATIONS.md).
 
@@ -175,7 +175,7 @@ For **Ubuntu 20.04 / 2–4 GB RAM** laptops: run the **Quick tier** natively (no
 
 **Full setup:** [`infra/low-end-ci/INSTALL.md`](../infra/low-end-ci/INSTALL.md) · **Daily checklist:** [`infra/low-end-ci/DAILY-DRIVER.md`](../infra/low-end-ci/DAILY-DRIVER.md)
 
-Baseline hardware eval: `infra/low-end-ci/eval-template.sh` → `~/storycraft-ci/eval-*.txt`
+Baseline hardware eval: `infra/low-end-ci/eval-template.sh` → `~/worldscript-ci/eval-*.txt`
 
 ---
 

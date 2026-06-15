@@ -1,5 +1,5 @@
 # ============================================================
-# StoryCraft Studio – Mutation Testing (Stryker) — Parallel + Incremental
+# WorldScript Studio – Mutation Testing (Stryker) — Parallel + Incremental
 # QNBS-v3: Matrix-parallel Stryker with per-module incremental caching.
 # Run manually via workflow_dispatch. Each matrix job targets one module
 # to keep wall-clock time low (~5–15 min per job vs. 30–45 min single job).

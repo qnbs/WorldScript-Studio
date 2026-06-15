@@ -2,7 +2,7 @@
 
 ## Overview
 
-Plot-Board v2 is StoryCraft's free-form scene canvas, replacing the swimlane-only view with three co-existing modes: **Swimlane** (Kanban), **Canvas** (free-form), and **Timeline** (Gantt-like). All modes share the same underlying data (`StorySection[]`) — no duplication.
+Plot-Board v2 is WorldScript's free-form scene canvas, replacing the swimlane-only view with three co-existing modes: **Swimlane** (Kanban), **Canvas** (free-form), and **Timeline** (Gantt-like). All modes share the same underlying data (`StorySection[]`) — no duplication.
 
 ## State Architecture
 
@@ -10,7 +10,7 @@ State is split across two slices by mutability tier:
 
 ### `features/plotBoard/plotBoardSlice.ts` — Ephemeral viewport / UI state
 - **NOT** wrapped by `redux-undo` — pan/zoom actions should not enter the undo history.
-- Persisted to `localStorage` (key `storycraft-plot-board`) via `plotBoardPersistenceMiddleware`.
+- Persisted to `localStorage` (key `worldscript-plot-board`) via `plotBoardPersistenceMiddleware`.
 - Reset on page load for drawing state (`isDrawingConnection`, `drawFromSectionId`, `selectedConnectionId`).
 - Holds: `activeMode`, `zoom`, `panX`, `panY`, `snapToGrid`, `selectedConnectionId`, `isDrawingConnection`, `drawFromSectionId`, `activeSubplotFilter`.
 

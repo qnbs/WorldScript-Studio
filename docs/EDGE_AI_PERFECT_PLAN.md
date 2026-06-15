@@ -1,6 +1,6 @@
 # Edge-AI Performance Audit & Perfection Cycle — Vollständiger Plan
 
-**Projekt:** StoryCraft-Studio v1.20.0
+**Projekt:** WorldScript-Studio v1.20.0
 **Gestartet:** 2026-05-31
 **Ziel:** Alle Edge-AI-Inference-Pfade von Stubs zu produktionsreifen, hardware-adaptiven Systemen mit Benchmarks und Compute-Shader-Beschleunigung heben.
 
