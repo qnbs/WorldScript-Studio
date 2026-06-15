@@ -6,19 +6,19 @@ import type { RootState } from '../app/store';
 import { selectEnableLoraAdapters } from '../features/featureFlags/featureFlagsSlice';
 import { selectActiveLoraOllamaTag } from '../features/lora/loraSelectors';
 import {
-  STORYCRAFT_COMPLETION_URL,
-  storyCraftCompletionFetch,
-} from '../services/ai/storyCraftCompletionFetch';
+  WORLDSCRIPT_COMPLETION_URL,
+  worldScriptCompletionFetch,
+} from '../services/ai/worldScriptCompletionFetch';
 import { createLogger, newCorrelationId } from '../services/logger';
 
 // QNBS-v3 (Phase 1): one correlation id per AI generation, shared by the request-start log here,
 // the fetch-side failure log, and the retry seam — for end-to-end traceability (no PII logged).
 const log = createLogger('ai.completion');
 
-export type StoryCraftIncrementalHandler = (fullText: string, delta: string) => void;
+export type WorldScriptIncrementalHandler = (fullText: string, delta: string) => void;
 
-export interface UseStoryCraftAIOptions {
-  onIncremental: StoryCraftIncrementalHandler;
+export interface UseWorldScriptAIOptions {
+  onIncremental: WorldScriptIncrementalHandler;
   onFinish?: (prompt: string, completion: string) => void;
   onError?: (error: Error) => void;
 }
@@ -27,7 +27,7 @@ export interface UseStoryCraftAIOptions {
  * Vercel AI SDK (`useCompletion`) + client-side `streamText` for Writer streaming.
  * Redux sync via `onIncremental` / `onFinish` — not written directly into the manuscript (see `services/ai/index.ts`).
  */
-export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
+export function useWorldScriptAI(options: UseWorldScriptAIOptions) {
   const provider = useAppSelector((s: RootState) => s.settings.advancedAi.provider);
   const model = useAppSelector((s: RootState) => s.settings.advancedAi.model);
   const ollamaBaseUrl = useAppSelector((s: RootState) => s.settings.advancedAi.ollamaBaseUrl);
@@ -83,9 +83,9 @@ export function useStoryCraftAI(options: UseStoryCraftAIOptions) {
   const correlationIdRef = useRef('');
 
   const { completion, complete, stop, isLoading, error, setCompletion } = useCompletion({
-    api: STORYCRAFT_COMPLETION_URL,
+    api: WORLDSCRIPT_COMPLETION_URL,
     streamProtocol: 'text',
-    fetch: storyCraftCompletionFetch,
+    fetch: worldScriptCompletionFetch,
     body,
     onFinish: (prompt, text) => {
       finishRef.current?.(prompt, text);
