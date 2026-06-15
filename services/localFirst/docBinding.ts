@@ -57,6 +57,9 @@ function commonOrder(a: string[], bSet: Set<string>): string[] {
 
 export class ProjectDocBinding {
   private readonly doc: Y.Doc;
+  // QNBS-v3 (CodeAnt): stamped on this binding's own transactions so observe() consumers can tell
+  // self-generated updates (origin === this.origin) from external ones and skip echoes.
+  readonly origin: symbol = Symbol('ProjectDocBinding');
 
   constructor(initial: ProjectData, doc?: Y.Doc) {
     this.doc = doc ?? createProjectDoc(initial);
@@ -106,21 +109,24 @@ export class ProjectDocBinding {
   }
 
   private reconcileSection(ySection: Y.Map<unknown>, section: StorySection): void {
+    const sectionKeys = new Set(Object.keys(section));
     for (const [key, value] of Object.entries(section)) {
       if (key === CONTENT_KEY) {
         const text = ySection.get(CONTENT_KEY);
         if (text instanceof Y.Text) {
           spliceText(text, typeof value === 'string' ? value : '');
         }
-      } else if (value !== undefined) {
-        if (JSON.stringify(ySection.get(key)) !== JSON.stringify(value)) {
-          ySection.set(key, structuredClone(value));
-        }
+      } else if (value === undefined) {
+        // QNBS-v3 (CodeAnt): a field cleared to undefined must be removed, not left stale. `key in
+        // section` stays true for an explicit-undefined property, so the trailing sweep won't catch it.
+        ySection.delete(key);
+      } else if (JSON.stringify(ySection.get(key)) !== JSON.stringify(value)) {
+        ySection.set(key, structuredClone(value));
       }
     }
-    // Drop keys that disappeared from the section (except content, always retained as Y.Text).
+    // Drop keys removed from the section entirely (content always retained as Y.Text).
     for (const key of [...ySection.keys()]) {
-      if (key !== CONTENT_KEY && !(key in section)) ySection.delete(key);
+      if (key !== CONTENT_KEY && !sectionKeys.has(key)) ySection.delete(key);
     }
   }
 
@@ -143,7 +149,13 @@ export class ProjectDocBinding {
   private reconcileMeta(project: ProjectData): void {
     const yMeta = this.doc.getMap(META);
     const skip = new Set([MANUSCRIPT, CHARACTERS, WORLDS]);
-    const nextKeys = new Set(Object.keys(project).filter((k) => !skip.has(k)));
+    // QNBS-v3 (CodeAnt): build nextKeys from keys with a DEFINED value (matching the write loop
+    // below), so a field cleared to undefined is dropped from the doc instead of left stale.
+    const nextKeys = new Set(
+      Object.entries(project)
+        .filter(([k, v]) => !skip.has(k) && v !== undefined)
+        .map(([k]) => k),
+    );
     for (const key of [...yMeta.keys()]) {
       if (!nextKeys.has(key)) yMeta.delete(key);
     }
@@ -157,14 +169,14 @@ export class ProjectDocBinding {
 
   /** Force a full re-projection — the self-heal path when verify() reports drift. */
   reproject(project: ProjectData): void {
-    applyProjectDataToDoc(this.doc, project);
+    this.doc.transact(() => applyProjectDataToDoc(this.doc, project), this.origin);
   }
 
   /** Write the current Redux project state into the doc — incrementally where structurally possible. */
   syncFromProject(project: ProjectData): void {
     const nextIds = project.manuscript.map((s) => s.id);
     if (!this.isIncrementalCompatible(nextIds)) {
-      applyProjectDataToDoc(this.doc, project);
+      this.doc.transact(() => applyProjectDataToDoc(this.doc, project), this.origin);
       return;
     }
     this.doc.transact(() => {
@@ -202,7 +214,7 @@ export class ProjectDocBinding {
       this.reconcileEntities(this.doc.getMap(CHARACTERS), project.characters.entities);
       this.reconcileEntities(this.doc.getMap(WORLDS), project.worlds.entities);
       this.reconcileMeta(project);
-    });
+    }, this.origin);
   }
 
   /**
@@ -234,14 +246,25 @@ export class ProjectDocBinding {
     if (JSON.stringify(restored.worlds.entities) !== JSON.stringify(project.worlds.entities)) {
       mismatches.push('worlds drift');
     }
-    if (restored.title !== project.title) mismatches.push('meta.title drift');
+
+    // QNBS-v3 (CodeAnt): verify EVERY meta field reconcileMeta() writes (title, logline, author,
+    // goals, outline, history…), not just title — otherwise drift in other fields evades self-heal.
+    const skip = new Set([MANUSCRIPT, CHARACTERS, WORLDS]);
+    const restoredMeta = restored as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(project)) {
+      if (skip.has(key) || value === undefined) continue;
+      if (JSON.stringify(restoredMeta[key]) !== JSON.stringify(value)) {
+        mismatches.push(`meta.${key} drift`);
+      }
+    }
 
     return { ok: mismatches.length === 0, mismatches };
   }
 
   /**
    * Subscribe to doc changes (the future doc → Redux hydrate direction). Returns an unsubscribe fn.
-   * Origin equals the binding instance for its own writes, so a future hydrate can ignore echoes.
+   * For this binding's own writes the update origin is `this.origin`, so a future hydrate can compare
+   * `origin === binding.origin` and ignore self-generated echoes.
    */
   observe(listener: (origin: unknown) => void): () => void {
     const handler = (_update: Uint8Array, origin: unknown) => listener(origin);

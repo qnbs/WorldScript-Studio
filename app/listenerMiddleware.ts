@@ -576,32 +576,70 @@ type LocalFirstHandle = {
 };
 let localFirstHandle: LocalFirstHandle | null = null;
 
-async function getLocalFirstHandle(project: ProjectData): Promise<LocalFirstHandle> {
-  const projectId = project.id ?? 'default';
-  if (localFirstHandle?.projectId === projectId) return localFirstHandle;
-  // Project switched (or first run) — tear down the previous handle before creating a new one.
-  if (localFirstHandle) {
-    await localFirstHandle.persistence.destroy().catch(() => undefined);
-    localFirstHandle = null;
-  }
-  const [{ createBlankProjectDoc }, { ProjectDocBinding }, { persistProjectDoc }] =
-    await Promise.all([
-      import('../services/localFirst/projectDoc'),
-      import('../services/localFirst/docBinding'),
-      import('../services/localFirst/docPersistence'),
-    ]);
-  const doc = createBlankProjectDoc();
-  const persistence = persistProjectDoc(projectId, doc);
-  await persistence.whenSynced; // load any persisted state first …
-  const binding = new ProjectDocBinding(project, doc); // … then project Redux over it (SoT wins)
-  localFirstHandle = { projectId, binding, persistence };
-  return localFirstHandle;
+// QNBS-v3 (CodeAnt): serialize all handle create/teardown so an overlapping sync run and an
+// enable/disable run can't race on the shared module-global and leave the wrong handle active.
+let localFirstLock: Promise<void> = Promise.resolve();
+function withLocalFirstLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = localFirstLock.then(fn, fn);
+  localFirstLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
-async function teardownLocalFirst(): Promise<void> {
-  const handle = localFirstHandle;
-  localFirstHandle = null;
-  if (handle) await handle.persistence.destroy().catch(() => undefined);
+function getLocalFirstHandle(project: ProjectData): Promise<LocalFirstHandle> {
+  return withLocalFirstLock(async () => {
+    const projectId = project.id ?? 'default';
+    if (localFirstHandle?.projectId === projectId) return localFirstHandle;
+    // Project switched (or first run) — tear down the previous handle before creating a new one.
+    if (localFirstHandle) {
+      await localFirstHandle.persistence.destroy().catch(() => undefined);
+      localFirstHandle = null;
+    }
+    const [{ createBlankProjectDoc }, { ProjectDocBinding }, { persistProjectDoc }] =
+      await Promise.all([
+        import('../services/localFirst/projectDoc'),
+        import('../services/localFirst/docBinding'),
+        import('../services/localFirst/docPersistence'),
+      ]);
+    const doc = createBlankProjectDoc();
+    const persistence = persistProjectDoc(projectId, doc);
+    await persistence.whenSynced; // load any persisted state first …
+    const binding = new ProjectDocBinding(project, doc); // … then project Redux over it (SoT wins)
+    localFirstHandle = { projectId, binding, persistence };
+    return localFirstHandle;
+  });
+}
+
+function teardownLocalFirst(): Promise<void> {
+  return withLocalFirstLock(async () => {
+    const handle = localFirstHandle;
+    localFirstHandle = null;
+    if (handle) await handle.persistence.destroy().catch(() => undefined);
+  });
+}
+
+// Shared shadow-sync run — used by both the debounced edit listener and the OFF→ON enable listener.
+async function runLocalFirstShadowSync(state: RootState): Promise<void> {
+  if (state.featureFlags?.enableLocalFirstSync !== true) return;
+  const projectState = state.project as ProjectStateWithHistory;
+  const presentData = projectState.present?.data ?? projectState.data;
+  if (!presentData || presentData.title === undefined) return;
+  try {
+    const handle = await getLocalFirstHandle(presentData);
+    handle.binding.syncFromProject(presentData);
+    const result = handle.binding.verify(presentData);
+    if (!result.ok) {
+      // Shadow phase: never affect the user. Log a count (no ids/content → no PII) and self-heal.
+      logger.warn('Local-First shadow drift — self-healing via re-projection', {
+        mismatchCount: result.mismatches.length,
+      });
+      handle.binding.reproject(presentData);
+    }
+  } catch (err) {
+    logger.warn('Local-First shadow sync failed (non-critical):', err);
+  }
 }
 
 addDebouncedListener(
@@ -610,27 +648,20 @@ addDebouncedListener(
     curr.project?.present !== prev.project?.present,
   1200,
   async (api) => {
-    const state = api.getState();
-    if (state.featureFlags?.enableLocalFirstSync !== true) return;
-    const projectState = state.project as ProjectStateWithHistory;
-    const presentData = projectState.present?.data ?? projectState.data;
-    if (!presentData || presentData.title === undefined) return;
-    try {
-      const handle = await getLocalFirstHandle(presentData);
-      handle.binding.syncFromProject(presentData);
-      const result = handle.binding.verify(presentData);
-      if (!result.ok) {
-        // Shadow phase: never affect the user. Log a count (no ids/content → no PII) and self-heal.
-        logger.warn('Local-First shadow drift — self-healing via re-projection', {
-          mismatchCount: result.mismatches.length,
-        });
-        handle.binding.reproject(presentData);
-      }
-    } catch (err) {
-      logger.warn('Local-First shadow sync failed (non-critical):', err);
-    }
+    await runLocalFirstShadowSync(api.getState());
   },
 );
+
+// QNBS-v3 (CodeAnt): OFF→ON must perform an immediate initial projection — otherwise the shadow doc
+// stays uninitialized until the user happens to make another edit.
+listenerMiddleware.startListening({
+  predicate: (_action, curr, prev) =>
+    (curr as RootState).featureFlags?.enableLocalFirstSync === true &&
+    (prev as RootState).featureFlags?.enableLocalFirstSync !== true,
+  effect: async (_action, listenerApi) => {
+    await runLocalFirstShadowSync(listenerApi.getState() as RootState);
+  },
+});
 
 // Tear down the shadow binding when the flag is turned off.
 listenerMiddleware.startListening({

@@ -158,4 +158,58 @@ describe('B1.1 — ProjectDocBinding (incremental shadow write-through)', () => 
     binding.syncFromProject(next2);
     expect(calls).toBe(after); // no further callbacks after unsubscribe
   });
+
+  it('clears a section field set to undefined (no stale Yjs value)', () => {
+    const project = smallProject();
+    const binding = new ProjectDocBinding(project);
+    expect(readProjectDoc(binding.getDoc()).manuscript[0]?.status).toBe('first-draft');
+
+    const next = smallProject();
+    const first = next.manuscript[0];
+    // Explicit-undefined (key present, value undefined) — the exact case the reconcile bug missed.
+    if (first) (first as unknown as Record<string, unknown>)['status'] = undefined;
+    binding.syncFromProject(next);
+
+    expect(readProjectDoc(binding.getDoc()).manuscript[0]?.status).toBeUndefined();
+    expect(binding.verify(next).ok).toBe(true);
+  });
+
+  it('clears a meta field set to undefined', () => {
+    const project = smallProject();
+    const binding = new ProjectDocBinding(project);
+    expect(readProjectDoc(binding.getDoc()).author).toBe('Bench Author');
+
+    const next = smallProject();
+    (next as unknown as Record<string, unknown>)['author'] = undefined;
+    binding.syncFromProject(next);
+
+    expect(readProjectDoc(binding.getDoc()).author).toBeUndefined();
+    expect(binding.verify(next).ok).toBe(true);
+  });
+
+  it('verify() detects drift in non-title meta fields (e.g. logline)', () => {
+    const project = smallProject();
+    const binding = new ProjectDocBinding(project);
+    binding.getDoc().getMap('meta').set('logline', 'tampered logline');
+
+    const result = binding.verify(project);
+    expect(result.ok).toBe(false);
+    expect(result.mismatches).toContain('meta.logline drift');
+  });
+
+  it('observe() stamps the binding origin on self-writes (echo filtering)', () => {
+    const project = smallProject();
+    const binding = new ProjectDocBinding(project);
+    const origins: unknown[] = [];
+    const unsubscribe = binding.observe((origin) => origins.push(origin));
+
+    const next = smallProject();
+    const first = next.manuscript[0];
+    if (first) first.content = `${first.content} edited`;
+    binding.syncFromProject(next);
+    unsubscribe();
+
+    expect(origins.length).toBeGreaterThan(0);
+    expect(origins.every((o) => o === binding.origin)).toBe(true);
+  });
 });
