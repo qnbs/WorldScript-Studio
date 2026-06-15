@@ -210,8 +210,9 @@ describe('AboutSection', () => {
 
   it('renders app version information', async () => {
     render(<AboutSection />);
-    // App name should be present
-    expect(screen.getByText(/WorldScript/i)).toBeInTheDocument();
+    // QNBS-v3: assert the exact product display name so a regression (e.g. dropping "Studio"
+    // or rendering a different label that still contains "WorldScript") fails the test.
+    expect(screen.getByText('WorldScript Studio')).toBeInTheDocument();
   });
 });
 
