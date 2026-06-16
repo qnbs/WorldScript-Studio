@@ -28,7 +28,7 @@ test.describe('LoRA Wizard (CI-only)', () => {
     await page.addInitScript(() => {
       try {
         localStorage.setItem(
-          'storycraft-feature-flags',
+          'worldscript-feature-flags',
           JSON.stringify({ enableLoraAdapters: true }),
         );
       } catch {

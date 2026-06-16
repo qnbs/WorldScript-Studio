@@ -182,7 +182,7 @@ export function sidebar(page: Page) {
  *
  * MUST be called BEFORE page.goto() — uses addInitScript so it runs before any app JS.
  * Only the specified keys are overridden; all other flags keep their slice defaults.
- * The storage key is 'storycraft-feature-flags' (mirrors featureFlagsSlice.ts).
+ * The storage key is 'worldscript-feature-flags' (mirrors featureFlagsSlice.ts).
  *
  * Example:
  *   await setFeatureFlags(page, { enableProForge: true });
@@ -194,12 +194,12 @@ export async function setFeatureFlags(
 ): Promise<void> {
   await page.addInitScript((overrides) => {
     try {
-      const stored = localStorage.getItem('storycraft-feature-flags');
+      const stored = localStorage.getItem('worldscript-feature-flags');
       const existing: Record<string, boolean> = stored
         ? (JSON.parse(stored) as Record<string, boolean>)
         : {};
       localStorage.setItem(
-        'storycraft-feature-flags',
+        'worldscript-feature-flags',
         JSON.stringify({ ...existing, ...overrides }),
       );
     } catch {

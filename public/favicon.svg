@@ -1,11 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="100" fill="#020617"/>
-  <path d="M150 200 L300 200 L350 350 L200 350 Z" fill="url(#grad)" />
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
     </linearGradient>
   </defs>
-  <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="200" fill="white" font-weight="bold">S</text>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <path d="M256 96 C160 96 96 160 96 256 C96 352 160 416 256 416 C352 416 416 352 416 256" 
+        fill="none" stroke="url(#glow)" stroke-width="32" stroke-linecap="round"/>
+  <path d="M256 160 L256 256 L320 288" 
+        fill="none" stroke="url(#glow)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="256" cy="256" r="24" fill="#f8fafc"/>
 </svg>
