@@ -33,7 +33,7 @@ tauri-plugin-window-state = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tokio = { version = "1", features = ["sync", "time", "process", "rt-multi-thread"] }
-candle-core = { version = "0.8", optional = true }
+candle-core = { version = "0.10", optional = true }
 candle-nn = { version = "0.10", optional = true }
 
 [profile.release]
