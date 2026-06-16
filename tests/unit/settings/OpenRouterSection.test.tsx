@@ -19,10 +19,16 @@ const mocks = vi.hoisted(() => ({
   clearCache: vi.fn(),
   resetCircuit: vi.fn(),
   isCircuitOpen: vi.fn().mockReturnValue(false),
-  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
   saveApiKey: vi.fn().mockResolvedValue(undefined),
   clearApiKey: vi.fn().mockResolvedValue(undefined),
   getApiKey: vi.fn().mockResolvedValue(null),
+  // QNBS-v3: mutable Redux settings the useAppSelector mock reads from — the policy block now derives
+  // from live aiMode + privacy, so tests drive it by mutating this (reset in beforeEach).
+  settingsState: {
+    openRouter: { enabled: false, preferredModel: 'deepseek/deepseek-r1:free' },
+    aiMode: 'cloud' as string,
+    privacy: { localStorageOnly: false } as { localStorageOnly: boolean },
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -36,16 +42,11 @@ vi.mock('../../../hooks/useTranslation', () => ({
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mocks.dispatch,
   useAppSelector: (selector: (state: unknown) => unknown) =>
-    selector({
-      settings: {
-        openRouter: { enabled: false, preferredModel: 'deepseek/deepseek-r1:free' },
-        aiMode: 'cloud',
-      },
-    }),
+    selector({ settings: mocks.settingsState }),
 }));
 
 vi.mock('../../../services/ai/aiPolicy', () => ({
-  assertCloudAiAllowed: (...args: unknown[]) => mocks.assertCloudAiAllowed(...args),
+  assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../../services/ai/openrouterModels', () => ({
@@ -185,7 +186,13 @@ describe('OpenRouterSection', () => {
     mocks.dispatch.mockImplementation(() => undefined);
     mocks.fetchModels.mockResolvedValue([]);
     mocks.validateKey.mockResolvedValue({ ok: true });
-    mocks.assertCloudAiAllowed.mockResolvedValue(undefined);
+    // QNBS-v3: reset the derived-policy inputs so a prior test's mutation doesn't leak.
+    mocks.settingsState.aiMode = 'cloud';
+    mocks.settingsState.privacy = { localStorageOnly: false };
+    mocks.settingsState.openRouter = {
+      enabled: false,
+      preferredModel: 'deepseek/deepseek-r1:free',
+    };
     mocks.saveApiKey.mockResolvedValue(undefined);
     mocks.clearApiKey.mockResolvedValue(undefined);
     mocks.getApiKey.mockResolvedValue(null);
@@ -318,21 +325,27 @@ describe('OpenRouterSection', () => {
       name: 'settings.openRouter.testConnection',
     });
     await waitFor(() => expect(testBtn).toBeEnabled());
-    // QNBS-v3: assertCloudAiAllowed also runs during the mount catalog effect; clear its call history
-    // so the assertions below prove the *click* performed the policy check + key validation, not mount.
-    mocks.assertCloudAiAllowed.mockClear();
+    mocks.validateKey.mockClear();
     await user.click(testBtn);
+    // Not policy-blocked (aiMode 'cloud' + localStorageOnly false) → proceeds to key validation.
     await waitFor(() => {
-      expect(mocks.assertCloudAiAllowed).toHaveBeenCalledWith('openrouter');
       expect(mocks.validateKey).toHaveBeenCalledWith('stored-key');
     });
   });
 
-  it('shows policy-blocked message when cloud AI is disallowed', async () => {
-    mocks.assertCloudAiAllowed.mockRejectedValue(new Error('blocked'));
+  it('shows the local-only policy-blocked message when localStorageOnly is on', async () => {
+    mocks.settingsState.privacy = { localStorageOnly: true };
     render(<OpenRouterSection />);
     await waitFor(() =>
-      expect(screen.getByText('settings.openRouter.policyBlocked')).toBeInTheDocument(),
+      expect(screen.getByText('settings.openRouter.policyBlocked.localOnly')).toBeInTheDocument(),
+    );
+  });
+
+  it('shows the mode policy-blocked message when AI mode is local/eco', async () => {
+    mocks.settingsState.aiMode = 'local';
+    render(<OpenRouterSection />);
+    await waitFor(() =>
+      expect(screen.getByText('settings.openRouter.policyBlocked.mode')).toBeInTheDocument(),
     );
   });
 
