@@ -1,7 +1,7 @@
 /**
  * Tauri Deep Link Service — handles native file associations and single-instance behavior.
  * QNBS-v3: Listens for `deep-link://new-url` events emitted from the deep-link plugin
- * when a .storycraft or .scst file is double-clicked or dragged onto the app icon.
+ * when a .worldscript or .wsst file is double-clicked or dragged onto the app icon.
  * Integrates with the existing importProjectThunk flow for seamless project loading.
  */
 
@@ -48,7 +48,7 @@ export async function initTauriDeepLink(
 
         log.info('Received deep-link event', { url });
 
-        // Parse the URL to get the file path (storycraft://path/to/file.storycraft)
+        // Parse the URL to get the file path (storycraft://path/to/file.worldscript)
         // The deep-link plugin handles custom schemes, but for file associations we need
         // to handle the case where the file path is passed as a CLI argument
         try {
@@ -136,11 +136,11 @@ export function deepLinkUrlToPath(url: string): string {
 }
 
 /**
- * Check if a file path is a StoryCraft project file.
+ * Check if a file path is a WorldScript project file.
  */
-export function isStoryCraftProjectFile(filePath: string): boolean {
+export function isWorldScriptProjectFile(filePath: string): boolean {
   const ext = filePath.split('.').pop()?.toLowerCase();
-  return ext === 'storycraft' || ext === 'scst' || filePath.endsWith('.json');
+  return ext === 'worldscript' || ext === 'wsst' || ext === 'json';
 }
 
 /**
@@ -149,5 +149,5 @@ export function isStoryCraftProjectFile(filePath: string): boolean {
 export function getProjectIdFromPath(filePath: string): string {
   const lastSegment = filePath.split(/[/\\]/).pop();
   if (!lastSegment) return 'unknown';
-  return lastSegment.replace(/\.(storycraft|scst|json)$/, '') || 'unknown';
+  return lastSegment.replace(/\.(worldscript|wsst|json)$/i, '') || 'unknown';
 }

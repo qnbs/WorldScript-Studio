@@ -60,8 +60,8 @@ pub fn run() {
       lora::abort_lora_training,
       lora::generate_ollama_modelfile,
       lora::check_lora_environment,
-      commands::task_supervisor::storycraft_task_supervisor_ping,
-      commands::task_supervisor::storycraft_task_supervisor_submit,
+      commands::task_supervisor::worldscript_task_supervisor_ping,
+      commands::task_supervisor::worldscript_task_supervisor_submit,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

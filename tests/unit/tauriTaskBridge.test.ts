@@ -55,7 +55,7 @@ describe('tauriTaskBridge', () => {
         timeoutMs: 5000,
       });
       expect(result.success).toBe(true);
-      expect(invoke).toHaveBeenCalledWith('storycraft_task_supervisor_submit', expect.any(Object));
+      expect(invoke).toHaveBeenCalledWith('worldscript_task_supervisor_submit', expect.any(Object));
     });
 
     it('wraps Tauri invoke errors with context message', async () => {
