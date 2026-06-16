@@ -9,12 +9,12 @@ source "${SCRIPT_DIR}/common.sh"
 PRUNE=false
 [[ "${1:-}" == "--prune" ]] && PRUNE=true
 
-if systemctl is-active --quiet storycraft-forgejo.service 2>/dev/null; then
-  log "Stopping storycraft-forgejo.service..."
-  sudo systemctl stop storycraft-forgejo.service
+if systemctl is-active --quiet worldscript-forgejo.service 2>/dev/null; then
+  log "Stopping worldscript-forgejo.service..."
+  sudo systemctl stop worldscript-forgejo.service
 fi
 
-if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^storycraft-forgejo$'; then
+if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^worldscript-forgejo$'; then
   log "Stopping Forgejo container..."
   docker compose -f "${FORGEJO_COMPOSE}" down
 fi

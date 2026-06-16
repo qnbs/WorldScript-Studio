@@ -35,11 +35,11 @@ cd "${REPO_ROOT}"
 if [[ ! -f "${HOME}/.actrc" ]]; then
   log "WARN: ~/.actrc missing — copy infra/low-end-ci/.actrc.example"
 fi
-if [[ ! -f "${STORYCRAFT_CI_HOME}/act.secrets" ]]; then
-  log "WARN: ${STORYCRAFT_CI_HOME}/act.secrets missing — copy act.secrets.example"
-  mkdir -p "${STORYCRAFT_CI_HOME}"
-  cp "${INFRA_DIR}/act.secrets.example" "${STORYCRAFT_CI_HOME}/act.secrets"
-  chmod 600 "${STORYCRAFT_CI_HOME}/act.secrets"
+if [[ ! -f "${WORLDSCRIPT_CI_HOME}/act.secrets" ]]; then
+  log "WARN: ${WORLDSCRIPT_CI_HOME}/act.secrets missing — copy act.secrets.example"
+  mkdir -p "${WORLDSCRIPT_CI_HOME}"
+  cp "${INFRA_DIR}/act.secrets.example" "${WORLDSCRIPT_CI_HOME}/act.secrets"
+  chmod 600 "${WORLDSCRIPT_CI_HOME}/act.secrets"
 fi
 
 LOG_FILE="${CI_LOG_DIR}/act-${EVENT}-$(date +%Y%m%d-%H%M%S).log"

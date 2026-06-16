@@ -1,5 +1,5 @@
 [Unit]
-Description=StoryCraft Forgejo (eco-mode Git server)
+Description=WorldScript Forgejo (eco-mode Git server)
 After=docker.service
 Requires=docker.service
 
@@ -11,9 +11,9 @@ Group=@USER@
 Environment=HOME=@HOME@
 Environment=FORGEJO_DATA_DIR=@HOME@/worldscript-ci/forgejo/data
 Environment=FORGEJO_CONFIG_DIR=@HOME@/worldscript-ci/forgejo/config
-WorkingDirectory=@HOME@/githubcursor/StoryCraft-Studio/infra/low-end-ci
-ExecStart=/usr/bin/docker compose -f @HOME@/githubcursor/StoryCraft-Studio/infra/low-end-ci/docker-compose.forgejo.yml up -d
-ExecStop=/usr/bin/docker compose -f @HOME@/githubcursor/StoryCraft-Studio/infra/low-end-ci/docker-compose.forgejo.yml down
+WorkingDirectory=@HOME@/githubcursor/WorldScript-Studio/infra/low-end-ci
+ExecStart=/usr/bin/docker compose -f @HOME@/githubcursor/WorldScript-Studio/infra/low-end-ci/docker-compose.forgejo.yml up -d
+ExecStop=/usr/bin/docker compose -f @HOME@/githubcursor/WorldScript-Studio/infra/low-end-ci/docker-compose.forgejo.yml down
 
 [Install]
 WantedBy=default.target

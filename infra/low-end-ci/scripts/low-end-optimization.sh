@@ -22,12 +22,12 @@ done
 
 log "Applying sysctl (needs sudo)..."
 if [[ -w /etc/sysctl.d ]] || sudo -n true 2>/dev/null; then
-  sudo tee /etc/sysctl.d/99-storycraft-lowend.conf >/dev/null <<'EOF'
-# StoryCraft low-end laptop
+  sudo tee /etc/sysctl.d/99-worldscript-lowend.conf >/dev/null <<'EOF'
+# WorldScript low-end laptop
 vm.swappiness=10
 vm.vfs_cache_pressure=50
 EOF
-  sudo sysctl --system >/dev/null 2>&1 || sudo sysctl -p /etc/sysctl.d/99-storycraft-lowend.conf
+  sudo sysctl --system >/dev/null 2>&1 || sudo sysctl -p /etc/sysctl.d/99-worldscript-lowend.conf
 else
   log "Skip sysctl (no sudo)"
 fi
@@ -44,13 +44,13 @@ if command -v docker >/dev/null 2>&1; then
 fi
 
 # Stop Forgejo after builds to free RAM (eco-mode)
-if systemctl is-active --quiet storycraft-forgejo.service 2>/dev/null; then
-  log "Stopping storycraft-forgejo.service (eco)..."
-  sudo systemctl stop storycraft-forgejo.service || true
+if systemctl is-active --quiet worldscript-forgejo.service 2>/dev/null; then
+  log "Stopping worldscript-forgejo.service (eco)..."
+  sudo systemctl stop worldscript-forgejo.service || true
 fi
 
 if [[ "${ENABLE_TMPFS}" == true ]]; then
-  TMPFS_DIR="${STORYCRAFT_CI_HOME}/tmpfs-cache"
+  TMPFS_DIR="${WORLDSCRIPT_CI_HOME}/tmpfs-cache"
   mkdir -p "${TMPFS_DIR}"
   if ! mountpoint -q "${TMPFS_DIR}" 2>/dev/null; then
     mem_kb=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
