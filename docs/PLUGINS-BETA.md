@@ -1,7 +1,7 @@
 # Plugin System (Beta)
 
-**Status:** Beta / Opt-in (v1.22.0)  
-**Feature Flag:** `enablePluginSystem` (off by default)
+**Status:** Beta (v1.22.0)  
+**Feature Flag:** `enablePluginSystem` (on by default since v1.23; disable via Settings → Experimental flags)
 
 ## Overview
 

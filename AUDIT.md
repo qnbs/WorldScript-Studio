@@ -1075,7 +1075,7 @@ Delivered: WorkerBus v2 (priority preemption, backpressure, transferables), GPU 
 - **Help:** Static chunk retrieval `services/help/helpDocRetrieval.ts` → doc context in `streamAiHelpResponse`; locale **`tryActionId`** on articles; `services/spotlightTour.ts` **`tourId`** for multiple guided flows.
 - **UI primitives:** `components/ui/Tooltip.tsx`, `EmptyState.tsx`; `features/status/statusSlice.ts` toast fields **`commandId`** / **`actionLabel`**; ErrorBoundary GitHub issue link.
 - **Section icon SSOT:** `constants/sections.tsx` → `APP_SECTIONS: Record<View, SectionConfig>` maps every view to icon, colorClass, textColor, accentColor. `components/ui/SectionIcon.tsx` renders the colored badge (sizes xs/sm/md/lg/xl, `aria-hidden`). All 14+ view headers, card headers, and nav items consume this SSOT. Tested in `tests/unit/SectionIcon.test.tsx`.
-- **Feature flags:** `enableProjectHealthScore` (dashboard health card), `enableCrossProjectSearch` (stub) in `features/featureFlags/featureFlagsSlice.ts`.
+- **Feature flags:** `features/featureFlags/featureFlagsSlice.ts` ships **23 flags** (18 default-on, 5 opt-in default-off — see `docs/FEATURE-PARITY.md`); e.g. `enableProjectHealthScore` (dashboard health card). Cross-project search is now permanent core (no flag).
 
 ### Documentation
 
