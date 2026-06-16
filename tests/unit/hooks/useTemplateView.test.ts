@@ -204,11 +204,15 @@ describe('applyCommunityTemplate', () => {
       (call: unknown[]) =>
         (call[0] as { type?: string } | undefined)?.type === 'project/setManuscript',
     );
-    const manuscript = (manuscriptCall?.[0] as { payload: Array<{ content: string }> } | undefined)
-      ?.payload;
+    const manuscript = (
+      manuscriptCall?.[0] as { payload: Array<{ content: string; prompt: string }> } | undefined
+    )?.payload;
     expect(manuscript).toHaveLength(2);
-    expect(manuscript?.[0]?.content).toContain('The crew assembles');
+    // Guidance goes into the writing brief (prompt); the manuscript content starts empty.
+    expect(manuscript?.[0]?.content).toBe('');
+    expect(manuscript?.[0]?.prompt).toContain('The crew assembles');
     expect(manuscript?.[1]?.content).toBe('');
+    expect(manuscript?.[1]?.prompt).toBe('');
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'project/setOutline' }),
     );

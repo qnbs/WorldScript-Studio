@@ -797,5 +797,6 @@
   "voice.modelDownload.error": "فشل التحميل: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% مكتمل",
   "voice.modelDownload.retry": "إعادة المحاولة",
-  "voice.modelDownload.title": "تحميل نموذج الصوت"
+  "voice.modelDownload.title": "تحميل نموذج الصوت",
+  "settings.about.productName": "WorldScript Studio"
 }

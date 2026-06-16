@@ -125,8 +125,10 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
       const newManuscript: StorySection[] = ct.sections.map((s, i) => ({
         id: `sec-${stamp}-${i}`,
         title: s.title,
-        content: s.description ? `# ${s.title}\n\n${s.description}` : '',
-        prompt: '',
+        // QNBS-v3: section guidance goes into `prompt` (writing brief), NOT `content` — mirrors the
+        // built-in-template path so a freshly applied template starts with an EMPTY manuscript.
+        content: '',
+        prompt: s.description ?? '',
       }));
       const newOutline: OutlineSection[] = ct.sections.map((s, i) => ({
         id: `out-${stamp}-${i}`,

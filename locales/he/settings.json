@@ -797,5 +797,6 @@
   "voice.modelDownload.error": "ההורדה נכשלה: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% הושלם",
   "voice.modelDownload.retry": "נסה שוב",
-  "voice.modelDownload.title": "הורדת מודל קול"
+  "voice.modelDownload.title": "הורדת מודל קול",
+  "settings.about.productName": "WorldScript Studio"
 }

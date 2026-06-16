@@ -797,5 +797,6 @@
   "voice.modelDownload.error": "下载失败：{{error}}",
   "voice.modelDownload.progress": "{{percent}}% 完成",
   "voice.modelDownload.retry": "重试",
-  "voice.modelDownload.title": "语音模型下载"
+  "voice.modelDownload.title": "语音模型下载",
+  "settings.about.productName": "WorldScript Studio"
 }

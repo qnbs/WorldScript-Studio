@@ -2265,6 +2265,7 @@
   "voice.modelDownload.progress": "{{percent}}% completato",
   "voice.modelDownload.retry": "Riprova",
   "voice.modelDownload.title": "Download modello vocale",
+  "settings.about.productName": "WorldScript Studio",
   "help.advanced.adaptiveAi.content": "Il motore IA adattivo rileva l’hardware in fase di esecuzione — WebGPU, WebNN, DirectML, core CPU, livello VRAM e batteria — e instrada l’inferenza locale al backend più veloce disponibile. Attivalo in Impostazioni → Funzioni ad accesso anticipato e controlla la lettura in tempo reale in Impostazioni → IA. La modalità Eco sceglie il modello più piccolo utilizzabile per risparmiare batteria e memoria, e un’elezione della scheda capofila garantisce che solo una scheda del browser usi la GPU alla volta per evitare collisioni di VRAM.",
   "help.advanced.adaptiveAi.title": "IA adattiva, GPU e modalità Eco",
   "help.advanced.cloudSync.content": "La sincronizzazione opzionale crittografata end-to-end mantiene allineata la tua libreria su più dispositivi tramite un backend Cloudflare R2. Attiva «Sincronizzazione cloud» in Impostazioni → Funzioni ad accesso anticipato e configurala in Impostazioni → Connessioni. I dati del progetto vengono crittografati localmente con AES-256-GCM prima del caricamento e le tue chiavi API dell’IA non vengono mai inviate al cloud. La sincronizzazione è del tutto facoltativa; senza di essa WorldScript resta un’app completamente offline-first.",

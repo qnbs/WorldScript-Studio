@@ -2265,6 +2265,7 @@
   "voice.modelDownload.progress": "{{percent}}% abgeschlossen",
   "voice.modelDownload.retry": "Wiederholen",
   "voice.modelDownload.title": "Sprachmodell-Download",
+  "settings.about.productName": "WorldScript Studio",
   "help.advanced.adaptiveAi.content": "Die adaptive KI-Engine erkennt deine Hardware zur Laufzeit – WebGPU, WebNN, DirectML, CPU-Kerne, VRAM-Stufe und Akku – und leitet die lokale Inferenz an das schnellste verfügbare Backend. Aktiviere sie unter Einstellungen → Early-Access-Funktionen und prüfe die Live-Anzeige unter Einstellungen → KI. Der Eco-Modus wählt das kleinste brauchbare Modell, um Akku und Speicher zu schonen, und eine Tab-Leader-Wahl stellt sicher, dass nur ein Browser-Tab gleichzeitig die GPU nutzt, um VRAM-Kollisionen zu vermeiden.",
   "help.advanced.adaptiveAi.title": "Adaptive KI, GPU & Eco-Modus",
   "help.advanced.cloudSync.content": "Die optionale Ende-zu-Ende-verschlüsselte Synchronisierung hält deine Bibliothek über mehrere Geräte hinweg aktuell – mit einem Cloudflare-R2-Backend. Aktiviere „Cloud-Sync“ unter Einstellungen → Early-Access-Funktionen und richte sie unter Einstellungen → Verbindungen ein. Projektdaten werden vor dem Hochladen lokal mit AES-256-GCM verschlüsselt, und deine KI-API-Schlüssel werden nie in die Cloud gesendet. Die Synchronisierung ist komplett optional; ohne sie bleibt WorldScript eine vollständig offline-first arbeitende App.",

@@ -12,43 +12,83 @@ interface Props {
 
 const ATTEMPT_STORAGE_KEY = 'worldscript-idb-unlock-attempts';
 const LOCKOUT_STORAGE_KEY = 'worldscript-idb-unlock-lockout';
+const LEGACY_ATTEMPT_STORAGE_KEY = 'storycraft-idb-unlock-attempts';
+const LEGACY_LOCKOUT_STORAGE_KEY = 'storycraft-idb-unlock-lockout';
 
-function getAttemptCount(): number {
+// QNBS-v3: lockout backoff is capped at 60s (see lockoutMs), so a valid lockout timestamp never
+// exceeds now + 60s; the attempt counter is a tiny integer. These bounds clamp corrupt storage.
+const MAX_LOCKOUT_MS = 60_000;
+const MAX_ATTEMPTS = 1000;
+
+function readInt(key: string, legacyKey: string, max = Number.MAX_SAFE_INTEGER): number {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
   try {
-    return Number.parseInt(localStorage.getItem(ATTEMPT_STORAGE_KEY) ?? '0', 10);
+    let raw = window.localStorage.getItem(key);
+    // QNBS-v3: Rebrand migration — read legacy StoryCraft lockout state once, then move to the new key.
+    if (raw === null) {
+      raw = window.localStorage.getItem(legacyKey);
+      if (raw !== null) {
+        window.localStorage.setItem(key, raw);
+        window.localStorage.removeItem(legacyKey);
+      }
+    }
+    // QNBS-v3: corrupt/non-numeric storage values parse to NaN, which would poison the lockout
+    // math (Date.now() + NaN) and the countdown UI — normalize any invalid parse to 0.
+    const parsed = Number.parseInt(raw ?? '0', 10);
+    if (Number.isNaN(parsed)) return 0;
+    // QNBS-v3 (CodeAnt): clamp to a non-negative, bounded range so a corrupt/huge value — e.g. a
+    // far-future lockout timestamp — cannot block unlock indefinitely.
+    return Math.min(Math.max(parsed, 0), max);
   } catch {
     return 0;
   }
 }
 
+function getAttemptCount(): number {
+  return readInt(ATTEMPT_STORAGE_KEY, LEGACY_ATTEMPT_STORAGE_KEY, MAX_ATTEMPTS);
+}
+
 function setAttemptCount(n: number): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   try {
-    localStorage.setItem(ATTEMPT_STORAGE_KEY, String(n));
+    window.localStorage.setItem(ATTEMPT_STORAGE_KEY, String(n));
   } catch {
     /* storage blocked */
   }
 }
 
 function getLockoutUntil(): number {
-  try {
-    return Number.parseInt(localStorage.getItem(LOCKOUT_STORAGE_KEY) ?? '0', 10);
-  } catch {
-    return 0;
-  }
+  const ts = readInt(LOCKOUT_STORAGE_KEY, LEGACY_LOCKOUT_STORAGE_KEY);
+  // QNBS-v3 (CodeAnt): a valid lockout never exceeds now + the max backoff window. Treat a
+  // beyond-bound (corrupt) value as INVALID → no lockout (0). A moving `now + MAX` clamp would
+  // re-clamp every read and never count down, permanently locking the user out.
+  return ts > Date.now() + MAX_LOCKOUT_MS ? 0 : ts;
 }
 
 function setLockoutUntil(ts: number): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   try {
-    localStorage.setItem(LOCKOUT_STORAGE_KEY, String(ts));
+    window.localStorage.setItem(LOCKOUT_STORAGE_KEY, String(ts));
   } catch {
     /* storage blocked */
   }
 }
 
 function clearAttemptTracking(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   try {
-    localStorage.removeItem(ATTEMPT_STORAGE_KEY);
-    localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+    window.localStorage.removeItem(ATTEMPT_STORAGE_KEY);
+    window.localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_ATTEMPT_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_LOCKOUT_STORAGE_KEY);
   } catch {
     /* storage blocked */
   }

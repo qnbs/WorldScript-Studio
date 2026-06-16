@@ -2265,6 +2265,7 @@
   "voice.modelDownload.progress": "{{percent}}% concluído",
   "voice.modelDownload.retry": "Tentar novamente",
   "voice.modelDownload.title": "Download do modelo de voz",
+  "settings.about.productName": "WorldScript Studio",
   "help.advanced.adaptiveAi.content": "The Adaptive IA engine detects your hardware at runtime — WebGPU, WebNN, DirectML, CPU cores, VRAM tier, and battery — and routes local inference to the fastest available backend. Enable it under Configurações → Early Access Features and inspect the live readout under Configurações → IA. Eco Mode picks the smallest viable model to save battery and memory, and a tab-leader election ensures only one browser tab uses the GPU at a time to avoid VRAM collisions.",
   "help.advanced.adaptiveAi.title": "Adaptive IA, GPU & Eco Mode",
   "help.advanced.cloudSync.content": "Optional end-to-end encrypted sync keeps your library in step across devices using a Cloudflare R2 backend. Enable “Cloud sync” under Configurações → Early Access Features and configure it under Configurações → Connections. Project data is encrypted locally with AES-256-GCM before upload, and your IA API keys are never sent to the cloud. Sync is entirely opt-in; with it off, WorldScript remains a fully offline-first app.",

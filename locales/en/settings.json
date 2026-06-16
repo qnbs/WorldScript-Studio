@@ -797,5 +797,6 @@
   "settings.ai.localAi.modelLabel.phi4mini": "Phi-4 Mini 3.8B (~2.3 GB)",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0.8 GB)",
   "settings.ai.localAi.modelLabel.gemma3_4b": "Gemma 3 4B (~4.9 GB)",
-  "settings.ai.localAi.modelLabel.llama33_70b": "Llama 3.3 70B (high-end, ~35 GB)"
+  "settings.ai.localAi.modelLabel.llama33_70b": "Llama 3.3 70B (high-end, ~35 GB)",
+  "settings.about.productName": "WorldScript Studio"
 }

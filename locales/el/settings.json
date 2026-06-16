@@ -797,5 +797,6 @@
   "voice.modelDownload.error": "Η λήψη απέτυχε: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% ολοκληρώθηκε",
   "voice.modelDownload.retry": "Δοκιμάζω πάλι",
-  "voice.modelDownload.title": "Λήψη φωνητικού μοντέλου"
+  "voice.modelDownload.title": "Λήψη φωνητικού μοντέλου",
+  "settings.about.productName": "WorldScript Studio"
 }
