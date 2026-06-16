@@ -497,7 +497,7 @@ Central orchestration layer for all background worker tasks. Messages use short 
 
 ## Desktop (Tauri)
 
-- `src-tauri/tauri.conf.json` configures the window, CSP, updater, deep links (`worldscript://`), and file associations (`.worldscript`, `.scst`).
+- `src-tauri/tauri.conf.json` configures the window, CSP, updater, deep links (`worldscript://`), and file associations (`.worldscript`, `.wsst`).
 - `src-tauri/Cargo.toml` defines the Rust crate; `rust-compute` feature optionally includes `candle-core` + `candle-nn` for Rust-side inference.
 - `vite.config.ts` externalizes all `@tauri-apps/*` modules for web builds.
 - Tauri plugins: log, fs, http, dialog, shell, updater, window-state, deep-link, single-instance.
