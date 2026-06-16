@@ -14,7 +14,7 @@ import {
 import {
   createLanguageModelForWorldScript,
   providerToKind,
-  type StoryCraftLanguageModelConfig,
+  type WorldScriptLanguageModelConfig,
 } from './providerFactory';
 
 const aiProviderSchema = z.enum([
@@ -40,9 +40,9 @@ const completionBodySchema = z.object({
   openAiSiteUrl: z.string().optional(),
   openAiSiteTitle: z.string().optional(),
   // QNBS-v3: C-3 LoRA wiring — when enableLoraAdapters is on and an adapter has ollamaModelTag,
-  // useStoryCraftAI passes it here so the Ollama model identifier is overridden at inference time.
+  // useWorldScriptAI passes it here so the Ollama model identifier is overridden at inference time.
   loraModelPath: z.string().optional(),
-  // QNBS-v3 (Phase 1): opaque per-request correlation id propagated from useStoryCraftAI so the
+  // QNBS-v3 (Phase 1): opaque per-request correlation id propagated from useWorldScriptAI so the
   // client request log and this fetch-side failure log share one id. Never user-derived.
   correlationId: z.string().optional(),
 });
@@ -58,8 +58,8 @@ function readCorrelationId(raw: unknown): string | undefined {
   return undefined;
 }
 
-/** Virtuelle URL — nur für `useCompletion`; der echte Transport läuft über `storyCraftCompletionFetch`. */
-export const STORYCRAFT_COMPLETION_URL = 'storycraft-internal://completion';
+/** Virtuelle URL — nur für `useCompletion`; der echte Transport läuft über `worldScriptCompletionFetch`. */
+export const WORLDSCRIPT_COMPLETION_URL = 'worldscript-internal://completion';
 
 async function resolveModelConfig(
   provider: AIProvider,
@@ -70,7 +70,7 @@ async function resolveModelConfig(
     openAiSiteUrl?: string;
     openAiSiteTitle?: string;
   },
-): Promise<StoryCraftLanguageModelConfig | { error: string; status: number }> {
+): Promise<WorldScriptLanguageModelConfig | { error: string; status: number }> {
   const kind = providerToKind(provider);
   if (kind === 'unsupported') {
     return {
@@ -128,14 +128,14 @@ async function resolveModelConfig(
  * und liefert eine Text-Stream-Response — ohne separates Backend.
  */
 // QNBS-v3: useCompletion verlangt fetch(URL) — Stream läuft clientseitig; URL-Parameter bleibt ungenutzt.
-export async function storyCraftCompletionFetch(
+export async function worldScriptCompletionFetch(
   _input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
   let correlationId: string | undefined;
   try {
     if (!init?.body || typeof init.body !== 'string') {
-      throw new Error('Invalid StoryCraft AI request body.');
+      throw new Error('Invalid WorldScript AI request body.');
     }
     const raw: unknown = JSON.parse(init.body);
     correlationId = readCorrelationId(raw);
@@ -203,8 +203,8 @@ export async function storyCraftCompletionFetch(
       });
     }
     // QNBS-v3: never expose err.message in response body — may contain internal paths or tokens (CodeQL js/stack-trace-exposure)
-    log.withContext({ correlationId }).error('storyCraftCompletionFetch failed', err);
-    return new Response(JSON.stringify({ error: 'StoryCraft AI request failed.' }), {
+    log.withContext({ correlationId }).error('worldScriptCompletionFetch failed', err);
+    return new Response(JSON.stringify({ error: 'WorldScript AI request failed.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

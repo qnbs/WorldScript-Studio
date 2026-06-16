@@ -15,7 +15,10 @@ const mockCreateGoogleGenerativeAI = vi.fn((_arg?: unknown) => ({
   languageModel: mockGoogleLanguageModel,
 }));
 const mockCreateOpenAI = vi.fn((_arg?: unknown) => ({ chat: mockOpenaiChat }));
-const mockCreateWorldScriptFetch = vi.fn().mockReturnValue(globalThis.fetch);
+// QNBS-v3: deterministic fake fetch — the suite must never depend on real network behaviour
+// (test-determinism rule). The factory only passes this through to the SDK; it is never invoked here.
+const mockFetch = vi.fn(async () => new Response(null, { status: 200 }));
+const mockCreateWorldScriptFetch = vi.fn().mockReturnValue(mockFetch);
 
 vi.mock('@ai-sdk/google', () => ({
   // QNBS-v3: cast needed — TS2556 requires tuple or rest for unknown[] spread

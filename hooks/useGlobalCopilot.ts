@@ -1,6 +1,6 @@
 /**
  * useGlobalCopilot — business logic for the Global AI Copilot live assistant.
- * QNBS-v3: Streams replies via useStoryCraftAI (honours the privacy/local-first AI policy), is
+ * QNBS-v3: Streams replies via useWorldScriptAI (honours the privacy/local-first AI policy), is
  * context-aware (current view + project), bridges to ProForge through the Core Capability Layer,
  * drives the heuristic insight generator, and supports a heuristics-only offline mode.
  */
@@ -36,8 +36,8 @@ import { createBrowserProForgeCapability } from '../services/proForge/adapters/b
 import type { ProForgeProjectSnapshot } from '../services/proForge/proForgeCapabilityCore';
 import { viewNavigationLabelKey } from '../services/viewNavigationLabels';
 import type { View } from '../types';
-import { useStoryCraftAI } from './useStoryCraftAI';
 import { useTranslation } from './useTranslation';
+import { useWorldScriptAI } from './useWorldScriptAI';
 
 /** Subset of the project shape the snapshot reads — avoids `any` while staying tolerant. */
 interface ProjectLike {
@@ -96,7 +96,7 @@ export function useGlobalCopilot(currentView: View) {
   const [applyStatus, setApplyStatus] = useState<'idle' | 'applying' | 'success' | 'error'>('idle');
   const enableProForge = useAppSelector(selectEnableProForge);
 
-  const { runCompletion, stop, isLoading } = useStoryCraftAI({
+  const { runCompletion, stop, isLoading } = useWorldScriptAI({
     onIncremental: (full) => {
       dispatch(copilotActions.setLastAssistantContent(full));
     },
@@ -232,7 +232,7 @@ export function useGlobalCopilot(currentView: View) {
   const open = useCallback(() => dispatch(copilotActions.setOpen(true)), [dispatch]);
   const close = useCallback(() => {
     stop();
-    // QNBS-v3 (CodeAnt #7): stop() can abort the stream without firing useStoryCraftAI's
+    // QNBS-v3 (CodeAnt #7): stop() can abort the stream without firing useWorldScriptAI's
     // onFinish/onError, leaving status stuck at 'streaming' — after which sendMessage's
     // `status === 'streaming'` guard blocks every future send. Reset to idle on close so the
     // panel is usable again next time it opens.

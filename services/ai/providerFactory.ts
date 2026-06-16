@@ -6,7 +6,7 @@ import type { AIProvider } from '../../types';
 import { createWorldScriptFetch } from './fetchAdapter';
 
 /** Konfiguration zur Erzeugung eines `LanguageModel` (erweiterbar um WebLLM o. Ä.). */
-export type StoryCraftLanguageModelConfig =
+export type WorldScriptLanguageModelConfig =
   | {
       provider: 'gemini';
       /** Gemini-Modell-ID (z. B. `gemini-3.5-flash`). */
@@ -41,7 +41,7 @@ function resolveFetch(): typeof globalThis.fetch {
  * QNBS-v3: zentrale Fabrik für Gemini + OpenAI-kompatibel (lokal); WebLLM später als eigene Union-Verzweigung.
  */
 export function createLanguageModelForWorldScript(
-  config: StoryCraftLanguageModelConfig,
+  config: WorldScriptLanguageModelConfig,
 ): LanguageModel {
   const fetchImpl = resolveFetch();
 
@@ -73,7 +73,7 @@ export function createLanguageModelForWorldScript(
   }
 }
 
-/** Mappt Redux-`AIProvider` auf Fabrik-Union (ohne Keys — Auflösung in `storyCraftCompletionFetch`). */
+/** Mappt Redux-`AIProvider` auf Fabrik-Union (ohne Keys — Auflösung in `worldScriptCompletionFetch`). */
 export function providerToKind(
   provider: AIProvider,
 ): 'gemini' | 'openai' | 'openaiCompatible' | 'unsupported' {

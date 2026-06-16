@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useStoryCraftAI } from '../../../hooks/useStoryCraftAI';
+import { useWorldScriptAI } from '../../../hooks/useWorldScriptAI';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -53,9 +53,9 @@ vi.mock('../../../app/hooks', () => ({
           openAiSiteTitle: '',
         },
       },
-      // QNBS-v3: lora slice required — useStoryCraftAI accesses selectActiveLoraOllamaTag
+      // QNBS-v3: lora slice required — useWorldScriptAI accesses selectActiveLoraOllamaTag
       lora: { adapters: [], activeAdapterId: null },
-      // QNBS-v3: all 20 flags required (strict TS) — useStoryCraftAI accesses enableLoraAdapters
+      // QNBS-v3: all 20 flags required (strict TS) — useWorldScriptAI accesses enableLoraAdapters
       featureFlags: {
         enableStoryBibleAdvanced: false,
         enableBinderResearch: false,
@@ -78,9 +78,9 @@ vi.mock('../../../app/hooks', () => ({
   ),
 }));
 
-vi.mock('../../../services/ai/storyCraftCompletionFetch', () => ({
-  STORYCRAFT_COMPLETION_URL: 'storycraft-internal://completion',
-  storyCraftCompletionFetch: vi.fn(),
+vi.mock('../../../services/ai/worldScriptCompletionFetch', () => ({
+  WORLDSCRIPT_COMPLETION_URL: 'worldscript-internal://completion',
+  worldScriptCompletionFetch: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -94,9 +94,9 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 // Hook returns
 // ---------------------------------------------------------------------------
-describe('useStoryCraftAI — return shape', () => {
+describe('useWorldScriptAI — return shape', () => {
   it('exposes completion, runCompletion, stop, isLoading, error, setCompletion', () => {
-    const { result } = renderHook(() => useStoryCraftAI({ onIncremental: vi.fn() }));
+    const { result } = renderHook(() => useWorldScriptAI({ onIncremental: vi.fn() }));
     expect(typeof result.current.completion).toBe('string');
     expect(typeof result.current.runCompletion).toBe('function');
     expect(typeof result.current.stop).toBe('function');
@@ -106,19 +106,19 @@ describe('useStoryCraftAI — return shape', () => {
 
   it('returns the current completion text', () => {
     mockCompletionText = 'Hello AI';
-    const { result } = renderHook(() => useStoryCraftAI({ onIncremental: vi.fn() }));
+    const { result } = renderHook(() => useWorldScriptAI({ onIncremental: vi.fn() }));
     expect(result.current.completion).toBe('Hello AI');
   });
 
   it('returns the current isLoading flag', () => {
     mockIsLoading = true;
-    const { result } = renderHook(() => useStoryCraftAI({ onIncremental: vi.fn() }));
+    const { result } = renderHook(() => useWorldScriptAI({ onIncremental: vi.fn() }));
     expect(result.current.isLoading).toBe(true);
   });
 
   it('returns the current error', () => {
     mockError = new Error('AI service error');
-    const { result } = renderHook(() => useStoryCraftAI({ onIncremental: vi.fn() }));
+    const { result } = renderHook(() => useWorldScriptAI({ onIncremental: vi.fn() }));
     expect(result.current.error?.message).toBe('AI service error');
   });
 });
@@ -128,7 +128,7 @@ describe('useStoryCraftAI — return shape', () => {
 // ---------------------------------------------------------------------------
 describe('runCompletion', () => {
   it('calls complete with the user prompt and a propagated correlationId', async () => {
-    const { result } = renderHook(() => useStoryCraftAI({ onIncremental: vi.fn() }));
+    const { result } = renderHook(() => useWorldScriptAI({ onIncremental: vi.fn() }));
     await act(async () => {
       await result.current.runCompletion('Write a story.');
     });
@@ -142,7 +142,7 @@ describe('runCompletion', () => {
   });
 
   it('calls setCompletion to reset before running', async () => {
-    const { result } = renderHook(() => useStoryCraftAI({ onIncremental: vi.fn() }));
+    const { result } = renderHook(() => useWorldScriptAI({ onIncremental: vi.fn() }));
     await act(async () => {
       await result.current.runCompletion('Prompt');
     });
@@ -155,7 +155,7 @@ describe('runCompletion', () => {
 // ---------------------------------------------------------------------------
 describe('stop', () => {
   it('delegates stop to the underlying useCompletion stop', () => {
-    const { result } = renderHook(() => useStoryCraftAI({ onIncremental: vi.fn() }));
+    const { result } = renderHook(() => useWorldScriptAI({ onIncremental: vi.fn() }));
     result.current.stop();
     expect(mockStop).toHaveBeenCalled();
   });

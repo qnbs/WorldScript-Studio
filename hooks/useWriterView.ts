@@ -13,8 +13,8 @@ import { getAiErrorMessage } from '../services/ai/aiErrorTaxonomy';
 import { isOrchestrationReadyProvider } from '../services/ai/orchestrationProviders';
 import { logger } from '../services/logger';
 import { assembleRAGPrompt } from '../services/ragPromptAssembly';
-import { useStoryCraftAI } from './useStoryCraftAI';
 import { useTranslation } from './useTranslation';
+import { useWorldScriptAI } from './useWorldScriptAI';
 
 export const useWriterView = () => {
   const { t, language } = useTranslation();
@@ -48,7 +48,7 @@ export const useWriterView = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const fullStreamRef = useRef('');
 
-  const { runCompletion, stop: stopOrchestrationStreaming } = useStoryCraftAI({
+  const { runCompletion, stop: stopOrchestrationStreaming } = useWorldScriptAI({
     onIncremental: useCallback(
       (fullText: string, delta: string) => {
         fullStreamRef.current = fullText;

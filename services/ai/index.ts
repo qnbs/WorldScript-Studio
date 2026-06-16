@@ -8,7 +8,7 @@
  * ## Thunk-Mapping (Legacy → Vercel AI SDK)
  * | Bereich | Legacy-Thunk | Neu |
  * |---------|----------------|-----|
- * | Writer | `streamGenerationThunk` | `useStoryCraftAI` + `useCompletion` + `streamText` |
+ * | Writer | `streamGenerationThunk` | `useWorldScriptAI` + `useCompletion` + `streamText` |
  * | Synopsis / Text | `generateSynopsisThunk`, Feld-Regenerate | `generateText` (folgende Phasen) |
  * | JSON / Schema | `generate*Thunk` mit `generateJson` | `generateObject` (folgende Phasen) |
  * | Hilfe | `streamAiHelpResponse` | `streamText` / Hook (optional) |
@@ -102,7 +102,7 @@ export {
 export {
   createLanguageModelForWorldScript,
   providerToKind,
-  type StoryCraftLanguageModelConfig,
+  type WorldScriptLanguageModelConfig,
 } from './providerFactory';
 export {
   getApproxRpm,
@@ -112,4 +112,7 @@ export {
   resetOpenRouterCircuit,
 } from './providers/openrouterProvider';
 export { logRoutingDecision, type RoutingDecision, type RoutingReason } from './routingLogger';
-export { STORYCRAFT_COMPLETION_URL, storyCraftCompletionFetch } from './storyCraftCompletionFetch';
+export {
+  WORLDSCRIPT_COMPLETION_URL,
+  worldScriptCompletionFetch,
+} from './worldScriptCompletionFetch';

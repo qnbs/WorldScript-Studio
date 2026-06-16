@@ -6,7 +6,7 @@ import {
 } from '../../services/ai/modelNormalization';
 import { isOrchestrationReadyProvider } from '../../services/ai/orchestrationProviders';
 
-describe('storyCraftAi provider helpers', () => {
+describe('worldScriptAi provider helpers', () => {
   it('normalizes Ollama base URL to include /v1', () => {
     expect(normalizeOpenAiCompatibleBaseUrl('http://localhost:11434')).toBe(
       'http://localhost:11434/v1',

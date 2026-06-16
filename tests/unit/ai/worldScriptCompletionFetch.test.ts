@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  STORYCRAFT_COMPLETION_URL,
-  storyCraftCompletionFetch,
-} from '../../../services/ai/storyCraftCompletionFetch';
+  WORLDSCRIPT_COMPLETION_URL,
+  worldScriptCompletionFetch,
+} from '../../../services/ai/worldScriptCompletionFetch';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -15,7 +15,7 @@ const mockStreamText = vi.fn().mockReturnValue(mockStreamTextResult);
 const mockAssertCloudAiAllowed = vi.fn().mockResolvedValue(undefined);
 const mockGetGeminiApiKey = vi.fn().mockResolvedValue('gemini-key');
 const mockGetApiKey = vi.fn().mockResolvedValue('openai-key');
-const mockCreateLanguageModelForStoryCraft = vi.fn().mockReturnValue({ type: 'mock-model' });
+const mockCreateLanguageModelForWorldScript = vi.fn().mockReturnValue({ type: 'mock-model' });
 const mockProviderToKind = vi.fn().mockReturnValue('gemini');
 
 vi.mock('ai', () => ({
@@ -35,7 +35,7 @@ vi.mock('../../../services/storageService', () => ({
 
 vi.mock('../../../services/ai/providerFactory', () => ({
   createLanguageModelForWorldScript: (...args: unknown[]) =>
-    mockCreateLanguageModelForStoryCraft(...args),
+    mockCreateLanguageModelForWorldScript(...args),
   providerToKind: (...args: unknown[]) => mockProviderToKind(...args),
 }));
 
@@ -84,46 +84,46 @@ beforeEach(() => {
   mockAssertCloudAiAllowed.mockResolvedValue(undefined);
   mockStreamText.mockReturnValue(mockStreamTextResult);
   mockStreamTextResult.toTextStreamResponse.mockReturnValue(new Response('ok', { status: 200 }));
-  mockCreateLanguageModelForStoryCraft.mockReturnValue({ type: 'mock-model' });
+  mockCreateLanguageModelForWorldScript.mockReturnValue({ type: 'mock-model' });
 });
 
 // ---------------------------------------------------------------------------
-// STORYCRAFT_COMPLETION_URL
+// WORLDSCRIPT_COMPLETION_URL
 // ---------------------------------------------------------------------------
-describe('STORYCRAFT_COMPLETION_URL', () => {
-  it('is the storycraft internal protocol URL', () => {
-    expect(STORYCRAFT_COMPLETION_URL).toBe('storycraft-internal://completion');
+describe('WORLDSCRIPT_COMPLETION_URL', () => {
+  it('is the worldscript internal protocol URL', () => {
+    expect(WORLDSCRIPT_COMPLETION_URL).toBe('worldscript-internal://completion');
   });
 });
 
 // ---------------------------------------------------------------------------
-// storyCraftCompletionFetch — error paths
+// worldScriptCompletionFetch — error paths
 // ---------------------------------------------------------------------------
-describe('storyCraftCompletionFetch — invalid body', () => {
+describe('worldScriptCompletionFetch — invalid body', () => {
   it('returns 500 when body is missing (generic error path)', async () => {
     // QNBS-v3: missing body throws generic Error (not ZodError) → caught as 500
-    const res = await storyCraftCompletionFetch('storycraft-internal://completion', {});
+    const res = await worldScriptCompletionFetch('worldscript-internal://completion', {});
     expect(res.status).toBe(500);
   });
 
   it('returns 500 when body is not a string', async () => {
-    const res = await storyCraftCompletionFetch('storycraft-internal://completion', {
+    const res = await worldScriptCompletionFetch('worldscript-internal://completion', {
       body: new Uint8Array([1, 2, 3]),
     });
     expect(res.status).toBe(500);
   });
 
   it('returns 500 for invalid JSON body (SyntaxError caught as generic)', async () => {
-    const res = await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit('not-json'),
     );
     expect(res.status).toBe(500);
   });
 
   it('returns 400 for schema validation failure (missing prompt)', async () => {
-    const res = await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(
         JSON.stringify({ provider: 'gemini', model: 'gemini-2.5-flash', creativity: 'Balanced' }),
       ),
@@ -132,22 +132,22 @@ describe('storyCraftCompletionFetch — invalid body', () => {
   });
 });
 
-describe('storyCraftCompletionFetch — unsupported provider', () => {
+describe('worldScriptCompletionFetch — unsupported provider', () => {
   it('returns 422 for unsupported provider', async () => {
     mockProviderToKind.mockReturnValue('unsupported');
-    const res = await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(makeBody({ provider: 'anthropic' })),
     );
     expect(res.status).toBe(422);
   });
 });
 
-describe('storyCraftCompletionFetch — missing API key', () => {
+describe('worldScriptCompletionFetch — missing API key', () => {
   it('returns 401 when Gemini API key is missing', async () => {
     mockGetGeminiApiKey.mockResolvedValue(null);
-    const res = await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(makeBody()),
     );
     expect(res.status).toBe(401);
@@ -156,22 +156,22 @@ describe('storyCraftCompletionFetch — missing API key', () => {
   it('returns 401 when OpenAI API key is missing', async () => {
     mockProviderToKind.mockReturnValue('openai');
     mockGetApiKey.mockResolvedValue(null);
-    const res = await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(makeBody({ provider: 'openai', model: 'gpt-4o' })),
     );
     expect(res.status).toBe(401);
   });
 });
 
-describe('storyCraftCompletionFetch — abort handling', () => {
+describe('worldScriptCompletionFetch — abort handling', () => {
   it('throws DOMException AbortError when signal is already aborted', async () => {
     // QNBS-v3: code throws DOMException('Aborted', 'AbortError') — message is 'Aborted', name is 'AbortError'
     const controller = new AbortController();
     controller.abort();
     await expect(
-      storyCraftCompletionFetch(
-        'storycraft-internal://completion',
+      worldScriptCompletionFetch(
+        'worldscript-internal://completion',
         makeInit(makeBody(), controller.signal),
       ),
     ).rejects.toSatisfy(
@@ -180,10 +180,10 @@ describe('storyCraftCompletionFetch — abort handling', () => {
   });
 });
 
-describe('storyCraftCompletionFetch — success (gemini)', () => {
+describe('worldScriptCompletionFetch — success (gemini)', () => {
   it('calls streamText and returns stream response', async () => {
-    const res = await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(makeBody()),
     );
     expect(mockStreamText).toHaveBeenCalled();
@@ -191,8 +191,8 @@ describe('storyCraftCompletionFetch — success (gemini)', () => {
   });
 
   it('passes temperature from creativity setting', async () => {
-    await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(makeBody({ creativity: 'Focused' })),
     );
     const callArgs = mockStreamText.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -200,14 +200,14 @@ describe('storyCraftCompletionFetch — success (gemini)', () => {
   });
 
   it('defaults maxOutputTokens to 2048 when not provided', async () => {
-    await storyCraftCompletionFetch('storycraft-internal://completion', makeInit(makeBody()));
+    await worldScriptCompletionFetch('worldscript-internal://completion', makeInit(makeBody()));
     const callArgs = mockStreamText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(callArgs?.['maxOutputTokens']).toBe(2048);
   });
 
   it('uses provided maxOutputTokens when specified', async () => {
-    await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(makeBody({ maxOutputTokens: 4096 })),
     );
     const callArgs = mockStreamText.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -215,11 +215,11 @@ describe('storyCraftCompletionFetch — success (gemini)', () => {
   });
 });
 
-describe('storyCraftCompletionFetch — success (ollama)', () => {
+describe('worldScriptCompletionFetch — success (ollama)', () => {
   it('resolves ollama provider to openaiCompatible', async () => {
     mockProviderToKind.mockReturnValue('openaiCompatible');
-    const res = await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(
         makeBody({
           provider: 'ollama',
@@ -229,17 +229,17 @@ describe('storyCraftCompletionFetch — success (ollama)', () => {
       ),
     );
     expect(res.status).toBe(200);
-    expect(mockCreateLanguageModelForStoryCraft).toHaveBeenCalledWith(
+    expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'openaiCompatible', apiKey: 'ollama' }),
     );
   });
 });
 
-describe('storyCraftCompletionFetch — unexpected error', () => {
+describe('worldScriptCompletionFetch — unexpected error', () => {
   it('returns 500 for unexpected errors', async () => {
     mockAssertCloudAiAllowed.mockRejectedValue(new Error('Network error'));
-    const res = await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(makeBody()),
     );
     expect(res.status).toBe(500);
@@ -248,8 +248,8 @@ describe('storyCraftCompletionFetch — unexpected error', () => {
   it('logs the failure with the propagated correlationId (Phase 1)', async () => {
     logWithContextSpy.mockClear();
     mockAssertCloudAiAllowed.mockRejectedValue(new Error('Network error'));
-    await storyCraftCompletionFetch(
-      'storycraft-internal://completion',
+    await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
       makeInit(makeBody({ correlationId: 'ai-zzz999' })),
     );
     expect(logWithContextSpy).toHaveBeenCalledWith(
