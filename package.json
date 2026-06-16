@@ -122,7 +122,7 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "ai": "^6.0.206",
     "diff-match-patch": "^1.0.5",
-    "docx": "^9.7.0",
+    "docx": "^9.7.1",
     "dompurify": "^3.4.6",
     "driver.js": "^1.4.0",
     "jspdf": "^4.2.1",
