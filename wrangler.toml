@@ -1,4 +1,4 @@
-# Cloudflare Pages — StoryCraft Studio (static SPA)
+# Cloudflare Pages — WorldScript Studio (static SPA)
 # https://developers.cloudflare.com/pages/
 #
 # Dashboard (Builds):
@@ -9,6 +9,6 @@
 #   NICHT:             npx wrangler deploy | wrangler pages deploy in CI-Deploy-Step
 #   NICHT nötig:       CLOUDFLARE_API_TOKEN in Pages-Build-Env (nur für manuelles GH-Deploy)
 #
-name = "storycraft-studio"
+name = "worldscript-studio"
 compatibility_date = "2026-05-31"
 pages_build_output_dir = "dist"

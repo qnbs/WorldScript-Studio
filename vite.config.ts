@@ -4,27 +4,11 @@ import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { GITHUB_PAGES_BASE, resolveViteBase } from './config/resolveViteBase';
 
 const isAnalyze = process.env['ANALYZE'] === 'true';
 
-function resolveBase(): string {
-  // QNBS-v3: Tauri builds need relative paths for local file:// loading
-  // TAURI_PLATFORM is set by Tauri CLI during desktop builds
-  const isTauri = process.env['TAURI_PLATFORM'] !== undefined;
-  if (isTauri) {
-    return './';
-  }
-  const viteBase = process.env['VITE_BASE']?.trim();
-  if (viteBase) {
-    return viteBase.endsWith('/') ? viteBase : `${viteBase}/`;
-  }
-  if (process.env['DEPLOY_TARGET'] === 'edge') {
-    return '/';
-  }
-  return '/WorldScript-Studio/';
-}
-
-const deployBase = resolveBase();
+const deployBase = resolveViteBase();
 
 export default defineConfig({
   base: deployBase,
@@ -51,7 +35,7 @@ export default defineConfig({
     {
       name: 'worldscript-deploy-base-html',
       transformIndexHtml(html) {
-        if (deployBase === '/WorldScript-Studio/') return html;
+        if (deployBase === GITHUB_PAGES_BASE) return html;
         // QNBS-v3: only rewrite app-relative paths (preceded by quote/space) so
         // absolute URLs like https://worldscript-studio.app/WorldScript-Studio/
         // are not corrupted when deployBase is './'.
