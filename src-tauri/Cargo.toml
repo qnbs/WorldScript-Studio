@@ -34,7 +34,7 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tokio = { version = "1", features = ["sync", "time", "process", "rt-multi-thread"] }
 candle-core = { version = "0.8", optional = true }
-candle-nn = { version = "0.8", optional = true }
+candle-nn = { version = "0.10", optional = true }
 
 [profile.release]
 # QNBS-v3: Aggressive size + speed optimizations for desktop bundles
