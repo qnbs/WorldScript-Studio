@@ -10,7 +10,6 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
-import { assertCloudAiAllowed } from '../../services/ai/aiPolicy';
 import {
   clearOpenRouterModelCache,
   fetchOpenRouterModels,
@@ -101,6 +100,17 @@ export const OpenRouterSection: FC = () => {
   const dispatch = useAppDispatch();
   const openRouterSettings = useAppSelector((s) => s.settings.openRouter);
   const aiMode = useAppSelector((s) => s.settings.aiMode);
+  const privacy = useAppSelector((s) => s.settings.privacy);
+  // QNBS-v3: Derive the cloud-policy block from LIVE Redux state so it reacts INSTANTLY to AI-mode /
+  // privacy changes. The previous approach used an async storageService.loadSettings() check that
+  // only re-ran on mount / API-key change, so toggling "Local storage only" (which defaults to ON) or
+  // switching the AI mode never updated the banner — OpenRouter looked permanently blocked.
+  const policyBlock = useMemo<'mode' | 'localOnly' | null>(() => {
+    if (aiMode === 'local' || aiMode === 'eco') return 'mode';
+    if (privacy?.localStorageOnly) return 'localOnly';
+    return null;
+  }, [aiMode, privacy?.localStorageOnly]);
+  const policyBlocked = policyBlock !== null;
   // QNBS-v3: Subscribe to online/offline events instead of reading navigator.onLine once at render —
   // otherwise the offline warning goes stale until an unrelated re-render happens to recompute it.
   const [isOffline, setIsOffline] = useState(
@@ -131,7 +141,6 @@ export const OpenRouterSection: FC = () => {
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [isModelsLoading, setIsModelsLoading] = useState(false);
   const [modelFetchError, setModelFetchError] = useState<string | null>(null);
-  const [policyBlocked, setPolicyBlocked] = useState(false);
   const [isCustomModel, setIsCustomModel] = useState(
     !OPENROUTER_FREE_MODELS.includes(preferredModel as (typeof OPENROUTER_FREE_MODELS)[number]),
   );
@@ -161,17 +170,6 @@ export const OpenRouterSection: FC = () => {
     };
   }, []);
 
-  const guardPolicy = useCallback(async () => {
-    try {
-      await assertCloudAiAllowed('openrouter');
-      setPolicyBlocked(false);
-      return true;
-    } catch {
-      setPolicyBlocked(true);
-      return false;
-    }
-  }, []);
-
   // QNBS-v3: Monotonic guard so concurrent catalog fetches are last-wins — a slower or failing
   // response can never overwrite the result of a newer request, and a response that resolves after
   // unmount / key change is dropped instead of leaking state.
@@ -186,12 +184,14 @@ export const OpenRouterSection: FC = () => {
       const isLatest = () => fetchSeqRef.current === seq;
       setIsModelsLoading(true);
       setModelFetchError(null);
-      const allowed = await guardPolicy();
-      if (!allowed) {
+      if (policyBlocked) {
         if (isLatest()) {
           // QNBS-v3: Cloud access is blocked — drop any previously loaded catalog so the Select
-          // doesn't keep offering stale paid options the user can no longer reach.
-          setModels([]);
+          // doesn't keep offering stale paid options the user can no longer reach. Use a functional
+          // update that returns the SAME reference when already empty: emitting a fresh [] on every
+          // run would change models' identity each render and — when an unstable t re-runs this
+          // effect — spin an infinite render loop instead of settling.
+          setModels((prev) => (prev.length === 0 ? prev : []));
           setIsModelsLoading(false);
         }
         return;
@@ -203,14 +203,15 @@ export const OpenRouterSection: FC = () => {
         logger.warn('OpenRouter: failed to fetch model catalog', { error: String(err) });
         if (isLatest()) {
           setModelFetchError(t('settings.openRouter.modelFetch.failed'));
-          // QNBS-v3: Drop stale paid models on error so the Select only offers guaranteed options.
-          setModels([]);
+          // QNBS-v3: Drop stale paid models on error so the Select only offers guaranteed options;
+          // keep the same ref when already empty to avoid a needless re-render (mirrors the blocked path).
+          setModels((prev) => (prev.length === 0 ? prev : []));
         }
       } finally {
         if (isLatest()) setIsModelsLoading(false);
       }
     },
-    [guardPolicy, t],
+    [policyBlocked, t],
   );
 
   // Fetch model catalog when the section mounts or the stored key changes.
@@ -328,10 +329,14 @@ export const OpenRouterSection: FC = () => {
     // result isn't hidden behind the higher-priority saveMsg in the status renderer.
     if (saveMsgTimer.current) clearTimeout(saveMsgTimer.current);
     setSaveMsg(null);
-    const allowed = await guardPolicy();
-    if (!isLatest()) return;
-    if (!allowed) {
-      setTestResult({ ok: false, text: t('settings.openRouter.policyBlocked') });
+    if (policyBlocked) {
+      setTestResult({
+        ok: false,
+        text:
+          policyBlock === 'mode'
+            ? t('settings.openRouter.policyBlocked.mode')
+            : t('settings.openRouter.policyBlocked.localOnly'),
+      });
       setIsTesting(false);
       return;
     }
@@ -359,7 +364,7 @@ export const OpenRouterSection: FC = () => {
     } finally {
       if (isLatest()) setIsTesting(false);
     }
-  }, [guardPolicy, storedKey, t]);
+  }, [policyBlocked, policyBlock, storedKey, t]);
 
   const handleModelChange = useCallback(
     (value: string) => {
@@ -521,9 +526,11 @@ export const OpenRouterSection: FC = () => {
                 {modeWarning}
               </p>
             )}
-            {policyBlocked && (
+            {policyBlock && (
               <p className="text-xs text-[var(--sc-danger-fg)]" role="alert" aria-live="polite">
-                {t('settings.openRouter.policyBlocked')}
+                {policyBlock === 'mode'
+                  ? t('settings.openRouter.policyBlocked.mode')
+                  : t('settings.openRouter.policyBlocked.localOnly')}
               </p>
             )}
           </div>
