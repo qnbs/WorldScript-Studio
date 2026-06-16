@@ -1,6 +1,6 @@
 # Dual-Graph Setup: Graphify + CodeGraph
 
-StoryCraft Studio uses **two complementary knowledge-graph tools** to provide maximum codebase intelligence for AI agents and human developers.
+WorldScript Studio uses **two complementary knowledge-graph tools** to provide maximum codebase intelligence for AI agents and human developers.
 
 ## Philosophy: City Map + GPS
 
@@ -82,7 +82,7 @@ pnpm run lint && pnpm run typecheck && pnpm run i18n:check
 ### Template A: Feature Development
 
 ```text
-I want to implement [FEATURE] in StoryCraft Studio.
+I want to implement [FEATURE] in WorldScript Studio.
 
 Please:
 1. Read graphify-out/GRAPH_REPORT.md for architecture context

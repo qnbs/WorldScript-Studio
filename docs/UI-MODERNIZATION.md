@@ -1,11 +1,11 @@
-# UI Modernization Guide — StoryCraft Studio
+# UI Modernization Guide — WorldScript Studio
 
 **Version:** v1.22.0 (2026-06-11)
 **Status:** Phase 1 & 2 (Select) Complete — LanguageSelector, RadioGroup, Tabs, Select
 
 ## Overview
 
-This document tracks the ongoing UI/UX modernization effort to bring StoryCraft Studio to 2026 premium standards. All components follow the established design token system (`--sc-*`) and maintain WCAG 2.2 AA+ accessibility compliance.
+This document tracks the ongoing UI/UX modernization effort to bring WorldScript Studio to 2026 premium standards. All components follow the established design token system (`--sc-*`) and maintain WCAG 2.2 AA+ accessibility compliance.
 
 ## Design Principles
 

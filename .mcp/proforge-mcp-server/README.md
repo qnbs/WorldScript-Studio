@@ -1,6 +1,6 @@
 # ProForge MCP Server
 
-Exposes the StoryCraft Studio **ProForge** 8-stage agentic editing pipeline to external AI agents
+Exposes the WorldScript Studio **ProForge** 8-stage agentic editing pipeline to external AI agents
 (Claude Desktop, Cline, Cursor, GitHub Copilot, Kimi, …) over the
 [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -23,7 +23,7 @@ AI agent ──stdio MCP──> ProForge MCP server (this folder)
    Node InferenceGateway (@google/genai) · in-process memory bank · file run-history
 ```
 
-Because StoryCraft is a backend-less PWA, this server cannot read the browser's live IndexedDB
+Because WorldScript is a backend-less PWA, this server cannot read the browser's live IndexedDB
 project. It operates on a **portable project payload** passed per call (`project` argument) or loaded
 once at startup (`--project <file>`). See [`examples/sample-project.json`](./examples/sample-project.json).
 
@@ -43,14 +43,14 @@ once at startup (`--project <file>`). See [`examples/sample-project.json`](./exa
 
 | Var | Purpose |
 |-----|---------|
-| `GEMINI_API_KEY` (or `STORYCRAFT_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`) | Required only for `proforge_run_stage`. Never logged, never bundled. |
+| `GEMINI_API_KEY` (or `WORLDSCRIPT_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`) | Required only for `proforge_run_stage`. Never logged, never bundled. |
 
 CLI flags: `--project <file>` (default payload), `--history <file>` (run-history JSON store).
 
 ## Run
 
 This server reuses the repo's TypeScript sources and their dependencies (`zod`, `@google/genai`),
-so it must live inside the StoryCraft repo. Only the MCP SDK + `tsx` are installed locally.
+so it must live inside the WorldScript repo. Only the MCP SDK + `tsx` are installed locally.
 
 ```bash
 cd .mcp/proforge-mcp-server
@@ -71,7 +71,7 @@ GEMINI_API_KEY=… npx tsx src/index.ts --project ./examples/sample-project.json
     "proforge": {
       "command": "npx",
       "args": ["tsx", "src/index.ts", "--project", "./examples/sample-project.json"],
-      "cwd": "/absolute/path/to/StoryCraft-Studio/.mcp/proforge-mcp-server",
+      "cwd": "/absolute/path/to/WorldScript-Studio/.mcp/proforge-mcp-server",
       "env": { "GEMINI_API_KEY": "your-key-here" }
     }
   }
@@ -85,7 +85,7 @@ GEMINI_API_KEY=… npx tsx src/index.ts --project ./examples/sample-project.json
   "mcpServers": {
     "proforge": {
       "command": "npx",
-      "args": ["tsx", "/absolute/path/to/StoryCraft-Studio/.mcp/proforge-mcp-server/src/index.ts"],
+      "args": ["tsx", "/absolute/path/to/WorldScript-Studio/.mcp/proforge-mcp-server/src/index.ts"],
       "env": { "GEMINI_API_KEY": "your-key-here" }
     }
   }

@@ -63,5 +63,5 @@ See `project_planbib_v17.md` in memory for the full plan.
 
 ## CI
 
-Monitor all CI jobs at `https://github.com/qnbs/StoryCraft-Studio/actions` after pushes.
-CodeQL scans: `https://github.com/qnbs/StoryCraft-Studio/security/code-scanning`
+Monitor all CI jobs at `https://github.com/qnbs/WorldScript-Studio/actions` after pushes.
+CodeQL scans: `https://github.com/qnbs/WorldScript-Studio/security/code-scanning`

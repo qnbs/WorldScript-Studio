@@ -48,7 +48,7 @@ pnpm run ci:quick           # lint + typecheck + i18n:check + unit tests — low
 
 **CI audit & housekeeping policy (ALL CI runs must be fully green):**
 - After every commit, monitor ALL CI jobs: security (OSV + CodeQL), quality (Biome + tsc + Vitest), build, e2e, lighthouse, deploy, mutation, storybook.
-- **CodeQL scanning**: Check `https://github.com/qnbs/StoryCraft-Studio/security/code-scanning` after every push. Fix the root cause — do not just suppress alerts.
+- **CodeQL scanning**: Check `https://github.com/qnbs/WorldScript-Studio/security/code-scanning` after every push. Fix the root cause — do not just suppress alerts.
 - **Token-Permissions**: All GitHub Actions workflows must set top-level `permissions: contents: read`; write permissions belong at the job level, never top-level.
 - **OSV vulnerabilities**: Run `pnpm audit` or check the security CI job. Add `pnpm.overrides` with pinned exact versions.
 - Correction loop: fix → commit → verify CI → fix until all jobs green.
@@ -68,11 +68,11 @@ Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on stage
 Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 ## Architecture
 
-StoryCraft Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
+WorldScript Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
 
 **Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 11, Node ≥ 22. Four internal workspace packages (`@domain/ai-core`, `@domain/ui`, `collab-transport`, `@domain/worker-bus` in `packages/`) are consumed as `workspace:*` deps.
 
-**Live:** `https://storycraft-studio-indol.vercel.app/` (Vercel, primary) · GitHub Pages: `https://qnbs.github.io/StoryCraft-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
+**Live:** `https://worldscript-studio.vercel.app/` (Vercel, primary) · GitHub Pages: `https://qnbs.github.io/WorldScript-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
 
 ### Directory map
 
@@ -85,7 +85,7 @@ features/         → Redux slices: project, settings, status, writer, versionCo
                      plotBoard, sceneComments, progressTracker, analytics, proForge
 hooks/            → View business logic (use*View.ts naming); useGlobalKeyboardShortcuts here too
 services/         → External adapters; key sub-dirs:
-                     ai/          Vercel AI SDK layer (index.ts entry, providerFactory, storyCraftCompletionFetch,
+                     ai/          Vercel AI SDK layer (index.ts entry, providerFactory, worldScriptCompletionFetch,
                                    hybridFallback, aiPolicy, aiRetry, aiModeService + cache/health/gpu/eco/embedding services)
                                    providers/ — openrouterProvider (circuit breaker, free-tier catalog, RPM tracking)
                      copilot/     heuristicEngine (8 manuscript rules), insightGenerator, copilotContextService,
@@ -176,7 +176,7 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 **AI constants:** `services/ai/aiConstants.ts` is the single source for `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS`, `LOCAL_INFERENCE_PROVIDERS`. Older per-constant files re-export from here and remain for import compatibility.
 
-**Vercel AI SDK layer (Strangler pattern):** `services/ai/index.ts` is the canonical entry. New Writer streaming uses `hooks/useStoryCraftAI.ts` (wraps `useCompletion` with `storyCraftCompletionFetch`). New code routes through `services/ai/` + `useStoryCraftAI`; legacy thunks remain for backwards compatibility. Always gate cloud AI calls with `assertCloudAiAllowed` from `services/ai/aiPolicy.ts`.
+**Vercel AI SDK layer (Strangler pattern):** `services/ai/index.ts` is the canonical entry. New Writer streaming uses `hooks/useWorldScriptAI.ts` (wraps `useCompletion` with `worldScriptCompletionFetch`). New code routes through `services/ai/` + `useWorldScriptAI`; legacy thunks remain for backwards compatibility. Always gate cloud AI calls with `assertCloudAiAllowed` from `services/ai/aiPolicy.ts`.
 
 `services/ai/aiRetry.ts` — `withTransientRetry(fn, opts)` wraps any AI call with transient-error retries. Use this instead of ad-hoc retry logic.
 
@@ -196,7 +196,7 @@ Use `services/logger.ts` (StructuredLogger — B-6, v1.19.0) for all diagnostic 
 
 **StructuredLogger API:** `createLogger('module')` → `.info/.warn/.error(msg, ctx?)` + `.withContext(ctx)` for scoped logging. **GDPR sanitization:** `sanitizeLogContext(ctx)` redacts `/key|token|password|passphrase/i` → `'[REDACTED]'` on every `.withContext()` and all IDB/Tauri writes.
 
-**Sinks:** IDB (`storycraft-logs-db`, 1 000-entry LRU) + Tauri JSONL (`$APPDATA/logs/storycraft-YYYY-MM-DD.jsonl`) + console (DEV-only). `getRecentLogs()` / `clearLogs()` — backward-compat ring-buffer API retained.
+**Sinks:** IDB (`worldscript-logs-db`, 1 000-entry LRU) + Tauri JSONL (`$APPDATA/logs/worldscript-YYYY-MM-DD.jsonl`) + console (DEV-only). `getRecentLogs()` / `clearLogs()` — backward-compat ring-buffer API retained.
 
 ### Environment Variables
 

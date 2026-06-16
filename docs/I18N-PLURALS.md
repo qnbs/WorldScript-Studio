@@ -1,6 +1,6 @@
 # i18n — CLDR Plural Rules
 
-> **Binding reference.** StoryCraft Studio uses native `Intl.PluralRules` for CLDR-compliant plural handling.
+> **Binding reference.** WorldScript Studio uses native `Intl.PluralRules` for CLDR-compliant plural handling.
 
 ## Overview
 

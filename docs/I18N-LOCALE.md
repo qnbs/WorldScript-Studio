@@ -1,6 +1,6 @@
 # i18n — Intl.Locale API
 
-> **Binding reference.** StoryCraft Studio uses native `Intl.Locale` for locale metadata and BCP47 tag handling.
+> **Binding reference.** WorldScript Studio uses native `Intl.Locale` for locale metadata and BCP47 tag handling.
 
 ## Overview
 

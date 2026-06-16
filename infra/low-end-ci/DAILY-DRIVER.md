@@ -15,7 +15,7 @@ Practical checklist for Ubuntu 20.04 Mate (2–4 GB RAM). **Primarily local**; G
 ## During development (standard, **without Docker**)
 
 ```bash
-cd ~/githubcursor/StoryCraft-Studio
+cd ~/githubcursor/WorldScript-Studio
 pnpm run ci:quick              # lint + i18n + typecheck
 pnpm run ci:quick:unit         # + Vitest without coverage
 ```
@@ -55,7 +55,7 @@ Prerequisites:
 - [ ] No other heavy programs running
 
 ```bash
-cd ~/githubcursor/StoryCraft-Studio
+cd ~/githubcursor/WorldScript-Studio
 pnpm run ci:act
 # or leaner E2E:
 ci-act-sequential.sh pull_request --e2e-chromium-only
@@ -73,7 +73,7 @@ act pull_request -j lighthouse -W .github/workflows/ci.yml
 
 ### Secrets
 
-File: `~/storycraft-ci/act.secrets` (chmod 600)
+File: `~/worldscript-ci/act.secrets` (chmod 600)
 
 ```ini
 GITHUB_TOKEN=ghp_…       # Mirror / API
@@ -103,7 +103,7 @@ Only **one** Node axis: `lts/*` (corresponds to Node 22 in act-22.04 image). Do 
 
 ### Caching
 
-- Host: `PNPM_STORE_DIR=~/storycraft-ci/cache/pnpm-store`
+- Host: `PNPM_STORE_DIR=~/worldscript-ci/cache/pnpm-store`
 - act: bind-mount via `--bind` in `~/.actrc`
 - After run: `sc-eco-off` or `low-end-optimization.sh --prune`
 
@@ -113,7 +113,7 @@ Only **one** Node axis: `lts/*` (corresponds to Node 22 in act-22.04 image). Do 
 
 - [ ] `pnpm run ci:act` with `--with-storybook` (optional)
 - [ ] `sc-backup`
-- [ ] Check `systemctl --user start storycraft-ci-prune.timer` status
+- [ ] Check `systemctl --user start worldscript-ci-prune.timer` status
 - [ ] `git fetch github && sc-mirror-up` — get backup from GitHub if you still work there
 
 ---
@@ -139,7 +139,7 @@ Only **one** Node axis: `lts/*` (corresponds to Node 22 in act-22.04 image). Do 
 ```bash
 sc-status
 htop
-tail -f ~/storycraft-ci/logs/act-*.log
+tail -f ~/worldscript-ci/logs/act-*.log
 docker compose -f infra/low-end-ci/docker-compose.forgejo.yml logs -f --tail=30
 ```
 
@@ -149,8 +149,8 @@ docker compose -f infra/low-end-ci/docker-compose.forgejo.yml logs -f --tail=30
 
 ```bash
 sc-backup
-ls ~/storycraft-ci/backups/
-restore-ci.sh ~/storycraft-ci/backups/<timestamp>
+ls ~/worldscript-ci/backups/
+restore-ci.sh ~/worldscript-ci/backups/<timestamp>
 ```
 
 ---
@@ -164,7 +164,7 @@ restore-ci.sh ~/storycraft-ci/backups/<timestamp>
 | `Cannot connect to Docker` | Daemon off / permissions | `sudo systemctl start docker`; in `docker` group |
 | Vitest OOM | Coverage + WASM | Without `--coverage`; `NODE_OPTIONS=--max-old-space-size=1536` |
 | Playwright OOM in act | 2 browser projects | `--e2e-chromium-only`; swap |
-| Forgejo 502 | Container booting | `docker logs storycraft-forgejo`; free RAM |
+| Forgejo 502 | Container booting | `docker logs worldscript-forgejo`; free RAM |
 | act artifact missing lighthouse | Separate act run | One `act --sequential` with build+e2e+lighthouse |
 | gitleaks false positive | History scan | Rotate secret; skip job locally if needed |
 | pnpm store corrupt | Aborted install | `pnpm store prune` |

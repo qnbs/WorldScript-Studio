@@ -1,4 +1,4 @@
-# StoryCraft Studio — Codebase Audit Report
+# WorldScript Studio — Codebase Audit Report
 
 **Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)** → **2026-06-01 (Post-crash session: CI stabilisation + 14 CodeAnt AI fixes + E2E hardening)** → **2026-06-02 (Perf Phase 2.3 — pipeline-LRU unification + PR #69 CodeAnt fixes)** → **2026-06-03 (WorkerBus v2 Phase 3 — Rust TaskSupervisor + Tauri-build unblock)** → **2026-06-06 (Phase 3 i18n Expansion — ja/zh/pt/el + Intl APIs)** → **2026-06-09 (v1.21 Deep Audit Correction — Whisper WASM download UI + 3 CodeAnt fixes + CloudSync LWW)** → **2026-06-09 (feat/deep-audit-v1.21 — CSP hardening, zh locale ≤5% EN, coverage Batches A/B/C, VoiceActivityCoordinator B-2 bridge)** → **2026-06-11 (Ultimate Copilot v2 Phase 2+3 — markdown, sidebar, Apply-to-chapter, InlineAnnotation, ProForge chip; PR #110+#111)** → **2026-06-11 (v1.22.0 release — OpenRouter Cloud 5 provider, AI Execution Modes hybrid/cloud/local/eco, AiModeIndicator, SW cache-invalidation fix)**
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation
@@ -133,7 +133,7 @@
 
 **Help & Settings content augmentation (2026-06-03):** new Help category **"Advanced & Power Features"** (`helpCatalog.ts`) — 8 articles (Languages/RTL, LoRA fine-tuning, ProForge, Voice, At-rest encryption, Cloud Sync, Plugins, Adaptive AI/GPU/Eco) translated in en/de/fr/es/it (ar/he English fallback). Offline help-RAG (`helpDocRetrieval.ts`) grown 13 → **16 chunks** (`languages-rtl`, `privacy-local-ai`, `advanced-editing`). In-app **Settings Guide** (`SettingsGuideSection.tsx`) completed — the previously-undocumented live categories **Fine-Tuning (LoRA)**, **Community**, and **Plugins** now appear with title/desc + search hints in all 7 locales. +23 keys (help) +6 keys (settings) → **2259 keys × 7 locales**. Tests green (`helpCatalogIntegrity`, `helpDocRetrieval`, `helpSearchIndex`, `SettingsGuideSection`).
 
-**SW i18n-staleness fix (2026-06-03):** returning users kept **stale translations** after a content-only i18n update (symptom: switching to ar/he flipped layout to RTL but text stayed English until a hard reload / cache clear). Root cause: `public/sw.js` cached `/locales/**/bundle.json` with **stale-while-revalidate** against `storycraft-dynamic-v${APP_VERSION}`; `APP_VERSION` is synced from `package.json` and doesn't bump on i18n-only changes, so the old (stub) bundle was served first and only revalidated in the background. Fix: locale handler switched to **network-first with cache fallback** — fresh strings whenever online, offline still served from cache. Regression guard: `tests/unit/swLocaleStrategy.test.ts` (asserts network-first ordering, no stale-first return). Changing `sw.js` also triggers a new SW install → `controllerchange` auto-reload (`register-sw.ts`) for existing clients.
+**SW i18n-staleness fix (2026-06-03):** returning users kept **stale translations** after a content-only i18n update (symptom: switching to ar/he flipped layout to RTL but text stayed English until a hard reload / cache clear). Root cause: `public/sw.js` cached `/locales/**/bundle.json` with **stale-while-revalidate** against `worldscript-dynamic-v${APP_VERSION}`; `APP_VERSION` is synced from `package.json` and doesn't bump on i18n-only changes, so the old (stub) bundle was served first and only revalidated in the background. Fix: locale handler switched to **network-first with cache fallback** — fresh strings whenever online, offline still served from cache. Regression guard: `tests/unit/swLocaleStrategy.test.ts` (asserts network-first ordering, no stale-first return). Changing `sw.js` also triggers a new SW install → `controllerchange` auto-reload (`register-sw.ts`) for existing clients.
 
 **Quality gate (2026-06-02):** lint ✅ · i18n:check ✅ (2236 keys × 5 locales; `lora` + `common.next/back` un-orphaned) · typecheck ✅ · tests ✅ · feature-parity 0 criticals · LoRA view routed (Phase 2.2) + Phase 3 coverage tests (33) · Stryker now manual-only · Coverage/E2E: CI-only
 
@@ -166,7 +166,7 @@
 
 **Scope:** Complete the WorkerBus v2 Rust half (TODO.md line 26) and verify it natively. Branch `feat/workerbus-v2-phase3-rust` (PR #70).
 
-**Phase 3 delivered:** `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs` — `storycraft_task_supervisor_ping` (version) + `storycraft_task_supervisor_submit` (taskType dispatcher; unknown/bad-payload → `{success:false,error}`, never a hard `Err`, matching the `RustTaskResultEvent` honest-failure contract). First native task `text.analyze` (word/char/sentence/syllable + Flesch Reading Ease, pure Rust, 8 `#[cfg(test)]` tests). TS front-end `services/rustTaskSupervisor.ts` `analyzeTextViaRust()` probes `isRustComputeAvailable()` before routing (Rust-only task never hits the web pool; null → JS fallback), 5 unit tests. Verified locally: biome + tsc + 5 TS tests ✅.
+**Phase 3 delivered:** `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs` — `worldscript_task_supervisor_ping` (version) + `worldscript_task_supervisor_submit` (taskType dispatcher; unknown/bad-payload → `{success:false,error}`, never a hard `Err`, matching the `RustTaskResultEvent` honest-failure contract). First native task `text.analyze` (word/char/sentence/syllable + Flesch Reading Ease, pure Rust, 8 `#[cfg(test)]` tests). TS front-end `services/rustTaskSupervisor.ts` `analyzeTextViaRust()` probes `isRustComputeAvailable()` before routing (Rust-only task never hits the web pool; null → JS fallback), 5 unit tests. Verified locally: biome + tsc + 5 TS tests ✅.
 
 **Verification method — Rust has no PR-CI gate.** `tauri-build.yml` runs only on `workflow_dispatch` / `v*` tags, and the crate cannot be compiled on the dev host. Verified by dispatching `tauri-build.yml` on the branch: the crate now **compiles clean** (`Finished release` in ~4m18s) and bundles **`.deb` / `.rpm` / `.AppImage`** on ubuntu.
 
@@ -383,7 +383,7 @@ The P0/P1 tables above were authored against the pre-Phase-2.1 tree. A line-by-l
 
 ### Settings: New Danger Zone features
 - **Factory Reset** (`services/factoryResetService.ts`): wipes all IDB databases, localStorage, SW caches
-- **Repeat Onboarding**: dispatches `storycraft:openPortal` event; `useApp.ts` listener re-opens WelcomePortal
+- **Repeat Onboarding**: dispatches `worldscript:openPortal` event; `useApp.ts` listener re-opens WelcomePortal
 
 ### CI: Stabilization
 - `deploy-cloudflare-pages.yml` paused (manual trigger only) — eliminates phantom 0-job failures on branch pushes
@@ -401,7 +401,7 @@ Three security findings identified and fixed in the same session:
 
 | ID | Severity | Finding | Fix |
 |----|----------|---------|-----|
-| C1-F1 | **High** | PBKDF2 iterations = 100,000 — below OWASP 2024 minimum (600k for SHA-256); StoryCraft's own code uses 310k | Raised to 600,000 across all 5 KDF sites (`collab-transport/crypto.js`, `collaborationService.ts`, `storageEncryptionService.ts`, `cloudSyncEncryption.ts`, `libraryBackupService.ts`) |
+| C1-F1 | **High** | PBKDF2 iterations = 100,000 — below OWASP 2024 minimum (600k for SHA-256); WorldScript's own code uses 310k | Raised to 600,000 across all 5 KDF sites (`collab-transport/crypto.js`, `collaborationService.ts`, `storageEncryptionService.ts`, `cloudSyncEncryption.ts`, `libraryBackupService.ts`) |
 | C1-F2 | **High** | `extractable: true` on the derived `CryptoKey` — violates SEC-RULE-5; allows key export via `crypto.subtle.exportKey()` | Changed to `extractable: false` |
 | C1-F3 | **Medium** | `promise.reject(...)` in decrypt() not `return`ed — error is swallowed, decrypt continues with garbage IV/ciphertext | Added `return` before the rejection |
 
@@ -421,7 +421,7 @@ Three security findings identified and fixed in the same session:
 
 **B-2:** `services/voice/wasmSttEngine.ts` + `sileroVadEngine.ts` — Whisper tiny.en Q8 + Silero VAD scaffold via @xenova/transformers. Feature-flagged (`enableVoiceWasm`).
 
-**B-3:** `packages/collab-transport` workspace package — vendor fork of y-webrtc 10.3.0 with StoryCraft RTCDataChannel E2E encryption patch baked in. Removes `patchedDependencies` re-apply burden. Biome alias + tsconfig paths wired.
+**B-3:** `packages/collab-transport` workspace package — vendor fork of y-webrtc 10.3.0 with WorldScript RTCDataChannel E2E encryption patch baked in. Removes `patchedDependencies` re-apply burden. Biome alias + tsconfig paths wired.
 
 **B-4:** `tests/e2e/a11y-axe.spec.ts` — Playwright axe-core gate across 8 views. WCAG 2.2 AA.
 
@@ -736,7 +736,7 @@ Three security findings identified and fixed in the same session:
 
 ### Sprint: v2.0 Phase 2 Completion (2026-05-23)
 
-**LORA-1 complete:** LoRA adapter inference foundation — `services/loraAdapterService.ts` (IDB: `storycraft-lora-db`, stores `lora-meta` + `lora-blobs`); `components/settings/LoraAdapterSection.tsx` (file upload, adapter list, delete); `services/localAiFacade.ts` extended with `loraAdapterId` parameter; `enableLoraAdapters` feature flag. Full QNBS-v3 comment coverage.
+**LORA-1 complete:** LoRA adapter inference foundation — `services/loraAdapterService.ts` (IDB: `worldscript-lora-db`, stores `lora-meta` + `lora-blobs`); `components/settings/LoraAdapterSection.tsx` (file upload, adapter list, delete); `services/localAiFacade.ts` extended with `loraAdapterId` parameter; `enableLoraAdapters` feature flag. Full QNBS-v3 comment coverage.
 
 **PLUGIN-1 complete:** Plugin system v0.1 — `PluginSandboxedApi` interface + `PluginPermission` typed union (`storage.read/write`, `ai.invoke`, `project.read/write`, `scene.read/write`); `pluginRegistry.execute()` builds permission-checking proxy before calling plugin callback; `components/settings/PluginsSection.tsx` (type badges, permission chips, uninstall); `enablePluginSystem` feature flag. Tests: `tests/unit/pluginRegistry.test.ts` extended with 8 `execute()` tests (deny/allow, error, log).
 
@@ -864,7 +864,7 @@ Delivered: WorkerBus v2 (priority preemption, backpressure, transferables), GPU 
 
 ### Released: v1.6.1 (2026-05-19, commit aa9f21c)
 
-**AI model catalogue (Gemini 3.x):** Default model `gemini-2.5-flash` → `gemini-3.5-flash`. Added Gemini 3.1 Pro Preview, 3.1 Flash, 3.1 Flash-Lite. Removed legacy `gemini-2.0-flash`. All fallback IDs updated across `geminiService.ts`, `storyCraftCompletionFetch.ts`, `dbService.ts` migration, `AiSections.tsx`, `settingsSlice.ts`.
+**AI model catalogue (Gemini 3.x):** Default model `gemini-2.5-flash` → `gemini-3.5-flash`. Added Gemini 3.1 Pro Preview, 3.1 Flash, 3.1 Flash-Lite. Removed legacy `gemini-2.0-flash`. All fallback IDs updated across `geminiService.ts`, `worldScriptCompletionFetch.ts`, `dbService.ts` migration, `AiSections.tsx`, `settingsSlice.ts`.
 
 **Docker:** Multi-stage `Dockerfile` (builder → nginx:1.27-alpine). `.dockerignore`. `docker.yml` GitHub Actions workflow (GHCR push on `v*` tags and `workflow_dispatch`).
 
@@ -1145,8 +1145,8 @@ Aligned with the current toolchain and UX: **README** Documentation Hub lists ev
 ### Storage and integrity
 
 - Refactored IndexedDB backend into **dual DB topology**:
-  - `storycraft-state-db` for app/snapshot state
-  - `storycraft-data-db` for images, codex, rag vectors
+  - `worldscript-state-db` for app/snapshot state
+  - `worldscript-data-db` for images, codex, rag vectors
 - Added `visibilitychange` persistence flush in `index.tsx` to reduce hidden-tab data loss windows.
 
 ### AI, sync, and security
@@ -1172,7 +1172,7 @@ Aligned with the current toolchain and UX: **README** Documentation Hub lists ev
 
 - **Socket.dev false positive — `json-schema@0.4.0` (2026-06-10):** Socket flagged this package as "90% likely obfuscated". Manual inspection confirms this is a **false positive**: the package ships two fully readable, well-commented files (`lib/validate.js` 271 lines, `lib/links.js` 64 lines) under AFL-2.1/BSD-3-Clause. It is a legitimate JSON Schema validator published in 2012 by Kris Zyp (Dojo Foundation), weekly downloads in the millions. `0.4.0` is the latest and only stable version (published 2021-11-09); `@ai-sdk/provider@3.0.10` (also latest) is the sole depender. No upgrade path exists. **Accepted as false positive.** To suppress on future PRs, use the Socket dashboard to set triage state to "acceptable risk" for `npm/json-schema@0.4.0`.
 - Local AI layers currently include placeholder fallback behavior; full WebLLM + Transformers runtime path should be completed in a dedicated performance validation cycle.
-- ~~Dual-DB migration from legacy `storycraft-db`~~ **Resolved (2026-05-08):** idempotent migration `migrateLegacyStorycraftDbIfNeeded` in [`services/dbMigration.ts`](services/dbMigration.ts) runs from [`services/dbService.ts`](services/dbService.ts) `initDB()`; Vitest fixtures in [`tests/unit/dbMigration.test.ts`](tests/unit/dbMigration.test.ts) (`fake-indexeddb`) copy legacy stores (`app-data-store`, `snapshots-store`, `images-store`, `rag-vectors-store`, `codex-store`) into `storycraft-state-db` / `storycraft-data-db` when the legacy DB exists and dual DBs are empty.
+- ~~Dual-DB migration from legacy `worldscript-db`~~ **Resolved (2026-05-08):** idempotent migration `migrateLegacyWorldscriptDbIfNeeded` in [`services/dbMigration.ts`](services/dbMigration.ts) runs from [`services/dbService.ts`](services/dbService.ts) `initDB()`; Vitest fixtures in [`tests/unit/dbMigration.test.ts`](tests/unit/dbMigration.test.ts) (`fake-indexeddb`) copy legacy stores (`app-data-store`, `snapshots-store`, `images-store`, `rag-vectors-store`, `codex-store`) into `worldscript-state-db` / `worldscript-data-db` when the legacy DB exists and dual DBs are empty.
 - CI mutation stage runs [`stryker.conf.json`](stryker.conf.json) against focused targets (`services/codexService.ts`, `services/dbMigration.ts`); tune thresholds as coverage grows.
 - **Automated accessibility:** Playwright + `@axe-core/playwright` smoke test ([`tests/e2e/a11y.spec.ts`](tests/e2e/a11y.spec.ts)) gates serious/critical axe violations on load (color-contrast disabled in CI for theme-variable variance); manual WCAG/sr verification remains recommended for releases.
 
@@ -1239,7 +1239,7 @@ The bullet list below described **pre-v1.2** gaps between `fileSystemService.ts`
 
 ## Executive Summary
 
-StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong TypeScript enforcement, excellent i18n, and sophisticated offline-first data management. The codebase demonstrates mature React patterns and thoughtful accessibility support. Main improvement areas are **test coverage**, **AI request lifecycle management**, and **desktop (Tauri) security hardening**.
+WorldScript Studio is a well-architected React 19 + Redux Toolkit PWA with strong TypeScript enforcement, excellent i18n, and sophisticated offline-first data management. The codebase demonstrates mature React patterns and thoughtful accessibility support. Main improvement areas are **test coverage**, **AI request lifecycle management**, and **desktop (Tauri) security hardening**.
 
 ### Scorecard
 
@@ -1272,7 +1272,7 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 
 **File:** `src-tauri/tauri.conf.json`
 **Issue:** `"security": { "csp": null }` — the desktop app has no Content Security Policy.
-**Resolution:** Set comprehensive CSP string including `connect-src` for Gemini API + WebRTC signaling. Identifier fixed to `com.storycraft.studio`, version synced to `1.0.0`. Capabilities narrowed to granular permissions.
+**Resolution:** Set comprehensive CSP string including `connect-src` for Gemini API + WebRTC signaling. Identifier fixed to `com.worldscript.studio`, version synced to `1.0.0`. Capabilities narrowed to granular permissions.
 
 ### 3. ~~No Request Cancellation for AI Thunks~~ ✅ FIXED
 
@@ -1336,8 +1336,8 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 ### 13. ~~Version Mismatch: Tauri vs npm~~ ✅ FIXED
 
 **Files:** `src-tauri/tauri.conf.json`, `package.json`
-**Issue:** Tauri had version `1.0.0`, package.json `1.1.1`. `frontendDist` pointed to `../build` instead of `../dist` (Vite default output). Window title was lowercase `storycraft-studio`.
-**Resolution:** Aligned version to `1.1.1`, fixed `frontendDist` to `../dist`, set proper product name and window title to `StoryCraft Studio`, improved window defaults (1280×800, centered, min size constraints). Narrowed CSP `connect-src` by removing overly broad `https://*.googleapis.com` wildcard.
+**Issue:** Tauri had version `1.0.0`, package.json `1.1.1`. `frontendDist` pointed to `../build` instead of `../dist` (Vite default output). Window title was lowercase `worldscript-studio`.
+**Resolution:** Aligned version to `1.1.1`, fixed `frontendDist` to `../dist`, set proper product name and window title to `WorldScript Studio`, improved window defaults (1280×800, centered, min size constraints). Narrowed CSP `connect-src` by removing overly broad `https://*.googleapis.com` wildcard.
 **Effort:** Low | **Priority:** Low
 
 ### 15. ~~No Performance Budgets~~ ✅ FIXED
@@ -1375,8 +1375,8 @@ StoryCraft Studio is a well-architected React 19 + Redux Toolkit PWA with strong
 ### 20. FOUC Theme Initialization ✅ FIXED (v1.1.2)
 
 **File:** `features/settings/settingsSlice.ts`, `index.html`
-**Issue:** `applyInitialTheme()` read `localStorage.getItem('storycraft-state')` — a key never written in production (only in tests). `JSON.parse` had no try/catch. Result: flash of wrong theme on every page load.
-**Resolution:** Added inline `<script>` in `<head>` reading `storycraft-theme` from localStorage. Theme mirrored to localStorage on save. Wrapped `JSON.parse` in try/catch. Removed dead `storycraft-state` read.
+**Issue:** `applyInitialTheme()` read `localStorage.getItem('worldscript-state')` — a key never written in production (only in tests). `JSON.parse` had no try/catch. Result: flash of wrong theme on every page load.
+**Resolution:** Added inline `<script>` in `<head>` reading `worldscript-theme` from localStorage. Theme mirrored to localStorage on save. Wrapped `JSON.parse` in try/catch. Removed dead `worldscript-state` read.
 
 ### 21. Untranslated FR/ES/IT Locales ✅ FIXED (v1.1.2)
 
@@ -1569,7 +1569,7 @@ The following section preserves the original repository audit performed on 2026-
 
 ### Executive Summary (Baseline)
 
-StoryCraft Studio was assessed as a strong, modern React/TypeScript application with good architectural design, strict TypeScript configuration, and a comprehensive CI/CD pipeline. The largest risks at that time were in the desktop backend implementation, the persistence layer, incomplete test coverage, and inconsistent dev/prod logging.
+WorldScript Studio was assessed as a strong, modern React/TypeScript application with good architectural design, strict TypeScript configuration, and a comprehensive CI/CD pipeline. The largest risks at that time were in the desktop backend implementation, the persistence layer, incomplete test coverage, and inconsistent dev/prod logging.
 
 ### Critical Findings (Baseline)
 

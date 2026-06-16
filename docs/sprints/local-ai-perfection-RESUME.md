@@ -399,7 +399,7 @@ git log --oneline -10
 
 ## Kontakt & Kontext
 
-- **Projekt:** StoryCraft-Studio v1.20.0
+- **Projekt:** WorldScript-Studio v1.20.0
 - **Stack:** React 19, Vite 8, TypeScript strict, Redux Toolkit 2.x, Tailwind 4.x
 - **Workspace:** `@domain/ai-core`, `@domain/ui`, `collab-transport`
 - **Test Runner:** Vitest (maxWorkers: 1), Playwright (E2E)

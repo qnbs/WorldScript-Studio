@@ -1,5 +1,5 @@
 [Unit]
-Description=Weekly Docker prune for StoryCraft low-end CI
+Description=Weekly Docker prune for WorldScript low-end CI
 
 [Timer]
 OnCalendar=Sun *-*-* 04:00:00

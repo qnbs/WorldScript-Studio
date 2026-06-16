@@ -1,6 +1,6 @@
-# Contributing to StoryCraft Studio
+# Contributing to WorldScript Studio
 
-Thank you for your interest in contributing to StoryCraft Studio — an AI-powered creative writing studio built with React, Redux Toolkit, and the Gemini API.
+Thank you for your interest in contributing to WorldScript Studio — an AI-powered creative writing studio built with React, Redux Toolkit, and the Gemini API.
 
 ## Table of Contents
 
@@ -76,8 +76,8 @@ pnpm run graphs:update        # update both Graphify + CodeGraph
 ### Installation
 
 ```bash
-git clone https://github.com/qnbs/StoryCraft-Studio.git
-cd StoryCraft-Studio
+git clone https://github.com/qnbs/WorldScript-Studio.git
+cd WorldScript-Studio
 pnpm install
 ```
 
@@ -115,7 +115,7 @@ pnpm run dev:tauri    # Tauri desktop app (requires Rust)
 ## Project Structure
 
 ```
-StoryCraft-Studio/
+WorldScript-Studio/
 ├── app/              # Redux store, hooks, listenerMiddleware
 ├── components/       # React UI components
 │   └── ui/           # Primitive design-system components (Button, Card, Modal…)
@@ -372,7 +372,7 @@ The CI pipeline will automatically run lint, i18n check, typecheck, tests, and b
 
 ## How to Add a New AI Provider
 
-StoryCraft Studio uses a multi-provider AI architecture. To add a new provider (e.g., Ollama, OpenAI):
+WorldScript Studio uses a multi-provider AI architecture. To add a new provider (e.g., Ollama, OpenAI):
 
 ### 1. Create the Service
 

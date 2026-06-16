@@ -1,6 +1,6 @@
 # Bulk Locale Translation Guide
 
-> Infrastructure for translating StoryCraft Studio's i18n keys to Beta languages at scale.
+> Infrastructure for translating WorldScript Studio's i18n keys to Beta languages at scale.
 
 ## Current Status (2026-06-07)
 
@@ -73,7 +73,7 @@ Add fixed translations to `locales/translation-glossary.json`:
 ```json
 {
   "ja": {
-    "StoryCraft Studio": "StoryCraft Studio",
+    "WorldScript Studio": "WorldScript Studio",
     "Manuscript": "原稿",
     "Plot Board": "プロットボード"
   }

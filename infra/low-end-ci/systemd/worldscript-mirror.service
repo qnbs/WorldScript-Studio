@@ -1,0 +1,10 @@
+[Unit]
+Description=Push main to GitHub backup remote
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+WorkingDirectory=@HOME@/githubcursor/WorldScript-Studio
+ExecStart=@HOME@/githubcursor/WorldScript-Studio/infra/low-end-ci/scripts/mirror-github-to-forgejo.sh --direction push-to-github
+ExecStartPost=@HOME@/githubcursor/WorldScript-Studio/infra/low-end-ci/scripts/ci-eco-stop.sh --prune

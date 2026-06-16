@@ -1,4 +1,4 @@
-# StoryCraft Studio — Feature Parity Matrix
+# WorldScript Studio — Feature Parity Matrix
 
 **Generated:** 2026-05-28 | **Last updated:** 2026-06-01 (post-parity-audit corrections + Edge-AI flags) | **Auditor:** Senior Principal Engineer  
 **Source of truth:** `features/featureFlags/featureFlagsSlice.ts`  
@@ -37,7 +37,7 @@
 | `enableCharacterInterviews` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
 | `enableRtlLayout` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx:271` | 🟢 OK |
 | `enableCloudSync` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `CloudSyncBackend.create()` structural `featureFlagEnabled` param *(fixed 2026-05-29)* | 🟢 OK |
-| `enableLoraAdapters` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useStoryCraftAI.ts` reads `selectActiveLoraOllamaTag` → `loraModelPath` *(fixed 2026-05-29)* | 🟢 OK |
+| `enableLoraAdapters` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useWorldScriptAI.ts` reads `selectActiveLoraOllamaTag` → `loraModelPath` *(fixed 2026-05-29)* | 🟢 OK |
 | `enablePluginSystem` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `PluginRegistry.setEnabled()` + `App.tsx` sync *(fixed 2026-05-29)* | 🟢 OK |
 | `enableVoiceSupport` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx:568` | 🟢 OK |
 | `enableProForge` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | Handler added to `useSettingsView.ts` *(fixed 2026-05-29)*; `WriterViewUI.tsx:23` | 🟢 OK |
@@ -64,7 +64,7 @@
 | `enableMindMaps` | No route guard in `App.tsx` | Route guard added |
 | `enableCloudSync` | No structural flag gate | `CloudSyncBackend.create()` param guard |
 | `enablePluginSystem` | Registry callable without flag | `PluginRegistry.setEnabled()` |
-| `enableLoraAdapters` | `selectActiveLoraOllamaTag` dead selector | Wired into `useStoryCraftAI.ts` |
+| `enableLoraAdapters` | `selectActiveLoraOllamaTag` dead selector | Wired into `useWorldScriptAI.ts` |
 
 ### 🟡 Remaining Minor Partial Wiring
 

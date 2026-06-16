@@ -1,6 +1,6 @@
 # i18n — Intl.ListFormat
 
-> **Binding reference.** StoryCraft Studio uses native `Intl.ListFormat` for locale-aware list formatting.
+> **Binding reference.** WorldScript Studio uses native `Intl.ListFormat` for locale-aware list formatting.
 
 ## Overview
 

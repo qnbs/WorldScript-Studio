@@ -14,7 +14,7 @@ so chat help and real ProForge actions share one code path.
 CopilotLauncher (FAB, App.tsx, flag-gated)
    └─ useGlobalCopilot(currentView)
         ├─ copilotContextService  → context-aware system prompt (current view + project)
-        ├─ useStoryCraftAI        → streaming chat (honours assertCloudAiAllowed → privacy)
+        ├─ useWorldScriptAI        → streaming chat (honours assertCloudAiAllowed → privacy)
         ├─ copilotActions         → ProForge bridge (runStage 'intake') + command executor
         └─ copilotSlice           → ephemeral chat state (root key `copilot`, not persisted)
 ```
@@ -22,7 +22,7 @@ CopilotLauncher (FAB, App.tsx, flag-gated)
 ## Tasks
 
 - [x] **Discovery** — searched for existing assistant/chat traces (none found; reused
-      `useStoryCraftAI`, `CommandExecutorContext`, `transientUiStore` patterns).
+      `useWorldScriptAI`, `CommandExecutorContext`, `transientUiStore` patterns).
 - [x] **Feature flag** `enableGlobalCopilot` — slice field + default + setter + selector
       (`features/featureFlags/featureFlagsSlice.ts`); UI toggle (`FeatureFlagsSection.tsx`);
       `handleSettingChange` case (`useSettingsView.ts`); i18n label (all 11 locales);
@@ -48,6 +48,6 @@ CopilotLauncher (FAB, App.tsx, flag-gated)
 ## Privacy & safety
 
 - No new persistence: chat lives in memory only (`copilot` slice is ephemeral, not in localStorage/IDB).
-- Cloud AI flows through `useStoryCraftAI` → `storyCraftCompletionFetch`, which enforces
+- Cloud AI flows through `useWorldScriptAI` → `worldScriptCompletionFetch`, which enforces
   `assertCloudAiAllowed` (respects `settings.privacy.localStorageOnly`).
 - The whole feature is behind `enableGlobalCopilot`; disabling it removes the launcher entirely.

@@ -7,7 +7,7 @@
 
 ## Context
 
-Background work in StoryCraft Studio (inference pipelines, DuckDB analytics, embeddings) historically
+Background work in WorldScript Studio (inference pipelines, DuckDB analytics, embeddings) historically
 used ad-hoc worker wiring in `packages/ai-core`. That gave no priority scheduling, no circuit
 breaking, no dead-letter handling, and no consistent protocol — and it could only ever target a Web
 Worker. The app also ships as a Tauri desktop bundle, where some CPU-bound work is better done in

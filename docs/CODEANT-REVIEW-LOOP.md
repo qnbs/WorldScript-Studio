@@ -53,7 +53,7 @@ Use GraphQL — REST does not expose thread resolution state. Use a **multi-line
 ```bash
 gh api graphql -f query='
 query {
-  repository(owner:"qnbs", name:"StoryCraft-Studio") {
+  repository(owner:"qnbs", name:"WorldScript-Studio") {
     pullRequest(number: PR_NUMBER) {
       reviewThreads(first: 100) {
         nodes {
@@ -134,7 +134,7 @@ Reply via REST (cite the resolving commit SHA), then resolve via GraphQL.
 
 ```bash
 # Reply (one per handled comment) — use the comment databaseId
-gh api -X POST "repos/qnbs/StoryCraft-Studio/pulls/PR_NUMBER/comments/COMMENT_DB_ID/replies" \
+gh api -X POST "repos/qnbs/WorldScript-Studio/pulls/PR_NUMBER/comments/COMMENT_DB_ID/replies" \
   -f body="✅ Fixed in <short-sha>. <one-line what+why>."
 
 # Resolve the thread — use the PRRT_… thread id
@@ -184,4 +184,4 @@ git branch -vv                # find branches whose upstream is "[gone]"
 | Reply to a comment (REST) | `databaseId` (numeric) | `comments.nodes[0].databaseId` |
 | Resolve a thread (GraphQL) | `id` (`PRRT_…`) | `reviewThreads.nodes[].id` |
 
-**Owner/repo:** `qnbs` / `StoryCraft-Studio`.
+**Owner/repo:** `qnbs` / `WorldScript-Studio`.

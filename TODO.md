@@ -1,4 +1,4 @@
-# StoryCraft Studio — TODO (Current Sprint)
+# WorldScript Studio — TODO (Current Sprint)
 
 Prioritized task tracker for the current sprint.
 Status: 🔄 in progress | ⬜ open | ✅ done
@@ -52,7 +52,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ## v1.21.0 — Integrity & Hardening Cycle (2026-06-10) — DELIVERED (PR #104, merged)
 
-> Master Plan: `.claude/plans/master-prompt-storycraft-studio-glistening-pnueli.md` (Deep Audit 2026-06-09, findings F-1…F-9).
+> Master Plan: `.claude/plans/master-prompt-worldscript-studio-glistening-pnueli.md` (Deep Audit 2026-06-09, findings F-1…F-9).
 > NOTE: prior sprint blocks are retained inline below (file convention), not moved to `docs/history/`.
 
 ### WS — Integrity & Hardening
@@ -80,7 +80,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **P0-2** — Coverage C-7: 96 neue Tests geschrieben (Ziel 90 übertroffen).
   - LoRA: datasetBuilder (19) + evaluationService (16)
   - Voice: intentEngine (17) + feedbackService (23) + audioNavigator (21)
-- ✅ **P0-4** — Native File Associations + Single-Instance: `.storycraft`/`.scst` extensions registered, deep link handler in `services/tauriDeepLink.ts`, Rust `RunEvent::Opened`/`RunEvent::SecondInstance` handlers in `lib.rs`.
+- ✅ **P0-4** — Native File Associations + Single-Instance: `.worldscript`/`.scst` extensions registered, deep link handler in `services/tauriDeepLink.ts`, Rust `RunEvent::Opened`/`RunEvent::SecondInstance` handlers in `lib.rs`.
 - ✅ **P0-3** — Quality Gates stabil: lint ✅ · typecheck ✅ · i18n:check ✅ · parity:check + bundle:budget + smoke:prod green on `main` (CI confirmed through PR #103, merged 2026-06-09).
 
 ### P1 — AI Resilience & Core Reliability
@@ -121,7 +121,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **OpenRouter Settings Section hardening** (2026-06-13) — searchable design-system `Select`, authenticated model catalog fetch/cache, key validation/test-connection, full i18n (38 new keys × 11 locales), `ViewErrorBoundary` wrapping, 10 `OpenRouterSection` unit tests + 12 `openrouterModels` tests + 4 provider tests. All 11 CodeAnt AI inline comments addressed (free-model i18n, cloud AI policy gates, cache validation, Escape propagation, authenticated catalog, error-resilient Select, re-fetch on credential change). PR `feat/openrouter-section-perfection`.
 - ✅ **WorkerBus v2 Phase 1** — `@domain/worker-bus` package: typed worker pool, circuit breakers, dead-letter queue, priority task queue, progress emitter, protocol handler; 123 tests / 12 suites; 84.5% coverage
 - ✅ **WorkerBus v2 Phase 2** — runtime wiring complete (2026-06-02): `workerBusManager` (singleton lifecycle), `hybridRouter` (web/Rust routing), `legacyWorkerBusAdapter` (ai-core shim), `tauriTaskBridge` (Tauri invoke); feature flag UI exposed; listenerMiddleware listeners; 154 combined tests; Rust backend stub deferred to Phase 3
-- 🔄 **WorkerBus v2 Phase 3** — Rust TaskSupervisor. ✅ (2026-06-03) `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs`; `storycraft_task_supervisor_ping` (version) + `storycraft_task_supervisor_submit` (taskType dispatcher, honest `success:false` on unknown/bad payload) registered in `lib.rs`. First real compute task `text.analyze` (word/char/sentence/syllable counts + Flesch Reading Ease, pure-Rust, 8 `#[cfg(test)]` tests). TS front-end `services/rustTaskSupervisor.ts` (`analyzeTextViaRust` — probes `isRustComputeAvailable` before routing so a Rust-only task never hits the web pool; null → JS fallback) + 5 unit tests. ⬜ Remaining: full `cargo build`/desktop verification (CI/Tauri — heavy locally); wire a real UI consumer (analytics/progress health); add more native tasks; `candle` `rust-compute` feature inference path
+- 🔄 **WorkerBus v2 Phase 3** — Rust TaskSupervisor. ✅ (2026-06-03) `src-tauri/src/commands/task_supervisor.rs` + `commands/mod.rs`; `worldscript_task_supervisor_ping` (version) + `worldscript_task_supervisor_submit` (taskType dispatcher, honest `success:false` on unknown/bad payload) registered in `lib.rs`. First real compute task `text.analyze` (word/char/sentence/syllable counts + Flesch Reading Ease, pure-Rust, 8 `#[cfg(test)]` tests). TS front-end `services/rustTaskSupervisor.ts` (`analyzeTextViaRust` — probes `isRustComputeAvailable` before routing so a Rust-only task never hits the web pool; null → JS fallback) + 5 unit tests. ⬜ Remaining: full `cargo build`/desktop verification (CI/Tauri — heavy locally); wire a real UI consumer (analytics/progress health); add more native tasks; `candle` `rust-compute` feature inference path
 - 🔄 **C-7** — Coverage L85%/B75%/F80%; Stryker break 75→80
   - ✅ Stryker Config: concurrency 3, timeoutFactor 1.5, reporters [progress,json], tempDirName, slow warnings
   - ✅ Matrix-Parallelisierung: 5 Jobs (services-commands, services-core, services-ai, features-project, features-misc)
@@ -153,7 +153,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 - ✅ **C-1** — `packages/collab-transport/src/crypto.js` security hardening: PBKDF2 100k→310k, extractable:false, return promise.reject() fix
 - ✅ **C-2** — Reference plugins: `services/plugins/wordCountOverlay.plugin.ts` + `sceneAppender.plugin.ts` (8 tests) + runtime flag gate (2026-05-29)
-- ✅ **C-3** — LoRA Ollama wiring: `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag`; **parity fix (2026-05-29)**: selector now wired into `useStoryCraftAI` + `storyCraftCompletionFetch`
+- ✅ **C-3** — LoRA Ollama wiring: `LoraAdapter.ollamaModelTag`, `AIRequestOptions.loraModelPath`, `selectActiveLoraOllamaTag`; **parity fix (2026-05-29)**: selector now wired into `useWorldScriptAI` + `worldScriptCompletionFetch`
 - ✅ **C-4** — Cloud-Sync verified: `services/cloudSync/` (3 files, 41 tests, AES-256-GCM); `create()` structural flag gate added (2026-05-29)
 - ✅ **C-5** — GitHub Issue Templates (`bug_report.yml`, `feature_request.yml`, `translation_pr.yml`) + AGENTS.md hardening
 - ✅ **Feature Parity Audit** (2026-05-29) — 8 critical drifts fixed; `docs/FEATURE-PARITY.md` + `features/featureCatalog.ts` + `scripts/audit-feature-parity.ts`

@@ -1,13 +1,13 @@
 # i18n Glossary — Arabic (ar) & Hebrew (he) RTL Beta
 
 > **Binding reference.** Every ar/he translation in `locales/ar/` and `locales/he/` MUST use
-> these canonical terms for the StoryCraft domain vocabulary, so the UI reads consistently.
+> these canonical terms for the WorldScript domain vocabulary, so the UI reads consistently.
 > Status: **Beta** — sensible, consistent, non-native-reviewed. Native review = community follow-up
 > (TODO.md C-6). When in doubt, prefer a clear common-usage word over a rare literary one.
 
 ## Conventions
 
-- **Keep as-is (do not translate):** product/brand and technical tokens — `StoryCraft Studio`,
+- **Keep as-is (do not translate):** product/brand and technical tokens — `WorldScript Studio`,
   `Gemini`, `OpenAI`, `Ollama`, `WebLLM`, `API`, `URL`, `PDF`, `DOCX`, `EPUB`, `RTF`, `HTML`,
   `JSON`, `CSV`, `TXT`, `ZIP`, `MD`, `AES-256`, `PWA`, `Tauri`, `GitHub`, `LoRA`, `RAG`,
   version strings (`v1.2`), and keyboard combos (`Ctrl+S`). These match `SKIP_PATTERNS` in

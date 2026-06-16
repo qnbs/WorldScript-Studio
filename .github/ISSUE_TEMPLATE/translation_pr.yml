@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping translate StoryCraft Studio!
+        Thanks for helping translate WorldScript Studio!
         Locale source files live in `locales/<lang>/*.json` (15 modules per language).
         Run `pnpm run i18n:check` before submitting to verify key parity across all 5 locales.
 

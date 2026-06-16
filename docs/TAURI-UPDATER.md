@@ -11,7 +11,7 @@ The desktop app ships with [`tauri-plugin-updater`](https://v2.tauri.app/plugin/
 1. **Generate a minisign key pair** (once per product line — store the private key as a GitHub secret; never commit it):
 
    ```bash
-   pnpm exec tauri signer generate -- -w ~/.storycraft-tauri.key
+   pnpm exec tauri signer generate -- -w ~/.worldscript-tauri.key
    ```
 
    Paste the **public** key string into `tauri.conf.json` → `plugins.updater.pubkey` (replace the placeholder).

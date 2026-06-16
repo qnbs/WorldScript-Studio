@@ -1,10 +1,10 @@
-# i18n Glossary — StoryCraft Studio
+# i18n Glossary — WorldScript Studio
 
-> **Binding reference.** Every translation in `locales/{lang}/` MUST use these canonical terms for the StoryCraft domain vocabulary, so the UI reads consistently.
+> **Binding reference.** Every translation in `locales/{lang}/` MUST use these canonical terms for the WorldScript domain vocabulary, so the UI reads consistently.
 
 ## Conventions
 
-- **Keep as-is (do not translate):** product/brand and technical tokens — `StoryCraft Studio`, `Gemini`, `OpenAI`, `Ollama`, `WebLLM`, `API`, `URL`, `PDF`, `DOCX`, `EPUB`, `RTF`, `HTML`, `JSON`, `CSV`, `TXT`, `ZIP`, `MD`, `AES-256`, `PWA`, `Tauri`, `GitHub`, `LoRA`, `RAG`, version strings (`v1.2`), and keyboard combos (`Ctrl+S`). These match `SKIP_PATTERNS` in `scripts/check-i18n-keys.mjs`.
+- **Keep as-is (do not translate):** product/brand and technical tokens — `WorldScript Studio`, `Gemini`, `OpenAI`, `Ollama`, `WebLLM`, `API`, `URL`, `PDF`, `DOCX`, `EPUB`, `RTF`, `HTML`, `JSON`, `CSV`, `TXT`, `ZIP`, `MD`, `AES-256`, `PWA`, `Tauri`, `GitHub`, `LoRA`, `RAG`, version strings (`v1.2`), and keyboard combos (`Ctrl+S`). These match `SKIP_PATTERNS` in `scripts/check-i18n-keys.mjs`.
 - **Preserve placeholders exactly:** `{{count}}`, `{{title}}`, `{{name}}` — never translate or reorder the inner token; surrounding words may be reordered for grammar.
 - **Numerals:** use Western Arabic digits (0-9) — the app's data layer is locale-agnostic.
 - **Tone:** concise, neutral, modern software register (not classical/literary).

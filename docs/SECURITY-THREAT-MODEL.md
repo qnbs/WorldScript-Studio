@@ -4,7 +4,7 @@
 **Date:** 2026-06-05  
 **Status:** v1.22.0 baseline
 
-This document provides a formal STRIDE threat analysis for StoryCraft Studio, mapping threats to mitigations and code locations.
+This document provides a formal STRIDE threat analysis for WorldScript Studio, mapping threats to mitigations and code locations.
 
 ## STRIDE Analysis
 

@@ -5,7 +5,7 @@
 
 ## Overview
 
-The StoryCraft Studio Plugin System allows extending the application with custom functionality through a secure, sandboxed execution model. Plugins run in an isolated Web Worker context and interact with the application through a permission-gated API.
+The WorldScript Studio Plugin System allows extending the application with custom functionality through a secure, sandboxed execution model. Plugins run in an isolated Web Worker context and interact with the application through a permission-gated API.
 
 ## Security Model
 

@@ -65,7 +65,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
       }
     }
   }
-}' -F owner=qnbs -F repo=StoryCraft-Studio -F pr=<NUMMER>
+}' -F owner=qnbs -F repo=WorldScript-Studio -F pr=<NUMMER>
 ```
 
 Speichere die ungelösten Thread-IDs in eine Datei, z. B.:
@@ -122,7 +122,7 @@ mutation {
   reply1: addPullRequestReviewThreadReply(
     input: {
       pullRequestReviewThreadId: "PRRT_...",
-      body: "Fixed in [`<SHORT_SHA>`](https://github.com/qnbs/StoryCraft-Studio/pull/<NUM>/commits/<FULL_SHA>). Lint, typecheck, i18n parity and targeted Vitest suites pass locally."
+      body: "Fixed in [`<SHORT_SHA>`](https://github.com/qnbs/WorldScript-Studio/pull/<NUM>/commits/<FULL_SHA>). Lint, typecheck, i18n parity and targeted Vitest suites pass locally."
     }
   ) { comment { id } }
 }
@@ -178,7 +178,7 @@ Die vollständige, agenten-übergreifende Referenz dieses Loops liegt in **`docs
    ```
 2. Artifacts auflisten:
    ```bash
-   gh api repos/qnbs/StoryCraft-Studio/actions/runs/<RUN_ID>/artifacts
+   gh api repos/qnbs/WorldScript-Studio/actions/runs/<RUN_ID>/artifacts
    ```
 3. `coverage-report` herunterladen:
    ```bash

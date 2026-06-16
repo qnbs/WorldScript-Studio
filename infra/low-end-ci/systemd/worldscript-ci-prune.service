@@ -1,5 +1,5 @@
 [Unit]
-Description=Docker system prune (StoryCraft CI)
+Description=Docker system prune (WorldScript CI)
 
 [Service]
 Type=oneshot

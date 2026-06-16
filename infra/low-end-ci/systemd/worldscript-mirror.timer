@@ -1,5 +1,5 @@
 [Unit]
-Description=Nightly GitHub backup push (StoryCraft)
+Description=Nightly GitHub backup push (WorldScript)
 
 [Timer]
 OnCalendar=*-*-* 03:00:00

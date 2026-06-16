@@ -1,4 +1,4 @@
-# StoryCraft Studio — Audit / Correction / Perfection Plan (v1.23 cycle)
+# WorldScript Studio — Audit / Correction / Perfection Plan (v1.23 cycle)
 
 > **Living master artifact** for the "Master Orchestration Prompt v1.1" engagement.
 > Single tracked home for the 6-phase audit toward v1.23. Updated per batch.
@@ -103,8 +103,8 @@ a CodeAnt-caught regression.
 - `useWriterView.handleFailure` now uses `getAiErrorMessage(err, t)` (classified, localized)
   instead of a hardcoded English string + localizes the `[Cancelled]` tag (`writer.cancelledTag`,
   11 locales). Parity to the Copilot (Batch 1.2).
-- **Correlation IDs:** `newCorrelationId()` (`services/logger.ts`); `useStoryCraftAI` mints one per
-  request, logs the lifecycle, and propagates it via the per-call body; `storyCraftCompletionFetch`
+- **Correlation IDs:** `newCorrelationId()` (`services/logger.ts`); `useWorldScriptAI` mints one per
+  request, logs the lifecycle, and propagates it via the per-call body; `worldScriptCompletionFetch`
   reads it (schema) and logs it on failure (still never exposes `err.message`); `withTransientRetry`
   accepts a propagated id. No prompts/keys logged.
 - **Phase 1 = ✅ complete.** Optional future polish: error action-buttons; correlation IDs through

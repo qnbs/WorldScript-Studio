@@ -1,6 +1,6 @@
 # Backend
 
-This directory is reserved for future server-side components of StoryCraft Studio.
+This directory is reserved for future server-side components of WorldScript Studio.
 
 ## Planned Components
 

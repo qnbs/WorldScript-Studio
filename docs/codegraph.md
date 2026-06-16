@@ -1,6 +1,6 @@
 # CodeGraph — Semantic Code Intelligence Setup
 
-StoryCraft Studio uses [CodeGraph](https://github.com/colbymchenry/codegraph) for fast, agent-optimized code exploration via MCP.
+WorldScript Studio uses [CodeGraph](https://github.com/colbymchenry/codegraph) for fast, agent-optimized code exploration via MCP.
 
 ## Overview
 
@@ -24,7 +24,7 @@ CodeGraph bundles its own Node runtime — nothing to compile.
 ### Per-project initialization
 
 ```bash
-cd /path/to/StoryCraft-Studio
+cd /path/to/WorldScript-Studio
 codegraph init -i
 ```
 
@@ -123,7 +123,7 @@ Four tasks are pre-defined in `.vscode/tasks.json`:
 
 ## Monorepo Notes
 
-CodeGraph indexes every file not excluded by `.gitignore`. For StoryCraft Studio:
+CodeGraph indexes every file not excluded by `.gitignore`. For WorldScript Studio:
 
 - **Indexed:** `app/`, `components/`, `features/`, `hooks/`, `services/`, `packages/`, `src-tauri/src/`, `workers/`, `tests/`, `locales/`
 - **Excluded:** `node_modules/`, `dist/`, `src-tauri/target/`, `graphify-out/`, `.codegraph/`

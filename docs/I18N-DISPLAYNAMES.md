@@ -1,6 +1,6 @@
 # i18n — Intl.DisplayNames
 
-> **Binding reference.** StoryCraft Studio uses native `Intl.DisplayNames` for localized display names of languages, regions, and scripts.
+> **Binding reference.** WorldScript Studio uses native `Intl.DisplayNames` for localized display names of languages, regions, and scripts.
 
 ## Overview
 

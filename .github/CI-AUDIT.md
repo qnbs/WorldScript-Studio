@@ -1,4 +1,4 @@
-# CI Audit — StoryCraft Studio
+# CI Audit — WorldScript Studio
 
 **As of:** 2026-05-21; **last updated:** 2026-06-01 · **Workflow files:** `ci.yml`, `tauri-build.yml`, `prune-deployments.yml`, `storybook-debug.yml`, `scorecard.yml`, `codeql.yml`, `docker.yml`
 

@@ -1,7 +1,7 @@
 # Local AI Perfection Sprint — Vollständiger Plan
 
 > **Sprint-Kodename:** Mantis-Impulse-Spider-Gwen  
-> **Projekt:** StoryCraft-Studio v1.20.0  
+> **Projekt:** WorldScript-Studio v1.20.0  
 > **Ausgangs-Coverage:** L 73 / F 65 / B 58 / S 71  
 > **Ziel-Coverage:** L ≥ 80 / F ≥ 70 / B ≥ 65 / S ≥ 78  
 > **Qualitätsgatter:** lint → typecheck → i18n:check → tests → coverage (alle müssen passen)  

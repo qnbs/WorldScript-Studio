@@ -2,7 +2,7 @@
 
 **Status:** Living document — last updated 2026-06-12 (PR #114 security-hardening follow-up)
 
-This guide documents the conventions, tooling, and policies that keep StoryCraft Studio's TypeScript/React codebase maintainable, secure, and accessible. It complements [`CONTRIBUTING.md`](../.github/CONTRIBUTING.md) and [`AUDIT.md`](../.github/CI-AUDIT.md).
+This guide documents the conventions, tooling, and policies that keep WorldScript Studio's TypeScript/React codebase maintainable, secure, and accessible. It complements [`CONTRIBUTING.md`](../.github/CONTRIBUTING.md) and [`AUDIT.md`](../.github/CI-AUDIT.md).
 
 ---
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# StoryCraft Studio — baseline hardware eval (read-only). Save output before installing local CI.
+# WorldScript Studio — baseline hardware eval (read-only). Save output before installing local CI.
 set -euo pipefail
 
-OUT="${HOME}/storycraft-ci/eval-$(date +%F).txt"
-mkdir -p "${HOME}/storycraft-ci"
+OUT="${HOME}/worldscript-ci/eval-$(date +%F).txt"
+mkdir -p "${HOME}/worldscript-ci"
 {
-  echo "=== StoryCraft low-end CI eval ==="
+  echo "=== WorldScript low-end CI eval ==="
   date -Is
   echo
   echo "--- Memory & swap ---"

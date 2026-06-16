@@ -6,12 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common.sh
 source "${SCRIPT_DIR}/common.sh"
 
-export FORGEJO_DATA_DIR="${STORYCRAFT_CI_HOME}/forgejo/data"
-export FORGEJO_CONFIG_DIR="${STORYCRAFT_CI_HOME}/forgejo/config"
+export FORGEJO_DATA_DIR="${WORLDSCRIPT_CI_HOME}/forgejo/data"
+export FORGEJO_CONFIG_DIR="${WORLDSCRIPT_CI_HOME}/forgejo/config"
 
-if systemctl list-unit-files storycraft-forgejo.service >/dev/null 2>&1; then
-  log "Starting storycraft-forgejo.service..."
-  sudo systemctl start storycraft-forgejo.service
+if systemctl list-unit-files worldscript-forgejo.service >/dev/null 2>&1; then
+  log "Starting worldscript-forgejo.service..."
+  sudo systemctl start worldscript-forgejo.service
 else
   log "Starting Forgejo via docker compose..."
   require_cmd docker

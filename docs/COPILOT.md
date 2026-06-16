@@ -1,6 +1,6 @@
 # Global AI Copilot
 
-StoryCraft Studio's Global AI Copilot is an always-present ambient-intelligence layer that surfaces proactive manuscript insights and lets you chat with an AI writing assistant — all without leaving the editor.
+WorldScript Studio's Global AI Copilot is an always-present ambient-intelligence layer that surfaces proactive manuscript insights and lets you chat with an AI writing assistant — all without leaving the editor.
 
 ## Enabling
 
