@@ -1,6 +1,6 @@
-# osv-scanner ignore list for src-tauri/Cargo.lock
+# osv-scanner ignore list for src-tauri/Cargo.lock + pnpm-lock.yaml
 # All entries have been evaluated and accepted by the maintainer.
-# Reviewed: 2026-05-17
+# Reviewed: 2026-05-17 (Rust) / 2026-06-16 (npm)
 
 # ─── GTK3 Rust bindings (Linux WebKit stack) ────────────────────────────────
 # webkit2gtk 2.0.2 (required by wry 0.55.x / Tauri 2.x for Linux) depends on
@@ -115,3 +115,18 @@ reason = "unic-ucd-version 0.9.0: unmaintained Unicode data crate; final version
 id = "RUSTSEC-2025-0100"
 ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; no exploitable attack surface"
+
+# ─── npm advisories (pnpm-lock.yaml) ─────────────────────────────────────────
+# Reviewed 2026-06-16. The fixable npm highs/moderates are remediated via
+# pnpm-workspace.yaml overrides (tmp, ws, form-data, protobufjs, @babel/core,
+# dompurify→3.4.10). The two entries below have no actionable upgrade.
+
+[[IgnoredVulns]]
+id = "GHSA-x4vx-rjvf-j5p4"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "dompurify: no fixed version exists (advisory lists fix '--') even on the latest 3.4.10. App sanitizes only DOMPurify-trusted HTML and never feeds attacker-controlled config; re-evaluate when upstream ships a fix."
+
+[[IgnoredVulns]]
+id = "GHSA-h67p-54hq-rp68"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "js-yaml 3.14.2: ReDoS, fixed only in the 4.x major line. Transitive build-time dependency (test/coverage tooling) — never parses attacker-controlled YAML at runtime; forcing the major upgrade would break the consumer. Re-evaluate when the consumer adopts js-yaml 4.x."
