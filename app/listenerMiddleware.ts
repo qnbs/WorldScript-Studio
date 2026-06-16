@@ -598,14 +598,24 @@ function getLocalFirstHandle(project: ProjectData): Promise<LocalFirstHandle> {
       await localFirstHandle.persistence.destroy().catch(() => undefined);
       localFirstHandle = null;
     }
-    const [{ createBlankProjectDoc }, { ProjectDocBinding }, { persistProjectDoc }] =
-      await Promise.all([
-        import('../services/localFirst/projectDoc'),
-        import('../services/localFirst/docBinding'),
-        import('../services/localFirst/docPersistence'),
-      ]);
+    const [
+      { createBlankProjectDoc },
+      { ProjectDocBinding },
+      { persistProjectDoc, NOOP_PERSISTENCE },
+      { isIdbEncryptionReady },
+    ] = await Promise.all([
+      import('../services/localFirst/projectDoc'),
+      import('../services/localFirst/docBinding'),
+      import('../services/localFirst/docPersistence'),
+      import('../services/storage/storageEncryptionService'),
+    ]);
     const doc = createBlankProjectDoc();
-    const persistence = persistProjectDoc(projectId, doc);
+    // QNBS-v3 (CodeAnt): never write a PLAINTEXT shadow copy to y-indexeddb when at-rest encryption
+    // is active — the local-first doc is not encrypted yet. Keep it in-memory only so the privacy
+    // guarantee holds; shadow-sync still validates against Redux (SoT).
+    const persistence = isIdbEncryptionReady()
+      ? NOOP_PERSISTENCE
+      : persistProjectDoc(projectId, doc);
     await persistence.whenSynced; // load any persisted state first …
     const binding = new ProjectDocBinding(project, doc); // … then project Redux over it (SoT wins)
     localFirstHandle = { projectId, binding, persistence };

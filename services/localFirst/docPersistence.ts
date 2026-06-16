@@ -38,7 +38,8 @@ export interface DocPersistence {
   clearData(): Promise<void>;
 }
 
-const NOOP_PERSISTENCE: DocPersistence = {
+/** In-memory-only handle: no IndexedDB persistence (unavailable, or deliberately skipped). */
+export const NOOP_PERSISTENCE: DocPersistence = {
   whenSynced: Promise.resolve(),
   active: false,
   destroy: () => Promise.resolve(),
@@ -61,13 +62,13 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
     return NOOP_PERSISTENCE;
   }
 
-  // QNBS-v3 (CodeAnt): make destroy idempotent and swallow its own errors so the whenSynced-rejection
-  // handler and an explicit caller destroy() can't double-destroy or throw.
-  let destroyed = false;
+  // QNBS-v3 (CodeAnt): memoize the real teardown promise so concurrent/repeat calls share the SAME
+  // in-flight destroy (no double-destroy, and no flag flipped to "destroyed" before destroy actually
+  // finishes). Errors are swallowed so teardown never throws.
+  let destroyPromise: Promise<void> | null = null;
   const destroy = (): Promise<void> => {
-    if (destroyed) return Promise.resolve();
-    destroyed = true;
-    return provider.destroy().catch(() => undefined);
+    if (!destroyPromise) destroyPromise = provider.destroy().catch(() => undefined);
+    return destroyPromise;
   };
 
   // QNBS-v3 (CodeAnt): if IndexedDB fails *asynchronously* after construction, provider.whenSynced
@@ -81,9 +82,14 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
 
   return {
     whenSynced,
-    active: true,
+    // QNBS-v3 (CodeAnt): `active` must reflect the live state — false once teardown has begun (incl.
+    // the async whenSynced-rejection path), not a constant true.
+    get active() {
+      return destroyPromise === null;
+    },
     destroy,
-    // After a teardown the provider can no longer clear its store — degrade to a resolved no-op.
-    clearData: () => (destroyed ? Promise.resolve() : provider.clearData().catch(() => undefined)),
+    // After teardown the provider can no longer clear its store — degrade to a resolved no-op.
+    clearData: () =>
+      destroyPromise ? Promise.resolve() : provider.clearData().catch(() => undefined),
   };
 }

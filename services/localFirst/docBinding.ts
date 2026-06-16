@@ -116,6 +116,13 @@ export class ProjectDocBinding {
         const text = ySection.get(CONTENT_KEY);
         if (text instanceof Y.Text) {
           spliceText(text, typeof value === 'string' ? value : '');
+        } else {
+          // QNBS-v3 (CodeAnt): if the content slot holds a non-Y.Text (corrupted/legacy) value, the
+          // edit would be silently dropped. Recreate a Y.Text seeded with the current content so it
+          // still round-trips instead of going stale.
+          const fresh = new Y.Text();
+          if (typeof value === 'string' && value.length > 0) fresh.insert(0, value);
+          ySection.set(CONTENT_KEY, fresh);
         }
       } else if (value === undefined) {
         // QNBS-v3 (CodeAnt): a field cleared to undefined must be removed, not left stale. `key in
