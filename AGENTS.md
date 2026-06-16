@@ -181,7 +181,7 @@ pnpm run mutation           # Stryker mutation testing (CI-only; manual workflow
 
 # Analysis / budgets
 pnpm run analyze            # Rollup visualizer → dist/bundle-analysis.html
-pnpm run bundle:budget      # Chunk size guard (default max 6500 KB total, 4000 KB entry)
+pnpm run bundle:budget      # Chunk size guard (default max 6200 KB total, 2500 KB entry)
 pnpm run storybook          # Storybook dev server on :6006
 pnpm run build-storybook    # Static Storybook build
 pnpm run test:storybook     # Test-runner against served Storybook

@@ -256,7 +256,7 @@ Wenn du nach etwas suchst:
 > - Typecheck laufen lassen, wenn du nur Strings/UI geändert hast
 > - `pnpm run build` ohne dringenden Grund (langsam, RAM-fressend)
 >
-> **Fragen?** Siehe `docs/EDGE_AI_PERFECT_PLAN.md` für die große Vision und `docs/EDGE_AI_ZWISCHENSTAND.md` für alle Details.
+> **Fragen?** Siehe `EDGE_AI_PERFECT_PLAN.md` für die große Vision und `EDGE_AI_ZWISCHENSTAND.md` für alle Details (beide jetzt in `docs/history/`).
 
 ---
 

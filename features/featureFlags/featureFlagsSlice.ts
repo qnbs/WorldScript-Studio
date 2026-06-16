@@ -30,13 +30,13 @@ export interface FeatureFlagsState {
   enableLoraAdapters: boolean;
   /** Plugin system v0.1 — ESM-based extensions with sandboxed capability API (default: true). */
   enablePluginSystem: boolean;
-  /** Voice Full Support — opt-in voice command, dictation and audio navigation (default: true). */
+  /** Voice Full Support — opt-in voice command, dictation and audio navigation (default: false — requires browser mic permission). */
   enableVoiceSupport: boolean;
   /** ProForge Ultimate Author Pipeline — agentic 8-stage manuscript pipeline (default: true). */
   enableProForge: boolean;
   /** IDB at-rest encryption — AES-256-GCM passphrase-derived key for all manuscript stores (default: true). */
   enableIdbAtRestEncryption: boolean;
-  /** Voice WASM engines — local Whisper STT + Silero VAD via ONNX; no cloud audio routing (default: true). */
+  /** Voice WASM engines — local Whisper STT + Silero VAD via ONNX; no cloud audio routing (default: false — ~57 MB Whisper download, explicit opt-in). */
   enableVoiceWasm: boolean;
   /** Adaptive AI Engine — runtime device profiler + automatic backend/model selection (default: true). */
   enableAdaptiveAiEngine: boolean;
@@ -48,7 +48,7 @@ export interface FeatureFlagsState {
   enableWorkerBusV2: boolean;
   /** Rust Compute — offload heavy tasks to Tauri Rust TaskSupervisor (default: true). */
   enableRustCompute: boolean;
-  /** Global AI Copilot — beginner-friendly, context-aware, local-first in-app live assistant (default: true). */
+  /** Global AI Copilot — beginner-friendly, context-aware, local-first in-app live assistant (default: false — ambient AI, user opt-in). */
   enableGlobalCopilot: boolean;
   /** Local-First sync (shadow) — mirror the project into a Yjs doc + y-indexeddb; Redux stays SoT (default: false). */
   enableLocalFirstSync: boolean;

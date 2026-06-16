@@ -22,28 +22,36 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 ---
 
 
-## v1.23 — Stabilisation & Verification (ACTIVE)
+## Upcoming — v1.24 / v2.0 Foundation (PLANNED)
 
-**Status:** 🔄 In Progress — P0-Audit-Follow-up vom 12. Juni 2026. Ziel-Release: 2026-06-20.
+Forward-looking work carried out of the v1.23 cycle:
 
-**P0 (Release-Blocker):**
-- ✅ ROADMAP.md/TODO.md synchron zu v1.22.0 bringen und v1.23-Ziele definieren.
-- ✅ Tauri Desktop Pipeline final verifizieren — `tauri-build.yml` grün auf Ubuntu/macOS/Windows (Run #27439443241); `.deb`/`.rpm`/`.AppImage`/`.dmg`/`.msi`/`.exe` Artifacts erzeugt. Signing/Updater offen für `v*` Releases.
-- ✅ Dependency-Hygiene abschließen (`pnpm audit`, `pnpm outdated`, `.npmrc`-Hardening dokumentieren, Known Overrides in AUDIT.md).
-- ✅ i18n Parity für `ja/zh/pt/el` + RTL (`ar/he`) auf <5 % EN-Placeholders halten (`pnpm run i18n:check` grün, 2590 Keys × 11 Locales).
-- ✅ Smoke-Test-Protokoll für v1.22-Features verfasst (`docs/V1.22-SMOKE-TEST.md`) — Live-Demo + lokaler Tauri-Build. Manuelle Ausführung der Matrix (Sign-off) bleibt ein Human-only-Schritt, getrackt in `TODO.md`.
+- **Coverage targets:** lift toward L≥85 % / B≥75 % / F≥80 % — focus on AI routing, Voice, Copilot.
+- **Local AI & Voice hardening:** Whisper/Kokoro on low-end devices, model-integrity checks, Eco-Mode.
+- **Error boundaries + structured logging** for AI/worker failures.
+- **Accessibility deep-dive:** manual keyboard + screen-reader passes.
+- **Collaboration:** finalise & test the RTCDataChannel E2E encryption path.
+- **Plugin Registry Beta:** graduate from the sandbox-hardening phase.
+- **Bundle optimisation:** further code-splitting for heavy chunks.
+- **Local-first:** advance ADR-0008 — B2.1 Y.Text migration → B2.2 SoT flip behind `enableLocalFirstSync`.
 
-**P1 (Diese Woche):**
-- Coverage-Ziele erreichen (L≥85 %, B≥75 %, F≥80 %) — Fokus auf AI-Routing, Voice, Copilot.
-- Local AI & Voice abschließen/härten (Whisper/Kokoro auf Low-End, Model-Integrity, Eco-Mode).
-- Error Boundaries + strukturiertes Logging für AI/Worker-Failures verbessern.
-- Accessibility Deep-Dive (manuelle Keyboard + Screen-Reader Tests).
+---
 
-**P2 (Nächster Sprint / v2.0 Foundation):**
-- Collaboration E2E-Encryption finalisieren & testen.
-- Plugin Registry Beta aus der Sandbox-Härtung herausführen.
-- Bundle-Optimierung + Code-Splitting für schwere Chunks.
-- Data-Migration/Backup/CloudSync LWW E2E-Tests erweitern.
+## v1.23.0 — Rebrand to WorldScript Studio + AI/i18n/Local-First Hardening (RELEASED 2026-06-16)
+
+**Status:** ✅ Released — see [`CHANGELOG.md`](CHANGELOG.md) `[1.23.0]`.
+
+- **Rebrand StoryCraft → WorldScript Studio:** repository metadata, build/URLs/PWA, Tauri identity, storage keys, UI components, i18n values and placeholder assets (8-phase sweep, PRs #142–#148); WorldScript "W" 8-bit monogram icons.
+- **AI error taxonomy + fail-fast retry classification:** localized Copilot/Writer error messages, AI request correlation IDs, transient-vs-fatal retry gating.
+- **Local-first data foundation (ADR-0008):** A0.1 perf harness → B0.1 PoC → ADR-0008 → B1.1 Yjs shadow sync, all behind `enableLocalFirstSync` (Redux stays source of truth).
+- **Plug-and-play Local AI settings:** capability detection, model downloads, storage management, fallback.
+- **OpenRouter + AI Execution Mode settings sections:** localized, modernized (Card + radiogroup), reactive cloud-policy block.
+- **Bundle split & budget tightening (PR #130):** named `vendor-webllm`/`vendor-onnx`/`vendor-transformers` chunks; ceilings `6200 KB / 2500 KB entry`.
+- **i18n interpolation bug-class fix + `i18nPlaceholders` regression guard.**
+- **Tauri blank-screen fix + updater asset-URL normalization.**
+- **i18n:** 2 709 keys × 11 locales.
+
+> Manual rebrand smoke-test sign-off matrix: [`docs/V1.23-REBRAND-SMOKE-TEST.md`](docs/V1.23-REBRAND-SMOKE-TEST.md) (human-only step).
 
 ---
 

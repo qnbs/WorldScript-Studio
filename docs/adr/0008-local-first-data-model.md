@@ -7,7 +7,7 @@
 
 ## Context
 
-StoryCraft is **offline-first** (encrypted IndexedDB + Tauri FS persistence, `redux-undo` history)
+WorldScript Studio is **offline-first** (encrypted IndexedDB + Tauri FS persistence, `redux-undo` history)
 but **not local-first** in the CRDT sense. `services/collaborationService.ts` instantiates an
 *ephemeral* `Y.Doc` only on `connect()` and exposes one `getSharedText('manuscript')` seam; the
 manuscript's source of truth is a plain Redux object (`ProjectData`, `StorySection.content: string`).
