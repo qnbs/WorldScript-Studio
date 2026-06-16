@@ -167,26 +167,30 @@ jobs:
             [ -f "$SIG_FILE" ] || continue
             BASE="${SIG_FILE%.sig}"
             FNAME="$(basename "$BASE")"
+            # QNBS-v3: GitHub normalizes spaces in uploaded asset names to dots (e.g.
+            # "WorldScript Studio_*.AppImage" → "WorldScript.Studio_*.AppImage"). The bundle file on
+            # disk still has the space, so the updater URL MUST use the normalized name or it 404s.
+            URLNAME="${FNAME// /.}"
             SIG_CONTENT="$(cat "$SIG_FILE")"
             case "$FNAME" in
               *.AppImage)
-                LINUX_URL="${REPO_URL}/${FNAME}"; LINUX_SIG="$SIG_CONTENT" ;;
+                LINUX_URL="${REPO_URL}/${URLNAME}"; LINUX_SIG="$SIG_CONTENT" ;;
               *-setup.exe)
                 # NSIS installer — preferred Windows updater format
-                WIN_URL="${REPO_URL}/${FNAME}"; WIN_SIG="$SIG_CONTENT" ;;
+                WIN_URL="${REPO_URL}/${URLNAME}"; WIN_SIG="$SIG_CONTENT" ;;
               *.msi)
                 # MSI fallback if no NSIS sig collected yet
-                [ -z "$WIN_SIG" ] && { WIN_URL="${REPO_URL}/${FNAME}"; WIN_SIG="$SIG_CONTENT"; } ;;
+                [ -z "$WIN_SIG" ] && { WIN_URL="${REPO_URL}/${URLNAME}"; WIN_SIG="$SIG_CONTENT"; } ;;
               *_aarch64.app.tar.gz)
                 # QNBS-v3: macOS updater bundle is .app.tar.gz (not .dmg).
                 # .dmg is the user-facing installer; .app.tar.gz is what Tauri downloads for in-app updates.
                 # aarch64 = macos-latest ARM runner. x64 runner not yet in matrix.
-                MAC_AARCH64_URL="${REPO_URL}/${FNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
+                MAC_AARCH64_URL="${REPO_URL}/${URLNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
               *_x64.app.tar.gz)
-                MAC_X64_URL="${REPO_URL}/${FNAME}"; MAC_X64_SIG="$SIG_CONTENT" ;;
+                MAC_X64_URL="${REPO_URL}/${URLNAME}"; MAC_X64_SIG="$SIG_CONTENT" ;;
               *.app.tar.gz)
                 # Fallback for generic .app.tar.gz (older Tauri versions)
-                MAC_AARCH64_URL="${REPO_URL}/${FNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
+                MAC_AARCH64_URL="${REPO_URL}/${URLNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
             esac
           done
 
@@ -213,4 +217,6 @@ jobs:
 
           echo "Generated latest.json:"
           cat latest.json
-          gh release upload "$TAG" latest.json --clobber
+          # QNBS-v3: this job has no actions/checkout, so gh has no local git context — pass --repo
+          # explicitly or `gh release upload` aborts with "fatal: not a git repository" (v1.23.0 fix).
+          gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"

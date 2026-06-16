@@ -38,7 +38,7 @@ Phase 0 and Phase 2 hardening complete as of v1.19.0. Remaining open items:
 | --- | --- | --- | --- |
 | SEC-1 | Collaboration | Mandatory password enforcement — `CollabEncryptionRequiredError` thrown in `collaborationService.ts` when no password is provided in production | ✅ Complete (Phase 0) |
 | SEC-2 | Documentation | Updated security policy, version table, scope, and active-item tracking | ✅ Complete (Phase 0) |
-| SEC-3 | Storage | IDB at-rest encryption — `services/storage/storageEncryptionService.ts`, AES-256-GCM, PBKDF2 600k iter; `enableIdbAtRestEncryption` flag (off by default) | ✅ Implemented (Phase 2 / B-1) |
+| SEC-3 | Storage | IDB at-rest encryption — `services/storage/storageEncryptionService.ts`, AES-256-GCM, PBKDF2 600k iter; `enableIdbAtRestEncryption` flag (on by default since v1.23) | ✅ Implemented (Phase 2 / B-1) |
 | SEC-4 | Voice | Web Speech API consent gate — GDPR Art. 13 disclosure and explicit opt-in before audio is routed to cloud STT providers | ✅ Complete (Phase 0) |
 | SEC-5 | Storage | IDB at-rest encryption UX — passphrase unlock modal, forgot-passphrase export flow, key rotation UI | ✅ Complete (2026-06-02) |
 | SEC-6 | Storage | DuckDB OPFS at-rest encryption — WAL and data files outside IDB; requires separate encryption layer | ⬜ Phase 3 (P0-4) |

@@ -9,10 +9,12 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 ---
 
 
-## v1.23 — P0 Audit Follow-up (ACTIVE)
+## v1.23 — P0 Audit Follow-up (DELIVERED 2026-06-16)
 
-> Ziel: Deep-Audit-P0-Items vom 12. Juni 2026 abschließen; Release-Ziel 2026-06-20.
-> Archivierte v1.22-Aufgaben → [`docs/history/completed-v1.22.md`](docs/history/completed-v1.22.md).
+> All P0 release-blockers closed and v1.23.0 shipped 2026-06-16. The only item still open is the
+> human-only manual smoke-test sign-off (below). Forward-looking P1/P2 work has moved to the
+> **Upcoming — v1.24 / v2.0 Foundation** block in [`ROADMAP.md`](ROADMAP.md).
+> Archived v1.22 tasks → [`docs/history/completed-v1.22.md`](docs/history/completed-v1.22.md).
 
 ### P0 — Release-Blocker
 - ✅ **ROADMAP/TODO sync** — `ROADMAP.md`, `TODO.md` und `AUDIT.md` widerspruchsfrei auf v1.22.0 + v1.23-Ziele gebracht (2026-06-13). Vorheriger Drift: ROADMAP markierte alle P0 ✅, TODO noch ⬜ — jetzt evidenzbasiert abgeglichen.

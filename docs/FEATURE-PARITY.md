@@ -1,6 +1,6 @@
 # WorldScript Studio — Feature Parity Matrix
 
-**Generated:** 2026-05-28 | **Last updated:** 2026-06-01 (post-parity-audit corrections + Edge-AI flags) | **Auditor:** Senior Principal Engineer  
+**Generated:** 2026-05-28 | **Last updated:** 2026-06-16 (v1.23.0 reconciliation — 23-flag model, defaults corrected, retired flags removed) | **Auditor:** Senior Principal Engineer  
 **Source of truth:** `features/featureFlags/featureFlagsSlice.ts`  
 **Script:** `pnpm exec tsx scripts/audit-feature-parity.ts`
 
@@ -21,37 +21,49 @@
 
 ## Feature Parity Matrix
 
+> **Defaults reconciled 2026-06-16 (v1.23.0):** the slice now ships the **full feature set** —
+> 23 flags, **18 default-on**, **5 opt-in default-off** (`enableRtlLayout`, `enableVoiceSupport`,
+> `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`). The retired/promoted flags
+> `enableCodexAutoTracking`, `enableCrossProjectSearch` (both promoted to permanent core),
+> `enablePlotBoardV2`, and `enableCloudSync` (retired) are no longer in the slice and have been
+> removed from this matrix. Run `pnpm exec tsx scripts/audit-feature-parity.ts` for the live check.
+
 | Feature Flag | Default | Slice | i18n Key | UI Toggle | `useSettingsView` Handler | Runtime Gate | Gate Location | Status |
 |---|---|---|---|---|---|---|---|---|
-| `enableCodexAutoTracking` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `listenerMiddleware.ts:219` | 🟢 OK |
-| `enableStoryBibleAdvanced` | OFF | ✅ | ✅ | ✅ | ✅ | ⚠️ | `listenerMiddleware.ts:247` only | 🟡 Partial |
-| `enableBinderResearch` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `ManuscriptView.tsx:27` | 🟢 OK |
-| `enableCompileWizard` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `ExportView.tsx:507` | 🟢 OK |
-| `enableProjectHealthScore` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `Dashboard.tsx:402` | 🟢 OK |
-| `enableCrossProjectSearch` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `CrossProjectSearchPanel.tsx:133`, `listenerMiddleware.ts:133` | 🟢 OK |
-| `enableAppHealthPanel` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `GeneralSections.tsx:314` | 🟢 OK |
-| `enablePlotBoardV2` | ON | ✅ | ✅ | ✅ | ✅ | ⚠️ | `helpDocRetrieval.ts` docs only | 🟡 Gate unclear |
-| `enableDuckDbAnalytics` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useDuckDb.ts:59`, `useAnalytics.ts:50`, `duckdbListenerLoader` | 🟢 OK |
-| `enableObjectsGroups` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
-| `enableMindMaps` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
-| `enableCharacterInterviews` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
+| `enableStoryBibleAdvanced` | ON | ✅ | ✅ | ✅ | ✅ | ⚠️ | `listenerMiddleware.ts:247` only | 🟡 Partial |
+| `enableBinderResearch` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `ManuscriptView.tsx:27` | 🟢 OK |
+| `enableCompileWizard` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `ExportView.tsx:507` | 🟢 OK |
+| `enableProjectHealthScore` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `Dashboard.tsx:402` | 🟢 OK |
+| `enableAppHealthPanel` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `GeneralSections.tsx:314` | 🟢 OK |
+| `enableDuckDbAnalytics` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `useDuckDb.ts:59`, `useAnalytics.ts:50`, `duckdbListenerLoader` | 🟢 OK |
+| `enableObjectsGroups` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
+| `enableMindMaps` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
+| `enableCharacterInterviews` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
+| `enableLoraAdapters` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `useWorldScriptAI.ts` reads `selectActiveLoraOllamaTag` → `loraModelPath` *(fixed 2026-05-29)* | 🟢 OK |
+| `enablePluginSystem` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `PluginRegistry.setEnabled()` + `App.tsx` sync *(fixed 2026-05-29)* | 🟢 OK |
+| `enableProForge` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | Handler added to `useSettingsView.ts` *(fixed 2026-05-29)*; `WriterViewUI.tsx:23` | 🟢 OK |
+| `enableIdbAtRestEncryption` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` + `IdbUnlockModal` *(fixed 2026-05-29)*; passphrase UX complete (B-1) | 🟢 OK |
+| `enableAdaptiveAiEngine` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `listenerMiddleware.ts` listeners; window gate; `useAdaptiveAi`; `App.tsx initAdaptiveAiOnStartup` *(added 2026-05-31)* | 🟢 OK |
+| `enableWebnnInference` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `adaptiveAiEngine.ts` backend selection; `webnnBridge.ts` *(added 2026-05-31)* | 🟢 OK |
+| `enableComputeShaders` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `computeShaderFactory.ts`; `localRagService.ts` GPU cosine; `useAdaptiveAi` *(added 2026-05-31)* | 🟢 OK |
+| `enableWorkerBusV2` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `packages/worker-bus` orchestration; `ensureWebLlmPool()` / WorkerBus init | 🟢 OK |
+| `enableRustCompute` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | Tauri Rust compute (`src-tauri/`); verified via `tauri-build.yml` (no PR-CI gate) | 🟢 OK |
 | `enableRtlLayout` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx:271` | 🟢 OK |
-| `enableCloudSync` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `CloudSyncBackend.create()` structural `featureFlagEnabled` param *(fixed 2026-05-29)* | 🟢 OK |
-| `enableLoraAdapters` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useWorldScriptAI.ts` reads `selectActiveLoraOllamaTag` → `loraModelPath` *(fixed 2026-05-29)* | 🟢 OK |
-| `enablePluginSystem` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `PluginRegistry.setEnabled()` + `App.tsx` sync *(fixed 2026-05-29)* | 🟢 OK |
 | `enableVoiceSupport` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx:568` | 🟢 OK |
-| `enableProForge` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | Handler added to `useSettingsView.ts` *(fixed 2026-05-29)*; `WriterViewUI.tsx:23` | 🟢 OK |
-| `enableIdbAtRestEncryption` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` + `IdbUnlockModal` *(fixed 2026-05-29)*; passphrase UX complete (B-1) | 🟢 OK |
 | `enableVoiceWasm` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useVoice.ts:29` + handler added *(fixed 2026-05-29)* | 🟢 OK |
-| `enableAdaptiveAiEngine` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `listenerMiddleware.ts` listeners; window gate; `useAdaptiveAi`; `App.tsx initAdaptiveAiOnStartup` *(added 2026-05-31)* | 🟢 OK |
-| `enableWebnnInference` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `adaptiveAiEngine.ts` backend selection; `webnnBridge.ts` *(added 2026-05-31)* | 🟢 OK |
-| `enableComputeShaders` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `computeShaderFactory.ts`; `localRagService.ts` GPU cosine; `useAdaptiveAi` *(added 2026-05-31)* | 🟢 OK |
+| `enableGlobalCopilot` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` lazy `CopilotPanel` mount; `hooks/useGlobalCopilot.ts` | 🟢 OK |
+| `enableLocalFirstSync` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | shadow Yjs projection (ADR-0008); Redux stays SoT | 🟢 OK |
 
 ---
 
-## Drift Summary (2026-06-01 — All critical drifts resolved)
+## Drift Summary (2026-06-16 — reconciled to the v1.23.0 23-flag model)
 
-**All 8 critical drifts from the 2026-05-29 parity audit have been fixed.** The matrix is now fully green.
+**All 8 critical drifts from the 2026-05-29 parity audit remain fixed.** The 2026-06-16 pass
+corrected the `Default` column (the slice ships the full set: 18 on, 5 opt-in off), removed the
+four retired/promoted flags (`enableCodexAutoTracking`, `enableCrossProjectSearch`,
+`enablePlotBoardV2`, `enableCloudSync`), and added the four flags introduced since v1.21
+(`enableWorkerBusV2`, `enableRustCompute`, `enableGlobalCopilot`, `enableLocalFirstSync`).
+The matrix is now fully green; `pnpm exec tsx scripts/audit-feature-parity.ts` is the live gate.
 
 ### ✅ Resolved Drifts (2026-05-29 parity audit)
 

@@ -12,8 +12,8 @@
   <img src="https://img.shields.io/badge/Version-v1.23.0-6366F1" alt="v1.23.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-11_locales-2706_keys-0EA5E9" alt="i18n 11 locales — 2706 keys">
-  <img src="https://img.shields.io/badge/Tests-5807%2B_%2F_481_files-22C55E" alt="5807+ tests / 481 files">
+  <img src="https://img.shields.io/badge/i18n-11_locales-2709_keys-0EA5E9" alt="i18n 11 locales — 2709 keys">
+  <img src="https://img.shields.io/badge/Tests-5807%2B_%2F_485_files-22C55E" alt="5807+ tests / 485 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
@@ -269,14 +269,14 @@ A keyboard-first **command palette** (⌘K / Ctrl+K, plus configurable bindings 
 - **Settings** — filter controls via the Settings search bar (`services/settingsSearchHints.ts`); **Import / Export** of a Zod-validated, privacy-conscious settings JSON subset (**Settings → Data** via `services/settingsExchange.ts`).
 - **Help Center (v1.9)** — `services/help/helpCatalog.ts` drives 50+ articles across 11 categories (including **Advanced & Power Features**, **Technical Documentation**, and **Settings Guide**); full-text search (`helpSearch.ts`); AI assistant uses 16 offline doc chunks; **Try it** actions via `tryActionId`; tours from `services/spotlightTour.ts`. The in-app **Settings Guide** documents every live settings category (incl. Fine-Tuning/LoRA, Community, Plugins). All five primary locales include translated article bodies (es/fr/it complete as of v1.9); Arabic/Hebrew article prose ships as English fallback in the RTL Beta.
 - **UI primitives** — shared **`Tooltip`**, **`EmptyState`**, and toast rows that trigger a **registered command** via `commandId` (see `features/status/statusSlice.ts`).
-- **Feature flags** — `enableProjectHealthScore` (dashboard card) and `enableCrossProjectSearch` (cross-project index) live in `features/featureFlags/featureFlagsSlice.ts`.
+- **Feature flags** — `enableProjectHealthScore` (dashboard card) lives in `features/featureFlags/featureFlagsSlice.ts`. (Cross-project search was promoted to permanent core behaviour in v1.8 and no longer has a flag.)
 
 ### 🔭 Cross-Project Search _(v2 — Privacy-Preserving Index)_
 
 Search across **all your projects** without loading them into memory. An IndexedDB-based privacy-preserving index (DB v8, `projects-index-store`) stores only lightweight metadata per project — title, logline, word count, character names — never manuscript plaintext.
 
 - **Two-phase search:** Phase 1 queries the index (instant); Phase 2 loads the full project on demand for deep-match excerpts.
-- **Auto-indexing** on every save via `listenerMiddleware` (behind the `enableCrossProjectSearch` flag).
+- **Auto-indexing** on every save via `listenerMiddleware` (permanent core behaviour since v1.8).
 - **Index management:** `crossProjectIndexService.ts` exposes `indexProject`, `listIndexedProjects`, `removeProjectIndex`.
 - Fully localized across all 5 UI languages.
 
@@ -304,7 +304,7 @@ Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc
 All project data, snapshots, and settings stored in IndexedDB can be encrypted at rest via `services/storage/storageEncryptionService.ts`:
 
 - **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
-- Gated behind `featureFlags.enableIdbAtRestEncryption` (off by default — no migration risk).
+- Gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23; the passphrase unlock UX is complete — Settings → Privacy).
 - Web build: passphrase-entry unlock screen on cold start (session-scoped in-memory key).
 - Tauri build: transparent OS-keychain protection via `tauri-plugin-stronghold` (no user friction).
 - GDPR-compliant: encrypted blobs are unreadable without the passphrase, even from the browser profile directory.
@@ -351,7 +351,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2706 i18n keys** across all 11 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2709 i18n keys** across all 11 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -450,8 +450,8 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2706 keys × 11 locales (de/en/es/fr/it + ar/he RTL Beta + ja/zh/pt/el Beta); EN fallback; `localStorage` persistence |
-| **Testing**          | Vitest 4.x (5807+ tests / 481 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2709 keys × 11 locales (de/en/es/fr/it + ar/he RTL Beta + ja/zh/pt/el Beta); EN fallback; `localStorage` persistence |
+| **Testing**          | Vitest 4.x (5807+ tests / 485 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -488,7 +488,7 @@ WorldScript-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 481 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 485 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -646,10 +646,10 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-06-11):**
-- **5807+ unit tests** across **481 test files** — all passing
+**Current test metrics (2026-06-16):**
+- **5807+ unit tests** across **485 test files** — all passing
 - Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2706 keys × 11 locales** (en/de/fr/es/it + ar/he RTL Beta + ja/zh/pt/el Beta)
+- i18n: **2709 keys × 11 locales** (en/de/fr/es/it + ar/he RTL Beta + ja/zh/pt/el Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

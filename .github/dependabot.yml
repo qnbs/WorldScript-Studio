@@ -6,6 +6,13 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # QNBS-v3: cooldown delays Dependabot PRs until a release has aged 7 days — matched to the
+    # .npmrc `minimum-release-age=10080` (7-day) supply-chain policy, so a freshly-published
+    # version is never PR'd before `pnpm install --frozen-lockfile` would accept it (avoids
+    # ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION CI failures like #154/#155). The .npmrc gate is
+    # install-time only; this cooldown is the PR-creation-time counterpart.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       # QNBS-v3: react and react-dom must stay in lockstep; split bumps cause version-mismatch errors at test time.
@@ -35,6 +42,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       tauri-deps:
@@ -50,4 +59,6 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5

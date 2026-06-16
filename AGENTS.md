@@ -84,7 +84,7 @@ WorldScript-Studio/
 │   ├── status/             # App-wide status / loading flags
 │   ├── writer/             # Writer view state
 │   ├── versionControl/     # Snapshots and branches
-│   ├── featureFlags/       # ~20 experimental flags (mostly off by default)
+│   ├── featureFlags/       # 23 flags — full set on by default; 5 opt-in (default-off)
 │   ├── plotBoard/          # Ephemeral viewport/draw state (NOT undo-able; localStorage)
 │   ├── progressTracker/    # Writing sessions, streaks, goals
 │   ├── sceneComments/      # Per-scene comments (EntityAdapter)
@@ -181,7 +181,7 @@ pnpm run mutation           # Stryker mutation testing (CI-only; manual workflow
 
 # Analysis / budgets
 pnpm run analyze            # Rollup visualizer → dist/bundle-analysis.html
-pnpm run bundle:budget      # Chunk size guard (default max 6500 KB total, 4000 KB entry)
+pnpm run bundle:budget      # Chunk size guard (default max 6200 KB total, 2500 KB entry)
 pnpm run storybook          # Storybook dev server on :6006
 pnpm run build-storybook    # Static Storybook build
 pnpm run test:storybook     # Test-runner against served Storybook
@@ -387,7 +387,7 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 ### Feature Flags
 
-- `features/featureFlags/featureFlagsSlice.ts` gates ~20 experimental flags + `enableVoiceSupport` (mostly off by default; a few like `enableCodexAutoTracking` and `enableCrossProjectSearch` are on).
+- `features/featureFlags/featureFlagsSlice.ts` gates **23 flags**. New installs get the **full feature set**: all default **on** except five opt-in flags that default **off** — `enableRtlLayout`, `enableVoiceSupport`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`. (`enableCodexAutoTracking` + `enableCrossProjectSearch` were promoted to permanent core; `enablePlotBoardV2` + `enableCloudSync` were retired — none remain in the slice.) See `docs/FEATURE-PARITY.md` for the per-flag matrix.
 - UI: Settings → Experimental flags.
 - Do not use scattered `if (true)` hacks.
 
@@ -455,7 +455,7 @@ Central orchestration layer for all background worker tasks. Messages use short 
 - `services/hybridRouter.ts` — routes to Web Worker pool or Rust TaskSupervisor (Tauri only) when `enableRustCompute` is on.
 - `services/legacyWorkerBusAdapter.ts` — shims old `@domain/ai-core` WorkerBus API onto v2.
 - `services/tauriTaskBridge.ts` — `invokeRustTask()`, `isRustComputeAvailable()` (60s TTL ping cache).
-- Feature flags: `enableWorkerBusV2` (off by default), `enableRustCompute` (off by default; Tauri desktop only).
+- Feature flags: `enableWorkerBusV2` (on by default), `enableRustCompute` (on by default; effective on Tauri desktop only).
 - v2 workers: `workers/v2/inference.worker.ts` (text + embed via Hugging Face transformers), `workers/v2/duckdb.worker.ts` (init/query/exec/shutdown).
 
 ### DuckDB Analytics
@@ -463,7 +463,7 @@ Central orchestration layer for all background worker tasks. Messages use short 
 - `workers/duckdbWorker.ts` runs DuckDB-WASM off main thread (OPFS persistence → in-memory fallback).
 - `services/duckdb/duckdbClient.ts` is a singleton proxy with AbortSignal and init retry.
 - Schema (`duckdbSchema.ts`): 10 tables + 5 views including `rag_chunks` (FLOAT[384]), `cross_project_index`, `codex_*`.
-- Gated behind `featureFlagsSlice.enableDuckDbAnalytics` (off by default).
+- Gated behind `featureFlagsSlice.enableDuckDbAnalytics` (on by default).
 - Dual-write (IDB + DuckDB) goes through `duckdbListenerLoader.ts` in the listener middleware.
 
 ---

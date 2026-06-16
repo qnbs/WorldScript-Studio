@@ -6,6 +6,7 @@
 > inline comments are cleared (0 unresolved) before a phase is declared done.
 
 **Owner:** maintainer + Claude Code · **Started:** 2026-06-13 · **Baseline version:** 1.22.0
+**v1.23.0 shipped:** 2026-06-16 · **post-release documentation perfection pass:** 2026-06-16 (corpus sync, metric/flag reconciliation, history archival, dependabot cooldown, GitHub release/package rebrand — see `AUDIT.md` § *v1.23.0 Post-Release Documentation Perfection Pass*). Phases 2–6 below remain forward work in the v1.24 / v2.0 cycle.
 
 ---
 
