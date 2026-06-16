@@ -1,6 +1,6 @@
 {
   "tour.intro.title": "Welcome aboard",
-  "tour.intro.body": "A short tour of StoryCraft Studio: navigation, command palette, and settings.",
+  "tour.intro.body": "A short tour of WorldScript Studio: navigation, command palette, and settings.",
   "tour.navigationOnly.introBody": "Let’s focus on how you move around the app on desktop and mobile.",
   "tour.navigationOnly.outroBody": "You can replay navigation-only tours anytime from Help.",
   "tour.navigationOnly.startButton": "Navigation tour only",

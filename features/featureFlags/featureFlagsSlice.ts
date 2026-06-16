@@ -51,7 +51,10 @@ export interface FeatureFlagsState {
   enableGlobalCopilot: boolean;
 }
 
-const FEATURE_FLAGS_STORAGE_KEY = 'storycraft-feature-flags';
+// QNBS-v3: rebrand storycraft → worldscript. Aligns the runtime key with the help docs that
+// reference `worldscript-feature-flags`. Pre-release (no users) so no migration needed. PR #144
+// further refactors this into services/featureFlagsStorage.ts using the same key.
+const FEATURE_FLAGS_STORAGE_KEY = 'worldscript-feature-flags';
 
 const defaultFeatureFlagsState: FeatureFlagsState = {
   // QNBS-v3: all flags on by default so new installs get the full feature set immediately
