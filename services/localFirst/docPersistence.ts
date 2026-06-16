@@ -16,7 +16,10 @@
 import { IndexeddbPersistence } from 'y-indexeddb';
 import type * as Y from 'yjs';
 
-const DB_PREFIX = 'storycraft-localfirst-';
+// QNBS-v3: Rebrand — canonical worldscript-* IndexedDB namespace. Safe to rename outright:
+// local-first sync is behind enableLocalFirstSync (off by default) and this is a pre-release
+// shadow store with no existing installs, so no migration from the old storycraft-* name is needed.
+const DB_PREFIX = 'worldscript-localfirst-';
 
 /** IndexedDB database name for a project's shadow doc. */
 export function dbNameForProject(projectId: string): string {

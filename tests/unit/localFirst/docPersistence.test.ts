@@ -40,7 +40,7 @@ async function clearPersisted(projectId: string): Promise<void> {
 
 describe('B1.1 — docPersistence (y-indexeddb)', () => {
   it('dbNameForProject namespaces by project id', () => {
-    expect(dbNameForProject('abc')).toBe('storycraft-localfirst-abc');
+    expect(dbNameForProject('abc')).toBe('worldscript-localfirst-abc');
     expect(dbNameForProject('abc')).not.toBe(dbNameForProject('xyz'));
   });
 
