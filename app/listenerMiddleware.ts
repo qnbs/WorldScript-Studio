@@ -592,9 +592,20 @@ function withLocalFirstLock<T>(fn: () => Promise<T>): Promise<T> {
 function getLocalFirstHandle(project: ProjectData): Promise<LocalFirstHandle> {
   return withLocalFirstLock(async () => {
     const projectId = project.id ?? 'default';
-    if (localFirstHandle?.projectId === projectId) return localFirstHandle;
-    // Project switched (or first run) — tear down the previous handle before creating a new one.
-    if (localFirstHandle) {
+    const { isIdbEncryptionReady } = await import('../services/storage/storageEncryptionService');
+    if (localFirstHandle?.projectId === projectId) {
+      // QNBS-v3 (CodeAnt): the persistence backend (NOOP vs y-indexeddb) is chosen at handle
+      // creation. If at-rest encryption became active AFTER a plaintext-persisting handle was made,
+      // tear it down — wiping the plaintext already written — so no further plaintext is persisted.
+      if (isIdbEncryptionReady() && localFirstHandle.persistence.active) {
+        await localFirstHandle.persistence.clearData().catch(() => undefined);
+        await localFirstHandle.persistence.destroy().catch(() => undefined);
+        localFirstHandle = null;
+      } else {
+        return localFirstHandle;
+      }
+    } else if (localFirstHandle) {
+      // Project switched — tear down the previous handle before creating a new one.
       await localFirstHandle.persistence.destroy().catch(() => undefined);
       localFirstHandle = null;
     }
@@ -602,12 +613,10 @@ function getLocalFirstHandle(project: ProjectData): Promise<LocalFirstHandle> {
       { createBlankProjectDoc },
       { ProjectDocBinding },
       { persistProjectDoc, NOOP_PERSISTENCE },
-      { isIdbEncryptionReady },
     ] = await Promise.all([
       import('../services/localFirst/projectDoc'),
       import('../services/localFirst/docBinding'),
       import('../services/localFirst/docPersistence'),
-      import('../services/storage/storageEncryptionService'),
     ]);
     const doc = createBlankProjectDoc();
     // QNBS-v3 (CodeAnt): never write a PLAINTEXT shadow copy to y-indexeddb when at-rest encryption

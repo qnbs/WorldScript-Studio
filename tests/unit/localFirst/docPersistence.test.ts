@@ -75,10 +75,13 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
         },
         { timeout: 2000, interval: 50 },
       );
-    } finally {
-      // QNBS-v3 (CodeAnt): wipe shared IndexedDB state in cleanup too, so nothing leaks across runs.
-      await pA.clearData();
+      // QNBS-v3 (CodeAnt): destroy the writer, then re-read — with pA gone the value can only come
+      // from persisted IndexedDB (not live cross-provider sync), proving actual persistence.
       await pA.destroy();
+      expect(await readPersisted(projectId)).toBe('hello world');
+    } finally {
+      await pA.destroy(); // idempotent (memoized)
+      await clearPersisted(projectId); // wipe shared IDB via a fresh provider
     }
   });
 
@@ -97,12 +100,13 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
         { timeout: 2000, interval: 50 },
       );
       await pA.clearData();
-    } finally {
-      // QNBS-v3 (CodeAnt): wipe shared IndexedDB state in cleanup too, so nothing leaks across runs.
-      await pA.clearData();
+      // QNBS-v3 (CodeAnt): destroy the writer, then re-read — with pA gone the empty result can only
+      // come from the cleared IndexedDB store (not live sync), proving clearData persisted the wipe.
       await pA.destroy();
+      expect(await readPersisted(projectId)).toBe('');
+    } finally {
+      await pA.destroy(); // idempotent (memoized)
+      await clearPersisted(projectId); // wipe shared IDB via a fresh provider
     }
-
-    expect(await readPersisted(projectId)).toBe('');
   });
 });
