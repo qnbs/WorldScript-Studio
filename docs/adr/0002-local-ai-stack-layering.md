@@ -7,7 +7,7 @@
 
 ## Context
 
-StoryCraft Studio is offline-first and privacy-first: AI must be able to run with **no cloud call**.
+WorldScript Studio is offline-first and privacy-first: AI must be able to run with **no cloud call**.
 The local-inference stack grew across several sprints (WebLLM, ONNX Runtime Web, Transformers.js,
 WGSL compute shaders, an adaptive engine, a device profiler, benchmark/telemetry). Audits flagged it
 as "deep and high-maintenance." This ADR records the intended layering and the **degradation

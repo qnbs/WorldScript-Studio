@@ -1,4 +1,4 @@
-# PWA Audit — StoryCraft Studio (v1.8)
+# PWA Audit — WorldScript Studio (v1.8)
 
 Baseline from [ROADMAP.md](../ROADMAP.md) UX/PWA section. Status: **2026-05-21**.
 
@@ -12,7 +12,7 @@ Baseline from [ROADMAP.md](../ROADMAP.md) UX/PWA section. Status: **2026-05-21**
 | `launch_handler` navigate-existing | Done |
 | `handle_links` preferred | Done (v1.8) |
 | Maskable + any icons | SVG `favicon.svg` |
-| `protocol_handlers` web+storycraft | Done |
+| `protocol_handlers` web+worldscript | Done |
 
 Optional later: PNG 192/512 for store listings; `screenshots` for install UI.
 

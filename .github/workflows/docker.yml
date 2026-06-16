@@ -1,5 +1,5 @@
 # Docker image build + push to GitHub Container Registry on every tag.
-# Pull with: docker pull ghcr.io/qnbs/storycraft-studio:latest
+# Pull with: docker pull ghcr.io/qnbs/worldscript-studio:latest
 
 name: Docker
 

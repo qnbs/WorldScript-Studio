@@ -1,10 +1,10 @@
 # Eco-Forgejo for low-end Ubuntu 20.04 — bind to localhost only, SQLite + WAL, tight limits.
-# Data: ~/storycraft-ci/forgejo (set FORGEJO_DATA_DIR or use default below)
+# Data: ~/worldscript-ci/forgejo (set FORGEJO_DATA_DIR or use default below)
 
 services:
   forgejo:
     image: codeberg.org/forgejo/forgejo:9
-    container_name: storycraft-forgejo
+    container_name: worldscript-forgejo
     restart: unless-stopped
     environment:
       - USER_UID=1000
@@ -22,8 +22,8 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
-      - ${FORGEJO_DATA_DIR:-${HOME}/storycraft-ci/forgejo/data}:/data
-      - ${FORGEJO_CONFIG_DIR:-${HOME}/storycraft-ci/forgejo/config}:/data/gitea/conf
+      - ${FORGEJO_DATA_DIR:-${HOME}/worldscript-ci/forgejo/data}:/data
+      - ${FORGEJO_CONFIG_DIR:-${HOME}/worldscript-ci/forgejo/config}:/data/gitea/conf
     deploy:
       resources:
         limits:

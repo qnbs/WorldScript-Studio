@@ -4,7 +4,7 @@
 > branch needed — fixed in place on PR #107). Each is covered by tests (unit + MCP smoke) and the
 > resolving change is noted per item below.
 > **Scope:** 8 CodeAnt.ai findings, all on code introduced by PR #107 (`feat/proforge-dual-purpose-mcp-copilot`).
-> **Source PR:** https://github.com/qnbs/StoryCraft-Studio/pull/107
+> **Source PR:** https://github.com/qnbs/WorldScript-Studio/pull/107
 >
 > Each item below was **validated against the current code** (not just trusting the bot). CodeAnt's
 > severity is shown alongside a **re-rated severity** for *this* codebase (a local stdio dev tool +
@@ -47,7 +47,7 @@ Total ≈ **half a day** including tests. Recommended single follow-up branch: `
 
 - **CodeAnt:** #7 (Critical, logic error) — `hooks/useGlobalCopilot.ts` (the `close` callback, ~L141–144)
 - **Confirmed.** `close()` calls `stop()` + `setOpen(false)` but never resets status. If `stop()`
-  aborts the stream without firing `useStoryCraftAI`'s `onFinish`/`onError`, the slice stays
+  aborts the stream without firing `useWorldScriptAI`'s `onFinish`/`onError`, the slice stays
   `status: 'streaming'`, and `sendMessage`'s `if (!trimmed || status === 'streaming') return;`
   guard blocks **all** future sends until `clear()`.
 - **Fix:** in `close()` (and `clear()` already calls `stop()`), when `status === 'streaming'`, also

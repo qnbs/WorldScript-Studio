@@ -29,7 +29,7 @@ has_remote() { git remote get-url "$1" >/dev/null 2>&1; }
 case "${DIRECTION}" in
   pull-from-github)
     has_remote github || {
-      echo "Add remote: git remote add github git@github.com:qnbs/StoryCraft-Studio.git"
+      echo "Add remote: git remote add github git@github.com:qnbs/WorldScript-Studio.git"
       exit 1
     }
     log "Fetching github..."
@@ -50,7 +50,7 @@ case "${DIRECTION}" in
     ;;
   sync-forgejo)
     has_remote forgejo || {
-      echo "Add remote: git remote add forgejo http://127.0.0.1:3000/<user>/StoryCraft-Studio.git"
+      echo "Add remote: git remote add forgejo http://127.0.0.1:3000/<user>/WorldScript-Studio.git"
       exit 1
     }
     "${SCRIPT_DIR}/ci-eco-start.sh"

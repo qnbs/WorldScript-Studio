@@ -1,4 +1,4 @@
-# Low-End Local CI/CD — StoryCraft Studio
+# Low-End Local CI/CD — WorldScript Studio
 
 **Variante:** act-first + Eco-Forgejo (kein Woodpecker, kein dauerlaufender Forgejo Actions Runner).
 
@@ -13,6 +13,6 @@
 ./scripts/install-permissions.sh
 ./eval-template.sh
 cp .actrc.example ~/.actrc
-cp act.secrets.example ~/storycraft-ci/act.secrets && chmod 600 ~/storycraft-ci/act.secrets
+cp act.secrets.example ~/worldscript-ci/act.secrets && chmod 600 ~/worldscript-ci/act.secrets
 cd ../../ && pnpm run ci:quick
 ```

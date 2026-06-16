@@ -1,6 +1,6 @@
 # i18n — Intl.Collator (ICU Sorting)
 
-> **Binding reference.** StoryCraft Studio uses native `Intl.Collator` for locale-aware string sorting.
+> **Binding reference.** WorldScript Studio uses native `Intl.Collator` for locale-aware string sorting.
 
 ## Overview
 

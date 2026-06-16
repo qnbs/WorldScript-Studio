@@ -1,4 +1,4 @@
-# Contributing to StoryCraft Studio
+# Contributing to WorldScript Studio
 
 ## Code of Conduct
 

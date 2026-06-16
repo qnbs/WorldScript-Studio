@@ -1,8 +1,8 @@
-# StoryCraft Studio — Roadmap
+# WorldScript Studio — Roadmap
 
 ## Vision
 
-StoryCraft Studio aims to become the leading open-source platform for AI-assisted creative writing — offline-first, privacy-friendly, and extensible.
+WorldScript Studio aims to become the leading open-source platform for AI-assisted creative writing — offline-first, privacy-friendly, and extensible.
 
 ### UX / PWA baseline audit (2026-05-11)
 
@@ -79,7 +79,7 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 
 **Status:** ✅ Released — siehe [`CHANGELOG.md`](CHANGELOG.md) `[1.20.0]`.
 
-- **Tauri Desktop Pipeline repariert:** pnpm-Config-Migration, Signing-Fix, Native File Associations (`.storycraft`/`.scst`), Single-Instance, Deep-Link-Handler.
+- **Tauri Desktop Pipeline repariert:** pnpm-Config-Migration, Signing-Fix, Native File Associations (`.worldscript`/`.scst`), Single-Instance, Deep-Link-Handler.
 - **UI Modernization Phase 1:** `LanguageSelector`, `RadioGroup`, `Tabs`, `ToggleSwitch`.
 - **Phase 3 i18n Expansion:** `ja/zh/pt/el` Beta-Sprachen + Intl APIs (`PluralRules`, `NumberFormat`, `RelativeTimeFormat`, `Collator`, `ListFormat`, `DisplayNames`).
 - **Coverage C-7:** +96 Tests; Thresholds angehoben.

@@ -17,11 +17,11 @@ fi
 
 if [[ -f "${SRC}/forgejo.tar.gz" ]]; then
   log "Restoring forgejo..."
-  rm -rf "${STORYCRAFT_CI_HOME}/forgejo"
-  tar -xzf "${SRC}/forgejo.tar.gz" -C "${STORYCRAFT_CI_HOME}"
+  rm -rf "${WORLDSCRIPT_CI_HOME}/forgejo"
+  tar -xzf "${SRC}/forgejo.tar.gz" -C "${WORLDSCRIPT_CI_HOME}"
 fi
 
 [[ -f "${SRC}/.actrc" ]] && cp "${SRC}/.actrc" "${HOME}/.actrc"
-[[ -f "${SRC}/act.secrets" ]] && cp "${SRC}/act.secrets" "${STORYCRAFT_CI_HOME}/act.secrets" && chmod 600 "${STORYCRAFT_CI_HOME}/act.secrets"
+[[ -f "${SRC}/act.secrets" ]] && cp "${SRC}/act.secrets" "${WORLDSCRIPT_CI_HOME}/act.secrets" && chmod 600 "${WORLDSCRIPT_CI_HOME}/act.secrets"
 
 log "Restore done from ${SRC}. Start Forgejo: ci-eco-start.sh"

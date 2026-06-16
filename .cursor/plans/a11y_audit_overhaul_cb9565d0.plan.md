@@ -23,7 +23,7 @@ todos:
 isProject: false
 ---
 
-# Accessibility-Audit + Overhaul-Plan (StoryCraft-Studio)
+# Accessibility-Audit + Overhaul-Plan (WorldScript-Studio)
 
 ## Kurz-Einordnung des Ist-Zustands
 

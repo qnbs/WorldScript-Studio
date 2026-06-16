@@ -11,12 +11,12 @@ Goal: **GitHub is backup only**; daily work with **native pnpm quick tier**; ful
 ## Phase 0 — Evaluate baseline
 
 ```bash
-cd ~/githubcursor/StoryCraft-Studio/infra/low-end-ci
+cd ~/githubcursor/WorldScript-Studio/infra/low-end-ci
 ./scripts/install-permissions.sh
 ./eval-template.sh
 ```
 
-Result: `~/storycraft-ci/eval-YYYY-MM-DD.txt`
+Result: `~/worldscript-ci/eval-YYYY-MM-DD.txt`
 
 ---
 
@@ -40,7 +40,7 @@ grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -
 ### sysctl (less aggressive swapping)
 
 ```bash
-sudo tee /etc/sysctl.d/99-storycraft-lowend.conf <<'EOF'
+sudo tee /etc/sysctl.d/99-worldscript-lowend.conf <<'EOF'
 vm.swappiness=10
 vm.vfs_cache_pressure=50
 EOF
@@ -74,7 +74,7 @@ newgrp docker
 **daemon.json** (merge if file already exists):
 
 ```bash
-sudo cp ~/githubcursor/StoryCraft-Studio/infra/low-end-ci/config/docker-daemon.json.example /etc/docker/daemon.json
+sudo cp ~/githubcursor/WorldScript-Studio/infra/low-end-ci/config/docker-daemon.json.example /etc/docker/daemon.json
 sudo systemctl restart docker
 ```
 
@@ -90,7 +90,7 @@ curl -fsSL https://fnm.vercel.app/install | bash
 fnm install 22
 fnm default 22
 corepack enable
-cd ~/githubcursor/StoryCraft-Studio
+cd ~/githubcursor/WorldScript-Studio
 corepack prepare pnpm@11.5.2 --activate
 node -v   # v22.x
 pnpm -v
@@ -99,8 +99,8 @@ pnpm -v
 Persistent pnpm store:
 
 ```bash
-mkdir -p ~/storycraft-ci/cache/pnpm-store
-pnpm config set store-dir ~/storycraft-ci/cache/pnpm-store
+mkdir -p ~/worldscript-ci/cache/pnpm-store
+pnpm config set store-dir ~/worldscript-ci/cache/pnpm-store
 ```
 
 ---
@@ -120,10 +120,10 @@ act --version
 ### act configuration
 
 ```bash
-mkdir -p ~/storycraft-ci/cache/act/artifacts ~/storycraft-ci/logs
-cp ~/githubcursor/StoryCraft-Studio/infra/low-end-ci/.actrc.example ~/.actrc
-cp ~/githubcursor/StoryCraft-Studio/infra/low-end-ci/act.secrets.example ~/storycraft-ci/act.secrets
-chmod 600 ~/storycraft-ci/act.secrets
+mkdir -p ~/worldscript-ci/cache/act/artifacts ~/worldscript-ci/logs
+cp ~/githubcursor/WorldScript-Studio/infra/low-end-ci/.actrc.example ~/.actrc
+cp ~/githubcursor/WorldScript-Studio/infra/low-end-ci/act.secrets.example ~/worldscript-ci/act.secrets
+chmod 600 ~/worldscript-ci/act.secrets
 ```
 
 Load initial image (one-time, ~1–2 GB):
@@ -137,7 +137,7 @@ docker pull catthehacker/ubuntu:act-22.04
 ## Phase 5 — Directory layout
 
 ```bash
-mkdir -p ~/storycraft-ci/{cache/pnpm-store,cache/act/artifacts,logs,backups,forgejo/data,forgejo/config}
+mkdir -p ~/worldscript-ci/{cache/pnpm-store,cache/act/artifacts,logs,backups,forgejo/data,forgejo/config}
 ```
 
 ---
@@ -145,7 +145,7 @@ mkdir -p ~/storycraft-ci/{cache/pnpm-store,cache/act/artifacts,logs,backups,forg
 ## Phase 6 — Forgejo (eco mode)
 
 ```bash
-cd ~/githubcursor/StoryCraft-Studio/infra/low-end-ci
+cd ~/githubcursor/WorldScript-Studio/infra/low-end-ci
 docker compose -f docker-compose.forgejo.yml up -d
 ```
 
@@ -154,9 +154,9 @@ Browser: **http://127.0.0.1:3000** — create admin user; registration is disabl
 Create repository (UI), then:
 
 ```bash
-cd ~/githubcursor/StoryCraft-Studio
-git remote add forgejo "http://127.0.0.1:3000/<YOUR_USER>/StoryCraft-Studio.git"
-git remote add github "git@github.com:qnbs/StoryCraft-Studio.git"
+cd ~/githubcursor/WorldScript-Studio
+git remote add forgejo "http://127.0.0.1:3000/<YOUR_USER>/WorldScript-Studio.git"
+git remote add github "git@github.com:qnbs/WorldScript-Studio.git"
 git push -u forgejo main
 ```
 
@@ -166,19 +166,19 @@ git push -u forgejo main
 
 ```bash
 ./scripts/install-systemd-units.sh
-systemctl --user enable --now storycraft-ci-prune.timer   # weekly Docker prune
+systemctl --user enable --now worldscript-ci-prune.timer   # weekly Docker prune
 # Optional nightly backup to GitHub:
-# systemctl --user enable --now storycraft-mirror.timer
+# systemctl --user enable --now worldscript-mirror.timer
 ```
 
-Adjust generated paths in `install-systemd-units.sh` if your repo is **not** located at `~/githubcursor/StoryCraft-Studio`.
+Adjust generated paths in `install-systemd-units.sh` if your repo is **not** located at `~/githubcursor/WorldScript-Studio`.
 
 ---
 
 ## Phase 7 — Shell aliases
 
 ```bash
-cat ~/githubcursor/StoryCraft-Studio/infra/low-end-ci/bashrc-aliases.snippet >> ~/.bashrc
+cat ~/githubcursor/WorldScript-Studio/infra/low-end-ci/bashrc-aliases.snippet >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -187,7 +187,7 @@ source ~/.bashrc
 ## Phase 8 — Test repo integration
 
 ```bash
-cd ~/githubcursor/StoryCraft-Studio
+cd ~/githubcursor/WorldScript-Studio
 pnpm install --frozen-lockfile
 pnpm run ci:quick          # native quick tier
 # Full workflow parity (slow, needs swap):
@@ -201,7 +201,7 @@ pnpm run ci:act              # act sequential
 ```bash
 backup-ci.sh
 # Restore:
-restore-ci.sh ~/storycraft-ci/backups/<timestamp>
+restore-ci.sh ~/worldscript-ci/backups/<timestamp>
 ```
 
 ---
@@ -212,9 +212,9 @@ restore-ci.sh ~/storycraft-ci/backups/<timestamp>
 2. `docker compose -f infra/low-end-ci/docker-compose.forgejo.yml down`
 3. Optional: `restore-ci.sh` from backup
 4. Git remotes: `git remote remove forgejo` — keep only **github**
-5. `sudo rm /etc/sysctl.d/99-storycraft-lowend.conf && sudo sysctl --system`
+5. `sudo rm /etc/sysctl.d/99-worldscript-lowend.conf && sudo sysctl --system`
 6. Swap file can remain (`swapoff` + remove fstab entry is optional)
-7. Delete `~/.actrc` and `~/storycraft-ci` if going fully back to cloud-only
+7. Delete `~/.actrc` and `~/worldscript-ci` if going fully back to cloud-only
 
 ---
 
@@ -225,7 +225,7 @@ restore-ci.sh ~/storycraft-ci/backups/<timestamp>
 | Docker permission denied | `sudo usermod -aG docker $USER` + re-login |
 | act: exec format error | Wrong arch — check release `amd64` vs `arm64` |
 | OOM during act | Swap ≥6G, `ci-eco-stop.sh`, `--sequential` only, single-axis matrix |
-| Forgejo won't start | `docker logs storycraft-forgejo`; data directory permissions `chown 1000:1000` |
+| Forgejo won't start | `docker logs worldscript-forgejo`; data directory permissions `chown 1000:1000` |
 | Node too old | `fnm use 22` — project requires Node ≥22 |
 
 ---

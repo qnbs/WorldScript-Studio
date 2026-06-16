@@ -1,4 +1,4 @@
-# StoryCraft Studio — Voice Full Support (opt-in) Master Plan v1.0
+# WorldScript Studio — Voice Full Support (opt-in) Master Plan v1.0
 
 > Created: 2026-05-24 | Updated: 2026-06-09 | Author: Senior Voice Architect | Status: **Phase 1 Complete (v1.17.0) + Phase 2 WASM Scaffold + KokoroTTS + Async Engine Refactor Complete (2026-05-31) + Phase 3 Model Download UI Complete (v1.21, 2026-06-09)**
 
@@ -6,7 +6,7 @@
 
 ## Executive Summary + Vision
 
-StoryCraft Studio receives a **complete, opt-in Voice Full Support** as a premium add-on feature. The app remains primarily mouse and keyboard driven. When activated, users can control nearly all features (navigation, writing, Plot Board, AI features, settings, export, collaboration) by voice.
+WorldScript Studio receives a **complete, opt-in Voice Full Support** as a premium add-on feature. The app remains primarily mouse and keyboard driven. When activated, users can control nearly all features (navigation, writing, Plot Board, AI features, settings, export, collaboration) by voice.
 
 **Vision:** Voice as an equal input medium alongside mouse/keyboard — with maximum privacy (local-first), offline capability, and WCAG 2.2 AAA-compliant accessibility. Voice Mode is a force multiplier for power users and a gateway for accessibility users.
 
@@ -77,7 +77,7 @@ StoryCraft Studio receives a **complete, opt-in Voice Full Support** as a premiu
 ## 2. Wake-Word, VAD, Continuous Listening & Microphone Handling
 
 ### Wake-Word ✅ v1.0
-- **Default:** "Hey StoryCraft" or "OK StoryCraft"
+- **Default:** "Hey WorldScript" or "OK WorldScript"
 - **Engine:** `EnergyThresholdWakeWordEngine` — energy threshold + phrase-matching fallback
 - **Future:** Sherpa-ONNX wake-word (WASM) with small ONNX model (~50KB)
 - **Privacy:** Wake-word runs entirely locally; no audio upload
@@ -502,4 +502,4 @@ locales/*/settings.json            — 2025 keys × 5 locales (voice keys added)
 }
 ```
 
-> **Note:** Since StoryCraft Studio strictly prioritizes privacy and offline-first, all voice engines are loaded as WASM/ONNX and executed locally. No cloud dependency for the base mode.
+> **Note:** Since WorldScript Studio strictly prioritizes privacy and offline-first, all voice engines are loaded as WASM/ONNX and executed locally. No cloud dependency for the base mode.

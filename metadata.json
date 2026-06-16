@@ -1,5 +1,5 @@
 {
-  "name": "StoryCraft Studio",
+  "name": "WorldScript Studio",
   "description": "An app for aspiring authors, screenwriters, and content creators who want to create stories, scripts, or novels. It includes story templates, character/world-building tools, an AI writing assistant, sample scenarios, and export options.",
   "requestFramePermissions": ["microphone"]
 }

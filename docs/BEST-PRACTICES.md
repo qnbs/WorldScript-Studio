@@ -1,4 +1,4 @@
-# StoryCraft Studio — Engineering & Content Best Practices
+# WorldScript Studio — Engineering & Content Best Practices
 
 Single reference for maintainers: architecture touchpoints, content rules, security/privacy framing, testing expectations, and CI gates. Product docs and tutorials remain in the [Documentation Hub](../README.md#documentation-hub).
 

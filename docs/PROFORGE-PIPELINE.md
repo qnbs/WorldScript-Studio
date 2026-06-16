@@ -1,4 +1,4 @@
-# StoryCraft ProForge Ultimate Author Pipeline (UAP)
+# WorldScript ProForge Ultimate Author Pipeline (UAP)
 
 **Status:** v1.1.0 — Humanization & Refinement Sprint complete (Phases H/A/P/X)  
 **Last Updated:** 27 May 2026  
