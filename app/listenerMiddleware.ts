@@ -16,6 +16,7 @@ import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
 import type { AppDispatch, RootState } from './store';
+import { appStoreRef } from './storeRef';
 
 type ProjectStateWithHistory = {
   present?: { data?: ProjectData };
@@ -564,6 +565,160 @@ listenerMiddleware.startListening({
     setOpenRouterConfig(or?.enabled ?? false, or?.preferredModel ?? 'deepseek/deepseek-r1:free');
   },
 });
+
+// QNBS-v3: B1.1 — Local-First shadow sync (ADR-0008). When enableLocalFirstSync is on, mirror the
+// authoritative Redux project into a per-project Yjs doc (+ y-indexeddb). Redux stays the source of
+// truth: on any read-verify drift we self-heal via full re-projection and only log (never surface to
+// the user). All local-first modules are dynamically imported so they stay out of the main bundle.
+type LocalFirstHandle = {
+  projectId: string;
+  binding: import('../services/localFirst/docBinding').ProjectDocBinding;
+  persistence: import('../services/localFirst/docPersistence').DocPersistence;
+};
+let localFirstHandle: LocalFirstHandle | null = null;
+
+// QNBS-v3 (CodeAnt): serialize all handle create/teardown so an overlapping sync run and an
+// enable/disable run can't race on the shared module-global and leave the wrong handle active.
+let localFirstLock: Promise<void> = Promise.resolve();
+function withLocalFirstLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = localFirstLock.then(fn, fn);
+  localFirstLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+function getLocalFirstHandle(project: ProjectData): Promise<LocalFirstHandle> {
+  return withLocalFirstLock(async () => {
+    const projectId = project.id ?? 'default';
+    const { isIdbEncryptionReady } = await import('../services/storage/storageEncryptionService');
+    if (localFirstHandle?.projectId === projectId) {
+      // QNBS-v3 (CodeAnt): the persistence backend (NOOP vs y-indexeddb) is chosen at handle
+      // creation. If at-rest encryption became active AFTER a plaintext-persisting handle was made,
+      // tear it down — wiping the plaintext already written — so no further plaintext is persisted.
+      if (isIdbEncryptionReady() && localFirstHandle.persistence.active) {
+        await localFirstHandle.persistence.clearData().catch(() => undefined);
+        await localFirstHandle.persistence.destroy().catch(() => undefined);
+        localFirstHandle = null;
+      } else {
+        return localFirstHandle;
+      }
+    } else if (localFirstHandle) {
+      // Project switched — tear down the previous handle before creating a new one.
+      await localFirstHandle.persistence.destroy().catch(() => undefined);
+      localFirstHandle = null;
+    }
+    const [
+      { createBlankProjectDoc },
+      { ProjectDocBinding },
+      { persistProjectDoc, NOOP_PERSISTENCE },
+    ] = await Promise.all([
+      import('../services/localFirst/projectDoc'),
+      import('../services/localFirst/docBinding'),
+      import('../services/localFirst/docPersistence'),
+    ]);
+    const doc = createBlankProjectDoc();
+    // QNBS-v3 (CodeAnt): never write a PLAINTEXT shadow copy to y-indexeddb when at-rest encryption
+    // is active — the local-first doc is not encrypted yet. Keep it in-memory only so the privacy
+    // guarantee holds; shadow-sync still validates against Redux (SoT).
+    const persistence = isIdbEncryptionReady()
+      ? NOOP_PERSISTENCE
+      : persistProjectDoc(projectId, doc);
+    await persistence.whenSynced; // load any persisted state first …
+    const binding = new ProjectDocBinding(project, doc); // … then project Redux over it (SoT wins)
+    localFirstHandle = { projectId, binding, persistence };
+    return localFirstHandle;
+  });
+}
+
+function teardownLocalFirst(): Promise<void> {
+  return withLocalFirstLock(async () => {
+    const handle = localFirstHandle;
+    localFirstHandle = null;
+    if (handle) await handle.persistence.destroy().catch(() => undefined);
+  });
+}
+
+// Shared shadow-sync run — used by both the debounced edit listener and the OFF→ON enable listener.
+// `stillEnabled` is re-evaluated AFTER the async handle init so a sync that was in flight when the
+// user disabled the flag aborts instead of resurrecting a torn-down binding.
+async function runLocalFirstShadowSync(
+  state: RootState,
+  stillEnabled: () => boolean,
+): Promise<void> {
+  if (state.featureFlags?.enableLocalFirstSync !== true) return;
+  const projectState = state.project as ProjectStateWithHistory;
+  const presentData = projectState.present?.data ?? projectState.data;
+  if (!presentData || presentData.title === undefined) return;
+  try {
+    const handle = await getLocalFirstHandle(presentData);
+    // QNBS-v3 (CodeAnt): flag may have flipped off during the await — re-check before mutating.
+    if (!stillEnabled()) return;
+    handle.binding.syncFromProject(presentData);
+    const result = handle.binding.verify(presentData);
+    if (!result.ok) {
+      // Shadow phase: never affect the user. Log a count (no ids/content → no PII) and self-heal.
+      logger.warn('Local-First shadow drift — self-healing via re-projection', {
+        mismatchCount: result.mismatches.length,
+      });
+      handle.binding.reproject(presentData);
+    }
+  } catch (err) {
+    logger.warn('Local-First shadow sync failed (non-critical):', err);
+  }
+}
+
+addDebouncedListener(
+  (curr, prev) =>
+    curr.featureFlags?.enableLocalFirstSync === true &&
+    curr.project?.present !== prev.project?.present,
+  1200,
+  async (api) => {
+    await runLocalFirstShadowSync(
+      api.getState(),
+      () => api.getState().featureFlags?.enableLocalFirstSync === true,
+    );
+  },
+);
+
+// QNBS-v3 (CodeAnt): OFF→ON must perform an immediate initial projection — otherwise the shadow doc
+// stays uninitialized until the user happens to make another edit.
+listenerMiddleware.startListening({
+  predicate: (_action, curr, prev) =>
+    (curr as RootState).featureFlags?.enableLocalFirstSync === true &&
+    (prev as RootState).featureFlags?.enableLocalFirstSync !== true,
+  effect: async (_action, listenerApi) => {
+    await runLocalFirstShadowSync(
+      listenerApi.getState() as RootState,
+      () => (listenerApi.getState() as RootState).featureFlags?.enableLocalFirstSync === true,
+    );
+  },
+});
+
+// Tear down the shadow binding when the flag is turned off.
+listenerMiddleware.startListening({
+  predicate: (_action, curr, prev) =>
+    (curr as RootState).featureFlags?.enableLocalFirstSync !== true &&
+    (prev as RootState).featureFlags?.enableLocalFirstSync === true,
+  effect: async () => {
+    await teardownLocalFirst();
+    logger.info('Local-First shadow sync disabled — binding torn down');
+  },
+});
+
+// QNBS-v3 (CodeAnt): cold-start init — when enableLocalFirstSync is already true in persisted state,
+// neither the edit listener nor the OFF→ON listener fires, so the shadow doc would stay uninitialized
+// until the next edit. Call this once on mount (App.tsx) to run an initial projection + verify.
+export async function initLocalFirstSyncOnStartup(enabled: boolean): Promise<void> {
+  if (!enabled) return;
+  const store = appStoreRef.current;
+  if (!store) return;
+  await runLocalFirstShadowSync(
+    store.getState(),
+    () => store.getState().featureFlags?.enableLocalFirstSync === true,
+  );
+}
 
 export const startAppListening = listenerMiddleware.startListening as TypedStartListening<
   RootState,

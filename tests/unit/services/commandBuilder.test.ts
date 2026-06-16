@@ -97,6 +97,7 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableWorkerBusV2: false,
       enableRustCompute: false,
       enableGlobalCopilot: false,
+      enableLocalFirstSync: false,
     },
     aiMode: 'hybrid',
     openRouterEnabled: false,

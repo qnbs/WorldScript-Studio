@@ -23,7 +23,11 @@ const CopilotLauncher = lazy(() =>
   import('./components/copilot/CopilotLauncher').then((m) => ({ default: m.CopilotLauncher })),
 );
 
-import { initAdaptiveAiOnStartup, initWorkerBusOnStartup } from './app/listenerMiddleware';
+import {
+  initAdaptiveAiOnStartup,
+  initLocalFirstSyncOnStartup,
+  initWorkerBusOnStartup,
+} from './app/listenerMiddleware';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
@@ -324,6 +328,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     initAdaptiveAiOnStartup(featureFlags.enableAdaptiveAiEngine);
     // QNBS-v3: Phase 2 — init WorkerBus v2 on cold start if already enabled in persisted state
     void initWorkerBusOnStartup(featureFlags.enableWorkerBusV2);
+    // QNBS-v3: B1.1 — init Local-First shadow sync on cold start if the flag is already on
+    void initLocalFirstSyncOnStartup(featureFlags.enableLocalFirstSync);
   }, []);
 
   // QNBS-v3: B-1 sentinel guard — async because IDB sentinel read is async.

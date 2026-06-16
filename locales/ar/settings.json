@@ -452,6 +452,7 @@
   "settings.featureFlags.enableDuckDbAnalytics": "تحليلات متقدّمة (قاعدة بيانات قصص سريعة)",
   "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableIdbAtRestEncryption": "تشفير IDB أثناء السكون ‏(AES-256-GCM) — فعّله عبر الإعدادات › الخصوصية",
+  "settings.featureFlags.enableLocalFirstSync": "Local-First sync (shadow — experimental)",
   "settings.featureFlags.enableLoraAdapters": "استدلال مُكيِّف LoRA (تجريبي)",
   "settings.featureFlags.enableMindMaps": "خرائط ذهنية مُحسَّنة",
   "settings.featureFlags.enableObjectsGroups": "مخزون الأشياء والمجموعات",

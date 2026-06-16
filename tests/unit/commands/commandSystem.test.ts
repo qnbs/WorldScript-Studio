@@ -51,6 +51,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableWorkerBusV2: false,
   enableRustCompute: false,
   enableGlobalCopilot: false,
+  enableLocalFirstSync: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {

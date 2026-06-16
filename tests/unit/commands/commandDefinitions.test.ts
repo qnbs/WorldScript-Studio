@@ -100,6 +100,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableWorkerBusV2: false,
     enableRustCompute: false,
     enableGlobalCopilot: false,
+    enableLocalFirstSync: false,
   },
   aiMode: 'hybrid',
   openRouterEnabled: false,

@@ -16,6 +16,7 @@ dist-ssr
 *.local
 coverage/
 reports/
+tests/bench/baseline/
 
 # Editor directories and files
 .vscode/*

@@ -50,6 +50,8 @@ export interface FeatureFlagsState {
   enableRustCompute: boolean;
   /** Global AI Copilot — beginner-friendly, context-aware, local-first in-app live assistant (default: true). */
   enableGlobalCopilot: boolean;
+  /** Local-First sync (shadow) — mirror the project into a Yjs doc + y-indexeddb; Redux stays SoT (default: false). */
+  enableLocalFirstSync: boolean;
 }
 
 const defaultFeatureFlagsState: FeatureFlagsState = {
@@ -80,6 +82,8 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enableRustCompute: true,
   // QNBS-v3: global copilot off by default — ambient AI; user opt-in per privacy preference
   enableGlobalCopilot: false,
+  // QNBS-v3: local-first sync off by default — experimental shadow projection (B1.1); Redux stays SoT
+  enableLocalFirstSync: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -176,6 +180,9 @@ const featureFlagsSlice = createSlice({
     setEnableGlobalCopilot(state, action: PayloadAction<boolean>) {
       state.enableGlobalCopilot = action.payload;
     },
+    setEnableLocalFirstSync(state, action: PayloadAction<boolean>) {
+      state.enableLocalFirstSync = action.payload;
+    },
   },
 });
 
@@ -226,6 +233,8 @@ export const selectEnableRustCompute = (state: { featureFlags: FeatureFlagsState
   state.featureFlags.enableRustCompute;
 export const selectEnableGlobalCopilot = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableGlobalCopilot;
+export const selectEnableLocalFirstSync = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableLocalFirstSync;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

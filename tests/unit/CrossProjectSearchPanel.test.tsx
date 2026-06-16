@@ -43,6 +43,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableWorkerBusV2: false,
   enableRustCompute: false,
   enableGlobalCopilot: false,
+  enableLocalFirstSync: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -140,6 +141,7 @@ afterEach(() => {
     enableWorkerBusV2: false,
     enableRustCompute: false,
     enableGlobalCopilot: false,
+    enableLocalFirstSync: false,
   };
 });
 
