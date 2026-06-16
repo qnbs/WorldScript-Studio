@@ -15,8 +15,8 @@
 #   185.199.111.153
 #
 # 4. Commit and push this file
-# 5. The build will automatically use '/' as base path instead of '/StoryCraft-Studio/'
+# 5. The build will automatically use '/' as base path instead of '/WorldScript-Studio/'
 #
 # Documentation: https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site
 
-storycraft.example.com
+worldscript.example.com

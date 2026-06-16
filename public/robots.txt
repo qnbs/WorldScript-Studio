@@ -1,5 +1,5 @@
-# StoryCraft Studio - robots.txt
+# WorldScript Studio - robots.txt
 User-agent: *
 Allow: /
 
-Sitemap: https://qnbs.github.io/StoryCraft-Studio/sitemap.xml
+Sitemap: https://qnbs.github.io/WorldScript-Studio/sitemap.xml

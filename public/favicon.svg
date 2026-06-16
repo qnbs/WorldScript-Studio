@@ -1,18 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WorldScript Studio">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e293b"/>
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
     </linearGradient>
-    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#818cf8"/>
+    <linearGradient id="ink" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#818cf8"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <path d="M256 96 C160 96 96 160 96 256 C96 352 160 416 256 416 C352 416 416 352 416 256" 
-        fill="none" stroke="url(#glow)" stroke-width="32" stroke-linecap="round"/>
-  <path d="M256 160 L256 256 L320 288" 
-        fill="none" stroke="url(#glow)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="256" cy="256" r="24" fill="#f8fafc"/>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- W monogram drawn as two quill strokes; the central apex carries an ink point (pen nib) -->
+  <path d="M118 150 L192 362 L256 250 L320 362 L394 150"
+        fill="none" stroke="url(#ink)" stroke-width="46"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="256" cy="238" r="17" fill="#f8fafc"/>
 </svg>
