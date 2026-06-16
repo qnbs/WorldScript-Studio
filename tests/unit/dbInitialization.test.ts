@@ -17,8 +17,8 @@ vi.mock('../../services/logger', () => ({
 }));
 
 vi.mock('../../services/dbConstants', () => ({
-  STATE_DB_NAME: 'storycraft-state-db',
-  DATA_DB_NAME: 'storycraft-data-db',
+  STATE_DB_NAME: 'worldscript-state-db',
+  DATA_DB_NAME: 'worldscript-data-db',
 }));
 
 describe('dbInitialization', () => {
@@ -107,19 +107,19 @@ describe('dbInitialization', () => {
       await resetAllDatabases();
 
       const deletedNames = mockDeleteDatabase.mock.calls.map((c: unknown[]) => c[0] as string);
-      expect(deletedNames).toContain('storycraft-state-db');
-      expect(deletedNames).toContain('storycraft-data-db');
+      expect(deletedNames).toContain('worldscript-state-db');
+      expect(deletedNames).toContain('worldscript-data-db');
     });
 
-    it('removes storycraft-prefixed localStorage keys', async () => {
-      localStorage.setItem('storycraft_version', '1');
+    it('removes worldscript-prefixed localStorage keys', async () => {
+      localStorage.setItem('worldscript_version', '1');
       localStorage.setItem('plotBoard_zoom', '1.5');
       localStorage.setItem('unrelated_key', 'keep');
       const { resetAllDatabases } = await import('../../services/dbInitialization');
 
       await resetAllDatabases();
 
-      expect(localStorage.getItem('storycraft_version')).toBeNull();
+      expect(localStorage.getItem('worldscript_version')).toBeNull();
       expect(localStorage.getItem('plotBoard_zoom')).toBeNull();
       expect(localStorage.getItem('unrelated_key')).toBe('keep');
     });

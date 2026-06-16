@@ -183,6 +183,40 @@ describe('handleStandardApply', () => {
 });
 
 // ---------------------------------------------------------------------------
+// applyCommunityTemplate
+// ---------------------------------------------------------------------------
+describe('applyCommunityTemplate', () => {
+  it('dispatches setManuscript/setOutline from community sections and navigates', () => {
+    const { result } = renderTemplateHook();
+    act(() => {
+      result.current.applyCommunityTemplate({
+        id: 'ct1',
+        name: 'Heist',
+        description: 'desc',
+        type: 'Genre',
+        tags: [],
+        arcDescription: '',
+        author: 'tester',
+        sections: [{ title: 'Setup', description: 'The crew assembles' }, { title: 'Twist' }],
+      });
+    });
+    const manuscriptCall = mockDispatch.mock.calls.find(
+      (call: unknown[]) =>
+        (call[0] as { type?: string } | undefined)?.type === 'project/setManuscript',
+    );
+    const manuscript = (manuscriptCall?.[0] as { payload: Array<{ content: string }> } | undefined)
+      ?.payload;
+    expect(manuscript).toHaveLength(2);
+    expect(manuscript?.[0]?.content).toContain('The crew assembles');
+    expect(manuscript?.[1]?.content).toBe('');
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/setOutline' }),
+    );
+    expect(mockNavigate).toHaveBeenCalledWith('manuscript');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // handleAiApply
 // ---------------------------------------------------------------------------
 describe('handleAiApply', () => {

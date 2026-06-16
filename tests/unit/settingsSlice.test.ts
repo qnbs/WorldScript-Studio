@@ -290,12 +290,12 @@ describe('settingsSlice', () => {
       initState(),
       settingsActions.setAdvancedEditor({
         focusMode: true,
-        customDictionary: ['storycraft', 'worldbuilding'],
+        customDictionary: ['worldscript', 'worldbuilding'],
       }),
     );
 
     expect(state.advancedEditor.focusMode).toBe(true);
-    expect(state.advancedEditor.customDictionary).toEqual(['storycraft', 'worldbuilding']);
+    expect(state.advancedEditor.customDictionary).toEqual(['worldscript', 'worldbuilding']);
     expect(state.advancedEditor.autoComplete).toBe(true);
   });
 
@@ -304,12 +304,12 @@ describe('settingsSlice', () => {
       initState(),
       settingsActions.setBackup({
         backupFrequency: 'daily',
-        backupLocation: '/tmp/storycraft-backups',
+        backupLocation: '/tmp/worldscript-backups',
       }),
     );
 
     expect(state.backup.backupFrequency).toBe('daily');
-    expect(state.backup.backupLocation).toBe('/tmp/storycraft-backups');
+    expect(state.backup.backupLocation).toBe('/tmp/worldscript-backups');
     expect(state.backup.autoBackup).toBe(true);
   });
 
@@ -330,7 +330,7 @@ describe('settingsSlice', () => {
   it('applyInitialTheme applies persisted theme from localStorage roundtrip', () => {
     const state = settingsReducer(initState(), settingsActions.setTheme('light'));
 
-    localStorage.setItem('storycraft-state', JSON.stringify({ settings: state }));
+    localStorage.setItem('worldscript-state', JSON.stringify({ settings: state }));
     document.body.classList.add('dark-theme', 'auto-theme');
 
     applyInitialTheme();
@@ -353,7 +353,7 @@ describe('settingsSlice', () => {
     }));
 
     const state = settingsReducer(initState(), settingsActions.setTheme('auto'));
-    localStorage.setItem('storycraft-state', JSON.stringify({ settings: state }));
+    localStorage.setItem('worldscript-state', JSON.stringify({ settings: state }));
 
     applyInitialTheme();
 

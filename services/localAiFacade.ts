@@ -140,7 +140,7 @@ export async function generateLocalText(
   try {
     // QNBS-v3: When adaptive AI engine is enabled, use its task config for optimal backend/model.
     const adaptiveEnabled =
-      typeof window !== 'undefined' && window.__storycraft_adaptive_ai__ === true;
+      typeof window !== 'undefined' && window.__worldscript_adaptive_ai__ === true;
 
     // QNBS-v3: capture the typed adaptive config so recordTaskLatency keeps its ComputeBackend type.
     //          Skipped entirely when the caller forces an exact model (explicit preload/download).

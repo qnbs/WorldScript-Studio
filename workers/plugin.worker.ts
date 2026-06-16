@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 /**
- * Plugin Worker — Isolated execution context for StoryCraft plugins.
+ * Plugin Worker — Isolated execution context for WorldScript plugins.
  * QNBS-v3: P0-1 — Plugins run inside a Function-scope sandbox with shadowed globals.
  *          P0-2 — Execution respects the AbortSignal supplied by WorkerBus v2.
  *          P0-3 — Read-only API snapshots are passed in the task payload; side effects

@@ -17,7 +17,7 @@ export function registerRunStage(server: McpServer): void {
         'Execute a single ProForge pipeline stage agent against the manuscript and return its ' +
         'review items, metrics, raw output, and the heuristic supervisor decision. Stages: ' +
         'intake, structural, lineProse, copyEdit, proof, production, publishing, analytics. ' +
-        'Requires GEMINI_API_KEY (or STORYCRAFT_API_KEY) in the server environment.',
+        'Requires GEMINI_API_KEY (or WORLDSCRIPT_API_KEY) in the server environment.',
       inputSchema: {
         project: projectShape.optional(),
         stage: z.enum([

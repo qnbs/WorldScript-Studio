@@ -34,7 +34,7 @@ vi.mock('../../../services/storageService', () => ({
 }));
 
 vi.mock('../../../services/ai/providerFactory', () => ({
-  createLanguageModelForStoryCraft: (...args: unknown[]) =>
+  createLanguageModelForWorldScript: (...args: unknown[]) =>
     mockCreateLanguageModelForStoryCraft(...args),
   providerToKind: (...args: unknown[]) => mockProviderToKind(...args),
 }));

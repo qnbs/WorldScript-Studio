@@ -11,7 +11,7 @@ import type { AudioChunk, WakeWordEngine } from './voiceTypes';
 export class EnergyThresholdWakeWordEngine implements WakeWordEngine {
   readonly name = 'Energy Threshold Wake-Word';
 
-  private phrase = 'hey storycraft';
+  private phrase = 'hey worldscript';
   private recentTranscripts: string[] = [];
   private maxRecent = 5;
 

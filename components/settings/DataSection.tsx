@@ -1,7 +1,7 @@
 import type { ChangeEventHandler, FC } from 'react';
 import { useRef, useState } from 'react';
 import { useAppDispatch } from '../../app/hooks';
-import { ICONS } from '../../constants';
+import { APP_FILE_SLUG, ICONS } from '../../constants';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
@@ -44,7 +44,7 @@ export const DataSection: FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `storycraft-library-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `${APP_FILE_SLUG}-library-${new Date().toISOString().slice(0, 10)}.zip`;
       a.click();
       URL.revokeObjectURL(url);
       dispatch(
@@ -75,7 +75,7 @@ export const DataSection: FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'storycraft-settings.json';
+    a.download = `${APP_FILE_SLUG}-settings.json`;
     a.click();
     URL.revokeObjectURL(url);
   };

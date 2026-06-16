@@ -19,7 +19,7 @@ async function resolveTauriFetch(): Promise<TauriHttpFetch | undefined> {
   }
 }
 
-export interface StoryCraftFetchOptions {
+export interface WorldScriptFetchOptions {
   /**
    * QNBS-v3: P1-F6 — opt-in request timeout (ms). DEFAULT OFF: streaming AI calls must not be
    * aborted mid-stream, so the timeout is only applied when a caller explicitly sets it (use for
@@ -68,11 +68,11 @@ function buildTimeoutSignal(
  * Fetch für AI-Provider: im **Tauri-Desktop** Rust-HTTP-Client (CORS-Umgehung für lokale LLMs),
  * sonst Browser-`fetch`. Schlägt das Plugin fehl → Fallback auf `globalThis.fetch`.
  *
- * QNBS-v3: `options.timeoutMs` is opt-in (see {@link StoryCraftFetchOptions}); without it the
+ * QNBS-v3: `options.timeoutMs` is opt-in (see {@link WorldScriptFetchOptions}); without it the
  * returned fetch is behaviourally identical to a bare `fetch`, so existing streaming callers are
  * unaffected. When set, the timeout applies consistently via {@link buildTimeoutSignal}.
  */
-export function createStoryCraftFetch(options?: StoryCraftFetchOptions): FetchLike {
+export function createWorldScriptFetch(options?: WorldScriptFetchOptions): FetchLike {
   const timeoutMs = options?.timeoutMs;
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const tauriFetch = await resolveTauriFetch();

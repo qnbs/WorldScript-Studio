@@ -765,7 +765,7 @@ export const streamAiHelpResponse = async (
 
     const ai = await getAiClient();
 
-    const prompt = `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown.\n\n${sanitizePromptBlock(promptBody)}`;
+    const prompt = `You are a helpful assistant for a creative writing app called WorldScript Studio. Answer the user's question concisely and clearly. Format your answer using Markdown.\n\n${sanitizePromptBlock(promptBody)}`;
     const responseStream = await ai.models.generateContentStream({
       model: getModelForText(),
       contents: prompt,

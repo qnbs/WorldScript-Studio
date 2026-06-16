@@ -31,7 +31,7 @@ export const projectShape = z
       .optional(),
     config: z.unknown().optional(),
   })
-  .describe("Portable StoryCraft project payload. Omit to use the server's --project file.");
+  .describe("Portable WorldScript project payload. Omit to use the server's --project file.");
 
 export interface ToolResult {
   content: Array<{ type: 'text'; text: string }>;

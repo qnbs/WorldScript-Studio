@@ -92,7 +92,7 @@ const quality = process.argv.includes('--quality');
 // Patterns for values that are legitimately the same across languages
 const SKIP_PATTERNS = [
   /^(PDF|DOCX?|HTML|RTF|EPUB|JSON|CSV|TXT|ZIP|PNG|JPG|SVG|MD)(\s|$|\s*\()/i,
-  /^(Gemini|OpenAI|Ollama|Claude|GPT|API|URL|HTTP|HTTPS|WebRTC|WebSocket|Yjs|IndexedDB|LZ-String|AES-256|CRDT|PWA|Tauri|GitHub|Google\s|Discord|LM Studio|vLLM|WebLLM|Dropbox|OneDrive|iCloud|StoryCraft)/i,
+  /^(Gemini|OpenAI|Ollama|Claude|GPT|API|URL|HTTP|HTTPS|WebRTC|WebSocket|Yjs|IndexedDB|LZ-String|AES-256|CRDT|PWA|Tauri|GitHub|Google\s|Discord|LM Studio|vLLM|WebLLM|Dropbox|OneDrive|iCloud|WorldScript)/i,
   /^Ctrl\+|^Alt\+|^Shift\+|^Meta\+|^\+\s/,
   /^\d+(\.\d+)?(\s*(KB|MB|GB|px|ms|s|%))?$/,
   /^v\d+\.\d+/,

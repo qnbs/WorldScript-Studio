@@ -42,7 +42,7 @@ const translate = (key: string) => {
   const map: Record<string, string> = {
     'help.cat.gettingStarted': 'Getting Started',
     'help.art.intro.title': 'Introduction',
-    'help.art.intro.content': '<p>Welcome to StoryCraft Studio.</p>',
+    'help.art.intro.content': '<p>Welcome to WorldScript Studio.</p>',
     'help.art.setup.title': 'Setup',
     'help.art.setup.content': '<p>Install and configure.</p>',
     'help.cat.ai': 'AI Features',

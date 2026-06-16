@@ -21,7 +21,7 @@ export interface ProgressTrackerState {
   totalWordsAllTime: number;
 }
 
-const STORAGE_KEY = 'storycraft-progress-tracker';
+const STORAGE_KEY = 'worldscript-progress-tracker';
 
 const defaultState: ProgressTrackerState = {
   dailyGoalWords: 500,

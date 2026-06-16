@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { APP_NAME } from '../constants';
 import type { Language } from '../contexts/I18nContext';
 import { selectFeatureFlags } from '../features/featureFlags/featureFlagsSlice';
 import {
@@ -588,7 +589,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </span>
             <span>{t('palette.footer.pinHint')}</span>
           </div>
-          <span>StoryCraft Studio</span>
+          <span>{APP_NAME}</span>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 /**
- * Shared Zod validation for StoryCraft project JSON imports (browser + Tauri).
+ * Shared Zod validation for WorldScript project JSON imports (browser + Tauri).
  * QNBS-v3: Einheitliches Schema verhindert divergierende Parse-Pfade und härter gegen korrupte Dateien.
  */
 import { z } from 'zod';

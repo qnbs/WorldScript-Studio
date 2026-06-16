@@ -10,8 +10,8 @@ interface Props {
   onForgotPassphrase?: () => void;
 }
 
-const ATTEMPT_STORAGE_KEY = 'storycraft-idb-unlock-attempts';
-const LOCKOUT_STORAGE_KEY = 'storycraft-idb-unlock-lockout';
+const ATTEMPT_STORAGE_KEY = 'worldscript-idb-unlock-attempts';
+const LOCKOUT_STORAGE_KEY = 'worldscript-idb-unlock-lockout';
 
 function getAttemptCount(): number {
   try {

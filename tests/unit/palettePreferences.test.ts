@@ -24,7 +24,7 @@ describe('loadPalettePreferences', () => {
 
   it('parses stored preferences', () => {
     localStorage.setItem(
-      'storycraft-palette-prefs-v1',
+      'worldscript-palette-prefs-v1',
       JSON.stringify({ recentIds: ['a', 'b'], pinnedIds: ['c'] }),
     );
     const prefs = loadPalettePreferences();
@@ -33,13 +33,13 @@ describe('loadPalettePreferences', () => {
   });
 
   it('returns defaults when JSON is invalid', () => {
-    localStorage.setItem('storycraft-palette-prefs-v1', '{invalid json}');
+    localStorage.setItem('worldscript-palette-prefs-v1', '{invalid json}');
     const prefs = loadPalettePreferences();
     expect(prefs.recentIds).toEqual([]);
   });
 
   it('returns defaults when stored arrays are missing', () => {
-    localStorage.setItem('storycraft-palette-prefs-v1', JSON.stringify({}));
+    localStorage.setItem('worldscript-palette-prefs-v1', JSON.stringify({}));
     const prefs = loadPalettePreferences();
     expect(prefs.recentIds).toEqual([]);
     expect(prefs.pinnedIds).toEqual([]);
@@ -49,7 +49,7 @@ describe('loadPalettePreferences', () => {
 describe('savePalettePreferences', () => {
   it('saves preferences to localStorage', () => {
     savePalettePreferences({ recentIds: ['x'], pinnedIds: ['y'] });
-    const raw = localStorage.getItem('storycraft-palette-prefs-v1');
+    const raw = localStorage.getItem('worldscript-palette-prefs-v1');
     expect(JSON.parse(raw!).recentIds).toEqual(['x']);
     expect(JSON.parse(raw!).pinnedIds).toEqual(['y']);
   });

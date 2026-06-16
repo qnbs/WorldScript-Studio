@@ -76,13 +76,13 @@ describe('initial language detection', () => {
   });
 
   it('restores language from localStorage', async () => {
-    localStorage.setItem('storycraft-language', 'de');
+    localStorage.setItem('worldscript-language', 'de');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     expect(result.current.language).toBe('de');
   });
 
   it('ignores invalid values in localStorage and falls back to "en"', async () => {
-    localStorage.setItem('storycraft-language', 'xx');
+    localStorage.setItem('worldscript-language', 'xx');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     expect(result.current.language).toBe('en');
   });
@@ -105,7 +105,7 @@ describe('setLanguage', () => {
     act(() => {
       result.current.setLanguage('de');
     });
-    expect(localStorage.getItem('storycraft-language')).toBe('de');
+    expect(localStorage.getItem('worldscript-language')).toBe('de');
   });
 });
 
@@ -132,14 +132,14 @@ describe('t()', () => {
   });
 
   it('falls back to EN when active language lacks a key', async () => {
-    localStorage.setItem('storycraft-language', 'fr');
+    localStorage.setItem('worldscript-language', 'fr');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     // FR bundle has only welcome.title; settings.save only in EN
     await waitFor(() => expect(result.current.t('settings.save')).toBe('Save {{name}}'));
   });
 
   it('uses active language translation when available', async () => {
-    localStorage.setItem('storycraft-language', 'de');
+    localStorage.setItem('worldscript-language', 'de');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.t('welcome.title')).toBe('Willkommen'));
   });
@@ -158,7 +158,7 @@ describe('bundle loading', () => {
   });
 
   it('also fetches EN as fallback when active language is not EN', async () => {
-    localStorage.setItem('storycraft-language', 'de');
+    localStorage.setItem('worldscript-language', 'de');
     renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => {
       const urls = mockFetch.mock.calls.map((c) => c[0] as string);
@@ -217,7 +217,7 @@ describe('Intl.PluralRules', () => {
   });
 
   it('returns correct plural category for Arabic zero', async () => {
-    localStorage.setItem('storycraft-language', 'ar');
+    localStorage.setItem('worldscript-language', 'ar');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     expect(result.current.getPluralCategory(0)).toBe('zero');
@@ -344,7 +344,7 @@ describe('Intl.DisplayNames', () => {
 // ---------------------------------------------------------------------------
 describe('Intl.PluralRules - Extended', () => {
   it('returns correct plural for Japanese', async () => {
-    localStorage.setItem('storycraft-language', 'ja');
+    localStorage.setItem('worldscript-language', 'ja');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     // Japanese uses 'other' for all counts (no plural forms)
@@ -354,7 +354,7 @@ describe('Intl.PluralRules - Extended', () => {
   });
 
   it('returns correct plural for Chinese', async () => {
-    localStorage.setItem('storycraft-language', 'zh');
+    localStorage.setItem('worldscript-language', 'zh');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     // Chinese uses 'other' for all counts
@@ -363,7 +363,7 @@ describe('Intl.PluralRules - Extended', () => {
   });
 
   it('returns correct plural for Portuguese', async () => {
-    localStorage.setItem('storycraft-language', 'pt');
+    localStorage.setItem('worldscript-language', 'pt');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     // Portuguese has 'one' and 'other'
@@ -372,7 +372,7 @@ describe('Intl.PluralRules - Extended', () => {
   });
 
   it('returns correct plural for Greek', async () => {
-    localStorage.setItem('storycraft-language', 'el');
+    localStorage.setItem('worldscript-language', 'el');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     // Greek has 'one' and 'other'
@@ -461,7 +461,7 @@ describe('Intl.Collator - Extended', () => {
   });
 
   it('sorts with different locales', async () => {
-    localStorage.setItem('storycraft-language', 'de');
+    localStorage.setItem('worldscript-language', 'de');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     const collator = result.current.getCollator();
@@ -562,7 +562,7 @@ describe('countWords', () => {
   });
 
   it('counts words in Japanese text using Intl.Segmenter', async () => {
-    localStorage.setItem('storycraft-language', 'ja');
+    localStorage.setItem('worldscript-language', 'ja');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     // QNBS-v3: Intl.Segmenter word boundaries are ICU-dependent; verify non-zero counts
@@ -579,7 +579,7 @@ describe('countWords', () => {
   });
 
   it('counts words in Chinese text using Intl.Segmenter', async () => {
-    localStorage.setItem('storycraft-language', 'zh');
+    localStorage.setItem('worldscript-language', 'zh');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     // QNBS-v3: Intl.Segmenter word boundaries are ICU-dependent; verify non-zero counts
@@ -596,7 +596,7 @@ describe('countWords', () => {
   });
 
   it('counts words in Portuguese text', async () => {
-    localStorage.setItem('storycraft-language', 'pt');
+    localStorage.setItem('worldscript-language', 'pt');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     expect(result.current.countWords('Olá mundo')).toBe(2);
@@ -604,7 +604,7 @@ describe('countWords', () => {
   });
 
   it('counts words in Greek text', async () => {
-    localStorage.setItem('storycraft-language', 'el');
+    localStorage.setItem('worldscript-language', 'el');
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     expect(result.current.countWords('Γεια σου κόσμε')).toBe(3);

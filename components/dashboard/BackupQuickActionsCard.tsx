@@ -10,7 +10,7 @@ import type { ProjectSnapshot, StoryProject, View } from '../../types';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 
-export const SETTINGS_CATEGORY_STORAGE_KEY = 'storycraft-settings-category';
+export const SETTINGS_CATEGORY_STORAGE_KEY = 'worldscript-settings-category';
 
 export interface BackupQuickActionsCardProps {
   onNavigate: (view: View) => void;

@@ -625,8 +625,8 @@ export async function streamAiHelpResponse(
     ? `${doc}\n\n---\n\nUser question:\n${sanitizePromptValue(question)}`
     : sanitizePromptValue(question);
   const helpPromptWithDocs = doc
-    ? `You are a helpful assistant for StoryCraft Studio. Prefer the documentation excerpts below when they answer the question; otherwise give concise general guidance. Format using Markdown.\n\n${mergedBody}`
-    : `You are a helpful assistant for a creative writing app called StoryCraft Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptValue(question)}`;
+    ? `You are a helpful assistant for WorldScript Studio. Prefer the documentation excerpts below when they answer the question; otherwise give concise general guidance. Format using Markdown.\n\n${mergedBody}`
+    : `You are a helpful assistant for a creative writing app called WorldScript Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptValue(question)}`;
   if (opts.provider === 'gemini') {
     return streamAiHelpResponseGemini(
       mergedBody,

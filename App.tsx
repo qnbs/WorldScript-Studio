@@ -219,7 +219,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         themeColorMeta.setAttribute('content', themeColor);
       }
       try {
-        localStorage.setItem('storycraft-theme', isDark ? 'dark' : 'light');
+        localStorage.setItem('worldscript-theme', isDark ? 'dark' : 'light');
       } catch {
         // localStorage may be unavailable (SSR, quota exceeded)
       }
@@ -257,7 +257,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
   useEffect(() => {
     document.body.classList.toggle(
-      'storycraft-reduced-motion',
+      'worldscript-reduced-motion',
       settings.accessibility.reducedMotion,
     );
   }, [settings.accessibility.reducedMotion]);
@@ -265,12 +265,15 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   // QNBS-v3: Barrierefreiheits-Toggles → dokumentweite Klassen (Tokens in index.css).
   useEffect(() => {
     document.documentElement.classList.toggle(
-      'storycraft-large-text',
+      'worldscript-large-text',
       settings.accessibility.largeText,
     );
-    document.body.classList.toggle('storycraft-screen-reader', settings.accessibility.screenReader);
     document.body.classList.toggle(
-      'storycraft-focus-indicators',
+      'worldscript-screen-reader',
+      settings.accessibility.screenReader,
+    );
+    document.body.classList.toggle(
+      'worldscript-focus-indicators',
       settings.accessibility.focusIndicators,
     );
     document.body.classList.toggle(
@@ -351,7 +354,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       const combined = [shareTitle, shareText, shareUrl].filter(Boolean).join('\n');
       const preview = combined.length > 280 ? `${combined.slice(0, 277).trimEnd()}…` : combined;
       try {
-        sessionStorage.setItem('storycraft-share-target-payload', combined);
+        sessionStorage.setItem('worldscript-share-target-payload', combined);
       } catch {
         /* quota / privacy mode */
       }
@@ -514,7 +517,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     return () => unregisterTauriMenuHandler();
   }, [executeCommand]);
 
-  // QNBS-v3: Tauri deep link handler for native file associations (.storycraft, .scst)
+  // QNBS-v3: Tauri deep link handler for native file associations (.worldscript, .wsst)
   useEffect(() => {
     let cleanup: (() => void) | undefined;
     void initTauriDeepLink(dispatch, t).then((fn) => {

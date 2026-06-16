@@ -1,5 +1,5 @@
 /**
- * StoryCraft semantic design tokens — mirror `index.css` CSS custom properties.
+ * WorldScript semantic design tokens — mirror `index.css` CSS custom properties.
  * QNBS-v3: Single TS source for Storybook/docs; runtime styling uses CSS vars.
  */
 export const designTokens = {

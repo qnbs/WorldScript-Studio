@@ -70,10 +70,10 @@ export const useSettingsView = () => {
 
   useEffect(() => {
     try {
-      const pending = sessionStorage.getItem('storycraft-settings-category');
+      const pending = sessionStorage.getItem('worldscript-settings-category');
       if (pending) {
         setActiveCategory(pending);
-        sessionStorage.removeItem('storycraft-settings-category');
+        sessionStorage.removeItem('worldscript-settings-category');
       }
     } catch {
       /* storage blocked */
@@ -354,7 +354,7 @@ export const useSettingsView = () => {
 
   const handleRepeatOnboarding = useCallback(() => {
     // QNBS-v3: useApp.ts listens for this event and re-opens the WelcomePortal.
-    window.dispatchEvent(new CustomEvent('storycraft:openPortal'));
+    window.dispatchEvent(new CustomEvent('worldscript:openPortal'));
   }, []);
 
   const handleCreateSnapshot = useCallback(async () => {

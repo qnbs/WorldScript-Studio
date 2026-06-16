@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 /** Matches `index.css` semantic vars — utilities like `bg-sc-accent`, `rounded-sc-lg`. */
-export const storycraftTailwindPreset: Partial<Config> = {
+export const worldscriptTailwindPreset: Partial<Config> = {
   theme: {
     extend: {
       colors: {

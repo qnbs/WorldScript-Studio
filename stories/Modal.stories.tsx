@@ -66,7 +66,7 @@ const ModalExample: React.FC<{ size: 'default' | 'lg' | 'xl' | undefined }> = ({
         <Modal
           isOpen={isOpen}
           onClose={() => setIsOpen(false)}
-          title="StoryCraft Modal"
+          title="WorldScript Modal"
           size={size}
         >
           <div className="space-y-4">

@@ -6,7 +6,7 @@ import { DEAD_LETTER_CAPACITY } from './constants';
 import type { TaskResult, WorkerTask } from './types';
 
 const log = createLogger('worker-bus:dlq');
-const IDB_DB_NAME = 'storycraft-dead-letter-db';
+const IDB_DB_NAME = 'worldscript-dead-letter-db';
 const IDB_STORE = 'dead_letters';
 
 export interface DeadLetterEntry {

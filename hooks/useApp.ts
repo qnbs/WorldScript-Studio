@@ -51,7 +51,7 @@ function readInitialView(): View {
     /* ignore */
   }
   try {
-    const stored = localStorage.getItem('storycraft-last-view');
+    const stored = localStorage.getItem('worldscript-last-view');
     if (stored && isValidView(stored)) return stored;
   } catch {
     /* ignore */
@@ -77,11 +77,11 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
     function onOpenPortal() {
       setIsPortalActive(true);
     }
-    window.addEventListener('storycraft:openPortal', onOpenPortal);
-    return () => window.removeEventListener('storycraft:openPortal', onOpenPortal);
+    window.addEventListener('worldscript:openPortal', onOpenPortal);
+    return () => window.removeEventListener('worldscript:openPortal', onOpenPortal);
   }, []);
 
-  // QNBS-v3: web+storycraft protocol placeholder — manifest passes ?protocol= for future routing hooks.
+  // QNBS-v3: web+worldscript protocol placeholder — manifest passes ?protocol= for future routing hooks.
   useEffect(() => {
     try {
       const proto = new URLSearchParams(window.location.search).get('protocol');
@@ -108,7 +108,7 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   // Save the current view to localStorage whenever it changes.
   useEffect(() => {
     try {
-      localStorage.setItem('storycraft-last-view', currentView);
+      localStorage.setItem('worldscript-last-view', currentView);
     } catch {
       /* Storage unavailable */
     }
