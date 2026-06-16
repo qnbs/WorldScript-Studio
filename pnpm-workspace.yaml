@@ -9,36 +9,43 @@ strictPeerDependencies: false
 # - typescript: Pinned to v6 for tsgo compatibility (TS7 preview)
 # - serialize-javascript: CVE-2024-XXXX - prototype pollution fix
 # - chrome-launcher: CVE-2024-XXXX - command injection fix
-# - tmp: CVE-2024-XXXX - prototype pollution fix
+# - tmp: GHSA-7c78-jf6q-g5cm - type-confusion _assertPath bypass (fixed 0.2.7)
 # - @xmldom/xmldom: CVE-2024-XXXX - XSS fix
-# - protobufjs: CVE-2024-XXXX - prototype pollution fix
+# - protobufjs: GHSA-wcpc-wj8m-hjx6 - DoS via unbounded Any expansion in JSON conversion (fixed 8.4.1)
 # - axios: CVE-2024-XXXX - SSRF fix
 # - basic-ftp: CVE-2024-XXXX - path traversal fix
 # - fast-uri: CVE-2024-XXXX - path traversal fix
 # - ip-address: CVE-2024-XXXX - DoS fix
-# - ws: CVE-2024-XXXX - DoS fix
+# - ws: GHSA-96hv-2xvq-fx4p - memory-exhaustion DoS from tiny fragments (fixed 8.21.0)
+# - form-data: CRLF injection via unescaped boundary (fixed 4.0.6)
 # - brace-expansion: CVE-2024-XXXX - ReDoS fix
 # - uuid: CVE-2024-XXXX - collision fix
 # - qs: CVE-2024-XXXX - prototype pollution fix
 # - esbuild: GHSA-67mh-4wv8-2f99 / GHSA-9j49-mf9f-jxg2 - missing binary integrity verification + arbitrary file read
 # - joi: GHSA-q7cg-457f-vx79 - unpublished jsdom exposure in @hapi/statehood
+# - dompurify: GHSA-vxr8-fq34-vvx9 + 3 others - XSS/nesting fixes (fixed 3.4.10; the no-fix
+#     GHSA-x4vx-rjvf-j5p4 is accepted in src-tauri/osv-scanner.toml)
+# - @babel/core: GHSA-4x5r-pxfx-6jf8 - build-time transpiler advisory (fixed 7.29.6)
 overrides:
   esbuild: ">=0.28.1"
   joi: "^18.2.1"
   typescript: "npm:@typescript/typescript6@~6.0.3"
   serialize-javascript: ">=7.0.3"
   chrome-launcher: "^1.2.1"
-  tmp: "^0.2.6"
+  tmp: ">=0.2.7"
   "@xmldom/xmldom": ">=0.8.13"
-  protobufjs: ">=7.5.6"
+  protobufjs: ">=8.4.1"
   axios: ">=1.15.2"
   basic-ftp: ">=5.3.1"
   fast-uri: ">=3.1.2"
   ip-address: ">=10.1.1"
-  ws: ">=8.20.1"
+  ws: ">=8.21.0"
+  form-data: ">=4.0.6"
   brace-expansion: ">=5.0.6"
   uuid: ">=11.1.1"
   qs: ">=6.15.2"
+  dompurify: ">=3.4.10"
+  "@babel/core": ">=7.29.6"
 
 peerDependencyRules:
   allowedVersions:
