@@ -21,7 +21,7 @@ import {
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
 const SALT_BYTE_LENGTH = 32;
-const SALT_STORAGE_KEY = 'storycraft-idb-kdf-salt-v1';
+const SALT_STORAGE_KEY = 'worldscript-idb-kdf-salt-v1';
 
 // \x00enc1\x00 — 6-byte sentinel distinct from LZ prefix \x00lz1\x00
 const SENTINEL = new Uint8Array([0x00, 0x65, 0x6e, 0x63, 0x31, 0x00]);

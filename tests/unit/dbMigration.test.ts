@@ -14,7 +14,7 @@ import {
   SNAPSHOTS_STORE,
   STATE_DB_NAME,
 } from '../../services/dbConstants';
-import { migrateLegacyStorycraftDbIfNeeded } from '../../services/dbMigration';
+import { migrateLegacyWorldscriptDbIfNeeded } from '../../services/dbMigration';
 
 async function deleteAllDatabases(): Promise<void> {
   if (typeof testIdb.databases !== 'function') return;
@@ -42,7 +42,7 @@ function openDb(
   });
 }
 
-/** Legacy monolithic DB: all stores in `storycraft-db` (pre–dual-DB layout). */
+/** Legacy monolithic DB: all stores in `worldscript-db` (pre–dual-DB layout). */
 async function seedLegacyDatabase(projectPayload: unknown, imageId: string, imageB64: string) {
   const legacy = await openDb(LEGACY_DB_NAME, 5, (db, ev) => {
     if (ev.oldVersion < 1 && !db.objectStoreNames.contains(APP_DATA_STORE)) {
@@ -105,7 +105,7 @@ async function openDualDatabases(): Promise<{ stateDb: IDBDatabase; dataDb: IDBD
   return { stateDb, dataDb };
 }
 
-describe('migrateLegacyStorycraftDbIfNeeded', () => {
+describe('migrateLegacyWorldscriptDbIfNeeded', () => {
   beforeEach(async () => {
     await deleteAllDatabases();
   });
@@ -120,7 +120,7 @@ describe('migrateLegacyStorycraftDbIfNeeded', () => {
     await seedLegacyDatabase(project, 'img-1', 'data:image/png;base64,xx');
 
     const { stateDb, dataDb } = await openDualDatabases();
-    const r1 = await migrateLegacyStorycraftDbIfNeeded(stateDb, dataDb, { idb: testIdb });
+    const r1 = await migrateLegacyWorldscriptDbIfNeeded(stateDb, dataDb, { idb: testIdb });
     expect(r1.migrated).toBe(true);
     expect(r1.reason).toBe('copied');
 
@@ -148,7 +148,7 @@ describe('migrateLegacyStorycraftDbIfNeeded', () => {
     });
     expect(typeof marker).toBe('string');
 
-    const r2 = await migrateLegacyStorycraftDbIfNeeded(stateDb, dataDb, { idb: testIdb });
+    const r2 = await migrateLegacyWorldscriptDbIfNeeded(stateDb, dataDb, { idb: testIdb });
     expect(r2.migrated).toBe(false);
     expect(r2.reason).toBe('already_migrated');
 
@@ -168,7 +168,7 @@ describe('migrateLegacyStorycraftDbIfNeeded', () => {
       tx.onerror = () => reject(tx.error);
     });
 
-    const r = await migrateLegacyStorycraftDbIfNeeded(stateDb, dataDb, { idb: testIdb });
+    const r = await migrateLegacyWorldscriptDbIfNeeded(stateDb, dataDb, { idb: testIdb });
     expect(r.migrated).toBe(false);
     expect(r.reason).toBe('state_has_project_data');
 
@@ -186,7 +186,7 @@ describe('migrateLegacyStorycraftDbIfNeeded', () => {
 
   it('returns legacy_not_listed when no legacy database exists', async () => {
     const { stateDb, dataDb } = await openDualDatabases();
-    const r = await migrateLegacyStorycraftDbIfNeeded(stateDb, dataDb, { idb: testIdb });
+    const r = await migrateLegacyWorldscriptDbIfNeeded(stateDb, dataDb, { idb: testIdb });
     expect(r.migrated).toBe(false);
     expect(r.reason).toBe('legacy_not_listed');
     stateDb.close();

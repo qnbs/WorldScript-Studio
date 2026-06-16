@@ -10,7 +10,7 @@ import {
   validateOpenRouterKey,
 } from '../../../services/ai/openrouterModels';
 
-const CACHE_KEY = 'storycraft-openrouter-models';
+const CACHE_KEY = 'worldscript-openrouter-models';
 // QNBS-v3: Freeze the clock so cache TTL assertions never depend on real wall-clock time.
 const FIXED_NOW = 1_700_000_000_000;
 // QNBS-v3: Capture the real fetch so teardown can restore it — these tests overwrite global.fetch

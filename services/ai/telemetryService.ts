@@ -17,7 +17,7 @@ export function setTelemetryEnabled(enabled: boolean): void {
   _telemetryEnabled = enabled;
 }
 
-const TELEMETRY_STORAGE_KEY = 'storycraft-ai-telemetry';
+const TELEMETRY_STORAGE_KEY = 'worldscript-ai-telemetry';
 const MAX_LOCAL_ENTRIES = 200;
 
 // DuckDB table DDL — created on first write

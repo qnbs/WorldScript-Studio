@@ -95,7 +95,7 @@ export class FsSettingsStore extends FsCore {
 
     const encrypted = await encryptText(
       apiKey.trim(),
-      `${appDataPath}|${provider}|StoryCraftStudio|v1`,
+      `${appDataPath}|${provider}|WorldScriptStudio|v1`,
     );
     const filePath = await apis.join(configPath, `${provider}_key.enc.json`);
     await retryFs(() => apis.writeTextFile(filePath, JSON.stringify(encrypted)));
@@ -109,7 +109,7 @@ export class FsSettingsStore extends FsCore {
       if (!(await apis.exists(keyFile))) return null;
       const content = await retryFs(() => apis.readTextFile(keyFile));
       const payload = JSON.parse(content) as { iv: string; data: string };
-      return await decryptText(payload, `${appDataPath}|${provider}|StoryCraftStudio|v1`);
+      return await decryptText(payload, `${appDataPath}|${provider}|WorldScriptStudio|v1`);
     } catch (error) {
       logger.warn(`Failed to decrypt API key for provider "${provider}":`, error);
       return null;

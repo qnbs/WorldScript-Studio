@@ -14,7 +14,7 @@ const logger = createLogger('openrouter-models');
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const MODELS_URL = `${OPENROUTER_BASE_URL}/models`;
-const CACHE_KEY = 'storycraft-openrouter-models';
+const CACHE_KEY = 'worldscript-openrouter-models';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 export interface OpenRouterModel {

@@ -78,18 +78,18 @@ describe('RECOMMENDED_OPENAI_COMPAT_CLOUD_HINT', () => {
 // fetchAdapter
 // ---------------------------------------------------------------------------
 
-import { createStoryCraftFetch } from '../../../services/ai/fetchAdapter';
+import { createWorldScriptFetch } from '../../../services/ai/fetchAdapter';
 
-describe('createStoryCraftFetch', () => {
+describe('createWorldScriptFetch', () => {
   it('returns a function', () => {
-    expect(typeof createStoryCraftFetch()).toBe('function');
+    expect(typeof createWorldScriptFetch()).toBe('function');
   });
 
   it('falls back to globalThis.fetch in non-Tauri environment', async () => {
     const mockFetch = vi.fn(() => Promise.resolve(new Response('{}', { status: 200 })));
     vi.stubGlobal('fetch', mockFetch);
 
-    const fetcher = createStoryCraftFetch();
+    const fetcher = createWorldScriptFetch();
     await fetcher('https://example.com/api');
 
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/api', undefined);
@@ -103,7 +103,7 @@ describe('createStoryCraftFetch', () => {
       vi.fn(() => Promise.resolve(mockResponse)),
     );
 
-    const fetcher = createStoryCraftFetch();
+    const fetcher = createWorldScriptFetch();
     const res = await fetcher('https://example.com');
     expect(res.status).toBe(200);
 
@@ -125,7 +125,7 @@ describe('fetchAdapter Tauri paths (isolated)', () => {
     vi.doMock('@tauri-apps/plugin-http', () => ({ fetch: tauriFetchMock }));
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true, writable: true });
 
-    const { createStoryCraftFetch: freshCreate } = await import(
+    const { createWorldScriptFetch: freshCreate } = await import(
       '../../../services/ai/fetchAdapter'
     );
     const fetcher = freshCreate();
@@ -144,7 +144,7 @@ describe('fetchAdapter Tauri paths (isolated)', () => {
     });
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true, writable: true });
 
-    const { createStoryCraftFetch: freshCreate } = await import(
+    const { createWorldScriptFetch: freshCreate } = await import(
       '../../../services/ai/fetchAdapter'
     );
     const fetcher = freshCreate();
@@ -155,7 +155,7 @@ describe('fetchAdapter Tauri paths (isolated)', () => {
 
   it('cache hit → second call skips Tauri resolution', async () => {
     vi.resetModules();
-    const { createStoryCraftFetch: freshCreate } = await import(
+    const { createWorldScriptFetch: freshCreate } = await import(
       '../../../services/ai/fetchAdapter'
     );
     const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));

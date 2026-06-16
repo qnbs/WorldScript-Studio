@@ -130,10 +130,10 @@ export type MigrateLegacyOptions = {
 };
 
 /**
- * One-time copy from pre–dual-DB `storycraft-db` into `storycraft-state-db` / `storycraft-data-db`.
+ * One-time copy from pre–dual-DB `worldscript-db` into `worldscript-state-db` / `worldscript-data-db`.
  * Idempotent: skips if marker exists, if state already holds project/settings, or if legacy is absent.
  */
-export async function migrateLegacyStorycraftDbIfNeeded(
+export async function migrateLegacyWorldscriptDbIfNeeded(
   stateDb: IDBDatabase,
   dataDb: IDBDatabase,
   options?: MigrateLegacyOptions,
@@ -141,7 +141,7 @@ export async function migrateLegacyStorycraftDbIfNeeded(
   const idb = options?.idb ?? globalThis.indexedDB;
 
   if (stateDb.name !== STATE_DB_NAME || dataDb.name !== DATA_DB_NAME) {
-    logger.warn('migrateLegacyStorycraftDbIfNeeded: unexpected DB names, skipping');
+    logger.warn('migrateLegacyWorldscriptDbIfNeeded: unexpected DB names, skipping');
     return { migrated: false, reason: 'invalid_target_dbs' };
   }
 

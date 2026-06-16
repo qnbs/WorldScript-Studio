@@ -7,7 +7,7 @@ import type { Settings, StoryProject } from '../types';
 import type { BinderAssetPayload } from './storageBackend';
 import { storageService } from './storageService';
 
-export const LIBRARY_BACKUP_FORMAT = 'storycraft-library-v1' as const;
+export const LIBRARY_BACKUP_FORMAT = 'worldscript-library-v1' as const;
 // QNBS-v3: 600k matches OWASP 2024 minimum for PBKDF2-HMAC-SHA-256.
 const PBKDF2_ITERATIONS = 600_000;
 
@@ -231,7 +231,7 @@ export async function decryptLibraryZipBlob(
   const metaFile = outer.file('META.json');
   const vaultFile = outer.file('vault.bin');
   if (!metaFile || !vaultFile) {
-    throw new Error('Invalid StoryCraft library backup: missing META.json or vault.bin');
+    throw new Error('Invalid WorldScript library backup: missing META.json or vault.bin');
   }
   const meta = JSON.parse(await metaFile.async('string')) as EncryptedLibraryZipMeta;
   const ciphertext = await vaultFile.async('uint8array');

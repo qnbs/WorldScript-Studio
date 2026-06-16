@@ -45,7 +45,7 @@ function ErrorFallback({ onReset }: { onReset?: () => void }) {
               variant="ghost"
               onClick={() =>
                 window.open(
-                  'https://github.com/qnbs/StoryCraft-Studio/issues/new',
+                  'https://github.com/qnbs/WorldScript-Studio/issues/new',
                   '_blank',
                   'noopener,noreferrer',
                 )

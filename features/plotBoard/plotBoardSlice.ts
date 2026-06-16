@@ -18,7 +18,7 @@ export interface PlotBoardState {
   snapToGrid: boolean;
 }
 
-const STORAGE_KEY = 'storycraft-plot-board';
+const STORAGE_KEY = 'worldscript-plot-board';
 
 const defaultState: PlotBoardState = {
   activeMode: 'swimlane',

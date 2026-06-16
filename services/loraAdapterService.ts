@@ -26,7 +26,7 @@ export interface LoraAdapterMeta {
   localPath?: string;
 }
 
-const DB_NAME = 'storycraft-lora-db';
+const DB_NAME = 'worldscript-lora-db';
 // QNBS-v3: v2 — adds lora-datasets, lora-runs, lora-active stores.
 const DB_VERSION = 2;
 const META_STORE = 'lora-meta';

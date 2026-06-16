@@ -272,10 +272,10 @@ export const {
 export default loraSlice.reducer;
 
 // ---------------------------------------------------------------------------
-// Persistence middleware (localStorage key: 'storycraft-lora')
+// Persistence middleware (localStorage key: 'worldscript-lora')
 // ---------------------------------------------------------------------------
 
-const LORA_STORAGE_KEY = 'storycraft-lora';
+const LORA_STORAGE_KEY = 'worldscript-lora';
 
 type StateWithLora = { lora: LoraState };
 

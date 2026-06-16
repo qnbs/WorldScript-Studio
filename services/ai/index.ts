@@ -55,7 +55,7 @@ export {
   isMemoryPressured,
 } from './deviceHealthService';
 export { ECO_MODE_MODEL_ID, ecoModeService } from './ecoModeService';
-export { createStoryCraftFetch } from './fetchAdapter';
+export { createWorldScriptFetch } from './fetchAdapter';
 export {
   type GpuConsumer,
   type GpuPriority,
@@ -100,7 +100,7 @@ export {
   validateOpenRouterKey,
 } from './openrouterModels';
 export {
-  createLanguageModelForStoryCraft,
+  createLanguageModelForWorldScript,
   providerToKind,
   type StoryCraftLanguageModelConfig,
 } from './providerFactory';

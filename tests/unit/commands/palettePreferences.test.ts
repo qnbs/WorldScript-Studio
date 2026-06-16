@@ -7,7 +7,7 @@ import {
   togglePinnedCommand,
 } from '../../../services/commands/palettePreferences';
 
-const STORAGE_KEY = 'storycraft-palette-prefs-v1';
+const STORAGE_KEY = 'worldscript-palette-prefs-v1';
 
 beforeEach(() => {
   localStorage.clear();

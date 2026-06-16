@@ -59,7 +59,7 @@ afterEach(() => {
 
 describe('wipeAllAppData', () => {
   it('clears web storage, deletes IDB databases, and reloads', async () => {
-    await createDb('storycraft-data-db');
+    await createDb('worldscript-data-db');
     localStorage.setItem('foo', 'bar');
     sessionStorage.setItem('baz', 'qux');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
@@ -68,7 +68,7 @@ describe('wipeAllAppData', () => {
 
     expect(localStorage.getItem('foo')).toBeNull();
     expect(sessionStorage.getItem('baz')).toBeNull();
-    expect(delSpy).toHaveBeenCalledWith('storycraft-data-db');
+    expect(delSpy).toHaveBeenCalledWith('worldscript-data-db');
     expect(reloadMock).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     delSpy.mockRestore();
@@ -81,7 +81,7 @@ describe('wipeAllAppData', () => {
     await runWipe();
 
     // Fallback deletes every name in the known list (e.g. the logs DB).
-    expect(delSpy).toHaveBeenCalledWith('storycraft-logs-db');
+    expect(delSpy).toHaveBeenCalledWith('worldscript-logs-db');
     expect(reloadMock).toHaveBeenCalledTimes(1);
     dbSpy.mockRestore();
     delSpy.mockRestore();

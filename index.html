@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
 
     <!-- ── Manifest & Icons ───────────────────────────────── -->
-    <!-- QNBS-v3: %BASE_URL% substituted by Vite at build time — resolves to / for Vercel/CF edge and /StoryCraft-Studio/ for GitHub Pages. -->
+    <!-- QNBS-v3: %BASE_URL% substituted by Vite at build time — resolves to / for Vercel/CF edge and /WorldScript-Studio/ for GitHub Pages. -->
     <link rel="manifest" href="%BASE_URL%manifest.json" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <link rel="apple-touch-icon" href="%BASE_URL%favicon.svg" />
@@ -53,7 +53,7 @@
       - connect-src: 'self'
                     + https:  — intentional broad HTTPS scheme-source. REQUIRED by the
                       shipped BYOK feature `openAiCompatibleBaseUrl` (Settings → AI →
-                      custom base URL): users point StoryCraft at arbitrary self-hosted
+                      custom base URL): users point WorldScript at arbitrary self-hosted
                       or third-party OpenAI-compatible proxies that cannot be statically
                       enumerated in a meta CSP. Because `https:` already covers every
                       HTTPS origin, the explicit cloud-provider endpoints (Gemini,

@@ -57,17 +57,17 @@ async function initDuckDb(): Promise<void> {
     try {
       const { DuckDBDataProtocol } = await getDuckDb();
       const opfsRoot = await navigator.storage.getDirectory();
-      const fileHandle = await opfsRoot.getFileHandle('storycraft_analytics.duckdb', {
+      const fileHandle = await opfsRoot.getFileHandle('worldscript_analytics.duckdb', {
         create: true,
       });
       await newDb.registerFileHandle(
-        'storycraft_analytics.duckdb',
+        'worldscript_analytics.duckdb',
         fileHandle,
         DuckDBDataProtocol.BROWSER_FSACCESS,
         true,
       );
       connection = await newDb.connect();
-      await connection.query("ATTACH 'storycraft_analytics.duckdb' AS analytics (TYPE duckdb)");
+      await connection.query("ATTACH 'worldscript_analytics.duckdb' AS analytics (TYPE duckdb)");
     } catch {
       connection = await newDb.connect();
     }

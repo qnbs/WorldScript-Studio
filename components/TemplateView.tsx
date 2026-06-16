@@ -429,7 +429,7 @@ const CommunityTab: FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFallback, setIsFallback] = useState(false);
-  const { t: _t } = useTemplateViewContext();
+  const { t: _t, applyCommunityTemplate } = useTemplateViewContext();
   const { language } = useTranslation();
 
   useEffect(() => {
@@ -448,17 +448,10 @@ const CommunityTab: FC = () => {
     // QNBS-v3: re-fetch when language changes so locale-specific template files are loaded.
   }, [language]);
 
+  // QNBS-v3: create the project directly via the view hook (setManuscript/setOutline + navigate).
+  // The previous `*:applyTemplate` window event had no listener, so this was a silent no-op.
   const handleApply = (ct: CommunityTemplate) => {
-    // Dispatch a new project with sections from community template — navigated via window event
-    const sections = ct.sections.map((s, i) => ({
-      id: `sec-${Date.now()}-${i}`,
-      title: s.title,
-      content: s.description ? `# ${s.title}\n\n${s.description}` : '',
-    }));
-    const event = new CustomEvent('storycraft:applyTemplate', {
-      detail: { title: ct.name, sections },
-    });
-    window.dispatchEvent(event);
+    applyCommunityTemplate(ct);
   };
 
   if (isLoading)

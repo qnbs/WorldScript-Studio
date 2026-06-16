@@ -210,15 +210,15 @@ describe('initIdbEncryption / isIdbEncryptionReady / idbEncrypt / idbDecrypt', (
 
   it('stores salt in localStorage on first call', async () => {
     await initIdbEncryption('pass');
-    expect(localStorageMock.getItem('storycraft-idb-kdf-salt-v1')).not.toBeNull();
+    expect(localStorageMock.getItem('worldscript-idb-kdf-salt-v1')).not.toBeNull();
   });
 
   it('reuses existing salt from localStorage', async () => {
     await initIdbEncryption('pass');
-    const salt1 = localStorageMock.getItem('storycraft-idb-kdf-salt-v1');
+    const salt1 = localStorageMock.getItem('worldscript-idb-kdf-salt-v1');
     clearIdbEncryptionKey();
     await initIdbEncryption('pass');
-    const salt2 = localStorageMock.getItem('storycraft-idb-kdf-salt-v1');
+    const salt2 = localStorageMock.getItem('worldscript-idb-kdf-salt-v1');
     expect(salt1).toBe(salt2);
   });
 });

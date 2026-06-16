@@ -217,7 +217,7 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Emp
     <dc:language>${lang}</dc:language>
     <dc:date>${dateStr.slice(0, 10)}</dc:date>
     <meta property="dcterms:modified">${dateStr}</meta>
-    <meta name="generator" content="StoryCraft Studio"/>
+    <meta name="generator" content="WorldScript Studio"/>
   </metadata>
   <manifest>
     ${manifest.join('\n    ')}

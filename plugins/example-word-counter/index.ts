@@ -1,5 +1,5 @@
 /**
- * Example StoryCraft Plugin — Word Counter.
+ * Example WorldScript Plugin — Word Counter.
  * QNBS-v3: Demonstrates scene.read + storage.read/write APIs.
  *          Install via: pluginRegistry.registerWithValidation(descriptor)
  */

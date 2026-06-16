@@ -4,6 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { APP_FILE_SLUG } from '../../constants';
 import { useLoraViewContext } from '../../contexts/LoraViewContext';
 import type { DatasetEntry, DatasetFormat, DatasetQualityReport } from '../../features/lora/types';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -66,7 +67,7 @@ export default React.memo(function LoraDatasetBuilder() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `storycraft-dataset-${format}-${Date.now()}.jsonl`;
+      a.download = `${APP_FILE_SLUG}-dataset-${format}-${Date.now()}.jsonl`;
       a.click();
       URL.revokeObjectURL(url);
     },

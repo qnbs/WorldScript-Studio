@@ -202,7 +202,7 @@ interface I18nProviderProps {
   children: ReactNode;
 }
 
-const LANG_KEY = 'storycraft-language';
+const LANG_KEY = 'worldscript-language';
 const VALID_LANGS: Language[] = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he', 'ja', 'zh', 'pt', 'el'];
 
 const getInitialLanguage = (): Language => {

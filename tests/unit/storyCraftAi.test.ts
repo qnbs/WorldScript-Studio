@@ -37,7 +37,7 @@ describe('storyCraftAi provider helpers', () => {
   });
 });
 
-describe('createStoryCraftFetch', () => {
+describe('createWorldScriptFetch', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.stubGlobal(
@@ -50,8 +50,8 @@ describe('createStoryCraftFetch', () => {
     const prev = (window as unknown as { __TAURI__?: unknown }).__TAURI__;
     delete (window as unknown as { __TAURI__?: unknown }).__TAURI__;
 
-    const { createStoryCraftFetch } = await import('../../services/ai/fetchAdapter');
-    const f = createStoryCraftFetch();
+    const { createWorldScriptFetch } = await import('../../services/ai/fetchAdapter');
+    const f = createWorldScriptFetch();
     await f('https://example.com', { method: 'GET' });
     expect(globalThis.fetch).toHaveBeenCalled();
 

@@ -29,7 +29,7 @@ describe('listOllamaModels', () => {
         models: [
           { name: 'llama3.2', modified_at: '2026-01-01', size: 4_000_000_000, digest: 'abc' },
           {
-            name: 'storycraft-lora-style',
+            name: 'worldscript-lora-style',
             modified_at: '2026-01-02',
             size: 200_000_000,
             digest: 'def',
@@ -59,7 +59,7 @@ describe('listOllamaModels', () => {
 describe('deleteOllamaModel', () => {
   it('calls DELETE /api/delete with model name', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true } as Response);
-    await deleteOllamaModel('storycraft-lora-style', 'http://localhost:11434');
+    await deleteOllamaModel('worldscript-lora-style', 'http://localhost:11434');
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:11434/api/delete',
       expect.objectContaining({ method: 'DELETE' }),

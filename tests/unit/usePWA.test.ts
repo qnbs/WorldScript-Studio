@@ -6,8 +6,8 @@ beforeEach(() => {
   sessionStorage.clear();
   // Ensure default online state
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-  // Clean up storyCraftPWA
-  delete (window as { storyCraftPWA?: unknown }).storyCraftPWA;
+  // Clean up worldScriptPWA
+  delete (window as { worldScriptPWA?: unknown }).worldScriptPWA;
 });
 
 afterEach(() => {

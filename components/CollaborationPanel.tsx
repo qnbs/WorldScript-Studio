@@ -222,7 +222,7 @@ export const CollaborationPanel: FC<CollaborationPanelProps> = ({ isOpen, onClos
     setConnectedUsers([]);
   }, []);
 
-  const currentRoomId = collaborationService.roomId ?? `storycraft-${projectId}`;
+  const currentRoomId = collaborationService.roomId ?? `worldscript-${projectId}`;
 
   if (!isOpen) return null;
 

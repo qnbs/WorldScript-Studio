@@ -62,10 +62,10 @@ describe('isLocalInferenceProvider', () => {
 });
 
 // ---------------------------------------------------------------------------
-// fetchAdapter — createStoryCraftFetch
+// fetchAdapter — createWorldScriptFetch
 // ---------------------------------------------------------------------------
 
-describe('createStoryCraftFetch', () => {
+describe('createWorldScriptFetch', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.resetModules();
@@ -76,8 +76,8 @@ describe('createStoryCraftFetch', () => {
     vi.stubGlobal('fetch', mockFetch);
     vi.stubGlobal('window', {});
 
-    const { createStoryCraftFetch } = await import('../../services/ai/fetchAdapter');
-    const fetchFn = createStoryCraftFetch();
+    const { createWorldScriptFetch } = await import('../../services/ai/fetchAdapter');
+    const fetchFn = createWorldScriptFetch();
     await fetchFn('https://example.com');
     expect(mockFetch).toHaveBeenCalledWith('https://example.com', undefined);
   });

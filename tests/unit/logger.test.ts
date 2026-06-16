@@ -17,32 +17,32 @@ describe('logger — console output', () => {
   it('logger.warn calls console.warn with structured tag in DEV', async () => {
     const { logger } = await import('../../services/logger');
     logger.warn('test warning');
-    expect(console.warn).toHaveBeenCalledWith('[StoryCraft:WARN:app]', 'test warning');
+    expect(console.warn).toHaveBeenCalledWith('[WorldScript:WARN:app]', 'test warning');
   });
 
   it('logger.error calls console.error with structured tag in DEV', async () => {
     const { logger } = await import('../../services/logger');
     logger.error('test error');
-    expect(console.error).toHaveBeenCalledWith('[StoryCraft:ERROR:app]', 'test error');
+    expect(console.error).toHaveBeenCalledWith('[WorldScript:ERROR:app]', 'test error');
   });
 
   it('logger.info calls console.info in DEV', async () => {
     const { logger } = await import('../../services/logger');
     logger.info('info msg');
-    expect(console.info).toHaveBeenCalledWith('[StoryCraft:INFO:app]', 'info msg');
+    expect(console.info).toHaveBeenCalledWith('[WorldScript:INFO:app]', 'info msg');
   });
 
   it('logger.debug calls console.debug in DEV', async () => {
     const { logger } = await import('../../services/logger');
     logger.debug('debug msg');
-    expect(console.debug).toHaveBeenCalledWith('[StoryCraft:DEBUG:app]', 'debug msg');
+    expect(console.debug).toHaveBeenCalledWith('[WorldScript:DEBUG:app]', 'debug msg');
   });
 
   it('auto-extracts module from [bracket] prefix', async () => {
     const { logger } = await import('../../services/logger');
     logger.warn('[createSttEngine] something failed');
     expect(console.warn).toHaveBeenCalledWith(
-      '[StoryCraft:WARN:createSttEngine]',
+      '[WorldScript:WARN:createSttEngine]',
       '[createSttEngine] something failed',
     );
   });
@@ -150,7 +150,7 @@ describe('createLogger factory', () => {
     const logs = getRecentLogs();
     const entry = logs.find((e) => e.message.includes('something happened'));
     expect(entry?.module).toBe('myService');
-    expect(console.warn).toHaveBeenCalledWith('[StoryCraft:WARN:myService]', 'something happened');
+    expect(console.warn).toHaveBeenCalledWith('[WorldScript:WARN:myService]', 'something happened');
   });
 
   it('withContext includes sanitized context on entries', async () => {

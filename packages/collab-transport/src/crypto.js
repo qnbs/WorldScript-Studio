@@ -3,7 +3,7 @@
  * Upstream: https://github.com/yjs/y-webrtc  |  npm tag: v10.3.0
  * Package:  @domain/collab-transport v10.3.0-sc1  (vendored 2026-05-28)
  *
- * StoryCraft patches (C-1, 2026-05-28 — commit 63afa69):
+ * WorldScript patches (C-1, 2026-05-28 — commit 63afa69):
  *   1. PBKDF2 iterations raised 100k → 310k → 600k (OWASP 2024 SHA-256 minimum)
  *   2. deriveKey: extractable=false  (prevents key export via subtle.exportKey)
  *   3. encryptMessageContent: added `return` before promise.reject() (was silent swallow)
@@ -11,7 +11,7 @@
  * SECURITY MAINTENANCE — Renovate cannot auto-update this fork.
  * On any new y-webrtc release: diff crypto.js + y-webrtc.js against the new tag,
  * cherry-pick security fixes, re-apply SC patches 1-3 above, bump version to <upstream>-sc1.
- * Checklist + audit log: https://github.com/qnbs/StoryCraft-Studio/issues/60
+ * Checklist + audit log: https://github.com/qnbs/WorldScript-Studio/issues/60
  */
 /* eslint-env browser */
 

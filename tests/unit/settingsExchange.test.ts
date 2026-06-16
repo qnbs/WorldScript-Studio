@@ -25,9 +25,9 @@ describe('buildSettingsExportEnvelope', () => {
     language: 'en',
   } as unknown as Settings;
 
-  it('sets storycraftSettingsExportVersion to 1', () => {
+  it('sets worldscriptSettingsExportVersion to 1', () => {
     const env = buildSettingsExportEnvelope(minSettings);
-    expect(env.storycraftSettingsExportVersion).toBe(1);
+    expect(env.worldscriptSettingsExportVersion).toBe(1);
   });
 
   it('copies all settings keys into the settings field', () => {
@@ -49,7 +49,7 @@ describe('buildSettingsExportEnvelope', () => {
 describe('parseSettingsImportEnvelope', () => {
   it('returns parsed settings for a valid envelope', () => {
     const input = {
-      storycraftSettingsExportVersion: 1,
+      worldscriptSettingsExportVersion: 1,
       settings: { theme: 'dark', language: 'en' },
     };
     const result = parseSettingsImportEnvelope(input);
@@ -63,7 +63,7 @@ describe('parseSettingsImportEnvelope', () => {
 
   it('returns null for wrong version value', () => {
     expect(
-      parseSettingsImportEnvelope({ storycraftSettingsExportVersion: 2, settings: {} }),
+      parseSettingsImportEnvelope({ worldscriptSettingsExportVersion: 2, settings: {} }),
     ).toBeNull();
   });
 
@@ -74,7 +74,7 @@ describe('parseSettingsImportEnvelope', () => {
   });
 
   it('returns null when settings field is missing', () => {
-    expect(parseSettingsImportEnvelope({ storycraftSettingsExportVersion: 1 })).toBeNull();
+    expect(parseSettingsImportEnvelope({ worldscriptSettingsExportVersion: 1 })).toBeNull();
   });
 });
 
@@ -84,7 +84,7 @@ describe('parseSettingsImportEnvelope', () => {
 describe('settingsExportEnvelopeSchema', () => {
   it('validates a correct envelope', () => {
     const result = settingsExportEnvelopeSchema.safeParse({
-      storycraftSettingsExportVersion: 1,
+      worldscriptSettingsExportVersion: 1,
       settings: { theme: 'light' },
     });
     expect(result.success).toBe(true);
@@ -92,7 +92,7 @@ describe('settingsExportEnvelopeSchema', () => {
 
   it('rejects version other than 1', () => {
     const result = settingsExportEnvelopeSchema.safeParse({
-      storycraftSettingsExportVersion: 99,
+      worldscriptSettingsExportVersion: 99,
       settings: {},
     });
     expect(result.success).toBe(false);

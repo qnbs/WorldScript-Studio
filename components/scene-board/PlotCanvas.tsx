@@ -165,7 +165,7 @@ export const PlotCanvas: FC<PlotCanvasProps> = ({
   const rafRef = useRef<number | null>(null);
   const reducedMotion =
     typeof document !== 'undefined' &&
-    document.body.classList.contains('storycraft-reduced-motion');
+    document.body.classList.contains('worldscript-reduced-motion');
 
   // Cancel any pending rAF on unmount to prevent dispatching into an unmounted tree.
   useEffect(

@@ -77,13 +77,13 @@
 }
 
 /* App-level reduced-motion toggle mirrors the media query */
-.storycraft-reduced-motion .animate-fade-in,
-.storycraft-reduced-motion .animate-scale-in,
-.storycraft-reduced-motion .animate-slide-up,
-.storycraft-reduced-motion .animate-slide-from-end,
-.storycraft-reduced-motion .animate-modal-backdrop,
-.storycraft-reduced-motion .animate-modal-panel,
-.storycraft-reduced-motion .animate-toast-slide-up,
-.storycraft-reduced-motion .animate-toast-progress {
+.worldscript-reduced-motion .animate-fade-in,
+.worldscript-reduced-motion .animate-scale-in,
+.worldscript-reduced-motion .animate-slide-up,
+.worldscript-reduced-motion .animate-slide-from-end,
+.worldscript-reduced-motion .animate-modal-backdrop,
+.worldscript-reduced-motion .animate-modal-panel,
+.worldscript-reduced-motion .animate-toast-slide-up,
+.worldscript-reduced-motion .animate-toast-progress {
   animation: none;
 }

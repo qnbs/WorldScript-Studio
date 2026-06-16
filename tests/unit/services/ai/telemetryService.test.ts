@@ -64,7 +64,7 @@ describe('telemetryService', () => {
       setTelemetryEnabled(false);
       await recordInferenceTelemetry(SAMPLE_ENTRY);
       expect(mockExec).not.toHaveBeenCalled();
-      expect(localStorageData['storycraft-ai-telemetry']).toBeUndefined();
+      expect(localStorageData['worldscript-ai-telemetry']).toBeUndefined();
     });
 
     it('calls duckdbClient.exec when DuckDB is available', async () => {
@@ -82,7 +82,7 @@ describe('telemetryService', () => {
     it('falls back to localStorage when DuckDB throws', async () => {
       mockExec.mockRejectedValue(new Error('DuckDB not ready'));
       await recordInferenceTelemetry(SAMPLE_ENTRY);
-      const raw = localStorageData['storycraft-ai-telemetry'];
+      const raw = localStorageData['worldscript-ai-telemetry'];
       expect(raw).toBeDefined();
       const entries = JSON.parse(raw!) as unknown[];
       expect(entries.length).toBeGreaterThanOrEqual(1);
@@ -111,7 +111,7 @@ describe('telemetryService', () => {
     it('falls back to localStorage when DuckDB query throws', async () => {
       mockQuery.mockRejectedValue(new Error('DuckDB not ready'));
       // Pre-populate localStorage
-      localStorageData['storycraft-ai-telemetry'] = JSON.stringify([SAMPLE_ENTRY]);
+      localStorageData['worldscript-ai-telemetry'] = JSON.stringify([SAMPLE_ENTRY]);
       const results = await getRecentTelemetry(10);
       expect(results.length).toBeGreaterThanOrEqual(1);
     });
@@ -119,10 +119,10 @@ describe('telemetryService', () => {
 
   describe('clearTelemetry', () => {
     it('clears DuckDB table and localStorage', async () => {
-      localStorageData['storycraft-ai-telemetry'] = JSON.stringify([SAMPLE_ENTRY]);
+      localStorageData['worldscript-ai-telemetry'] = JSON.stringify([SAMPLE_ENTRY]);
       await clearTelemetry();
       expect(mockExec).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM ai_telemetry'));
-      expect(localStorageData['storycraft-ai-telemetry']).toBeUndefined();
+      expect(localStorageData['worldscript-ai-telemetry']).toBeUndefined();
     });
   });
 });

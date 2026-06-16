@@ -14,7 +14,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from '@playwright/test';
 
 const PORT = Number(process.env['SMOKE_PORT'] ?? 4173);
-const CANDIDATE_PATHS = ['/StoryCraft-Studio/', '/'];
+const CANDIDATE_PATHS = ['/WorldScript-Studio/', '/'];
 
 function startPreview() {
   const child = spawn(

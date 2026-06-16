@@ -15,7 +15,7 @@ describe('useApp', () => {
   it('prefers a valid view from the URL query over localStorage', () => {
     const original = `${window.location.pathname}${window.location.search}`;
     window.history.replaceState(null, '', `${window.location.pathname}?view=settings`);
-    localStorage.setItem('storycraft-last-view', 'writer');
+    localStorage.setItem('worldscript-last-view', 'writer');
     try {
       const { result } = renderHook(() => useApp({ isNewUser: false }));
       expect(result.current.currentView).toBe('settings');
@@ -25,7 +25,7 @@ describe('useApp', () => {
   });
 
   it('restores the last view from localStorage', () => {
-    localStorage.setItem('storycraft-last-view', 'writer');
+    localStorage.setItem('worldscript-last-view', 'writer');
     const { result } = renderHook(() => useApp({ isNewUser: false }));
     expect(result.current.currentView).toBe('writer');
   });
@@ -38,7 +38,7 @@ describe('useApp', () => {
     });
 
     expect(result.current.currentView).toBe('settings');
-    expect(localStorage.getItem('storycraft-last-view')).toBe('settings');
+    expect(localStorage.getItem('worldscript-last-view')).toBe('settings');
   });
 
   it('handlePortalExit sets isPortalActive to false', () => {

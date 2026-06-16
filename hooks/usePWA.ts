@@ -78,7 +78,7 @@ export function usePWA(): UsePWAReturn {
     window.addEventListener('sw-update-available', onUpdate);
 
     // ── Sync initial installed state from global object ────────
-    if (window.storyCraftPWA?.isInstalled) {
+    if (window.worldScriptPWA?.isInstalled) {
       setIsInstalled(true);
     }
     // Also check via matchMedia (catches already-installed before hook mounts)
@@ -89,7 +89,7 @@ export function usePWA(): UsePWAReturn {
     ) {
       setIsInstalled(true);
     }
-    if (window.storyCraftPWA?.deferredInstallPrompt) {
+    if (window.worldScriptPWA?.deferredInstallPrompt) {
       setIsInstallable(true);
     }
 
@@ -103,8 +103,8 @@ export function usePWA(): UsePWAReturn {
   }, []);
 
   const installApp = useCallback(async () => {
-    if (!window.storyCraftPWA) return;
-    const outcome = await window.storyCraftPWA.installApp();
+    if (!window.worldScriptPWA) return;
+    const outcome = await window.worldScriptPWA.installApp();
     if (outcome === 'accepted') {
       setIsInstallable(false);
       setIsInstalled(true);
@@ -130,7 +130,7 @@ export function usePWA(): UsePWAReturn {
   }, []);
 
   const clearCache = useCallback(async () => {
-    await window.storyCraftPWA?.clearCache();
+    await window.worldScriptPWA?.clearCache();
   }, []);
 
   // Don't show install banner if already dismissed this session

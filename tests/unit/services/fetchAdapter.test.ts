@@ -1,11 +1,11 @@
 /**
  * Tests for services/ai/fetchAdapter.ts
- * QNBS-v3: createStoryCraftFetch — uses browser globalThis.fetch when not in Tauri.
+ * QNBS-v3: createWorldScriptFetch — uses browser globalThis.fetch when not in Tauri.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-describe('createStoryCraftFetch', () => {
+describe('createWorldScriptFetch', () => {
   beforeEach(() => {
     // Ensure no __TAURI__ context
     delete (window as unknown as Record<string, unknown>)['__TAURI__'];
@@ -17,8 +17,8 @@ describe('createStoryCraftFetch', () => {
     const mockFetch = vi.fn().mockResolvedValue(mockResponse);
     vi.stubGlobal('fetch', mockFetch);
 
-    const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
-    const fetchFn = createStoryCraftFetch();
+    const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+    const fetchFn = createWorldScriptFetch();
     const result = await fetchFn('https://api.example.com/test');
 
     expect(mockFetch).toHaveBeenCalledWith('https://api.example.com/test', undefined);
@@ -31,8 +31,8 @@ describe('createStoryCraftFetch', () => {
     const mockFetch = vi.fn().mockResolvedValue(mockResponse);
     vi.stubGlobal('fetch', mockFetch);
 
-    const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
-    const fetchFn = createStoryCraftFetch();
+    const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+    const fetchFn = createWorldScriptFetch();
     const init = { method: 'POST', body: JSON.stringify({ test: true }) };
     await fetchFn('https://api.example.com/test', init);
 
@@ -41,8 +41,8 @@ describe('createStoryCraftFetch', () => {
   });
 
   it('returns a callable function', async () => {
-    const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
-    const fetchFn = createStoryCraftFetch();
+    const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+    const fetchFn = createWorldScriptFetch();
     expect(typeof fetchFn).toBe('function');
   });
 
@@ -50,8 +50,8 @@ describe('createStoryCraftFetch', () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', mockFetch);
 
-    const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
-    await createStoryCraftFetch()('https://api.example.com/stream', { method: 'POST' });
+    const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+    await createWorldScriptFetch()('https://api.example.com/stream', { method: 'POST' });
 
     expect(mockFetch).toHaveBeenCalledWith('https://api.example.com/stream', { method: 'POST' });
     vi.unstubAllGlobals();
@@ -61,8 +61,8 @@ describe('createStoryCraftFetch', () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', mockFetch);
 
-    const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
-    await createStoryCraftFetch({ timeoutMs: 5000 })('https://api.example.com/tags');
+    const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+    await createWorldScriptFetch({ timeoutMs: 5000 })('https://api.example.com/tags');
 
     const init = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(init?.signal).toBeInstanceOf(AbortSignal);
@@ -76,8 +76,8 @@ describe('createStoryCraftFetch', () => {
     // Simulate a runtime where AbortSignal exists but the static timeout helper does not.
     (AbortSignal as unknown as { timeout?: unknown }).timeout = undefined;
     try {
-      const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
-      await createStoryCraftFetch({ timeoutMs: 1000 })('https://api.example.com/tags');
+      const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+      await createWorldScriptFetch({ timeoutMs: 1000 })('https://api.example.com/tags');
       const init = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
       expect(init?.signal).toBeInstanceOf(AbortSignal);
     } finally {
@@ -90,9 +90,9 @@ describe('createStoryCraftFetch', () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', mockFetch);
 
-    const { createStoryCraftFetch } = await import('../../../services/ai/fetchAdapter');
+    const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
     const caller = new AbortController();
-    await createStoryCraftFetch({ timeoutMs: 5000 })('https://api.example.com/tags', {
+    await createWorldScriptFetch({ timeoutMs: 5000 })('https://api.example.com/tags', {
       signal: caller.signal,
     });
 

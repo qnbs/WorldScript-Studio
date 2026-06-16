@@ -6,7 +6,7 @@ const IV_LENGTH = 12;
 /** Derives a per-user AES-256-GCM key from a passphrase + deterministic salt (userId). */
 export async function deriveCloudSyncKey(passphrase: string, userId: string): Promise<CryptoKey> {
   const encoded = new TextEncoder().encode(passphrase);
-  const saltInput = new TextEncoder().encode(`storycraft-cloud-sync::${userId}`);
+  const saltInput = new TextEncoder().encode(`worldscript-cloud-sync::${userId}`);
   const salt = await crypto.subtle.digest('SHA-256', saltInput);
 
   const keyMaterial = await crypto.subtle.importKey('raw', encoded, 'PBKDF2', false, ['deriveKey']);

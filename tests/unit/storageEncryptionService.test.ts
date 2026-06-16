@@ -108,7 +108,7 @@ describe('Module-level singleton API', () => {
     clearIdbEncryptionKey();
     // Use a fixed localStorage key to avoid cross-test salt conflicts
     localStorage.setItem(
-      'storycraft-idb-kdf-salt-v1',
+      'worldscript-idb-kdf-salt-v1',
       // deterministic base64 salt (32 bytes of 0x01)
       btoa(String.fromCharCode(...new Array(32).fill(1))),
     );
@@ -190,7 +190,7 @@ describe('Sentinel-backed API', () => {
     clearIdbEncryptionKey();
     // deterministic salt (32 bytes of 0x01)
     localStorage.setItem(
-      'storycraft-idb-kdf-salt-v1',
+      'worldscript-idb-kdf-salt-v1',
       btoa(String.fromCharCode(...new Array(32).fill(1))),
     );
     mockGetSentinel.mockResolvedValue(null);

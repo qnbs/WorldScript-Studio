@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ICONS } from '../../constants';
+import { APP_NAME, ICONS } from '../../constants';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { defaultThemeCustomization } from '../../features/settings/settingsSlice';
@@ -421,7 +421,7 @@ export const AboutSection: FC = React.memo(() => {
           >
             {ICONS.WRITER}
           </svg>
-          <h3 className="text-2xl font-bold text-[var(--sc-text-primary)]">StoryCraft Studio</h3>
+          <h3 className="text-2xl font-bold text-[var(--sc-text-primary)]">{APP_NAME}</h3>
           <p>
             {t('settings.about.versionLabel')} {packageJson.version}
           </p>
@@ -429,7 +429,7 @@ export const AboutSection: FC = React.memo(() => {
           <p>{t('settings.about.description')}</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
             <a
-              href="https://www.github.com/qnbs/StoryCraft-Studio/"
+              href="https://www.github.com/qnbs/WorldScript-Studio/"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-sc-lg border border-[var(--sc-border-subtle)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)] hover:border-[var(--sc-border-strong)] transition-colors duration-sc-fast text-sm font-medium"
@@ -448,7 +448,7 @@ export const AboutSection: FC = React.memo(() => {
               {t('settings.about.githubLabel')}
             </a>
             <a
-              href="https://storycraft-studio-indol.vercel.app/"
+              href="https://worldscript-studio-indol.vercel.app/"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-sc-lg bg-[var(--sc-accent)]/10 border border-[var(--sc-accent)]/30 text-[var(--sc-accent)] hover:bg-[var(--sc-accent)]/20 transition-colors duration-sc-fast text-sm font-medium"

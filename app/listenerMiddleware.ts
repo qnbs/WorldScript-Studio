@@ -378,7 +378,7 @@ listenerMiddleware.startListening({
   effect: async () => {
     // QNBS-v3: guard for SSR / worker contexts where window is not defined
     if (typeof window !== 'undefined') {
-      window.__storycraft_adaptive_ai__ = true;
+      window.__worldscript_adaptive_ai__ = true;
     }
     try {
       const { generateDeviceProfile } = await import('../services/ai/localAiDeviceProfiler');
@@ -399,7 +399,7 @@ listenerMiddleware.startListening({
   effect: async () => {
     // QNBS-v3: guard for SSR / worker contexts where window is not defined
     if (typeof window !== 'undefined') {
-      window.__storycraft_adaptive_ai__ = false;
+      window.__worldscript_adaptive_ai__ = false;
     }
     try {
       const [aiCore, profiler] = await Promise.all([
@@ -426,7 +426,7 @@ listenerMiddleware.startListening({
 export function initAdaptiveAiOnStartup(enabled: boolean): void {
   if (!enabled) return;
   if (typeof window !== 'undefined') {
-    window.__storycraft_adaptive_ai__ = true;
+    window.__worldscript_adaptive_ai__ = true;
   }
   // Profile generation is handled by useAdaptiveAi on first mount
   logger.info('Adaptive AI engine: window gate set on cold start');

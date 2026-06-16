@@ -43,7 +43,7 @@ if (!fs.existsSync(path.join(dist, 'index.html'))) {
   process.exit(1);
 }
 
-const project = process.env.CLOUDFLARE_PAGES_PROJECT ?? 'storycraft-studio';
+const project = process.env.CLOUDFLARE_PAGES_PROJECT ?? 'worldscript-studio';
 const args = [
   'pages',
   'deploy',

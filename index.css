@@ -421,13 +421,13 @@
   }
 }
 
-.storycraft-reduced-motion .aurora-blob {
+.worldscript-reduced-motion .aurora-blob {
   animation: none;
   opacity: 0.1;
 }
 
 /* Large UI text — paired with Settings › Accessibility */
-html.storycraft-large-text {
+html.worldscript-large-text {
   font-size: 112.5%;
 }
 
@@ -437,13 +437,13 @@ body.accessibility-comfortable-targets :where(button:not(.sr-only), [role="butto
 }
 
 /* Stronger focus rings when enabled */
-body.storycraft-focus-indicators :focus-visible {
+body.worldscript-focus-indicators :focus-visible {
   outline: 3px solid var(--ring-focus);
   outline-offset: 3px;
 }
 
 /* Screen reader mode — slightly roomier line rhythm */
-body.storycraft-screen-reader {
+body.worldscript-screen-reader {
   line-height: 1.65;
 }
 

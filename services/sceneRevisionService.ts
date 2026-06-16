@@ -2,7 +2,7 @@
 //          Max 50 revisions per scene; oldest are evicted automatically on save.
 import type { SceneRevision } from '../types';
 
-const DB_NAME = 'storycraft-revisions-db';
+const DB_NAME = 'worldscript-revisions-db';
 const DB_VERSION = 1;
 const STORE = 'scene-revisions';
 const MAX_PER_SCENE = 50;

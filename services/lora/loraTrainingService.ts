@@ -74,7 +74,7 @@ export async function startTraining(
   onProgress: (event: TrainingProgressEvent) => void,
 ): Promise<TrainingResult> {
   if (!isTauri()) {
-    throw new Error('LoRA training requires the StoryCraft Studio desktop app.');
+    throw new Error('LoRA training requires the WorldScript Studio desktop app.');
   }
   const runId = uuid();
   logger.info('loraTrainingService: starting training run', { runId, preset: config.preset.id });

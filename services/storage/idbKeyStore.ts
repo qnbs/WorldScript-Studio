@@ -16,7 +16,7 @@ export class IdbKeyStore extends IdbConnectionManager {
   /** Legacy key derivation — used only for migrating existing encrypted data. */
   private async getLegacyCryptoKey(): Promise<CryptoKey> {
     const material = new TextEncoder().encode(
-      `${location.origin}|StoryCraftStudio|gemini-key-v1|${navigator.userAgent.slice(0, 50)}`,
+      `${location.origin}|WorldScriptStudio|gemini-key-v1|${navigator.userAgent.slice(0, 50)}`,
     );
     const hash = await crypto.subtle.digest('SHA-256', material);
     return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);

@@ -17,7 +17,7 @@ import {
   SNAPSHOTS_STORE,
   STATE_DB_NAME,
 } from '../dbConstants';
-import { migrateLegacyStorycraftDbIfNeeded } from '../dbMigration';
+import { migrateLegacyWorldscriptDbIfNeeded } from '../dbMigration';
 import { logger } from '../logger';
 
 // LZ-String threshold: compress payloads >10 KB
@@ -177,9 +177,9 @@ export class IdbConnectionManager {
     await Promise.all([this.openStateDb(), this.openDataDb()]);
     if (this.stateDb && this.dataDb) {
       try {
-        const result = await migrateLegacyStorycraftDbIfNeeded(this.stateDb, this.dataDb);
+        const result = await migrateLegacyWorldscriptDbIfNeeded(this.stateDb, this.dataDb);
         if (result.migrated) {
-          logger.info('Migrated legacy IndexedDB (storycraft-db) to dual-database layout.');
+          logger.info('Migrated legacy IndexedDB (worldscript-db) to dual-database layout.');
         }
       } catch (error) {
         logger.warn('Legacy IndexedDB migration step failed:', error);

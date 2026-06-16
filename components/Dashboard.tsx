@@ -490,7 +490,7 @@ const DashboardModals: FC = () => {
   );
 };
 
-const DASHBOARD_ONBOARDING_KEY = 'storycraft-dashboard-onboarding-dismissed';
+const DASHBOARD_ONBOARDING_KEY = 'worldscript-dashboard-onboarding-dismissed';
 
 const OnboardingTipsBanner: FC = () => {
   const { t } = useTranslation();

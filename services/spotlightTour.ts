@@ -3,7 +3,7 @@ import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 
 /** Persisted when the user finishes or closes the spotlight tour. */
-export const SPOTLIGHT_TOUR_STORAGE_KEY = 'storycraft-spotlight-tour-done';
+export const SPOTLIGHT_TOUR_STORAGE_KEY = 'worldscript-spotlight-tour-done';
 
 export function markSpotlightTourComplete(): void {
   try {
@@ -110,7 +110,7 @@ export function startSpotlightTour(t: Translate, tourId: SpotlightTourId = 'defa
     nextBtnText: t('tour.btn.next'),
     prevBtnText: t('tour.btn.prev'),
     doneBtnText: t('tour.btn.done'),
-    popoverClass: 'storycraft-driver-popover',
+    popoverClass: 'worldscript-driver-popover',
     steps,
     onDestroyed: () => {
       markSpotlightTourComplete();

@@ -31,7 +31,7 @@ describe('palettePreferences', () => {
 
     it('returns stored data', () => {
       localStorage.setItem(
-        'storycraft-palette-prefs-v1',
+        'worldscript-palette-prefs-v1',
         JSON.stringify({ recentIds: ['a', 'b'], pinnedIds: ['c'] }),
       );
       const prefs = loadPalettePreferences();
@@ -40,7 +40,7 @@ describe('palettePreferences', () => {
     });
 
     it('returns defaults when JSON is malformed', () => {
-      localStorage.setItem('storycraft-palette-prefs-v1', '{{{invalid}}}');
+      localStorage.setItem('worldscript-palette-prefs-v1', '{{{invalid}}}');
       const prefs = loadPalettePreferences();
       expect(prefs.recentIds).toEqual([]);
     });
@@ -48,7 +48,7 @@ describe('palettePreferences', () => {
     it('limits recentIds to 15', () => {
       const ids = Array.from({ length: 20 }, (_, i) => `cmd-${i}`);
       localStorage.setItem(
-        'storycraft-palette-prefs-v1',
+        'worldscript-palette-prefs-v1',
         JSON.stringify({ recentIds: ids, pinnedIds: [] }),
       );
       const prefs = loadPalettePreferences();
@@ -59,7 +59,7 @@ describe('palettePreferences', () => {
   describe('savePalettePreferences', () => {
     it('persists data to localStorage', () => {
       savePalettePreferences({ recentIds: ['x'], pinnedIds: ['y'] });
-      const raw = localStorage.getItem('storycraft-palette-prefs-v1');
+      const raw = localStorage.getItem('worldscript-palette-prefs-v1');
       const parsed = JSON.parse(raw ?? '{}');
       expect(parsed.recentIds).toEqual(['x']);
       expect(parsed.pinnedIds).toEqual(['y']);
@@ -69,7 +69,7 @@ describe('palettePreferences', () => {
       const recent = Array.from({ length: 20 }, (_, i) => `r-${i}`);
       const pinned = Array.from({ length: 25 }, (_, i) => `p-${i}`);
       savePalettePreferences({ recentIds: recent, pinnedIds: pinned });
-      const raw = localStorage.getItem('storycraft-palette-prefs-v1');
+      const raw = localStorage.getItem('worldscript-palette-prefs-v1');
       const parsed = JSON.parse(raw ?? '{}');
       expect(parsed.recentIds).toHaveLength(15);
       expect(parsed.pinnedIds).toHaveLength(20);

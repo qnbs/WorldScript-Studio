@@ -1,10 +1,10 @@
 import { logger as appLogger } from './services/logger';
 
 // ============================================================
-// StoryCraft Studio — Service Worker Registration v3.0
+// WorldScript Studio — Service Worker Registration v3.0
 // Features:
 //   • Update detection + explicit user-triggered skipWaiting
-//   • beforeinstallprompt capture  → window.storyCraftPWA
+//   • beforeinstallprompt capture  → window.worldScriptPWA
 //   • appinstalled tracking
 //   • Periodic background sync registration
 //   • Custom events: sw-update-available, sw-installed
@@ -17,7 +17,7 @@ export interface PWAInstallEvent extends Event {
 
 declare global {
   interface Window {
-    storyCraftPWA: {
+    worldScriptPWA: {
       deferredInstallPrompt: PWAInstallEvent | null;
       isInstalled: boolean;
       swRegistration: ServiceWorkerRegistration | null;
@@ -30,22 +30,22 @@ declare global {
 }
 
 // ── Global PWA state object ───────────────────────────────────
-window.storyCraftPWA = {
+window.worldScriptPWA = {
   deferredInstallPrompt: null,
   isInstalled: false,
   swRegistration: null,
 
   async installApp() {
-    const prompt = window.storyCraftPWA.deferredInstallPrompt;
+    const prompt = window.worldScriptPWA.deferredInstallPrompt;
     if (!prompt) return 'unavailable';
     await prompt.prompt();
     const { outcome } = await prompt.userChoice;
-    window.storyCraftPWA.deferredInstallPrompt = null;
+    window.worldScriptPWA.deferredInstallPrompt = null;
     return outcome;
   },
 
   async checkForUpdate() {
-    const reg = window.storyCraftPWA.swRegistration;
+    const reg = window.worldScriptPWA.swRegistration;
     if (reg) await reg.update();
   },
 
@@ -63,13 +63,13 @@ window.storyCraftPWA = {
 // ── Capture install prompt before browser auto-dismisses it ──
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
-  window.storyCraftPWA.deferredInstallPrompt = e as PWAInstallEvent;
+  window.worldScriptPWA.deferredInstallPrompt = e as PWAInstallEvent;
   window.dispatchEvent(new CustomEvent('sw-installable', { detail: { installable: true } }));
 });
 
 window.addEventListener('appinstalled', () => {
-  window.storyCraftPWA.isInstalled = true;
-  window.storyCraftPWA.deferredInstallPrompt = null;
+  window.worldScriptPWA.isInstalled = true;
+  window.worldScriptPWA.deferredInstallPrompt = null;
   window.dispatchEvent(new CustomEvent('sw-installed'));
   appLogger.info('[PWA] App installed successfully');
 });
@@ -103,7 +103,7 @@ const registerServiceWorker = async (): Promise<void> => {
       updateViaCache: 'none', // always fetch new SW from network
     });
 
-    window.storyCraftPWA.swRegistration = registration;
+    window.worldScriptPWA.swRegistration = registration;
     appLogger.info('[SW] Registered, scope:', registration.scope);
 
     // ── Detect and announce SW updates ───────────────────────
@@ -160,7 +160,7 @@ const registerServiceWorker = async (): Promise<void> => {
         });
         if (status.state === 'granted') {
           // @ts-expect-error — periodicSync not in TS lib yet
-          await registration.periodicSync.register('storycraft-refresh', {
+          await registration.periodicSync.register('worldscript-refresh', {
             minInterval: 24 * 60 * 60 * 1000, // once per day
           });
         }
@@ -175,7 +175,7 @@ const registerServiceWorker = async (): Promise<void> => {
       // @ts-expect-error — iOS Safari proprietary
       window.navigator.standalone === true
     ) {
-      window.storyCraftPWA.isInstalled = true;
+      window.worldScriptPWA.isInstalled = true;
     }
   } catch (error) {
     appLogger.error('[SW] Registration failed:', error);

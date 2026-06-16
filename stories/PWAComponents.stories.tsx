@@ -40,7 +40,7 @@ const InstallBanner = ({
     className="fixed bottom-20 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm z-50 rounded-xl bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] p-4 shadow-2xl"
   >
     <p className="text-sm font-medium text-[var(--sc-text-primary)] mb-3">
-      Install StoryCraft Studio
+      Install WorldScript Studio
     </p>
     <div className="flex gap-2">
       <button

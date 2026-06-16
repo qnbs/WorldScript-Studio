@@ -130,7 +130,7 @@ class CollaborationService {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('')
       .slice(0, 16);
-    return `storycraft-${hex}`;
+    return `worldscript-${hex}`;
   }
 
   // QNBS-v3: Serialize CollaborationUser to JSON, encrypt with AES-256-GCM, base64-encode for y-webrtc awareness transport.

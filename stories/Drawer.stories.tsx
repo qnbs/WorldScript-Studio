@@ -66,7 +66,7 @@ const DrawerExample: React.FC<{ position?: 'left' | 'right' }> = ({ position = '
         <Drawer
           isOpen={open}
           onClose={() => setOpen(false)}
-          title="StoryCraft Drawer"
+          title="WorldScript Drawer"
           position={position}
         >
           <div className="p-4 space-y-4 text-[var(--sc-text-secondary)]">

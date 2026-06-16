@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  createLanguageModelForStoryCraft,
+  createLanguageModelForWorldScript,
   providerToKind,
 } from '../../services/ai/providerFactory';
 
@@ -15,7 +15,7 @@ const mockCreateGoogleGenerativeAI = vi.fn((_arg?: unknown) => ({
   languageModel: mockGoogleLanguageModel,
 }));
 const mockCreateOpenAI = vi.fn((_arg?: unknown) => ({ chat: mockOpenaiChat }));
-const mockCreateStoryCraftFetch = vi.fn().mockReturnValue(globalThis.fetch);
+const mockCreateWorldScriptFetch = vi.fn().mockReturnValue(globalThis.fetch);
 
 vi.mock('@ai-sdk/google', () => ({
   // QNBS-v3: cast needed — TS2556 requires tuple or rest for unknown[] spread
@@ -27,7 +27,7 @@ vi.mock('@ai-sdk/openai', () => ({
 }));
 
 vi.mock('../../services/ai/fetchAdapter', () => ({
-  createStoryCraftFetch: () => mockCreateStoryCraftFetch(),
+  createWorldScriptFetch: () => mockCreateWorldScriptFetch(),
 }));
 
 beforeEach(() => {
@@ -66,12 +66,12 @@ describe('providerToKind', () => {
 });
 
 // ---------------------------------------------------------------------------
-// createLanguageModelForStoryCraft
+// createLanguageModelForWorldScript
 // ---------------------------------------------------------------------------
-describe('createLanguageModelForStoryCraft', () => {
+describe('createLanguageModelForWorldScript', () => {
   describe('gemini provider', () => {
     it('creates a Gemini language model with the given apiKey and modelId', () => {
-      const model = createLanguageModelForStoryCraft({
+      const model = createLanguageModelForWorldScript({
         provider: 'gemini',
         modelId: 'gemini-2.5-flash',
         apiKey: 'test-gemini-key',
@@ -85,7 +85,7 @@ describe('createLanguageModelForStoryCraft', () => {
     });
 
     it('passes the custom fetch implementation', () => {
-      createLanguageModelForStoryCraft({
+      createLanguageModelForWorldScript({
         provider: 'gemini',
         modelId: 'gemini-2.0-flash',
         apiKey: 'key',
@@ -99,7 +99,7 @@ describe('createLanguageModelForStoryCraft', () => {
 
   describe('openai provider', () => {
     it('creates an OpenAI chat model', () => {
-      const model = createLanguageModelForStoryCraft({
+      const model = createLanguageModelForWorldScript({
         provider: 'openai',
         modelId: 'gpt-4o',
         apiKey: 'sk-test',
@@ -111,7 +111,7 @@ describe('createLanguageModelForStoryCraft', () => {
     });
 
     it('passes optional headers when provided', () => {
-      createLanguageModelForStoryCraft({
+      createLanguageModelForWorldScript({
         provider: 'openai',
         modelId: 'gpt-4o',
         apiKey: 'sk-test',
@@ -122,7 +122,7 @@ describe('createLanguageModelForStoryCraft', () => {
     });
 
     it('omits headers property when not provided', () => {
-      createLanguageModelForStoryCraft({
+      createLanguageModelForWorldScript({
         provider: 'openai',
         modelId: 'gpt-4o',
         apiKey: 'sk-test',
@@ -134,7 +134,7 @@ describe('createLanguageModelForStoryCraft', () => {
 
   describe('openaiCompatible provider (Ollama / LM Studio)', () => {
     it('creates an OpenAI-compatible model with baseURL', () => {
-      const model = createLanguageModelForStoryCraft({
+      const model = createLanguageModelForWorldScript({
         provider: 'openaiCompatible',
         baseURL: 'http://localhost:11434/v1',
         apiKey: 'ollama',
@@ -152,7 +152,7 @@ describe('createLanguageModelForStoryCraft', () => {
     });
 
     it('passes optional headers for openaiCompatible', () => {
-      createLanguageModelForStoryCraft({
+      createLanguageModelForWorldScript({
         provider: 'openaiCompatible',
         baseURL: 'http://localhost:11434/v1',
         apiKey: 'ollama',

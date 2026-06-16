@@ -307,7 +307,7 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
       },
       { file: 'hooks/useLoraView.ts:50', description: 'Returns isEnabled=false when off' },
       {
-        file: 'hooks/useStoryCraftAI.ts:39',
+        file: 'hooks/useWorldScriptAI.ts:39',
         description:
           'Reads selectActiveLoraOllamaTag; passes ollamaModelTag as loraModelPath in AIRequestOptions — C-3 wiring complete (df185c7)',
       },

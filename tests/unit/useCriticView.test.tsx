@@ -20,7 +20,7 @@ const mockState = {
       localBackendPreset: 'ollama_default',
       openAiCompatibleBaseUrl: '',
       openAiSiteUrl: '',
-      openAiSiteTitle: 'StoryCraft Studio',
+      openAiSiteTitle: 'WorldScript Studio',
       hybridFallbackEnabled: false,
       hybridFallbackChain: [],
     },

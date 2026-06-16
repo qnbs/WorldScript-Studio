@@ -14,7 +14,7 @@ export interface SceneCommentsState {
   comments: ReturnType<typeof commentsAdapter.getInitialState>;
 }
 
-const STORAGE_KEY = 'storycraft-scene-comments';
+const STORAGE_KEY = 'worldscript-scene-comments';
 
 const loadState = (): SceneCommentsState => {
   if (typeof window === 'undefined') {

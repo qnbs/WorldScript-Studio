@@ -1,5 +1,5 @@
 // QNBS-v3: Eco mode — auto-detects low battery / low-end device and forces lightweight inference.
-//          Adapted from CannaGuide-2025 ecoModeService.ts for StoryCraft context.
+//          Adapted from CannaGuide-2025 ecoModeService.ts for WorldScript context.
 
 const LOW_BATTERY_THRESHOLD = 0.2; // < 20% → eco mode
 const CRITICAL_BATTERY_THRESHOLD = 0.1; // < 10% → critical (block large downloads)

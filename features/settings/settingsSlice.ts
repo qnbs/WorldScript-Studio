@@ -74,7 +74,7 @@ const defaultSettings: Settings = {
     localBackendPreset: 'ollama_default',
     openAiCompatibleBaseUrl: '',
     openAiSiteUrl: '',
-    openAiSiteTitle: 'StoryCraft Studio',
+    openAiSiteTitle: 'WorldScript Studio',
     hybridFallbackEnabled: false,
     hybridFallbackChain: [],
     ragMode: 'hybrid',
@@ -163,7 +163,7 @@ const defaultSettings: Settings = {
     speechVolume: 1.0,
     allowCloudSttFallback: false,
     listeningTimeoutSeconds: 8,
-    wakeWordPhrase: 'Hey StoryCraft',
+    wakeWordPhrase: 'Hey WorldScript',
     pttShortcutId: 'voice-push-to-talk',
     ttsMuted: false,
     dictationAutoPunctuation: true,
@@ -307,7 +307,7 @@ const settingsSlice = createSlice({
         speechVolume: 1.0,
         allowCloudSttFallback: false,
         listeningTimeoutSeconds: 8,
-        wakeWordPhrase: 'Hey StoryCraft',
+        wakeWordPhrase: 'Hey WorldScript',
         pttShortcutId: 'voice-push-to-talk',
         ttsMuted: false,
         dictationAutoPunctuation: true,
@@ -325,7 +325,7 @@ export const applyInitialTheme = () => {
     typeof localStorage.getItem === 'function';
 
   // Fast path: read simple theme string mirrored by App.tsx
-  const directTheme = hasLocalStorage ? localStorage.getItem('storycraft-theme') : null;
+  const directTheme = hasLocalStorage ? localStorage.getItem('worldscript-theme') : null;
   if (directTheme === 'dark' || directTheme === 'light') {
     document.body.classList.remove('light-theme', 'dark-theme', 'auto-theme');
     document.body.classList.add(`${directTheme}-theme`);
@@ -333,7 +333,7 @@ export const applyInitialTheme = () => {
   }
 
   // Fallback: read from legacy serialized state (used in tests)
-  const storedState = hasLocalStorage ? localStorage.getItem('storycraft-state') : null;
+  const storedState = hasLocalStorage ? localStorage.getItem('worldscript-state') : null;
   if (storedState) {
     try {
       const persistedState = JSON.parse(storedState);
