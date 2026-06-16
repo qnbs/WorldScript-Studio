@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- QNBS-v3: Hardened Runtime Entitlements for StoryCraft Studio -->
+    <!-- QNBS-v3: Hardened Runtime Entitlements for WorldScript Studio -->
     <!-- Required for Tauri v2 apps distributed outside the Mac App Store -->
 
     <!-- Allow execution of JIT-compiled code (required for WebKit) -->

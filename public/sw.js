@@ -1,14 +1,14 @@
 // ============================================================
-// StoryCraft Studio — Advanced Service Worker v3.0
+// WorldScript Studio — Advanced Service Worker v3.0
 // Strategy: Stale-While-Revalidate + Cache-First + Network-Only
 // Features: Versioned caches, background sync, periodic updates,
 //           offline fallback, push notifications, share target
 // ============================================================
 
-const APP_VERSION   = '1.22.0';
-const CACHE_STATIC  = `storycraft-static-v${APP_VERSION}`;
-const CACHE_DYNAMIC = `storycraft-dynamic-v${APP_VERSION}`;
-const CACHE_IMAGES  = `storycraft-images-v${APP_VERSION}`;
+const APP_VERSION   = '1.23.0';
+const CACHE_STATIC  = `worldscript-static-v${APP_VERSION}`;
+const CACHE_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
+const CACHE_IMAGES  = `worldscript-images-v${APP_VERSION}`;
 const ALL_CACHES    = [CACHE_STATIC, CACHE_DYNAMIC, CACHE_IMAGES];
 
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
@@ -73,7 +73,7 @@ async function trimCache(cacheName, maxEntries) {
 async function offlineFallback(request) {
   if (request.destination === 'document') {
     const cached = await caches.match(`${BASE}offline.html`);
-    return cached || new Response('<!doctype html><title>Offline</title><p>StoryCraft Studio ist offline.</p>', {
+    return cached || new Response('<!doctype html><title>Offline</title><p>WorldScript Studio ist offline.</p>', {
       headers: { 'Content-Type': 'text/html' },
       status: 503,
     });
@@ -305,13 +305,13 @@ self.addEventListener('message', (event) => {
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   let data;
-  try { data = event.data.json(); } catch { data = { title: 'StoryCraft Studio', body: event.data.text() }; }
+  try { data = event.data.json(); } catch { data = { title: 'WorldScript Studio', body: event.data.text() }; }
 
   const options = {
     body:    data.body    || 'New notification',
     icon:    `${BASE}favicon.svg`,
     badge:   `${BASE}favicon.svg`,
-    tag:     data.tag     || 'storycraft-notification',
+    tag:     data.tag     || 'worldscript-notification',
     data:    data.data    || {},
     actions: data.actions || [],
     vibrate: [100, 50, 100],
@@ -320,7 +320,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'StoryCraft Studio', options)
+    self.registration.showNotification(data.title || 'WorldScript Studio', options)
   );
 });
 
@@ -342,7 +342,7 @@ self.addEventListener('notificationclick', (event) => {
 // BACKGROUND SYNC — Retry deferred autosave operations
 // ════════════════════════════════════════════════════════════
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'storycraft-autosave') {
+  if (event.tag === 'worldscript-autosave') {
     event.waitUntil(
       self.clients.matchAll().then((clients) =>
         clients.forEach((c) => c.postMessage({ type: 'TRIGGER_AUTOSAVE' }))
@@ -355,7 +355,7 @@ self.addEventListener('sync', (event) => {
 // PERIODIC BACKGROUND SYNC — Refresh locale JSON while idle
 // ════════════════════════════════════════════════════════════
 self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'storycraft-refresh') {
+  if (event.tag === 'worldscript-refresh') {
     event.waitUntil(
       caches.open(CACHE_DYNAMIC).then(async (cache) => {
         const keys         = await cache.keys();
@@ -371,4 +371,4 @@ self.addEventListener('periodicsync', (event) => {
   }
 });
 
-swLogger.log(`StoryCraft Studio Service Worker v${APP_VERSION} loaded`);
+swLogger.log(`WorldScript Studio Service Worker v${APP_VERSION} loaded`);

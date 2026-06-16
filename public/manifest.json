@@ -1,10 +1,10 @@
 {
-  "name": "StoryCraft Studio",
-  "short_name": "StoryCraft",
-  "description": "AI-Powered Creative Writing Studio — Craft entire novels, characters & worlds with Gemini AI.",
-  "start_url": "/StoryCraft-Studio/?source=pwa",
-  "scope": "/StoryCraft-Studio/",
-  "id": "/StoryCraft-Studio/",
+  "name": "WorldScript Studio",
+  "short_name": "WorldScript",
+  "description": "AI-Powered Creative Writing Studio — Build immersive worlds and craft entire novels with AI.",
+  "start_url": "/WorldScript-Studio/?source=pwa",
+  "scope": "/WorldScript-Studio/",
+  "id": "/WorldScript-Studio/",
 
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
@@ -45,42 +45,42 @@
       "name": "Templates",
       "short_name": "Templates",
       "description": "Browse narrative templates and start a structured project",
-      "url": "/StoryCraft-Studio/?view=templates&source=shortcut",
+      "url": "/WorldScript-Studio/?view=templates&source=shortcut",
       "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "My Manuscript",
       "short_name": "Manuscript",
       "description": "Open your manuscript view",
-      "url": "/StoryCraft-Studio/?view=manuscript&source=shortcut",
+      "url": "/WorldScript-Studio/?view=manuscript&source=shortcut",
       "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "Characters",
       "short_name": "Characters",
       "description": "Manage your characters",
-      "url": "/StoryCraft-Studio/?view=characters&source=shortcut",
+      "url": "/WorldScript-Studio/?view=characters&source=shortcut",
       "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "AI Writer",
       "short_name": "Writer",
       "description": "Open the AI writing studio",
-      "url": "/StoryCraft-Studio/?view=writer&source=shortcut",
+      "url": "/WorldScript-Studio/?view=writer&source=shortcut",
       "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "New Scene",
       "short_name": "New Scene",
       "description": "Jump to the Plot Board and add a new scene",
-      "url": "/StoryCraft-Studio/#/board?action=add-scene",
+      "url": "/WorldScript-Studio/#/board?action=add-scene",
       "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "Start Writing Session",
       "short_name": "Session",
       "description": "Open the Progress Tracker and start a writing session",
-      "url": "/StoryCraft-Studio/#/progress?action=start-session",
+      "url": "/WorldScript-Studio/#/progress?action=start-session",
       "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ],
@@ -92,7 +92,7 @@
   "handle_links": "preferred",
 
   "share_target": {
-    "action": "/StoryCraft-Studio/",
+    "action": "/WorldScript-Studio/",
     "method": "GET",
     "params": {
       "title": "share_title",
@@ -103,8 +103,8 @@
 
   "protocol_handlers": [
     {
-      "protocol": "web+storycraft",
-      "url": "/StoryCraft-Studio/?protocol=%s"
+      "protocol": "web+worldscript",
+      "url": "/WorldScript-Studio/?protocol=%s"
     }
   ],
 

@@ -1,7 +1,17 @@
 {
-  "name": "storycraft-studio",
+  "name": "worldscript-studio",
   "private": true,
-  "version": "1.22.0",
+  "version": "1.23.0",
+  "description": "WorldScript Studio — offline-first, AI-powered creative writing application.",
+  "author": "QNBS",
+  "keywords": [
+    "worldscript",
+    "worldscript-studio",
+    "creative-writing",
+    "ai-writing",
+    "pwa",
+    "tauri"
+  ],
   "type": "module",
   "packageManager": "pnpm@11.5.2",
   "engines": {

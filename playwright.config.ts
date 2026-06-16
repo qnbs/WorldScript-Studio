@@ -53,7 +53,7 @@ export default defineConfig({
   },
 
   use: {
-    baseURL: 'http://127.0.0.1:3000/StoryCraft-Studio',
+    baseURL: 'http://127.0.0.1:3000/WorldScript-Studio',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     // QNBS-v3: action + navigation timeouts bound to detect UI hangs / stalled

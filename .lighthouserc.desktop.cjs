@@ -1,12 +1,26 @@
 // QNBS-v3: Desktop Lighthouse config — runs alongside the mobile config (.lighthouserc.cjs).
 // Serves production dist (pnpm run preview) and audits with desktop emulation.
 // continue-on-error: true in ci.yml until desktop baselines stabilise.
+// QNBS-v3: derive the audited URL from the same deploy-base logic the build/preview use
+// (mirror of scripts/resolve-deploy-base.mjs — keep in sync). Hardcoding the GitHub Pages
+// base made LHCI audit a 404 when the preview was built with VITE_BASE=/ or DEPLOY_TARGET=edge.
+function resolveDeployBase() {
+  const viteBase = process.env.VITE_BASE?.trim();
+  if (viteBase) {
+    return viteBase.endsWith('/') ? viteBase : `${viteBase}/`;
+  }
+  if (process.env.DEPLOY_TARGET === 'edge') {
+    return '/';
+  }
+  return '/WorldScript-Studio/';
+}
+
 module.exports = {
   ci: {
     collect: {
       startServerCommand: 'pnpm run preview',
       startServerReadyPattern: 'Local',
-      url: ['http://127.0.0.1:4173/StoryCraft-Studio/'],
+      url: [`http://127.0.0.1:4173${resolveDeployBase()}`],
       numberOfRuns: 2,
       settings: {
         // QNBS-v3: same /dev/shm crash hardening as the mobile config (.lighthouserc.cjs) —
