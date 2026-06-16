@@ -120,7 +120,7 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-updater": "^2.10.1",
-    "ai": "^6.0.191",
+    "ai": "^6.0.206",
     "diff-match-patch": "^1.0.5",
     "docx": "^9.7.0",
     "dompurify": "^3.4.6",
