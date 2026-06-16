@@ -452,6 +452,7 @@
   "settings.featureFlags.enableDuckDbAnalytics": "אנליטיקה מתקדמת (מסד נתוני סיפור מהיר)",
   "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableIdbAtRestEncryption": "הצפנת IDB במנוחה ‏(AES-256-GCM) — הפעילו דרך הגדרות › פרטיות",
+  "settings.featureFlags.enableLocalFirstSync": "Local-First sync (shadow — experimental)",
   "settings.featureFlags.enableLoraAdapters": "אינפרנס מתאם LoRA (ניסיוני)",
   "settings.featureFlags.enableMindMaps": "מפות חשיבה משופרות",
   "settings.featureFlags.enableObjectsGroups": "מלאי אובייקטים וקבוצות",

@@ -49,6 +49,7 @@ const initialState: FeatureFlagsState = {
   enableWorkerBusV2: true,
   enableRustCompute: true,
   enableGlobalCopilot: false,
+  enableLocalFirstSync: false,
 };
 
 // ---------------------------------------------------------------------------

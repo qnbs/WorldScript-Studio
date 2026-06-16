@@ -81,6 +81,7 @@ vi.mock('../../app/hooks', () => ({
         enableWorkerBusV2: false,
         enableRustCompute: false,
         enableGlobalCopilot: false,
+        enableLocalFirstSync: false,
         enableLoraAdapters: false,
         enablePluginSystem: false,
         enableObjectsGroups: false,

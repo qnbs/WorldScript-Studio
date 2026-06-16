@@ -452,6 +452,7 @@
   "settings.featureFlags.enableDuckDbAnalytics": "Analisi avanzate (database veloce)",
   "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableIdbAtRestEncryption": "Cifratura IDB a riposo (AES-256-GCM) — attiva in Impostazioni › Privacy",
+  "settings.featureFlags.enableLocalFirstSync": "Sincronizzazione local-first (ombra — sperimentale)",
   "settings.featureFlags.enableLoraAdapters": "Inferenza adattatore LoRA (sperimentale)",
   "settings.featureFlags.enableMindMaps": "Mappe mentali avanzate",
   "settings.featureFlags.enableObjectsGroups": "Inventario oggetti e gruppi",

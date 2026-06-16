@@ -13,6 +13,7 @@ than editing history.
 | [0005](0005-webllm-worker-offload.md) | WebLLM inference offloaded to a dedicated WorkerBus v2 pool | Accepted |
 | [0006](0006-superseded.md) | (reserved, never issued) | Superseded / void |
 | [0007](0007-plugin-sandbox-model.md) | Plugin Sandbox Model | Accepted |
+| [0008](0008-local-first-data-model.md) | Local-first data model: Yjs document as source of truth | Accepted |
 
 **Format:** Context → Decision → Consequences (incl. rejected alternatives). Keep each ADR to one
 decision. Link related records with `[[slug]]`.

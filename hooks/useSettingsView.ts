@@ -259,6 +259,10 @@ export const useSettingsView = () => {
         case 'enableRustCompute':
           dispatch(featureFlagsActions.setEnableRustCompute(Boolean(value)));
           break;
+        // QNBS-v3: Local-First sync (shadow) — Yjs doc + y-indexeddb projection (B1.1).
+        case 'enableLocalFirstSync':
+          dispatch(featureFlagsActions.setEnableLocalFirstSync(Boolean(value)));
+          break;
         // QNBS-v3: Global AI Copilot — beginner-friendly in-app live assistant.
         case 'enableGlobalCopilot':
           dispatch(featureFlagsActions.setEnableGlobalCopilot(Boolean(value)));

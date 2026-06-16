@@ -41,6 +41,8 @@ export const FeatureFlagsSection: FC = () => {
     { key: 'enableRustCompute', labelKey: 'settings.featureFlags.enableRustCompute' },
     // QNBS-v3: Global AI Copilot — beginner-friendly in-app live assistant (ENABLE_GLOBAL_COPILOT).
     { key: 'enableGlobalCopilot', labelKey: 'settings.featureFlags.enableGlobalCopilot' },
+    // QNBS-v3: Local-First sync (shadow) — Yjs doc + y-indexeddb projection; Redux stays SoT (B1.1).
+    { key: 'enableLocalFirstSync', labelKey: 'settings.featureFlags.enableLocalFirstSync' },
     // QNBS-v3: enableIdbAtRestEncryption removed — toggling without passphrase setup blocks all users.
     // Dedicated UI lives in Settings → Privacy (PrivacySection.tsx).
   ];

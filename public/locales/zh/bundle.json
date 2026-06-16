@@ -1919,6 +1919,7 @@
   "settings.featureFlags.enableDuckDbAnalytics": "高级分析（快速故事数据库）",
   "settings.featureFlags.enableGlobalCopilot": "Global AI Copilot (beginner-friendly in-app live assistant)",
   "settings.featureFlags.enableIdbAtRestEncryption": "IDB at-rest encryption (AES-256-GCM) — enable via 设置 › Privacy",
+  "settings.featureFlags.enableLocalFirstSync": "本地优先同步（影子·实验性）",
   "settings.featureFlags.enableLoraAdapters": "LoRA 适配器推理（实验）",
   "settings.featureFlags.enableMindMaps": "增强的思维导图",
   "settings.featureFlags.enableObjectsGroups": "对象和组清单",

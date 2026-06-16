@@ -452,6 +452,7 @@
   "settings.featureFlags.enableDuckDbAnalytics": "Erweiterte Analysen (schnelle Story-Datenbank)",
   "settings.featureFlags.enableGlobalCopilot": "Globaler KI-Copilot (einsteigerfreundlicher Live-Assistent in der App)",
   "settings.featureFlags.enableIdbAtRestEncryption": "IDB-Ruheverschlüsselung (AES-256-GCM) — über Einstellungen › Datenschutz aktivieren",
+  "settings.featureFlags.enableLocalFirstSync": "Local-First-Synchronisierung (Schatten – experimentell)",
   "settings.featureFlags.enableLoraAdapters": "LoRA-Adapter-Inferenz (experimentell)",
   "settings.featureFlags.enableMindMaps": "Erweiterte Mindmaps",
   "settings.featureFlags.enableObjectsGroups": "Objekte & Gruppen",

@@ -1919,6 +1919,7 @@
   "settings.featureFlags.enableComputeShaders": "WebGPU compute shaders (GPU-accelerated RAG & attention)",
   "settings.featureFlags.enableDuckDbAnalytics": "Advanced analytics (fast story database)",
   "settings.featureFlags.enableIdbAtRestEncryption": "IDB at-rest encryption (AES-256-GCM) — enable via Settings › Privacy",
+  "settings.featureFlags.enableLocalFirstSync": "Local-First sync (shadow — experimental)",
   "settings.featureFlags.enableLoraAdapters": "LoRA adapter inference (experimental)",
   "settings.featureFlags.enableMindMaps": "Enhanced mind maps",
   "settings.featureFlags.enableObjectsGroups": "Objects & groups inventory",
