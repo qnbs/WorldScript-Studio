@@ -269,14 +269,14 @@ A keyboard-first **command palette** (⌘K / Ctrl+K, plus configurable bindings 
 - **Settings** — filter controls via the Settings search bar (`services/settingsSearchHints.ts`); **Import / Export** of a Zod-validated, privacy-conscious settings JSON subset (**Settings → Data** via `services/settingsExchange.ts`).
 - **Help Center (v1.9)** — `services/help/helpCatalog.ts` drives 50+ articles across 11 categories (including **Advanced & Power Features**, **Technical Documentation**, and **Settings Guide**); full-text search (`helpSearch.ts`); AI assistant uses 16 offline doc chunks; **Try it** actions via `tryActionId`; tours from `services/spotlightTour.ts`. The in-app **Settings Guide** documents every live settings category (incl. Fine-Tuning/LoRA, Community, Plugins). All five primary locales include translated article bodies (es/fr/it complete as of v1.9); Arabic/Hebrew article prose ships as English fallback in the RTL Beta.
 - **UI primitives** — shared **`Tooltip`**, **`EmptyState`**, and toast rows that trigger a **registered command** via `commandId` (see `features/status/statusSlice.ts`).
-- **Feature flags** — `enableProjectHealthScore` (dashboard card) and `enableCrossProjectSearch` (cross-project index) live in `features/featureFlags/featureFlagsSlice.ts`.
+- **Feature flags** — `enableProjectHealthScore` (dashboard card) lives in `features/featureFlags/featureFlagsSlice.ts`. (Cross-project search was promoted to permanent core behaviour in v1.8 and no longer has a flag.)
 
 ### 🔭 Cross-Project Search _(v2 — Privacy-Preserving Index)_
 
 Search across **all your projects** without loading them into memory. An IndexedDB-based privacy-preserving index (DB v8, `projects-index-store`) stores only lightweight metadata per project — title, logline, word count, character names — never manuscript plaintext.
 
 - **Two-phase search:** Phase 1 queries the index (instant); Phase 2 loads the full project on demand for deep-match excerpts.
-- **Auto-indexing** on every save via `listenerMiddleware` (behind the `enableCrossProjectSearch` flag).
+- **Auto-indexing** on every save via `listenerMiddleware` (permanent core behaviour since v1.8).
 - **Index management:** `crossProjectIndexService.ts` exposes `indexProject`, `listIndexedProjects`, `removeProjectIndex`.
 - Fully localized across all 5 UI languages.
 
@@ -304,7 +304,7 @@ Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc
 All project data, snapshots, and settings stored in IndexedDB can be encrypted at rest via `services/storage/storageEncryptionService.ts`:
 
 - **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
-- Gated behind `featureFlags.enableIdbAtRestEncryption` (off by default — no migration risk).
+- Gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23; the passphrase unlock UX is complete — Settings → Privacy).
 - Web build: passphrase-entry unlock screen on cold start (session-scoped in-memory key).
 - Tauri build: transparent OS-keychain protection via `tauri-plugin-stronghold` (no user friction).
 - GDPR-compliant: encrypted blobs are unreadable without the passphrase, even from the browser profile directory.
