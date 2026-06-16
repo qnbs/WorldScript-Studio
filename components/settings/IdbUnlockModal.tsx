@@ -15,7 +15,12 @@ const LOCKOUT_STORAGE_KEY = 'worldscript-idb-unlock-lockout';
 const LEGACY_ATTEMPT_STORAGE_KEY = 'storycraft-idb-unlock-attempts';
 const LEGACY_LOCKOUT_STORAGE_KEY = 'storycraft-idb-unlock-lockout';
 
-function readInt(key: string, legacyKey: string): number {
+// QNBS-v3: lockout backoff is capped at 60s (see lockoutMs), so a valid lockout timestamp never
+// exceeds now + 60s; the attempt counter is a tiny integer. These bounds clamp corrupt storage.
+const MAX_LOCKOUT_MS = 60_000;
+const MAX_ATTEMPTS = 1000;
+
+function readInt(key: string, legacyKey: string, max = Number.MAX_SAFE_INTEGER): number {
   if (typeof window === 'undefined') {
     return 0;
   }
@@ -32,14 +37,17 @@ function readInt(key: string, legacyKey: string): number {
     // QNBS-v3: corrupt/non-numeric storage values parse to NaN, which would poison the lockout
     // math (Date.now() + NaN) and the countdown UI — normalize any invalid parse to 0.
     const parsed = Number.parseInt(raw ?? '0', 10);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    if (Number.isNaN(parsed)) return 0;
+    // QNBS-v3 (CodeAnt): clamp to a non-negative, bounded range so a corrupt/huge value — e.g. a
+    // far-future lockout timestamp — cannot block unlock indefinitely.
+    return Math.min(Math.max(parsed, 0), max);
   } catch {
     return 0;
   }
 }
 
 function getAttemptCount(): number {
-  return readInt(ATTEMPT_STORAGE_KEY, LEGACY_ATTEMPT_STORAGE_KEY);
+  return readInt(ATTEMPT_STORAGE_KEY, LEGACY_ATTEMPT_STORAGE_KEY, MAX_ATTEMPTS);
 }
 
 function setAttemptCount(n: number): void {
@@ -54,7 +62,8 @@ function setAttemptCount(n: number): void {
 }
 
 function getLockoutUntil(): number {
-  return readInt(LOCKOUT_STORAGE_KEY, LEGACY_LOCKOUT_STORAGE_KEY);
+  // Clamp to now + the max backoff window — a corrupt far-future timestamp expires within 60s.
+  return readInt(LOCKOUT_STORAGE_KEY, LEGACY_LOCKOUT_STORAGE_KEY, Date.now() + MAX_LOCKOUT_MS);
 }
 
 function setLockoutUntil(ts: number): void {
