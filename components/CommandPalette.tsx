@@ -437,7 +437,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             )}
           </button>
           <div className="hidden sm:flex items-center gap-1">
-            <kbd className="px-2 py-1 text-xs font-semibold text-[var(--sc-text-muted)] bg-[var(--sc-surface-overlay)] rounded border border-[var(--sc-border-subtle)]">
+            {/* QNBS-v3: text-secondary (not -muted) — over the /90 translucent panel, -muted composites to ~4.05:1 in sepia and flakes the axe AA gate; -secondary clears 4.5:1 in every theme and matches the footer kbds. */}
+            <kbd className="px-2 py-1 text-xs font-semibold text-[var(--sc-text-secondary)] bg-[var(--sc-surface-overlay)] rounded border border-[var(--sc-border-subtle)]">
               ESC
             </kbd>
           </div>
