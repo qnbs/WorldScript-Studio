@@ -69,6 +69,7 @@ import {
 } from './services/storage/storageEncryptionService';
 import { initTauriDeepLink } from './services/tauriDeepLink';
 import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services/tauriMenuService';
+import { applyDesktopRuntimeFlags } from './services/tauriRuntime';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
 
@@ -258,6 +259,12 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       settings.accessibility.highContrast,
     );
   }, [settings.accessibility.highContrast]);
+
+  // QNBS-v3: Tag the body for desktop-scoped styling (is-desktop + data-os). Tauri-ness is constant
+  // for the session, so this runs once; no-op on the web. Pairs with the `.is-desktop` CSS layer.
+  useEffect(() => {
+    applyDesktopRuntimeFlags();
+  }, []);
 
   useEffect(() => {
     document.body.classList.toggle(

@@ -6,6 +6,29 @@ export function isTauriRuntime(): boolean {
   );
 }
 
+export type DesktopOs = 'windows' | 'macos' | 'linux';
+
+/** Best-effort OS detection for the Tauri WebView, from the user-agent. Null on the web. */
+export function getDesktopOs(): DesktopOs | null {
+  if (!isTauriRuntime()) return null;
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  if (/windows/i.test(ua)) return 'windows';
+  if (/mac/i.test(ua)) return 'macos';
+  return 'linux';
+}
+
+/**
+ * Tags `document.body` for desktop-scoped styling: adds `is-desktop` and `data-os` so the
+ * `.is-desktop` CSS layer (index.css) can refine the desktop UI without touching the PWA.
+ * Idempotent and a no-op on the web — safe to call unconditionally on mount.
+ */
+export function applyDesktopRuntimeFlags(): void {
+  if (!isTauriRuntime() || typeof document === 'undefined') return;
+  document.body.classList.add('is-desktop');
+  const os = getDesktopOs();
+  if (os) document.body.dataset['os'] = os;
+}
+
 export async function getTauriAppVersion(): Promise<string | null> {
   if (!isTauriRuntime()) return null;
   try {

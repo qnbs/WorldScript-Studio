@@ -895,3 +895,16 @@ select option {
 .rtl-keep-ltr {
   direction: ltr;
 }
+
+/* ==========================================================================
+   Desktop (Tauri) scoped layer — QNBS-v3
+   Applied only inside the Tauri WebView: `applyDesktopRuntimeFlags()`
+   (services/tauriRuntime.ts) sets `body.is-desktop` + `data-os` on mount, so
+   every desktop-specific refinement lives here and the PWA stays untouched.
+   `data-os` ∈ {windows, macos, linux} is available for per-engine quirks
+   (WebView2 / WebKit / WebKitGTK). Populated by the Desktop UI/UX remediation
+   phases D1–D4 — see docs/DESKTOP-UI-AUDIT.md. (D0 = hook only, no visual change.)
+   ========================================================================== */
+body.is-desktop {
+  /* Phase D1+: content max-width primitive, density, typography, glass perf. */
+}
