@@ -63,6 +63,12 @@ function maskPlaceholders(text) {
   return { masked, tokens };
 }
 
+// QNBS-v3: Modules excluded from `--all`. help.json is long-form rich HTML; the free MT endpoint
+// mangles tag-dense markup even with sentinel masking (dropped/duplicated tags → unbalanced HTML
+// rendered by HelpView), so per policy it stays English fallback for Beta locales and is only
+// translated by human review. Still translatable explicitly via `--files=help` if ever needed.
+const ALL_SKIP = new Set(['help.json']);
+
 function restorePlaceholders(text, tokens) {
   let result = text;
   for (let i = 0; i < tokens.length; i++) {
@@ -85,21 +91,13 @@ function glossaryTranslate(text, lang, glossary) {
   const langGlossary = glossary[lang];
   if (!langGlossary) return null;
 
-  // Exact match
-  if (langGlossary[text]) return langGlossary[text];
-
-  // Partial match for short terms embedded in longer strings
-  // (conservative: only replace whole words)
-  let result = text;
-  for (const [en, translated] of Object.entries(langGlossary)) {
-    if (en.startsWith('_')) continue;
-    // Word-boundary replacement for standalone terms
-    const regex = new RegExp(`\\b${en}\\b`, 'g');
-    if (regex.test(result)) {
-      result = result.replace(regex, translated);
-    }
-  }
-  return result === text ? null : result;
+  // QNBS-v3: EXACT full-string match only. The previous whole-word partial substitution was a
+  // correctness footgun: a non-null partial result skipped the MT step entirely, leaving the rest
+  // of a multi-word string in English (e.g. "Export your project…" → "Exportálás your project…").
+  // Exact labels still anchor here; everything else flows to MT in full. Cross-module term
+  // consistency is enforced via the glossary + native review, not by mangling sentences.
+  if (langGlossary[text] !== undefined) return langGlossary[text];
+  return null;
 }
 
 function loadCheckpoint(lang, file) {
@@ -263,7 +261,7 @@ async function main() {
     .sort();
 
   const filesToProcess = opts.all
-    ? enFiles
+    ? enFiles.filter((f) => !ALL_SKIP.has(f))
     : opts.files.length > 0
       ? opts.files.map((f) => (f.endsWith('.json') ? f : `${f}.json`))
       : enFiles;

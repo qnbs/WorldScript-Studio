@@ -1,0 +1,14 @@
+# GitGuardian / ggshield configuration.
+#
+# Locale files are UI translations, never credentials. Keys such as
+# `collab.roomPasswordPlaceholder` ("Secret password for private room") and
+# `settings.privacy.encryptionPassphrase` ("Storage Passphrase") are user-facing
+# labels; their translated values trip the high-recall "Generic Password" detector
+# as false positives (e.g. hu: "Titkos jelszó a privát szobához"). Exclude all
+# locale sources and the generated runtime bundles from secret scanning.
+version: 2
+
+secret:
+  ignored-paths:
+    - 'locales/**'
+    - 'public/locales/**'

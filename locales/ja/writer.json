@@ -1,5 +1,5 @@
 {
-  "writer.cancelledTag": "Cancelled",
+  "writer.cancelledTag": "キャンセル",
   "writer.chapter.label": "章: {{title}}",
   "writer.context.hide": "コンテキストを隠す",
   "writer.context.label": "コンテクスト",

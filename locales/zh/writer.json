@@ -1,5 +1,5 @@
 {
-  "writer.cancelledTag": "Cancelled",
+  "writer.cancelledTag": "取消",
   "writer.chapter.label": "章节：{{title}}",
   "writer.context.hide": "隐藏上下文",
   "writer.context.label": "语境",

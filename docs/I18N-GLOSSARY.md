@@ -67,8 +67,9 @@
 ## Phase X Beta Languages (fi, sv, hu, is, eu, fa)
 
 **Status:** Beta. Priority chrome (`portal`, `sidebar`, `dashboard`, top `common.*`) hand-translated;
-remaining modules are English-fallback stubs pending the user-run bulk translator. Canonical terms
-live lang-first in `locales/translation-glossary.json`. See [`LANGUAGE-EXPANSION-2026.md`](LANGUAGE-EXPANSION-2026.md).
+all remaining modules machine-translated (glossary-anchored, placeholder-masked) to ~96-100 % coverage,
+human native review pending. Canonical terms live lang-first in `locales/translation-glossary.json`.
+See [`LANGUAGE-EXPANSION-2026.md`](LANGUAGE-EXPANSION-2026.md).
 
 | English | Finnish (fi) | Swedish (sv) | Hungarian (hu) | Icelandic (is) | Basque (eu) | Persian (fa) |
 |---------|-------------|--------------|----------------|----------------|-------------|--------------|
@@ -96,6 +97,21 @@ live lang-first in `locales/translation-glossary.json`. See [`LANGUAGE-EXPANSION
 Basque has **no** Unicode flag emoji (the ikurriña is not encoded); `LanguageSelector` uses 🌐.
 Persian uses 🇮🇷.
 
+## Glossary expansion (v2.0)
+
+`locales/translation-glossary.json` (lang-first, `_meta.version: "2.0"`) is the machine-readable
+source of truth and now carries **~44 anchor terms per Beta language** (the original UI/creative set
+plus product-distinctive terms: `Co-Pilot`, `ProForge`, `Chapter`, `Theme`, `Subplot`, `Timeline`,
+`Snapshot`, `Synopsis`, `Mind Map`, `Word Count`, `Continue Writing`, `Improve Writing`,
+`Consistency Checker`, `Plot Hole`, `Revision`). These anchor the bulk translator
+(`scripts/bulk-translate-locales.mjs`) for cross-module consistency. The glossary is **sparse-tolerant**
+— a term absent for a given language simply falls through to machine translation. To propose terms,
+follow [`TRANSLATION-GUIDE.md`](TRANSLATION-GUIDE.md) §4 (prefer distinctive Title-Case strings).
+
 ## Scope Note
 
-`help.json` (long-form help-article prose) is intentionally left as **English fallback** for Beta languages. Only the UI-chrome modules are hand-translated. See `AUDIT.md` C-6 and [`LANGUAGE-EXPANSION-2026.md`](LANGUAGE-EXPANSION-2026.md).
+For Beta locales, UI-chrome modules are hand-translated and the deeper modules are completed by the
+glossary-anchored, placeholder-safe **bulk translator** (machine translation, Beta quality) pending
+human native review. `help.json` (long-form help-article prose) may remain English fallback longest.
+See `AUDIT.md` C-6, [`LANGUAGE-EXPANSION-2026.md`](LANGUAGE-EXPANSION-2026.md) and the review checklist
+in [`TRANSLATION-GUIDE.md`](TRANSLATION-GUIDE.md) §6.

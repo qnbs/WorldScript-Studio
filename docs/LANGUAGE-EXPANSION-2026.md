@@ -16,16 +16,46 @@ that delivered ja/zh/pt/el (P1-5).
 ## What shipped vs. what's machine-pending
 
 **Hand-translated to production quality (all 6 langs):**
-- `portal.json` (welcome screen), `sidebar.json` (nav chrome), `dashboard.json`, and the
-  high-traffic `common.*` action verbs.
+- `sidebar.json` (nav chrome) and `dashboard.json` — **~100 %** translated (EN-identical < 3 %).
+- `portal.json` (welcome screen) — **100 %** of localizable strings, including the **17 language-name
+  exonyms** (`portal.language.names.<code>`) shown in the `LanguageSelector` subtitle/search. The lone
+  EN-identical key is `portal.features.ai.title` = "AI Co-Pilot" (brand term, verbatim by glossary).
+- The high-traffic `common.*` action verbs (Save/Cancel/Delete/Close/Undo/… — the ~31 ubiquitous keys).
 - Cold-start values (`services/i18nBootstrap.ts`) — native title/logline/chapter-1, no English flash.
 - Glossary blocks (`locales/translation-glossary.json`).
 
-**English-fallback stubs (parity-green) — awaiting the bulk job + human QA:**
-- The other 16 modules (`writer`, `manuscript`, `settings`, `help`, `export`, …). They pass the
-  `i18n:check` parity gate as EN stubs and are filled by the user-run bulk translator.
+**Language picker (`components/ui/LanguageSelector.tsx`):** the visible **exonym** label is resolved
+at render time via `t('portal.language.names.<code>')` (no hardcoded UI strings); the **endonym**
+(`nativeName` — `Suomi`, `Svenska`, …) stays hardcoded by design so a speaker always finds their own
+language regardless of the active UI locale. `portal.language.names.*` is hand-translated for the 5
+core + 6 new languages and English-fallback for the other Beta locales (filled by the bulk translator).
 
-## Running the bulk translator (user-run; the agent makes no network calls)
+**Machine-translated — bulk run completed 2026-06-17 (Beta; human native review pending):**
+- All remaining modules (`common`, `writer`, `manuscript`, `settings`, `copilot`, `export`, …) were
+  completed via `scripts/bulk-translate-locales.mjs` — glossary-anchored (v2.0, ~44 anchor terms/locale)
+  and placeholder-masked. Post-run coverage (translated; EN-identical residual is mostly brand/format
+  verbatim terms **plus the English-fallback `help.json`** for the 6 new langs):
+
+  | fi | sv | hu | is | eu | fa | ja | zh | pt | el |
+  |----|----|----|----|----|----|----|----|----|----|
+  | 91 % | 90 % | 91 % | 92 % | 92 % | 93 % | 99 % | 100 % | 98 % | 97 % |
+
+- **`help.json` stays English fallback** for the new Beta langs and is **excluded from `--all`**
+  (`ALL_SKIP` in the bulk script). Its long-form rich HTML cannot be safely machine-translated by the
+  free endpoint — the tag-dense markup gets mangled (dropped/duplicated tags → unbalanced HTML)
+  even with sentinel masking. Translating it is a **human-review** task; valid English help is shipped
+  in the meantime. (ja/zh/pt/el `help.json` were translated in the earlier P1-5 run and are unchanged.)
+- Quality bar is **Beta / machine translation**; human native review is the tracked follow-up (checklist
+  in [`TRANSLATION-GUIDE.md`](TRANSLATION-GUIDE.md) §6). Measure coverage any time with
+  `node scripts/check-i18n-keys.mjs --quality`.
+
+> **Two bugs fixed during this run:** (1) `glossaryTranslate` did partial whole-word substitution and
+> returned early, leaving multi-word strings partially English (e.g. "Exportálás your project…") — now
+> **exact-match only**; ~1,300 mangled strings were reset + re-translated. (2) The `--all` mode
+> translated `help.json` and mangled its HTML — now **excluded from `--all`** and reset to clean
+> English fallback. Both fixes are in `scripts/bulk-translate-locales.mjs`.
+
+## Running the bulk translator (glossary-first, placeholder-masked, resumable)
 
 ```bash
 node scripts/bulk-translate-locales.mjs --lang=fi,sv,hu,is,eu,fa --all --delay=600
