@@ -59,6 +59,37 @@ export const I18N_BOOTSTRAP: Record<Language, Record<string, string>> = {
     'initialProject.logline': 'Το ταξίδι αυτό εκατομμύριο μιλία ξεκινάει από ένα βήμα...',
     'initialProject.chapter1': 'Κεφάλαιο 1',
   },
+  // QNBS-v3: Phase X Beta — fi/sv/hu/is/eu/fa cold-start values (native, no English flash on first paint).
+  fi: {
+    'initialProject.title': 'Nimetön tarinani',
+    'initialProject.logline': 'Tuhannen mailin matka alkaa yhdellä askeleella...',
+    'initialProject.chapter1': 'Luku 1',
+  },
+  sv: {
+    'initialProject.title': 'Min namnlösa berättelse',
+    'initialProject.logline': 'En resa på tusen mil börjar med ett enda steg...',
+    'initialProject.chapter1': 'Kapitel 1',
+  },
+  hu: {
+    'initialProject.title': 'Címtelen történetem',
+    'initialProject.logline': 'Az ezer mérföldes utazás egyetlen lépéssel kezdődik...',
+    'initialProject.chapter1': '1. fejezet',
+  },
+  is: {
+    'initialProject.title': 'Saga mín án titils',
+    'initialProject.logline': 'Þúsund mílna ferð hefst á einu skrefi...',
+    'initialProject.chapter1': '1. kafli',
+  },
+  eu: {
+    'initialProject.title': 'Nire istorio izengabea',
+    'initialProject.logline': 'Mila miliako bidaia urrats bakar batekin hasten da...',
+    'initialProject.chapter1': '1. kapitulua',
+  },
+  fa: {
+    'initialProject.title': 'داستان بی‌عنوان من',
+    'initialProject.logline': 'سفر هزار فرسنگی با یک گام آغاز می‌شود...',
+    'initialProject.chapter1': 'فصل ۱',
+  },
 };
 
 const KNOWN_PERSISTED_KEYS = new Set([

@@ -26,6 +26,7 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 
 Forward-looking work carried out of the v1.23 cycle:
 
+- **i18n — 17 locales (✅ infra + priority chrome):** added `fi/sv/hu/is/eu` (Beta) + `fa` (RTL, Persian). Priority files (`portal`/`sidebar`/`dashboard`/top `common`) hand-translated; remaining 16 modules are EN stubs pending the user-run bulk translator (`node scripts/bulk-translate-locales.mjs --lang=fi,sv,hu,is,eu,fa --all`). See [`docs/LANGUAGE-EXPANSION-2026.md`](docs/LANGUAGE-EXPANSION-2026.md).
 - **Coverage targets:** lift toward L≥85 % / B≥75 % / F≥80 % — focus on AI routing, Voice, Copilot.
 - **Local AI & Voice hardening:** Whisper/Kokoro on low-end devices, model-integrity checks, Eco-Mode.
 - **Error boundaries + structured logging** for AI/worker failures.

@@ -4,12 +4,30 @@ import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { bootstrapTranslation } from '../services/i18nBootstrap';
 import { logger } from '../services/logger';
 
-export type Language = 'en' | 'de' | 'fr' | 'es' | 'it' | 'ar' | 'he' | 'ja' | 'zh' | 'pt' | 'el';
+export type Language =
+  | 'en'
+  | 'de'
+  | 'fr'
+  | 'es'
+  | 'it'
+  | 'ar'
+  | 'he'
+  | 'ja'
+  | 'zh'
+  | 'pt'
+  | 'el'
+  | 'fi'
+  | 'sv'
+  | 'hu'
+  | 'is'
+  | 'eu'
+  | 'fa';
 
 // QNBS-v3: Phase 2 B-5 — ar/he are beta stubs (English placeholder text); RTL direction is active.
 // QNBS-v3: Phase 3 — ja/zh/pt/el are beta stubs (English placeholder text); LTR direction.
+// QNBS-v3: Phase X — fi/sv/hu/is/eu (LTR) + fa (RTL) beta stubs; priority files hand-translated.
 /** Languages whose natural writing direction is right-to-left. */
-export const RTL_LOCALES: ReadonlySet<Language> = new Set(['ar', 'he']);
+export const RTL_LOCALES: ReadonlySet<Language> = new Set(['ar', 'he', 'fa']);
 
 // QNBS-v3: Phase 3 — Language metadata for UI display and font handling
 export interface LanguageInfo {
@@ -35,6 +53,13 @@ export const SUPPORTED_LOCALES: ReadonlyArray<LanguageInfo> = [
   { code: 'zh', nativeName: '简体中文', dir: 'ltr', fontScript: 'cjk', isBeta: true },
   { code: 'pt', nativeName: 'Português', dir: 'ltr', fontScript: 'latin', isBeta: true },
   { code: 'el', nativeName: 'Ελληνικά', dir: 'ltr', fontScript: 'greek', isBeta: true },
+  // QNBS-v3: Phase X Beta — Nordic/Uralic/Basque (LTR) + Persian (RTL, Arabic script)
+  { code: 'fi', nativeName: 'Suomi', dir: 'ltr', fontScript: 'latin', isBeta: true },
+  { code: 'sv', nativeName: 'Svenska', dir: 'ltr', fontScript: 'latin', isBeta: true },
+  { code: 'hu', nativeName: 'Magyar', dir: 'ltr', fontScript: 'latin', isBeta: true },
+  { code: 'is', nativeName: 'Íslenska', dir: 'ltr', fontScript: 'latin', isBeta: true },
+  { code: 'eu', nativeName: 'Euskara', dir: 'ltr', fontScript: 'latin', isBeta: true },
+  { code: 'fa', nativeName: 'فارسی', dir: 'rtl', fontScript: 'arabic', isBeta: true },
 ];
 
 interface I18nContextType {
@@ -203,7 +228,25 @@ interface I18nProviderProps {
 }
 
 const LANG_KEY = 'worldscript-language';
-const VALID_LANGS: Language[] = ['en', 'de', 'fr', 'es', 'it', 'ar', 'he', 'ja', 'zh', 'pt', 'el'];
+const VALID_LANGS: Language[] = [
+  'en',
+  'de',
+  'fr',
+  'es',
+  'it',
+  'ar',
+  'he',
+  'ja',
+  'zh',
+  'pt',
+  'el',
+  'fi',
+  'sv',
+  'hu',
+  'is',
+  'eu',
+  'fa',
+];
 
 const getInitialLanguage = (): Language => {
   try {

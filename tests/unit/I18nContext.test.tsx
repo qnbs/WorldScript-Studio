@@ -515,22 +515,37 @@ describe('Intl.ListFormat - Extended', () => {
 // SUPPORTED_LOCALES metadata
 // ---------------------------------------------------------------------------
 describe('SUPPORTED_LOCALES', () => {
-  it('contains all 11 languages', async () => {
+  it('contains all 17 languages', async () => {
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
     // Import the constant directly for testing
     const { SUPPORTED_LOCALES } = await import('../../contexts/I18nContext');
-    expect(SUPPORTED_LOCALES.length).toBe(11);
+    expect(SUPPORTED_LOCALES.length).toBe(17);
   });
 
-  it('marks ar and he as RTL beta', async () => {
+  it('marks ar, he and fa as RTL beta', async () => {
     const { SUPPORTED_LOCALES } = await import('../../contexts/I18nContext');
     const arLocale = SUPPORTED_LOCALES.find((l) => l.code === 'ar');
     const heLocale = SUPPORTED_LOCALES.find((l) => l.code === 'he');
+    const faLocale = SUPPORTED_LOCALES.find((l) => l.code === 'fa');
     expect(arLocale?.dir).toBe('rtl');
     expect(arLocale?.isBeta).toBe(true);
     expect(heLocale?.dir).toBe('rtl');
     expect(heLocale?.isBeta).toBe(true);
+    // QNBS-v3: Phase X — Persian is the third RTL locale (Arabic script).
+    expect(faLocale?.dir).toBe('rtl');
+    expect(faLocale?.isBeta).toBe(true);
+    expect(faLocale?.fontScript).toBe('arabic');
+  });
+
+  it('marks fi, sv, hu, is, eu as LTR beta', async () => {
+    const { SUPPORTED_LOCALES } = await import('../../contexts/I18nContext');
+    for (const code of ['fi', 'sv', 'hu', 'is', 'eu'] as const) {
+      const locale = SUPPORTED_LOCALES.find((l) => l.code === code);
+      expect(locale, `${code} should be present`).toBeDefined();
+      expect(locale?.dir).toBe('ltr');
+      expect(locale?.isBeta).toBe(true);
+    }
   });
 
   it('marks ja, zh, pt, el as beta', async () => {

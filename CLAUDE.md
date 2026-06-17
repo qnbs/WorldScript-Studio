@@ -26,6 +26,7 @@ pnpm run typecheck     # TypeScript type check — EXACT CI command (tsgo --proj
 pnpm run test          # Vitest watch mode
 pnpm run test:run      # Vitest single run (CI mode)
 pnpm run test:coverage # Vitest with V8 coverage (thresholds: lines 74%, branches 60%, functions 67%, statements 72%)
+pnpm run bench         # Vitest perf benchmarks (tests/bench) — baseline gate for the Y.Doc-as-SoT / Local-First migration
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
 pnpm run i18n:bundle   # Rebuild public/locales/<lang>/bundle.json from source JSON
@@ -35,6 +36,9 @@ pnpm run test:e2e:deep # Deep coverage suite — feature-flag matrix + error pat
 pnpm run test:storybook # Storybook test-runner (CI; needs Storybook running or built)
 pnpm run graphify:update    # Rebuild AST-only knowledge graph (no API cost)
 pnpm run ci:quick           # lint + typecheck + i18n:check + unit tests — low-end hardware shortcut
+pnpm run parity:check       # tsx scripts/audit-feature-parity.ts — feature-flag parity audit (CI gate; must report 0 drifts)
+pnpm run suppressions:check # check-suppressions.mjs — biome-ignore/eslint-disable ratchet gate (never add a new suppression)
+pnpm run token:audit        # audit-tokens.mjs — design-token usage gate (CI baseline guard)
 ```
 
 **Run a single test file:** `pnpm exec vitest run tests/unit/serviceName.test.ts`
@@ -104,8 +108,8 @@ services/         → External adapters; key sub-dirs:
 packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui,
                      collab-transport (vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption),
                      worker-bus (typed worker pool, circuit breakers, dead-letter queue — see § WorkerBus below)
-locales/          → i18n source JSON (de/en/es/fr/it/ar/he/el/ja/pt/zh × 20 modules); runtime: public/locales/<lang>/bundle.json
-                     ar/ + he/ — RTL stubs behind enableRtlLayout; el/ja/pt/zh — Beta locales (P1-5)
+locales/          → i18n source JSON (de/en/es/fr/it/ar/he/el/ja/pt/zh/fi/sv/hu/is/eu/fa × 20 modules); runtime: public/locales/<lang>/bundle.json
+                     ar/ + he/ + fa/ — RTL (fa is Arabic-script Persian); el/ja/pt/zh/fi/sv/hu/is/eu — Beta locales (P1-5 + Phase X)
 tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
 types/            → Supplemental TypeScript definitions (duckdb-wasm-worker.d.ts, tauri-plugins.d.ts)
 types.ts          → Core shared interfaces and types (root level)
@@ -252,7 +256,7 @@ Experimental features are gated behind `features/featureFlags/featureFlagsSlice.
 
 ### i18n
 
-Custom React Context in `I18nContext.tsx` — not i18next. Source locales: **de, en, es, fr, it** (core), **ar, he** (RTL stubs, B-5), **el, ja, pt, zh** (Beta, P1-5). All 11 ship as `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` or auto via `pnpm run i18n:check`. All user-facing strings must use `t('key.path')` from `useTranslation()`. New keys: add to **all 11** locale trees (`node scripts/check-i18n-keys.mjs --fix`), then `pnpm run i18n:bundle`. The `/i18n-key` skill targets the **5 core** locales only; update Beta/RTL locales manually afterward.
+Custom React Context in `I18nContext.tsx` — not i18next. Source locales: **de, en, es, fr, it** (core), **ar, he, fa** (RTL; fa = Persian/Arabic script), **el, ja, pt, zh, fi, sv, hu, is, eu** (Beta). All 17 ship as `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` or auto via `pnpm run i18n:check`. All user-facing strings must use `t('key.path')` from `useTranslation()`. New keys: add to **all 17** locale trees (`node scripts/check-i18n-keys.mjs --fix`), then `pnpm run i18n:bundle`. The `/i18n-key` skill targets the **5 core** locales only; update Beta/RTL locales manually afterward. See [`docs/LANGUAGE-EXPANSION-2026.md`](docs/LANGUAGE-EXPANSION-2026.md) for the fi/sv/hu/is/eu/fa rollout and the user-run bulk-translate workflow.
 
 **RTL stubs (B-5):** `locales/ar/` + `locales/he/` are English-fallback stubs behind `enableRtlLayout`. Full content is v2.0 community task.
 

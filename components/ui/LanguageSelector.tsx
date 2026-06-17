@@ -4,23 +4,31 @@ import type { Language } from '../../contexts/I18nContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import { Icon } from './Icon';
 
-// QNBS-v3: Language metadata with flag emoji and native names for premium UX
-const LANGUAGE_METADATA: Record<
-  Language,
-  { label: string; nativeName: string; flag: string; isBeta?: boolean }
-> = {
-  en: { label: 'English', nativeName: 'English', flag: '🇺🇸' },
-  de: { label: 'German', nativeName: 'Deutsch', flag: '🇩🇪' },
-  fr: { label: 'French', nativeName: 'Français', flag: '🇫🇷' },
-  es: { label: 'Spanish', nativeName: 'Español', flag: '🇪🇸' },
-  it: { label: 'Italian', nativeName: 'Italiano', flag: '🇮🇹' },
-  ar: { label: 'Arabic', nativeName: 'العربية', flag: '🇸🇦', isBeta: true },
-  he: { label: 'Hebrew', nativeName: 'עברית', flag: '🇮🇱', isBeta: true },
-  ja: { label: 'Japanese', nativeName: '日本語', flag: '🇯🇵', isBeta: true },
-  zh: { label: 'Chinese', nativeName: '简体中文', flag: '🇨🇳', isBeta: true },
-  pt: { label: 'Portuguese', nativeName: 'Português', flag: '🇵🇹', isBeta: true },
-  el: { label: 'Greek', nativeName: 'Ελληνικά', flag: '🇬🇷', isBeta: true },
-};
+// QNBS-v3: Language metadata. nativeName is the endonym — intentionally NOT localized so users
+// always find their own language regardless of the active UI language (standard language-picker UX).
+// The exonym label is resolved at render time via t('portal.language.names.<code>') to satisfy the
+// no-hardcoded-user-facing-strings rule. flag is an emoji (non-translatable).
+const LANGUAGE_METADATA: Record<Language, { nativeName: string; flag: string; isBeta?: boolean }> =
+  {
+    en: { nativeName: 'English', flag: '🇺🇸' },
+    de: { nativeName: 'Deutsch', flag: '🇩🇪' },
+    fr: { nativeName: 'Français', flag: '🇫🇷' },
+    es: { nativeName: 'Español', flag: '🇪🇸' },
+    it: { nativeName: 'Italiano', flag: '🇮🇹' },
+    ar: { nativeName: 'العربية', flag: '🇸🇦', isBeta: true },
+    he: { nativeName: 'עברית', flag: '🇮🇱', isBeta: true },
+    ja: { nativeName: '日本語', flag: '🇯🇵', isBeta: true },
+    zh: { nativeName: '简体中文', flag: '🇨🇳', isBeta: true },
+    pt: { nativeName: 'Português', flag: '🇵🇹', isBeta: true },
+    el: { nativeName: 'Ελληνικά', flag: '🇬🇷', isBeta: true },
+    // QNBS-v3: Phase X Beta — Basque has no Unicode flag emoji (ikurriña absent); use 🌐 globe.
+    fi: { nativeName: 'Suomi', flag: '🇫🇮', isBeta: true },
+    sv: { nativeName: 'Svenska', flag: '🇸🇪', isBeta: true },
+    hu: { nativeName: 'Magyar', flag: '🇭🇺', isBeta: true },
+    is: { nativeName: 'Íslenska', flag: '🇮🇸', isBeta: true },
+    eu: { nativeName: 'Euskara', flag: '🌐', isBeta: true },
+    fa: { nativeName: 'فارسی', flag: '🇮🇷', isBeta: true },
+  };
 
 interface LanguageSelectorProps {
   value: Language;
@@ -127,19 +135,19 @@ export const LanguageSelector = React.memo(
       };
     }, [isOpen, variant]);
 
-    // QNBS-v3: Filter languages by search query (search in native name, label, and code)
+    // QNBS-v3: Filter languages by search query (search in localized exonym, native name, and code)
     const filteredLanguages = useMemo(() => {
       const query = searchQuery.toLowerCase().trim();
       if (!query) return Object.keys(LANGUAGE_METADATA) as Language[];
       return (Object.keys(LANGUAGE_METADATA) as Language[]).filter((code) => {
         const meta = LANGUAGE_METADATA[code];
         return (
-          meta.label.toLowerCase().includes(query) ||
+          t(`portal.language.names.${code}`).toLowerCase().includes(query) ||
           meta.nativeName.toLowerCase().includes(query) ||
           code.toLowerCase().includes(query)
         );
       });
-    }, [searchQuery]);
+    }, [searchQuery, t]);
 
     const currentMeta = LANGUAGE_METADATA[value];
 
@@ -197,7 +205,9 @@ export const LanguageSelector = React.memo(
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium">{meta.nativeName}</div>
-                    <div className="text-xs text-[var(--sc-text-muted)] truncate">{meta.label}</div>
+                    <div className="text-xs text-[var(--sc-text-muted)] truncate">
+                      {t(`portal.language.names.${lang}`)}
+                    </div>
                   </div>
                   {meta.isBeta && (
                     <span className="text-[0.6em] opacity-70 px-1" aria-hidden="true">

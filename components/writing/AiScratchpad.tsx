@@ -23,6 +23,13 @@ const TTS_LOCALE: Record<Language, string> = {
   zh: 'zh-CN',
   pt: 'pt-BR',
   el: 'el-GR',
+  // QNBS-v3: Phase X Beta — fi/sv/hu/is/eu/fa TTS locales (eu uses es-region voice fallback)
+  fi: 'fi-FI',
+  sv: 'sv-SE',
+  hu: 'hu-HU',
+  is: 'is-IS',
+  eu: 'eu-ES',
+  fa: 'fa-IR',
 };
 
 const AiScratchpad: FC = React.memo(() => {

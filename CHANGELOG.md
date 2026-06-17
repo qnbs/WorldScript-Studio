@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Language expansion — 6 new locales (11 → 17):** Finnish (`fi`), Swedish (`sv`), Hungarian (`hu`), Icelandic (`is`), Basque (`eu`) and Persian/Farsi (`fa`, **RTL**, Arabic script). All ship as Beta. The high-traffic chrome (`portal`, `sidebar`, `dashboard`, top `common.*` verbs) plus native cold-start strings (`i18nBootstrap`) and glossary blocks are hand-translated; the remaining 16 modules ship as English-fallback stubs (parity-green) pending the user-run bulk translator. `fa` direction/fonts are automatic via `RTL_LOCALES` + the existing `[dir="rtl"]` Noto Arabic swap — no App/CSS/font changes. New guide: [`docs/LANGUAGE-EXPANSION-2026.md`](docs/LANGUAGE-EXPANSION-2026.md).
+- **Bulk-translate hardening (`scripts/bulk-translate-locales.mjs`):** placeholder masking (`{{token}}` → sentinel → restore, so MT can't mangle interpolation) and a `--dry-run` mode (per-file key + glossary-hit counts, no network calls, no writes). The 6 new languages are added to `SUPPORTED_LANGS`, `check-i18n-keys.mjs`, and `build-i18n.mjs`. The `i18nPlaceholders` guard now covers all 17 locale bundles.
+
 ## [1.23.0] — 2026-06-16
 
 ### Changed

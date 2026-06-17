@@ -33,6 +33,13 @@ const SUPPORTED_LANGS = {
   zh: 'Chinese (Simplified)',
   pt: 'Portuguese',
   el: 'Greek',
+  // QNBS-v3: Phase X — Google `tl` codes map 1:1 (fa = Persian).
+  fi: 'Finnish',
+  sv: 'Swedish',
+  hu: 'Hungarian',
+  is: 'Icelandic',
+  eu: 'Basque',
+  fa: 'Persian',
 };
 
 const FREE_ENDPOINT =
@@ -40,6 +47,28 @@ const FREE_ENDPOINT =
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// QNBS-v3: Placeholder masking — the free MT endpoint mangles `{{name}}` tokens (translates the
+// word inside, drops braces, reorders). Replace each with an order-indexed sentinel using unusual
+// math brackets (U+27E6/U+27E7) that survive MT, then restore afterward. Restore is whitespace-
+// tolerant because MT sometimes pads the sentinel (e.g. "⟦ 0 ⟧").
+function maskPlaceholders(text) {
+  const tokens = [];
+  const masked = text.replace(/\{\{.*?\}\}/g, (match) => {
+    const idx = tokens.length;
+    tokens.push(match);
+    return `⟦${idx}⟧`;
+  });
+  return { masked, tokens };
+}
+
+function restorePlaceholders(text, tokens) {
+  let result = text;
+  for (let i = 0; i < tokens.length; i++) {
+    result = result.replace(new RegExp(`⟦\\s*${i}\\s*⟧`, 'g'), tokens[i]);
+  }
+  return result;
 }
 
 function loadGlossary() {
@@ -123,7 +152,7 @@ async function translateWithRetry(text, targetLang, retries = 3) {
   return text;
 }
 
-async function translateFile(enPath, outPath, targetLang, delayMs = 600) {
+async function translateFile(enPath, outPath, targetLang, delayMs = 600, dryRun = false) {
   const glossary = loadGlossary();
   const enData = JSON.parse(fs.readFileSync(enPath, 'utf8'));
   const existing = fs.existsSync(outPath) ? JSON.parse(fs.readFileSync(outPath, 'utf8')) : {};
@@ -145,6 +174,17 @@ async function translateFile(enPath, outPath, targetLang, delayMs = 600) {
     return;
   }
 
+  // QNBS-v3: --dry-run — report counts only; no network calls, no writes.
+  if (dryRun) {
+    const glossaryHits = keysToTranslate.filter(
+      (k) => glossaryTranslate(enData[k], targetLang, glossary) !== null,
+    ).length;
+    console.log(
+      `  [dry-run] ${fileBase}: ${keysToTranslate.length}/${Object.keys(enData).length} to translate · ${glossaryHits} glossary hit(s) · ${keysToTranslate.length - glossaryHits} via MT`,
+    );
+    return;
+  }
+
   console.log(
     `  Translating ${keysToTranslate.length}/${Object.keys(enData).length} keys for ${targetLang}...`,
   );
@@ -160,8 +200,11 @@ async function translateFile(enPath, outPath, targetLang, delayMs = 600) {
     let result = glossaryTranslate(original, targetLang, glossary);
 
     if (!result) {
+      // QNBS-v3: mask {{placeholders}} before MT so the engine can't translate/drop them.
+      const { masked, tokens } = maskPlaceholders(original);
       try {
-        result = await translateWithRetry(original, targetLang);
+        const translatedMasked = await translateWithRetry(masked, targetLang);
+        result = restorePlaceholders(translatedMasked, tokens);
       } catch (err) {
         console.error(`\n  Failed: ${key} = "${original}" — ${err.message}`);
         result = original; // fallback to EN
@@ -189,11 +232,12 @@ async function translateFile(enPath, outPath, targetLang, delayMs = 600) {
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { lang: [], files: [], all: false, delay: 600 };
+  const opts = { lang: [], files: [], all: false, delay: 600, dryRun: false };
   for (const arg of args) {
     if (arg.startsWith('--lang=')) opts.lang = arg.slice(7).split(',').filter(Boolean);
     else if (arg.startsWith('--files=')) opts.files = arg.slice(8).split(',').filter(Boolean);
     else if (arg === '--all') opts.all = true;
+    else if (arg === '--dry-run') opts.dryRun = true;
     else if (arg.startsWith('--delay=')) opts.delay = Number.parseInt(arg.slice(8), 10);
   }
   return opts;
@@ -204,11 +248,13 @@ async function main() {
 
   if (opts.lang.length === 0) {
     console.error(
-      'Usage: node bulk-translate-locales.mjs --lang=ja [--files=common,portal] [--all] [--delay=400]',
+      'Usage: node bulk-translate-locales.mjs --lang=ja [--files=common,portal] [--all] [--delay=400] [--dry-run]',
     );
     console.error('Supported languages:', Object.keys(SUPPORTED_LANGS).join(', '));
     process.exit(1);
   }
+
+  if (opts.dryRun) console.log('🔍 Dry run — no network calls, no writes.\n');
 
   const enDir = path.join(ROOT, 'locales', 'en');
   const enFiles = fs
@@ -238,7 +284,7 @@ async function main() {
         continue;
       }
       const outPath = path.join(outDir, file);
-      await translateFile(enPath, outPath, lang, opts.delay);
+      await translateFile(enPath, outPath, lang, opts.delay, opts.dryRun);
     }
   }
 

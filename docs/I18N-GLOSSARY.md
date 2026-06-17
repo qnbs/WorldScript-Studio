@@ -64,6 +64,38 @@
 - Uses "εσείς" form for polite address
 - Follows Greek CLDR plural rules
 
+## Phase X Beta Languages (fi, sv, hu, is, eu, fa)
+
+**Status:** Beta. Priority chrome (`portal`, `sidebar`, `dashboard`, top `common.*`) hand-translated;
+remaining modules are English-fallback stubs pending the user-run bulk translator. Canonical terms
+live lang-first in `locales/translation-glossary.json`. See [`LANGUAGE-EXPANSION-2026.md`](LANGUAGE-EXPANSION-2026.md).
+
+| English | Finnish (fi) | Swedish (sv) | Hungarian (hu) | Icelandic (is) | Basque (eu) | Persian (fa) |
+|---------|-------------|--------------|----------------|----------------|-------------|--------------|
+| Manuscript | Käsikirjoitus | Manuskript | Kézirat | Handrit | Eskuizkribu | دست‌نوشته |
+| Plot Board | Juonitaulu | Plot Board | Cselekménytábla | Söguborð | Argumentu-taula | تخته‌داستان |
+| Character | Hahmo | Karaktär | Karakter | Persóna | Pertsonaia | شخصیت |
+| World | Maailma | Värld | Világ | Heimur | Mundua | جهان |
+| Dashboard | Kojelauta | Översikt | Irányítópult | Mælaborð | Aginte-panela | داشبورد |
+| Settings | Asetukset | Inställningar | Beállítások | Stillingar | Ezarpenak | تنظیمات |
+| Export | Vie | Exportera | Exportálás | Flytja út | Esportatu | خروجی |
+
+### Morphology & UI-length notes
+- **fi (Finnish):** agglutinative; long single-word compounds (*Johdonmukaisuustarkistus*). Watch
+  sidebar/dashboard overflow. one/other plurals via `Intl.PluralRules`.
+- **hu (Hungarian):** agglutinative; ordinal chapters use a trailing dot (*1. fejezet*). Long
+  compounds (*Konzisztencia-ellenőrző*). one/other plurals.
+- **is (Icelandic):** four cases; long compounds (*Samkvæmnisprófun*). Ordinals as *1. kafli*.
+  one/other plurals (note 21, 31… are "one" — never hardcode).
+- **eu (Basque):** non-Indo-European; prefer short, clear forms. Ordinals *1. kapitulua*.
+- **fa (Persian):** **RTL**, Arabic script with Persian letters (پ چ ژ گ ک ی). Numerals may render
+  as Eastern Arabic (۱۲۳) in prose; keep `{{count}}` etc. unchanged. Literary register for narrative
+  demo strings, neutral register for chrome. one/other plurals.
+
+### Flags
+Basque has **no** Unicode flag emoji (the ikurriña is not encoded); `LanguageSelector` uses 🌐.
+Persian uses 🇮🇷.
+
 ## Scope Note
 
-`help.json` (long-form help-article prose) is intentionally left as **English fallback** for Beta languages. Only the 18 UI-chrome modules are translated. See `AUDIT.md` C-6.
+`help.json` (long-form help-article prose) is intentionally left as **English fallback** for Beta languages. Only the UI-chrome modules are hand-translated. See `AUDIT.md` C-6 and [`LANGUAGE-EXPANSION-2026.md`](LANGUAGE-EXPANSION-2026.md).

@@ -92,6 +92,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   - **Hinweis:** Rust TaskSupervisor UI (ManuscriptStatsPanel) ist separat in WorkerBus v2 Phase 3 (siehe unten).
 
 ### P2 — Global Readiness & i18n
+- 🟡 **Language expansion — 6 neue Locales (11 → 17):** `fi/sv/hu/is/eu` (Beta) + `fa` (RTL, Persisch). Infra (Language-Type, `RTL_LOCALES`, `SUPPORTED_LOCALES`, `LANGUAGE_METADATA`, `TTS_LOCALE`, `I18N_BOOTSTRAP`), Glossar (lang-first), Priority-Files (`portal`/`sidebar`/`dashboard`/Top-`common`) **hand-übersetzt**; übrige 16 Module = EN-Stubs (Parität grün). Bulk-Script gehärtet (Placeholder-Masking + `--dry-run`). **Offen (user-run):** `node scripts/bulk-translate-locales.mjs --lang=fi,sv,hu,is,eu,fa --all --delay=600` + `pnpm run i18n:bundle`, dann `--quality` bis ≤5% EN-Placeholders + native Review. Siehe [`docs/LANGUAGE-EXPANSION-2026.md`](docs/LANGUAGE-EXPANSION-2026.md).
 - ✅ **P1-5** — Beta-Sprachen ja/zh/pt/el ≤ 5% English-Placeholders **erreicht** (verifiziert 2026-06-09: pt 2.2% · el 2.8% · ja 0.9% · zh 0.5%). Tooling: `scripts/bulk-translate-locales.mjs` (Google-Translate-Endpoint mit Rate-Limiting/Retry/Checkpointing/Glossary) + `locales/translation-glossary.json` + `docs/BULK-TRANSLATION.md`. Command: `node scripts/bulk-translate-locales.mjs --lang=ja,zh,pt,el --all --delay=400`.
 - ✅ **P1-4** — Error Boundaries + Logging: Alle 19+ Views in `App.tsx` mit `ErrorBoundary`/`ViewErrorBoundary` gewrappt (WelcomePortal früher Return-Path + alle Modals/Portals). Commits `f810d51` + `6305d64`.
 

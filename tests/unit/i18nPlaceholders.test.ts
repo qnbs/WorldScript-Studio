@@ -7,7 +7,7 @@
  *      braces render literally (user saw "Du bist hier: {view}", "common.abort", etc.).
  *   2. translated placeholder NAMES — es/pt localized `{count}`→`{contar}` / `{seconds}`→`{segundos}`
  *      / `{{count}}`→`{{contagem}}`, which never match the param names the code passes.
- * This guard fails CI if either recurs in any of the 11 shipped locale bundles.
+ * This guard fails CI if either recurs in any of the 17 shipped locale bundles.
  *
  * QNBS-v3: token patterns use the Unicode letter class `\p{L}` (not `[A-Za-z]`) so a token name
  * localized into a non-ASCII script (e.g. `{{タイトル}}`, the ja-writer bug class) is still detected
@@ -18,7 +18,25 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const LOCALES = ['en', 'de', 'es', 'fr', 'it', 'ar', 'he', 'el', 'ja', 'pt', 'zh'] as const;
+const LOCALES = [
+  'en',
+  'de',
+  'es',
+  'fr',
+  'it',
+  'ar',
+  'he',
+  'el',
+  'ja',
+  'pt',
+  'zh',
+  'fi',
+  'sv',
+  'hu',
+  'is',
+  'eu',
+  'fa',
+] as const;
 
 function loadBundle(lang: string): Record<string, string> {
   const path = join(process.cwd(), 'public', 'locales', lang, 'bundle.json');
