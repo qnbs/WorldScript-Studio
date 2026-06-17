@@ -29,6 +29,9 @@ export const binderReducers = {
     if (!nodes?.length) return;
     const toRemove = new Set<string>();
     const collect = (pid: string) => {
+      // QNBS-v3: visited guard — a cyclic binder (corrupted/imported parentId loop) would otherwise
+      // recurse forever; the Set already dedupes removal, this also breaks the recursion.
+      if (toRemove.has(pid)) return;
       toRemove.add(pid);
       for (const n of nodes) {
         if (n.parentId === pid) collect(n.id);

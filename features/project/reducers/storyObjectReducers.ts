@@ -13,7 +13,13 @@ export const storyObjectReducers = {
     action: PayloadAction<{ id: string; changes: Partial<StoryObject> }>,
   ) => {
     const obj = (state.data.storyObjects ?? []).find((o) => o.id === action.payload.id);
-    if (obj) Object.assign(obj, action.payload.changes);
+    // QNBS-v3: never let an update rewrite the entity id — objectGroups[*].objectIds key on it and
+    // deleteStoryObject's cascade matches by id, so an id change would orphan group cross-refs.
+    if (obj) {
+      const originalId = obj.id;
+      Object.assign(obj, action.payload.changes);
+      obj.id = originalId;
+    }
   },
   deleteStoryObject: (state: ProjectSliceState, action: PayloadAction<string>) => {
     const id = action.payload;
@@ -32,7 +38,12 @@ export const storyObjectReducers = {
     action: PayloadAction<{ id: string; changes: Partial<ObjectGroup> }>,
   ) => {
     const g = (state.data.objectGroups ?? []).find((g) => g.id === action.payload.id);
-    if (g) Object.assign(g, action.payload.changes);
+    // QNBS-v3: keep id immutable — storyObjects[*].groupIds reference it; a change would desync membership.
+    if (g) {
+      const originalId = g.id;
+      Object.assign(g, action.payload.changes);
+      g.id = originalId;
+    }
   },
   deleteObjectGroup: (state: ProjectSliceState, action: PayloadAction<string>) => {
     const id = action.payload;

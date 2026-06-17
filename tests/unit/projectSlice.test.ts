@@ -524,6 +524,34 @@ describe('projectSlice', () => {
     });
   });
 
+  describe('binder nodes', () => {
+    it('deleteBinderNode removes a node and its subtree', () => {
+      const store = createTestStore({
+        binderNodes: [
+          { id: 'root', parentId: null, title: 'Root', type: 'folder' },
+          { id: 'child', parentId: 'root', title: 'Child', type: 'note' },
+          { id: 'other', parentId: null, title: 'Other', type: 'note' },
+        ],
+      });
+      store.dispatch(projectActions.deleteBinderNode('root'));
+      const nodes = store.getState().project.present.data.binderNodes ?? [];
+      expect(nodes.map((n) => n.id)).toEqual(['other']);
+    });
+
+    it('deleteBinderNode terminates on a cyclic parent chain (no infinite recursion)', () => {
+      const store = createTestStore({
+        // QNBS-v3: corrupted/imported cycle a→b→a — must not hang the reducer.
+        binderNodes: [
+          { id: 'a', parentId: 'b', title: 'A', type: 'note' },
+          { id: 'b', parentId: 'a', title: 'B', type: 'note' },
+        ],
+      });
+      store.dispatch(projectActions.deleteBinderNode('a'));
+      const nodes = store.getState().project.present.data.binderNodes ?? [];
+      expect(nodes).toHaveLength(0);
+    });
+  });
+
   describe('undo/redo', () => {
     it('should support undo/redo for synchronous actions', () => {
       const store = createTestStore();
