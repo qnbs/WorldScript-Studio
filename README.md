@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/TypeScript-7.x_(tsgo)-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7 (tsgo)">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_OpenRouter_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · OpenRouter · Ollama · WebLLM">
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
-  <img src="https://img.shields.io/badge/Version-v1.23.0-6366F1" alt="v1.23.0">
+  <img src="https://img.shields.io/badge/Version-v1.23.1-6366F1" alt="v1.23.1">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-17_locales-2716_keys-0EA5E9" alt="i18n 17 locales — 2716 keys">

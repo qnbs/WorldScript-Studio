@@ -87,8 +87,46 @@ navigator.serviceWorker?.addEventListener('message', (event: MessageEvent) => {
   }
 });
 
+// QNBS-v3: Detect the Tauri desktop runtime. Tauri injects these globals before page scripts run,
+// so they are reliably present by the time `load` fires. The PWA Service Worker must NEVER run in
+// the Tauri WebView: Tauri already serves all assets locally (offline-first), and a SW there
+// hijacks navigations and can render "<APP_NAME> ist offline." when its cache is empty.
+const isTauriEnvironment = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const w = window as unknown as Record<string, unknown>;
+  return (
+    '__TAURI_INTERNALS__' in w ||
+    '__TAURI__' in w ||
+    '__TAURI_METADATA__' in w ||
+    (typeof navigator !== 'undefined' && / Tauri\//.test(navigator.userAgent ?? ''))
+  );
+};
+
 // ── Core registration ─────────────────────────────────────────
 const registerServiceWorker = async (): Promise<void> => {
+  // QNBS-v3: In Tauri, never register — and proactively tear down any SW + caches a prior build
+  // installed, so already-broken desktop installs self-heal on the first launch that boots the app.
+  if (isTauriEnvironment()) {
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((reg) => reg.unregister()));
+        if (typeof caches !== 'undefined') {
+          const keys = await caches.keys();
+          await Promise.all(
+            keys.filter((k) => k.startsWith('worldscript-')).map((k) => caches.delete(k)),
+          );
+        }
+        appLogger.info(
+          '[SW] Tauri runtime — service worker disabled; any prior registration removed.',
+        );
+      } catch (error) {
+        appLogger.warn('[SW] Tauri service-worker teardown failed (non-fatal):', error);
+      }
+    }
+    return;
+  }
+
   if (!('serviceWorker' in navigator)) {
     appLogger.warn('[SW] Service Workers not supported in this browser.');
     return;

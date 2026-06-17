@@ -5,13 +5,21 @@
 //           offline fallback, push notifications, share target
 // ============================================================
 
-const APP_VERSION   = '1.23.0';
+const APP_VERSION   = '1.23.1';
 const CACHE_STATIC  = `worldscript-static-v${APP_VERSION}`;
 const CACHE_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `worldscript-images-v${APP_VERSION}`;
 const ALL_CACHES    = [CACHE_STATIC, CACHE_DYNAMIC, CACHE_IMAGES];
 
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
+
+// QNBS-v3: Detect the Tauri desktop WebView (served from tauri://localhost or https://tauri.localhost).
+// Inside Tauri the app is bundled locally and is already offline-first; a Service Worker only
+// intercepts navigations and — when its cache is empty — serves the "<APP> ist offline." fallback
+// (this exact regression). So under Tauri the SW precaches nothing, never intercepts fetches, and
+// self-unregisters on activate so any SW a prior build installed stops hijacking navigation.
+const IS_TAURI =
+  self.location.protocol === 'tauri:' || self.location.hostname === 'tauri.localhost';
 
 const swLogger = {
   log: (...args) => self.console.log('[SW]', ...args),
@@ -99,6 +107,8 @@ self.addEventListener('install', (event) => {
   // active SW that serves cached v.old assets. The app auto-saves to IDB so a mid-session
   // reload is safe. Paired with clients.claim() in activate this ensures all tabs get new code.
   self.skipWaiting();
+  // QNBS-v3: Never precache inside Tauri — the desktop app serves its shell from the bundle.
+  if (IS_TAURI) return;
   event.waitUntil(
     caches.open(CACHE_STATIC)
       .then((cache) => cache.addAll(PRECACHE_URLS))
@@ -113,6 +123,28 @@ self.addEventListener('install', (event) => {
 // ACTIVATE — Prune stale caches, claim all clients
 // ════════════════════════════════════════════════════════════
 self.addEventListener('activate', (event) => {
+  // QNBS-v3: Self-destruct inside Tauri — wipe every cache and unregister this SW so a previously
+  // installed worker stops intercepting navigation and serving "<APP> ist offline." in the desktop
+  // app. After unregister the WebView loads the real bundled index.html directly (no SW control).
+  if (IS_TAURI) {
+    event.waitUntil(
+      (async () => {
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((name) => caches.delete(name)));
+        } catch (err) {
+          swLogger.warn('Tauri cache cleanup failed (non-fatal):', err);
+        }
+        try {
+          await self.registration.unregister();
+        } catch (err) {
+          swLogger.warn('Tauri SW unregister failed (non-fatal):', err);
+        }
+        await self.clients.claim();
+      })()
+    );
+    return;
+  }
   event.waitUntil(
     caches.keys()
       .then((cacheNames) =>
@@ -155,6 +187,10 @@ function isNetworkOnlyUrl(url) {
 // FETCH — Multi-strategy routing
 // ════════════════════════════════════════════════════════════
 self.addEventListener('fetch', (event) => {
+  // QNBS-v3: In Tauri, never intercept — let the WebView load bundled assets directly so the SW
+  // can't serve a stale/empty-cache offline fallback over the real app. (Belt to activate's unregister.)
+  if (IS_TAURI) return;
+
   const { request } = event;
   const url = new URL(request.url);
 

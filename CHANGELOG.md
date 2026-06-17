@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.1] — 2026-06-17
+
+### Fixed
+
+- **Tauri desktop app stuck on "WorldScript Studio ist offline."**: the PWA Service Worker was registering inside the Tauri WebView (WebView2 supports SWs) and hijacking the root navigation. When its versioned caches were empty (precache fails under the `tauri.localhost` custom protocol while a version bump had already pruned the previous caches), the SW's network-first navigation strategy fell through to the hardcoded inline offline fallback (`public/sw.js`), rendering a bare "<APP> ist offline." page instead of the app. A Service Worker has no place in Tauri — the desktop app is already served locally and offline-first. Two-layer fix: (1) `register-sw.ts` now detects the Tauri runtime and never registers, additionally unregistering any SW + deleting `worldscript-*` caches so already-broken installs self-heal; (2) `public/sw.js` detects the Tauri origin (`tauri://` / `tauri.localhost`) and becomes a no-op — it precaches nothing, never intercepts `fetch`, and self-unregisters on `activate`. The browser PWA path is unchanged.
+
 ## [Unreleased]
 
 ### Added
