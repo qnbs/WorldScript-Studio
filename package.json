@@ -95,7 +95,7 @@
   "dependencies": {
     "@ai-sdk/google": "^3.0.82",
     "@ai-sdk/openai": "^3.0.71",
-    "@ai-sdk/react": "^3.0.193",
+    "@ai-sdk/react": "^3.0.201",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
