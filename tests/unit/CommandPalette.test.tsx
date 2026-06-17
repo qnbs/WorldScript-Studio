@@ -1,6 +1,9 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, renderHook, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandPalette } from '../../components/CommandPalette';
+import { useCommandPalette } from '../../hooks/useCommandPalette';
+import { buildPaletteCommandModels } from '../../services/commands/commandBuilder';
+import type { PaletteCommandModel } from '../../services/commands/commandTypes';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -119,6 +122,22 @@ vi.mock('../../features/project/projectSelectors', () => ({
 const mockOnClose = vi.fn();
 const mockOnNavigate = vi.fn();
 
+// QNBS-v3: keep the default empty-list mock for the smoke tests; populated per-test below.
+afterEach(() => {
+  vi.mocked(buildPaletteCommandModels).mockReturnValue([]);
+});
+
+const makeCommands = (n: number): PaletteCommandModel[] =>
+  Array.from({ length: n }, (_, i) => ({
+    id: `cmd-${i}`,
+    title: `Command ${i}`,
+    categoryLabel: 'palette.category.global',
+    category: 'global',
+    icon: null,
+    keywords: [],
+    run: vi.fn(),
+  }));
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -172,5 +191,28 @@ describe('CommandPalette', () => {
         />,
       ),
     ).not.toThrow();
+  });
+
+  // QNBS-v3: the virtualized refactor flattens blocks into a single row list. Verify the hook's
+  // row model deterministically (no DOM/layout): headings + options interleaved, with a stable
+  // option-index → row-index map so the virtualizer can scroll the keyboard selection into view.
+  it('builds a flattened heading+option row model with a stable option-index map', () => {
+    vi.mocked(buildPaletteCommandModels).mockReturnValue(makeCommands(60));
+    const { result } = renderHook(() =>
+      useCommandPalette({
+        isOpen: true,
+        onClose: mockOnClose,
+        onNavigate: mockOnNavigate,
+        currentView: 'dashboard',
+      }),
+    );
+    const headings = result.current.rows.filter((r) => r.kind === 'heading');
+    const options = result.current.rows.filter((r) => r.kind === 'option');
+    expect(headings.length).toBe(1);
+    expect(options.length).toBe(60);
+    expect(result.current.flatItems.length).toBe(60);
+    // Row 0 is the section heading, so option index 0 lives at row index 1.
+    expect(result.current.optionIndexToRowIndex.get(0)).toBe(1);
+    expect(result.current.optionIndexToRowIndex.get(59)).toBe(60);
   });
 });
