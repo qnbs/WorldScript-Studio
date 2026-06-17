@@ -63,6 +63,12 @@ function maskPlaceholders(text) {
   return { masked, tokens };
 }
 
+// QNBS-v3: Modules excluded from `--all`. help.json is long-form rich HTML; the free MT endpoint
+// mangles tag-dense markup even with sentinel masking (dropped/duplicated tags → unbalanced HTML
+// rendered by HelpView), so per policy it stays English fallback for Beta locales and is only
+// translated by human review. Still translatable explicitly via `--files=help` if ever needed.
+const ALL_SKIP = new Set(['help.json']);
+
 function restorePlaceholders(text, tokens) {
   let result = text;
   for (let i = 0; i < tokens.length; i++) {
@@ -255,7 +261,7 @@ async function main() {
     .sort();
 
   const filesToProcess = opts.all
-    ? enFiles
+    ? enFiles.filter((f) => !ALL_SKIP.has(f))
     : opts.files.length > 0
       ? opts.files.map((f) => (f.endsWith('.json') ? f : `${f}.json`))
       : enFiles;
