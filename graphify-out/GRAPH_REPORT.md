@@ -1,11 +1,11 @@
 # Graph Report - StoryCraft-Studio  (2026-06-18)
 
 ## Corpus Check
-- 1089 files · ~1,257,302 words
+- 1092 files · ~1,257,811 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4866 nodes · 8651 edges · 84 communities detected
+- 4869 nodes · 8651 edges · 84 communities detected
 - Extraction: 76% EXTRACTED · 24% INFERRED · 0% AMBIGUOUS · INFERRED: 2091 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -69,9 +69,6 @@
 - [[_COMMUNITY_Community 222|Community 222]]
 - [[_COMMUNITY_Community 262|Community 262]]
 - [[_COMMUNITY_Community 267|Community 267]]
-- [[_COMMUNITY_Community 703|Community 703]]
-- [[_COMMUNITY_Community 704|Community 704]]
-- [[_COMMUNITY_Community 705|Community 705]]
 - [[_COMMUNITY_Community 706|Community 706]]
 - [[_COMMUNITY_Community 707|Community 707]]
 - [[_COMMUNITY_Community 708|Community 708]]
@@ -94,6 +91,9 @@
 - [[_COMMUNITY_Community 725|Community 725]]
 - [[_COMMUNITY_Community 726|Community 726]]
 - [[_COMMUNITY_Community 727|Community 727]]
+- [[_COMMUNITY_Community 728|Community 728]]
+- [[_COMMUNITY_Community 729|Community 729]]
+- [[_COMMUNITY_Community 730|Community 730]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `mt()` - 104 edges
@@ -357,103 +357,103 @@ Nodes (1): FileSystemService
 Cohesion: 1.0
 Nodes (1): IndexedDBService
 
-### Community 703 - "Community 703"
+### Community 706 - "Community 706"
 Cohesion: 1.0
 Nodes (1): Remove ANSI escape codes from text.
 
-### Community 704 - "Community 704"
+### Community 707 - "Community 707"
 Cohesion: 1.0
 Nodes (1): Remove timestamp strings from text.
 
-### Community 705 - "Community 705"
+### Community 708 - "Community 708"
 Cohesion: 1.0
 Nodes (1): Replace long base64 strings with placeholder.
 
-### Community 706 - "Community 706"
+### Community 709 - "Community 709"
 Cohesion: 1.0
 Nodes (1): Remove NPM/pnpm warning lines.
 
-### Community 707 - "Community 707"
+### Community 710 - "Community 710"
 Cohesion: 1.0
 Nodes (1): Remove redundant success messages.
 
-### Community 708 - "Community 708"
+### Community 711 - "Community 711"
 Cohesion: 1.0
 Nodes (1): Apply all preprocessing steps to reduce token payload.
 
-### Community 709 - "Community 709"
+### Community 712 - "Community 712"
 Cohesion: 1.0
 Nodes (1): Extract only error-related sections from log.
 
-### Community 710 - "Community 710"
+### Community 713 - "Community 713"
 Cohesion: 1.0
 Nodes (1): Pydantic models for CI Analyzer structured output. QNBS-v3: These models enforce
 
-### Community 711 - "Community 711"
+### Community 714 - "Community 714"
 Cohesion: 1.0
 Nodes (1): Structured CI error for VS Code problem matcher integration.
 
-### Community 712 - "Community 712"
+### Community 715 - "Community 715"
 Cohesion: 1.0
 Nodes (1): Vitest JSON test result structure.
 
-### Community 713 - "Community 713"
+### Community 716 - "Community 716"
 Cohesion: 1.0
 Nodes (1): Full Vitest JSON report structure.
 
-### Community 714 - "Community 714"
+### Community 717 - "Community 717"
 Cohesion: 1.0
 Nodes (1): Stryker per-file mutation report.
 
-### Community 715 - "Community 715"
+### Community 718 - "Community 718"
 Cohesion: 1.0
 Nodes (1): Full Stryker JSON report structure.
 
-### Community 716 - "Community 716"
+### Community 719 - "Community 719"
 Cohesion: 1.0
 Nodes (1): Initialize OpenRouter client for Poolside Laguna model.
 
-### Community 717 - "Community 717"
+### Community 720 - "Community 720"
 Cohesion: 1.0
 Nodes (1): Analyze Vitest JSON report and raw logs for errors.
 
-### Community 718 - "Community 718"
+### Community 721 - "Community 721"
 Cohesion: 1.0
 Nodes (1): Analyze Stryker JSON report for surviving mutants.
 
-### Community 719 - "Community 719"
+### Community 722 - "Community 722"
 Cohesion: 1.0
 Nodes (1): Send preprocessed errors to LLM for analysis.
 
-### Community 720 - "Community 720"
+### Community 723 - "Community 723"
 Cohesion: 1.0
 Nodes (1): Format errors for VS Code problem matcher.
 
-### Community 721 - "Community 721"
+### Community 724 - "Community 724"
 Cohesion: 1.0
 Nodes (1): Main entry point for CI analyzer.
 
-### Community 722 - "Community 722"
+### Community 725 - "Community 725"
 Cohesion: 1.0
 Nodes (1): Execute gh CLI command and return parsed JSON output.
 
-### Community 723 - "Community 723"
+### Community 726 - "Community 726"
 Cohesion: 1.0
 Nodes (1): Get the ID of the most recent failed CI run.
 
-### Community 724 - "Community 724"
+### Community 727 - "Community 727"
 Cohesion: 1.0
 Nodes (1): Download a specific artifact from a workflow run.
 
-### Community 725 - "Community 725"
+### Community 728 - "Community 728"
 Cohesion: 1.0
 Nodes (1): Get raw logs from a failed workflow run.
 
-### Community 726 - "Community 726"
+### Community 729 - "Community 729"
 Cohesion: 1.0
 Nodes (1): Parse Vitest JSON report for failing tests.
 
-### Community 727 - "Community 727"
+### Community 730 - "Community 730"
 Cohesion: 1.0
 Nodes (1): Parse Stryker JSON report for surviving mutants.
 
@@ -498,55 +498,55 @@ Nodes (1): Parse Stryker JSON report for surviving mutants.
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 267`** (2 nodes): `IndexedDBService`, `index.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 703`** (1 nodes): `Remove ANSI escape codes from text.`
+- **Thin community `Community 706`** (1 nodes): `Remove ANSI escape codes from text.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 704`** (1 nodes): `Remove timestamp strings from text.`
+- **Thin community `Community 707`** (1 nodes): `Remove timestamp strings from text.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 705`** (1 nodes): `Replace long base64 strings with placeholder.`
+- **Thin community `Community 708`** (1 nodes): `Replace long base64 strings with placeholder.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 706`** (1 nodes): `Remove NPM/pnpm warning lines.`
+- **Thin community `Community 709`** (1 nodes): `Remove NPM/pnpm warning lines.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 707`** (1 nodes): `Remove redundant success messages.`
+- **Thin community `Community 710`** (1 nodes): `Remove redundant success messages.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 708`** (1 nodes): `Apply all preprocessing steps to reduce token payload.`
+- **Thin community `Community 711`** (1 nodes): `Apply all preprocessing steps to reduce token payload.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 709`** (1 nodes): `Extract only error-related sections from log.`
+- **Thin community `Community 712`** (1 nodes): `Extract only error-related sections from log.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 710`** (1 nodes): `Pydantic models for CI Analyzer structured output. QNBS-v3: These models enforce`
+- **Thin community `Community 713`** (1 nodes): `Pydantic models for CI Analyzer structured output. QNBS-v3: These models enforce`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 711`** (1 nodes): `Structured CI error for VS Code problem matcher integration.`
+- **Thin community `Community 714`** (1 nodes): `Structured CI error for VS Code problem matcher integration.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 712`** (1 nodes): `Vitest JSON test result structure.`
+- **Thin community `Community 715`** (1 nodes): `Vitest JSON test result structure.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 713`** (1 nodes): `Full Vitest JSON report structure.`
+- **Thin community `Community 716`** (1 nodes): `Full Vitest JSON report structure.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 714`** (1 nodes): `Stryker per-file mutation report.`
+- **Thin community `Community 717`** (1 nodes): `Stryker per-file mutation report.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 715`** (1 nodes): `Full Stryker JSON report structure.`
+- **Thin community `Community 718`** (1 nodes): `Full Stryker JSON report structure.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 716`** (1 nodes): `Initialize OpenRouter client for Poolside Laguna model.`
+- **Thin community `Community 719`** (1 nodes): `Initialize OpenRouter client for Poolside Laguna model.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 717`** (1 nodes): `Analyze Vitest JSON report and raw logs for errors.`
+- **Thin community `Community 720`** (1 nodes): `Analyze Vitest JSON report and raw logs for errors.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 718`** (1 nodes): `Analyze Stryker JSON report for surviving mutants.`
+- **Thin community `Community 721`** (1 nodes): `Analyze Stryker JSON report for surviving mutants.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 719`** (1 nodes): `Send preprocessed errors to LLM for analysis.`
+- **Thin community `Community 722`** (1 nodes): `Send preprocessed errors to LLM for analysis.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 720`** (1 nodes): `Format errors for VS Code problem matcher.`
+- **Thin community `Community 723`** (1 nodes): `Format errors for VS Code problem matcher.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 721`** (1 nodes): `Main entry point for CI analyzer.`
+- **Thin community `Community 724`** (1 nodes): `Main entry point for CI analyzer.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 722`** (1 nodes): `Execute gh CLI command and return parsed JSON output.`
+- **Thin community `Community 725`** (1 nodes): `Execute gh CLI command and return parsed JSON output.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 723`** (1 nodes): `Get the ID of the most recent failed CI run.`
+- **Thin community `Community 726`** (1 nodes): `Get the ID of the most recent failed CI run.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 724`** (1 nodes): `Download a specific artifact from a workflow run.`
+- **Thin community `Community 727`** (1 nodes): `Download a specific artifact from a workflow run.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 725`** (1 nodes): `Get raw logs from a failed workflow run.`
+- **Thin community `Community 728`** (1 nodes): `Get raw logs from a failed workflow run.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 726`** (1 nodes): `Parse Vitest JSON report for failing tests.`
+- **Thin community `Community 729`** (1 nodes): `Parse Vitest JSON report for failing tests.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 727`** (1 nodes): `Parse Stryker JSON report for surviving mutants.`
+- **Thin community `Community 730`** (1 nodes): `Parse Stryker JSON report for surviving mutants.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
@@ -555,9 +555,9 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `mt()` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 11`, `Community 15`, `Community 16`, `Community 17`, `Community 22`, `Community 24`?**
   _High betweenness centrality (0.070) - this node is a cross-community bridge._
 - **Why does `t()` connect `Community 2` to `Community 0`, `Community 1`, `Community 3`, `Community 4`, `Community 5`, `Community 8`, `Community 9`, `Community 11`, `Community 13`, `Community 17`, `Community 25`?**
-  _High betweenness centrality (0.048) - this node is a cross-community bridge._
+  _High betweenness centrality (0.046) - this node is a cross-community bridge._
 - **Why does `fn()` connect `Community 8` to `Community 1`, `Community 5`, `Community 10`, `Community 16`, `Community 17`, `Community 19`, `Community 22`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+  _High betweenness centrality (0.035) - this node is a cross-community bridge._
 - **Are the 87 inferred relationships involving `mt()` (e.g. with `pE()` and `xE()`) actually correct?**
   _`mt()` has 87 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 57 inferred relationships involving `fn()` (e.g. with `makeMediaQuery()` and `MockSpeechRecognition()`) actually correct?**
