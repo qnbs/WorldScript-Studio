@@ -19,6 +19,7 @@ import { DebouncedInput } from './ui/DebouncedInput';
 import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { PageContainer } from './ui/PageContainer';
 import { SectionIcon } from './ui/SectionIcon';
 import { Skeleton } from './ui/Skeleton';
 import { Spinner } from './ui/Spinner';
@@ -583,7 +584,9 @@ export const Dashboard: FC<DashboardProps> = ({ onNavigate }) => {
   const contextValue = useDashboard({ onNavigate });
   return (
     <DashboardContext.Provider value={contextValue}>
-      <DashboardUI />
+      <PageContainer>
+        <DashboardUI />
+      </PageContainer>
     </DashboardContext.Provider>
   );
 };

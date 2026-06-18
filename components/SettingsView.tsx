@@ -33,6 +33,7 @@ import {
 import { TauriUpdaterBanner } from './settings/TauriUpdaterBanner';
 import { VoiceSettingsSection } from './settings/VoiceSettingsSection';
 import { Input } from './ui/Input';
+import { PageContainer } from './ui/PageContainer';
 import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 import { ViewErrorBoundary } from './ui/ViewErrorBoundary';
@@ -451,7 +452,9 @@ export const SettingsView: FC = () => {
   const contextValue = useSettingsView();
   return (
     <SettingsViewContext.Provider value={contextValue}>
-      <SettingsViewUI />
+      <PageContainer>
+        <SettingsViewUI />
+      </PageContainer>
     </SettingsViewContext.Provider>
   );
 };

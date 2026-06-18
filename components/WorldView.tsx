@@ -23,6 +23,7 @@ import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { EmptyState } from './ui/EmptyState';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { PageContainer } from './ui/PageContainer';
 import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
@@ -745,7 +746,9 @@ export const WorldView: FC = () => {
   const contextValue = useWorldView();
   return (
     <WorldViewContext.Provider value={contextValue}>
-      <WorldViewUI />
+      <PageContainer>
+        <WorldViewUI />
+      </PageContainer>
     </WorldViewContext.Provider>
   );
 };

@@ -906,5 +906,17 @@ select option {
    phases D1–D4 — see docs/DESKTOP-UI-AUDIT.md. (D0 = hook only, no visual change.)
    ========================================================================== */
 body.is-desktop {
-  /* Phase D1+: content max-width primitive, density, typography, glass perf. */
+  /* QNBS-v3 (D1): work-content reading width. ~72rem keeps line-length and
+     density comfortable on wide desktop windows without wasting ultrawide space;
+     a no-op on the PWA, which never gets `.is-desktop`. */
+  --width-content: 72rem;
+}
+
+/* QNBS-v3 (D1): one content-width primitive (components/ui/PageContainer.tsx →
+   `.view-shell`). Centers content-light views under the desktop cap; on the web
+   the rule is inert because the cap only applies inside `.is-desktop`. Editor,
+   Plot Board and Mind Map own their width and are intentionally NOT wrapped. */
+body.is-desktop .view-shell {
+  max-width: var(--width-content);
+  margin-inline: auto;
 }

@@ -12,6 +12,7 @@ import { CompileWizardModal } from './CompileWizardModal';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Checkbox } from './ui/Checkbox';
+import { PageContainer } from './ui/PageContainer';
 import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
@@ -554,7 +555,9 @@ export const ExportView: FC = () => {
   const contextValue = useExportView();
   return (
     <ExportViewContext.Provider value={contextValue}>
-      <ExportViewUI />
+      <PageContainer>
+        <ExportViewUI />
+      </PageContainer>
     </ExportViewContext.Provider>
   );
 };
