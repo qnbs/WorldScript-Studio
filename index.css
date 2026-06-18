@@ -968,3 +968,30 @@ body.is-desktop .view-shell--wide {
     --size-touch-target: 2.25rem;
   }
 }
+
+/* QNBS-v3 (D4 / C-8): scrollbars sized for a mouse on desktop. The 6px global
+   default reads well for touch/trackpad; a desktop pointer grabs a 10px track
+   more comfortably. `::-webkit-scrollbar` covers all three Tauri engines
+   (WebView2 / WebKit / WebKitGTK, all Chromium/WebKit-based). `scrollbar-gutter:
+   stable` reserves the track so content doesn't shift when scrollbars appear. */
+body.is-desktop ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+body.is-desktop {
+  scrollbar-gutter: stable;
+}
+
+/* QNBS-v3 (D4 / C-6): honor the OS reduced-transparency accessibility preference
+   on desktop by making the token-driven glass layer opaque (drops the GPU cost of
+   compositing translucent surfaces). NOTE: components that apply `backdrop-blur-*`
+   Tailwind utilities directly are not covered here — consolidating those onto the
+   `--glass-*` token layer is the remaining C-6 work (see docs/DESKTOP-UI-AUDIT.md). */
+@media (prefers-reduced-transparency: reduce) {
+  body.is-desktop {
+    --glass-bg: var(--sc-surface-raised);
+    --glass-bg-hover: var(--sc-surface-overlay);
+    --glass-border: var(--sc-border-subtle);
+  }
+}

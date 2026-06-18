@@ -526,6 +526,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       if (action === 'menu-settings') executeCommand('nav-settings');
       else if (action === 'menu-help') executeCommand('nav-help');
       else if (action === 'menu-export') executeCommand('nav-export');
+      // QNBS-v3 (D4): native View → Command Palette opens the palette via its command.
+      else if (action === 'menu-command-palette') executeCommand('global-open-command-palette');
     });
     return () => unregisterTauriMenuHandler();
   }, [executeCommand]);

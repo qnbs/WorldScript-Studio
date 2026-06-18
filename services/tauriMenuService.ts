@@ -1,6 +1,11 @@
 import { isTauriRuntime } from './tauriRuntime';
 
-export type TauriMenuAction = 'menu-export' | 'menu-settings' | 'menu-help' | 'menu-quit';
+export type TauriMenuAction =
+  | 'menu-export'
+  | 'menu-settings'
+  | 'menu-help'
+  | 'menu-quit'
+  | 'menu-command-palette';
 
 type MenuHandler = (action: TauriMenuAction) => void;
 
@@ -20,7 +25,8 @@ export async function registerTauriMenuHandler(onAction: MenuHandler): Promise<v
         id === 'menu-export' ||
         id === 'menu-settings' ||
         id === 'menu-help' ||
-        id === 'menu-quit'
+        id === 'menu-quit' ||
+        id === 'menu-command-palette'
       ) {
         handler?.(id);
       }
