@@ -906,17 +906,36 @@ select option {
    phases D1–D4 — see docs/DESKTOP-UI-AUDIT.md. (D0 = hook only, no visual change.)
    ========================================================================== */
 body.is-desktop {
-  /* QNBS-v3 (D1): work-content reading width. ~72rem keeps line-length and
-     density comfortable on wide desktop windows without wasting ultrawide space;
-     a no-op on the PWA, which never gets `.is-desktop`. */
+  /* QNBS-v3 (D2): desktop content-width family. One scale reused by the
+     `.view-shell` primitive so every view inherits consistent desktop measure
+     instead of ad-hoc `max-w-*`. A no-op on the PWA, which never gets
+     `.is-desktop`. Pair with `--sc-prose-measure` (65ch) for long-form text.
+       narrow → single-column reading/forms · default → work-content
+       wide   → multi-column dashboards/grids that need room to breathe */
+  --width-content-narrow: 48rem;
   --width-content: 72rem;
+  --width-content-wide: 90rem;
+
+  /* QNBS-v3 (D2): desktop vertical rhythm. The PWA tunes section spacing for
+     touch; a mouse-driven desktop reads denser. Views opt in via `.view-stack`
+     (token only — applying it is incremental, so nothing shifts implicitly). */
+  --space-section-desktop: 1.5rem;
 }
 
-/* QNBS-v3 (D1): one content-width primitive (components/ui/PageContainer.tsx →
-   `.view-shell`). Centers content-light views under the desktop cap; on the web
-   the rule is inert because the cap only applies inside `.is-desktop`. Editor,
-   Plot Board and Mind Map own their width and are intentionally NOT wrapped. */
+/* QNBS-v3 (D1/D2): the content-width primitive (components/ui/PageContainer.tsx
+   → `.view-shell`). Centers content-light views under the desktop cap; on the
+   web the rule is inert because the cap only applies inside `.is-desktop`.
+   Editor, Plot Board and Mind Map own their width and are NOT wrapped.
+   Width variants are opt-in modifier classes set by PageContainer's `width` prop. */
 body.is-desktop .view-shell {
   max-width: var(--width-content);
   margin-inline: auto;
+}
+
+body.is-desktop .view-shell--narrow {
+  max-width: var(--width-content-narrow);
+}
+
+body.is-desktop .view-shell--wide {
+  max-width: var(--width-content-wide);
 }

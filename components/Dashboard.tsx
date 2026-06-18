@@ -584,7 +584,7 @@ export const Dashboard: FC<DashboardProps> = ({ onNavigate }) => {
   const contextValue = useDashboard({ onNavigate });
   return (
     <DashboardContext.Provider value={contextValue}>
-      <PageContainer>
+      <PageContainer width="wide">
         <DashboardUI />
       </PageContainer>
     </DashboardContext.Provider>

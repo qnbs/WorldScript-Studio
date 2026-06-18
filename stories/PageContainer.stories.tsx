@@ -29,6 +29,14 @@ export const Default: Story = {
   args: { children: DemoContent },
 };
 
+export const Narrow: Story = {
+  args: { width: 'narrow', children: DemoContent },
+};
+
+export const Wide: Story = {
+  args: { width: 'wide', children: DemoContent },
+};
+
 export const WithExtraClassName: Story = {
   args: { children: DemoContent, className: 'px-8' },
 };
