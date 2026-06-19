@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "Qu'est-ce qui est le plus urgent à corriger ?",
   "copilot.suggestionWorldBuilding": "Quels détails de world-building me manquent ?",
   "copilot.title": "Copilot IA",
-  "copilot.you": "Vous"
+  "copilot.you": "Vous",
+  "menu": {
+    "file": "Fichier",
+    "export": "Exporter le projet…",
+    "settings": "Paramètres",
+    "edit": "Édition",
+    "view": "Affichage",
+    "commandPalette": "Palette de commandes",
+    "window": "Fenêtre",
+    "help": "Aide",
+    "helpCenter": "Centre d'aide"
+  }
 }

@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "最も緊急に修正しなければならないことは何ですか?",
   "copilot.suggestionWorldBuilding": "世界構築のどの詳細が不足していますか?",
   "copilot.title": "AI副操縦士",
-  "copilot.you": "あなた"
+  "copilot.you": "あなた",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

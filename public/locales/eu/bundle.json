@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "Zein da konpontzeko premiazkoena?",
   "copilot.suggestionWorldBuilding": "Zein mundu eraikitzeko xehetasun falta zaizkit?",
   "copilot.title": "AI kopilotua",
-  "copilot.you": "Zuk"
+  "copilot.you": "Zuk",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

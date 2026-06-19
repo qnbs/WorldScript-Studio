@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "Ποιο είναι το πιο επείγον πράγμα να διορθωθεί;",
   "copilot.suggestionWorldBuilding": "Ποιες λεπτομέρειες οικοδόμησης κόσμου μου λείπουν;",
   "copilot.title": "AI Copilot",
-  "copilot.you": "Εσείς"
+  "copilot.you": "Εσείς",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

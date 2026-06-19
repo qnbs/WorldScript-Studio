@@ -60,6 +60,7 @@ import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
+import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
 import {
@@ -522,6 +523,17 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     });
     return () => unregisterTauriMenuHandler();
   }, [executeCommand]);
+
+  // QNBS-v3 (T1): install the localized JS application menu (overrides the minimal Rust fallback).
+  // Rebuilds when the language changes so labels follow the active locale. No-op on the web.
+  useEffect(() => {
+    void installDesktopMenu(
+      (key) => t(key),
+      (id) => {
+        executeCommand(id);
+      },
+    );
+  }, [t, executeCommand]);
 
   // QNBS-v3: Tauri deep link handler for native file associations (.worldscript, .wsst)
   useEffect(() => {

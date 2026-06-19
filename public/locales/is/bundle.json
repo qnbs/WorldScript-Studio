@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "Hvað er brýnast að laga?",
   "copilot.suggestionWorldBuilding": "Hvaða heimsuppbyggjandi smáatriði vantar mig?",
   "copilot.title": "AI aðstoðarflugmaður",
-  "copilot.you": "Þú"
+  "copilot.you": "Þú",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

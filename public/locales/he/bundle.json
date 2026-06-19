@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "What's the most urgent thing to fix?",
   "copilot.suggestionWorldBuilding": "What world-building details am I missing?",
   "copilot.title": "AI Copilot",
-  "copilot.you": "You"
+  "copilot.you": "You",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

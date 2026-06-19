@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "Mi a legsürgősebb megjavítandó?",
   "copilot.suggestionWorldBuilding": "Milyen világépítő részleteket hiányolok?",
   "copilot.title": "AI másodpilóta",
-  "copilot.you": "Te"
+  "copilot.you": "Te",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

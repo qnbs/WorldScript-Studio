@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "Mikä on kiireellisin korjattava asia?",
   "copilot.suggestionWorldBuilding": "Mitä maailmaa rakentavia yksityiskohtia minulta puuttuu?",
   "copilot.title": "AI Copilot",
-  "copilot.you": "sinä"
+  "copilot.you": "sinä",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

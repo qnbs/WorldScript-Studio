@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "最急需解决的问题是什么？",
   "copilot.suggestionWorldBuilding": "我错过了哪些世界构建细节？",
   "copilot.title": "人工智能副驾驶",
-  "copilot.you": "你"
+  "copilot.you": "你",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

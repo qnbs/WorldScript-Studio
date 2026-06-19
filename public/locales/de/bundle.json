@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "Was ist am dringendsten zu beheben?",
   "copilot.suggestionWorldBuilding": "Welche Weltenbau-Details fehlen mir?",
   "copilot.title": "KI-Copilot",
-  "copilot.you": "Du"
+  "copilot.you": "Du",
+  "menu": {
+    "file": "Datei",
+    "export": "Projekt exportieren…",
+    "settings": "Einstellungen",
+    "edit": "Bearbeiten",
+    "view": "Ansicht",
+    "commandPalette": "Befehlspalette",
+    "window": "Fenster",
+    "help": "Hilfe",
+    "helpCenter": "Hilfe-Center"
+  }
 }

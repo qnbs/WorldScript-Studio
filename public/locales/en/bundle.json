@@ -2714,5 +2714,16 @@
   "copilot.changeApplyFailed": "Could not apply — the text may have changed.",
   "copilot.annotationCount": "{{count}} insight for this chapter",
   "copilot.askCopilot": "Ask Copilot",
-  "copilot.askAboutReviewItem": "ProForge flagged this as {{severity}}: \"{{description}}\". Can you explain the concern and suggest a concrete fix?"
+  "copilot.askAboutReviewItem": "ProForge flagged this as {{severity}}: \"{{description}}\". Can you explain the concern and suggest a concrete fix?",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }

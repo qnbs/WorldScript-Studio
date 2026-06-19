@@ -1,0 +1,13 @@
+{
+  "menu": {
+    "file": "Fichier",
+    "export": "Exporter le projet…",
+    "settings": "Paramètres",
+    "edit": "Édition",
+    "view": "Affichage",
+    "commandPalette": "Palette de commandes",
+    "window": "Fenêtre",
+    "help": "Aide",
+    "helpCenter": "Centre d'aide"
+  }
+}

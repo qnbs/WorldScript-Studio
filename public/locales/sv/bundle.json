@@ -2714,5 +2714,16 @@
   "copilot.suggestionTopInsight": "Vad är det mest brådskande att fixa?",
   "copilot.suggestionWorldBuilding": "Vilka världsbyggande detaljer saknar jag?",
   "copilot.title": "AI Copilot",
-  "copilot.you": "Du"
+  "copilot.you": "Du",
+  "menu": {
+    "file": "File",
+    "export": "Export Project…",
+    "settings": "Settings",
+    "edit": "Edit",
+    "view": "View",
+    "commandPalette": "Command Palette",
+    "window": "Window",
+    "help": "Help",
+    "helpCenter": "Help Center"
+  }
 }
