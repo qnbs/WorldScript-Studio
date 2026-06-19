@@ -16,14 +16,22 @@ describe('isTauriRuntime', () => {
     expect(isTauriRuntime()).toBe(false);
   });
 
-  it('returns false when __TAURI__ is not set on window', async () => {
+  it('returns false when neither Tauri global is set on window', async () => {
     vi.stubGlobal('window', {});
     const { isTauriRuntime } = await import('../../services/tauriRuntime');
     expect(isTauriRuntime()).toBe(false);
   });
 
-  it('returns true when __TAURI__ is set on window', async () => {
+  it('returns true when __TAURI__ is set on window (withGlobalTauri)', async () => {
     vi.stubGlobal('window', { __TAURI__: {} });
+    const { isTauriRuntime } = await import('../../services/tauriRuntime');
+    expect(isTauriRuntime()).toBe(true);
+  });
+
+  // QNBS-v3 (T0): the real desktop shell exposes `__TAURI_INTERNALS__` (always) but not `__TAURI__`
+  // unless withGlobalTauri is on — which this app does not set. Detection must accept it.
+  it('returns true when only __TAURI_INTERNALS__ is set (real Tauri v2 shell)', async () => {
+    vi.stubGlobal('window', { __TAURI_INTERNALS__: {} });
     const { isTauriRuntime } = await import('../../services/tauriRuntime');
     expect(isTauriRuntime()).toBe(true);
   });
