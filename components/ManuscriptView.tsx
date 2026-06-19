@@ -6,6 +6,7 @@ import { selectEnableBinderResearch } from '../features/featureFlags/featureFlag
 import { projectActions } from '../features/project/projectSlice';
 import { useManuscriptLayout } from '../hooks/useManuscriptLayout';
 import { useManuscriptView } from '../hooks/useManuscriptView';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ManuscriptDesktopLayout } from './manuscript/ManuscriptDesktopLayout';
 import { ManuscriptMobileLayout } from './manuscript/ManuscriptMobileLayout';
 import { EmptyState } from './ui/EmptyState';
@@ -18,6 +19,8 @@ const ManuscriptViewUI: FC = () => {
   const { project, t } = useManuscriptViewContext();
   const enableBinder = useAppSelector(selectEnableBinderResearch);
   const layout = useManuscriptLayout();
+  // QNBS-v3: `md` breakpoint (768px) — render one layout at a time so only one ManuscriptEditor mounts.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   if (!project) {
     return (
@@ -45,8 +48,14 @@ const ManuscriptViewUI: FC = () => {
 
   return (
     <div className="h-full flex flex-col">
-      <ManuscriptMobileLayout project={project} layout={layout} enableBinder={enableBinder} />
-      <ManuscriptDesktopLayout project={project} layout={layout} enableBinder={enableBinder} />
+      {/* QNBS-v3: render only the layout matching the breakpoint — mounting both ran two
+          ManuscriptEditor trees (duplicate voice/window effects) and could leave a mobile drawer
+          open over the desktop layout on resize. `md` = 768px, matching the layouts' own CSS. */}
+      {isDesktop ? (
+        <ManuscriptDesktopLayout project={project} layout={layout} enableBinder={enableBinder} />
+      ) : (
+        <ManuscriptMobileLayout project={project} layout={layout} enableBinder={enableBinder} />
+      )}
     </div>
   );
 };
