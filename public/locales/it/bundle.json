@@ -2725,5 +2725,17 @@
     "window": "Finestra",
     "help": "Aiuto",
     "helpCenter": "Centro assistenza"
+  },
+  "tray": {
+    "tooltip": "WorldScript Studio",
+    "show": "Mostra WorldScript Studio",
+    "settings": "Impostazioni",
+    "commandPalette": "Palette comandi",
+    "quit": "Esci"
+  },
+  "settings": {
+    "sectionTitle": "Desktop",
+    "minimizeToTray": "Riduci nella barra delle applicazioni alla chiusura",
+    "minimizeToTrayHint": "Mantieni WorldScript Studio attivo nell'area di notifica invece di uscire quando chiudi la finestra."
   }
 }

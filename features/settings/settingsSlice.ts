@@ -10,6 +10,7 @@ import type {
   BackupSettings,
   CollaborationSettings,
   CustomFont,
+  DesktopSettings,
   EditorFont,
   IntegrationSettings,
   KeyboardShortcut,
@@ -169,8 +170,13 @@ const defaultSettings: Settings = {
     dictationAutoPunctuation: true,
     webSpeechConsentGranted: false,
   },
+  // QNBS-v3 (T2): desktop-only behavior; default off so the web/PWA is unaffected.
+  desktop: {
+    minimizeToTray: false,
+  },
 };
 
+export const defaultDesktopSettings = defaultSettings.desktop;
 export const defaultVoiceSettings = defaultSettings.voice;
 // QNBS-v3: exported so components + IDB rehydration can backfill missing nested objects
 // (older persisted settings lacked advancedEditor/themeCustomization → page crash on read).
@@ -289,6 +295,9 @@ const settingsSlice = createSlice({
     },
     setVoiceSettings(state, action: PayloadAction<Partial<VoiceSettings>>) {
       state.voice = { ...state.voice, ...action.payload };
+    },
+    setDesktopSettings(state, action: PayloadAction<Partial<DesktopSettings>>) {
+      state.desktop = { ...(state.desktop ?? defaultDesktopSettings), ...action.payload };
     },
     setOpenRouter(state, action: PayloadAction<Partial<OpenRouterSettings>>) {
       state.openRouter = {

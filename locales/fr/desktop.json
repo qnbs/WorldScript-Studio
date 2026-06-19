@@ -9,5 +9,17 @@
     "window": "Fenêtre",
     "help": "Aide",
     "helpCenter": "Centre d'aide"
+  },
+  "tray": {
+    "tooltip": "WorldScript Studio",
+    "show": "Afficher WorldScript Studio",
+    "settings": "Paramètres",
+    "commandPalette": "Palette de commandes",
+    "quit": "Quitter"
+  },
+  "settings": {
+    "sectionTitle": "Bureau",
+    "minimizeToTray": "Réduire dans la zone de notification à la fermeture",
+    "minimizeToTrayHint": "Garder WorldScript Studio actif dans la zone de notification au lieu de quitter lorsque vous fermez la fenêtre."
   }
 }

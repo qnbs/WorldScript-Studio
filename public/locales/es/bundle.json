@@ -2725,5 +2725,17 @@
     "window": "Ventana",
     "help": "Ayuda",
     "helpCenter": "Centro de ayuda"
+  },
+  "tray": {
+    "tooltip": "WorldScript Studio",
+    "show": "Mostrar WorldScript Studio",
+    "settings": "Ajustes",
+    "commandPalette": "Paleta de comandos",
+    "quit": "Salir"
+  },
+  "settings": {
+    "sectionTitle": "Escritorio",
+    "minimizeToTray": "Minimizar a la bandeja al cerrar",
+    "minimizeToTrayHint": "Mantén WorldScript Studio en la bandeja del sistema en lugar de salir al cerrar la ventana."
   }
 }

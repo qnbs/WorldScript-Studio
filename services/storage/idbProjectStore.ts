@@ -8,7 +8,10 @@
 import type { ProjectData } from '../../features/project/projectSlice';
 import { normalizeAccessibilitySettings } from '../../features/settings/accessibilitySchema';
 import { getDefaultKeyboardShortcuts } from '../../features/settings/keyboardShortcutsDefaults';
-import { defaultVoiceSettings } from '../../features/settings/settingsSlice';
+import {
+  defaultDesktopSettings,
+  defaultVoiceSettings,
+} from '../../features/settings/settingsSlice';
 import type { Settings, StoryProject } from '../../types';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
@@ -145,6 +148,10 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   }
   if (!validSettings.voice || typeof validSettings.voice !== 'object') {
     validSettings.voice = { ...defaultVoiceSettings };
+  }
+  // QNBS-v3 (T2): desktop group added for native-desktop behavior — backfill older persisted settings.
+  if (!validSettings.desktop || typeof validSettings.desktop !== 'object') {
+    validSettings.desktop = { ...defaultDesktopSettings };
   }
   if (!validSettings.performance || typeof validSettings.performance !== 'object') {
     validSettings.performance = {

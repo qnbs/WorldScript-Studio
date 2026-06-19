@@ -61,6 +61,7 @@ import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
 import { installDesktopMenu } from './services/desktop/desktopMenu';
+import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
 import {
@@ -534,6 +535,29 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       },
     );
   }, [t, executeCommand]);
+
+  // QNBS-v3 (T2): system tray (created once; guard makes re-calls a no-op). No-op on the web.
+  useEffect(() => {
+    void installDesktopTray(
+      (key) => t(key),
+      (id) => {
+        executeCommand(id);
+      },
+    );
+  }, [t, executeCommand]);
+
+  // QNBS-v3 (T2): close-to-tray — hide instead of quit when the setting is on (read live from store).
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void installCloseToTray(
+      () => (store.getState() as RootState).settings.desktop.minimizeToTray,
+    ).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [store]);
 
   // QNBS-v3: Tauri deep link handler for native file associations (.worldscript, .wsst)
   useEffect(() => {

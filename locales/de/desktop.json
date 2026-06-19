@@ -9,5 +9,17 @@
     "window": "Fenster",
     "help": "Hilfe",
     "helpCenter": "Hilfe-Center"
+  },
+  "tray": {
+    "tooltip": "WorldScript Studio",
+    "show": "WorldScript Studio anzeigen",
+    "settings": "Einstellungen",
+    "commandPalette": "Befehlspalette",
+    "quit": "Beenden"
+  },
+  "settings": {
+    "sectionTitle": "Desktop",
+    "minimizeToTray": "Beim Schließen in den Infobereich minimieren",
+    "minimizeToTrayHint": "WorldScript Studio beim Schließen des Fensters im Infobereich weiterlaufen lassen, statt zu beenden."
   }
 }

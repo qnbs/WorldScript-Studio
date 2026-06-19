@@ -9,5 +9,17 @@
     "window": "Window",
     "help": "Help",
     "helpCenter": "Help Center"
+  },
+  "tray": {
+    "tooltip": "WorldScript Studio",
+    "show": "Show WorldScript Studio",
+    "settings": "Settings",
+    "commandPalette": "Command Palette",
+    "quit": "Quit"
+  },
+  "settings": {
+    "sectionTitle": "Desktop",
+    "minimizeToTray": "Minimize to tray on close",
+    "minimizeToTrayHint": "Keep WorldScript Studio running in the system tray instead of quitting when you close the window."
   }
 }
