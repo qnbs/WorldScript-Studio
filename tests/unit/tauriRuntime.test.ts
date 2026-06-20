@@ -58,3 +58,60 @@ describe('openTauriDataDirectory', () => {
     await expect(openTauriDataDirectory()).resolves.toBe(false);
   });
 });
+
+describe('getDesktopOs', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('returns null when not in Tauri runtime', async () => {
+    vi.stubGlobal('window', {});
+    const { getDesktopOs } = await import('../../services/tauriRuntime');
+    expect(getDesktopOs()).toBeNull();
+  });
+
+  it.each([
+    ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'windows'],
+    ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'macos'],
+    ['Mozilla/5.0 (X11; Linux x86_64)', 'linux'],
+  ])('detects %s → %s', async (userAgent, expected) => {
+    vi.stubGlobal('window', { __TAURI__: {} });
+    vi.stubGlobal('navigator', { userAgent });
+    const { getDesktopOs } = await import('../../services/tauriRuntime');
+    expect(getDesktopOs()).toBe(expected);
+  });
+
+  it.each([
+    [''],
+    ['Some Unknown WebView/1.0'],
+    ['SunOS sparc'],
+  ])('returns null for unrecognized/empty UA %j (no silent linux misclassification)', async (userAgent) => {
+    vi.stubGlobal('window', { __TAURI__: {} });
+    vi.stubGlobal('navigator', { userAgent });
+    const { getDesktopOs } = await import('../../services/tauriRuntime');
+    expect(getDesktopOs()).toBeNull();
+  });
+});
+
+describe('applyDesktopRuntimeFlags', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is a no-op on the web (no Tauri global)', async () => {
+    vi.stubGlobal('window', {});
+    const add = vi.fn();
+    vi.stubGlobal('document', { body: { classList: { add }, dataset: {} } });
+    const { applyDesktopRuntimeFlags } = await import('../../services/tauriRuntime');
+    applyDesktopRuntimeFlags();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it('adds is-desktop + data-os in the Tauri runtime', async () => {
+    vi.stubGlobal('window', { __TAURI__: {} });
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0)' });
+    const dataset: Record<string, string> = {};
+    const add = vi.fn();
+    vi.stubGlobal('document', { body: { classList: { add }, dataset } });
+    const { applyDesktopRuntimeFlags } = await import('../../services/tauriRuntime');
+    applyDesktopRuntimeFlags();
+    expect(add).toHaveBeenCalledWith('is-desktop');
+    expect(dataset['os']).toBe('windows');
+  });
+});
