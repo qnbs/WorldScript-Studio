@@ -98,6 +98,7 @@
   "common.words": "واژه",
   "consistencyChecker.checkButton": "سازگاری را بررسی کنید",
   "consistencyChecker.description": "کاراکترهای خود را برای ناسازگاری با افسانه های رایج، شخصیت های دیگر و دست نوشته خود بررسی کنید.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "هنوز هیچ نتیجه ای وجود ندارد",
   "consistencyChecker.noResultsHint": "یک کاراکتر را از لیست سمت چپ انتخاب کنید و روی Check Consistency کلیک کنید تا دستنوشته خود را اسکن کنید.",
   "consistencyChecker.refLabel": "Related",

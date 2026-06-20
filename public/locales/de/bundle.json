@@ -105,6 +105,7 @@
   "consistencyChecker.severity.warn": "Warnung",
   "consistencyChecker.severity.error": "Konflikt",
   "consistencyChecker.refLabel": "Bezug",
+  "consistencyChecker.noFindings": "Keine Widersprüche gefunden — diese Figur wirkt konsistent.",
   "consistencyChecker.selectCharacter": "Charakter auswählen",
   "consistencyChecker.selectPlaceholder": "Wählen Sie einen Charakter zum Prüfen",
   "consistencyChecker.storyBible.edgesTitle": "Entity-Kookkurrenz (Top)",

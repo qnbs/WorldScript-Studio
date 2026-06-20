@@ -98,6 +98,7 @@
   "common.words": "מילים",
   "consistencyChecker.checkButton": "בדיקת עקביות",
   "consistencyChecker.description": "בדקו את הדמויות שלכם לאיתור אי‑התאמות עם המורשת המבוססת, דמויות אחרות וכתב היד שלכם.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "אין עדיין תוצאות",
   "consistencyChecker.noResultsHint": "בחרו דמות מהרשימה משמאל ולחצו על «בדיקת עקביות» כדי לסרוק את כתב היד שלכם.",
   "consistencyChecker.refLabel": "Related",

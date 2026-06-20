@@ -98,6 +98,7 @@
   "common.words": "orð",
   "consistencyChecker.checkButton": "Athugaðu samræmi",
   "consistencyChecker.description": "Athugaðu persónurnar þínar fyrir ósamræmi við þekkta fróðleik, aðrar persónur og handritið þitt.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "Engar niðurstöður enn",
   "consistencyChecker.noResultsHint": "Veldu staf af listanum til vinstri og smelltu á Athugaðu samræmi til að skanna handritið þitt.",
   "consistencyChecker.refLabel": "Related",

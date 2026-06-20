@@ -98,6 +98,7 @@
   "common.words": "λόγια",
   "consistencyChecker.checkButton": "Ελέγξτε τη συνέπεια",
   "consistencyChecker.description": "Ελέγξτε τους χαρακτήρες σας για ασυνέπειες με την καθιερωμένη παράδοση, άλλους χαρακτήρες και το χειρόγραφό σας.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "Δεν υπάρχουν ακόμη αποτελέσματα",
   "consistencyChecker.noResultsHint": "Επιλέξτε έναν χαρακτήρα από τη λίστα στα αριστερά και κάντε κλικ στο Check Consistency για να σαρώσετε το χειρόγραφό σας.",
   "consistencyChecker.refLabel": "Related",

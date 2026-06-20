@@ -49,6 +49,7 @@
   "consistencyChecker.severity.warn": "Warning",
   "consistencyChecker.severity.error": "Conflict",
   "consistencyChecker.refLabel": "Related",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "No results yet",
   "consistencyChecker.noResultsHint": "Select a character from the list on the left and click Check Consistency to scan your manuscript.",
   "consistencyChecker.storyBible.title": "Story Bible (Codex)",

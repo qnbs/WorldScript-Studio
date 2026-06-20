@@ -98,6 +98,7 @@
   "common.words": "كلمات",
   "consistencyChecker.checkButton": "فحص الاتساق",
   "consistencyChecker.description": "افحص شخصياتك بحثًا عن تناقضات مع المعرفة المُرسَّخة والشخصيات الأخرى ومخطوطتك.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "لا توجد نتائج بعد",
   "consistencyChecker.noResultsHint": "اختر شخصية من القائمة على اليسار وانقر على «فحص الاتساق» لمسح مخطوطتك.",
   "consistencyChecker.refLabel": "Related",

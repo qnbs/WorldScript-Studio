@@ -98,6 +98,7 @@
   "common.words": "言葉",
   "consistencyChecker.checkButton": "一貫性のチェック",
   "consistencyChecker.description": "確立された伝承、他のキャラクター、原稿との矛盾がないか、キャラクターをチェックしてください。",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "まだ結果はありません",
   "consistencyChecker.noResultsHint": "左側のリストから文字を選択し、「一貫性の確認」をクリックして原稿をスキャンします。",
   "consistencyChecker.refLabel": "Related",

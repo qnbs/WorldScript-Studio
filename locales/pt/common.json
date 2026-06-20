@@ -98,6 +98,7 @@
   "common.words": "palavras",
   "consistencyChecker.checkButton": "Verifique a consistência",
   "consistencyChecker.description": "Verifique se há inconsistências em seus personagens com a tradição estabelecida, outros personagens e seu manuscrito.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "Ainda não há resultados",
   "consistencyChecker.noResultsHint": "Selecione um caractere da lista à esquerda e clique em Verificar consistência para digitalizar seu manuscrito.",
   "consistencyChecker.refLabel": "Related",

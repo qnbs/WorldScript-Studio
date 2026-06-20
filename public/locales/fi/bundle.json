@@ -98,6 +98,7 @@
   "common.words": "sanaa",
   "consistencyChecker.checkButton": "Tarkista johdonmukaisuus",
   "consistencyChecker.description": "Tarkista, ettei hahmoissasi ole ristiriitoja vakiintuneen tarinan, muiden hahmojen ja käsikirjoituksen kanssa.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "Ei tuloksia vielä",
   "consistencyChecker.noResultsHint": "Valitse merkki vasemmalla olevasta luettelosta ja napsauta Tarkista johdonmukaisuus skannataksesi käsikirjoituksesi.",
   "consistencyChecker.refLabel": "Related",

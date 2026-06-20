@@ -245,6 +245,21 @@ describe('useConsistencyCheckerView', () => {
     });
   });
 
+  it('treats a valid empty array as a structured no-findings result (not raw text)', async () => {
+    mockGenerateText.mockReset().mockImplementation(async () => '[]');
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    await waitFor(() => {
+      const r = result.current.checkResult;
+      expect(r?.kind).toBe('structured');
+      if (r?.kind === 'structured') expect(r.findings).toHaveLength(0);
+    });
+  });
+
   it('falls back to text when JSON output is fenced but malformed', async () => {
     mockGenerateText.mockReset().mockImplementation(async () => '```json\nnot-an-array\n```');
     const { result } = renderHook(() => useConsistencyCheckerView());

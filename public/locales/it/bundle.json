@@ -105,6 +105,7 @@
   "consistencyChecker.severity.warn": "Avviso",
   "consistencyChecker.severity.error": "Conflitto",
   "consistencyChecker.refLabel": "Correlato",
+  "consistencyChecker.noFindings": "Nessuna incoerenza trovata — questo personaggio sembra coerente.",
   "consistencyChecker.selectCharacter": "Seleziona personaggio",
   "consistencyChecker.selectPlaceholder": "Scegli un personaggio da verificare",
   "consistencyChecker.storyBible.edgesTitle": "Co-occorrenza entità (top)",

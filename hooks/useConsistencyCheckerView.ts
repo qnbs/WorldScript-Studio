@@ -71,7 +71,9 @@ export const parseConsistencyResult = (raw: string): ConsistencyResult => {
           };
         })
         .filter((f) => f.title || f.detail);
-      if (findings.length > 0) return { kind: 'structured', findings };
+      // QNBS-v3: valid JSON array → structured, even when empty. An empty array means "no issues",
+      // which the view renders as an explicit clean state rather than dumping raw "[]" as text.
+      return { kind: 'structured', findings };
     }
   } catch {
     // Not JSON — fall back to the raw string below.
@@ -206,7 +208,16 @@ export const useConsistencyCheckerView = () => {
         const result = await generateText(prompt, aiCreativity, aiOptions, controller.signal);
         setCheckResult(parseConsistencyResult(result));
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        // QNBS-v3: treat any AbortError as a cancellation (not a failure). The provider layer can
+        // surface aborts as a plain Error named 'AbortError', not only as a DOMException — and in
+        // some runtimes DOMException is NOT an Error subclass — so guard on the name across both,
+        // otherwise a cancelled run would overwrite a valid prior result.
+        if (
+          (error instanceof DOMException || error instanceof Error) &&
+          error.name === 'AbortError'
+        ) {
+          return;
+        }
         setCheckResult({
           kind: 'text',
           text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,

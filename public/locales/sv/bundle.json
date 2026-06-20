@@ -98,6 +98,7 @@
   "common.words": "ord",
   "consistencyChecker.checkButton": "Kontrollera överensstämmelse",
   "consistencyChecker.description": "Kontrollera dina karaktärer för inkonsekvenser med den etablerade loren, andra karaktärer och ditt manuskript.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "Inga resultat ännu",
   "consistencyChecker.noResultsHint": "Välj ett tecken från listan till vänster och klicka på Kontrollera konsistens för att skanna ditt manuskript.",
   "consistencyChecker.refLabel": "Related",

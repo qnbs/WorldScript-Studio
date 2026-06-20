@@ -98,6 +98,7 @@
   "common.words": "szó",
   "consistencyChecker.checkButton": "Ellenőrizze a konzisztenciát",
   "consistencyChecker.description": "Ellenőrizd, hogy szereplőid nincsenek-e összeegyeztethetetlenek a bevált tanokkal, a többi szereplővel és a kéziratoddal.",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "Még nincs eredmény",
   "consistencyChecker.noResultsHint": "Válasszon ki egy karaktert a bal oldali listából, majd kattintson a Konzisztencia ellenőrzése gombra a kézirat beolvasásához.",
   "consistencyChecker.refLabel": "Related",

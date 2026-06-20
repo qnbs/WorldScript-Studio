@@ -98,6 +98,7 @@
   "common.words": "字",
   "consistencyChecker.checkButton": "检查一致性",
   "consistencyChecker.description": "检查你的角色与既定的传说、其他角色和你的手稿是否不一致。",
+  "consistencyChecker.noFindings": "No inconsistencies found — this character looks consistent.",
   "consistencyChecker.noResults": "还没有结果",
   "consistencyChecker.noResultsHint": "从左侧列表中选择一个字符，然后单击“检查一致性”以扫描您的手稿。",
   "consistencyChecker.refLabel": "Related",

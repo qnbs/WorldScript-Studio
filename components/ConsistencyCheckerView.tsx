@@ -138,7 +138,13 @@ const ConsistencyCheckerUI: FC = () => {
             </CardHeader>
             <CardContent>
               {checkResult ? (
-                checkResult.kind === 'structured' ? (
+                checkResult.kind === 'structured' && checkResult.findings.length === 0 ? (
+                  // QNBS-v3: valid empty array = the model found no issues — show an explicit clean
+                  // state instead of an empty list or raw "[]".
+                  <p className="text-sm text-[var(--sc-success-fg)]">
+                    {t('consistencyChecker.noFindings')}
+                  </p>
+                ) : checkResult.kind === 'structured' ? (
                   <ul className="space-y-3">
                     {checkResult.findings.map((f) => (
                       <li
