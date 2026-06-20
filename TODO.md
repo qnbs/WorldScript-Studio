@@ -168,7 +168,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - 🔄 **C-7 remainder** — Coverage → L85%/B75%/F80%; Stryker break 75→80 (current thresholds: L73/F65/B58). **Phase 3 started (2026-06-02):** +33 LoRA tests (useLoraView, training wizard, sub-panels — were 0%)
 - ✅ IDB at-rest encryption UX (2026-06-02 reconciliation) — `IdbUnlockModal` (startup unlock + 2-step forgot-passphrase escape hatch, `App.tsx:182-188,638-643`), `PassphraseModal` (set/change/disable), real read/write gating `idbProjectStore.ts:209-265`, session lock + key rotation (Phase 1). `enableIdbAtRestEncryption` flag in Settings › Privacy with ⚠ warning
 - ✅ **P0-2** — Plugin worker isolation (`workers/plugin.worker.ts`) — routes plugin execution to isolated worker context with timeout and sandboxed API
-- ✅ **P0-4** — DuckDB OPFS encryption (`services/duckdb/duckdbEncryption.ts`) — encrypts DuckDB analytics data at rest using shared passphrase-derived key
+- 🟡 **P0-4** — DuckDB OPFS encryption (`services/duckdb/duckdbEncryption.ts`) — encryption module + unit tests landed (passphrase-derived AES-256-GCM), **but not yet wired into the DuckDB persistence path** (0 production callers as of v1.23.1), so analytics are not encrypted at rest. Integration into `duckdbClient`/`duckdbWorker` remains open. (2026-06-17 reconciliation — was over-marked ✅; see `.github/SECURITY.md` SEC-6.)
 - ✅ **P0-5** — Voice WASM model download UI (`components/voice/VoiceModelDownloadModal.tsx`) — progress modal for Whisper/Kokoro model downloads with cancel/retry
 - ⬜ Complete Whisper WASM STT model download + inference pipeline (B-2 continuation)
 - ⬜ Kokoro/Piper TTS WASM engines
