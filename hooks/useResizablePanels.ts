@@ -19,11 +19,18 @@ export const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
 
+  // QNBS-v3 (#179): track both widths in a ref so the stable drag handlers can enforce a COMBINED
+  // constraint — left + right ≤ 80%, keeping ≥ 20% for the center editor. Clamping each side
+  // independently to 15–50% let a drag collapse the editor once both panels reached ~50%.
+  const widthsRef = useRef({ left: initialLeft, right: initialRight });
+  widthsRef.current = { left: leftPanelWidth, right: rightPanelWidth };
+
   // QNBS-v3: PointerEvent replaces MouseEvent for reliable mobile drag (touch + stylus + mouse).
   const handleLeftResize = useCallback((e: PointerEvent) => {
     if (!isResizingLeft.current) return;
     const newWidth = (e.clientX / window.innerWidth) * 100;
-    if (newWidth > 15 && newWidth < 50) {
+    const maxLeft = Math.min(50, 80 - widthsRef.current.right);
+    if (newWidth > 15 && newWidth < maxLeft) {
       setLeftPanelWidth(newWidth);
     }
   }, []);
@@ -31,7 +38,8 @@ export const useResizablePanels = (initialLeft = 20, initialRight = 20) => {
   const handleRightResize = useCallback((e: PointerEvent) => {
     if (!isResizingRight.current) return;
     const newWidth = ((window.innerWidth - e.clientX) / window.innerWidth) * 100;
-    if (newWidth > 15 && newWidth < 50) {
+    const maxRight = Math.min(50, 80 - widthsRef.current.left);
+    if (newWidth > 15 && newWidth < maxRight) {
       setRightPanelWidth(newWidth);
     }
   }, []);

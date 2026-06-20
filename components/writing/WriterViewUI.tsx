@@ -1,15 +1,13 @@
 // QNBS-v3: Extracted from WriterView.tsx to keep each file ≤350 lines per architecture rules
 import type { FC } from 'react';
-import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { useWriterViewContext } from '../../contexts/WriterViewContext';
 import { proForgeActions } from '../../features/proForge/proForgeSlice';
 import {
   selectIsPanelOpen,
   versionControlActions,
 } from '../../features/versionControl/versionControlSlice';
-import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useWriterLayout } from '../../hooks/useWriterLayout';
 import { ProForgeDashboard } from '../proForge/ProForgeDashboard';
 import { AiScratchpad } from './AiScratchpad';
 import { ContextPanel } from './ContextPanel';
@@ -18,43 +16,20 @@ import { ToolsPanel } from './ToolsPanel';
 const WriterViewUI: FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
-  const { flowMode, toggleFlowMode } = useWriterViewContext();
   const isVCPanelOpen = useAppSelector(selectIsPanelOpen);
   const isProForgeEnabled = useAppSelector((s) => s.featureFlags.enableProForge);
   const isProForgeActive = useAppSelector((s) => s.proForge.isActive);
-  const [activeMobileTab, setActiveMobileTab] = useState<'context' | 'tools' | 'result'>('tools');
-  const [collapsedPanels, setCollapsedPanels] = useState<Record<string, boolean>>({});
-  const [focusMode, setFocusMode] = useState(false);
-
-  // X-2: Escape exits Flow Mode without conflicting with global shortcuts (no existing Escape handler found in useGlobalKeyboardShortcuts)
-  useEffect(() => {
-    if (!flowMode) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') toggleFlowMode();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [flowMode, toggleFlowMode]);
-
-  // Mobile swipe gesture for panel switching (outline → tools → result)
-  const mobilePanelRef = useRef<HTMLDivElement>(null);
-  const MOBILE_TABS = ['context', 'tools', 'result'] as const;
-
-  useSwipeGesture(mobilePanelRef, {
-    onSwipeLeft: () => {
-      // QNBS-v3: Swipe left = next panel in tab order.
-      const idx = MOBILE_TABS.indexOf(activeMobileTab);
-      if (idx < MOBILE_TABS.length - 1) setActiveMobileTab(MOBILE_TABS[idx + 1]!);
-    },
-    onSwipeRight: () => {
-      const idx = MOBILE_TABS.indexOf(activeMobileTab);
-      if (idx > 0) setActiveMobileTab(MOBILE_TABS[idx - 1]!);
-    },
-  });
-
-  const togglePanel = (panel: string) => {
-    setCollapsedPanels((prev) => ({ ...prev, [panel]: !prev[panel] }));
-  };
+  const {
+    flowMode,
+    toggleFlowMode,
+    activeMobileTab,
+    setActiveMobileTab,
+    collapsedPanels,
+    togglePanel,
+    focusMode,
+    setFocusMode,
+    mobilePanelRef,
+  } = useWriterLayout();
 
   // X-2: Flow Mode — full-screen AiScratchpad, all panels hidden
   if (flowMode) {
