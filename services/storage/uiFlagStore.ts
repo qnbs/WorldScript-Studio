@@ -36,4 +36,8 @@ export const uiFlagStore = {
       // storage unavailable — the session map above keeps the value for this session
     }
   },
+  /** Test-only: clear the module-level session map so unit tests start from a clean store. */
+  _resetForTest(): void {
+    sessionMemory.clear();
+  },
 };

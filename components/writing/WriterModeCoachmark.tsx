@@ -27,7 +27,7 @@ export const WriterModeCoachmark: FC<WriterModeCoachmarkProps> = ({
     <button
       type="button"
       onClick={onDismiss}
-      className="text-xs px-2 py-1 rounded border border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)] transition-colors shrink-0"
+      className="text-xs min-h-[44px] sm:min-h-0 px-3 sm:px-2 py-2 sm:py-1 rounded border border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)] transition-colors shrink-0 touch-manipulation"
     >
       {dismissLabel}
     </button>

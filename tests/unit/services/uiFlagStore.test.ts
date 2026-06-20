@@ -4,6 +4,8 @@ import { uiFlagStore } from '../../../services/storage/uiFlagStore';
 describe('uiFlagStore', () => {
   beforeEach(() => {
     localStorage.clear();
+    // QNBS-v3: clear the module-level session map too, so tests aren't order-dependent.
+    uiFlagStore._resetForTest();
   });
   afterEach(() => {
     vi.restoreAllMocks();
