@@ -33,6 +33,35 @@ function installMatchMedia(initial: boolean) {
   };
 }
 
+// QNBS-v3: older Safari/WebView MediaQueryList has no addEventListener — only the deprecated
+// addListener/removeListener. The hook must fall back to those instead of throwing.
+function installLegacyMatchMedia(initial: boolean) {
+  let matches = initial;
+  let handler: (() => void) | null = null;
+  const removeListener = vi.fn();
+  const mql = {
+    get matches() {
+      return matches;
+    },
+    media: '',
+    addListener: (cb: () => void) => {
+      handler = cb;
+    },
+    removeListener,
+  };
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => mql),
+  );
+  return {
+    removeListener,
+    fire(next: boolean) {
+      matches = next;
+      handler?.();
+    },
+  };
+}
+
 describe('useMediaQuery', () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -48,5 +77,15 @@ describe('useMediaQuery', () => {
     expect(result.current).toBe(false);
     act(() => mm.fire(true));
     expect(result.current).toBe(true);
+  });
+
+  it('falls back to addListener/removeListener on legacy engines without addEventListener', () => {
+    const mm = installLegacyMatchMedia(false);
+    const { result, unmount } = renderHook(() => useMediaQuery('(min-width: 768px)'));
+    expect(result.current).toBe(false);
+    act(() => mm.fire(true));
+    expect(result.current).toBe(true);
+    unmount();
+    expect(mm.removeListener).toHaveBeenCalled();
   });
 });

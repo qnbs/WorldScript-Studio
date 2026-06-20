@@ -54,7 +54,7 @@ export const ManuscriptDesktopLayout: FC<ManuscriptDesktopLayoutProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setIsFocusMode(!isFocusMode)}
+          onClick={() => setIsFocusMode((prev) => !prev)}
           className={`transition-colors ${isFocusMode ? 'text-[var(--sc-accent)] bg-[var(--sc-accent)]/10' : 'text-[var(--sc-text-muted)]'}`}
           title={isFocusMode ? t('manuscript.zenMode.exit') : t('manuscript.zenMode.enter')}
         >

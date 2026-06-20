@@ -17,8 +17,14 @@ export function useMediaQuery(query: string): boolean {
     const mq = window.matchMedia(query);
     const onChange = () => setMatches(mq.matches);
     onChange();
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    // QNBS-v3: addEventListener is unavailable on older Safari/WebView MediaQueryList engines (<14),
+    // where it would throw and break layout rendering — fall back to the deprecated addListener there.
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    }
+    mq.addListener(onChange);
+    return () => mq.removeListener(onChange);
   }, [query]);
 
   return matches;

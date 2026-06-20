@@ -27,13 +27,18 @@ export function useWriterLayout() {
 
   useSwipeGesture(mobilePanelRef, {
     onSwipeLeft: () => {
-      // QNBS-v3: Swipe left = next panel in tab order.
-      const idx = MOBILE_TABS.indexOf(activeMobileTab);
-      if (idx < MOBILE_TABS.length - 1) setActiveMobileTab(MOBILE_TABS[idx + 1]!);
+      // QNBS-v3: Swipe left = next panel. Functional update derives from the latest tab so rapid
+      // consecutive swipes aren't collapsed into one move by a stale captured value.
+      setActiveMobileTab((prev) => {
+        const idx = MOBILE_TABS.indexOf(prev);
+        return idx < MOBILE_TABS.length - 1 ? MOBILE_TABS[idx + 1]! : prev;
+      });
     },
     onSwipeRight: () => {
-      const idx = MOBILE_TABS.indexOf(activeMobileTab);
-      if (idx > 0) setActiveMobileTab(MOBILE_TABS[idx - 1]!);
+      setActiveMobileTab((prev) => {
+        const idx = MOBILE_TABS.indexOf(prev);
+        return idx > 0 ? MOBILE_TABS[idx - 1]! : prev;
+      });
     },
   });
 
