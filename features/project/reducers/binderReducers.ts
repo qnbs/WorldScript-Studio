@@ -14,7 +14,9 @@ export const binderReducers = {
   },
   updateBinderNode: (
     state: ProjectSliceState,
-    action: PayloadAction<{ id: string; changes: Partial<BinderNode> }>,
+    // QNBS-v3: id excluded from changes — child nodes keep parentId pointers and the delete/update
+    // lookups match by id, so a renamed id would orphan whole subtrees.
+    action: PayloadAction<{ id: string; changes: Partial<Omit<BinderNode, 'id'>> }>,
   ) => {
     const nodes = state.data.binderNodes;
     if (!nodes) return;

@@ -49,7 +49,9 @@ export const plotReducers = {
   },
   updatePlotSubplot: (
     state: ProjectSliceState,
-    action: PayloadAction<{ id: string; changes: Partial<Subplot> }>,
+    // QNBS-v3: id excluded — plotConnections[].subplotId references it; a patched id would silently
+    // sever every connection's linkage to the subplot.
+    action: PayloadAction<{ id: string; changes: Partial<Omit<Subplot, 'id'>> }>,
   ) => {
     const subplot = state.data.plotSubplots?.find((s) => s.id === action.payload.id);
     if (subplot) Object.assign(subplot, action.payload.changes);

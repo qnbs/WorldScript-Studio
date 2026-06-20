@@ -128,7 +128,13 @@ describe('projectSlice', () => {
 
     it('should reset project with new title/logline', () => {
       const store = createTestStore({ title: 'Old', logline: 'Old logline' });
-      store.dispatch(projectActions.resetProject({ title: 'Fresh', logline: 'A fresh start' }));
+      store.dispatch(
+        projectActions.resetProject({
+          title: 'Fresh',
+          logline: 'A fresh start',
+          chapter1Title: 'Chapter 1',
+        }),
+      );
       const data = store.getState().project.present.data;
       expect(data.title).toBe('Fresh');
       expect(data.logline).toBe('A fresh start');
@@ -223,6 +229,7 @@ describe('projectSlice', () => {
         projectActions.resetProject({
           title: 'T',
           logline: 'L',
+          chapter1Title: 'C1',
         }),
       );
       // updateWritingGoal on unknown id is a no-op (initializes array but adds nothing)

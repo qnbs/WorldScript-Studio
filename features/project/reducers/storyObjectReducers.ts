@@ -10,16 +10,13 @@ export const storyObjectReducers = {
   },
   updateStoryObject: (
     state: ProjectSliceState,
-    action: PayloadAction<{ id: string; changes: Partial<StoryObject> }>,
+    // QNBS-v3: id AND groupIds excluded — id is referenced by objectGroups[*].objectIds and the
+    // delete cascade; groupIds membership is reciprocal with objectGroups and must only change via
+    // assign/removeObjectToGroup, else the two sides desync.
+    action: PayloadAction<{ id: string; changes: Partial<Omit<StoryObject, 'id' | 'groupIds'>> }>,
   ) => {
     const obj = (state.data.storyObjects ?? []).find((o) => o.id === action.payload.id);
-    // QNBS-v3: never let an update rewrite the entity id — objectGroups[*].objectIds key on it and
-    // deleteStoryObject's cascade matches by id, so an id change would orphan group cross-refs.
-    if (obj) {
-      const originalId = obj.id;
-      Object.assign(obj, action.payload.changes);
-      obj.id = originalId;
-    }
+    if (obj) Object.assign(obj, action.payload.changes);
   },
   deleteStoryObject: (state: ProjectSliceState, action: PayloadAction<string>) => {
     const id = action.payload;
@@ -35,15 +32,12 @@ export const storyObjectReducers = {
   },
   updateObjectGroup: (
     state: ProjectSliceState,
-    action: PayloadAction<{ id: string; changes: Partial<ObjectGroup> }>,
+    // QNBS-v3: id AND objectIds excluded — id is referenced by storyObjects[*].groupIds, and
+    // objectIds membership is reciprocal and must only change via assign/removeObjectToGroup.
+    action: PayloadAction<{ id: string; changes: Partial<Omit<ObjectGroup, 'id' | 'objectIds'>> }>,
   ) => {
     const g = (state.data.objectGroups ?? []).find((g) => g.id === action.payload.id);
-    // QNBS-v3: keep id immutable — storyObjects[*].groupIds reference it; a change would desync membership.
-    if (g) {
-      const originalId = g.id;
-      Object.assign(g, action.payload.changes);
-      g.id = originalId;
-    }
+    if (g) Object.assign(g, action.payload.changes);
   },
   deleteObjectGroup: (state: ProjectSliceState, action: PayloadAction<string>) => {
     const id = action.payload;
@@ -60,8 +54,11 @@ export const storyObjectReducers = {
     const { objectId, groupId } = action.payload;
     const obj = (state.data.storyObjects ?? []).find((o) => o.id === objectId);
     const grp = (state.data.objectGroups ?? []).find((g) => g.id === groupId);
-    if (obj && !obj.groupIds.includes(groupId)) obj.groupIds.push(groupId);
-    if (grp && !grp.objectIds.includes(objectId)) grp.objectIds.push(objectId);
+    // QNBS-v3: only wire the relation when BOTH ends exist — a stale/missing id would otherwise
+    // write a one-sided reference and permanently desync groupIds vs objectIds.
+    if (!obj || !grp) return;
+    if (!obj.groupIds.includes(groupId)) obj.groupIds.push(groupId);
+    if (!grp.objectIds.includes(objectId)) grp.objectIds.push(objectId);
   },
   removeObjectFromGroup: (
     state: ProjectSliceState,

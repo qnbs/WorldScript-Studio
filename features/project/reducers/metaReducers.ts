@@ -27,7 +27,9 @@ export const metaReducers = {
   },
   resetProject: (
     state: ProjectSliceState,
-    action: PayloadAction<{ title: string; logline: string; chapter1Title?: string }>,
+    // QNBS-v3: chapter1Title is required and supplied localized by callers (t('initialProject.chapter1'))
+    // — no hardcoded English fallback in the reducer, which can't reach the i18n context.
+    action: PayloadAction<{ title: string; logline: string; chapter1Title: string }>,
   ) => {
     state.data = {
       ...initialState.data,
@@ -38,7 +40,7 @@ export const metaReducers = {
       manuscript: [
         {
           id: `sec-${Date.now()}`,
-          title: action.payload.chapter1Title ?? 'Chapter 1',
+          title: action.payload.chapter1Title,
           content: '',
         },
       ],

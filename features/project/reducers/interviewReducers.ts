@@ -49,7 +49,9 @@ export const interviewReducers = {
     action: PayloadAction<{
       characterId: string;
       interviewId: string;
-      changes: Partial<Omit<CharacterInterview, 'messages'>>;
+      // QNBS-v3: id + characterId excluded — the record lives in a map bucket keyed by characterId
+      // and is found by id; patching either without re-bucketing would strand the interview.
+      changes: Partial<Omit<CharacterInterview, 'messages' | 'id' | 'characterId'>>;
     }>,
   ) => {
     const { characterId, interviewId, changes } = action.payload;

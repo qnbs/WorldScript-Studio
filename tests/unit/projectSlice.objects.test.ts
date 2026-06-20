@@ -68,9 +68,9 @@ describe('projectSlice — storyObjects reducers', () => {
     };
     const next = projectReducer(
       state,
-      projectActions.updateStoryObject({ id: 'obj-1', changes: { id: 'obj-X', name: 'Renamed' } }),
+      projectActions.updateStoryObject({ id: 'obj-1', changes: { name: 'Renamed' } }),
     );
-    expect(next.data.storyObjects![0]!.id).toBe('obj-1'); // id is immutable
+    expect(next.data.storyObjects![0]!.id).toBe('obj-1'); // id is immutable (excluded from changes type)
     expect(next.data.storyObjects![0]!.name).toBe('Renamed');
     // deletion cascade still resolves because the id never drifted from the group reference
     const after = projectReducer(next, projectActions.deleteStoryObject('obj-1'));
@@ -125,9 +125,9 @@ describe('projectSlice — objectGroups reducers', () => {
     };
     const next = projectReducer(
       state,
-      projectActions.updateObjectGroup({ id: 'grp-1', changes: { id: 'grp-X', name: 'Blades' } }),
+      projectActions.updateObjectGroup({ id: 'grp-1', changes: { name: 'Blades' } }),
     );
-    expect(next.data.objectGroups![0]!.id).toBe('grp-1');
+    expect(next.data.objectGroups![0]!.id).toBe('grp-1'); // id immutable (excluded from changes type)
     expect(next.data.objectGroups![0]!.name).toBe('Blades');
   });
 

@@ -10,7 +10,12 @@ export const mindMapReducers = {
   },
   updateMindMap: (
     state: ProjectSliceState,
-    action: PayloadAction<{ id: string; changes: Partial<Omit<MindMap, 'nodes' | 'edges'>> }>,
+    // QNBS-v3: id excluded — nested nodes/edges and other maps resolve by previous id, so an in-place
+    // id change would break every lookup and desync entities still carrying the old mindMapId.
+    action: PayloadAction<{
+      id: string;
+      changes: Partial<Omit<MindMap, 'nodes' | 'edges' | 'id'>>;
+    }>,
   ) => {
     const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.id);
     if (map) Object.assign(map, action.payload.changes);
@@ -27,7 +32,13 @@ export const mindMapReducers = {
   },
   updateMindMapNode: (
     state: ProjectSliceState,
-    action: PayloadAction<{ mapId: string; nodeId: string; changes: Partial<MindMapNode> }>,
+    // QNBS-v3: node id excluded — edges keep sourceNodeId/targetNodeId pointers, so renaming a node
+    // id in place would dangle every connected edge.
+    action: PayloadAction<{
+      mapId: string;
+      nodeId: string;
+      changes: Partial<Omit<MindMapNode, 'id'>>;
+    }>,
   ) => {
     const map = (state.data.mindMaps ?? []).find((m) => m.id === action.payload.mapId);
     const node = map?.nodes.find((n) => n.id === action.payload.nodeId);
