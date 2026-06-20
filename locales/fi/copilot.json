@@ -12,6 +12,7 @@
   "copilot.clear": "Selkeä keskustelu",
   "copilot.closeLabel": "Sulje AI Copilot",
   "copilot.contextLabel": "Olet päällä: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "En voinut suorittaa diagnoosia juuri nyt. Tarkista AI-yhteytesi ja yritä uudelleen.",
   "copilot.diagnosticResult": "Diagnostiikka valmis – kokonaislaatupisteet: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Kelluva paneeli",

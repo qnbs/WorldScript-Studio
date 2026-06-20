@@ -12,6 +12,7 @@
   "copilot.clear": "Καθαρή συνομιλία",
   "copilot.closeLabel": "Κλείστε το AI Copilot",
   "copilot.contextLabel": "Είστε στο: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "Δεν μπορούσα να εκτελέσω το διαγνωστικό αυτή τη στιγμή. Ελέγξτε τη σύνδεσή σας με AI και δοκιμάστε ξανά.",
   "copilot.diagnosticResult": "Ολοκληρώθηκε το διαγνωστικό — συνολική βαθμολογία ποιότητας: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Float as dialog",

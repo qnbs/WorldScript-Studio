@@ -100,6 +100,11 @@ vi.mock('../../services/ai/localEmbeddingService', () => ({
 }));
 vi.mock('../../services/aiProviderService', () => ({
   generateText: (...args: Parameters<typeof mockGenerateText>) => mockGenerateText(...args),
+  // QNBS-v3: mirror the real shape-based abort guard so cancellation tests exercise the same logic.
+  isAbortError: (error: unknown) =>
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError',
 }));
 vi.mock('../../features/project/projectSelectors', () => ({
   selectAiCreativity: (state: typeof mockState) => state.aiCreativity,
@@ -130,7 +135,9 @@ describe('useConsistencyCheckerView', () => {
       expect.any(Object),
     );
 
-    await waitFor(() => expect(result.current.checkResult).toBe('Consistency OK'));
+    await waitFor(() =>
+      expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' }),
+    );
     expect(result.current.isChecking).toBe(false);
   });
 
@@ -148,15 +155,48 @@ describe('useConsistencyCheckerView', () => {
     mockState.projectData = originalProjectData;
   });
 
-  it('preserves check result when request is aborted', async () => {
-    mockGenerateText.mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+  it('preserves an existing check result when a later request is aborted', async () => {
     const { result } = renderHook(() => useConsistencyCheckerView());
 
+    // Seed a non-null result via a successful run.
+    mockGenerateText.mockReset().mockImplementation(async () => 'Consistency OK');
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+    await waitFor(() =>
+      expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' }),
+    );
+
+    // A subsequent aborted run must NOT clear the prior result.
+    mockGenerateText.mockReset().mockRejectedValue(new DOMException('Aborted', 'AbortError'));
     await act(async () => {
       await result.current.runCheck('c1');
     });
 
-    expect(result.current.checkResult).toBe('');
+    expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' });
+    expect(result.current.isChecking).toBe(false);
+  });
+
+  it('treats a plain { name: "AbortError" } object (non-Error) as a cancellation', async () => {
+    // QNBS-v3: provider/runtime cancellations can surface as plain objects, not Error/DOMException
+    // instances. The shape-based isAbortError guard must still recognize them and preserve results.
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    mockGenerateText.mockReset().mockImplementation(async () => 'Consistency OK');
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+    await waitFor(() =>
+      expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' }),
+    );
+
+    // Reject with a bare object shaped like an abort — not an Error/DOMException instance.
+    mockGenerateText.mockReset().mockRejectedValue({ name: 'AbortError', message: 'cancelled' });
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' });
     expect(result.current.isChecking).toBe(false);
   });
 
@@ -168,8 +208,114 @@ describe('useConsistencyCheckerView', () => {
       await result.current.runCheck('c1');
     });
 
-    await waitFor(() => expect(result.current.checkResult).toContain('Error:'));
+    await waitFor(() => {
+      const r = result.current.checkResult;
+      expect(r?.kind).toBe('text');
+      expect(r?.kind === 'text' ? r.text : '').toContain('Error:');
+    });
     expect(result.current.isChecking).toBe(false);
+  });
+
+  it('parses a JSON finding array into structured results', async () => {
+    mockGenerateText.mockReset().mockImplementation(async () =>
+      JSON.stringify([
+        {
+          severity: 'error',
+          title: 'Eye colour',
+          detail: 'Blue in Ch1, brown in Ch3.',
+          ref: 'Chapter 3',
+        },
+        { severity: 'info', title: 'Age', detail: 'Consistent throughout.' },
+      ]),
+    );
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    await waitFor(() => {
+      const r = result.current.checkResult;
+      expect(r?.kind).toBe('structured');
+      if (r?.kind === 'structured') {
+        expect(r.findings).toHaveLength(2);
+        expect(r.findings[0]).toEqual({
+          id: '0',
+          severity: 'error',
+          title: 'Eye colour',
+          detail: 'Blue in Ch1, brown in Ch3.',
+          ref: 'Chapter 3',
+        });
+      }
+    });
+  });
+
+  it('normalizes severity variants (warning/ERROR/uppercase) instead of downgrading to info', async () => {
+    mockGenerateText.mockReset().mockImplementation(async () =>
+      JSON.stringify([
+        { severity: 'warning', title: 'Pacing', detail: 'Slow middle.' },
+        { severity: 'ERROR', title: 'Contradiction', detail: 'Dead character speaks.' },
+        { severity: ' High ', title: 'Plot hole', detail: 'Unexplained jump.' },
+      ]),
+    );
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    await waitFor(() => {
+      const r = result.current.checkResult;
+      expect(r?.kind).toBe('structured');
+      if (r?.kind === 'structured') {
+        expect(r.findings.map((f) => f.severity)).toEqual(['warn', 'error', 'error']);
+      }
+    });
+  });
+
+  it('treats a valid empty array as a structured no-findings result (not raw text)', async () => {
+    mockGenerateText.mockReset().mockImplementation(async () => '[]');
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    await waitFor(() => {
+      const r = result.current.checkResult;
+      expect(r?.kind).toBe('structured');
+      if (r?.kind === 'structured') expect(r.findings).toHaveLength(0);
+    });
+  });
+
+  it('falls back to text when a non-empty array drops all entries as malformed (no false all-clear)', async () => {
+    // QNBS-v3: array is valid JSON but every element lacks both title and detail, so the filter
+    // empties it. This must NOT render as "no findings" — it should surface the raw output instead.
+    mockGenerateText
+      .mockReset()
+      .mockImplementation(async () => '[{"severity":"warn"},{"severity":"error"}]');
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    await waitFor(() => {
+      const r = result.current.checkResult;
+      expect(r?.kind).toBe('text');
+      if (r?.kind === 'text') expect(r.text).toContain('"severity":"warn"');
+    });
+  });
+
+  it('falls back to text when JSON output is fenced but malformed', async () => {
+    mockGenerateText.mockReset().mockImplementation(async () => '```json\nnot-an-array\n```');
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    await waitFor(() => expect(result.current.checkResult?.kind).toBe('text'));
   });
 
   it('aborts active consistency checks when the component unmounts', async () => {
@@ -245,7 +391,9 @@ describe('useConsistencyCheckerView', () => {
     });
 
     expect(mockGenerateText).toHaveBeenCalled();
-    await waitFor(() => expect(result.current.checkResult).toBe('Consistency OK'));
+    await waitFor(() =>
+      expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' }),
+    );
   });
 
   it('sets storyCodex to null when no project data exists', async () => {

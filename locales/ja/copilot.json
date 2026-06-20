@@ -12,6 +12,7 @@
   "copilot.clear": "明確な会話",
   "copilot.closeLabel": "AI コパイロットを閉じる",
   "copilot.contextLabel": "現在の位置: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "現在診断を実行できませんでした。 AI 接続を確認して、もう一度試してください。",
   "copilot.diagnosticResult": "診断完了 — 全体的な品質スコア: {{score}}/100。 {{summary}}",
   "copilot.dialogMode": "Float as dialog",

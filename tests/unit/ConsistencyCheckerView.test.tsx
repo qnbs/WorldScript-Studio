@@ -99,19 +99,48 @@ describe('ConsistencyCheckerView', () => {
     expect(screen.getByText('consistencyChecker.noResults')).toBeTruthy();
   });
 
-  it('shows check result when provided', async () => {
+  it('renders structured findings with severity badges', async () => {
     const { useConsistencyCheckerView } = await import('../../hooks/useConsistencyCheckerView');
     vi.mocked(useConsistencyCheckerView).mockReturnValueOnce({
       t: (k: string) => k,
       characters: [],
       selectedCharacterId: null,
       setSelectedCharacterId: mockSetSelectedCharacterId,
-      checkResult: 'Inconsistency found: Alice has blue eyes in Ch1 but brown in Ch3.',
+      checkResult: {
+        kind: 'structured',
+        findings: [
+          {
+            id: '0',
+            severity: 'error',
+            title: 'Eye colour',
+            detail: 'Alice has blue eyes in Ch1 but brown in Ch3.',
+            ref: 'Chapter 3',
+          },
+        ],
+      },
       isChecking: false,
       runCheck: mockRunCheck,
       storyCodex: null,
     } as never);
     render(<ConsistencyCheckerView />);
-    expect(screen.getByText(/Inconsistency found/)).toBeTruthy();
+    expect(screen.getByText('Eye colour')).toBeTruthy();
+    expect(screen.getByText(/Alice has blue eyes/)).toBeTruthy();
+    expect(screen.getByText('consistencyChecker.severity.error')).toBeTruthy();
+  });
+
+  it('falls back to a raw text block when the result is unstructured', async () => {
+    const { useConsistencyCheckerView } = await import('../../hooks/useConsistencyCheckerView');
+    vi.mocked(useConsistencyCheckerView).mockReturnValueOnce({
+      t: (k: string) => k,
+      characters: [],
+      selectedCharacterId: null,
+      setSelectedCharacterId: mockSetSelectedCharacterId,
+      checkResult: { kind: 'text', text: 'Error: Service unavailable' },
+      isChecking: false,
+      runCheck: mockRunCheck,
+      storyCodex: null,
+    } as never);
+    render(<ConsistencyCheckerView />);
+    expect(screen.getByText(/Service unavailable/)).toBeTruthy();
   });
 });

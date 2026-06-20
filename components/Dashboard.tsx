@@ -23,6 +23,7 @@ import { PageContainer } from './ui/PageContainer';
 import { SectionIcon } from './ui/SectionIcon';
 import { Skeleton } from './ui/Skeleton';
 import { Spinner } from './ui/Spinner';
+import { Tooltip } from './ui/Tooltip';
 
 // --- Generic Components ---
 
@@ -99,9 +100,25 @@ const AuthorInsightsCard: FC = () => {
               {t('dashboard.authorInsights.readabilityNeedMore')}
             </p>
           ) : (
-            <p className="text-4xl font-black tabular-nums text-[var(--sc-text-primary)]">
-              {readability.score}
-            </p>
+            // QNBS-v3: show the /100 scale + an interpretation tooltip so the bare number isn't
+            // mistaken for a normative grade (Flesch 0–100, higher = easier). Trigger is a
+            // <button> so the tooltip is reachable by keyboard, with the full scale explanation
+            // exposed to screen readers via aria-label.
+            <Tooltip label={t('dashboard.authorInsights.readabilityTooltip')}>
+              <button
+                type="button"
+                aria-label={`${readability.score}${t('dashboard.authorInsights.readabilityScaleSuffix')} — ${t('dashboard.authorInsights.readabilityTooltip')}`}
+                className="inline-flex items-baseline rounded text-4xl font-black tabular-nums text-[var(--sc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+              >
+                <span aria-hidden="true">{readability.score}</span>
+                <span
+                  aria-hidden="true"
+                  className="text-lg font-semibold text-[var(--sc-text-muted)]"
+                >
+                  {t('dashboard.authorInsights.readabilityScaleSuffix')}
+                </span>
+              </button>
+            </Tooltip>
           )}
           <p className="text-xs text-[var(--sc-text-muted)] mt-2">
             {t('dashboard.authorInsights.readabilityFootnote')}

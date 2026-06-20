@@ -12,6 +12,7 @@
   "copilot.clear": "Skýrt samtal",
   "copilot.closeLabel": "Lokaðu AI Copilot",
   "copilot.contextLabel": "Þú ert á: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "Ég gat ekki keyrt greininguna núna. Athugaðu gervigreindartenginguna þína og reyndu aftur.",
   "copilot.diagnosticResult": "Greiningu lokið — heildargæðastig: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Flot spjaldið",

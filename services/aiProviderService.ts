@@ -83,7 +83,7 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
 // QNBS-v3: True for a user/abort-signal cancellation, regardless of how the provider surfaced it
 // (DOMException or a plain Error named 'AbortError'). Used to treat cancels as a silent stop, not
 // a provider failure that would trigger fallback + a terminal onError callback.
-function isAbortError(error: unknown): boolean {
+export function isAbortError(error: unknown): boolean {
   // QNBS-v3: Match both Error and DOMException named 'AbortError' (DOMException is not always an
   // instanceof Error across runtimes), so a thrown abort is recognized regardless of its class.
   return (

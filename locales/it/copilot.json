@@ -12,6 +12,7 @@
   "copilot.clear": "Cancella conversazione",
   "copilot.closeLabel": "Chiudi Copilota IA",
   "copilot.contextLabel": "Sei su: {{view}}",
+  "copilot.contextSource": "Contesto: vista attuale + metadati del progetto",
   "copilot.diagnosticFailed": "Non ho potuto eseguire la diagnosi ora. Controlla la tua connessione IA e riprova.",
   "copilot.diagnosticResult": "Diagnosi completata — punteggio qualità generale: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Float as dialog",

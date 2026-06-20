@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { ConsistencyResult } from '../hooks/useConsistencyCheckerView';
 import type { Character, StoryCodex } from '../types';
 
 interface ConsistencyCheckerViewContextType {
@@ -6,7 +7,7 @@ interface ConsistencyCheckerViewContextType {
   characters: Character[];
   selectedCharacterId: string | null;
   setSelectedCharacterId: (id: string | null) => void;
-  checkResult: string;
+  checkResult: ConsistencyResult | null;
   isChecking: boolean;
   runCheck: (characterId: string) => void;
   storyCodex: StoryCodex | null;

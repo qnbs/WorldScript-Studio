@@ -12,6 +12,7 @@
   "copilot.clear": "Tiszta beszélgetés",
   "copilot.closeLabel": "Zárja be az AI másodpilótát",
   "copilot.contextLabel": "Itt vagy: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "A diagnosztikát most nem tudtam elindítani. Ellenőrizze az AI-kapcsolatot, és próbálja újra.",
   "copilot.diagnosticResult": "A diagnosztika kész – általános minőségi pontszám: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Úszó panel",
