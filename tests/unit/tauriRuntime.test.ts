@@ -27,6 +27,12 @@ describe('isTauriRuntime', () => {
     const { isTauriRuntime } = await import('../../services/tauriRuntime');
     expect(isTauriRuntime()).toBe(true);
   });
+
+  it('returns true when only __TAURI_INTERNALS__ is set (withGlobalTauri disabled)', async () => {
+    vi.stubGlobal('window', { __TAURI_INTERNALS__: {} });
+    const { isTauriRuntime } = await import('../../services/tauriRuntime');
+    expect(isTauriRuntime()).toBe(true);
+  });
 });
 
 describe('getTauriAppVersion', () => {

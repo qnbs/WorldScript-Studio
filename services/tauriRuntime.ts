@@ -1,9 +1,12 @@
 /** Desktop (Tauri) runtime helpers — dynamic imports keep web bundle lean. */
 
 export function isTauriRuntime(): boolean {
-  return (
-    typeof window !== 'undefined' && Boolean((window as Window & { __TAURI__?: unknown }).__TAURI__)
-  );
+  if (typeof window === 'undefined') return false;
+  // QNBS-v3 (#183): Tauri v2 commonly runs with `withGlobalTauri` disabled, which exposes only
+  // `__TAURI_INTERNALS__` (not `__TAURI__`). Accept either so detection works in real desktop builds
+  // (checking only `__TAURI__` short-circuited every desktop-gated path to false).
+  const w = window as Window & { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+  return Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
 }
 
 export type DesktopOs = 'windows' | 'macos' | 'linux';
