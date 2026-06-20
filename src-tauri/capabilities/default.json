@@ -16,6 +16,14 @@
     "dialog:allow-save",
     "http:default",
     "shell:allow-open",
-    "updater:default"
+    "updater:default",
+    "core:tray:default",
+    "core:app:allow-default-window-icon",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-visible",
+    "core:window:allow-close",
+    "core:window:allow-destroy"
   ]
 }

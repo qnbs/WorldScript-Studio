@@ -25,6 +25,18 @@ describe('settingsSlice', () => {
     expect(state.accessibility.comfortableTargets).toBe(false);
   });
 
+  it('defaults desktop.minimizeToTray to false', () => {
+    expect(initState().desktop.minimizeToTray).toBe(false);
+  });
+
+  it('setDesktopSettings merges the desktop group', () => {
+    const next = settingsReducer(
+      initState(),
+      settingsActions.setDesktopSettings({ minimizeToTray: true }),
+    );
+    expect(next.desktop.minimizeToTray).toBe(true);
+  });
+
   it('setSettings replaces state values from payload', () => {
     const base = initState();
     const nextSettings = {

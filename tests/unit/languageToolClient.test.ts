@@ -123,6 +123,9 @@ const baseSettings = (): Settings => ({
     ttsMuted: false,
     dictationAutoPunctuation: true,
   },
+  desktop: {
+    minimizeToTray: false,
+  },
 });
 
 describe('languageToolClient', () => {

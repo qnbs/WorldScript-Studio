@@ -22,7 +22,8 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 base64 = "0.22"
 log = "0.4"
-tauri = { version = "2.10.3", features = [] }
+# QNBS-v3 (T2): tray-icon enables the system-tray APIs (JS @tauri-apps/api/tray builds the tray).
+tauri = { version = "2.10.3", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
