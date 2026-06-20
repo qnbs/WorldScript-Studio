@@ -128,7 +128,13 @@ describe('projectSlice', () => {
 
     it('should reset project with new title/logline', () => {
       const store = createTestStore({ title: 'Old', logline: 'Old logline' });
-      store.dispatch(projectActions.resetProject({ title: 'Fresh', logline: 'A fresh start' }));
+      store.dispatch(
+        projectActions.resetProject({
+          title: 'Fresh',
+          logline: 'A fresh start',
+          chapter1Title: 'Chapter 1',
+        }),
+      );
       const data = store.getState().project.present.data;
       expect(data.title).toBe('Fresh');
       expect(data.logline).toBe('A fresh start');
@@ -223,6 +229,7 @@ describe('projectSlice', () => {
         projectActions.resetProject({
           title: 'T',
           logline: 'L',
+          chapter1Title: 'C1',
         }),
       );
       // updateWritingGoal on unknown id is a no-op (initializes array but adds nothing)
@@ -521,6 +528,34 @@ describe('projectSlice', () => {
       const preset = store.getState().project.present.data.aiPreset;
       expect(preset?.provider).toBeUndefined();
       expect(preset?.temperature).toBe(1.0);
+    });
+  });
+
+  describe('binder nodes', () => {
+    it('deleteBinderNode removes a node and its subtree', () => {
+      const store = createTestStore({
+        binderNodes: [
+          { id: 'root', parentId: null, title: 'Root', type: 'folder', sortIndex: 0 },
+          { id: 'child', parentId: 'root', title: 'Child', type: 'note', sortIndex: 0 },
+          { id: 'other', parentId: null, title: 'Other', type: 'note', sortIndex: 1 },
+        ],
+      });
+      store.dispatch(projectActions.deleteBinderNode('root'));
+      const nodes = store.getState().project.present.data.binderNodes ?? [];
+      expect(nodes.map((n) => n.id)).toEqual(['other']);
+    });
+
+    it('deleteBinderNode terminates on a cyclic parent chain (no infinite recursion)', () => {
+      const store = createTestStore({
+        // QNBS-v3: corrupted/imported cycle a→b→a — must not hang the reducer.
+        binderNodes: [
+          { id: 'a', parentId: 'b', title: 'A', type: 'note', sortIndex: 0 },
+          { id: 'b', parentId: 'a', title: 'B', type: 'note', sortIndex: 1 },
+        ],
+      });
+      store.dispatch(projectActions.deleteBinderNode('a'));
+      const nodes = store.getState().project.present.data.binderNodes ?? [];
+      expect(nodes).toHaveLength(0);
     });
   });
 

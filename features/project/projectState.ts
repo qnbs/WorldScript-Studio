@@ -18,6 +18,7 @@ import type {
   WritingGoal,
   WritingSession,
 } from '../../types';
+import { charactersAdapter, worldsAdapter } from './adapters';
 
 export interface ProjectData {
   id?: string;
@@ -58,3 +59,29 @@ export interface ProjectData {
   // QNBS-v3: Character Interview transcripts keyed by characterId for co-location with character data.
   characterInterviews?: Record<string, CharacterInterview[]>;
 }
+
+// QNBS-v3: Shared slice-state shape so reducer case modules (features/project/reducers/*) can
+// type their Immer draft param without `any` — preserves WritableDraft typing across the split.
+export interface ProjectSliceState {
+  data: ProjectData;
+}
+
+// QNBS-v3: Canonical initial state. Lives here (not in projectSlice) so reducer modules such as
+// metaReducers.resetProject can reference it without a circular import back through the slice.
+export const initialState: ProjectSliceState = {
+  data: {
+    id: 'default',
+    title: '',
+    logline: '',
+    characters: charactersAdapter.getInitialState(),
+    worlds: worldsAdapter.getInitialState(),
+    outline: [],
+    manuscript: [],
+    projectGoals: {
+      totalWordCount: 50000,
+      targetDate: null,
+    },
+    writingHistory: [],
+    binderNodes: [],
+  },
+};
