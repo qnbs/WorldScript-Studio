@@ -27,7 +27,10 @@ strictPeerDependencies: false
 #     GHSA-x4vx-rjvf-j5p4 is accepted in src-tauri/osv-scanner.toml)
 # - @babel/core: GHSA-4x5r-pxfx-6jf8 - build-time transpiler advisory (fixed 7.29.6)
 # - undici: GHSA-vmh5-mc38-953g (HIGH) - TLS cert validation bypass via dropped requestTls in
-#     SOCKS5 ProxyAgent + cross-user info disclosure (moderate); transitive via jsdom (fixed 7.28.0)
+#     SOCKS5 ProxyAgent + cross-user info disclosure (moderate); transitive via jsdom (fixed 7.28.0).
+#     Bounded to the 7.x line (<8): undici 8.x removed lib/handler/wrap-handler.js, an internal file
+#     jsdom@29.1.1 require()s (jsdom declares undici ^7.25.0). An unbounded ">=7.28.0" resolved to 8.5.0
+#     and broke every jsdom test worker -> coverage collapse -> Quality Gate red. Keep within 7.x.
 # - js-yaml: quadratic-complexity DoS in merge key (<=4.1.1; fixed 4.1.2)
 # - playwright / playwright-core: dedup to a single version. @playwright/test bumped to 1.61
 #     while @axe-core/playwright (peer >=1.0.0) + the transitive `playwright` runner stayed on
@@ -55,7 +58,7 @@ overrides:
   qs: ">=6.15.2"
   dompurify: ">=3.4.11"
   "@babel/core": ">=7.29.6"
-  undici: ">=7.28.0"
+  undici: ">=7.28.0 <8"
   js-yaml: ">=4.1.2"
 
 peerDependencyRules:
