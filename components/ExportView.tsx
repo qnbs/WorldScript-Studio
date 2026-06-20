@@ -555,9 +555,7 @@ export const ExportView: FC = () => {
   const contextValue = useExportView();
   return (
     <ExportViewContext.Provider value={contextValue}>
-      {/* QNBS-v3: ExportViewUI is a full-height grid (h-full + inner overflow-y-auto columns), so the
-          width-capping wrapper must also carry h-full — otherwise the height contract collapses. */}
-      <PageContainer className="h-full">
+      <PageContainer>
         <ExportViewUI />
       </PageContainer>
     </ExportViewContext.Provider>

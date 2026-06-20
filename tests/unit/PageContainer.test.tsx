@@ -40,12 +40,51 @@ describe('PageContainer', () => {
     expect(shell).toHaveClass('px-8');
   });
 
-  it('trims trailing space when no className is given', () => {
+  it('trims trailing space when no className/width is given (default)', () => {
     const { container } = render(
       <PageContainer>
         <span>x</span>
       </PageContainer>,
     );
     expect(container.firstElementChild?.className).toBe('view-shell w-full');
+  });
+
+  it('adds the narrow width modifier class', () => {
+    const { container } = render(
+      <PageContainer width="narrow">
+        <span>x</span>
+      </PageContainer>,
+    );
+    expect(container.firstElementChild).toHaveClass('view-shell--narrow');
+  });
+
+  it('adds the wide width modifier class', () => {
+    const { container } = render(
+      <PageContainer width="wide">
+        <span>x</span>
+      </PageContainer>,
+    );
+    expect(container.firstElementChild).toHaveClass('view-shell--wide');
+  });
+
+  it('default width adds no modifier class', () => {
+    const { container } = render(
+      <PageContainer width="default">
+        <span>x</span>
+      </PageContainer>,
+    );
+    const shell = container.firstElementChild;
+    expect(shell).not.toHaveClass('view-shell--narrow');
+    expect(shell).not.toHaveClass('view-shell--wide');
+    expect(shell?.className).toBe('view-shell w-full');
+  });
+
+  it('collapses internal whitespace when width + className combine', () => {
+    const { container } = render(
+      <PageContainer width="wide" className="px-8">
+        <span>x</span>
+      </PageContainer>,
+    );
+    expect(container.firstElementChild?.className).toBe('view-shell w-full view-shell--wide px-8');
   });
 });

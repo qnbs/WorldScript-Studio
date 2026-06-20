@@ -555,7 +555,10 @@ const OnboardingTipsBanner: FC = () => {
 const DashboardUI: FC = () => {
   const { onNavigate } = useDashboardContext();
   return (
-    <div className="space-y-8 pb-16 max-w-7xl mx-auto">
+    // QNBS-v3: width-capping moved to the PageContainer wrapper (width="wide"); the old inner
+    // max-w-7xl (80rem) capped below the wide token (90rem) and neutralized it. Web stays full-width
+    // by design (PWA), desktop honors the --width-content-wide token.
+    <div className="space-y-8 pb-16">
       <DashboardHeader />
       <OnboardingTipsBanner />
       <StatsGrid />
@@ -584,7 +587,7 @@ export const Dashboard: FC<DashboardProps> = ({ onNavigate }) => {
   const contextValue = useDashboard({ onNavigate });
   return (
     <DashboardContext.Provider value={contextValue}>
-      <PageContainer>
+      <PageContainer width="wide">
         <DashboardUI />
       </PageContainer>
     </DashboardContext.Provider>
