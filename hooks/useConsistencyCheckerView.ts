@@ -8,7 +8,7 @@ import {
 } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
 import { embedText } from '../services/ai/localEmbeddingService';
-import { generateText } from '../services/aiProviderService';
+import { generateText, isAbortError } from '../services/aiProviderService';
 import { loadStoryCodex } from '../services/codexService';
 import { getPrompts } from '../services/geminiService';
 import { retrieveContext } from '../services/localRagService';
@@ -213,14 +213,11 @@ export const useConsistencyCheckerView = () => {
         const result = await generateText(prompt, aiCreativity, aiOptions, controller.signal);
         setCheckResult(parseConsistencyResult(result));
       } catch (error) {
-        // QNBS-v3: treat any AbortError as a cancellation (not a failure). The provider layer can
-        // surface aborts as a plain Error named 'AbortError', not only as a DOMException — and in
-        // some runtimes DOMException is NOT an Error subclass — so guard on the name across both,
-        // otherwise a cancelled run would overwrite a valid prior result.
-        if (
-          (error instanceof DOMException || error instanceof Error) &&
-          error.name === 'AbortError'
-        ) {
+        // QNBS-v3: treat any AbortError as a cancellation (not a failure). Reuse the provider's
+        // shape-based `isAbortError` — provider/runtime cancellations can surface as plain objects
+        // shaped `{ name: 'AbortError' }` (or cross-realm errors), not only Error/DOMException
+        // instances, so an `instanceof` gate would misclassify a cancel and overwrite a valid result.
+        if (isAbortError(error)) {
           return;
         }
         setCheckResult({

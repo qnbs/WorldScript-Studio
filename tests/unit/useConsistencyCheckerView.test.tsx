@@ -100,6 +100,11 @@ vi.mock('../../services/ai/localEmbeddingService', () => ({
 }));
 vi.mock('../../services/aiProviderService', () => ({
   generateText: (...args: Parameters<typeof mockGenerateText>) => mockGenerateText(...args),
+  // QNBS-v3: mirror the real shape-based abort guard so cancellation tests exercise the same logic.
+  isAbortError: (error: unknown) =>
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError',
 }));
 vi.mock('../../features/project/projectSelectors', () => ({
   selectAiCreativity: (state: typeof mockState) => state.aiCreativity,
@@ -164,6 +169,29 @@ describe('useConsistencyCheckerView', () => {
 
     // A subsequent aborted run must NOT clear the prior result.
     mockGenerateText.mockReset().mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' });
+    expect(result.current.isChecking).toBe(false);
+  });
+
+  it('treats a plain { name: "AbortError" } object (non-Error) as a cancellation', async () => {
+    // QNBS-v3: provider/runtime cancellations can surface as plain objects, not Error/DOMException
+    // instances. The shape-based isAbortError guard must still recognize them and preserve results.
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    mockGenerateText.mockReset().mockImplementation(async () => 'Consistency OK');
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+    await waitFor(() =>
+      expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' }),
+    );
+
+    // Reject with a bare object shaped like an abort — not an Error/DOMException instance.
+    mockGenerateText.mockReset().mockRejectedValue({ name: 'AbortError', message: 'cancelled' });
     await act(async () => {
       await result.current.runCheck('c1');
     });
