@@ -8,7 +8,7 @@ import type {
   StageAgentResult,
   SuperviseInput,
 } from '../../features/proForge/machine/proForgeMachine.types';
-import type { SupervisionDecision } from '../../features/proForge/types';
+import type { PipelineStage, SupervisionDecision } from '../../features/proForge/types';
 
 // QNBS-v3: Headless machine tests — no React, no live store. Actors are injected via .provide so we
 // assert the control flow (snapshot → run → supervise gate → review → apply → advance, plus retry,
@@ -43,7 +43,7 @@ interface Overrides {
 }
 
 function makeActor(
-  selectedStages: string[],
+  selectedStages: PipelineStage[],
   opts: { maxRetries?: number; overrides?: Overrides } = {},
 ) {
   const machine = proForgeMachine.provide({
@@ -65,8 +65,7 @@ function makeActor(
     input: {
       projectId: 'p1',
       label: 'Run',
-      // biome-ignore lint/suspicious/noExplicitAny: test passes stage strings directly
-      selectedStages: selectedStages as any,
+      selectedStages,
       maxRetries: opts.maxRetries ?? 1,
     },
   });
