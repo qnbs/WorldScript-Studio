@@ -23,6 +23,7 @@ import { DebouncedTextarea } from './ui/DebouncedTextarea';
 import { EmptyState } from './ui/EmptyState';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { PageContainer } from './ui/PageContainer';
 import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
@@ -721,7 +722,9 @@ export const CharacterView: FC = () => {
   const contextValue = useCharacterView();
   return (
     <CharacterViewContext.Provider value={contextValue}>
-      <CharacterViewUI />
+      <PageContainer>
+        <CharacterViewUI />
+      </PageContainer>
     </CharacterViewContext.Provider>
   );
 };

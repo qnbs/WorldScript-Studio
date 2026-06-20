@@ -12,6 +12,7 @@ import { CompileWizardModal } from './CompileWizardModal';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Checkbox } from './ui/Checkbox';
+import { PageContainer } from './ui/PageContainer';
 import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
@@ -554,7 +555,11 @@ export const ExportView: FC = () => {
   const contextValue = useExportView();
   return (
     <ExportViewContext.Provider value={contextValue}>
-      <ExportViewUI />
+      {/* QNBS-v3: ExportViewUI is a full-height grid (h-full + inner overflow-y-auto columns), so the
+          width-capping wrapper must also carry h-full — otherwise the height contract collapses. */}
+      <PageContainer className="h-full">
+        <ExportViewUI />
+      </PageContainer>
     </ExportViewContext.Provider>
   );
 };

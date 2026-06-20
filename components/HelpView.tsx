@@ -11,6 +11,7 @@ import type { HelpCategory } from '../types';
 import { HelpSearchInput, HelpSearchPanel } from './help/HelpSearchPanel';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
+import { PageContainer } from './ui/PageContainer';
 
 // --- SUB-COMPONENTS ---
 
@@ -105,7 +106,7 @@ const ArticleViewer: FC = () => {
       <CardContent>
         {/* biome-ignore-start lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
         <div
-          className={`prose max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--sc-text-secondary)] prose-strong:text-[var(--sc-text-primary)] prose-a:text-[var(--sc-accent)] prose-ul:list-disc prose-li:text-[var(--sc-text-secondary)] prose-ol:text-[var(--sc-text-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
+          className={`prose max-w-[var(--sc-prose-measure)] prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--sc-text-secondary)] prose-strong:text-[var(--sc-text-primary)] prose-a:text-[var(--sc-accent)] prose-ul:list-disc prose-li:text-[var(--sc-text-secondary)] prose-ol:text-[var(--sc-text-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(t(selectedArticle.content)) }}
         />
         {/* biome-ignore-end lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
@@ -235,7 +236,9 @@ export const HelpView: FC = () => {
   const contextValue = useHelpView();
   return (
     <HelpViewContext.Provider value={contextValue}>
-      <HelpViewUI />
+      <PageContainer>
+        <HelpViewUI />
+      </PageContainer>
     </HelpViewContext.Provider>
   );
 };
