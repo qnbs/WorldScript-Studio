@@ -358,6 +358,9 @@ const SceneBoardUI: FC = () => {
         onClose={() => setShowAiPanel(false)}
         title={t('sceneboard.ai.panelTitle')}
       >
+        {/* QNBS-v3: make the AI's input basis explicit so users don't expect full-manuscript
+            analysis (audit: AI-context transparency). */}
+        <p className="text-xs text-[var(--sc-text-muted)] mb-2">{t('sceneboard.ai.contextNote')}</p>
         {plotAi.ragChunkCount > 0 && (
           <p className="text-xs text-[var(--sc-text-muted)] mb-2">
             {t('sceneboard.ai.ragChunks', { count: String(plotAi.ragChunkCount) })}

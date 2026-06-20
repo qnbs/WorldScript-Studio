@@ -4,6 +4,7 @@ import {
   ConsistencyCheckerViewContext,
   useConsistencyCheckerViewContext,
 } from '../contexts/ConsistencyCheckerViewContext';
+import type { ConsistencySeverity } from '../hooks/useConsistencyCheckerView';
 import { useConsistencyCheckerView } from '../hooks/useConsistencyCheckerView';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
@@ -11,6 +12,14 @@ import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
+
+// QNBS-v3: severity → state-token badge (never hardcoded colours; reuses the danger/warning/info
+// families so badges stay correct across every theme).
+const SEVERITY_BADGE: Record<ConsistencySeverity, string> = {
+  error: 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]',
+  warn: 'bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]',
+  info: 'bg-[var(--sc-info-bg)] text-[var(--sc-info-fg)]',
+};
 
 const ConsistencyCheckerUI: FC = () => {
   const {
@@ -129,9 +138,47 @@ const ConsistencyCheckerUI: FC = () => {
             </CardHeader>
             <CardContent>
               {checkResult ? (
-                <div className="prose prose-sm max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm">{checkResult}</pre>
-                </div>
+                checkResult.kind === 'structured' && checkResult.findings.length === 0 ? (
+                  // QNBS-v3: valid empty array = the model found no issues — show an explicit clean
+                  // state instead of an empty list or raw "[]".
+                  <p className="text-sm text-[var(--sc-success-fg)]">
+                    {t('consistencyChecker.noFindings')}
+                  </p>
+                ) : checkResult.kind === 'structured' ? (
+                  <ul className="space-y-3">
+                    {checkResult.findings.map((f) => (
+                      <li
+                        key={f.id}
+                        className="rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] p-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${SEVERITY_BADGE[f.severity]}`}
+                          >
+                            {t(`consistencyChecker.severity.${f.severity}`)}
+                          </span>
+                          {f.title && (
+                            <p className="text-sm font-semibold text-[var(--sc-text-primary)]">
+                              {f.title}
+                            </p>
+                          )}
+                        </div>
+                        {f.detail && (
+                          <p className="text-sm text-[var(--sc-text-secondary)] mt-1">{f.detail}</p>
+                        )}
+                        {f.ref && (
+                          <p className="text-xs text-[var(--sc-text-muted)] mt-1">
+                            {t('consistencyChecker.refLabel')}: {f.ref}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap text-sm">{checkResult.text}</pre>
+                  </div>
+                )
               ) : (
                 <EmptyState
                   compact

@@ -12,6 +12,7 @@
   "copilot.clear": "Elkarrizketa argia",
   "copilot.closeLabel": "Itxi AI Copilot",
   "copilot.contextLabel": "Hemen zaude: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "Ezin izan dut diagnostikoa exekutatu une honetan. Egiaztatu AI konexioa eta saiatu berriro.",
   "copilot.diagnosticResult": "Diagnostikoa osatuta — kalitatearen puntuazio orokorra: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Panel flotatzailea",

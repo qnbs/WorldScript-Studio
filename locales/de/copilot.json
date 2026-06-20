@@ -12,6 +12,7 @@
   "copilot.clear": "Unterhaltung löschen",
   "copilot.closeLabel": "KI-Copilot schließen",
   "copilot.contextLabel": "Du bist hier: {{view}}",
+  "copilot.contextSource": "Kontext: aktuelle Ansicht + Projekt-Metadaten",
   "copilot.diagnosticFailed": "Ich konnte die Analyse gerade nicht durchführen. Prüfe deine KI-Verbindung und versuche es erneut.",
   "copilot.diagnosticResult": "Analyse abgeschlossen – Gesamtqualität: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Float as dialog",

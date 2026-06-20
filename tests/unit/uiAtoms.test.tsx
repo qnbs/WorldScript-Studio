@@ -225,6 +225,20 @@ describe('Tooltip', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('Save (Ctrl+S)');
   });
 
+  it('reveals on focus-within (keyboard reachable) for a focusable child, not focus-visible', () => {
+    // QNBS-v3: regression — a focusable child can never put :focus-visible on the non-focusable
+    // .group wrapper, so the reveal must key off focus-within; otherwise keyboard users get a
+    // focus stop that shows nothing.
+    render(
+      <Tooltip label="Info">
+        <button type="button">trigger</button>
+      </Tooltip>,
+    );
+    const bubble = screen.getByRole('tooltip');
+    expect(bubble.className).toContain('group-focus-within:opacity-100');
+    expect(bubble.className).not.toContain('group-focus-visible:opacity-100');
+  });
+
   it('tooltip element is linked via aria-describedby', () => {
     render(
       <Tooltip label="Delete">

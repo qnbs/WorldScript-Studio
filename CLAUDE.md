@@ -14,6 +14,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Chain sequential steps inside ONE Bash call using `&&` if needed.
 - DevContainer / Codespaces configuration has been removed; this is a local-only development environment.
 
+**Plan-mode exception — parallel exploration IS allowed.** The OOM risk is from concurrent *heavy shells* (vitest/biome/tsc/vite/build), not from read-only exploration. In **plan mode** (read-only research, no builds), you SHOULD launch parallel `Explore`/`Plan` subagents to map the codebase faster — these read files and run light `grep`/`ls`, which is safe. The ONE-Bash-per-turn rule still governs the **main loop's own heavy commands** at all times, and parallel agents must not each kick off vitest/biome/tsc/vite/build. Outside plan mode (implementation), keep agent spawns sequential when they issue heavy shells.
+
 ## Commands
 
 ```bash
@@ -58,6 +60,8 @@ pnpm run token:audit        # audit-tokens.mjs — design-token usage gate (CI b
 - Correction loop: fix → commit → verify CI → fix until all jobs green.
 
 **PR review-comment policy — the CodeAnt Correction Loop (proactive, automatic, every PR):** Fix ALL inline comments (CodeAnt AI + any bot/human) on every PR, **without being asked**. Validate findings against the *current* code (anchors may be stale); implement real **root-cause** fixes (code **+ tests + i18n + docs** in lockstep) or reply with evidence if a false positive. **Never add a new `biome-ignore`** — the suppression ratchet (`scripts/check-suppressions.mjs`) fails the quality gate; refactor so the rule passes honestly. Reply to each thread citing the resolving commit (`POST .../comments/<id>/replies`), resolve it (GraphQL `resolveReviewThread`), leave **0 unresolved**. Then commit, push, and **re-trigger** (`gh pr comment <N> --body "@codeant-ai review"`). **Iron rule — loop until quiescent:** a push triggers a fresh review that often raises NEW findings (a "wave"); repeat the full cycle until **BOTH** a fresh review yields **0 new comments** AND **0 threads unresolved**. Only then merge (auto-squash; admin-squash only after CI is green + loop quiescent). Full canonical procedure: [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md).
+
+**PR-size limit — keep every PR under ~100 changed files so CodeAnt actually reviews it.** CodeAnt does **not** post inline review comments on PRs that exceed ~100 changed files (the >100-file check hangs/skips). Since any i18n-touching change fans out across 17 locale source files + 17 rebuilt `bundle.json` per module, a multi-feature branch crosses 100 fast. **Before pushing, run `git diff --name-only <base>...HEAD | wc -l`.** If it is over ~100, split the work into the **fewest** stacked PRs that each stay clearly under the limit — group by which locale module-files they touch so the per-PR fan-out stays small (e.g. P0 batch touching `writer.json`; P1/P2 batch touching `common.json`/`dashboard.json`). Stack them (PR2 base = PR1's branch) so each PR's incremental diff — what CodeAnt sees — is small; when PR1 merges, PR2 auto-retargets to `main`. **Do not** make more PRs than needed: if everything fits under ~100 in one (or two) PRs, use that. Keep commits atomic per concern regardless of how they are bundled into PRs.
 
 **E2E notes:** Do NOT use `networkidle` waits (HMR keeps WebSocket open). Scope sidebar navigation via `#sidebar`. Shared helpers: `tests/e2e/helpers.ts`. Mobile E2E: set `RUN_MOBILE_E2E=1` locally (off by default).
 

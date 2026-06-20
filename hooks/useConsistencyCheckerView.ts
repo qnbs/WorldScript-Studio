@@ -8,12 +8,83 @@ import {
 } from '../features/project/projectSelectors';
 import { useTranslation } from '../hooks/useTranslation';
 import { embedText } from '../services/ai/localEmbeddingService';
-import { generateText } from '../services/aiProviderService';
+import { generateText, isAbortError } from '../services/aiProviderService';
 import { loadStoryCodex } from '../services/codexService';
 import { getPrompts } from '../services/geminiService';
 import { retrieveContext } from '../services/localRagService';
 import { logger } from '../services/logger';
 import type { CharacterRelationship, StoryCodex } from '../types';
+
+// QNBS-v3: structured consistency findings — the AI is asked to return a JSON array so results can
+// be rendered as a severity-tagged list (mirroring the Story Bible hints) instead of a raw <pre>.
+export type ConsistencySeverity = 'info' | 'warn' | 'error';
+
+export interface ConsistencyFinding {
+  /** Stable, unique id within a result set — used as the React list key. */
+  id: string;
+  severity: ConsistencySeverity;
+  title: string;
+  detail: string;
+  ref?: string;
+}
+
+export type ConsistencyResult =
+  | { kind: 'structured'; findings: ConsistencyFinding[] }
+  | { kind: 'text'; text: string };
+
+// QNBS-v3: tolerant severity normalization — models emit "warning", "ERROR", " High ", etc.
+// Trim + lowercase, then map common variants so real problems aren't silently downgraded to info.
+const normalizeSeverity = (raw: unknown): ConsistencySeverity => {
+  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (s === 'error' || s === 'err' || s === 'critical' || s === 'high' || s === 'severe') {
+    return 'error';
+  }
+  if (s === 'warn' || s === 'warning' || s === 'medium' || s === 'moderate') return 'warn';
+  return 'info';
+};
+
+/**
+ * Parse the model's response into structured findings, falling back to raw text when the output
+ * is not valid finding-array JSON (so the results pane never regresses to empty).
+ */
+export const parseConsistencyResult = (raw: string): ConsistencyResult => {
+  const fenced = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  try {
+    const parsed: unknown = JSON.parse(fenced);
+    if (Array.isArray(parsed)) {
+      const findings: ConsistencyFinding[] = parsed
+        .filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
+        .map((f, index) => {
+          const ref = typeof f['ref'] === 'string' && f['ref'] ? { ref: f['ref'] } : {};
+          return {
+            // QNBS-v3: id from source position guarantees a unique, stable React key even when
+            // two findings share severity/title/detail (avoids list-item reuse / stale rows).
+            id: String(index),
+            severity: normalizeSeverity(f['severity']),
+            title: typeof f['title'] === 'string' ? f['title'] : '',
+            detail: typeof f['detail'] === 'string' ? f['detail'] : '',
+            ...ref,
+          };
+        })
+        .filter((f) => f.title || f.detail);
+      // QNBS-v3: distinguish a genuinely empty result ("[]" → no issues) from a parse-drop where the
+      // model returned a NON-empty array but every element was malformed (missing title+detail) and
+      // got filtered out. Showing the clean "no findings" state for the latter would hide a real
+      // model/output failure as a false all-clear — so we fall back to raw text to surface it.
+      if (parsed.length > 0 && findings.length === 0) {
+        return { kind: 'text', text: raw };
+      }
+      return { kind: 'structured', findings };
+    }
+  } catch {
+    // Not JSON — fall back to the raw string below.
+  }
+  return { kind: 'text', text: raw };
+};
 
 export const useConsistencyCheckerView = () => {
   const { t, language } = useTranslation();
@@ -38,7 +109,7 @@ export const useConsistencyCheckerView = () => {
   );
 
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
-  const [checkResult, setCheckResult] = useState<string>('');
+  const [checkResult, setCheckResult] = useState<ConsistencyResult | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [storyCodex, setStoryCodex] = useState<StoryCodex | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -140,10 +211,19 @@ export const useConsistencyCheckerView = () => {
 
         const { prompt } = getPrompts('consistencyCheck', promptArgs);
         const result = await generateText(prompt, aiCreativity, aiOptions, controller.signal);
-        setCheckResult(result);
+        setCheckResult(parseConsistencyResult(result));
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        setCheckResult(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // QNBS-v3: treat any AbortError as a cancellation (not a failure). Reuse the provider's
+        // shape-based `isAbortError` — provider/runtime cancellations can surface as plain objects
+        // shaped `{ name: 'AbortError' }` (or cross-realm errors), not only Error/DOMException
+        // instances, so an `instanceof` gate would misclassify a cancel and overwrite a valid result.
+        if (isAbortError(error)) {
+          return;
+        }
+        setCheckResult({
+          kind: 'text',
+          text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
       } finally {
         setIsChecking(false);
         abortControllerRef.current = null;

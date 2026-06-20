@@ -117,6 +117,11 @@ export const CopilotPanel: FC<CopilotPanelProps> = ({ copilot, contextLabel, onN
             {t('copilot.title')}
           </h2>
           <p className="text-xs text-[var(--sc-text-muted)]">{contextLabel}</p>
+          {/* QNBS-v3: state what the Co-Pilot actually sees, so users know the basis of its
+              answers (audit: AI-context transparency). Honest — selection isn't wired here yet. */}
+          <p className="text-[10px] text-[var(--sc-text-muted)] mt-0.5">
+            {t('copilot.contextSource')}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {/* QNBS-v3: Active AI mode indicator — shows current routing mode at a glance (G9). */}

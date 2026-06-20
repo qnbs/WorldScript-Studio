@@ -12,6 +12,7 @@
   "copilot.clear": "مکالمه را پاک کنید",
   "copilot.closeLabel": "AI Copilot را ببندید",
   "copilot.contextLabel": "شما در: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "در حال حاضر نتوانستم تشخیص را اجرا کنم. اتصال هوش مصنوعی خود را بررسی کنید و دوباره امتحان کنید.",
   "copilot.diagnosticResult": "تشخیص کامل - نمره کیفیت کلی: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "پانل شناور",

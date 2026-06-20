@@ -12,6 +12,7 @@
   "copilot.clear": "Tydlig konversation",
   "copilot.closeLabel": "Stäng AI Copilot",
   "copilot.contextLabel": "Du är på: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "Jag kunde inte köra diagnostiken just nu. Kontrollera din AI-anslutning och försök igen.",
   "copilot.diagnosticResult": "Diagnostisk komplett — övergripande kvalitetspoäng: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Flytande panel",

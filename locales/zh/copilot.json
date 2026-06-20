@@ -12,6 +12,7 @@
   "copilot.clear": "清晰的对话",
   "copilot.closeLabel": "关闭AI副驾驶",
   "copilot.contextLabel": "您正在：{{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.diagnosticFailed": "我现在无法运行诊断。检查您的 AI 连接并重试。",
   "copilot.diagnosticResult": "诊断完成 — 总体质量得分：{{score}}/100。 {{summary}}",
   "copilot.dialogMode": "Float as dialog",

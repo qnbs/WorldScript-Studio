@@ -13,6 +13,7 @@
   "copilot.emptyTitle": "Hi! I'm your Copilot 👋",
   "copilot.emptyBody": "Ask for help, or try a suggestion below. I know where you are in the app.",
   "copilot.contextLabel": "You're on: {{view}}",
+  "copilot.contextSource": "Context: current view + project metadata",
   "copilot.error": "Something went wrong. Please try again.",
   "copilot.disabledHint": "Enable the Global AI Copilot in Settings → Experimental.",
   "copilot.suggestionExplainView": "What can I do on this screen?",

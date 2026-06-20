@@ -41,9 +41,12 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
 
   if (!enabled) return null;
 
+  // QNBS-v3: stack the voice panel ABOVE the Copilot FAB (which anchors at bottom-20/md:bottom-4,
+  // h-14) so the two no longer overlap in the shared bottom-right corner. Offsets clear the 3.5rem
+  // FAB plus a small gap while staying clear of the mobile bottom-nav.
   if (microphonePermission === 'denied') {
     return (
-      <div className="fixed bottom-20 right-4 z-50 md:bottom-4 md:right-4 p-3 rounded-[var(--radius-sc-lg)] bg-[var(--sc-surface-raised)] border border-[var(--sc-border)] shadow-lg">
+      <div className="fixed bottom-[9.25rem] right-4 z-50 md:bottom-[5.25rem] p-3 rounded-[var(--radius-sc-lg)] bg-[var(--sc-surface-raised)] border border-[var(--sc-border)] shadow-lg">
         <p className="text-sm text-[var(--sc-text-primary)]">{t('voice.permissionDenied')}</p>
       </div>
     );
@@ -53,9 +56,16 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
 
   return (
     <section
-      className="fixed bottom-20 right-4 z-50 md:bottom-4 md:right-4 flex flex-col gap-2 p-2 rounded-[var(--radius-sc-lg)] bg-[var(--sc-surface-raised)] border border-[var(--sc-border)] shadow-lg"
+      className="fixed bottom-[9.25rem] right-4 z-50 md:bottom-[5.25rem] flex flex-col gap-2 p-2 rounded-[var(--radius-sc-lg)] bg-[var(--sc-surface-raised)] border border-[var(--sc-border)] shadow-lg"
       aria-label={t('voice.panelLabel')}
     >
+      {/* QNBS-v3: visible mode chip — distinguishes command-listening from dictation, which were
+          previously conveyed only by background colour (audit: voice modes not self-explanatory). */}
+      {isActive && (
+        <span className="text-[10px] text-center px-2 py-0.5 rounded-full bg-[var(--sc-surface-subtle)] text-[var(--sc-text-secondary)]">
+          {dictationActive ? t('voice.modeChip.dictation') : t('voice.modeChip.commands')}
+        </span>
+      )}
       <button
         type="button"
         onClick={handleToggleListening}

@@ -12,6 +12,7 @@
   "copilot.clear": "Limpiar conversación",
   "copilot.closeLabel": "Cerrar Copiloto IA",
   "copilot.contextLabel": "Estás en: {{view}}",
+  "copilot.contextSource": "Contexto: vista actual + metadatos del proyecto",
   "copilot.diagnosticFailed": "No pude ejecutar el diagnóstico ahora mismo. Comprueba tu conexión IA y vuelve a intentarlo.",
   "copilot.diagnosticResult": "Diagnóstico completo — puntuación de calidad general: {{score}}/100. {{summary}}",
   "copilot.dialogMode": "Float as dialog",

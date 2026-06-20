@@ -45,6 +45,40 @@ Each wave is handled exactly like the first.
         (next wave, go to 1)        DONE → merge when CI green
 ```
 
+## 1a. Keep every PR under the ~100-file review limit (split when needed)
+
+**CodeAnt does not post inline review comments on a PR that exceeds ~100 changed files** — the
+large-diff check hangs/skips, so the whole correction loop above silently never starts. This repo
+hits the limit easily: any user-facing string change fans out across **17 locale source files +
+17 rebuilt `public/locales/**/bundle.json`** *per module touched*, so a multi-feature branch can
+cross 100 files from i18n alone.
+
+**Procedure (do this BEFORE opening the PR):**
+
+1. Count the footprint: `git diff --name-only <base>...HEAD | wc -l`. Break it down with
+   `... | grep -c '^locales/'` and `... | grep -c bundle.json` to see how much is i18n fan-out.
+2. If it is **over ~100**, split into the **fewest** stacked PRs that each stay clearly under the
+   limit. Group by **which locale module-files each batch touches** (e.g. one batch that only edits
+   `writer.json`, another that only edits `common.json`/`dashboard.json`) so the per-PR fan-out is
+   minimized. Keep commits **atomic per concern** so the split is a clean branch operation, not a
+   re-edit.
+3. **Stack** them: PR1 base = `main`; PR2 base = **PR1's branch**. GitHub then shows PR2 only its
+   *incremental* diff (what CodeAnt counts), and PR2 auto-retargets to `main` when PR1 merges.
+   Run the loop on PR1 to quiescence + merge first, then PR2.
+4. **Do not over-split.** If the whole change fits under ~100 in one (or two) PRs, use that — extra
+   PRs are extra review loops and CI runs. One or two is the target, never "one PR per file group"
+   for its own sake.
+
+Quick split recipe (current branch already has atomic per-concern commits):
+
+```bash
+git diff --name-only main...HEAD | wc -l        # >100? split.
+git branch <pr1-branch> <sha-of-last-PR1-commit> # PR1 = main..that commit
+git branch -m <current> <pr2-branch>             # PR2 continues, base = <pr1-branch>
+# push both; gh pr create --base main --head <pr1-branch>
+#            gh pr create --base <pr1-branch> --head <pr2-branch>
+```
+
 ## 2. Fetch unresolved threads
 
 Use GraphQL — REST does not expose thread resolution state. Use a **multi-line** query string

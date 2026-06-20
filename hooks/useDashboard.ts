@@ -250,8 +250,11 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
     (logline: string) => {
       dispatch(projectActions.updateLogline(logline));
       setIsLoglineModalOpen(false);
+      // QNBS-v3: reassure the user the AI logline is reversible (project slice is redux-undo wrapped),
+      // so applying a suggestion never feels like a destructive overwrite.
+      toast.success(t('dashboard.logline.updated'), t('dashboard.logline.updatedUndo'));
     },
-    [dispatch],
+    [dispatch, toast, t],
   );
 
   const handleTitleChange = useCallback(
