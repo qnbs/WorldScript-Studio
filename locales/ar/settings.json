@@ -13,6 +13,7 @@
   "settings.about.githubDescription": "اعرض الكود المصدري، وأبلغ عن المشكلات، وساهم.",
   "settings.about.githubLabel": "مفتوح المصدر على GitHub",
   "settings.about.liveDemo": "جرّب العرض الحي",
+  "settings.about.productName": "WorldScript Studio",
   "settings.about.tauriVersion": "إصدار تشغيل سطح المكتب",
   "settings.about.title": "حول WorldScript Studio",
   "settings.about.versionLabel": "الإصدار",
@@ -617,8 +618,8 @@
   "settings.openRouter.modelFetch.loading": "Loading model catalog…",
   "settings.openRouter.modelPlaceholder": "deepseek/deepseek-r1:free",
   "settings.openRouter.paidModelNote": "Paid models require credits on your OpenRouter account.",
-  "settings.openRouter.policyBlocked.mode": "OpenRouter is unavailable while the AI mode is Local or Eco. Switch to Hybrid or Cloud in AI & Models to use it.",
   "settings.openRouter.policyBlocked.localOnly": "OpenRouter is blocked because “Local storage only” is on. Turn it off in Privacy & Data to allow cloud AI.",
+  "settings.openRouter.policyBlocked.mode": "OpenRouter is unavailable while the AI mode is Local or Eco. Switch to Hybrid or Cloud in AI & Models to use it.",
   "settings.openRouter.preferredModel": "Preferred Model",
   "settings.openRouter.resetCircuit": "Reset",
   "settings.openRouter.resetCircuitAria": "Reset OpenRouter circuit breaker",
@@ -799,6 +800,5 @@
   "voice.modelDownload.error": "فشل التحميل: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% مكتمل",
   "voice.modelDownload.retry": "إعادة المحاولة",
-  "voice.modelDownload.title": "تحميل نموذج الصوت",
-  "settings.about.productName": "WorldScript Studio"
+  "voice.modelDownload.title": "تحميل نموذج الصوت"
 }

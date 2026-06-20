@@ -1,3 +1,4 @@
+import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { FC } from 'react';
 import type { Character, StorySection } from '../../types';
@@ -42,6 +43,12 @@ export const ActSwimlane: FC<ActSwimlaneProps> = ({
 
   const wordCount = sections.reduce((sum, s) => sum + (s.wordCount || 0), 0);
 
+  // QNBS-v3: register the lane as an explicit droppable with a stable `act-N` id so dropping a
+  // scene into an EMPTY swimlane (where there are no card droppables) commits the act change, and
+  // so the drag-over highlight has a target. Without this the `act-*` branches in SceneBoardView's
+  // drag handlers are unreachable.
+  const { setNodeRef } = useDroppable({ id: `act-${act}` });
+
   return (
     <div
       className={`flex flex-col min-w-[280px] max-w-[320px] bg-gradient-to-b ${ACT_GRADIENT_CLASSES[act]} to-transparent rounded-xl border p-3 transition-colors duration-sc-fast ${isOver ? 'border-[var(--sc-border-focus)] bg-[var(--sc-accent-subtle)]' : 'border-[var(--sc-border-subtle)]'}`}
@@ -65,6 +72,7 @@ export const ActSwimlane: FC<ActSwimlaneProps> = ({
       </div>
 
       <ul
+        ref={setNodeRef}
         className="flex-grow min-h-[200px] overflow-y-auto pr-1 space-y-0 list-none"
         aria-label={t('sceneboard.dragAriaLabel')}
       >

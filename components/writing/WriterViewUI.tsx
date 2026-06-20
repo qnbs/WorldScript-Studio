@@ -1,17 +1,21 @@
 // QNBS-v3: Extracted from WriterView.tsx to keep each file ≤350 lines per architecture rules
 import type { FC } from 'react';
+import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { proForgeActions } from '../../features/proForge/proForgeSlice';
 import {
   selectIsPanelOpen,
   versionControlActions,
 } from '../../features/versionControl/versionControlSlice';
+import { useFirstUseFlag } from '../../hooks/useFirstUseFlag';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useWriterLayout } from '../../hooks/useWriterLayout';
 import { ProForgeDashboard } from '../proForge/ProForgeDashboard';
 import { AiScratchpad } from './AiScratchpad';
 import { ContextPanel } from './ContextPanel';
 import { ToolsPanel } from './ToolsPanel';
+import { WriterModeBadge } from './WriterModeBadge';
+import { WriterModeCoachmark } from './WriterModeCoachmark';
 
 const WriterViewUI: FC = () => {
   const { t } = useTranslation();
@@ -28,13 +32,53 @@ const WriterViewUI: FC = () => {
     togglePanel,
     focusMode,
     setFocusMode,
+    resetLayout,
     mobilePanelRef,
   } = useWriterLayout();
+
+  // QNBS-v3: one-time mode coachmarks (persist via localStorage) so first-time users learn what
+  // Flow / Focus / ProForge do without a heavyweight tour framework.
+  const [seenFlow, markFlowSeen] = useFirstUseFlag('flow');
+  const [seenFocus, markFocusSeen] = useFirstUseFlag('focus');
+  const [seenProForge, markProForgeSeen] = useFirstUseFlag('proforge');
+
+  const contextHidden = Boolean(collapsedPanels['context']);
+  const toolsHidden = Boolean(collapsedPanels['tools']);
+
+  // QNBS-v3: badge reset clears layout (focus/collapse/flow) AND turns off the Redux-owned
+  // ProForge mode, guaranteeing a return to the default 3-column view in one click.
+  const handleResetLayout = useCallback(() => {
+    resetLayout();
+    if (isProForgeActive) dispatch(proForgeActions.setProForgeActive(false));
+  }, [resetLayout, isProForgeActive, dispatch]);
+
+  const modeBadge = (
+    <WriterModeBadge
+      flowMode={flowMode}
+      focusMode={focusMode}
+      proForgeActive={isProForgeActive}
+      contextHidden={contextHidden}
+      toolsHidden={toolsHidden}
+      onReset={handleResetLayout}
+      t={t}
+    />
+  );
 
   // X-2: Flow Mode — full-screen AiScratchpad, all panels hidden
   if (flowMode) {
     return (
       <div className="h-full flex flex-col">
+        {modeBadge}
+        {!seenFlow && (
+          <div className="mb-2">
+            <WriterModeCoachmark
+              title={t('writer.coachmark.flow.title')}
+              body={t('writer.coachmark.flow.body')}
+              dismissLabel={t('writer.coachmark.dismiss')}
+              onDismiss={markFlowSeen}
+            />
+          </div>
+        )}
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-[var(--sc-text-muted)]">{t('writer.flowMode.hint')}</span>
           <button
@@ -55,6 +99,7 @@ const WriterViewUI: FC = () => {
 
   return (
     <div className="h-full flex flex-col">
+      {modeBadge}
       {/* Focus Mode Toggle + Panel Controls (Desktop) */}
       <div className="hidden md:flex items-center justify-end mb-2 gap-2">
         {/* QNBS-v3: ProForge pipeline mode toggle — only visible when feature flag is enabled */}
@@ -161,6 +206,28 @@ const WriterViewUI: FC = () => {
           ⎎ {t('writer.versionControl.label')}
         </button>
       </div>
+
+      {/* QNBS-v3: first-use coachmarks for Focus / ProForge — shown once until dismissed */}
+      {((focusMode && !seenFocus) || (isProForgeActive && !seenProForge)) && (
+        <div className="mb-3 space-y-2">
+          {focusMode && !seenFocus && (
+            <WriterModeCoachmark
+              title={t('writer.coachmark.focus.title')}
+              body={t('writer.coachmark.focus.body')}
+              dismissLabel={t('writer.coachmark.dismiss')}
+              onDismiss={markFocusSeen}
+            />
+          )}
+          {isProForgeActive && !seenProForge && (
+            <WriterModeCoachmark
+              title={t('writer.coachmark.proforge.title')}
+              body={t('writer.coachmark.proforge.body')}
+              dismissLabel={t('writer.coachmark.dismiss')}
+              onDismiss={markProForgeSeen}
+            />
+          )}
+        </div>
+      )}
 
       {/* QNBS-v3: ARIA tablist — mobile segmented control needs role/aria-selected for axe compliance + Playwright testid selectors */}
       <div

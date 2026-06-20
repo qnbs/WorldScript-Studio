@@ -56,7 +56,7 @@ const SceneBoardUI: FC = () => {
     handleUpdateSection,
     handleDeleteSection,
     handleMoveSectionWithinAct,
-    handleAddSection,
+    handleAddSectionForAct,
   } = useSceneBoardViewContext();
   const dispatch = useAppDispatch();
   // QNBS-v3: activeMode is persisted in plotBoardSlice (localStorage) instead of local state
@@ -90,12 +90,25 @@ const SceneBoardUI: FC = () => {
       setActiveId(null);
       setDragOverActId(null);
 
-      if (!over || active.id === over.id) return;
+      if (!over) return;
 
-      // When hovering over another card, move to the same act
-      const overSection = sections.find((s) => s.id === over.id);
       const activeSection = sections.find((s) => s.id === active.id);
-      if (overSection && activeSection && overSection.act !== activeSection.act) {
+      if (!activeSection) return;
+
+      // QNBS-v3: commit the act change ONLY on drop (not on drag-over), so a cancelled or
+      // reverted drag never mutates the scene's act. Dropping onto an empty column resolves to
+      // an 'act-N' container id; dropping onto a card adopts that card's act.
+      if (String(over.id).startsWith('act-')) {
+        const act = parseInt(String(over.id).replace('act-', ''), 10) as 1 | 2 | 3;
+        if (activeSection.act !== act) {
+          handleUpdateSection(active.id as string, { act });
+        }
+        return;
+      }
+
+      if (active.id === over.id) return;
+      const overSection = sections.find((s) => s.id === over.id);
+      if (overSection && overSection.act !== activeSection.act) {
         handleUpdateSection(active.id as string, { act: overSection.act || 1 });
       }
     },
@@ -104,32 +117,25 @@ const SceneBoardUI: FC = () => {
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
-      // Check for act change when hovering (container IDs: 'act-1', 'act-2', 'act-3')
+      // QNBS-v3: highlight-only — track the hovered act column for the drop-zone glow. The actual
+      // act reassignment happens in handleDragEnd, so merely passing over a column no longer
+      // rewrites the scene's act on every hover frame.
       const { over } = event;
-      if (over?.id && String(over.id).startsWith('act-')) {
-        const act = parseInt(String(over.id).replace('act-', ''), 10) as 1 | 2 | 3;
-        setDragOverActId(act);
-        const activeSection = sections.find((s) => s.id === event.active.id);
-        if (activeSection && activeSection.act !== act) {
-          handleUpdateSection(event.active.id as string, { act });
-        }
-      } else {
+      if (!over) {
         setDragOverActId(null);
+        return;
+      }
+      const overId = String(over.id);
+      if (overId.startsWith('act-')) {
+        // Empty lane: the lane droppable (ActSwimlane useDroppable) is the closest target.
+        setDragOverActId(parseInt(overId.replace('act-', ''), 10));
+      } else {
+        // Over a scene card (closest droppable inside a populated lane) — highlight its lane.
+        const overSection = sections.find((s) => s.id === over.id);
+        setDragOverActId(overSection?.act ?? 1);
       }
     },
-    [sections, handleUpdateSection],
-  );
-
-  const handleAddForAct = useCallback(
-    (act: 1 | 2 | 3) => {
-      handleAddSection();
-      // Set the act after adding — via short timeout (after Redux update)
-      setTimeout(() => {
-        const last = sections[sections.length - 1];
-        if (last) handleUpdateSection(last.id, { act });
-      }, 100);
-    },
-    [handleAddSection, sections, handleUpdateSection],
+    [sections],
   );
 
   const activeSection = activeId ? sections.find((s) => s.id === activeId) : null;
@@ -250,7 +256,7 @@ const SceneBoardUI: FC = () => {
           >
             {plotAi.isLoading ? t('sceneboard.ai.suggesting') : t('sceneboard.ai.suggestBeat')}
           </Button>
-          <Button onClick={() => handleAddForAct(1)} size="sm">
+          <Button onClick={() => handleAddSectionForAct(1)} size="sm">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -323,7 +329,7 @@ const SceneBoardUI: FC = () => {
                 t={t}
                 onUpdate={handleUpdateSection}
                 onDelete={setDeleteTargetId}
-                onAddSection={handleAddForAct}
+                onAddSection={handleAddSectionForAct}
                 onReorderInAct={handleMoveSectionWithinAct}
                 isOver={dragOverActId === act}
               />

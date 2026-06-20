@@ -12,6 +12,32 @@ import { projectActions } from '../features/project/projectSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import type { PlotConnectionType, StorySection } from '../types';
 
+// QNBS-v3: single source for new-section defaults so handleAddSection / handleAddSectionForAct
+// stay in lockstep (color/status/summary) and `act` is applied without a follow-up update.
+// No `position` here: Scene Board placement is authoritative in `project.sceneBoardLayout` (keyed by
+// section id), never `section.position` — storing one would be dead data. Unplaced sections fall to
+// the deterministic grid in the `sections` derivation below.
+const buildNewSectionPayload = (
+  title: string,
+  act?: 1 | 2 | 3,
+): { title: string } & Partial<Omit<StorySection, 'id'>> => ({
+  title,
+  content: '',
+  summary: '',
+  color: '#3b82f6',
+  status: 'draft',
+  ...(act !== undefined ? { act } : {}),
+});
+
+// QNBS-v3: deterministic fallback placement for sections not yet in sceneBoardLayout. Index-derived
+// grid (not Math.random()) so a new/unplaced scene keeps a stable position across re-renders instead
+// of jumping to a fresh random spot every time the manuscript changes.
+const FALLBACK_GRID_COLS = 4;
+const fallbackPosition = (index: number): { x: number; y: number } => ({
+  x: (index % FALLBACK_GRID_COLS) * 220 + 40,
+  y: Math.floor(index / FALLBACK_GRID_COLS) * 160 + 40,
+});
+
 export const useSceneBoardView = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -36,12 +62,9 @@ export const useSceneBoardView = () => {
   );
 
   const sections = useMemo(() => {
-    return project.manuscript.map((section) => ({
+    return project.manuscript.map((section, index) => ({
       ...section,
-      position: project.sceneBoardLayout?.[section.id] || {
-        x: Math.random() * 800,
-        y: Math.random() * 600,
-      },
+      position: project.sceneBoardLayout?.[section.id] || fallbackPosition(index),
       wordCount: section.content?.split(/\s+/).filter(Boolean).length || 0,
     }));
   }, [project.manuscript, project.sceneBoardLayout]);
@@ -70,16 +93,24 @@ export const useSceneBoardView = () => {
   );
 
   const handleAddSection = useCallback(() => {
-    const newSection: Omit<StorySection, 'id'> = {
-      title: t('sceneboard.newSceneTitle'),
-      content: '',
-      summary: '',
-      color: '#3b82f6',
-      status: 'draft',
-      position: { x: Math.random() * 800, y: Math.random() * 600 },
-    };
-    dispatch(projectActions.addManuscriptSection(newSection));
+    dispatch(
+      projectActions.addManuscriptSection(buildNewSectionPayload(t('sceneboard.newSceneTitle'))),
+    );
   }, [dispatch, t]);
+
+  // QNBS-v3: deterministic add-to-act — sets `act` atomically on the freshly created section in a
+  // single dispatch. Replaces the previous setTimeout + sections[sections.length-1] guess, which
+  // read a stale closure and reassigned the WRONG section's act (data-integrity bug).
+  const handleAddSectionForAct = useCallback(
+    (act: 1 | 2 | 3) => {
+      dispatch(
+        projectActions.addManuscriptSection(
+          buildNewSectionPayload(t('sceneboard.newSceneTitle'), act),
+        ),
+      );
+    },
+    [dispatch, t],
+  );
 
   const handleMoveSectionWithinAct = useCallback(
     (id: string, direction: 'up' | 'down') => {
@@ -197,6 +228,7 @@ export const useSceneBoardView = () => {
     handleMoveSection,
     handleMoveSectionWithinAct,
     handleAddSection,
+    handleAddSectionForAct,
     handleAddConnection,
     handleDeleteConnection,
     handleStartDrawConnection,

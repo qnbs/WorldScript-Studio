@@ -13,6 +13,7 @@
   "settings.about.githubDescription": "צפו בקוד המקור, דווחו על בעיות ותרמו.",
   "settings.about.githubLabel": "קוד פתוח ב‑GitHub",
   "settings.about.liveDemo": "נסו את ההדגמה החיה",
+  "settings.about.productName": "WorldScript Studio",
   "settings.about.tauriVersion": "גרסת זמן ריצה של שולחן העבודה",
   "settings.about.title": "אודות WorldScript Studio",
   "settings.about.versionLabel": "גרסה",
@@ -617,8 +618,8 @@
   "settings.openRouter.modelFetch.loading": "Loading model catalog…",
   "settings.openRouter.modelPlaceholder": "deepseek/deepseek-r1:free",
   "settings.openRouter.paidModelNote": "Paid models require credits on your OpenRouter account.",
-  "settings.openRouter.policyBlocked.mode": "OpenRouter is unavailable while the AI mode is Local or Eco. Switch to Hybrid or Cloud in AI & Models to use it.",
   "settings.openRouter.policyBlocked.localOnly": "OpenRouter is blocked because “Local storage only” is on. Turn it off in Privacy & Data to allow cloud AI.",
+  "settings.openRouter.policyBlocked.mode": "OpenRouter is unavailable while the AI mode is Local or Eco. Switch to Hybrid or Cloud in AI & Models to use it.",
   "settings.openRouter.preferredModel": "Preferred Model",
   "settings.openRouter.resetCircuit": "Reset",
   "settings.openRouter.resetCircuitAria": "Reset OpenRouter circuit breaker",
@@ -799,6 +800,5 @@
   "voice.modelDownload.error": "ההורדה נכשלה: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% הושלם",
   "voice.modelDownload.retry": "נסה שוב",
-  "voice.modelDownload.title": "הורדת מודל קול",
-  "settings.about.productName": "WorldScript Studio"
+  "voice.modelDownload.title": "הורדת מודל קול"
 }
