@@ -9,6 +9,7 @@ import { AiExecutionModeSection } from './settings/AiExecutionModeSection';
 import { AdvancedAiSection, AiSection } from './settings/AiSections';
 import { CommunitySection } from './settings/CommunitySection';
 import { DataSection } from './settings/DataSection';
+import { DesktopSection } from './settings/DesktopSection';
 import { AdvancedEditorSection, EditorSection } from './settings/EditorSections';
 import { FeatureFlagsSection } from './settings/FeatureFlagsSection';
 import { AboutSection, AppearanceSection, GeneralSection } from './settings/GeneralSections';
@@ -346,6 +347,7 @@ const SettingsViewUI: FC = () => {
         return (
           <div className="space-y-6">
             <TauriUpdaterBanner />
+            <DesktopSection />
             <AboutSection />
           </div>
         );

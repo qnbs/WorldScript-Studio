@@ -8,7 +8,13 @@
 import type { ProjectData } from '../../features/project/projectSlice';
 import { normalizeAccessibilitySettings } from '../../features/settings/accessibilitySchema';
 import { getDefaultKeyboardShortcuts } from '../../features/settings/keyboardShortcutsDefaults';
-import { defaultVoiceSettings } from '../../features/settings/settingsSlice';
+// QNBS-v3 (#190): import defaults from the side-effect-free module — settingsSlice runs
+// applyInitialTheme() at load, so importing it from this low-level storage layer would touch the
+// DOM/theme on any storage import (and break non-DOM runtimes).
+import {
+  defaultDesktopSettings,
+  defaultVoiceSettings,
+} from '../../features/settings/settingsDefaults';
 import type { Settings, StoryProject } from '../../types';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
@@ -145,6 +151,14 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   }
   if (!validSettings.voice || typeof validSettings.voice !== 'object') {
     validSettings.voice = { ...defaultVoiceSettings };
+  }
+  // QNBS-v3 (T2/#190): backfill the desktop group AND coerce minimizeToTray to a strict boolean —
+  // imported/corrupted settings can carry a truthy non-boolean (e.g. the string "false"), which would
+  // make close-to-tray behave incorrectly.
+  if (!validSettings.desktop || typeof validSettings.desktop !== 'object') {
+    validSettings.desktop = { ...defaultDesktopSettings };
+  } else {
+    validSettings.desktop = { minimizeToTray: validSettings.desktop.minimizeToTray === true };
   }
   if (!validSettings.performance || typeof validSettings.performance !== 'object') {
     validSettings.performance = {

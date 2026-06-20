@@ -1,47 +1,11 @@
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useCallback, useEffect } from 'react';
 import { APP_NAME } from '../constants';
-import type { Language } from '../contexts/I18nContext';
-import { selectFeatureFlags } from '../features/featureFlags/featureFlagsSlice';
-import {
-  selectAllCharacters,
-  selectAllWorlds,
-  selectProjectData,
-} from '../features/project/projectSelectors';
-import { useFocusTrap } from '../hooks/useFocusTrap';
-import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import { useTranslation } from '../hooks/useTranslation';
-import { getLocalAiSuggestions } from '../services/commands/aiSuggestions';
-import { buildPaletteCommandModels } from '../services/commands/commandBuilder';
-import type { CommandCategory, PaletteCommandModel } from '../services/commands/commandTypes';
-import { getEffectiveTheme } from '../services/commands/effectiveTheme';
-import {
-  highlightSubsequence,
-  normalizeSearch,
-  scoreAgainstQuery,
-} from '../services/commands/fuzzyScore';
-import {
-  loadPalettePreferences,
-  recordRecentCommand,
-  togglePinnedCommand,
-} from '../services/commands/palettePreferences';
-import { approximateManuscriptWordCount } from '../services/commands/wordCountApprox';
+import { useCommandPalette } from '../hooks/useCommandPalette';
+import { highlightSubsequence } from '../services/commands/fuzzyScore';
 import type { View } from '../types';
 import { Icon } from './ui/Icon';
-
-const CATEGORY_SORT: CommandCategory[] = [
-  'navigation',
-  'global',
-  'editor',
-  'projectManagement',
-  'aiActions',
-  'settings',
-  'appearance',
-  'accessibility',
-  'help',
-  'customUser',
-];
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -50,293 +14,69 @@ interface CommandPaletteProps {
   currentView: View;
 }
 
+// QNBS-v3: Estimated row heights for the virtualizer (refined at runtime via measureElement).
+const HEADING_ROW_ESTIMATE = 36;
+const OPTION_ROW_ESTIMATE = 64;
+
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
   onNavigate,
   currentView,
 }) => {
-  const { t, language, setLanguage } = useTranslation();
-  const dispatch = useAppDispatch();
-  const settings = useAppSelector((state) => state.settings);
-  const project = useAppSelector(selectProjectData);
-  const characters = useAppSelector(selectAllCharacters);
-  const worlds = useAppSelector(selectAllWorlds);
-  const featureFlags = useAppSelector(selectFeatureFlags);
-  const { isListening, transcript, toggleListening, stopListening, setTranscript } =
-    useSpeechRecognition();
+  const {
+    t,
+    query,
+    setQuery,
+    selectedIndex,
+    setSelectedIndex,
+    rows,
+    flatItems,
+    optionIndexToRowIndex,
+    qNorm,
+    runCommand,
+    togglePin,
+    paletteLiveStatus,
+    isListening,
+    toggleListening,
+    isTouchDevice,
+    inputRef,
+    listRef,
+    palettePanelRef,
+  } = useCommandPalette({ isOpen, onClose, onNavigate, currentView });
 
-  const [query, setQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [pinTick, setPinTick] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const palettePanelRef = useRef<HTMLDivElement>(null);
-  const [paletteLiveStatus, setPaletteLiveStatus] = useState('');
-
-  useFocusTrap(palettePanelRef, { isActive: isOpen });
-
-  const isTouchDevice = useMemo(
-    () =>
-      typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
-    [],
-  );
-
-  const effectiveTheme = useMemo(() => getEffectiveTheme(settings.theme), [settings.theme]);
-
-  const wordCountApprox = useMemo(() => approximateManuscriptWordCount(project), [project]);
-
-  const runtimeDeps = useMemo(
-    () => ({
-      dispatch,
-      navigate: onNavigate,
-      setLanguage: (lang: Language) => setLanguage(lang),
-      t,
-      theme: effectiveTheme,
-      language,
-      characters: characters.map((c) => ({ id: c.id, name: c.name })),
-      worlds: worlds.map((w) => ({ id: w.id, name: w.name })),
-      currentView,
-      wordCountApprox,
-      featureFlags,
-      aiMode: settings.aiMode,
-      openRouterEnabled: settings.openRouter?.enabled ?? false,
-      appearancePreset: settings.appearancePreset,
-      advancedEditor: {
-        distractionFree: settings.advancedEditor.distractionFree,
-        typewriterMode: settings.advancedEditor.typewriterMode,
-        zenMode: settings.advancedEditor.zenMode,
-        focusMode: settings.advancedEditor.focusMode,
-      },
-      accessibility: {
-        highContrast: settings.accessibility.highContrast,
-        reducedMotion: settings.accessibility.reducedMotion,
-        largeText: settings.accessibility.largeText,
-      },
-    }),
-    [
-      dispatch,
-      onNavigate,
-      setLanguage,
-      t,
-      effectiveTheme,
-      language,
-      characters,
-      worlds,
-      currentView,
-      wordCountApprox,
-      featureFlags,
-      settings.aiMode,
-      settings.openRouter?.enabled,
-      settings.appearancePreset,
-      settings.advancedEditor,
-      settings.accessibility,
-    ],
-  );
-
-  const baseModels = useMemo(() => buildPaletteCommandModels(runtimeDeps), [runtimeDeps]);
-
-  useEffect(() => {
-    if (transcript && isOpen) {
-      setQuery(transcript);
-      setTranscript('');
-    }
-  }, [transcript, isOpen, setTranscript]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setQuery('');
-      setSelectedIndex(0);
-      if (!isTouchDevice) {
-        setTimeout(() => inputRef.current?.focus(), 50);
+  // QNBS-v3: aria-activedescendant points at the active option's id, but the virtualizer only mounts a
+  // windowed subset of rows. If the user scrolls the active option out of view its DOM node would
+  // unmount and aria-activedescendant would dangle (AT announces nothing). Force the active row to
+  // always stay in the rendered range so its id always resolves.
+  const activeRowIndex = optionIndexToRowIndex.get(selectedIndex);
+  const rangeExtractor = useCallback(
+    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
+      const base = defaultRangeExtractor(range);
+      if (activeRowIndex !== undefined && !base.includes(activeRowIndex)) {
+        base.push(activeRowIndex);
+        base.sort((a, b) => a - b);
       }
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-      if (isListening) stopListening();
-    }
-  }, [isOpen, isListening, stopListening, isTouchDevice]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `pinTick` only exists to invalidate cached prefs after pin/unpin writes to storage
-  const prefs = useMemo(() => loadPalettePreferences(), [pinTick]);
-
-  const suggestionEntries = useMemo(() => {
-    const sug = getLocalAiSuggestions(runtimeDeps);
-    return sug
-      .map((s) => {
-        const m = baseModels.find((x) => x.id === s.id);
-        return m ? { model: m, reasonKey: s.reasonKey } : null;
-      })
-      .filter((x): x is { model: PaletteCommandModel; reasonKey: string } => x != null);
-  }, [baseModels, runtimeDeps]);
-
-  const sortedCommands = useMemo(() => {
-    const qn = normalizeSearch(query);
-    const pinnedSet = new Set(prefs.pinnedIds);
-    const recentOrder = new Map(prefs.recentIds.map((id, i) => [id, i]));
-
-    const boost = (m: PaletteCommandModel): number => {
-      let b = 0;
-      if (pinnedSet.has(m.id)) b += 400;
-      const ri = recentOrder.get(m.id);
-      if (ri !== undefined) b += (50 - ri) * 2;
-      return b;
-    };
-
-    if (!qn) {
-      const catRank = (c: CommandCategory) => CATEGORY_SORT.indexOf(c);
-      return [...baseModels].sort((a, b) => {
-        const ap = pinnedSet.has(a.id);
-        const bp = pinnedSet.has(b.id);
-        if (ap !== bp) return ap ? -1 : 1;
-        const ar = recentOrder.get(a.id) ?? 999;
-        const br = recentOrder.get(b.id) ?? 999;
-        if (ar !== br) return ar - br;
-        const cc = catRank(a.category) - catRank(b.category);
-        if (cc !== 0) return cc;
-        return a.title.localeCompare(b.title);
-      });
-    }
-
-    return baseModels
-      .map((m) => {
-        const textScore = scoreAgainstQuery(qn, m.title, m.keywords.join(' '), m.categoryLabel);
-        const total = textScore > 0 ? textScore + boost(m) : 0;
-        return { m, total };
-      })
-      .filter((x) => x.total > 0)
-      .sort((a, b) => b.total - a.total)
-      .map((x) => x.m);
-  }, [baseModels, query, prefs.pinnedIds, prefs.recentIds]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset highlighted row whenever the search query changes
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
-
-  useEffect(() => {
-    setSelectedIndex((i) => Math.min(i, Math.max(0, sortedCommands.length - 1)));
-  }, [sortedCommands.length]);
-
-  const flatList = useMemo(() => {
-    if (!query) {
-      const pinned = sortedCommands.filter((c) => prefs.pinnedIds.includes(c.id));
-      const recentIds = prefs.recentIds.filter((id) => !prefs.pinnedIds.includes(id));
-      const recent = recentIds
-        .map((id) => sortedCommands.find((c) => c.id === id))
-        .filter((c): c is PaletteCommandModel => c != null);
-      const sugIds = new Set(suggestionEntries.map((s) => s.model.id));
-      const rest = sortedCommands.filter(
-        (c) => !prefs.pinnedIds.includes(c.id) && !recentIds.includes(c.id) && !sugIds.has(c.id),
-      );
-      const blocks: { heading?: string; items: PaletteCommandModel[] }[] = [];
-      if (suggestionEntries.length) {
-        blocks.push({
-          heading: t('palette.section.suggestions'),
-          items: suggestionEntries.map((s) => s.model),
-        });
-      }
-      if (pinned.length) blocks.push({ heading: t('palette.section.pinned'), items: pinned });
-      if (recent.length) blocks.push({ heading: t('palette.section.recent'), items: recent });
-      if (rest.length) blocks.push({ heading: t('palette.section.allCommands'), items: rest });
-      return blocks;
-    }
-
-    const grouped = sortedCommands.reduce((acc, cmd) => {
-      const cat = cmd.categoryLabel;
-      const bucket = acc.get(cat);
-      if (bucket) bucket.push(cmd);
-      else acc.set(cat, [cmd]);
-      return acc;
-    }, new Map<string, PaletteCommandModel[]>());
-
-    return [...grouped.entries()].map(([heading, items]) => ({ heading, items }));
-  }, [query, sortedCommands, prefs.pinnedIds, prefs.recentIds, suggestionEntries, t]);
-
-  const flatItems = useMemo(() => {
-    let seq = 0;
-    return flatList.flatMap((b) =>
-      b.items.map((item) => {
-        seq += 1;
-        const headingKey = b.heading ?? '';
-        return {
-          item,
-          heading: b.heading,
-          rowKey: `${item.id}-${headingKey}-${seq}`,
-        };
-      }),
-    );
-  }, [flatList]);
-
-  const runCommand = useCallback(
-    (cmd: PaletteCommandModel) => {
-      recordRecentCommand(cmd.id);
-      cmd.run();
-      onClose();
+      return base;
     },
-    [onClose],
+    [activeRowIndex],
   );
 
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: (index) =>
+      rows[index]?.kind === 'heading' ? HEADING_ROW_ESTIMATE : OPTION_ROW_ESTIMATE,
+    overscan: 6,
+    rangeExtractor,
+  });
+
+  // QNBS-v3: keep the keyboard-selected option scrolled into view through the virtual window.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-      // QNBS-v3: Escape + Enter must work on all devices (ARIA modal requirement + command execution);
-      // Arrow navigation skipped on touch devices to avoid conflicts with native mobile browser behaviour.
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const row = flatItems[selectedIndex]?.item;
-        if (row) runCommand(row);
-        return;
-      }
-      if (isTouchDevice) return;
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev + 1) % Math.max(flatItems.length, 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex(
-          (prev) => (prev - 1 + Math.max(flatItems.length, 1)) % Math.max(flatItems.length, 1),
-        );
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isTouchDevice, flatItems, selectedIndex, runCommand, onClose]);
-
-  useEffect(() => {
-    if (listRef.current) {
-      const activeItem = listRef.current.querySelector(`[data-palette-index="${selectedIndex}"]`);
-      if (activeItem instanceof HTMLElement) {
-        activeItem.scrollIntoView({ block: 'nearest' });
-      }
-    }
-  }, [selectedIndex]);
-
-  // QNBS-v3: aria-live for voice input (priority) and hit count.
-  useEffect(() => {
-    if (!isOpen) {
-      setPaletteLiveStatus('');
-      return;
-    }
-    if (isListening) {
-      setPaletteLiveStatus(t('palette.voice.listeningLive'));
-      return;
-    }
-    const qn = normalizeSearch(query);
-    if (flatItems.length === 0 && qn) {
-      setPaletteLiveStatus(t('palette.noResults'));
-      return;
-    }
-    setPaletteLiveStatus(t('palette.resultsLive', { count: String(flatItems.length) }));
-  }, [isOpen, isListening, query, flatItems.length, t]);
-
-  const qNorm = normalizeSearch(query);
+    if (!isOpen) return;
+    const rowIndex = optionIndexToRowIndex.get(selectedIndex);
+    if (rowIndex !== undefined) virtualizer.scrollToIndex(rowIndex, { align: 'auto' });
+  }, [isOpen, selectedIndex, optionIndexToRowIndex, virtualizer]);
 
   const renderTitle = (title: string) => {
     if (!qNorm) return title;
@@ -456,116 +196,109 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               {t('palette.noResults')}
             </div>
           ) : (
-            (() => {
-              let visualIndex = 0;
-              return flatList.map((block) => {
-                const blockKey = `${block.heading ?? '__flat__'}:${block.items.map((c) => c.id).join('|')}`;
-                const headingId = block.heading
-                  ? `palette-sec-${block.items.map((c) => c.id).join('-')}`.replace(
-                      /[^a-zA-Z0-9_-]/g,
-                      '_',
-                    )
-                  : undefined;
-                const headingNode =
-                  block.heading && headingId ? (
-                    <div
-                      key={headingId}
-                      id={headingId}
-                      role="presentation"
-                      className="px-3 py-2 text-xs font-semibold text-[var(--sc-text-muted)] uppercase tracking-wider sticky top-0 bg-[var(--sc-surface-raised)]/95 backdrop-blur-sm z-10"
-                    >
-                      {block.heading}
-                    </div>
-                  ) : null;
-
-                const optionButtons = block.items.map((cmd) => {
-                  const vi = visualIndex;
-                  visualIndex += 1;
-                  const isActive = vi === selectedIndex;
-                  const sug = suggestionEntries.find((s) => s.model.id === cmd.id);
-                  const rowKey = `${cmd.id}-${blockKey}-${vi}`;
-
-                  return (
-                    <button
-                      key={rowKey}
-                      type="button"
-                      role="option"
-                      aria-selected={isActive}
-                      id={`palette-opt-${vi}`}
-                      data-palette-index={vi}
-                      onClick={() => runCommand(cmd)}
-                      onMouseEnter={() => setSelectedIndex(vi)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        togglePinnedCommand(cmd.id);
-                        setPinTick((x) => x + 1);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-start transition-all duration-150 group ${
-                        isActive
-                          ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] shadow-md'
-                          : 'text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`p-1.5 rounded-md shrink-0 ${isActive ? 'text-[var(--sc-text-on-accent)] bg-[var(--glass-bg-hover)]' : 'text-[var(--sc-text-secondary)] bg-[var(--sc-surface-overlay)] group-hover:bg-[var(--sc-surface-base)]'}`}
-                        >
-                          {cmd.icon}
-                        </div>
-                        <div className="min-w-0">
-                          <div
-                            className={`font-medium truncate ${isActive ? 'text-[var(--sc-text-on-accent)]' : ''}`}
-                          >
-                            {renderTitle(cmd.title)}
-                          </div>
-                          {sug && !query ? (
-                            <div
-                              className={`text-xs truncate ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
-                            >
-                              {t(sug.reasonKey)}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {prefs.pinnedIds.includes(cmd.id) ? (
-                          <span
-                            // QNBS-v3: text-[var(--sc-text-on-accent)]/70 fails WCAG AA contrast on --sc-accent background; use full-opacity white.
-                            className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
-                          >
-                            {t('palette.pin.badge')}
-                          </span>
-                        ) : null}
-                        {cmd.shortcutDisplay ? (
-                          <div className="flex gap-1">
-                            {cmd.shortcutDisplay.map((k) => (
-                              <kbd
-                                key={k}
-                                className={`px-1.5 py-0.5 text-xs rounded border ${isActive ? 'border-[var(--glass-highlight)] bg-[var(--glass-bg-hover)] text-[var(--sc-text-on-accent)]' : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-muted)]'}`}
-                              >
-                                {k}
-                              </kbd>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </button>
-                  );
-                });
-
-                const groupProps =
-                  block.heading && headingId
-                    ? { role: 'group' as const, 'aria-labelledby': headingId }
-                    : {};
-
+            <div
+              style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const row = rows[virtualRow.index];
+                if (!row) return null;
                 return (
-                  <div key={`palette-block-${blockKey}`} {...groupProps}>
-                    {headingNode}
-                    {optionButtons}
+                  <div
+                    key={row.key}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {row.kind === 'heading' ? (
+                      <div
+                        role="presentation"
+                        className="px-3 py-2 text-xs font-semibold text-[var(--sc-text-muted)] uppercase tracking-wider bg-[var(--sc-surface-raised)]/95 backdrop-blur-sm"
+                      >
+                        {row.label}
+                      </div>
+                    ) : (
+                      (() => {
+                        const isActive = row.optionIndex === selectedIndex;
+                        const cmd = row.cmd;
+                        return (
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={isActive}
+                            id={`palette-opt-${row.optionIndex}`}
+                            data-palette-index={row.optionIndex}
+                            onClick={() => runCommand(cmd)}
+                            onMouseEnter={() => setSelectedIndex(row.optionIndex)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              togglePin(cmd.id);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-start transition-all duration-150 group ${
+                              isActive
+                                ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] shadow-md'
+                                : 'text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              {/* QNBS-v3: decorative icon — the command label already conveys meaning,
+                                  so hide it from AT to avoid a redundant announcement per option. */}
+                              <div
+                                aria-hidden="true"
+                                className={`p-1.5 rounded-md shrink-0 ${isActive ? 'text-[var(--sc-text-on-accent)] bg-[var(--glass-bg-hover)]' : 'text-[var(--sc-text-secondary)] bg-[var(--sc-surface-overlay)] group-hover:bg-[var(--sc-surface-base)]'}`}
+                              >
+                                {cmd.icon}
+                              </div>
+                              <div className="min-w-0">
+                                <div
+                                  className={`font-medium truncate ${isActive ? 'text-[var(--sc-text-on-accent)]' : ''}`}
+                                >
+                                  {renderTitle(cmd.title)}
+                                </div>
+                                {row.suggestionReasonKey && !query ? (
+                                  <div
+                                    className={`text-xs truncate ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
+                                  >
+                                    {t(row.suggestionReasonKey)}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {row.isPinned ? (
+                                <span
+                                  // QNBS-v3: text-[var(--sc-text-on-accent)]/70 fails WCAG AA contrast on --sc-accent background; use full-opacity white.
+                                  className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
+                                >
+                                  {t('palette.pin.badge')}
+                                </span>
+                              ) : null}
+                              {cmd.shortcutDisplay ? (
+                                <div className="flex gap-1">
+                                  {cmd.shortcutDisplay.map((k) => (
+                                    <kbd
+                                      key={k}
+                                      className={`px-1.5 py-0.5 text-xs rounded border ${isActive ? 'border-[var(--glass-highlight)] bg-[var(--glass-bg-hover)] text-[var(--sc-text-on-accent)]' : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-muted)]'}`}
+                                    >
+                                      {k}
+                                    </kbd>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      })()
+                    )}
                   </div>
                 );
-              });
-            })()
+              })}
+            </div>
           )}
         </div>
 

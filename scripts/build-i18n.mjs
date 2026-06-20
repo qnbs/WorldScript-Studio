@@ -65,6 +65,7 @@ const modules = [
   'characterInterviews',
   'lora',
   'copilot',
+  'desktop',
 ];
 
 let totalKeys = 0;

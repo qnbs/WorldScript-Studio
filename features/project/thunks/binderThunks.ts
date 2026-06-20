@@ -6,9 +6,15 @@ import type { BinderNode } from '../../../types';
 import { selectProjectData } from '../projectSelectors';
 import { projectActions } from '../projectSlice';
 
-function collectSubtreeIds(nodes: BinderNode[], rootId: string): string[] {
+// QNBS-v3: exported for unit coverage of the cycle guard (mirrors the deleteBinderNode reducer).
+export function collectSubtreeIds(nodes: BinderNode[], rootId: string): string[] {
   const out: string[] = [];
+  // QNBS-v3: visited guard — a cyclic/corrupted parentId loop (a→b→a) would otherwise recurse
+  // forever here, before deleteBinderNode's own guard is ever reached. Set also dedupes.
+  const visited = new Set<string>();
   const walk = (pid: string) => {
+    if (visited.has(pid)) return;
+    visited.add(pid);
     out.push(pid);
     for (const n of nodes) {
       if (n.parentId === pid) walk(n.id);

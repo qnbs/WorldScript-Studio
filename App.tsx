@@ -60,6 +60,8 @@ import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
+import { installDesktopMenu } from './services/desktop/desktopMenu';
+import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
 import {
@@ -68,7 +70,6 @@ import {
   isIdbEncryptionReady,
 } from './services/storage/storageEncryptionService';
 import { initTauriDeepLink } from './services/tauriDeepLink';
-import { registerTauriMenuHandler, unregisterTauriMenuHandler } from './services/tauriMenuService';
 import { applyDesktopRuntimeFlags } from './services/tauriRuntime';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
@@ -521,14 +522,68 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     return () => window.removeEventListener('voice-command', handler);
   }, [executeCommand]);
 
+  // QNBS-v3 (T1/#189): the localized JS menu (installDesktopMenu) is the single source of truth for
+  // native menu actions — its item callbacks dispatch via executeCommand directly. The old
+  // registerTauriMenuHandler (Rust `menu-action` event bridge) reused the SAME item ids, so on desktop
+  // every menu click dispatched twice (JS callback + Rust event path). It is removed; the JS menu owns it.
+  //
+  // executeCommand is held in a ref so the menu only rebuilds when the language (t) changes — not on
+  // every executeCommand identity change (it depends on characters/worlds/settings/… and recreates often).
+  const executeCommandRef = useRef(executeCommand);
+  executeCommandRef.current = executeCommand;
   useEffect(() => {
-    void registerTauriMenuHandler((action) => {
-      if (action === 'menu-settings') executeCommand('nav-settings');
-      else if (action === 'menu-help') executeCommand('nav-help');
-      else if (action === 'menu-export') executeCommand('nav-export');
+    void installDesktopMenu(
+      (key) => t(key),
+      (id) => executeCommandRef.current(id),
+    );
+  }, [t]);
+
+  // QNBS-v3 (T1): install the localized JS application menu (overrides the minimal Rust fallback).
+  // Rebuilds when the language changes so labels follow the active locale. No-op on the web.
+  useEffect(() => {
+    void installDesktopMenu(
+      (key) => t(key),
+      (id) => {
+        executeCommand(id);
+      },
+    );
+  }, [t, executeCommand]);
+
+  // QNBS-v3 (T2): system tray (created once; guard makes re-calls a no-op). No-op on the web.
+  // QNBS-v3 (#190): executeCommand in a ref so the tray rebuilds on language (t) change only, not on
+  // every executeCommand identity change. installDesktopTray relabels the existing tray on re-call.
+  const trayCommandRef = useRef(executeCommand);
+  trayCommandRef.current = executeCommand;
+  useEffect(() => {
+    void installDesktopTray(
+      (key) => t(key),
+      (id) => trayCommandRef.current(id),
+    );
+  }, [t]);
+
+  // QNBS-v3 (T2): close-to-tray — hide instead of quit when the setting is on (read live from store).
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    // QNBS-v3 (#190): guard the async race — if the component unmounts before installCloseToTray
+    // resolves, `unlisten` is still null during cleanup and the resolved listener would leak. Track a
+    // cancelled flag and tear the resolved listener down immediately in that case.
+    let cancelled = false;
+    void installCloseToTray(
+      // Defensive read — imported/malformed persisted settings can leave `desktop` null/undefined,
+      // which would crash the close handler; default to false (don't trap the window).
+      () => (store.getState() as RootState).settings.desktop?.minimizeToTray ?? false,
+    ).then((fn) => {
+      if (cancelled) {
+        fn?.();
+        return;
+      }
+      unlisten = fn;
     });
-    return () => unregisterTauriMenuHandler();
-  }, [executeCommand]);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [store]);
 
   // QNBS-v3: Tauri deep link handler for native file associations (.worldscript, .wsst)
   useEffect(() => {

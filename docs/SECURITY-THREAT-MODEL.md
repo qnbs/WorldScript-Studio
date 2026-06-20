@@ -41,7 +41,7 @@ This document provides a formal STRIDE threat analysis for WorldScript Studio, m
 | API key leakage via logs | StructuredLogger sanitization; never log keys | `services/logger.ts:sanitizeLogContext()` |
 | Manuscript data in IndexedDB | AES-256-GCM at-rest encryption | `services/storage/storageEncryptionService.ts` |
 | Voice audio to cloud | Web Speech API consent gate | `components/voice/VoicePrivacyConsentModal.tsx` |
-| DuckDB analytics unencrypted | OPFS encryption (planned) | `services/duckdb/duckdbEncryption.ts` (P0-4) |
+| DuckDB analytics unencrypted | OPFS encryption module exists but is **not wired** into the persistence path — analytics remain unencrypted at rest (P0-4 integration pending) | `services/duckdb/duckdbEncryption.ts` |
 | Prompt injection exposing context | Prompt sanitization | `services/ai/ragPromptAssembly.ts:sanitizePromptBlock()` |
 | Prompt injection via AI-proposed edits | Control-character / lone-surrogate validation; per-item skip | `services/proForge/applyReviewEdits.ts:validateProposedText()` |
 
@@ -154,7 +154,7 @@ Regression test: `tests/unit/csp.test.ts`.
 - [x] Collaboration requires password in production
 - [x] Plugin system permission-gated
 - [x] Plugin system Worker-isolated (P0-2) — `workers/plugin.worker.ts`
-- [x] DuckDB OPFS encrypted (P0-4) — `services/duckdb/duckdbEncryption.ts`
+- [ ] DuckDB OPFS encrypted (P0-4) — encryption module + unit tests exist (`services/duckdb/duckdbEncryption.ts`), but it is **not wired** into the persistence path (0 production callers), so DuckDB analytics are not encrypted at rest. Integration pending.
 - [x] Voice WASM download UX (P0-5) — `components/voice/VoiceModelDownloadModal.tsx`
 
 ## References

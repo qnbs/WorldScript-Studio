@@ -2714,5 +2714,22 @@
   "copilot.suggestionTopInsight": "Was ist am dringendsten zu beheben?",
   "copilot.suggestionWorldBuilding": "Welche Weltenbau-Details fehlen mir?",
   "copilot.title": "KI-Copilot",
-  "copilot.you": "Du"
+  "copilot.you": "Du",
+  "desktop.menu.file": "Datei",
+  "desktop.menu.export": "Projekt exportieren…",
+  "desktop.menu.settings": "Einstellungen",
+  "desktop.menu.edit": "Bearbeiten",
+  "desktop.menu.view": "Ansicht",
+  "desktop.menu.commandPalette": "Befehlspalette",
+  "desktop.menu.window": "Fenster",
+  "desktop.menu.help": "Hilfe",
+  "desktop.menu.helpCenter": "Hilfe-Center",
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.tray.show": "WorldScript Studio anzeigen",
+  "desktop.tray.settings": "Einstellungen",
+  "desktop.tray.commandPalette": "Befehlspalette",
+  "desktop.tray.quit": "Beenden",
+  "desktop.settings.sectionTitle": "Desktop",
+  "desktop.settings.minimizeToTray": "Beim Schließen in den Infobereich minimieren",
+  "desktop.settings.minimizeToTrayHint": "WorldScript Studio beim Schließen des Fensters im Infobereich weiterlaufen lassen, statt zu beenden."
 }

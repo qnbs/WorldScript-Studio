@@ -1,0 +1,19 @@
+{
+  "desktop.menu.file": "File",
+  "desktop.menu.export": "Esporta progetto…",
+  "desktop.menu.settings": "Impostazioni",
+  "desktop.menu.edit": "Modifica",
+  "desktop.menu.view": "Visualizza",
+  "desktop.menu.commandPalette": "Palette comandi",
+  "desktop.menu.window": "Finestra",
+  "desktop.menu.help": "Aiuto",
+  "desktop.menu.helpCenter": "Centro assistenza",
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.tray.show": "Mostra WorldScript Studio",
+  "desktop.tray.settings": "Impostazioni",
+  "desktop.tray.commandPalette": "Palette comandi",
+  "desktop.tray.quit": "Esci",
+  "desktop.settings.sectionTitle": "Desktop",
+  "desktop.settings.minimizeToTray": "Riduci nella barra delle applicazioni alla chiusura",
+  "desktop.settings.minimizeToTrayHint": "Mantieni WorldScript Studio attivo nell'area di notifica invece di uscire quando chiudi la finestra."
+}
