@@ -21,15 +21,28 @@ export type MenuTranslate = (key: string) => string;
 /** Routes a native menu action to an app command (the App-level `executeCommand`). */
 export type MenuCommandRunner = (commandId: string) => void;
 
+// QNBS-v3 (#189): monotonic request token. installDesktopMenu is async and re-runs on every language
+// change; without this, two overlapping calls race and whichever finishes setAsAppMenu() LAST wins —
+// even if it started earlier with a stale locale. Each call captures the latest token and bails before
+// applying if a newer call has since started.
+let menuInstallToken = 0;
+
+/** @internal test-only reset for the request-token guard. */
+export function _resetMenuInstallTokenForTest(): void {
+  menuInstallToken = 0;
+}
+
 /**
  * Build and install the localized application menu. Returns `true` when installed, `false` on the
- * web or if the menu API is unavailable (never throws — a menu failure must not break startup).
+ * web, if superseded by a newer call, or if the menu API is unavailable (never throws — a menu
+ * failure must not break startup).
  */
 export async function installDesktopMenu(
   t: MenuTranslate,
   runCommand: MenuCommandRunner,
 ): Promise<boolean> {
   if (!isTauriRuntime()) return false;
+  const myToken = ++menuInstallToken;
   try {
     const { Menu, Submenu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
 
@@ -103,6 +116,9 @@ export async function installDesktopMenu(
     const menu = await Menu.new({
       items: [fileMenu, editMenu, viewMenu, windowMenu, helpMenu],
     });
+    // QNBS-v3 (#189): a newer installDesktopMenu call has started since this one began — discard this
+    // stale build instead of letting it overwrite the newer menu via setAsAppMenu().
+    if (myToken !== menuInstallToken) return false;
     await menu.setAsAppMenu();
     return true;
   } catch (err) {

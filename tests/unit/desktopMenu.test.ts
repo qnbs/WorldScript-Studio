@@ -48,7 +48,10 @@ vi.mock('@tauri-apps/api/menu', () => ({
   },
 }));
 
-import { installDesktopMenu } from '../../services/desktop/desktopMenu';
+import {
+  _resetMenuInstallTokenForTest,
+  installDesktopMenu,
+} from '../../services/desktop/desktopMenu';
 
 describe('installDesktopMenu', () => {
   beforeEach(() => {
@@ -57,6 +60,7 @@ describe('installDesktopMenu', () => {
     h.predefinedCalls.length = 0;
     h.setAsAppMenu.mockClear();
     h.isTauri.value = true;
+    _resetMenuInstallTokenForTest();
   });
 
   it('returns false on the web (no Tauri runtime)', async () => {
@@ -105,6 +109,19 @@ describe('installDesktopMenu', () => {
     expect(run).toHaveBeenCalledWith('nav-settings');
     expect(run).toHaveBeenCalledWith('global-open-command-palette');
     expect(run).toHaveBeenCalledWith('nav-help');
+  });
+
+  it('discards a stale concurrent install — only the latest applies setAsAppMenu', async () => {
+    const results = await Promise.all([
+      installDesktopMenu((k) => k, vi.fn()),
+      installDesktopMenu((k) => k, vi.fn()),
+    ]);
+    // Core guarantee: a superseded (stale) call must NEVER apply its menu — at most one of the two
+    // overlapping calls reaches setAsAppMenu, so a stale locale can't overwrite the newer menu.
+    expect(h.setAsAppMenu.mock.calls.length).toBeLessThanOrEqual(1);
+    expect(results.filter(Boolean).length).toBeLessThanOrEqual(1);
+    // And the earlier call is the one discarded: its result is false.
+    expect(results[0]).toBe(false);
   });
 
   it('returns false (and does not throw) when the menu API rejects', async () => {
