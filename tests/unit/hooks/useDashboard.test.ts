@@ -444,6 +444,18 @@ describe('selectLogline', () => {
     );
   });
 
+  it('shows an undo hint toast after applying a logline', () => {
+    setProjectData({});
+    const { result } = renderHook(() => useDashboard({ onNavigate }));
+
+    act(() => result.current.selectLogline('A warrior finds destiny'));
+
+    expect(mockToast.success).toHaveBeenCalledWith(
+      'dashboard.logline.updated',
+      'dashboard.logline.updatedUndo',
+    );
+  });
+
   it('closes the logline modal after selection', async () => {
     mockUnwrap.mockResolvedValue(['Some logline']);
     setProjectData({});
