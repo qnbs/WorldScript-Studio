@@ -58,17 +58,24 @@ export const proForgeMachine = setup({
       context.currentStage === 'intake' && (context.lastDecision?.qualityScore ?? 0) < 30,
     hasNextStage: ({ context }) => context.stageIndex + 1 < context.selectedStages.length,
     isEditingStage: ({ context }) => EDITING_STAGES.includes(context.currentStage),
+    // QNBS-v3: only roll back to a stage that's actually in the selected pipeline, so currentStage
+    // and stageIndex never diverge (an unknown stage forced stageIndex to 0 while pointing elsewhere).
+    isRollbackStageSelected: ({ context, event }) =>
+      event.type === 'ROLLBACK' && context.selectedStages.includes(event.stage),
   },
   actions: {
+    // QNBS-v3: cast through `unknown` — these onDone actions only ever fire on the invoke's
+    // done event (which carries `output`), but the ProForgeMachineEvent union also includes
+    // ABORT (no `output`), so a direct cast no longer overlaps (TS2352).
     setPreSnapshot: assign({
-      prePipelineSnapshotId: ({ event }) => (event as { output: string }).output,
+      prePipelineSnapshotId: ({ event }) => (event as unknown as { output: string }).output,
     }),
     setResult: assign({
-      lastResult: ({ event }) => (event as { output: StageAgentResult }).output,
+      lastResult: ({ event }) => (event as unknown as { output: StageAgentResult }).output,
     }),
     setDecision: assign({
       lastDecision: ({ event }) =>
-        (event as { output: ProForgeMachineContext['lastDecision'] }).output,
+        (event as unknown as { output: ProForgeMachineContext['lastDecision'] }).output,
     }),
     setRunError: assign({
       error: ({ event }) => {
@@ -82,8 +89,17 @@ export const proForgeMachine = setup({
     }),
     incrementAttempt: assign({
       attempt: ({ context }) => context.attempt + 1,
-      retryFeedback: ({ context }) =>
-        (context.lastDecision?.reasons ?? []).map((r) => `- ${r}`).join('\n'),
+      // QNBS-v3: parity with proForgeOrchestrator — feed supervisor reasons AND the agent's
+      // self-reflection note from the last result into the next attempt's prompt.
+      retryFeedback: ({ context }) => {
+        const reflectionNote = (
+          context.lastResult?.agentOutput as { reflectionNotes?: string } | undefined
+        )?.reflectionNotes;
+        return [...(context.lastDecision?.reasons ?? []), reflectionNote]
+          .filter((line): line is string => Boolean(line))
+          .map((line) => `- ${line}`)
+          .join('\n');
+      },
     }),
     setReviewDecisions: assign({
       reviewDecisions: ({ event }) => (event.type === 'SUBMIT_REVIEW' ? event.decisions : null),
@@ -132,6 +148,9 @@ export const proForgeMachine = setup({
       on: { START: 'preparing' },
     },
     preparing: {
+      // QNBS-v3: accept ABORT while the pre-pipeline snapshot actor runs — otherwise a cancel sent
+      // right after START is ignored and the pipeline proceeds anyway.
+      on: { ABORT: 'aborting' },
       invoke: {
         src: 'snapshot',
         input: ({ context }) => ({ stage: 'prePipeline' as const, label: context.label }),
@@ -204,7 +223,11 @@ export const proForgeMachine = setup({
               { target: 'advancing', actions: 'setReviewDecisions' },
             ],
             SKIP: 'advancing',
-            ROLLBACK: { target: 'preStageSnapshot', actions: 'applyRollback' },
+            ROLLBACK: {
+              guard: 'isRollbackStageSelected',
+              target: 'preStageSnapshot',
+              actions: 'applyRollback',
+            },
           },
         },
         applyingEdits: {

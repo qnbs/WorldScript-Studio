@@ -176,4 +176,56 @@ describe('proForgeMachine', () => {
     );
     expect(actor.getSnapshot().context.stageIndex).toBe(0);
   });
+
+  it('feeds supervisor reasons AND the agent reflection note into the retry prompt', async () => {
+    const feedbacks: string[] = [];
+    let supCalls = 0;
+    const actor = makeActor(['structural'], {
+      maxRetries: 1,
+      overrides: {
+        runStage: async (input) => {
+          feedbacks.push(input.retryFeedback);
+          return {
+            reviewItems: [],
+            metrics: EMPTY_METRICS,
+            agentOutput: { reflectionNotes: 'tighten the prose' },
+          };
+        },
+        supervise: async () => {
+          supCalls += 1;
+          return supCalls === 1
+            ? { pass: false, retryRecommended: true, qualityScore: 70, reasons: ['weak structure'] }
+            : PASS;
+        },
+      },
+    });
+    actor.start();
+    actor.send({ type: 'START' });
+    await waitFor(actor, (s) => s.matches({ running: 'awaitingReview' }));
+    // The 2nd run carries retry feedback built from the supervisor reasons + the reflection note.
+    expect(feedbacks[1]).toContain('weak structure');
+    expect(feedbacks[1]).toContain('tighten the prose');
+  });
+
+  it('ignores a ROLLBACK to a stage outside the selected pipeline (guard)', async () => {
+    const actor = makeActor(['intake', 'structural']);
+    actor.start();
+    actor.send({ type: 'START' });
+    await waitFor(actor, (s) => s.matches({ running: 'awaitingReview' }));
+    // 'lineProse' was never selected — the guard rejects it; state stays consistent.
+    actor.send({ type: 'ROLLBACK', stage: 'lineProse' });
+    expect(actor.getSnapshot().matches({ running: 'awaitingReview' })).toBe(true);
+    expect(actor.getSnapshot().context.currentStage).toBe('intake');
+    expect(actor.getSnapshot().context.stageIndex).toBe(0);
+  });
+
+  it('accepts ABORT while preparing (before the pipeline runs)', () => {
+    const actor = makeActor(['intake']);
+    actor.start();
+    actor.send({ type: 'START' });
+    // The snapshot actor resolves on a later microtask, so we are synchronously still in `preparing`.
+    expect(actor.getSnapshot().value).toBe('preparing');
+    actor.send({ type: 'ABORT' });
+    expect(actor.getSnapshot().value).toBe('aborting');
+  });
 });
