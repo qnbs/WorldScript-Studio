@@ -1,4 +1,5 @@
 import { render, renderHook, screen } from '@testing-library/react';
+import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandPalette } from '../../components/CommandPalette';
 import { useCommandPalette } from '../../hooks/useCommandPalette';
@@ -216,6 +217,28 @@ describe('CommandPalette', () => {
     // Row 0 is the section heading, so option index 0 lives at row index 1.
     expect(result.current.optionIndexToRowIndex.get(0)).toBe(1);
     expect(result.current.optionIndexToRowIndex.get(59)).toBe(60);
+  });
+
+  it('keeps the highlighted command selected by id across a pin reorder', () => {
+    vi.mocked(buildPaletteCommandModels).mockReturnValue(makeCommands(5));
+    vi.mocked(loadPalettePreferences).mockReturnValue({ pinnedIds: [], recentIds: [] });
+    const { result } = renderHook(() =>
+      useCommandPalette({
+        isOpen: true,
+        onClose: mockOnClose,
+        onNavigate: mockOnNavigate,
+        currentView: 'dashboard',
+      }),
+    );
+    // Highlight cmd-2, then capture its id.
+    act(() => result.current.setSelectedIndex(2));
+    const highlightedId = result.current.flatItems[result.current.selectedIndex]?.item.id;
+    expect(highlightedId).toBe('cmd-2');
+    // Pinning cmd-4 reorders it to the top; selection must follow cmd-2, not stay at index 2.
+    vi.mocked(loadPalettePreferences).mockReturnValue({ pinnedIds: ['cmd-4'], recentIds: [] });
+    act(() => result.current.togglePin('cmd-4'));
+    expect(result.current.flatItems[result.current.selectedIndex]?.item.id).toBe('cmd-2');
+    vi.mocked(loadPalettePreferences).mockReturnValue({ pinnedIds: [], recentIds: [] });
   });
 
   it('dedupes a command that is both suggested and pinned (appears once)', () => {

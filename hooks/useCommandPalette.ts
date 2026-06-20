@@ -151,19 +151,32 @@ export function useCommandPalette({
     }
   }, [transcript, isOpen, setTranscript]);
 
+  // QNBS-v3: reset + focus + scroll-lock strictly on OPEN/CLOSE transitions. Deliberately does NOT
+  // depend on isListening — otherwise toggling the mic while the palette is open re-runs this and
+  // wipes the user's query/selection. The focus timer is tracked and cleared so a stale timeout can't
+  // fire after close and steal focus.
   useEffect(() => {
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
-      if (!isTouchDevice) {
-        setTimeout(() => inputRef.current?.focus(), 50);
-      }
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-      if (isListening) stopListening();
+      let focusTimer: ReturnType<typeof setTimeout> | undefined;
+      if (!isTouchDevice) {
+        focusTimer = setTimeout(() => inputRef.current?.focus(), 50);
+      }
+      return () => {
+        if (focusTimer !== undefined) clearTimeout(focusTimer);
+      };
     }
-  }, [isOpen, isListening, stopListening, isTouchDevice]);
+    document.body.style.overflow = '';
+    return undefined;
+  }, [isOpen, isTouchDevice]);
+
+  // QNBS-v3: stop the mic when the palette closes — separated from the reset effect above so a mic
+  // toggle while open doesn't trigger a query/selection reset.
+  useEffect(() => {
+    if (!isOpen && isListening) stopListening();
+  }, [isOpen, isListening, stopListening]);
 
   // QNBS-v3: `pinTick` + `isOpen` are invalidation ticks, not memo inputs — `pinTick` reloads prefs
   // after pin/unpin writes; `isOpen` reloads them on each open so recents recorded by
@@ -327,10 +340,26 @@ export function useCommandPalette({
     [onClose],
   );
 
-  const togglePin = useCallback((id: string) => {
-    togglePinnedCommand(id);
-    setPinTick((x) => x + 1);
-  }, []);
+  // QNBS-v3: pinning reorders the list, so a bare numeric selectedIndex would afterwards point at a
+  // different command (Enter could run the wrong one). Capture the currently highlighted command's id
+  // before the reorder and remap selection back to it once the list recomputes.
+  const pendingSelectIdRef = useRef<string | null>(null);
+  const togglePin = useCallback(
+    (id: string) => {
+      pendingSelectIdRef.current = flatItems[selectedIndex]?.item.id ?? null;
+      togglePinnedCommand(id);
+      setPinTick((x) => x + 1);
+    },
+    [flatItems, selectedIndex],
+  );
+
+  useEffect(() => {
+    const pendingId = pendingSelectIdRef.current;
+    if (pendingId == null) return;
+    pendingSelectIdRef.current = null;
+    const idx = flatItems.findIndex((f) => f.item.id === pendingId);
+    if (idx >= 0) setSelectedIndex(idx);
+  }, [flatItems]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -343,6 +372,9 @@ export function useCommandPalette({
         return;
       }
       if (e.key === 'Enter') {
+        // QNBS-v3: never execute a command while an IME composition is active — Enter is committing
+        // composed text (e.g. Japanese/Chinese input), not selecting a command.
+        if (e.isComposing) return;
         // QNBS-v3: let focused buttons/links handle their own Enter (e.g. the mic toggle) instead of
         // hijacking it to run the selected command. Only the search input / listbox triggers a run.
         const active = document.activeElement;

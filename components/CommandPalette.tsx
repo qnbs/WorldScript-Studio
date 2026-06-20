@@ -1,6 +1,6 @@
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import type React from 'react';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { APP_NAME } from '../constants';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { highlightSubsequence } from '../services/commands/fuzzyScore';
@@ -45,12 +45,30 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     palettePanelRef,
   } = useCommandPalette({ isOpen, onClose, onNavigate, currentView });
 
+  // QNBS-v3: aria-activedescendant points at the active option's id, but the virtualizer only mounts a
+  // windowed subset of rows. If the user scrolls the active option out of view its DOM node would
+  // unmount and aria-activedescendant would dangle (AT announces nothing). Force the active row to
+  // always stay in the rendered range so its id always resolves.
+  const activeRowIndex = optionIndexToRowIndex.get(selectedIndex);
+  const rangeExtractor = useCallback(
+    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
+      const base = defaultRangeExtractor(range);
+      if (activeRowIndex !== undefined && !base.includes(activeRowIndex)) {
+        base.push(activeRowIndex);
+        base.sort((a, b) => a - b);
+      }
+      return base;
+    },
+    [activeRowIndex],
+  );
+
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => listRef.current,
     estimateSize: (index) =>
       rows[index]?.kind === 'heading' ? HEADING_ROW_ESTIMATE : OPTION_ROW_ESTIMATE,
     overscan: 6,
+    rangeExtractor,
   });
 
   // QNBS-v3: keep the keyboard-selected option scrolled into view through the virtual window.
@@ -228,7 +246,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                             }`}
                           >
                             <div className="flex items-center gap-3 min-w-0">
+                              {/* QNBS-v3: decorative icon — the command label already conveys meaning,
+                                  so hide it from AT to avoid a redundant announcement per option. */}
                               <div
+                                aria-hidden="true"
                                 className={`p-1.5 rounded-md shrink-0 ${isActive ? 'text-[var(--sc-text-on-accent)] bg-[var(--glass-bg-hover)]' : 'text-[var(--sc-text-secondary)] bg-[var(--sc-surface-overlay)] group-hover:bg-[var(--sc-surface-base)]'}`}
                               >
                                 {cmd.icon}
