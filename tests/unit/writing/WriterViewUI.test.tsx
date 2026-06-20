@@ -93,6 +93,8 @@ describe('WriterViewUI', () => {
     mockIsVCPanelOpen = false;
     mockIsProForgeEnabled = false;
     mockIsProForgeActive = false;
+    // QNBS-v3: reset first-use coachmark flags so badge/coachmark tests start from a clean slate.
+    localStorage.clear();
   });
 
   it('renders mobile tab list', () => {
@@ -259,5 +261,52 @@ describe('WriterViewUI', () => {
   it('renders focus mode button', () => {
     render(<WriterViewUI />);
     expect(screen.getByTitle('writer.focusMode.enter')).toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
+  // Mode badge + restore-layout (Item 1)
+  // -------------------------------------------------------------------------
+  it('does not render the mode badge when no non-default modes are active', () => {
+    render(<WriterViewUI />);
+    expect(screen.queryByText('writer.modeBadge.label')).not.toBeInTheDocument();
+  });
+
+  it('renders the mode badge with a ProForge chip when ProForge is active', () => {
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = true;
+    render(<WriterViewUI />);
+    expect(screen.getByText('writer.modeBadge.label')).toBeInTheDocument();
+    expect(screen.getByText('writer.modeBadge.proforge')).toBeInTheDocument();
+  });
+
+  it('restore-layout button turns ProForge off', async () => {
+    const user = userEvent.setup();
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = true;
+    render(<WriterViewUI />);
+    await user.click(screen.getByTitle('writer.modeBadge.resetTitle'));
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'proForge/setProForgeActive',
+      payload: false,
+    });
+  });
+
+  it('shows a Focus chip after enabling focus mode', async () => {
+    const user = userEvent.setup();
+    render(<WriterViewUI />);
+    await user.click(screen.getByTitle('writer.focusMode.enter'));
+    expect(screen.getByText('writer.modeBadge.focus')).toBeInTheDocument();
+  });
+
+  it('restore-layout also returns the mobile tab to the default (tools)', async () => {
+    const user = userEvent.setup();
+    // ProForge active → the mode badge (with the reset button) is rendered.
+    mockIsProForgeEnabled = true;
+    mockIsProForgeActive = true;
+    render(<WriterViewUI />);
+    await user.click(screen.getByTestId('writer-tab-context'));
+    expect(screen.getByTestId('writer-tab-context')).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByTitle('writer.modeBadge.resetTitle'));
+    expect(screen.getByTestId('writer-tab-tools')).toHaveAttribute('aria-selected', 'true');
   });
 });

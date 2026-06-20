@@ -108,6 +108,25 @@ describe('projectSlice', () => {
       expect(store.getState().project.present.data.manuscript.length).toBe(2);
     });
 
+    it('should honor act/color/status on the new manuscript section and still generate an id', () => {
+      const store = createTestStore();
+      store.dispatch(
+        projectActions.addManuscriptSection({
+          title: 'Climax',
+          act: 3,
+          color: '#3b82f6',
+          status: 'draft',
+        }),
+      );
+      const manuscript = store.getState().project.present.data.manuscript;
+      const added = manuscript[manuscript.length - 1];
+      expect(added?.title).toBe('Climax');
+      expect(added?.act).toBe(3);
+      expect(added?.color).toBe('#3b82f6');
+      expect(added?.status).toBe('draft');
+      expect(added?.id).toBeTruthy();
+    });
+
     it('should update manuscript section', () => {
       const store = createTestStore();
       store.dispatch(

@@ -22,15 +22,21 @@ export const manuscriptReducers = {
   },
   addManuscriptSection: (
     state: ProjectSliceState,
-    action: PayloadAction<{ title: string; index?: number }>,
+    // QNBS-v3: honor the full section payload (act/color/status/summary/position) instead of
+    // dropping everything but `title`. Callers (e.g. add-scene-to-act) need `act` applied
+    // atomically on the new section — the old signature forced a fragile setTimeout guess.
+    action: PayloadAction<
+      { index?: number } & { title: string } & Partial<Omit<StorySection, 'id'>>
+    >,
   ) => {
+    const { index, ...rest } = action.payload;
     const newSection: StorySection = {
       id: uuidv4(),
-      title: action.payload.title,
       content: '',
+      ...rest,
     };
-    if (action.payload.index !== undefined) {
-      state.data.manuscript.splice(action.payload.index, 0, newSection);
+    if (index !== undefined) {
+      state.data.manuscript.splice(index, 0, newSection);
     } else {
       state.data.manuscript.push(newSection);
     }

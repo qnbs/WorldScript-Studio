@@ -29,6 +29,7 @@ const mockSceneBoardViewBase = {
   handleMoveSection: vi.fn(),
   handleMoveSectionWithinAct: vi.fn(),
   handleAddSection: vi.fn(),
+  handleAddSectionForAct: vi.fn(),
   handleAddConnection: vi.fn(),
   handleDeleteConnection: vi.fn(),
   handleStartDrawConnection: vi.fn(),

@@ -23,6 +23,8 @@ interface SceneBoardViewContextType {
   handleMoveSection: (id: string, position: { x: number; y: number }) => void;
   handleMoveSectionWithinAct: (id: string, direction: 'up' | 'down') => void;
   handleAddSection: () => void;
+  /** Add a new scene with its `act` set atomically (deterministic — no post-add timeout). */
+  handleAddSectionForAct: (act: 1 | 2 | 3) => void;
   handleAddConnection: (from: string, to: string, type?: PlotConnectionType) => void;
   handleDeleteConnection: (id: string) => void;
   handleStartDrawConnection: (fromId: string) => void;
