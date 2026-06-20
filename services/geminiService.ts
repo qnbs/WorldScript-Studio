@@ -508,7 +508,7 @@ ${codexContext}
 
 Identify any inconsistencies, plot holes, or contradictions related to this character. Be thorough but concise.
 
-Respond with ONLY a JSON array (no markdown fences, no prose outside the array). Each element is a finding object with the keys "severity", "title", "detail", and an optional "ref". The "severity" value must be exactly one of the strings "error" (clear contradictions), "warn" (likely issues worth checking), or "info" (minor notes). Here is a valid example array with one finding:
+Respond with ONLY a JSON array (no markdown fences, no prose outside the array). Each element is a finding object with the keys "severity", "title", "detail", and an optional "ref". The "severity" value must be exactly one of the literal English strings "error" (clear contradictions), "warn" (likely issues worth checking), or "info" (minor notes) — NEVER translate or localize the "severity" value, even when the rest of the response is in another language; translate only the "title", "detail", and "ref" text. Here is a valid example array with one finding:
 [{"severity":"warn","title":"short summary","detail":"specific explanation","ref":"optional related scene title or character name"}]
 If there are no issues at all, return an empty array [] — do NOT invent an "info" finding to confirm consistency; the empty array is how a clean result is reported.
 
