@@ -15,6 +15,17 @@ vi.mock('../../services/tauriRuntime', () => ({
   isTauriRuntime: () => mockIsTauri,
 }));
 
+// QNBS-v3: capture the registered `listen` callback so tests can simulate native menu events.
+let capturedMenuListener: ((event: { payload: string }) => void) | null = null;
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(async (_name: string, cb: (event: { payload: string }) => void) => {
+    capturedMenuListener = cb;
+    return () => {
+      capturedMenuListener = null;
+    };
+  }),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
@@ -49,6 +60,22 @@ describe('registerTauriMenuHandler', () => {
   it('does not throw even when Tauri listen is unavailable (non-Tauri)', async () => {
     mockIsTauri = false;
     await expect(registerTauriMenuHandler(vi.fn())).resolves.not.toThrow();
+  });
+
+  it('routes the new menu-command-palette action to the handler', async () => {
+    mockIsTauri = true;
+    const handler = vi.fn();
+    await registerTauriMenuHandler(handler);
+    capturedMenuListener?.({ payload: 'menu-command-palette' });
+    expect(handler).toHaveBeenCalledWith('menu-command-palette');
+  });
+
+  it('ignores unknown / predefined menu ids (e.g. native undo)', async () => {
+    mockIsTauri = true;
+    const handler = vi.fn();
+    await registerTauriMenuHandler(handler);
+    capturedMenuListener?.({ payload: 'undo' });
+    expect(handler).not.toHaveBeenCalled();
   });
 });
 
