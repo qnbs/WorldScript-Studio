@@ -21,10 +21,15 @@ export type MenuTranslate = (key: string) => string;
 export type TrayCommandRunner = (commandId: string) => void;
 
 let trayInstalled = false;
+// QNBS-v3 (#190): in-flight guard. `trayInstalled` only flips true AFTER the async imports + tray
+// creation finish, so two concurrent installDesktopTray() calls could both pass the early check and
+// race to create the same tray. This flag rejects the second caller while the first is still running.
+let trayInstalling = false;
 
 /** @internal test-only reset for the once-per-session guard. */
 export function _resetTrayInstalledForTest(): void {
   trayInstalled = false;
+  trayInstalling = false;
 }
 
 /**
@@ -35,7 +40,8 @@ export async function installDesktopTray(
   t: MenuTranslate,
   runCommand: TrayCommandRunner,
 ): Promise<boolean> {
-  if (!isTauriRuntime() || trayInstalled) return false;
+  if (!isTauriRuntime() || trayInstalled || trayInstalling) return false;
+  trayInstalling = true;
   try {
     const [{ TrayIcon }, { Menu, MenuItem, PredefinedMenuItem }, { defaultWindowIcon }] =
       await Promise.all([
@@ -88,6 +94,8 @@ export async function installDesktopTray(
   } catch (err) {
     log.warn('Failed to create system tray', { error: String(err) });
     return false;
+  } finally {
+    trayInstalling = false;
   }
 }
 

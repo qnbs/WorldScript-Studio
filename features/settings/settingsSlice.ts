@@ -26,6 +26,7 @@ import type {
 } from '../../types';
 import { normalizeAccessibilitySettings } from './accessibilitySchema';
 import { getDefaultKeyboardShortcuts } from './keyboardShortcutsDefaults';
+import { defaultDesktopSettings, defaultVoiceSettings } from './settingsDefaults';
 
 // Detect system preference for initial theme
 const getSystemThemePreference = (): Theme => {
@@ -154,30 +155,15 @@ const defaultSettings: Settings = {
     textColor: '#f8fafc',
     customCss: '',
   },
-  voice: {
-    enabled: false,
-    activationMode: 'manual',
-    sttEngine: 'auto',
-    ttsEngine: 'auto',
-    feedbackLevel: 'standard',
-    speechRate: 1.0,
-    speechVolume: 1.0,
-    allowCloudSttFallback: false,
-    listeningTimeoutSeconds: 8,
-    wakeWordPhrase: 'Hey WorldScript',
-    pttShortcutId: 'voice-push-to-talk',
-    ttsMuted: false,
-    dictationAutoPunctuation: true,
-    webSpeechConsentGranted: false,
-  },
+  voice: defaultVoiceSettings,
   // QNBS-v3 (T2): desktop-only behavior; default off so the web/PWA is unaffected.
-  desktop: {
-    minimizeToTray: false,
-  },
+  desktop: defaultDesktopSettings,
 };
 
-export const defaultDesktopSettings = defaultSettings.desktop;
-export const defaultVoiceSettings = defaultSettings.voice;
+// QNBS-v3 (#190): re-exported (sourced from the side-effect-free settingsDefaults module) so existing
+// importers keep working, while low-level modules (storage layer) import straight from settingsDefaults
+// to avoid triggering this slice's top-level applyInitialTheme().
+export { defaultDesktopSettings, defaultVoiceSettings };
 // QNBS-v3: exported so components + IDB rehydration can backfill missing nested objects
 // (older persisted settings lacked advancedEditor/themeCustomization → page crash on read).
 export const defaultAdvancedEditorSettings = defaultSettings.advancedEditor;

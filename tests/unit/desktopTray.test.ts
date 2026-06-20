@@ -93,6 +93,17 @@ describe('installDesktopTray', () => {
     expect(await installDesktopTray((k) => k, vi.fn())).toBe(false);
   });
 
+  it('rejects a concurrent second install (in-flight guard, no double tray)', async () => {
+    const results = await Promise.all([
+      installDesktopTray((k) => k, vi.fn()),
+      installDesktopTray((k) => k, vi.fn()),
+    ]);
+    // Exactly one call wins; the other is rejected by the in-flight guard before it creates anything.
+    expect(results.filter(Boolean)).toHaveLength(1);
+    // Only one tray's worth of items was created (3, not 6) — no duplicate creation.
+    expect(h.itemCalls).toHaveLength(3);
+  });
+
   it('left-click focuses the window; command items route to executeCommand', async () => {
     const run = vi.fn();
     await installDesktopTray((k) => k, run);

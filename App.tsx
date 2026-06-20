@@ -550,7 +550,9 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     void installCloseToTray(
-      () => (store.getState() as RootState).settings.desktop.minimizeToTray,
+      // QNBS-v3 (#190): defensive read — imported/malformed persisted settings can leave `desktop`
+      // null/undefined, which would crash the close handler; default to false (don't trap the window).
+      () => (store.getState() as RootState).settings.desktop?.minimizeToTray ?? false,
     ).then((fn) => {
       unlisten = fn;
     });
