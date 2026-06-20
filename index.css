@@ -37,6 +37,12 @@
   --font-ui-greek: "Noto Sans GR", "Inter", system-ui, -apple-system, sans-serif;
   --sc-prose-measure: 65ch;
 
+  /* QNBS-v3 (D3): pointer-aware touch-target size. 44px (AAA) is the default for touch/coarse
+     pointers; the `.is-desktop` fine-pointer override (bottom of file) drops it to 36px (still
+     WCAG 2.2 AA — 24px min) so mouse-driven toolbars aren't chunky. Consumed by the
+     `min-h-touch` / `min-w-touch` utilities (packages/ui/tailwind-preset.ts). */
+  --size-touch-target: 2.75rem;
+
   /* Icon size tokens — QNBS-v3: semantic names replace w-4/w-5/w-6/w-8 literals; map to 16/20/24/32px. */
   --icon-sc-sm: 1rem; /* 16px — inline icon */
   --icon-sc-md: 1.25rem; /* 20px — button icon */
@@ -504,6 +510,19 @@ body.worldscript-screen-reader {
   --height-icon-sc-xl: var(--icon-sc-xl);
 }
 
+/* QNBS-v3 (D3): pointer-aware touch-target utilities. `min-height`/`min-width` aren't a Tailwind v4
+   theme namespace, so define them as first-class `@utility` rules (variant-compatible). They read
+   `--size-touch-target` (44px default; 36px under `.is-desktop` + `(pointer: fine)`), so the same
+   class is AAA-sized for touch and AA-sized (≥24px) under a desktop mouse. Replaces raw
+   `min-h-[44px]`/`min-w-[44px]`. */
+@utility min-h-touch {
+  min-height: var(--size-touch-target);
+}
+
+@utility min-w-touch {
+  min-width: var(--size-touch-target);
+}
+
 /* ── Base ──────────────────────────────────────────────── */
 html {
   scroll-behavior: smooth;
@@ -938,4 +957,15 @@ body.is-desktop .view-shell--narrow {
 
 body.is-desktop .view-shell--wide {
   max-width: var(--width-content-wide);
+}
+
+/* QNBS-v3 (D3): denser touch targets for mouse-driven desktop. Guarded by
+   `(pointer: fine) and (not (any-pointer: coarse))` so HYBRID touchscreen laptops
+   (precise mouse AND a coarse touch input) keep the full 44px (AAA) rather than being
+   shrunk to 36px — only pure-pointer devices densify. 36px still satisfies WCAG 2.2
+   AA (2.5.8 — 24px minimum). Drives `min-h-touch` / `min-w-touch` via `--size-touch-target`. */
+@media (pointer: fine) and (not (any-pointer: coarse)) {
+  body.is-desktop {
+    --size-touch-target: 2.25rem;
+  }
 }

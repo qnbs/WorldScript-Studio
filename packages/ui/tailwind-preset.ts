@@ -85,6 +85,15 @@ export const worldscriptTailwindPreset: Partial<Config> = {
         'icon-sc-lg': 'var(--icon-sc-lg)',
         'icon-sc-xl': 'var(--icon-sc-xl)',
       },
+      // QNBS-v3 (D3): pointer-aware touch target. `--size-touch-target` is 44px (AAA) by default
+      // and shrinks to 36px (still WCAG 2.2 AA — 24px min) only under `.is-desktop` + fine pointer
+      // (index.css). Use `min-h-touch`/`min-w-touch` instead of raw `min-h-[44px]`.
+      minHeight: {
+        touch: 'var(--size-touch-target)',
+      },
+      minWidth: {
+        touch: 'var(--size-touch-target)',
+      },
       fontSize: {
         'sc-xs': ['var(--text-sc-xs)', { lineHeight: '1.5' }],
         'sc-sm': ['var(--text-sc-sm)', { lineHeight: '1.5' }],

@@ -32,7 +32,7 @@ export const Button = React.memo(
 
       const sizeClasses = {
         sm: 'px-3 py-1.5 text-xs min-h-[32px] gap-1.5',
-        default: 'px-5 py-2.5 text-sm min-h-[44px] gap-2',
+        default: 'px-5 py-2.5 text-sm min-h-touch gap-2',
         lg: 'px-8 py-4 text-base min-h-[56px] gap-2.5',
       };
 
