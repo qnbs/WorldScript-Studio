@@ -71,8 +71,13 @@ export const parseConsistencyResult = (raw: string): ConsistencyResult => {
           };
         })
         .filter((f) => f.title || f.detail);
-      // QNBS-v3: valid JSON array → structured, even when empty. An empty array means "no issues",
-      // which the view renders as an explicit clean state rather than dumping raw "[]" as text.
+      // QNBS-v3: distinguish a genuinely empty result ("[]" → no issues) from a parse-drop where the
+      // model returned a NON-empty array but every element was malformed (missing title+detail) and
+      // got filtered out. Showing the clean "no findings" state for the latter would hide a real
+      // model/output failure as a false all-clear — so we fall back to raw text to surface it.
+      if (parsed.length > 0 && findings.length === 0) {
+        return { kind: 'text', text: raw };
+      }
       return { kind: 'structured', findings };
     }
   } catch {
