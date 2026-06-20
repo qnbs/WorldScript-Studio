@@ -1,3 +1,5 @@
+import { isTauriRuntime } from '../tauriRuntime';
+
 type TauriHttpFetch = typeof globalThis.fetch;
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -5,7 +7,9 @@ let cachedTauriFetch: TauriHttpFetch | null | undefined;
 
 async function resolveTauriFetch(): Promise<TauriHttpFetch | undefined> {
   if (cachedTauriFetch !== undefined) return cachedTauriFetch ?? undefined;
-  if (typeof window === 'undefined' || !window.__TAURI__) {
+  // QNBS-v3 (T0): canonical detection — `window.__TAURI__` alone was false in the real shell, so
+  // desktop AI calls never used the native HTTP client (CORS bypass) and silently hit the WebView.
+  if (!isTauriRuntime()) {
     cachedTauriFetch = null;
     return undefined;
   }

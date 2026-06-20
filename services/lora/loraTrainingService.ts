@@ -7,6 +7,9 @@
 import { v4 as uuid } from 'uuid';
 import type { HyperparamPreset } from '../../features/lora/types';
 import { logger } from '../logger';
+// QNBS-v3 (T0): use the canonical hardened detector instead of a local `__TAURI_INTERNALS__` check
+// (the drift this consolidates). isTauriRuntime() now accepts `__TAURI_INTERNALS__` too.
+import { isTauriRuntime as isTauri } from '../tauriRuntime';
 
 export interface TrainingJobConfig {
   projectId: string;
@@ -37,11 +40,6 @@ export interface TrainingResult {
   runId: string;
   adapterPath: string;
   ggufPath: string;
-}
-
-/** Whether we're running inside the Tauri desktop shell. */
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
 /** Invoke a Tauri command, typed. Throws on web build. */

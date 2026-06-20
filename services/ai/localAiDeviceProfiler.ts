@@ -4,6 +4,7 @@
  *          Detects WebGPU, WebNN, NPU, Compute Shaders, memory tier, battery, and platform.
  */
 
+import { isTauriRuntime } from '../tauriRuntime';
 import { detectWebGpuDetails } from './webGpuDetectorService';
 
 // ---------------------------------------------------------------------------
@@ -202,7 +203,9 @@ function detectMemoryTier(): DeviceCapabilityProfile['memoryTier'] {
 // ---------------------------------------------------------------------------
 
 function detectPlatform(): DevicePlatform {
-  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+  // QNBS-v3 (T0): canonical detection (`__TAURI_INTERNALS__`-aware); `__TAURI__` alone misclassified
+  // the real desktop shell as web, picking the wrong device profile.
+  const isTauri = isTauriRuntime();
   const isMobile =
     typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 

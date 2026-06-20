@@ -24,6 +24,7 @@ export {
 import { dbService } from './dbService';
 import { fileSystemService } from './fileSystemService';
 import { logger } from './logger';
+import { isTauriRuntime } from './tauriRuntime';
 
 declare global {
   interface Window {
@@ -43,8 +44,9 @@ class StorageManager {
   }
 
   private async initializeBackend(): Promise<void> {
-    // Check if we're running in Tauri
-    if (typeof window !== 'undefined' && window.__TAURI__) {
+    // QNBS-v3 (T0): use the canonical isTauriRuntime() (now `__TAURI_INTERNALS__`-aware) instead of
+    // a raw `window.__TAURI__` check, which was false in the real shell and forced IndexedDB.
+    if (isTauriRuntime()) {
       try {
         await fileSystemService.initialize();
         this.backend = fileSystemService;

@@ -1,5 +1,9 @@
 // QNBS-v3: B-6 StructuredLogger — replaces ring-buffer with IDB + Tauri JSONL sinks
 
+// QNBS-v3 (T0): canonical Tauri detection (now `__TAURI_INTERNALS__`-aware). tauriRuntime is a
+// dependency-free leaf, so importing it into the logger introduces no cycle.
+import { isTauriRuntime } from './tauriRuntime';
+
 const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 
 // --- Types ------------------------------------------------------------------
@@ -115,7 +119,7 @@ async function loadTauriSink(): Promise<{
       : null;
   }
   _tauriChecked = true;
-  if (typeof window === 'undefined' || !('__TAURI__' in window)) return null;
+  if (!isTauriRuntime()) return null;
   try {
     const [fsM, pathM] = await Promise.all([
       import('@tauri-apps/plugin-fs'),

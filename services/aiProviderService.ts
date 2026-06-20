@@ -41,6 +41,7 @@ import {
   testOllamaConnection,
 } from './ollamaService';
 import { storageService } from './storageService';
+import { isTauriRuntime } from './tauriRuntime';
 
 const providerTextSchema = z.object({
   text: z.string().min(1),
@@ -684,7 +685,9 @@ export async function testAIConnection(
         return { ok: true };
       }
       case 'ollama': {
-        const isDesktop = typeof window !== 'undefined' && Boolean(window.__TAURI__);
+        // QNBS-v3 (T0): canonical detection — `__TAURI__` alone was false in the real shell, so the
+        // desktop Ollama (localhost) path was unreachable there.
+        const isDesktop = isTauriRuntime();
         if (!isDesktop) {
           return {
             ok: false,

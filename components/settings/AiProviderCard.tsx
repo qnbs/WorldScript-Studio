@@ -11,6 +11,7 @@ import {
   testAIConnection,
 } from '../../services/aiProviderService';
 import { storageService } from '../../services/storageService';
+import { isTauriRuntime } from '../../services/tauriRuntime';
 import type { AdvancedAiSettings, AIProvider, LocalBackendPreset } from '../../types';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
@@ -35,7 +36,9 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const { t } = useTranslation();
   const provider = advancedAi.provider;
   const ollamaBaseUrl = advancedAi.ollamaBaseUrl;
-  const isDesktop = typeof window !== 'undefined' && Boolean(window.__TAURI__);
+  // QNBS-v3 (T0): canonical detection (`__TAURI_INTERNALS__`-aware); `__TAURI__` alone read as web
+  // in the real desktop shell, hiding desktop-only provider affordances.
+  const isDesktop = isTauriRuntime();
   const [openaiKey, setOpenaiKey] = useState('');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
