@@ -70,6 +70,17 @@ describe('getDesktopOs', () => {
     const { getDesktopOs } = await import('../../services/tauriRuntime');
     expect(getDesktopOs()).toBe(expected);
   });
+
+  it.each([
+    [''],
+    ['Some Unknown WebView/1.0'],
+    ['SunOS sparc'],
+  ])('returns null for unrecognized/empty UA %j (no silent linux misclassification)', async (userAgent) => {
+    vi.stubGlobal('window', { __TAURI__: {} });
+    vi.stubGlobal('navigator', { userAgent });
+    const { getDesktopOs } = await import('../../services/tauriRuntime');
+    expect(getDesktopOs()).toBeNull();
+  });
 });
 
 describe('applyDesktopRuntimeFlags', () => {

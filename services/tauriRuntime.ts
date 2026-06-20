@@ -14,7 +14,10 @@ export function getDesktopOs(): DesktopOs | null {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   if (/windows/i.test(ua)) return 'windows';
   if (/mac/i.test(ua)) return 'macos';
-  return 'linux';
+  if (/linux|x11|cros/i.test(ua)) return 'linux';
+  // QNBS-v3: unknown/empty UA — return null rather than silently defaulting to 'linux', which would
+  // apply the wrong per-OS desktop CSS quirks. Callers (applyDesktopRuntimeFlags) already skip null.
+  return null;
 }
 
 /**
