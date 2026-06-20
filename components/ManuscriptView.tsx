@@ -1,57 +1,26 @@
 import type React from 'react';
 import type { FC } from 'react';
-import { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { useTransientUiStore } from '../app/transientUiStore';
 import { ManuscriptViewContext, useManuscriptViewContext } from '../contexts/ManuscriptViewContext';
 import { selectEnableBinderResearch } from '../features/featureFlags/featureFlagsSlice';
 import { projectActions } from '../features/project/projectSlice';
+import { useManuscriptLayout } from '../hooks/useManuscriptLayout';
 import { useManuscriptView } from '../hooks/useManuscriptView';
-import { useResizablePanels } from '../hooks/useResizablePanels';
-import { BinderPanel } from './BinderPanel';
-import { ManuscriptResearchSplit } from './ManuscriptResearchSplit';
-import { InspectorPanel } from './manuscript/InspectorPanel';
-import { ManuscriptEditor } from './manuscript/ManuscriptEditor';
-import { StoryNavigator } from './manuscript/NavigatorPanel';
-import { Resizer } from './manuscript/ResizeHandle';
-import { Button } from './ui/Button';
-import { Card, CardHeader } from './ui/Card';
-import { Drawer } from './ui/Drawer';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { ManuscriptDesktopLayout } from './manuscript/ManuscriptDesktopLayout';
+import { ManuscriptMobileLayout } from './manuscript/ManuscriptMobileLayout';
 import { EmptyState } from './ui/EmptyState';
-import { Icon } from './ui/Icon';
-import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 
+// QNBS-v3: ManuscriptViewUI is now a thin orchestrator — layout state lives in useManuscriptLayout,
+// and rendering is split into ManuscriptMobileLayout / ManuscriptDesktopLayout (responsive show/hide).
 const ManuscriptViewUI: FC = () => {
   const dispatch = useAppDispatch();
-  const { project, activeSection, t } = useManuscriptViewContext();
+  const { project, t } = useManuscriptViewContext();
   const enableBinder = useAppSelector(selectEnableBinderResearch);
-  const manuscriptResearchSplitOpen = useTransientUiStore((s) => s.manuscriptResearchSplitOpen);
-  const manuscriptPinnedBinderNodeId = useTransientUiStore((s) => s.manuscriptPinnedBinderNodeId);
-  const setManuscriptResearchSplitOpen = useTransientUiStore(
-    (s) => s.setManuscriptResearchSplitOpen,
-  );
-  const [leftNavTab, setLeftNavTab] = useState<'chapters' | 'binder'>('chapters');
-  const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
-  const [isInspectorDrawerOpen, setIsInspectorDrawerOpen] = useState(false);
-  const [isFocusMode, setIsFocusMode] = useState(false);
-  const {
-    leftPanelWidth,
-    rightPanelWidth,
-    startLeftResize,
-    startRightResize,
-    setLeftPanelWidth,
-    setRightPanelWidth,
-  } = useResizablePanels(20, 20);
-
-  useEffect(() => {
-    if (!manuscriptResearchSplitOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setManuscriptResearchSplitOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [manuscriptResearchSplitOpen, setManuscriptResearchSplitOpen]);
+  const layout = useManuscriptLayout();
+  // QNBS-v3: `md` breakpoint (768px) — render one layout at a time so only one ManuscriptEditor mounts.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   if (!project) {
     return (
@@ -77,236 +46,16 @@ const ManuscriptViewUI: FC = () => {
     );
   }
 
-  const projectStorageId = project.id && project.id.length > 0 ? project.id : 'browser-project';
-  const pinnedBinderNode = project.binderNodes?.find((n) => n.id === manuscriptPinnedBinderNodeId);
-
   return (
     <div className="h-full flex flex-col">
-      {/* Mobile Header */}
-      {/* QNBS-v3: min-h-[52px] ensures header always meets 44px touch-target zone even on compact devices. */}
-      <header className="md:hidden flex-shrink-0 flex justify-between items-center p-2 min-h-[52px] mb-2 bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border-b border-[var(--sc-border-subtle)] sticky top-0 z-20">
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {enableBinder ? (
-            <>
-              <Button
-                type="button"
-                variant={leftNavTab === 'chapters' ? 'secondary' : 'ghost'}
-                onClick={() => setLeftNavTab('chapters')}
-                size="sm"
-                className="px-2 min-w-[2.5rem]"
-                aria-pressed={leftNavTab === 'chapters'}
-                aria-label={t('manuscript.navigator.title')}
-              >
-                {t('manuscript.leftPanel.mobileChapters')}
-              </Button>
-              <Button
-                type="button"
-                variant={leftNavTab === 'binder' ? 'secondary' : 'ghost'}
-                onClick={() => setLeftNavTab('binder')}
-                size="sm"
-                className="px-2 min-w-[2.5rem]"
-                aria-pressed={leftNavTab === 'binder'}
-                aria-label={t('manuscript.binder.tab')}
-              >
-                {t('manuscript.leftPanel.mobileBinder')}
-              </Button>
-            </>
-          ) : null}
-          <Button
-            variant="ghost"
-            onClick={() => setIsNavDrawerOpen(true)}
-            size="sm"
-            className="min-h-[44px] min-w-[44px]"
-            aria-label={t('manuscript.leftPanel.openDrawer')}
-          >
-            <Icon name="menu" size="lg" />
-          </Button>
-        </div>
-        <h1 className="text-sm font-bold truncate px-2 text-center flex-grow text-[var(--sc-text-primary)]">
-          {activeSection?.title || project.title}
-        </h1>
-        <Button
-          variant="ghost"
-          onClick={() => setIsInspectorDrawerOpen(true)}
-          size="sm"
-          className="min-h-[44px] min-w-[44px]"
-          aria-label={t('manuscript.inspector.title')}
-        >
-          <Icon name="info" size="lg" />
-        </Button>
-      </header>
-
-      {/* Desktop Toolbar - Focus Toggle */}
-      <div className="hidden md:flex justify-end px-2 pb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsFocusMode(!isFocusMode)}
-          className={`transition-colors ${isFocusMode ? 'text-[var(--sc-accent)] bg-[var(--sc-accent)]/10' : 'text-[var(--sc-text-muted)]'}`}
-          title={isFocusMode ? t('manuscript.zenMode.exit') : t('manuscript.zenMode.enter')}
-        >
-          <Icon
-            name={isFocusMode ? 'fullscreen-exit' : 'fullscreen-enter'}
-            size="md"
-            className="me-2"
-          />
-          {isFocusMode ? t('manuscript.zenMode.exit') : t('manuscript.zenMode.label')}
-        </Button>
-      </div>
-
-      {/* Main Content Area */}
-      <main className="flex-grow min-h-0 hidden md:flex md:flex-row relative">
-        {/* Desktop Navigator */}
-        {/* QNBS-v3: container-type enables @container queries inside NavigatorPanel for width-aware layout — LA-2. */}
-        <div
-          className={`h-full flex flex-col transition-all duration-500 ease-in-out overflow-hidden ${isFocusMode ? 'opacity-0 w-0 border-0 pointer-events-none' : 'opacity-100 border-r border-[var(--sc-border-subtle)]'}`}
-          style={{ width: isFocusMode ? 0 : `${leftPanelWidth}%`, containerType: 'inline-size' }}
-        >
-          <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-            <CardHeader className="py-3 min-h-[50px]">
-              {enableBinder ? (
-                <div
-                  className="flex rounded-lg border border-[var(--sc-border-subtle)] p-0.5 gap-0.5"
-                  role="tablist"
-                  aria-label={t('manuscript.leftPanel.tabsAria')}
-                >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={leftNavTab === 'chapters'}
-                    className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                      leftNavTab === 'chapters'
-                        ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
-                        : 'text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-overlay)]'
-                    }`}
-                    onClick={() => setLeftNavTab('chapters')}
-                  >
-                    {t('manuscript.navigator.title')}
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={leftNavTab === 'binder'}
-                    className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                      leftNavTab === 'binder'
-                        ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]'
-                        : 'text-[var(--sc-text-muted)] hover:bg-[var(--sc-surface-overlay)]'
-                    }`}
-                    onClick={() => setLeftNavTab('binder')}
-                  >
-                    {t('manuscript.binder.tab')}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  {/* QNBS-v3: manuscript section icon from SSOT */}
-                  <SectionIcon section="manuscript" size="xs" />
-                  <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--sc-text-muted)]">
-                    {t('manuscript.navigator.title')}
-                  </h2>
-                </div>
-              )}
-            </CardHeader>
-            <div className="flex-grow overflow-y-auto min-h-0">
-              {enableBinder && leftNavTab === 'binder' ? <BinderPanel /> : <StoryNavigator />}
-            </div>
-          </Card>
-        </div>
-
-        {!isFocusMode && (
-          <Resizer
-            onPointerDown={startLeftResize}
-            onKeyAdjust={(delta) => setLeftPanelWidth((w) => Math.max(15, Math.min(50, w + delta)))}
-            label={t('manuscript.resizer.left')}
-            value={leftPanelWidth}
-          />
-        )}
-
-        {/* Editor + optional research split */}
-        <Card
-          className={`h-full flex-grow p-0 rounded-none border-0 shadow-none z-0 bg-[var(--sc-surface-base)] transition-all duration-500 ease-sc-emphasized flex flex-col min-w-0 ${
-            isFocusMode
-              ? 'manuscript-zen-active rounded-sc-lg shadow-sc-lg ring-1 ring-[var(--sc-border-subtle)]'
-              : ''
-          }`}
-        >
-          <div className="flex h-full min-h-0 w-full flex-1">
-            <div className="flex-1 min-h-0 min-w-0 flex flex-col">
-              <ManuscriptEditor isFocusMode={isFocusMode} />
-            </div>
-            {manuscriptResearchSplitOpen && enableBinder ? (
-              <ManuscriptResearchSplit
-                projectId={projectStorageId}
-                node={pinnedBinderNode}
-                onClose={() => setManuscriptResearchSplitOpen(false)}
-              />
-            ) : null}
-          </div>
-        </Card>
-
-        {!isFocusMode && (
-          <Resizer
-            onPointerDown={startRightResize}
-            onKeyAdjust={(delta) =>
-              setRightPanelWidth((w) => Math.max(15, Math.min(50, w + delta)))
-            }
-            label={t('manuscript.resizer.right')}
-            value={rightPanelWidth}
-          />
-        )}
-
-        {/* Desktop Inspector */}
-        {/* QNBS-v3: container-type enables @container queries inside InspectorPanel for width-aware layout — LA-2. */}
-        <div
-          className={`h-full flex flex-col transition-all duration-500 ease-in-out overflow-hidden ${isFocusMode ? 'opacity-0 w-0 border-0 pointer-events-none' : 'opacity-100 border-l border-[var(--sc-border-subtle)]'}`}
-          style={{ width: isFocusMode ? 0 : `${rightPanelWidth}%`, containerType: 'inline-size' }}
-        >
-          <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-            <CardHeader className="py-3 min-h-[50px]">
-              <div className="flex items-center gap-2">
-                <SectionIcon section="manuscript" size="xs" />
-                <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--sc-text-muted)]">
-                  {t('manuscript.inspector.title')}
-                </h2>
-              </div>
-            </CardHeader>
-            <div className="flex-grow overflow-y-auto">
-              <InspectorPanel />
-            </div>
-          </Card>
-        </div>
-      </main>
-
-      {/* Mobile Editor (takes full space) */}
-      <main className="flex-grow min-h-0 md:hidden bg-[var(--sc-surface-raised)] overflow-hidden relative">
-        <ManuscriptEditor isFocusMode={false} />
-      </main>
-
-      {/* Mobile Drawers */}
-      <Drawer
-        isOpen={isNavDrawerOpen}
-        onClose={() => setIsNavDrawerOpen(false)}
-        title={
-          enableBinder && leftNavTab === 'binder'
-            ? t('manuscript.binder.tab')
-            : t('manuscript.navigator.title')
-        }
-        position="left"
-      >
-        {enableBinder && leftNavTab === 'binder' ? (
-          <BinderPanel />
-        ) : (
-          <StoryNavigator onSectionSelect={() => setIsNavDrawerOpen(false)} />
-        )}
-      </Drawer>
-      <Drawer
-        isOpen={isInspectorDrawerOpen}
-        onClose={() => setIsInspectorDrawerOpen(false)}
-        title={t('manuscript.inspector.title')}
-        position="right"
-      >
-        <InspectorPanel />
-      </Drawer>
+      {/* QNBS-v3: render only the layout matching the breakpoint — mounting both ran two
+          ManuscriptEditor trees (duplicate voice/window effects) and could leave a mobile drawer
+          open over the desktop layout on resize. `md` = 768px, matching the layouts' own CSS. */}
+      {isDesktop ? (
+        <ManuscriptDesktopLayout project={project} layout={layout} enableBinder={enableBinder} />
+      ) : (
+        <ManuscriptMobileLayout project={project} layout={layout} enableBinder={enableBinder} />
+      )}
     </div>
   );
 };

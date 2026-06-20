@@ -57,6 +57,26 @@ describe('projectSlice — storyObjects reducers', () => {
     expect(next.data.storyObjects![1]!.name).toBe('Shield');
   });
 
+  it('updateStoryObject ignores an id change to preserve group cross-refs', () => {
+    const state = {
+      ...BASE,
+      data: {
+        ...BASE.data,
+        storyObjects: [obj({ groupIds: ['grp-1'] })],
+        objectGroups: [grp({ objectIds: ['obj-1'] })],
+      },
+    };
+    const next = projectReducer(
+      state,
+      projectActions.updateStoryObject({ id: 'obj-1', changes: { name: 'Renamed' } }),
+    );
+    expect(next.data.storyObjects![0]!.id).toBe('obj-1'); // id is immutable (excluded from changes type)
+    expect(next.data.storyObjects![0]!.name).toBe('Renamed');
+    // deletion cascade still resolves because the id never drifted from the group reference
+    const after = projectReducer(next, projectActions.deleteStoryObject('obj-1'));
+    expect(after.data.objectGroups![0]!.objectIds).toHaveLength(0);
+  });
+
   it('deleteStoryObject removes the object and cascades groupIds in all groups', () => {
     const state = {
       ...BASE,
@@ -96,6 +116,19 @@ describe('projectSlice — objectGroups reducers', () => {
     );
     expect(next.data.objectGroups![0]!.name).toBe('Blades');
     expect(next.data.objectGroups![1]!.name).toBe('Tools');
+  });
+
+  it('updateObjectGroup ignores an id change to preserve membership refs', () => {
+    const state = {
+      ...BASE,
+      data: { ...BASE.data, objectGroups: [grp()] },
+    };
+    const next = projectReducer(
+      state,
+      projectActions.updateObjectGroup({ id: 'grp-1', changes: { name: 'Blades' } }),
+    );
+    expect(next.data.objectGroups![0]!.id).toBe('grp-1'); // id immutable (excluded from changes type)
+    expect(next.data.objectGroups![0]!.name).toBe('Blades');
   });
 
   it('deleteObjectGroup removes the group and clears groupIds on objects', () => {
