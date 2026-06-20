@@ -21,11 +21,13 @@ export async function registerTauriMenuHandler(onAction: MenuHandler): Promise<v
     const { listen } = await import('@tauri-apps/api/event');
     const stop = await listen<string>('menu-action', (event) => {
       const id = event.payload;
+      // QNBS-v3: 'menu-quit' is intentionally absent — Quit is a PredefinedMenuItem in the Rust menu,
+      // handled natively by the OS (it never emits a 'menu-action' event), so forwarding it would be a
+      // dead branch that misrepresents the backend contract.
       if (
         id === 'menu-export' ||
         id === 'menu-settings' ||
         id === 'menu-help' ||
-        id === 'menu-quit' ||
         id === 'menu-command-palette'
       ) {
         handler?.(id);

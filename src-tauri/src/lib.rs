@@ -43,12 +43,15 @@ fn install_app_menu(app: &tauri::App) -> tauri::Result<()> {
     handle,
     "View",
     true,
+    // QNBS-v3: no native accelerator on this item. CmdOrCtrl+K is already a *toggle* in the web
+    // shortcut layer; binding it here to the open-only menu command would shadow that toggle on
+    // desktop (the key could open but never close the palette). The menu item still opens it on click.
     &[&MenuItem::with_id(
       handle,
       "menu-command-palette",
       "Command Palette",
       true,
-      Some("CmdOrCtrl+K"),
+      None::<&str>,
     )?],
   )?;
   // QNBS-v3 (D4): Window menu via predefined items — OS-native window controls, no wiring needed.

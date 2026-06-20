@@ -979,9 +979,9 @@ body.is-desktop ::-webkit-scrollbar {
   height: 10px;
 }
 
-body.is-desktop {
-  scrollbar-gutter: stable;
-}
+/* QNBS-v3: scrollbar-gutter was removed from body.is-desktop — `body` is `overflow: hidden`, so it is
+   not a scrolling container and the rule had no effect. Per-view scroll containers (overflow-y-auto)
+   own their own gutter; apply scrollbar-gutter there if a specific view needs shift-free scrolling. */
 
 /* QNBS-v3 (D4 / C-6): honor the OS reduced-transparency accessibility preference
    on desktop by making the token-driven glass layer opaque (drops the GPU cost of
