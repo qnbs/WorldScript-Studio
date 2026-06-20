@@ -102,6 +102,21 @@ describe('sections', () => {
     expect(result.current.sections).toHaveLength(0);
   });
 
+  it('falls back to a deterministic grid position for sections not in sceneBoardLayout', () => {
+    // QNBS-v3: regression for the non-deterministic Math.random() fallback — unplaced scenes must
+    // keep a stable position across renders instead of jumping every time the manuscript changes.
+    mockProject.manuscript = [makeSection('s1'), makeSection('s2')];
+    mockProject.sceneBoardLayout = {};
+    const { result: r1 } = renderHook(() => useSceneBoardView());
+    const { result: r2 } = renderHook(() => useSceneBoardView());
+    // Index-derived grid: id 0 → {40,40}, id 1 → {260,40}; identical across independent renders.
+    expect(r1.current.sections[0]?.position).toEqual({ x: 40, y: 40 });
+    expect(r1.current.sections[1]?.position).toEqual({ x: 260, y: 40 });
+    expect(r2.current.sections.map((s) => s.position)).toEqual(
+      r1.current.sections.map((s) => s.position),
+    );
+  });
+
   it('handles section with undefined content (wordCount 0)', () => {
     // content is required in StorySection but we simulate edge case via spread
     mockProject.manuscript = [{ ...makeSection('s1'), content: '' }];
