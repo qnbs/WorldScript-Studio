@@ -644,6 +644,8 @@
   "vc.title": "Historique des versions",
   "vc.words": "mots",
   "voice.cancelSpeech": "Annuler la parole",
+  "voice.modeChip.commands": "Commandes",
+  "voice.modeChip.dictation": "Dictée",
   "voice.panelLabel": "Contrôle vocal",
   "voice.permissionDenied": "Accès au micro refusé. Veuillez autoriser l’accès au microphone dans les paramètres de votre navigateur.",
   "voice.startDictation": "Commencer la dictée",

@@ -644,6 +644,8 @@
   "vc.title": "Bertsioen Historia",
   "vc.words": "hitzak",
   "voice.cancelSpeech": "Hitzaldia bertan behera utzi",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "voice.panelLabel": "Ahots kontrola",
   "voice.permissionDenied": "Mikrofonorako sarbidea ukatu da. Mesedez, baimendu mikrofonorako sarbidea zure arakatzailearen ezarpenetan ahots-eginbideak erabiltzeko.",
   "voice.startDictation": "Hasi diktaketa",

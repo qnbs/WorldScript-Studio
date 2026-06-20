@@ -644,6 +644,8 @@
   "vc.title": "Verziótörténet",
   "vc.words": "szavak",
   "voice.cancelSpeech": "Beszéd megszakítása",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "voice.panelLabel": "Hangvezérlés",
   "voice.permissionDenied": "Mikrofon hozzáférés megtagadva. A hangfunkciók használatához engedélyezze a mikrofonhoz való hozzáférést a böngésző beállításaiban.",
   "voice.startDictation": "Indítsa el a diktálást",

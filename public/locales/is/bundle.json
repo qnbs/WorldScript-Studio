@@ -644,6 +644,8 @@
   "vc.title": "Útgáfusaga",
   "vc.words": "orð",
   "voice.cancelSpeech": "Hætta við ræðu",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "voice.panelLabel": "Raddstýring",
   "voice.permissionDenied": "Aðgangi hljóðnema hafnað. Vinsamlegast leyfðu aðgang að hljóðnema í stillingum vafrans til að nota raddaðgerðir.",
   "voice.startDictation": "Byrjaðu á einræði",

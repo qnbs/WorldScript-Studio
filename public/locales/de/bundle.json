@@ -644,6 +644,8 @@
   "vc.title": "Versionsverlauf",
   "vc.words": "Wörter",
   "voice.cancelSpeech": "Sprache abbrechen",
+  "voice.modeChip.commands": "Befehle",
+  "voice.modeChip.dictation": "Diktat",
   "voice.panelLabel": "Sprachsteuerung",
   "voice.permissionDenied": "Mikrofonzugriff verweigert. Bitte erlaube den Mikrofonzugriff in deinen Browsereinstellungen.",
   "voice.startDictation": "Diktat starten",

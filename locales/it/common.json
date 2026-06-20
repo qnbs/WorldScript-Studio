@@ -644,6 +644,8 @@
   "vc.title": "Cronologia versioni",
   "vc.words": "parole",
   "voice.cancelSpeech": "Annulla voce",
+  "voice.modeChip.commands": "Comandi",
+  "voice.modeChip.dictation": "Dettatura",
   "voice.panelLabel": "Controllo vocale",
   "voice.permissionDenied": "Accesso al microfono negato. Consenti l’accesso al microfono nelle impostazioni del browser.",
   "voice.startDictation": "Inizia dettatura",

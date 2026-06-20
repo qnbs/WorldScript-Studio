@@ -644,6 +644,8 @@
   "vc.title": "היסטוריית גרסאות",
   "vc.words": "מילים",
   "voice.cancelSpeech": "ביטול דיבור",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "voice.panelLabel": "בקרה קולית",
   "voice.permissionDenied": "הגישה למיקרופון נדחתה. אנא אפשרו גישה למיקרופון בהגדרות הדפדפן כדי להשתמש בתכונות הקוליות.",
   "voice.startDictation": "התחלת הכתבה",

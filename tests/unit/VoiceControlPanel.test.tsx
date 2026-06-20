@@ -139,4 +139,31 @@ describe('VoiceControlPanel', () => {
       expect(mockStopDictation).toHaveBeenCalledTimes(1);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Mode chip (Item 3) — visible label distinguishing commands vs dictation
+  // -------------------------------------------------------------------------
+  it('hides the mode chip while inactive', () => {
+    mockEnabled = true;
+    mockMode = 'inactive';
+    render(<VoiceControlPanel />);
+    expect(screen.queryByText('voice.modeChip.commands')).not.toBeInTheDocument();
+    expect(screen.queryByText('voice.modeChip.dictation')).not.toBeInTheDocument();
+  });
+
+  it('shows the commands chip when listening for commands', () => {
+    mockEnabled = true;
+    mockMode = 'listening';
+    mockIsListening = true;
+    render(<VoiceControlPanel />);
+    expect(screen.getByText('voice.modeChip.commands')).toBeInTheDocument();
+  });
+
+  it('shows the dictation chip when dictation is active', () => {
+    mockEnabled = true;
+    mockMode = 'dictation';
+    mockDictationActive = true;
+    render(<VoiceControlPanel />);
+    expect(screen.getByText('voice.modeChip.dictation')).toBeInTheDocument();
+  });
 });

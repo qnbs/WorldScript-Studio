@@ -644,6 +644,8 @@
   "vc.title": "Historial de versiones",
   "vc.words": "palabras",
   "voice.cancelSpeech": "Cancelar voz",
+  "voice.modeChip.commands": "Comandos",
+  "voice.modeChip.dictation": "Dictado",
   "voice.panelLabel": "Control de voz",
   "voice.permissionDenied": "Acceso al micrófono denegado. Permite el acceso al micrófono en la configuración de tu navegador.",
   "voice.startDictation": "Iniciar dictado",

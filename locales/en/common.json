@@ -34,6 +34,8 @@
   "voice.startDictation": "Start dictation",
   "voice.stopDictation": "Stop dictation",
   "voice.cancelSpeech": "Cancel speech",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "header.openMenu": "Open menu",
   "error.apiErrorTitle": "AI Assistant Error",
   "error.apiErrorDescription": "The AI failed to generate a response. Please check your connection and API key, then try again. If the problem persists, the service may be temporarily unavailable.",

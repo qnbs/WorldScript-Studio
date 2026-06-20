@@ -644,6 +644,8 @@
   "vc.title": "バージョン履歴",
   "vc.words": "言葉",
   "voice.cancelSpeech": "キャンセル speech",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "voice.panelLabel": "音声制御",
   "voice.permissionDenied": "マイクへのアクセスが拒否されました。音声機能を使用するには、ブラウザの設定でマイクへのアクセスを許可してください。",
   "voice.startDictation": "ディクテーションを開始する",

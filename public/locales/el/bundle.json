@@ -644,6 +644,8 @@
   "vc.title": "Ιστορικό έκδοσης",
   "vc.words": "λόγια",
   "voice.cancelSpeech": "Ακύρωση speech",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "voice.panelLabel": "Φωνητικός έλεγχος",
   "voice.permissionDenied": "Δεν επιτρέπεται η πρόσβαση στο μικρόφωνο. Επιτρέψτε την πρόσβαση στο μικρόφωνο στις ρυθμίσεις του προγράμματος περιήγησής σας για χρήση φωνητικών λειτουργιών.",
   "voice.startDictation": "Έναρξη υπαγόρευσης",

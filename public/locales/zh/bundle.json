@@ -644,6 +644,8 @@
   "vc.title": "版本历史",
   "vc.words": "字",
   "voice.cancelSpeech": "取消 speech",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "voice.panelLabel": "语音控制",
   "voice.permissionDenied": "麦克风访问被拒绝。请在浏览器设置中允许麦克风访问才能使用语音功能。",
   "voice.startDictation": "开始听写",

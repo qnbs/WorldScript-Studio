@@ -644,6 +644,8 @@
   "vc.title": "Versionshistorik",
   "vc.words": "ord",
   "voice.cancelSpeech": "Avbryt tal",
+  "voice.modeChip.commands": "Commands",
+  "voice.modeChip.dictation": "Dictation",
   "voice.panelLabel": "Röststyrning",
   "voice.permissionDenied": "Mikrofonåtkomst nekad. Tillåt mikrofonåtkomst i webbläsarinställningarna för att använda röstfunktioner.",
   "voice.startDictation": "Börja diktering",
