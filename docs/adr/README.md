@@ -14,6 +14,7 @@ than editing history.
 | [0006](0006-superseded.md) | (reserved, never issued) | Superseded / void |
 | [0007](0007-plugin-sandbox-model.md) | Plugin Sandbox Model | Accepted |
 | [0008](0008-local-first-data-model.md) | Local-first data model: Yjs document as source of truth | Accepted |
+| [0009](0009-xstate-workflow-orchestration.md) | XState for complex workflow orchestration (Redux + RTK Query + XState) | Accepted |
 
 **Format:** Context → Decision → Consequences (incl. rejected alternatives). Keep each ADR to one
 decision. Link related records with `[[slug]]`.
