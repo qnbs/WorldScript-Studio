@@ -55,6 +55,7 @@ const MODULES = [
   'characterInterviews',
   'lora',
   'copilot',
+  'desktop',
 ];
 
 const REF = 'en';
