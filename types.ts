@@ -662,6 +662,12 @@ export interface OpenRouterSettings {
   preferredModel: string;
 }
 
+/** QNBS-v3 (T2): Desktop-only (Tauri) behavior. Ignored on the web. Extended by later native phases. */
+export interface DesktopSettings {
+  /** Hide to the system tray on window close instead of quitting. */
+  minimizeToTray: boolean;
+}
+
 export interface Settings {
   // Basic Settings
   theme: Theme;
@@ -692,6 +698,7 @@ export interface Settings {
   backup: BackupSettings;
   themeCustomization: ThemeCustomization;
   voice: VoiceSettings;
+  desktop: DesktopSettings;
 
   // Legacy support
   language?: string;
