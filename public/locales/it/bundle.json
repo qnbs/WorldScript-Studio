@@ -765,6 +765,7 @@
   "dashboard.authorInsights.readability": "Leggibilità (Gulpease, euristica IT)",
   "dashboard.authorInsights.readabilityFootnote": "Punteggi più alti sono spesso più facili da leggere; calibra sul genere.",
   "dashboard.authorInsights.readabilityTooltip": "Scala di leggibilità Flesch 0–100: più alto = più facile da leggere (60–70 è linguaggio comune). È un indicatore approssimativo, non un voto normativo.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.logline.updated": "Logline aggiornata",
   "dashboard.logline.updatedUndo": "Premi Ctrl+Z per annullare.",
   "dashboard.authorInsights.readabilityNeedMore": "Scrivi ancora — servono ~40+ parole per un punteggio stabile.",

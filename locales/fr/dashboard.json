@@ -2,6 +2,7 @@
   "dashboard.authorInsights.readability": "Lisibilité (Kandel-Moles, heuristique FR)",
   "dashboard.authorInsights.readabilityFootnote": "Des scores plus élevés lisent souvent plus facilement ; adaptez selon le genre.",
   "dashboard.authorInsights.readabilityTooltip": "Échelle de lisibilité Flesch 0–100 : plus c'est élevé, plus c'est facile à lire (60–70 = langage courant). Un indicateur approximatif, pas une note normative.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.logline.updated": "Logline mise à jour",
   "dashboard.logline.updatedUndo": "Appuyez sur Ctrl+Z pour annuler.",
   "dashboard.authorInsights.readabilityNeedMore": "Écrivez encore un peu — score stable vers 40+ mots.",

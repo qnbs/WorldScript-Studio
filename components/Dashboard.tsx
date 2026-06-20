@@ -101,12 +101,23 @@ const AuthorInsightsCard: FC = () => {
             </p>
           ) : (
             // QNBS-v3: show the /100 scale + an interpretation tooltip so the bare number isn't
-            // mistaken for a normative grade (Flesch 0–100, higher = easier).
+            // mistaken for a normative grade (Flesch 0–100, higher = easier). Trigger is a
+            // <button> so the tooltip is reachable by keyboard, with the full scale explanation
+            // exposed to screen readers via aria-label.
             <Tooltip label={t('dashboard.authorInsights.readabilityTooltip')}>
-              <span className="text-4xl font-black tabular-nums text-[var(--sc-text-primary)]">
-                {readability.score}
-                <span className="text-lg font-semibold text-[var(--sc-text-muted)]">/100</span>
-              </span>
+              <button
+                type="button"
+                aria-label={`${readability.score}${t('dashboard.authorInsights.readabilityScaleSuffix')} — ${t('dashboard.authorInsights.readabilityTooltip')}`}
+                className="inline-flex items-baseline rounded text-4xl font-black tabular-nums text-[var(--sc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+              >
+                <span aria-hidden="true">{readability.score}</span>
+                <span
+                  aria-hidden="true"
+                  className="text-lg font-semibold text-[var(--sc-text-muted)]"
+                >
+                  {t('dashboard.authorInsights.readabilityScaleSuffix')}
+                </span>
+              </button>
             </Tooltip>
           )}
           <p className="text-xs text-[var(--sc-text-muted)] mt-2">

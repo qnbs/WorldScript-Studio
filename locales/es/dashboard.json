@@ -2,6 +2,7 @@
   "dashboard.authorInsights.readability": "Legibilidad (Fernández Huerta, heurística ES)",
   "dashboard.authorInsights.readabilityFootnote": "Puntuaciones más altas suelen leerse más fácil; afina según el género.",
   "dashboard.authorInsights.readabilityTooltip": "Escala de facilidad de lectura Flesch 0–100: más alto = más fácil de leer (60–70 es lenguaje sencillo). Es un indicador aproximado, no una nota normativa.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.logline.updated": "Logline actualizada",
   "dashboard.logline.updatedUndo": "Pulsa Ctrl+Z para deshacer.",
   "dashboard.authorInsights.readabilityNeedMore": "Escribe un poco más — se necesitan ~40+ palabras para un valor estable.",

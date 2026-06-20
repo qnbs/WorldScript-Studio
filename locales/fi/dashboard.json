@@ -2,6 +2,7 @@
   "dashboard.authorInsights.readability": "Luettavuus (Flesch-tyyli, EN-heuristiikka)",
   "dashboard.authorInsights.readabilityFootnote": "Korkeammat pisteet tarkoittavat yleensä helpompaa luettavuutta; säädä tarkoituksella genresi mukaan.",
   "dashboard.authorInsights.readabilityNeedMore": "Kirjoita hieman lisää — luettavuus tarvitsee ~40+ sanaa vakaaseen pisteytykseen.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "Kohtausten aikajanatarkistukset",
   "dashboard.authorInsights.timelineClear": "Ei aikajanavaroituksia kohtausten metatiedoista.",

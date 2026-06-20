@@ -110,6 +110,7 @@ describe('ConsistencyCheckerView', () => {
         kind: 'structured',
         findings: [
           {
+            id: '0',
             severity: 'error',
             title: 'Eye colour',
             detail: 'Alice has blue eyes in Ch1 but brown in Ch3.',

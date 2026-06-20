@@ -765,6 +765,7 @@
   "dashboard.authorInsights.readability": "קריאוּת (בסגנון פלש, היוריסטיקה אנגלית)",
   "dashboard.authorInsights.readabilityFootnote": "ציונים גבוהים יותר משמעם בדרך כלל קריאה קלה יותר; כווננו במכוון לפי הז׳אנר שלכם.",
   "dashboard.authorInsights.readabilityNeedMore": "כתבו עוד מעט — קריאוּת דורשת כ‑40+ מילים לציון יציב.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "בדיקות ציר זמן של סצנות",
   "dashboard.authorInsights.timelineClear": "אין אזהרות ציר זמן ממטא‑נתוני הסצנות.",

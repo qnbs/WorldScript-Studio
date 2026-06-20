@@ -765,6 +765,7 @@
   "dashboard.authorInsights.readability": "Legibilidade (estilo Flesch, heurística EN)",
   "dashboard.authorInsights.readabilityFootnote": "Pontuações mais altas geralmente significam leitura mais fácil; sintonize seu gênero intencionalmente.",
   "dashboard.authorInsights.readabilityNeedMore": "Escreva um pouco mais - a legibilidade precisa de mais de 40 palavras para uma pontuação estável.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "Verificações da linha do tempo da cena",
   "dashboard.authorInsights.timelineClear": "Nenhum aviso de linha do tempo nos metadados da cena.",

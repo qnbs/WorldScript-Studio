@@ -2,6 +2,7 @@
   "dashboard.authorInsights.readability": "可読性 (Flesch スタイル、EN ヒューリスティック)",
   "dashboard.authorInsights.readabilityFootnote": "通常、スコアが高いほど読みやすいことを意味します。意図的にジャンルに合わせて調整してください。",
   "dashboard.authorInsights.readabilityNeedMore": "もう少し詳しく書いてください。安定したスコアを得るには、可読性を高めるには約 40 単語以上が必要です。",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "シーンのタイムラインチェック",
   "dashboard.authorInsights.timelineClear": "シーンのメタデータからのタイムライン警告はありません。",

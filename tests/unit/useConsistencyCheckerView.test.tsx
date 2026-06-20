@@ -150,15 +150,25 @@ describe('useConsistencyCheckerView', () => {
     mockState.projectData = originalProjectData;
   });
 
-  it('preserves check result when request is aborted', async () => {
-    mockGenerateText.mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+  it('preserves an existing check result when a later request is aborted', async () => {
     const { result } = renderHook(() => useConsistencyCheckerView());
 
+    // Seed a non-null result via a successful run.
+    mockGenerateText.mockReset().mockImplementation(async () => 'Consistency OK');
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+    await waitFor(() =>
+      expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' }),
+    );
+
+    // A subsequent aborted run must NOT clear the prior result.
+    mockGenerateText.mockReset().mockRejectedValue(new DOMException('Aborted', 'AbortError'));
     await act(async () => {
       await result.current.runCheck('c1');
     });
 
-    expect(result.current.checkResult).toBeNull();
+    expect(result.current.checkResult).toEqual({ kind: 'text', text: 'Consistency OK' });
     expect(result.current.isChecking).toBe(false);
   });
 
@@ -202,11 +212,35 @@ describe('useConsistencyCheckerView', () => {
       if (r?.kind === 'structured') {
         expect(r.findings).toHaveLength(2);
         expect(r.findings[0]).toEqual({
+          id: '0',
           severity: 'error',
           title: 'Eye colour',
           detail: 'Blue in Ch1, brown in Ch3.',
           ref: 'Chapter 3',
         });
+      }
+    });
+  });
+
+  it('normalizes severity variants (warning/ERROR/uppercase) instead of downgrading to info', async () => {
+    mockGenerateText.mockReset().mockImplementation(async () =>
+      JSON.stringify([
+        { severity: 'warning', title: 'Pacing', detail: 'Slow middle.' },
+        { severity: 'ERROR', title: 'Contradiction', detail: 'Dead character speaks.' },
+        { severity: ' High ', title: 'Plot hole', detail: 'Unexplained jump.' },
+      ]),
+    );
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    await waitFor(() => {
+      const r = result.current.checkResult;
+      expect(r?.kind).toBe('structured');
+      if (r?.kind === 'structured') {
+        expect(r.findings.map((f) => f.severity)).toEqual(['warn', 'error', 'error']);
       }
     });
   });

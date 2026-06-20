@@ -765,6 +765,7 @@
   "dashboard.authorInsights.readability": "Irakurgarritasuna (Flesch estiloa, EN heuristika)",
   "dashboard.authorInsights.readabilityFootnote": "Puntuazio altuagoek irakurketa errazagoa adierazten dute normalean; doitu nahita zure generorako.",
   "dashboard.authorInsights.readabilityNeedMore": "Idatzi pixka bat gehiago — irakurgarritasunak ~40+ hitz behar ditu puntuazio egonkorrerako.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "Eszenen denbora-lerroaren egiaztapenak",
   "dashboard.authorInsights.timelineClear": "Ez dago denbora-lerroaren abisurik eszenen metadatuetatik.",

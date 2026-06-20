@@ -2,6 +2,7 @@
   "dashboard.authorInsights.readability": "Læsileiki (Flesch-stíll, EN-heurística)",
   "dashboard.authorInsights.readabilityFootnote": "Hærri einkunnir þýða yfirleitt auðveldari lestur; stilltu af ásetningi fyrir tegund þína.",
   "dashboard.authorInsights.readabilityNeedMore": "Skrifaðu aðeins meira — læsileiki þarf ~40+ orð fyrir stöðuga einkunn.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "Tímalínuathuganir senu",
   "dashboard.authorInsights.timelineClear": "Engar tímalínuviðvaranir úr lýsigögnum senu.",

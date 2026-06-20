@@ -765,6 +765,7 @@
   "dashboard.authorInsights.readability": "سهولة القراءة (بأسلوب فليش، تقدير إنجليزي)",
   "dashboard.authorInsights.readabilityFootnote": "الدرجات الأعلى تعني عادة قراءة أسهل؛ اضبطها عمدًا حسب نوعك الأدبي.",
   "dashboard.authorInsights.readabilityNeedMore": "اكتب المزيد قليلًا — تحتاج سهولة القراءة إلى ~40 كلمة على الأقل لدرجة مستقرة.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "فحوصات الخط الزمني للمشاهد",
   "dashboard.authorInsights.timelineClear": "لا تحذيرات زمنية من بيانات المشاهد.",

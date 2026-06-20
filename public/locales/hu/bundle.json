@@ -765,6 +765,7 @@
   "dashboard.authorInsights.readability": "Olvashatóság (Flesch-stílus, EN heurisztika)",
   "dashboard.authorInsights.readabilityFootnote": "A magasabb pontszám általában könnyebb olvashatóságot jelent; hangold tudatosan a műfajodhoz.",
   "dashboard.authorInsights.readabilityNeedMore": "Írj egy kicsit többet — az olvashatósághoz ~40+ szó kell a stabil pontszámhoz.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "Jelenet-idővonal ellenőrzések",
   "dashboard.authorInsights.timelineClear": "Nincs idővonal-figyelmeztetés a jelenetek metaadataiból.",

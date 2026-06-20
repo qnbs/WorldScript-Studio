@@ -142,7 +142,7 @@ const ConsistencyCheckerUI: FC = () => {
                   <ul className="space-y-3">
                     {checkResult.findings.map((f) => (
                       <li
-                        key={`${f.severity}-${f.title}-${f.detail.slice(0, 24)}`}
+                        key={f.id}
                         className="rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] p-3"
                       >
                         <div className="flex items-center gap-2">

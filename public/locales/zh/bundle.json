@@ -765,6 +765,7 @@
   "dashboard.authorInsights.readability": "可读性（Flesch 风格，EN 启发式）",
   "dashboard.authorInsights.readabilityFootnote": "分数越高通常意味着阅读越容易；有意调整您的风格。",
   "dashboard.authorInsights.readabilityNeedMore": "多写一点——可读性需要约 40 个以上的单词才能获得稳定的分数。",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "场景时间线检查",
   "dashboard.authorInsights.timelineClear": "场景元数据没有时间线警告。",

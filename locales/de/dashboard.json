@@ -2,6 +2,7 @@
   "dashboard.authorInsights.readability": "Lesbarkeit (Flesch/Amstad, DE-Heuristik)",
   "dashboard.authorInsights.readabilityFootnote": "Höhere Werte wirken oft leichter lesbar; Genre bewusst steuern.",
   "dashboard.authorInsights.readabilityTooltip": "Flesch-Lesbarkeitsskala 0–100: höher = leichter lesbar (60–70 ist Alltagssprache). Ein grober Richtwert, keine normative Note.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.logline.updated": "Logline aktualisiert",
   "dashboard.logline.updatedUndo": "Mit Strg+Z rückgängig machen.",
   "dashboard.authorInsights.readabilityNeedMore": "Noch etwas schreiben — stabiler Wert ab ca. 40+ Wörtern.",

@@ -822,6 +822,7 @@
   "dashboard.authorInsights.readabilityNeedMore": "Write a bit more — readability needs ~40+ words for a stable score.",
   "dashboard.authorInsights.readabilityFootnote": "Higher scores usually mean easier reading; tune for your genre intentionally.",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.logline.updated": "Logline updated",
   "dashboard.logline.updatedUndo": "Press Ctrl+Z to undo.",
   "dashboard.authorInsights.timeline": "Scene timeline checks",

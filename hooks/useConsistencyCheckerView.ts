@@ -20,6 +20,8 @@ import type { CharacterRelationship, StoryCodex } from '../types';
 export type ConsistencySeverity = 'info' | 'warn' | 'error';
 
 export interface ConsistencyFinding {
+  /** Stable, unique id within a result set — used as the React list key. */
+  id: string;
   severity: ConsistencySeverity;
   title: string;
   detail: string;
@@ -29,6 +31,17 @@ export interface ConsistencyFinding {
 export type ConsistencyResult =
   | { kind: 'structured'; findings: ConsistencyFinding[] }
   | { kind: 'text'; text: string };
+
+// QNBS-v3: tolerant severity normalization — models emit "warning", "ERROR", " High ", etc.
+// Trim + lowercase, then map common variants so real problems aren't silently downgraded to info.
+const normalizeSeverity = (raw: unknown): ConsistencySeverity => {
+  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (s === 'error' || s === 'err' || s === 'critical' || s === 'high' || s === 'severe') {
+    return 'error';
+  }
+  if (s === 'warn' || s === 'warning' || s === 'medium' || s === 'moderate') return 'warn';
+  return 'info';
+};
 
 /**
  * Parse the model's response into structured findings, falling back to raw text when the output
@@ -45,12 +58,13 @@ export const parseConsistencyResult = (raw: string): ConsistencyResult => {
     if (Array.isArray(parsed)) {
       const findings: ConsistencyFinding[] = parsed
         .filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
-        .map((f) => {
-          const sev = f['severity'];
-          const severity: ConsistencySeverity = sev === 'error' || sev === 'warn' ? sev : 'info';
+        .map((f, index) => {
           const ref = typeof f['ref'] === 'string' && f['ref'] ? { ref: f['ref'] } : {};
           return {
-            severity,
+            // QNBS-v3: id from source position guarantees a unique, stable React key even when
+            // two findings share severity/title/detail (avoids list-item reuse / stale rows).
+            id: String(index),
+            severity: normalizeSeverity(f['severity']),
             title: typeof f['title'] === 'string' ? f['title'] : '',
             detail: typeof f['detail'] === 'string' ? f['detail'] : '',
             ...ref,

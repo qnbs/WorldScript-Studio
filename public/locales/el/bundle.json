@@ -765,6 +765,7 @@
   "dashboard.authorInsights.readability": "Αναγνωσιμότητα (Flesch-style, EN ευρετικό)",
   "dashboard.authorInsights.readabilityFootnote": "Οι υψηλότερες βαθμολογίες συνήθως σημαίνουν ευκολότερη ανάγνωση. συντονιστείτε για το είδος σας σκόπιμα.",
   "dashboard.authorInsights.readabilityNeedMore": "Γράψτε λίγο περισσότερο — η αναγνωσιμότητα χρειάζεται ~40+ λέξεις για μια σταθερή βαθμολογία.",
+  "dashboard.authorInsights.readabilityScaleSuffix": "/100",
   "dashboard.authorInsights.readabilityTooltip": "Flesch reading-ease scale 0–100: higher is easier to read (60–70 is plain English). A rough indicator, not a normative grade.",
   "dashboard.authorInsights.timeline": "Έλεγχοι χρονοδιαγράμματος σκηνής",
   "dashboard.authorInsights.timelineClear": "Δεν υπάρχουν προειδοποιήσεις για το χρονοδιάγραμμα από τα μεταδεδομένα σκηνής.",
