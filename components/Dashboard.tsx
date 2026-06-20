@@ -23,6 +23,7 @@ import { PageContainer } from './ui/PageContainer';
 import { SectionIcon } from './ui/SectionIcon';
 import { Skeleton } from './ui/Skeleton';
 import { Spinner } from './ui/Spinner';
+import { Tooltip } from './ui/Tooltip';
 
 // --- Generic Components ---
 
@@ -99,9 +100,14 @@ const AuthorInsightsCard: FC = () => {
               {t('dashboard.authorInsights.readabilityNeedMore')}
             </p>
           ) : (
-            <p className="text-4xl font-black tabular-nums text-[var(--sc-text-primary)]">
-              {readability.score}
-            </p>
+            // QNBS-v3: show the /100 scale + an interpretation tooltip so the bare number isn't
+            // mistaken for a normative grade (Flesch 0–100, higher = easier).
+            <Tooltip label={t('dashboard.authorInsights.readabilityTooltip')}>
+              <span className="text-4xl font-black tabular-nums text-[var(--sc-text-primary)]">
+                {readability.score}
+                <span className="text-lg font-semibold text-[var(--sc-text-muted)]">/100</span>
+              </span>
+            </Tooltip>
           )}
           <p className="text-xs text-[var(--sc-text-muted)] mt-2">
             {t('dashboard.authorInsights.readabilityFootnote')}
