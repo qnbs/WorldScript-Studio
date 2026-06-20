@@ -260,6 +260,25 @@ describe('useConsistencyCheckerView', () => {
     });
   });
 
+  it('falls back to text when a non-empty array drops all entries as malformed (no false all-clear)', async () => {
+    // QNBS-v3: array is valid JSON but every element lacks both title and detail, so the filter
+    // empties it. This must NOT render as "no findings" — it should surface the raw output instead.
+    mockGenerateText
+      .mockReset()
+      .mockImplementation(async () => '[{"severity":"warn"},{"severity":"error"}]');
+    const { result } = renderHook(() => useConsistencyCheckerView());
+
+    await act(async () => {
+      await result.current.runCheck('c1');
+    });
+
+    await waitFor(() => {
+      const r = result.current.checkResult;
+      expect(r?.kind).toBe('text');
+      if (r?.kind === 'text') expect(r.text).toContain('"severity":"warn"');
+    });
+  });
+
   it('falls back to text when JSON output is fenced but malformed', async () => {
     mockGenerateText.mockReset().mockImplementation(async () => '```json\nnot-an-array\n```');
     const { result } = renderHook(() => useConsistencyCheckerView());
