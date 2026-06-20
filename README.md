@@ -351,7 +351,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2716 i18n keys** across all 17 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2726 i18n keys** across all 17 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
