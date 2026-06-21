@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **ProForge is now opt-in (default off).** The experimental 8-stage agentic editing pipeline
+  (`enableProForge`) shipped on by default; it is token-heavy and carries loop risk, so it is now a
+  user opt-in like Voice and the Global Copilot. New installs get **17 default-on / 6 default-off**
+  flags. Existing users who enabled or relied on it are unaffected (the persisted value wins);
+  everyone can still turn it on under Settings → Experimental.
+- **Settings → Experimental features are grouped by category** (Writing, AI, Editing Pipeline,
+  Performance, Voice, …) with maturity + risk hints, dependency-aware disabling (a flag whose
+  prerequisite is off — e.g. Voice WASM without Voice Support — is disabled with an explanation), a
+  "Desktop app only" note for Rust Compute, and a **Reset to defaults** action.
+
+### Fixed
+
+- **Feature-catalog / slice default drift made structurally impossible.** `features/featureCatalog.ts`
+  now covers all **23** flags (was 16) and **derives** each entry's `defaultOn` from the slice's
+  `defaultFeatureFlagsState` instead of hand-keying it — the class of bug where the catalog said
+  `false` while the slice said `true` for ~12 flags can no longer recur (guarded by the new
+  `tests/unit/featureCatalog.test.ts`). Added risk-level / desktop-requirement / dependency metadata.
+- **`enableWebnnInference` documented as a ghost/stub.** Corrected `docs/FEATURE-PARITY.md`'s stale
+  "🟢 OK" row — no runtime gate reads `selectEnableWebnnInference` (the WebNN code in
+  `packages/ai-core/src/webnnBridge.ts` is not gated on the flag); `audit-feature-parity.ts` already
+  warns on it.
+
 ## [1.24.0] — 2026-06-21
 
 > **Critical & Immediate hardening sequence** — six stacked PRs (privacy, experimental labeling, coverage, voice consent, local-AI, hygiene/docs) plus the 11→17 locale expansion, shipped as a minor release.

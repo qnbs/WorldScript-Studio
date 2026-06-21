@@ -10,6 +10,8 @@
 
 **Quality gate (2026-06-21 — v1.24.0 Critical & Immediate hardening sequence):** lint ✅ · typecheck ✅ (tsgo) · i18n:check ✅ (**2786 keys × 17 locales**) · suppressions ratchet ✅ (52, no new) · targeted unit tests ✅. Stacked PRs A–F: privacy analytics gating (SEC-6), reusable Badge + experimental labeling, coverage (collab-transport/ProForge/copilot, +101 tests), voice consent clarity, device-aware Ollama pull, hygiene/docs. Coverage/E2E/Lighthouse/Stryker remain CI-gate jobs.
 
+**Quality gate (2026-06-21 — feature-flag catalog + grouped Settings + ProForge opt-in):** lint ✅ · typecheck ✅ (tsgo) · i18n:check ✅ (**2793 keys × 17 locales**) · parity:check ✅ (0 drifts) · suppressions ratchet ✅ (52, no new) · targeted unit tests ✅ (127: slice 89, catalog 7, flagDependencies 5, FeatureFlagsSection 15, FeatureFlagsAndOverview 11). `enableProForge` default flipped to opt-in (now **17 on / 6 off**); `featureCatalog.ts` reconciled to all 23 flags with `defaultOn` **derived** from the slice (drift now structurally impossible — guarded by `tests/unit/featureCatalog.test.ts`). Shipped as a standalone PR off `main`.
+
 ## v1.24.0 Dependency Hygiene + Onboarding + Docs Truth-up (2026-06-21, PR F)
 
 - **`joi` override (accepted risk, KEPT):** `pnpm-workspace.yaml` `overrides.joi: ^18.2.1` pins the patched `joi` pulled transitively via `wait-on` (Storybook/test-runner wait helper), mitigating **GHSA-q7cg-457f-vx79** (unpublished jsdom exposure in `@hapi/statehood`). Still required — `wait-on@9.x` still depends on `joi`. `pnpm audit --audit-level=high` clean with the override in place; rationale documented inline in `pnpm-workspace.yaml` and here.

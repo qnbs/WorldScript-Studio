@@ -13,6 +13,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockHandleSettingChange = vi.fn();
 const mockSetActiveCategory = vi.fn();
+const mockDispatch = vi.fn();
+
+vi.mock('../../../app/hooks', () => ({
+  useAppDispatch: () => mockDispatch,
+  useAppSelector: vi.fn(),
+  useAppSelectorShallow: vi.fn(),
+}));
+
+vi.mock('../../../components/ui/Toast', () => ({
+  useToast: () => ({
+    success: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+  }),
+}));
 
 const defaultFeatureFlags = {
   enableStoryBibleAdvanced: false,

@@ -11,8 +11,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockHandleSettingChange } = vi.hoisted(() => ({
+const { mockHandleSettingChange, mockDispatch, mockToastSuccess } = vi.hoisted(() => ({
   mockHandleSettingChange: vi.fn(),
+  mockDispatch: vi.fn(),
+  mockToastSuccess: vi.fn(),
+}));
+
+vi.mock('../../../app/hooks', () => ({
+  useAppDispatch: () => mockDispatch,
+  useAppSelector: vi.fn(),
+  useAppSelectorShallow: vi.fn(),
+}));
+
+vi.mock('../../../components/ui/Toast', () => ({
+  useToast: () => ({
+    success: mockToastSuccess,
+    info: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+  }),
 }));
 
 const mockFeatureFlags = {
@@ -74,13 +91,19 @@ describe('FeatureFlagsSection', () => {
     expect(screen.getByText('settings.featureFlags.description')).toBeInTheDocument();
   });
 
-  // QNBS-v3: 20 toggles + enableGlobalCopilot (Global AI Copilot) = 21 toggles.
-  // Retired: enableCodexAutoTracking, enableCrossProjectSearch (promoted), enablePlotBoardV2 (deprecated), enableCloudSync (stub).
-  // Excluded (not a toggle here): enableIdbAtRestEncryption (managed in Settings → Privacy).
+  // QNBS-v3: all 23 catalog flags except enableIdbAtRestEncryption (managed in Settings → Privacy)
+  // = 22 toggles, now grouped by category but the count is unchanged.
   it('renders 22 feature flag toggles', () => {
     render(<FeatureFlagsSection />);
     const switches = screen.getAllByRole('switch');
     expect(switches.length).toBe(22);
+  });
+
+  it('groups flags under category headings', () => {
+    render(<FeatureFlagsSection />);
+    // The catalog always has core + ai tiers with visible flags.
+    expect(screen.getByText('settings.featureFlags.category.core')).toBeInTheDocument();
+    expect(screen.getByText('settings.featureFlags.category.ai')).toBeInTheDocument();
   });
 
   it('does not render the IDB at-rest encryption toggle (managed in Privacy settings)', () => {
@@ -140,5 +163,31 @@ describe('FeatureFlagsSection', () => {
     });
     await user.click(duckDbSwitch);
     expect(mockHandleSettingChange).toHaveBeenCalledWith('enableDuckDbAnalytics', true);
+  });
+
+  // QNBS-v3: Voice WASM requires Voice Support — with the prerequisite off its toggle is disabled.
+  it('disables the Voice WASM toggle while Voice Support is off', () => {
+    render(<FeatureFlagsSection />);
+    const wasmSwitch = screen.getByRole('switch', {
+      name: 'settings.featureFlags.enableVoiceWasm',
+    });
+    expect(wasmSwitch).toBeDisabled();
+  });
+
+  it('resets all flags to defaults after confirming the dialog', async () => {
+    const user = userEvent.setup();
+    render(<FeatureFlagsSection />);
+    // Only the header trigger exists before the dialog opens.
+    const trigger = screen.getByRole('button', {
+      name: 'settings.featureFlags.resetToDefaults',
+    });
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'settings.featureFlags.resetToDefaults' }),
+    );
+    expect(mockDispatch).toHaveBeenCalledTimes(1);
+    expect(mockDispatch.mock.calls[0]?.[0]?.type).toBe('featureFlags/setFeatureFlags');
+    expect(mockToastSuccess).toHaveBeenCalledWith('settings.featureFlags.resetDone');
   });
 });

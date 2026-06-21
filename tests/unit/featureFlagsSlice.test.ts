@@ -22,10 +22,11 @@ import featureFlagsReducer, {
 } from '../../features/featureFlags/featureFlagsSlice';
 
 // ---------------------------------------------------------------------------
-// Shared initial state — must include ALL 20 flags (strict TypeScript)
+// Shared initial state — must include ALL 23 flags (strict TypeScript)
 // ---------------------------------------------------------------------------
 
-// QNBS-v3: all flags default true (v1.21 — full feature set on fresh install); RTL stays false
+// QNBS-v3: full feature set on by default EXCEPT the six user-opt-in flags
+// (RTL, voice, voice-WASM, ProForge, global copilot, local-first sync). 17 on / 6 off.
 const initialState: FeatureFlagsState = {
   enableStoryBibleAdvanced: true,
   enableBinderResearch: true,
@@ -40,7 +41,8 @@ const initialState: FeatureFlagsState = {
   enableLoraAdapters: true,
   enablePluginSystem: true,
   enableVoiceSupport: false,
-  enableProForge: true,
+  // QNBS-v3: ProForge is user-opt-in (experimental, token-heavy) — default off as of v1.24 post-release.
+  enableProForge: false,
   enableIdbAtRestEncryption: true,
   enableVoiceWasm: false,
   enableAdaptiveAiEngine: true,
@@ -87,6 +89,21 @@ describe('featureFlagsSlice', () => {
     );
     state = featureFlagsReducer(state, featureFlagsActions.setEnableStoryBibleAdvanced(false));
     expect(state.enableStoryBibleAdvanced).toBe(false);
+  });
+
+  it('defaults to 17 flags on and 6 user-opt-in flags off', () => {
+    const state = featureFlagsReducer(undefined, { type: '@@INIT' });
+    const values = Object.values(state);
+    expect(values).toHaveLength(23);
+    expect(values.filter((v) => v === true)).toHaveLength(17);
+    expect(values.filter((v) => v === false)).toHaveLength(6);
+    // The six opt-in flags are exactly these:
+    expect(state.enableRtlLayout).toBe(false);
+    expect(state.enableVoiceSupport).toBe(false);
+    expect(state.enableVoiceWasm).toBe(false);
+    expect(state.enableProForge).toBe(false);
+    expect(state.enableGlobalCopilot).toBe(false);
+    expect(state.enableLocalFirstSync).toBe(false);
   });
 });
 
@@ -160,7 +177,8 @@ describe('featureFlagsSlice — individual setters', () => {
       action: featureFlagsActions.setEnableVoiceSupport,
       defaultOn: false,
     },
-    { flag: 'enableProForge', action: featureFlagsActions.setEnableProForge, defaultOn: true },
+    // QNBS-v3: ProForge default flipped to off (experimental, token-heavy; user opt-in) — v1.24 post-release.
+    { flag: 'enableProForge', action: featureFlagsActions.setEnableProForge, defaultOn: false },
     {
       flag: 'enableIdbAtRestEncryption',
       action: featureFlagsActions.setEnableIdbAtRestEncryption,
