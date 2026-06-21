@@ -11,9 +11,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockHandleSettingChange, mockToastSuccess } = vi.hoisted(() => ({
+const { mockHandleSettingChange, mockToastSuccess, mockIsTauriRuntime } = vi.hoisted(() => ({
   mockHandleSettingChange: vi.fn(),
   mockToastSuccess: vi.fn(),
+  // QNBS-v3: explicit, controllable Tauri-runtime mock — drives the web (false) vs desktop (true)
+  // branch deterministically instead of relying on jsdom's ambient environment.
+  mockIsTauriRuntime: vi.fn(() => false),
+}));
+
+vi.mock('../../../services/tauriRuntime', () => ({
+  isTauriRuntime: () => mockIsTauriRuntime(),
 }));
 
 vi.mock('../../../components/ui/Toast', () => ({
@@ -72,6 +79,8 @@ import { FeatureFlagsSection } from '../../../components/settings/FeatureFlagsSe
 describe('FeatureFlagsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // QNBS-v3: default to the web runtime; desktop-specific tests opt in explicitly below.
+    mockIsTauriRuntime.mockReturnValue(false);
   });
 
   it('renders the feature flags title', () => {
@@ -168,15 +177,27 @@ describe('FeatureFlagsSection', () => {
     expect(wasmSwitch).toBeDisabled();
   });
 
-  // QNBS-v3: desktop-only flags (Rust Compute) are unavailable on web — isTauriRuntime() is false
-  // under jsdom, so blockedByDesktop is true and the toggle must be disabled while off. Regression
-  // guard for the CodeAnt finding that blockedByDesktop was ignored in the disable predicate.
+  // QNBS-v3: desktop-only flags (Rust Compute) are unavailable on web — with isTauriRuntime() mocked
+  // to false, blockedByDesktop is true and the toggle must be disabled while off. Regression guard
+  // for the CodeAnt finding that blockedByDesktop was ignored in the disable predicate.
   it('disables the Rust Compute toggle on web (desktop-only) while it is off', () => {
+    mockIsTauriRuntime.mockReturnValue(false);
     render(<FeatureFlagsSection />);
     const rustSwitch = screen.getByRole('switch', {
       name: 'settings.featureFlags.enableRustCompute',
     });
     expect(rustSwitch).toBeDisabled();
+  });
+
+  // QNBS-v3: on the desktop (Tauri) runtime the platform prerequisite is met, so the same desktop-only
+  // flag is interactive even while off — confirms blockedByDesktop, not jsdom ambient, drives the gate.
+  it('enables the Rust Compute toggle on the desktop runtime while it is off', () => {
+    mockIsTauriRuntime.mockReturnValue(true);
+    render(<FeatureFlagsSection />);
+    const rustSwitch = screen.getByRole('switch', {
+      name: 'settings.featureFlags.enableRustCompute',
+    });
+    expect(rustSwitch).toBeEnabled();
   });
 
   // QNBS-v3: but an already-enabled desktop-only flag must stay interactive on web so the user can
