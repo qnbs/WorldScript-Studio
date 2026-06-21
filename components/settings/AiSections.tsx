@@ -21,6 +21,7 @@ import { AdaptiveAiHardwarePanel } from './AdaptiveAiHardwarePanel';
 import { AiProviderCard } from './AiProviderCard';
 import { GpuMetricsPanel } from './GpuMetricsPanel';
 import { LocalAiDownloadProgress } from './LocalAiDownloadProgress';
+import { OllamaDevicePull } from './OllamaDevicePull';
 import { ToggleSwitch } from './SettingsShared';
 
 const KNOWN_OLLAMA_MODELS = new Set([
@@ -334,10 +335,23 @@ export const AdvancedAiSection: FC = () => {
               {t('settings.advancedAi.modelDescription')}
             </p>
             {settings.advancedAi.provider === 'ollama' && (
-              <p className="text-xs text-[var(--sc-text-muted)] mb-3">
-                {t('settings.advancedAi.modelRecommendationsIntro')}{' '}
-                {RECOMMENDED_OLLAMA_MODEL_IDS.join(', ')}
-              </p>
+              <>
+                <p className="text-xs text-[var(--sc-text-muted)] mb-3">
+                  {t('settings.advancedAi.modelRecommendationsIntro')}{' '}
+                  {RECOMMENDED_OLLAMA_MODEL_IDS.join(', ')}
+                </p>
+                {/* QNBS-v3: device-aware recommendation + one-click pull (PR E). */}
+                <OllamaDevicePull
+                  baseUrl={settings.advancedAi.ollamaBaseUrl}
+                  onUseModel={(tag) => {
+                    handleSettingChange('advancedAi', { ...settings.advancedAi, model: tag });
+                    // QNBS-v3: recommended tags aren't in the known-options list, so applying one takes
+                    // the custom-model path — sync the custom input so the selector isn't left stale.
+                    if (isCustomOllamaModel(tag)) setCustomModelInput(tag.replace(/^ollama\//, ''));
+                  }}
+                  t={t}
+                />
+              </>
             )}
             <Select
               id="settings-ai-model"

@@ -35,6 +35,107 @@ export interface OllamaStreamCallbacks {
   onError?: (error: Error) => void;
 }
 
+// QNBS-v3: shape-based AbortError check — DOMException is not an instanceof Error in some runtimes.
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === 'object' && err !== null && (err as { name?: string }).name === 'AbortError'
+  );
+}
+
+export interface OllamaPullProgress {
+  /** Ollama status line, e.g. "pulling manifest", "downloading …", "verifying", "success". */
+  status: string;
+  /** 0–1 download fraction for the active layer, when total/completed bytes are present. */
+  progress?: number;
+  completedBytes?: number;
+  totalBytes?: number;
+}
+
+export interface OllamaPullOptions {
+  baseUrl?: string;
+  signal?: AbortSignal;
+  onProgress?: (p: OllamaPullProgress) => void;
+}
+
+/**
+ * One-click model install: POST {baseUrl}/api/pull and stream the NDJSON progress until the model is
+ * ready. QNBS-v3: mirrors streamOllama's reader/abort handling. Ollama reports failures inline as an
+ * `{error}` line (not via HTTP status), so we surface those as a thrown Error; an aborted signal
+ * propagates as the original AbortError so callers can distinguish cancel from failure.
+ */
+export async function pullOllamaModel(name: string, opts: OllamaPullOptions = {}): Promise<void> {
+  const baseUrl = normalizeBaseUrl(opts.baseUrl);
+  const model = name.trim().replace(/^ollama\//, '');
+  if (!model) throw new Error('Ollama pull: model name is required');
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/api/pull`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: model, stream: true }),
+      signal: opts.signal ?? null,
+    });
+  } catch (err) {
+    if (isAbortError(err)) throw err;
+    throw new Error(
+      `Ollama not reachable (${baseUrl}). Make sure Ollama is running: ollama serve`,
+      { cause: err as Error },
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(`Ollama pull failed ${response.status}: ${response.statusText}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Ollama pull: no response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const handleLine = (line: string): void => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let payload: { status?: string; total?: number; completed?: number; error?: string };
+    try {
+      payload = JSON.parse(trimmed);
+    } catch {
+      return; // ignore non-JSON keepalive/noise lines
+    }
+    if (payload.error) throw new Error(`Ollama pull error: ${payload.error}`);
+    const hasBytes =
+      typeof payload.total === 'number' &&
+      payload.total > 0 &&
+      typeof payload.completed === 'number';
+    opts.onProgress?.({
+      status: payload.status ?? 'pulling',
+      ...(hasBytes
+        ? { progress: Math.min(1, (payload.completed as number) / (payload.total as number)) }
+        : {}),
+      ...(typeof payload.completed === 'number' ? { completedBytes: payload.completed } : {}),
+      ...(typeof payload.total === 'number' ? { totalBytes: payload.total } : {}),
+    });
+  };
+
+  // QNBS-v3: cancel the reader in finally so an inline-{error} throw (or any parse error) does not
+  // leave the HTTP body streaming in the background. cancel() is a no-op once the stream is drained.
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? '';
+      for (const line of lines) handleLine(line);
+    }
+    // Flush any trailing buffered line (final "success" status without a newline).
+    if (buffer.trim()) handleLine(buffer);
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+}
+
 export async function listOllamaModels(baseUrl?: string): Promise<string[]> {
   const url = `${normalizeBaseUrl(baseUrl)}/api/tags`;
   try {

@@ -1,5 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { listOllamaModels, streamOllama, testOllamaConnection } from '../../services/ollamaService';
+import {
+  listOllamaModels,
+  type OllamaPullProgress,
+  pullOllamaModel,
+  streamOllama,
+  testOllamaConnection,
+} from '../../services/ollamaService';
+
+/** Build a streaming NDJSON Response (one JSON object per line) for /api/pull mocks. */
+function ndjsonResponse(objects: object[], status = 200): Response {
+  const enc = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const o of objects) controller.enqueue(enc.encode(`${JSON.stringify(o)}\n`));
+      controller.close();
+    },
+  });
+  return new Response(stream, { status });
+}
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
@@ -147,5 +165,72 @@ describe('streamOllama', () => {
     await streamOllama('prompt', { model: 'llama3' }, { onChunk: (c) => chunks.push(c) });
 
     expect(chunks).toEqual(['ok']);
+  });
+});
+
+// ─── pullOllamaModel ──────────────────────────────────────────────────────────
+
+describe('pullOllamaModel', () => {
+  it('streams progress and resolves on success', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      ndjsonResponse([
+        { status: 'pulling manifest' },
+        { status: 'downloading', total: 1000, completed: 250 },
+        { status: 'downloading', total: 1000, completed: 1000 },
+        { status: 'success' },
+      ]),
+    );
+    const progress: OllamaPullProgress[] = [];
+    await pullOllamaModel('llama3.2:1b', { onProgress: (p) => progress.push(p) });
+
+    expect(progress.map((p) => p.status)).toEqual([
+      'pulling manifest',
+      'downloading',
+      'downloading',
+      'success',
+    ]);
+    // mid-download fraction surfaced
+    expect(progress[1]).toMatchObject({ progress: 0.25, completedBytes: 250, totalBytes: 1000 });
+    expect(progress[2]?.progress).toBe(1);
+    // manifest/success lines (no byte counts) omit the progress fraction
+    expect(progress[0]?.progress).toBeUndefined();
+  });
+
+  it('POSTs to /api/pull with the stripped model name and stream:true', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(ndjsonResponse([{ status: 'success' }]));
+    await pullOllamaModel('ollama/llama3.2:3b', { baseUrl: 'http://host:11434/' });
+    const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://host:11434/api/pull');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ name: 'llama3.2:3b', stream: true });
+  });
+
+  it('throws on an inline {error} line (Ollama reports failures in-band)', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      ndjsonResponse([{ status: 'pulling manifest' }, { error: 'manifest unknown' }]),
+    );
+    await expect(pullOllamaModel('bogus:latest')).rejects.toThrow(/manifest unknown/);
+  });
+
+  it('throws a reachability error on network failure', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Network error'));
+    await expect(pullOllamaModel('llama3.2:1b')).rejects.toThrow(/not reachable/);
+  });
+
+  it('throws on a non-200 response', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('', { status: 500, statusText: 'Server Error' }),
+    );
+    await expect(pullOllamaModel('llama3.2:1b')).rejects.toThrow(/pull failed 500/);
+  });
+
+  it('propagates an AbortError unchanged (cancel, not failure)', async () => {
+    const abortErr = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    vi.mocked(fetch).mockRejectedValueOnce(abortErr);
+    await expect(pullOllamaModel('llama3.2:1b')).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('rejects an empty model name', async () => {
+    await expect(pullOllamaModel('   ')).rejects.toThrow(/model name is required/);
   });
 });
