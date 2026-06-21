@@ -159,6 +159,11 @@ export const VoiceSettingsSection: FC = () => {
                 options={engineOptions}
                 ariaLabel={t('settings.voice.sttEngine')}
               />
+              {/* QNBS-v3: consent clarity — spell out the cloud-vs-on-device privacy tradeoff per engine
+                  so the choice is informed (the default Web Speech path sends audio to the browser vendor). */}
+              <p className="text-xs text-[var(--sc-info-fg)] bg-[var(--sc-info-bg)] rounded-sc-md px-2 py-1.5">
+                {t('settings.voice.engine.privacyNote')}
+              </p>
             </div>
 
             {/* Cloud fallback */}
