@@ -96,6 +96,12 @@ export async function runRagVectorMigration(
     await duckdbRagWrite(projectId, batch);
   }
 
+  // QNBS-v3: SEC — re-check immediately before the done-marker: an opt-out landing during the awaited
+  // vector write above must not let us record the migration as complete (else re-opt-in never reruns).
+  if (!shouldPersist()) {
+    return { migrated, aborted: true };
+  }
+
   await duckdbClient.exec(
     `INSERT INTO _meta (key, value) VALUES ('${RAG_VECTORS_V2_KEY}', '1')
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
