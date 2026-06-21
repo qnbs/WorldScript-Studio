@@ -26,6 +26,7 @@ const ROOT = join(import.meta.dirname, '..');
 const SLICE_FILE = join(ROOT, 'features/featureFlags/featureFlagsSlice.ts');
 const LOCALE_FILE = join(ROOT, 'locales/en/settings.json');
 const SECTION_FILE = join(ROOT, 'components/settings/FeatureFlagsSection.tsx');
+const CATALOG_FILE = join(ROOT, 'features/featureCatalog.ts');
 const SETTINGS_HOOK = join(ROOT, 'hooks/useSettingsView.ts');
 
 // Files/dirs excluded from runtime-gate grep (tests, type declarations, config)
@@ -106,11 +107,31 @@ function extractLocaleFlags(src: string): Set<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Step 4: Extract flags from FeatureFlagsSection.tsx
+// Step 4: Determine which flags have a UI toggle in FeatureFlagsSection.tsx
 // ---------------------------------------------------------------------------
 
-function extractSectionFlags(src: string): Set<string> {
-  return new Set([...src.matchAll(/key:\s*['"`](enable\w+)['"`]/g)].map((m) => m[1] as string));
+// QNBS-v3: the section is now data-driven — it renders every FEATURE_CATALOG flag EXCEPT those in
+// its HIDDEN_FLAGS set (instead of a hand-maintained `key: 'enableX'` array). So a flag "has a UI
+// toggle" iff it is in the catalog and not hidden. Parse both from source rather than greping for
+// literal keys that no longer exist.
+// QNBS-v3: type-safe capture extraction — narrow the optional regex group instead of `as string`.
+const isString = (s: string | undefined): s is string => s !== undefined;
+
+function extractCatalogFlags(catalogSrc: string): Set<string> {
+  return new Set(
+    [...catalogSrc.matchAll(/flagKey:\s*['"`](enable\w+)['"`]/g)].map((m) => m[1]).filter(isString),
+  );
+}
+
+function extractHiddenFlags(sectionSrc: string): Set<string> {
+  const inner = sectionSrc.match(/HIDDEN_FLAGS[^=]*=\s*new Set\(\[([^\]]*)\]/)?.[1];
+  if (inner === undefined) return new Set();
+  return new Set([...inner.matchAll(/['"`](enable\w+)['"`]/g)].map((m) => m[1]).filter(isString));
+}
+
+function extractSectionFlags(sectionSrc: string, catalogSrc: string): Set<string> {
+  const hidden = extractHiddenFlags(sectionSrc);
+  return new Set([...extractCatalogFlags(catalogSrc)].filter((flag) => !hidden.has(flag)));
 }
 
 // ---------------------------------------------------------------------------
@@ -137,12 +158,13 @@ function hasRuntimeConsumption(flag: string): boolean {
 const sliceSrc = read(SLICE_FILE);
 const localeSrc = read(LOCALE_FILE);
 const sectionSrc = read(SECTION_FILE);
+const catalogSrc = read(CATALOG_FILE);
 const hookSrc = read(SETTINGS_HOOK);
 
 const sliceFlags = extractFlagsFromSlice(sliceSrc);
 const defaultFlags = extractDefaultsFromSlice(sliceSrc);
 const localeFlags = extractLocaleFlags(localeSrc);
-const sectionFlags = extractSectionFlags(sectionSrc);
+const sectionFlags = extractSectionFlags(sectionSrc, catalogSrc);
 const handlerFlags = extractHandlerFlags(hookSrc);
 
 let errors = 0;

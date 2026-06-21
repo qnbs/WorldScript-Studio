@@ -9,6 +9,14 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 ---
 
 
+## v1.24 — Post-release feature-flag refinement (2026-06-21)
+
+- ✅ **ProForge → opt-in** — flipped `enableProForge` default to `false` (experimental, token-heavy); now 17 on / 6 off. Slice + tests + `FEATURE-PARITY.md` + `CLAUDE.md` updated in lockstep.
+- ✅ **Feature catalog reconciled** — `featureCatalog.ts` covers all 23 flags; `defaultOn` derived from the slice (drift now impossible, guarded by `tests/unit/featureCatalog.test.ts`); added risk/desktop/dependency metadata.
+- ✅ **Grouped Settings UI** — Experimental flags grouped by category with risk hints, dependency-aware disabling (Voice WASM ⇠ Voice Support), "Desktop only" note (Rust Compute), and Reset-to-defaults.
+- ⬜ **WebNN flag decision** — `enableWebnnInference` is a ghost/stub (no runtime gate reads it). Either wire `selectEnableWebnnInference` into the ONNX RT WebNN provider selection, or retire the flag.
+
+
 ## v1.23 — P0 Audit Follow-up (DELIVERED 2026-06-16)
 
 > All P0 release-blockers closed and v1.23.0 shipped 2026-06-16. The only item still open is the

@@ -21,12 +21,15 @@
 
 ## Feature Parity Matrix
 
-> **Defaults reconciled 2026-06-16 (v1.23.0):** the slice now ships the **full feature set** —
-> 23 flags, **18 default-on**, **5 opt-in default-off** (`enableRtlLayout`, `enableVoiceSupport`,
-> `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`). The retired/promoted flags
-> `enableCodexAutoTracking`, `enableCrossProjectSearch` (both promoted to permanent core),
+> **Defaults (v1.24 post-release):** the slice ships the **full feature set** —
+> 23 flags, **17 default-on**, **6 opt-in default-off** (`enableProForge`, `enableRtlLayout`,
+> `enableVoiceSupport`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`).
+> `enableProForge` was flipped to opt-in (experimental, token-heavy 8-stage pipeline). The retired/promoted
+> flags `enableCodexAutoTracking`, `enableCrossProjectSearch` (both promoted to permanent core),
 > `enablePlotBoardV2`, and `enableCloudSync` (retired) are no longer in the slice and have been
-> removed from this matrix. Run `pnpm exec tsx scripts/audit-feature-parity.ts` for the live check.
+> removed from this matrix. `features/featureCatalog.ts` now **derives** each flag's `defaultOn` from
+> the slice (single source of truth — the catalog/slice default drift can no longer recur). Run
+> `pnpm exec tsx scripts/audit-feature-parity.ts` for the live check.
 
 | Feature Flag | Default | Slice | i18n Key | UI Toggle | `useSettingsView` Handler | Runtime Gate | Gate Location | Status |
 |---|---|---|---|---|---|---|---|---|
@@ -41,10 +44,10 @@
 | `enableCharacterInterviews` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` route guard *(fixed 2026-05-29)* | 🟢 OK |
 | `enableLoraAdapters` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `useWorldScriptAI.ts` reads `selectActiveLoraOllamaTag` → `loraModelPath` *(fixed 2026-05-29)* | 🟢 OK |
 | `enablePluginSystem` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `PluginRegistry.setEnabled()` + `App.tsx` sync *(fixed 2026-05-29)* | 🟢 OK |
-| `enableProForge` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | Handler added to `useSettingsView.ts` *(fixed 2026-05-29)*; `WriterViewUI.tsx:23` | 🟢 OK |
+| `enableProForge` | **OFF** | ✅ | ✅ | ✅ | ✅ | ✅ | Handler in `useSettingsView.ts`; `WriterViewUI.tsx:86` *(default flipped to opt-in v1.24 post-release)* | 🟢 OK |
 | `enableIdbAtRestEncryption` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` + `IdbUnlockModal` *(fixed 2026-05-29)*; passphrase UX complete (B-1) | 🟢 OK |
 | `enableAdaptiveAiEngine` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `listenerMiddleware.ts` listeners; window gate; `useAdaptiveAi`; `App.tsx initAdaptiveAiOnStartup` *(added 2026-05-31)* | 🟢 OK |
-| `enableWebnnInference` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `adaptiveAiEngine.ts` backend selection; `webnnBridge.ts` *(added 2026-05-31)* | 🟢 OK |
+| `enableWebnnInference` | ON | ✅ | ✅ | ✅ | ✅ | ⚠️ | Toggle + handler only — **no runtime gate reads `selectEnableWebnnInference`**. WebNN code lives in `packages/ai-core/src/webnnBridge.ts` but is not gated on this flag (ghost/stub) *(corrected 2026-06-21)* | 🟡 Partial |
 | `enableComputeShaders` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `computeShaderFactory.ts`; `localRagService.ts` GPU cosine; `useAdaptiveAi` *(added 2026-05-31)* | 🟢 OK |
 | `enableWorkerBusV2` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `packages/worker-bus` orchestration; `ensureWebLlmPool()` / WorkerBus init | 🟢 OK |
 | `enableRustCompute` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | Tauri Rust compute (`src-tauri/`); verified via `tauri-build.yml` (no PR-CI gate) | 🟢 OK |
@@ -56,14 +59,17 @@
 
 ---
 
-## Drift Summary (2026-06-16 — reconciled to the v1.23.0 23-flag model)
+## Drift Summary (2026-06-21 — v1.24 post-release: ProForge opt-in + catalog defaultOn derived)
 
-**All 8 critical drifts from the 2026-05-29 parity audit remain fixed.** The 2026-06-16 pass
-corrected the `Default` column (the slice ships the full set: 18 on, 5 opt-in off), removed the
-four retired/promoted flags (`enableCodexAutoTracking`, `enableCrossProjectSearch`,
-`enablePlotBoardV2`, `enableCloudSync`), and added the four flags introduced since v1.21
-(`enableWorkerBusV2`, `enableRustCompute`, `enableGlobalCopilot`, `enableLocalFirstSync`).
-The matrix is now fully green; `pnpm exec tsx scripts/audit-feature-parity.ts` is the live gate.
+**All 8 critical drifts from the 2026-05-29 parity audit remain fixed.** The 2026-06-21 pass
+flipped `enableProForge` to opt-in (now **17 on / 6 off**), made `features/featureCatalog.ts`
+**derive** each entry's `defaultOn` from the slice (so the catalog/slice default drift fixed in
+v1.24 can no longer recur — guarded by `tests/unit/featureCatalog.test.ts`), brought the catalog to
+full 23-flag coverage, and corrected the `enableWebnnInference` row to reflect that it has no runtime
+gate (ghost/stub — `scripts/audit-feature-parity.ts` already warns on it). The earlier 2026-06-16
+pass corrected the `Default` column and removed the four retired/promoted flags
+(`enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`, `enableCloudSync`).
+`pnpm exec tsx scripts/audit-feature-parity.ts` is the live gate.
 
 ### ✅ Resolved Drifts (2026-05-29 parity audit)
 
