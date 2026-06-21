@@ -58,6 +58,9 @@ export const OllamaDevicePull: FC<OllamaDevicePullProps> = ({ baseUrl, onUseMode
   };
 
   const startPull = async () => {
+    // QNBS-v3: in-flight guard — never start a second pull while one is running, so two controllers
+    // can't race (and so a stale finally can't clear a newer request's abort ref).
+    if (abortRef.current) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setState('pulling');
@@ -75,7 +78,9 @@ export const OllamaDevicePull: FC<OllamaDevicePullProps> = ({ baseUrl, onUseMode
       setError(err instanceof Error ? err.message : String(err));
       setState('error');
     } finally {
-      abortRef.current = null;
+      // QNBS-v3: only clear the ref if it still points to THIS controller — defends against a late
+      // resolution nulling a newer pull's controller and breaking its Cancel.
+      if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
