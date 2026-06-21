@@ -7,7 +7,22 @@ Workflow: [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build
 ## Triggers
 
 - **Manual:** Actions → “Tauri desktop build” → Run workflow  
-- **Tags:** pushing `v*` (e.g. `v1.2.0`) starts a build on Ubuntu, Windows, and macOS in parallel.
+- **Tags:** pushing `v*` (e.g. `v1.2.0`) starts a build on Ubuntu, Windows, and **both macOS arches** in parallel.
+
+### Build matrix
+
+| Runner | Target arch | Updater platform key |
+|--------|-------------|----------------------|
+| `ubuntu-22.04` | x86_64 (AppImage / deb / rpm) | `linux-x86_64` |
+| `windows-latest` | x86_64 (NSIS `-setup.exe`, MSI fallback) | `windows-x86_64` |
+| `macos-latest` | **aarch64** (Apple Silicon) | `darwin-aarch64` |
+| `macos-13` | **x86_64** (Intel) | `darwin-x86_64` |
+
+`macos-latest` is GitHub's Apple-Silicon runner and `macos-13` is the last Intel runner — both are
+required so Intel Macs get a native build and in-app updates. Tauri infers the target arch from the
+runner (no `--target` flag needed), and the `latest.json` generator maps `*_x64.app.tar.gz` →
+`darwin-x86_64` automatically. A **per-arch warning** is emitted (and that platform omitted from
+`latest.json`) if any arch produces no signed bundle; the step hard-fails only if **no** arch did.
 
 ## Outputs
 
@@ -103,8 +118,9 @@ Complete these steps once before pushing the first signed release tag:
 4. Verify release-assets in the GitHub Release:
    - tauri-bundle-ubuntu-22.04  → .deb, .AppImage + .sig files
    - tauri-bundle-windows-latest → .msi/.exe + .sig files
-   - tauri-bundle-macos-latest  → .dmg + .sig files
-   - latest.json  (auto-updater manifest with signatures)
+   - tauri-bundle-macos-latest  → .dmg + .app.tar.gz (aarch64) + .sig files
+   - tauri-bundle-macos-13      → .dmg + .app.tar.gz (x64 / Intel) + .sig files
+   - latest.json  (auto-updater manifest with linux/windows/darwin-aarch64/darwin-x86_64 entries)
 
 5. Download the installer for your OS, install the app, open it.
 
