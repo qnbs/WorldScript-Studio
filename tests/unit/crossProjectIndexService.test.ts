@@ -67,9 +67,11 @@ beforeEach(async () => {
   }
 });
 
-// Flush the fire-and-forget DuckDB write chain (loadDuckdbAnalytics().then(...)).
+// Flush the fire-and-forget DuckDB write chain (loadDuckdbAnalytics().then(...)) deterministically —
+// it is a pure microtask chain (mocked loader resolves synchronously), so awaiting a few microtask
+// ticks settles it without depending on real timers / wall-clock scheduling.
 async function flushMicrotasks() {
-  await new Promise((r) => setTimeout(r, 0));
+  for (let i = 0; i < 5; i++) await Promise.resolve();
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
