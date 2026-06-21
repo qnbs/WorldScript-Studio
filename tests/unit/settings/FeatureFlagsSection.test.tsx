@@ -158,13 +158,29 @@ describe('FeatureFlagsSection', () => {
     expect(mockHandleSettingChange).toHaveBeenCalledWith('enableDuckDbAnalytics', true);
   });
 
-  // QNBS-v3: Voice WASM requires Voice Support — with the prerequisite off its toggle is disabled.
-  it('disables the Voice WASM toggle while Voice Support is off', () => {
+  // QNBS-v3: Voice WASM requires Voice Support — with the prerequisite off AND the flag itself off,
+  // its toggle is disabled (can't be turned on).
+  it('disables the Voice WASM toggle while Voice Support is off and it is off', () => {
     render(<FeatureFlagsSection />);
     const wasmSwitch = screen.getByRole('switch', {
       name: 'settings.featureFlags.enableVoiceWasm',
     });
     expect(wasmSwitch).toBeDisabled();
+  });
+
+  // QNBS-v3: but an already-enabled dependent flag must stay interactive so the user can turn it off
+  // (no stuck checked+disabled state) — regression guard for CodeAnt finding.
+  it('keeps an already-enabled dependent toggle interactive when its prerequisite is off', () => {
+    mockFeatureFlags.enableVoiceWasm = true;
+    try {
+      render(<FeatureFlagsSection />);
+      const wasmSwitch = screen.getByRole('switch', {
+        name: 'settings.featureFlags.enableVoiceWasm',
+      });
+      expect(wasmSwitch).toBeEnabled();
+    } finally {
+      mockFeatureFlags.enableVoiceWasm = false;
+    }
   });
 
   it('resets flags to defaults via handleSettingChange after confirming the dialog', async () => {

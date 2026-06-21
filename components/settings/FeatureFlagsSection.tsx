@@ -134,14 +134,19 @@ export const FeatureFlagsSection: FC = () => {
                     featureFlags,
                     isDesktop,
                   );
+                  const isOn = featureFlags[entry.flagKey];
+                  // QNBS-v3: only block the "turn on" attempt when a prerequisite is missing — never
+                  // trap an already-enabled flag in a non-interactive checked state (the user must
+                  // still be able to turn it back off). So disable only when blocked AND currently off.
+                  const disabled = blockedBy.length > 0 && !isOn;
                   return (
                     <ToggleSwitch
                       key={entry.flagKey}
                       label={t(`settings.featureFlags.${entry.flagKey}`)}
                       badge={renderBadge(entry)}
                       hint={buildHint(entry)}
-                      checked={featureFlags[entry.flagKey]}
-                      disabled={blockedBy.length > 0}
+                      checked={isOn}
+                      disabled={disabled}
                       onChange={(v) => handleSettingChange(entry.flagKey, v)}
                     />
                   );
