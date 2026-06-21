@@ -82,25 +82,25 @@ describe('OllamaDevicePull', () => {
     ).toBeInTheDocument();
   });
 
-  it('returns to idle (not error) when the pull is aborted', async () => {
-    // Deferred pull so we can confirm the in-flight (pulling) state BEFORE rejecting with AbortError,
-    // making the post-abort transition a definitive assertion rather than a trivially-true one.
-    let rejectPull!: (reason: unknown) => void;
-    mockPull.mockReturnValueOnce(
-      new Promise((_resolve, reject) => {
-        rejectPull = reject;
-      }),
+  it('cancels via the Cancel button (aborts the controller) and returns to idle', async () => {
+    // The mocked pull observes the AbortSignal and rejects with AbortError when it fires — so this
+    // exercises the REAL Cancel wiring (onClick → abortRef.abort() → signal). Broken wiring (onClick
+    // not aborting) would leave the pull pending and the idle Pull button would never return.
+    mockPull.mockImplementationOnce(
+      (_name: string, opts: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          opts.signal?.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          );
+        }),
     );
     const user = userEvent.setup();
     render(<OllamaDevicePull baseUrl="http://localhost:11434" onUseModel={vi.fn()} t={t} />);
     await user.click(
       await screen.findByRole('button', { name: 'settings.advancedAi.ollamaPull.pull' }),
     );
-    // pull is in flight → the Cancel button is shown (pulling state confirmed)
-    expect(await screen.findByRole('button', { name: 'common.cancel' })).toBeInTheDocument();
-
-    // user aborts → the pull promise rejects with an AbortError
-    rejectPull(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    // pull is in flight → click the real Cancel button
+    await user.click(await screen.findByRole('button', { name: 'common.cancel' }));
 
     // definitive transition: the idle Pull button returns (findBy waits) and no error alert appears
     expect(
