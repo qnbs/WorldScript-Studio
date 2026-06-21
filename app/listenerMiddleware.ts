@@ -156,9 +156,11 @@ addDebouncedListener(
 
       await storageService.saveProject(projectDataToSave);
 
-      // QNBS-v3: enableCrossProjectSearch promoted to permanent core — always index on save.
+      // QNBS-v3: enableCrossProjectSearch promoted to permanent core — the IDB search index always
+      // updates on save. The DuckDB mirror is analytics persistence, so it honours the same privacy
+      // gate as the other DuckDB writes (search still works fully from the IDB index when off).
       if (presentData.id) {
-        const duckDbOn = api.getState().featureFlags?.enableDuckDbAnalytics ?? false;
+        const duckDbOn = isAnalyticsPersistenceAllowed(api.getState());
         const { indexProject } = await import('../services/crossProjectIndexService');
         indexProject(presentData.id, enriched, duckDbOn).catch((err: unknown) =>
           logger.warn('Cross-project index update failed (non-critical):', err),
