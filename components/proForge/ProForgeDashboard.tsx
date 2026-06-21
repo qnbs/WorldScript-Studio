@@ -7,6 +7,7 @@ import type React from 'react';
 import { useCallback, useState } from 'react';
 import { useProForgeViewContext } from '../../contexts/ProForgeViewContext';
 import { PIPELINE_STAGES, type PipelineStage } from '../../features/proForge/types';
+import { Badge } from '../ui/Badge';
 import { PipelineProgressPanel } from './PipelineProgressPanel';
 import { PipelineReviewPanel } from './PipelineReviewPanel';
 
@@ -85,7 +86,11 @@ export const ProForgeDashboard: React.FC = () => {
             <span className="text-[var(--sc-text-on-accent)] font-bold text-sm">P</span>
           </div>
           <div>
-            <h2 className="text-base font-semibold">{t('proforge.pipeline.title')}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold">{t('proforge.pipeline.title')}</h2>
+              {/* QNBS-v3: ProForge is an on-by-default but experimental agentic pipeline — label it. */}
+              <Badge variant="experimental">{t('common.badge.experimental')}</Badge>
+            </div>
             <p className="text-xs text-[var(--sc-text-tertiary)]">
               {currentRun ? currentRun.label : t('proforge.pipeline.noneActive')}
             </p>
