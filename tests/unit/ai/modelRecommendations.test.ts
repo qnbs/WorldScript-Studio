@@ -8,6 +8,7 @@ import type { DeviceHealthReport } from '../../../services/ai/deviceHealthServic
 import {
   ECO_TEXT_GEN_MODEL,
   getModelRecommendationForTask,
+  getOllamaModelForDevice,
   getProviderSpeedEstimate,
   RECOMMENDED_OLLAMA_MODEL_IDS,
 } from '../../../services/ai/modelRecommendations';
@@ -108,5 +109,66 @@ describe('getProviderSpeedEstimate', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('net')));
     const latency = await getProviderSpeedEstimate('http://localhost:11434');
     expect(latency).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('getOllamaModelForDevice', () => {
+  it('recommends the 7B model for a high-end device', () => {
+    const rec = getOllamaModelForDevice({ ...baseReport, deviceClass: 'high-end' });
+    expect(rec).toMatchObject({
+      modelId: 'qwen2.5:7b',
+      tier: 'high-end',
+      downgradedForBattery: false,
+    });
+  });
+
+  it('recommends the 3B model for a mid-range device', () => {
+    const rec = getOllamaModelForDevice({ ...baseReport, deviceClass: 'mid-range' });
+    expect(rec.modelId).toBe('llama3.2:3b');
+    expect(rec.tier).toBe('mid-range');
+  });
+
+  it('recommends the smallest model for low-end and unknown devices', () => {
+    expect(getOllamaModelForDevice({ ...baseReport, deviceClass: 'low-end' }).modelId).toBe(
+      'llama3.2:1b',
+    );
+    expect(getOllamaModelForDevice({ ...baseReport, deviceClass: 'unknown' }).modelId).toBe(
+      'llama3.2:1b',
+    );
+  });
+
+  it('exposes a human-readable size hint', () => {
+    expect(getOllamaModelForDevice({ ...baseReport, deviceClass: 'high-end' }).sizeHint).toMatch(
+      /GB/,
+    );
+  });
+
+  it('steps down one tier on low battery and flags the downgrade', () => {
+    const rec = getOllamaModelForDevice({
+      ...baseReport,
+      deviceClass: 'high-end',
+      batteryLevel: 0.1,
+    });
+    expect(rec.tier).toBe('mid-range');
+    expect(rec.modelId).toBe('llama3.2:3b');
+    expect(rec.downgradedForBattery).toBe(true);
+  });
+
+  it('does not downgrade below low-end and does not flag when battery is unknown', () => {
+    const lowEndLowBattery = getOllamaModelForDevice({
+      ...baseReport,
+      deviceClass: 'low-end',
+      batteryLevel: 0.05,
+    });
+    expect(lowEndLowBattery.tier).toBe('low-end');
+    expect(lowEndLowBattery.downgradedForBattery).toBe(false);
+
+    const noBattery = getOllamaModelForDevice({
+      ...baseReport,
+      deviceClass: 'high-end',
+      batteryLevel: null,
+    });
+    expect(noBattery.tier).toBe('high-end');
+    expect(noBattery.downgradedForBattery).toBe(false);
   });
 });

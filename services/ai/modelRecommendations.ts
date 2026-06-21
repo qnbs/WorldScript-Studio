@@ -13,6 +13,54 @@ export const RECOMMENDED_OLLAMA_MODEL_IDS = [
 export const RECOMMENDED_OPENAI_COMPAT_CLOUD_HINT =
   'OpenRouter/Groq/Azure OpenAI: Basis-URL + Modell-ID wie beim Anbieter dokumentiert (Stand 2026 — Preise/SLAs auf der Anbieterseite prüfen).';
 
+export type OllamaDeviceTier = 'high-end' | 'mid-range' | 'low-end';
+
+export interface OllamaDeviceRecommendation {
+  /** Ollama model tag to `ollama pull` (and the one-click pull button installs). */
+  modelId: string;
+  /** The device tier this recommendation targets (after any battery downgrade). */
+  tier: OllamaDeviceTier;
+  /** Human-readable approximate download size for the UI. */
+  sizeHint: string;
+  /** True when the tier was stepped down one level because the device is on low battery. */
+  downgradedForBattery: boolean;
+}
+
+// QNBS-v3: curated device→Ollama catalog (2025/2026 tags). Bigger models need more RAM/VRAM, so the
+// recommendation tracks the profiler's deviceClass; on low battery we step down one tier to cut the
+// sustained compute/thermal load of a one-click local run.
+const OLLAMA_DEVICE_CATALOG: Record<OllamaDeviceTier, { modelId: string; sizeHint: string }> = {
+  'high-end': { modelId: 'qwen2.5:7b', sizeHint: '~4.7 GB' },
+  'mid-range': { modelId: 'llama3.2:3b', sizeHint: '~2.0 GB' },
+  'low-end': { modelId: 'llama3.2:1b', sizeHint: '~1.3 GB' },
+};
+
+const LOW_BATTERY_THRESHOLD = 0.2;
+
+/**
+ * Pick the recommended Ollama model for the current device from a curated, tiered catalog.
+ * QNBS-v3: device-aware sibling of getModelRecommendationForTask, but for the user-run Ollama server
+ * (so it returns concrete `ollama pull` tags, not WebLLM/ONNX ids). Unknown class → conservative low-end.
+ */
+export function getOllamaModelForDevice(report: DeviceHealthReport): OllamaDeviceRecommendation {
+  let tier: OllamaDeviceTier =
+    report.deviceClass === 'high-end'
+      ? 'high-end'
+      : report.deviceClass === 'mid-range'
+        ? 'mid-range'
+        : 'low-end'; // 'low-end' + 'unknown' → conservative default
+
+  const lowBattery = report.batteryLevel !== null && report.batteryLevel < LOW_BATTERY_THRESHOLD;
+  let downgradedForBattery = false;
+  if (lowBattery && tier !== 'low-end') {
+    tier = tier === 'high-end' ? 'mid-range' : 'low-end';
+    downgradedForBattery = true;
+  }
+
+  const { modelId, sizeHint } = OLLAMA_DEVICE_CATALOG[tier];
+  return { modelId, tier, sizeHint, downgradedForBattery };
+}
+
 // QNBS-v3: Eco-mode model: smallest viable ONNX model for battery-constrained devices (2025 update).
 export const ECO_TEXT_GEN_MODEL = 'HuggingFaceTB/SmolLM2-135M-Instruct';
 
