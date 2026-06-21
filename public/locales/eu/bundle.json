@@ -2155,6 +2155,7 @@
   "settings.plugins.title": "Pluginak",
   "settings.plugins.uninstallBtn": "Desinstalatu",
   "settings.privacy.analyticsEnabled": "Gaitu Analytics",
+  "settings.privacy.analyticsHint": "Analitika lokala soilik — ez da inoiz zure gailutik irteten. Desaktibatu analitika bilketa guztia gelditzeko.",
   "settings.privacy.crashReporting": "Istripuen berri ematea",
   "settings.privacy.dataEncryption": "Datuen enkriptatzea",
   "settings.privacy.encryptionActiveStatus": "Enkriptatzea aktiboa: datuak babestuta daude saio honetarako",

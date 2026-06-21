@@ -90,7 +90,11 @@ const defaultSettings: Settings = {
     colorBlindMode: 'none',
   }),
   privacy: {
-    analyticsEnabled: false,
+    // QNBS-v3: SEC — analytics default ON because the data is local-only metadata (no manuscript
+    // prose, never leaves the device) and the analytics dashboard relies on it. The toggle is now a
+    // functional opt-out (gates DuckDB writes + inference telemetry via isAnalyticsPersistenceAllowed).
+    // Outward-facing privacy switches (crashReporting / shareUsageData) stay opt-in.
+    analyticsEnabled: true,
     crashReporting: false,
     dataEncryption: true,
     localStorageOnly: true,

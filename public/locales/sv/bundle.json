@@ -2155,6 +2155,7 @@
   "settings.plugins.title": "Plugins",
   "settings.plugins.uninstallBtn": "Avinstallera",
   "settings.privacy.analyticsEnabled": "Aktivera Analytics",
+  "settings.privacy.analyticsHint": "Endast lokal analys — lämnar aldrig din enhet. Stäng av för att stoppa all analysinsamling.",
   "settings.privacy.crashReporting": "Kraschrapportering",
   "settings.privacy.dataEncryption": "Datakryptering",
   "settings.privacy.encryptionActiveStatus": "Kryptering aktiv — data är skyddade för denna session",

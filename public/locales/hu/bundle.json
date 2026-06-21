@@ -2155,6 +2155,7 @@
   "settings.plugins.title": "Beépülő modulok",
   "settings.plugins.uninstallBtn": "Eltávolítás",
   "settings.privacy.analyticsEnabled": "Analytics engedélyezése",
+  "settings.privacy.analyticsHint": "Csak helyi elemzés — soha nem hagyja el az eszközödet. Kapcsold ki az összes elemzési adatgyűjtés leállításához.",
   "settings.privacy.crashReporting": "Összeomlás jelentése",
   "settings.privacy.dataEncryption": "Adattitkosítás",
   "settings.privacy.encryptionActiveStatus": "Titkosítás aktív – az adatok ebben a munkamenetben védettek",

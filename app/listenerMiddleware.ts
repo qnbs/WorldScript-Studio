@@ -25,6 +25,17 @@ type ProjectStateWithHistory = {
 
 export const listenerMiddleware = createListenerMiddleware();
 
+// QNBS-v3: SEC — DuckDB analytics persistence requires BOTH the feature flag (enableDuckDbAnalytics)
+// AND the user-facing Settings → Privacy "Analytics" opt-out (settings.privacy.analyticsEnabled).
+// Before this gate the privacy toggle was cosmetic — only the flag controlled writes. Analytics data
+// is local-only metadata (titles/loglines/word-counts/codex excerpts; never manuscript prose), but a
+// privacy toggle that does nothing is a dark pattern. Single source of truth for every write site.
+export function isAnalyticsPersistenceAllowed(state: RootState): boolean {
+  return (
+    Boolean(state.featureFlags?.enableDuckDbAnalytics) && state.settings.privacy.analyticsEnabled
+  );
+}
+
 // QNBS-v3: Listener categories in this file:
 //   1. Auto-Save        — project data + version control → IDB (debounced 1s)
 //   2. Auto-Track       — Codex extraction (always-on; promoted from enableCodexAutoTracking flag)
@@ -154,7 +165,7 @@ addDebouncedListener(
         );
       }
 
-      if (api.getState().featureFlags?.enableDuckDbAnalytics) {
+      if (isAnalyticsPersistenceAllowed(api.getState())) {
         const projectId = presentData.id ?? 'default';
         const sections = presentData.manuscript.map((s, idx) => ({
           id: s.id,
@@ -270,7 +281,7 @@ addDebouncedListener(
       );
       await saveStoryCodex(codex);
 
-      if (state.featureFlags?.enableDuckDbAnalytics) {
+      if (isAnalyticsPersistenceAllowed(state)) {
         const entities = codex.entities.map((e) => ({
           id: e.id,
           name: e.name,

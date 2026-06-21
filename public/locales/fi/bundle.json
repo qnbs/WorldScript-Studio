@@ -2155,6 +2155,7 @@
   "settings.plugins.title": "Plugins",
   "settings.plugins.uninstallBtn": "Poista asennus",
   "settings.privacy.analyticsEnabled": "Ota Analytics käyttöön",
+  "settings.privacy.analyticsHint": "Vain paikallinen analytiikka — ei poistu laitteeltasi. Poista käytöstä pysäyttääksesi kaiken analytiikan keräämisen.",
   "settings.privacy.crashReporting": "Kaatumisraportointi",
   "settings.privacy.dataEncryption": "Tietojen salaus",
   "settings.privacy.encryptionActiveStatus": "Salaus käytössä – tiedot on suojattu tälle istunnolle",

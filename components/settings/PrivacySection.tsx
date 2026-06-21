@@ -44,6 +44,7 @@ export const PrivacySection: FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ToggleSwitch
               label={t('settings.privacy.analyticsEnabled')}
+              hint={t('settings.privacy.analyticsHint')}
               checked={settings.privacy.analyticsEnabled}
               onChange={(v) =>
                 handleSettingChange('privacy', { ...settings.privacy, analyticsEnabled: v })

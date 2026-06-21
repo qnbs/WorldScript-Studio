@@ -60,7 +60,10 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
 
   validSettings.privacy = {
-    analyticsEnabled: false,
+    // QNBS-v3: SEC — keep in lockstep with settingsSlice defaults. Analytics default ON (local-only
+    // metadata, never leaves device) and gated by isAnalyticsPersistenceAllowed; persisted user choice
+    // in `incoming.privacy` overrides this default via the spread below.
+    analyticsEnabled: true,
     crashReporting: false,
     dataEncryption: true,
     localStorageOnly: true,
