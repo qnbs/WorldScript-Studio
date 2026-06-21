@@ -157,6 +157,14 @@ describe('VoiceSettingsSection', () => {
     expect(screen.getByText('settings.voice.privacyNotice')).toBeInTheDocument();
   });
 
+  // QNBS-v3: consent clarity — the per-engine cloud-vs-on-device privacy note must be visible next to
+  // the STT engine selector so the choice is informed (the default Web Speech path is cloud).
+  it('shows the per-engine cloud-vs-on-device privacy note when voice is enabled', () => {
+    mockVoiceEnabled = true;
+    render(<VoiceSettingsSection />);
+    expect(screen.getByText('settings.voice.engine.privacyNote')).toBeInTheDocument();
+  });
+
   it('shows TTS muted toggle when voice is enabled', () => {
     mockVoiceEnabled = true;
     render(<VoiceSettingsSection />);
