@@ -5,7 +5,7 @@
 //           offline fallback, push notifications, share target
 // ============================================================
 
-const APP_VERSION   = '1.23.1';
+const APP_VERSION   = '1.24.0';
 const CACHE_STATIC  = `worldscript-static-v${APP_VERSION}`;
 const CACHE_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `worldscript-images-v${APP_VERSION}`;
