@@ -337,11 +337,13 @@ listenerMiddleware.startListening({
     // QNBS-v3: SEC — the seed migration may only run when analytics persistence is allowed (flag +
     // privacy opt-out). It fires when EITHER DuckDB just became ready OR the user just opted back in
     // while DuckDB is already ready — so a user who starts opted-out and later enables analytics still
-    // gets the one-time historical backfill (no reload required).
+    // gets the one-time historical backfill (no reload required). 'error' is retryable too so a
+    // transient DuckDB failure recovers on the next ready/opt-in transition (not stuck until reload).
+    const status = curr.analytics?.migrationStatus;
     const eligible =
       isAnalyticsPersistenceAllowed(curr) &&
       curr.analytics?.duckDbStatus === 'ready' &&
-      curr.analytics?.migrationStatus === 'idle';
+      (status === 'idle' || status === 'error');
     if (!eligible) return false;
     const duckDbJustReady = prev.analytics?.duckDbStatus !== 'ready';
     const analyticsJustEnabled = !isAnalyticsPersistenceAllowed(prev);

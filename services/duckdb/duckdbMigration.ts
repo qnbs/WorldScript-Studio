@@ -50,8 +50,9 @@ export async function runIfNeeded(
   // the (async) migration aborts before any row is written. Defaults to always-allow for callers that
   // have no privacy context (the gate is enforced by the middleware that schedules the migration).
   shouldPersist: () => boolean = () => true,
-  // QNBS-v3: SEC — `aborted: true` means a privacy opt-out stopped the run before the done-marker was
-  // written; the caller MUST keep migration status retryable so re-opt-in re-runs the seed.
+  // QNBS-v3: SEC — `aborted: true` means the run did NOT complete + write the done-marker (a privacy
+  // opt-out stopped it mid-run, or dry-run); the caller MUST keep migration status retryable so a later
+  // ready/opt-in transition re-runs the seed. `aborted: false` ⇒ genuinely complete (or already done).
 ): Promise<{ aborted: boolean }> {
   if (await isMigrated()) return { aborted: false };
 
@@ -94,7 +95,10 @@ export async function runIfNeeded(
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
       );
     } else {
+      // QNBS-v3: SEC — dry-run persists nothing and writes no marker → report as not-completed so the
+      // caller keeps migration status retryable rather than marking it 'done'.
       logger.debug('[duckdbMigration] DRY_RUN — skipping DuckDB writes');
+      return { aborted: true };
     }
 
     logger.debug('[duckdbMigration] Seed migration complete');
@@ -122,8 +126,10 @@ export async function runMigrationWithRollback(
   logger.debug('[duckdbMigration] Starting migration with rollback for project', projectId);
 
   if (DRY_RUN) {
+    // QNBS-v3: SEC — dry-run writes nothing and no marker, so report it as NOT completed (aborted) so
+    // callers keep migration status retryable instead of marking it 'done'.
     logger.debug('[duckdbMigration] DRY_RUN — skipping migration');
-    return { aborted: false };
+    return { aborted: true };
   }
 
   try {
