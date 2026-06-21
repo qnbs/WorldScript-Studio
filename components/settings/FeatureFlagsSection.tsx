@@ -1,6 +1,5 @@
 import type { FC, ReactNode } from 'react';
 import { useMemo, useState } from 'react';
-import { useAppDispatch } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import {
   FEATURE_CATALOG,
@@ -10,7 +9,6 @@ import {
 import {
   defaultFeatureFlagsState,
   type FeatureFlagsState,
-  featureFlagsActions,
 } from '../../features/featureFlags/featureFlagsSlice';
 import { resolveFlagAvailability } from '../../features/featureFlags/flagDependencies';
 import { isTauriRuntime } from '../../services/tauriRuntime';
@@ -42,7 +40,6 @@ const HIDDEN_FLAGS: ReadonlySet<keyof FeatureFlagsState> = new Set(['enableIdbAt
  */
 export const FeatureFlagsSection: FC = () => {
   const { t, featureFlags, handleSettingChange } = useSettingsViewContext();
-  const dispatch = useAppDispatch();
   const toast = useToast();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -86,7 +83,17 @@ export const FeatureFlagsSection: FC = () => {
   };
 
   const handleReset = () => {
-    dispatch(featureFlagsActions.setFeatureFlags(defaultFeatureFlagsState));
+    // QNBS-v3: route each change through handleSettingChange (NOT a bulk setFeatureFlags dispatch) so
+    // per-flag side effects run — e.g. disabling Global Copilot tears down its slice, and the
+    // ProForge discoverability toast fires on enable. Hidden flags (IDB at-rest encryption) are
+    // driven by the passphrase flow and are intentionally left untouched here.
+    for (const entry of FEATURE_CATALOG) {
+      if (HIDDEN_FLAGS.has(entry.flagKey)) continue;
+      const target = defaultFeatureFlagsState[entry.flagKey];
+      if (featureFlags[entry.flagKey] !== target) {
+        handleSettingChange(entry.flagKey, target);
+      }
+    }
     toast.success(t('settings.featureFlags.resetDone'));
     setShowResetConfirm(false);
   };

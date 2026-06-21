@@ -11,16 +11,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockHandleSettingChange, mockDispatch, mockToastSuccess } = vi.hoisted(() => ({
+const { mockHandleSettingChange, mockToastSuccess } = vi.hoisted(() => ({
   mockHandleSettingChange: vi.fn(),
-  mockDispatch: vi.fn(),
   mockToastSuccess: vi.fn(),
-}));
-
-vi.mock('../../../app/hooks', () => ({
-  useAppDispatch: () => mockDispatch,
-  useAppSelector: vi.fn(),
-  useAppSelectorShallow: vi.fn(),
 }));
 
 vi.mock('../../../components/ui/Toast', () => ({
@@ -174,7 +167,7 @@ describe('FeatureFlagsSection', () => {
     expect(wasmSwitch).toBeDisabled();
   });
 
-  it('resets all flags to defaults after confirming the dialog', async () => {
+  it('resets flags to defaults via handleSettingChange after confirming the dialog', async () => {
     const user = userEvent.setup();
     render(<FeatureFlagsSection />);
     // Only the header trigger exists before the dialog opens.
@@ -186,8 +179,10 @@ describe('FeatureFlagsSection', () => {
     await user.click(
       within(dialog).getByRole('button', { name: 'settings.featureFlags.resetToDefaults' }),
     );
-    expect(mockDispatch).toHaveBeenCalledTimes(1);
-    expect(mockDispatch.mock.calls[0]?.[0]?.type).toBe('featureFlags/setFeatureFlags');
+    // QNBS-v3: reset routes through the per-flag handler (so side effects run), not a bulk dispatch.
+    // In this fixture every flag is off, so each default-ON flag is re-enabled via handleSettingChange.
+    expect(mockHandleSettingChange).toHaveBeenCalledWith('enableMindMaps', true);
+    expect(mockHandleSettingChange.mock.calls.length).toBeGreaterThan(1);
     expect(mockToastSuccess).toHaveBeenCalledWith('settings.featureFlags.resetDone');
   });
 });
