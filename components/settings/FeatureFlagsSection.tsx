@@ -1,11 +1,37 @@
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { FEATURE_CATALOG } from '../../features/featureCatalog';
+import type { FeatureFlagsState } from '../../features/featureFlags/featureFlagsSlice';
+import { Badge, type BadgeVariant } from '../ui/Badge';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { ToggleSwitch } from './SettingsShared';
+
+// QNBS-v3: drive the maturity badge from FEATURE_CATALOG (single source of truth) rather than a
+// hand-maintained list — stub/experimental → "Experimental", beta → "Beta", stable/unlisted → none.
+const MATURITY_TO_BADGE: Record<string, BadgeVariant | undefined> = {
+  experimental: 'experimental',
+  stub: 'experimental',
+  beta: 'beta',
+  stable: undefined,
+};
+
+const FLAG_BADGE: Partial<Record<keyof FeatureFlagsState, BadgeVariant>> = Object.fromEntries(
+  FEATURE_CATALOG.map((e) => [e.flagKey, MATURITY_TO_BADGE[e.maturity]]).filter(
+    ([, variant]) => variant !== undefined,
+  ),
+) as Partial<Record<keyof FeatureFlagsState, BadgeVariant>>;
 
 /** All experimental feature flags in one settings category. */
 export const FeatureFlagsSection: FC = () => {
   const { t, featureFlags, handleSettingChange } = useSettingsViewContext();
+
+  // QNBS-v3: translated badge text per variant; the visible pill is read inline by screen readers.
+  const renderBadge = (key: keyof FeatureFlagsState): ReactNode => {
+    const variant = FLAG_BADGE[key];
+    if (!variant) return undefined;
+    const label = variant === 'beta' ? t('common.badge.beta') : t('common.badge.experimental');
+    return <Badge variant={variant}>{label}</Badge>;
+  };
 
   // QNBS-v3: Flags retired from UI (not user-toggleable):
   //   enableCodexAutoTracking — promoted to permanent core (always on)
@@ -63,6 +89,7 @@ export const FeatureFlagsSection: FC = () => {
             <ToggleSwitch
               key={key}
               label={t(labelKey)}
+              badge={renderBadge(key)}
               checked={featureFlags[key]}
               onChange={(v) => handleSettingChange(key, v)}
             />

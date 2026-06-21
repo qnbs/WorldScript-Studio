@@ -318,6 +318,39 @@ Pipeline configuration (`PipelineConfig`) includes:
 
 ---
 
+## Limitations, Token Cost & Loop Risks
+
+> **Experimental — Beta.** ProForge is gated behind `enableProForge` and is surfaced with an
+> **Experimental** badge in the dashboard header and the Settings → Experimental flags list. It is
+> on by default for new installs, but the behaviour below is intentional and worth understanding
+> before running a full pipeline on a long manuscript.
+
+**Experimental status.** ProForge is an agentic, multi-stage editing pipeline. The orchestration,
+supervisor heuristics, and per-stage agents are stable enough for everyday use, but prompt quality and
+edit precision vary by genre, model, and manuscript length. Always review proposed edits — ProForge
+**never** modifies the manuscript without explicit user approval (see *Applying Accepted Edits*).
+
+**Token cost.** Each of the 8 stages issues at least one AI call bounded by `maxTokens` (default
+`8000`). A full run is therefore **8+ calls**; with the supervisor retry (`maxRetries`, capped at 1) a
+stage can run **twice**, so a worst-case full run is up to **16 calls**. Token usage is surfaced per
+stage via the `tokensUsed` field on each stage result and aggregated in the run summary. On metered
+cloud providers this is the dominant cost — prefer running a **subset of stages** (`selectedStages`)
+or a local provider (WebLLM/Ollama) for iterative work, and reserve full cloud runs for final passes.
+
+**Loop bounding.** ProForge cannot loop unboundedly:
+- The supervisor gate (`SupervisorAgent.evaluate`) is heuristic and makes **no AI calls**.
+- Retries are capped at `maxRetries` (≤ 1) **per stage** — a failing stage is retried at most once,
+  then the pipeline advances or pauses at `awaitingReview` rather than spinning.
+- A hard intake gate (`qualityScore < 30` → fail) stops a run early on unusable input.
+- Fallback results (`isFallback: true`) carry **0** quality scores (never fake mid-range values), so a
+  degraded stage is visible rather than silently "passing".
+
+**Privacy.** When `useDuckDb` is enabled, ProForge's run history + memory-bank analytics follow the
+same gate as all other analytics — `enableDuckDbAnalytics` **and** Settings → Privacy → Analytics
+(see `app/analyticsGate.ts`). Manuscript prose is never written to DuckDB.
+
+---
+
 ## Type Reference
 
 Key types added in the Humanization Sprint:

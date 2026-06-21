@@ -3,7 +3,7 @@
  * QNBS-v3: Mocks SettingsViewContext; tests feature flag toggles list.
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -98,6 +98,21 @@ describe('FeatureFlagsSection', () => {
   it('renders ProForge toggle', () => {
     render(<FeatureFlagsSection />);
     expect(screen.getByText('settings.featureFlags.enableProForge')).toBeInTheDocument();
+  });
+
+  // QNBS-v3: maturity badges are driven by FEATURE_CATALOG — ProForge is 'experimental'.
+  it('renders an Experimental badge next to the ProForge toggle', () => {
+    render(<FeatureFlagsSection />);
+    const label = screen.getByText('settings.featureFlags.enableProForge');
+    // label span and the Badge are siblings inside the same flex row.
+    const row = label.parentElement as HTMLElement;
+    expect(within(row).getByText('common.badge.experimental')).toBeInTheDocument();
+  });
+
+  it('renders at least one Beta badge (beta-maturity flags) and Experimental badges', () => {
+    render(<FeatureFlagsSection />);
+    expect(screen.getAllByText('common.badge.experimental').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('common.badge.beta').length).toBeGreaterThan(0);
   });
 
   it('renders voice support and voice WASM toggles', () => {

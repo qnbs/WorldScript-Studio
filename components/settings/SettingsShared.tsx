@@ -1,13 +1,16 @@
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import React from 'react';
 
 export const ToggleSwitch: FC<{
   label?: string;
   hint?: string;
+  // QNBS-v3: optional inline status pill (e.g. <Badge variant="experimental" />) rendered after the
+  // label. Kept as ReactNode so callers control the badge variant/text without coupling this atom.
+  badge?: ReactNode;
   checked: boolean;
   onChange: (checked: boolean) => void;
   ariaLabel?: string;
-}> = React.memo(({ label, hint, checked, onChange, ariaLabel }) => {
+}> = React.memo(({ label, hint, badge, checked, onChange, ariaLabel }) => {
   const labelId = React.useId();
   const hintId = React.useId();
   // QNBS-v3: Ensure switch always has an accessible name (CodeAnt AI fix)
@@ -16,9 +19,14 @@ export const ToggleSwitch: FC<{
     <div className="flex items-start justify-between gap-3">
       {(label ?? hint) && (
         <div className="flex flex-col gap-0.5 min-w-0">
-          {label && (
-            <span id={labelId} className="text-sm font-medium text-[var(--sc-text-secondary)]">
-              {label}
+          {(label || badge) && (
+            <span className="flex items-center gap-2 flex-wrap">
+              {label && (
+                <span id={labelId} className="text-sm font-medium text-[var(--sc-text-secondary)]">
+                  {label}
+                </span>
+              )}
+              {badge}
             </span>
           )}
           {hint && (
