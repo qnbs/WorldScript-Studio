@@ -2155,6 +2155,7 @@
   "settings.plugins.title": "Πρόσθετα",
   "settings.plugins.uninstallBtn": "Απεγκατάσταση",
   "settings.privacy.analyticsEnabled": "Ενεργοποιήστε το Analytics",
+  "settings.privacy.analyticsHint": "Μόνο τοπικά αναλυτικά — δεν φεύγουν ποτέ από τη συσκευή σας. Απενεργοποιήστε για διακοπή κάθε συλλογής.",
   "settings.privacy.crashReporting": "Αναφορά σφαλμάτων",
   "settings.privacy.dataEncryption": "Κρυπτογράφηση δεδομένων",
   "settings.privacy.encryptionActiveStatus": "Ενεργή κρυπτογράφηση — τα δεδομένα προστατεύονται για αυτήν την περίοδο λειτουργίας",

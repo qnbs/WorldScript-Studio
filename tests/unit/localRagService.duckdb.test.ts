@@ -19,6 +19,7 @@ vi.mock('../../services/ai/localEmbeddingService', () => ({
   cosineSimilarity: vi.fn(),
 }));
 
+import { embedText } from '../../services/ai/localEmbeddingService';
 import { duckdbRagWrite, queryRagSimilarity } from '../../services/duckdb/duckdbAnalytics';
 import { rebuildHybridRagIndex, retrieveContext } from '../../services/localRagService';
 import { storageService } from '../../services/storageService';
@@ -27,6 +28,7 @@ const mockRagWrite = vi.mocked(duckdbRagWrite);
 const mockRagSimilarity = vi.mocked(queryRagSimilarity);
 const mockSaveRagVectors = vi.mocked(storageService.saveRagVectors);
 const mockGetRagVectors = vi.mocked(storageService.getRagVectors);
+const mockEmbed = vi.mocked(embedText);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -70,6 +72,46 @@ describe('rebuildHybridRagIndex — DuckDB dual-write', () => {
     await rebuildHybridRagIndex('p1', [], true);
     await Promise.resolve();
     expect(mockRagWrite).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: SEC — the gate may be a callback re-evaluated at write time (after the async embedding
+  // loop), so a privacy opt-out toggled mid-rebuild is honoured.
+  it('calls duckdbRagWrite when the duckDbEnabled callback returns true at write time', async () => {
+    await rebuildHybridRagIndex('p1', manuscript, () => true);
+    await Promise.resolve();
+    expect(mockRagWrite).toHaveBeenCalledOnce();
+  });
+
+  it('does NOT call duckdbRagWrite when the duckDbEnabled callback returns false at write time', async () => {
+    await rebuildHybridRagIndex('p1', manuscript, () => false);
+    await Promise.resolve();
+    expect(mockRagWrite).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: SEC — prove the decision is made at WRITE time, not function entry: flip the gate to
+  // false DURING the async embedding loop (embedText is awaited per chunk). A service that evaluated
+  // the callback once at entry (when it was true) would still write; the write-time contract must not.
+  it('honours a mid-rebuild opt-out: gate flipped false during embedding suppresses the write', async () => {
+    let allowed = true;
+    mockEmbed.mockImplementation(async () => {
+      allowed = false; // user toggles Privacy → Analytics off while embeddings are computing
+      return new Float32Array(384).fill(0.1);
+    });
+    await rebuildHybridRagIndex('p1', manuscript, () => allowed);
+    await Promise.resolve();
+    expect(mockSaveRagVectors).toHaveBeenCalledOnce(); // local index still rebuilt
+    expect(mockRagWrite).not.toHaveBeenCalled(); // but no DuckDB mirror write
+  });
+
+  it('mid-rebuild opt-IN: gate flipped true during embedding allows the write', async () => {
+    let allowed = false;
+    mockEmbed.mockImplementation(async () => {
+      allowed = true;
+      return new Float32Array(384).fill(0.1);
+    });
+    await rebuildHybridRagIndex('p1', manuscript, () => allowed);
+    await Promise.resolve();
+    expect(mockRagWrite).toHaveBeenCalledOnce();
   });
 });
 

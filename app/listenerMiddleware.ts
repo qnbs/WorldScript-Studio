@@ -15,6 +15,7 @@ import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
+import { isAnalyticsPersistenceAllowed } from './analyticsGate';
 import type { AppDispatch, RootState } from './store';
 import { appStoreRef } from './storeRef';
 
@@ -24,6 +25,10 @@ type ProjectStateWithHistory = {
 };
 
 export const listenerMiddleware = createListenerMiddleware();
+
+// QNBS-v3: SEC — analytics persistence gate now lives in app/analyticsGate.ts so middleware AND
+// components share the one enforcement point. Re-exported here for existing importers/tests.
+export { isAnalyticsPersistenceAllowed };
 
 // QNBS-v3: Listener categories in this file:
 //   1. Auto-Save        — project data + version control → IDB (debounced 1s)
@@ -145,16 +150,22 @@ addDebouncedListener(
 
       await storageService.saveProject(projectDataToSave);
 
-      // QNBS-v3: enableCrossProjectSearch promoted to permanent core — always index on save.
+      // QNBS-v3: enableCrossProjectSearch promoted to permanent core — the IDB search index always
+      // updates on save. The DuckDB mirror is analytics persistence, so it honours the same privacy
+      // gate as the other DuckDB writes (search still works fully from the IDB index when off).
       if (presentData.id) {
-        const duckDbOn = api.getState().featureFlags?.enableDuckDbAnalytics ?? false;
         const { indexProject } = await import('../services/crossProjectIndexService');
-        indexProject(presentData.id, enriched, duckDbOn).catch((err: unknown) =>
+        // QNBS-v3: SEC — pass a thunk so the gate is re-evaluated at the DuckDB write site inside
+        // indexProject (after its async IDB work), not snapshotted here — an opt-out toggled during
+        // that window can't slip a stale mirror write through.
+        indexProject(presentData.id, enriched, () =>
+          isAnalyticsPersistenceAllowed(api.getState()),
+        ).catch((err: unknown) =>
           logger.warn('Cross-project index update failed (non-critical):', err),
         );
       }
 
-      if (api.getState().featureFlags?.enableDuckDbAnalytics) {
+      if (isAnalyticsPersistenceAllowed(api.getState())) {
         const projectId = presentData.id ?? 'default';
         const sections = presentData.manuscript.map((s, idx) => ({
           id: s.id,
@@ -166,8 +177,11 @@ addDebouncedListener(
         }));
         const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
         const { duckdbDualWrite, withDuckDbRetry } = await loadDuckdbAnalytics();
-        void withDuckDbRetry(() =>
-          duckdbDualWrite(
+        void withDuckDbRetry(() => {
+          // QNBS-v3: SEC — re-check at write time; the opt-out may have toggled during the async
+          // loadDuckdbAnalytics()/retry window, so a snapshot taken at the outer gate could go stale.
+          if (!isAnalyticsPersistenceAllowed(api.getState())) return Promise.resolve();
+          return duckdbDualWrite(
             projectId,
             presentData.title,
             presentData.logline,
@@ -176,8 +190,8 @@ addDebouncedListener(
             presentData.projectGoals?.targetDate,
             presentData.writingHistory ?? [],
             sections,
-          ),
-        ).catch((err: unknown) =>
+          );
+        }).catch((err: unknown) =>
           logger.warn('DuckDB dual-write failed after retries (non-critical):', err),
         );
       }
@@ -270,7 +284,9 @@ addDebouncedListener(
       );
       await saveStoryCodex(codex);
 
-      if (state.featureFlags?.enableDuckDbAnalytics) {
+      // QNBS-v3: SEC — re-read live state at the gate (not the pre-await snapshot) so toggling the
+      // Analytics opt-out off during codex extraction/save is honoured for the DuckDB write.
+      if (isAnalyticsPersistenceAllowed(api.getState())) {
         const entities = codex.entities.map((e) => ({
           id: e.id,
           name: e.name,
@@ -279,7 +295,12 @@ addDebouncedListener(
           mentions: e.mentions.map((m) => ({ sectionId: m.sectionId, excerpt: m.excerpt })),
         }));
         const { duckdbCodexWrite, withDuckDbRetry } = await loadDuckdbAnalytics();
-        void withDuckDbRetry(() => duckdbCodexWrite(projectId, entities)).catch((err: unknown) =>
+        void withDuckDbRetry(() => {
+          // QNBS-v3: SEC — re-check at write time; opt-out may have toggled during the async
+          // loadDuckdbAnalytics()/retry window (incl. between retry attempts).
+          if (!isAnalyticsPersistenceAllowed(api.getState())) return Promise.resolve();
+          return duckdbCodexWrite(projectId, entities);
+        }).catch((err: unknown) =>
           logger.warn('DuckDB codex write failed after retries (non-critical):', err),
         );
       }
@@ -313,25 +334,48 @@ listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
     const curr = currentState as RootState;
     const prev = previousState as RootState;
-    return (
-      curr.featureFlags?.enableDuckDbAnalytics === true &&
+    // QNBS-v3: SEC — the seed migration may only run when analytics persistence is allowed (flag +
+    // privacy opt-out). It fires when EITHER DuckDB just became ready OR the user just opted back in
+    // while DuckDB is already ready — so a user who starts opted-out and later enables analytics still
+    // gets the one-time historical backfill (no reload required). 'error' is retryable too so a
+    // transient DuckDB failure recovers on the next ready/opt-in transition (not stuck until reload).
+    const status = curr.analytics?.migrationStatus;
+    const eligible =
+      isAnalyticsPersistenceAllowed(curr) &&
       curr.analytics?.duckDbStatus === 'ready' &&
-      curr.analytics?.migrationStatus === 'idle' &&
-      prev.analytics?.duckDbStatus !== 'ready'
-    );
+      (status === 'idle' || status === 'error');
+    if (!eligible) return false;
+    const duckDbJustReady = prev.analytics?.duckDbStatus !== 'ready';
+    const analyticsJustEnabled = !isAnalyticsPersistenceAllowed(prev);
+    return duckDbJustReady || analyticsJustEnabled;
   },
   effect: async (_action, listenerApi) => {
     const state = listenerApi.getState() as RootState;
     const project = state.project.present?.data;
     if (!project) return;
 
+    // QNBS-v3: SEC — defence in depth; the predicate already requires the combined gate, but re-check
+    // here in case state changed between predicate and effect. DuckDB still initialises (the hook gates
+    // on the flag); no analytics rows are written while the Privacy opt-out is off.
+    if (!isAnalyticsPersistenceAllowed(state)) return;
+
     listenerApi.dispatch(analyticsActions.setMigrationStatus('running'));
     try {
+      // QNBS-v3: SEC — pass a live gate thunk so the long-running migrations re-check the analytics
+      // opt-out at each DuckDB write step and abort (without marking done) if it flips off mid-run.
+      const gate = () => isAnalyticsPersistenceAllowed(listenerApi.getState() as RootState);
       const { runMigrationWithRollback } = await loadDuckdbMigration();
-      await runMigrationWithRollback(project);
+      const seedResult = await runMigrationWithRollback(project, gate);
       const projectId = project.id || 'default';
       const { runRagVectorMigration } = await loadRagVectorMigration();
-      await runRagVectorMigration(projectId, project.manuscript);
+      const ragResult = await runRagVectorMigration(projectId, project.manuscript, gate);
+      // QNBS-v3: SEC — if either migration aborted because analytics was opted out mid-run, do NOT mark
+      // it 'done' (no markers were written). Reset to 'idle' so re-enabling analytics re-triggers the
+      // backfill (the predicate re-fires on analyticsEnabled→true while DuckDB is ready + status idle).
+      if (seedResult.aborted || ragResult.aborted) {
+        listenerApi.dispatch(analyticsActions.setMigrationStatus('idle'));
+        return;
+      }
       listenerApi.dispatch(analyticsActions.setMigrationStatus('done'));
       listenerApi.dispatch(analyticsActions.setLastSyncAt(new Date().toISOString()));
     } catch (err) {
@@ -357,10 +401,14 @@ listenerMiddleware.startListening({
     if (!project) return;
 
     const projectId = project.id || 'default';
-    const duckDbOn = state.featureFlags?.enableDuckDbAnalytics ?? false;
     try {
       const { rebuildHybridRagIndex } = await loadLocalRagService();
-      await rebuildHybridRagIndex(projectId, project.manuscript, duckDbOn);
+      // QNBS-v3: SEC — the local RAG index always rebuilds (retrieval keeps working); only its DuckDB
+      // vector mirror is analytics persistence. Pass a thunk so the gate is re-checked at write time
+      // (after the async embedding loop), honouring an opt-out toggled during the rebuild.
+      await rebuildHybridRagIndex(projectId, project.manuscript, () =>
+        isAnalyticsPersistenceAllowed(listenerApi.getState() as RootState),
+      );
     } catch (err) {
       logger.warn('RAG auto-rebuild failed (non-critical):', err);
     }

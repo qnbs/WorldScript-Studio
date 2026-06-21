@@ -2154,6 +2154,7 @@
   "settings.plugins.title": "Plugins",
   "settings.plugins.uninstallBtn": "Deinstallieren",
   "settings.privacy.analyticsEnabled": "Analytics aktivieren",
+  "settings.privacy.analyticsHint": "Nur lokale Analysen – verlassen niemals dein Gerät. Deaktivieren, um jede Analyse-Erfassung zu stoppen.",
   "settings.privacy.crashReporting": "Absturzberichterstattung",
   "settings.privacy.dataEncryption": "Datenverschlüsselung",
   "settings.privacy.encryptionActiveStatus": "Verschlüsselung aktiv — Daten sind für diese Sitzung geschützt",

@@ -117,17 +117,38 @@ describe('normalizePersistedSettings', () => {
 
   // ── privacy ───────────────────────────────────────────────────────────────
 
-  it('provides default privacy settings when field is absent', () => {
+  it('provides default privacy settings when field is absent (analytics ON, migrated)', () => {
     const result = normalizePersistedSettings({});
     expect(result.privacy).toBeDefined();
     expect(result.privacy.localStorageOnly).toBe(true);
-    expect(result.privacy.analyticsEnabled).toBe(false);
+    // QNBS-v3: SEC — default analytics ON (local-only metadata); fresh data is treated as migrated.
+    expect(result.privacy.analyticsEnabled).toBe(true);
+    expect(result.privacy.analyticsGateMigrated).toBe(true);
   });
 
   it('merges partial privacy settings with defaults', () => {
-    const result = normalizePersistedSettings({ privacy: { analyticsEnabled: true } });
+    const result = normalizePersistedSettings({
+      privacy: { analyticsEnabled: true, analyticsGateMigrated: true },
+    });
     expect(result.privacy.analyticsEnabled).toBe(true);
     expect(result.privacy.localStorageOnly).toBe(true); // default preserved
+  });
+
+  // QNBS-v3: SEC one-time migration — legacy persisted analyticsEnabled was cosmetic (the gate didn't
+  // exist; analytics ran whenever enableDuckDbAnalytics was on, which is the default). On first upgrade
+  // we reset to the new default to PRESERVE prior behavior, then respect the user's choice thereafter.
+  it('migrates legacy persisted analyticsEnabled:false (no marker) to ON, preserving prior behavior', () => {
+    const result = normalizePersistedSettings({ privacy: { analyticsEnabled: false } });
+    expect(result.privacy.analyticsEnabled).toBe(true);
+    expect(result.privacy.analyticsGateMigrated).toBe(true);
+  });
+
+  it('respects a genuine opt-out (analyticsEnabled:false) once the migration marker is set', () => {
+    const result = normalizePersistedSettings({
+      privacy: { analyticsEnabled: false, analyticsGateMigrated: true },
+    });
+    expect(result.privacy.analyticsEnabled).toBe(false);
+    expect(result.privacy.analyticsGateMigrated).toBe(true);
   });
 
   // ── advancedAi ────────────────────────────────────────────────────────────

@@ -533,6 +533,12 @@ export interface PrivacySettings {
   localStorageOnly: boolean;
   shareUsageData: boolean;
   euDataResidency: boolean;
+  // QNBS-v3: SEC one-time migration marker. Before the analytics gate existed, analyticsEnabled was
+  // cosmetic (persistence was controlled solely by enableDuckDbAnalytics, default on), so legacy
+  // persisted settings hold a meaningless value. On the first load after the gate ships we reset
+  // analyticsEnabled to the new default to preserve prior behavior, then set this flag so the user's
+  // real choice is respected on every subsequent load. Optional for back-compat with old payloads.
+  analyticsGateMigrated?: boolean;
 }
 
 export interface PerformanceSettings {

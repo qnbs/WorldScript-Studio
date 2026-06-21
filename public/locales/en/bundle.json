@@ -2104,6 +2104,7 @@
   "settings.plugins.title": "Plugins",
   "settings.plugins.uninstallBtn": "Uninstall",
   "settings.privacy.analyticsEnabled": "Enable Analytics",
+  "settings.privacy.analyticsHint": "Local analytics only — never leaves your device. Turn off to stop all analytics collection.",
   "settings.privacy.crashReporting": "Crash Reporting",
   "settings.privacy.dataEncryption": "Data Encryption",
   "settings.privacy.encryptionActiveStatus": "Encryption active — data is protected for this session",

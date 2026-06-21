@@ -75,6 +75,17 @@ describe('runIfNeeded', () => {
     expect(mockDualWrite).toHaveBeenCalledOnce();
   });
 
+  // QNBS-v3: SEC — analytics opt-out aborts the seed write WITHOUT marking done (retries on opt-in).
+  it('skips the write and the marker when shouldPersist() returns false', async () => {
+    mockQuery.mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] }); // marker absent
+    await runIfNeeded(sampleProject, () => false);
+    expect(mockDualWrite).not.toHaveBeenCalled();
+    const markerCall = mockExec.mock.calls.find(([sql]) =>
+      (sql as string).includes('INSERT INTO _meta'),
+    );
+    expect(markerCall).toBeUndefined();
+  });
+
   it('writes _meta marker after successful migration', async () => {
     mockQuery.mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] });
     await runIfNeeded(sampleProject);
