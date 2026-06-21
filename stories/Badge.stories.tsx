@@ -17,15 +17,15 @@ export default meta;
 type Story = StoryObj<typeof Badge>;
 
 export const Experimental: Story = {
-  args: { variant: 'experimental' },
+  args: { variant: 'experimental', children: 'Experimental' },
 };
 
 export const Beta: Story = {
-  args: { variant: 'beta' },
+  args: { variant: 'beta', children: 'Beta' },
 };
 
 export const New: Story = {
-  args: { variant: 'new' },
+  args: { variant: 'new', children: 'New' },
 };
 
 export const CustomLabel: Story = {
@@ -34,5 +34,5 @@ export const CustomLabel: Story = {
 
 export const Decorative: Story = {
   // srLabel="" → aria-hidden (use beside already-labelled content)
-  args: { variant: 'experimental', srLabel: '' },
+  args: { variant: 'experimental', children: 'Experimental', srLabel: '' },
 };

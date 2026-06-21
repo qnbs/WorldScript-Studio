@@ -6,8 +6,12 @@ export type BadgeVariant = 'experimental' | 'beta' | 'new' | 'neutral';
 interface BadgeProps {
   /** Visual tone. `experimental` = warning/amber, `beta` = info/blue, `new` = success/green. */
   variant?: BadgeVariant;
-  /** Visible text. Defaults to the capitalized variant name when omitted (except `neutral`). */
-  children?: ReactNode;
+  /**
+   * Visible text — REQUIRED. QNBS-v3: this is a presentational atom and deliberately carries no
+   * user-facing copy of its own; callers pass already-translated text (e.g. t('common.badge.beta'))
+   * so there are no hardcoded strings to localize here.
+   */
+  children: ReactNode;
   className?: string;
   /**
    * Accessible label. When the badge is decorative next to already-labelled content (e.g. a feature
@@ -25,21 +29,14 @@ const VARIANT_CLASS: Record<BadgeVariant, string> = {
   neutral: 'bg-[var(--sc-surface-overlay)]/50 text-[var(--sc-text-muted)]',
 };
 
-const DEFAULT_TEXT: Record<BadgeVariant, string> = {
-  experimental: 'Experimental',
-  beta: 'Beta',
-  new: 'New',
-  neutral: '',
-};
-
 /**
  * Small inline status pill for labelling features as Experimental / Beta / New.
  * Pure rendering, theme-token driven. Reused by FeatureFlagsSection, the ProForge header, and the
- * Ollama "recommended for your device" chip.
+ * Ollama "recommended for your device" chip. Callers supply the (translated) label via children.
  */
 export const Badge: FC<BadgeProps> = React.memo(
   ({ variant = 'neutral', children, className, srLabel }) => {
-    const content = children ?? DEFAULT_TEXT[variant];
+    const content = children;
     // When srLabel is an empty string, the badge is decorative — hide from a11y tree.
     const decorative = srLabel === '';
     return (
