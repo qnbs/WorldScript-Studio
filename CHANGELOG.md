@@ -5,25 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.23.1] — 2026-06-17
-
-### Fixed
-
-- **Tauri desktop app stuck on "WorldScript Studio ist offline."**: the PWA Service Worker was registering inside the Tauri WebView (WebView2 supports SWs) and hijacking the root navigation. When its versioned caches were empty (precache fails under the `tauri.localhost` custom protocol while a version bump had already pruned the previous caches), the SW's network-first navigation strategy fell through to the hardcoded inline offline fallback (`public/sw.js`), rendering a bare "<APP> ist offline." page instead of the app. A Service Worker has no place in Tauri — the desktop app is already served locally and offline-first. Two-layer fix: (1) `register-sw.ts` now detects the Tauri runtime and never registers, additionally unregistering any SW + deleting `worldscript-*` caches so already-broken installs self-heal; (2) `public/sw.js` detects the Tauri origin (`tauri://` / `tauri.localhost`) and becomes a no-op — it precaches nothing, never intercepts `fetch`, and self-unregisters on `activate`. The browser PWA path is unchanged.
-
 ## [Unreleased]
+
+## [1.24.0] — 2026-06-21
+
+> **Critical & Immediate hardening sequence** — six stacked PRs (privacy, experimental labeling, coverage, voice consent, local-AI, hygiene/docs) plus the 11→17 locale expansion, shipped as a minor release.
+
+### Security
+
+- **Privacy → Analytics is now a real opt-out (SEC-6).** The Settings → Privacy "Analytics" toggle was cosmetic — only the `enableDuckDbAnalytics` flag controlled persistence. A single enforcement point (`app/analyticsGate.ts` `isAnalyticsPersistenceAllowed`) now gates **every** DuckDB write path (project dual-write, codex, cross-project mirror, RAG vector mirror, seed + RAG migrations, and inference telemetry) on **both** the flag **and** the privacy toggle. The gate is re-evaluated at the last synchronous moment before each async write (no opt-out race); migrations abort without writing their done-marker (so re-opt-in retries) and recover from a transient `error` state; a one-time `analyticsGateMigrated` marker preserves existing-install behavior on upgrade. Analytics remain **local-only metadata** (never manuscript prose, never leaves the device). Full DuckDB OPFS/cell encryption stays deferred to v2.0 (`docs/SECURITY-THREAT-MODEL.md`).
+- **Voice consent clarity.** Corrected the misleading "all voice processing runs locally" intro (the default STT path is the cloud Web Speech API) and added a per-engine cloud-vs-on-device privacy note beside the STT engine selector (`settings.voice.engine.privacyNote`, 17 locales).
 
 ### Added
 
+- **Device-aware Ollama recommendation + one-click pull.** `pullOllamaModel` streams `POST /api/pull` progress with cancel + error-retry (surfaces Ollama's in-band `{error}` lines, propagates AbortError for cancel, releases the reader on every path); `getOllamaModelForDevice` picks a tiered model (qwen2.5:7b / llama3.2:3b / llama3.2:1b) from the device profile and steps down a size on low battery; new `OllamaDevicePull` settings UI with a recommendation chip + progress/cancel/retry.
+- **Reusable `Badge` design-system atom** (variant `experimental | beta | new | neutral`, theme-token driven, accessible) with a Storybook story; applied as maturity badges (driven by `FEATURE_CATALOG`) in the Experimental flags list and an "Experimental" badge in the ProForge dashboard header. New "Limitations, Token Cost & Loop Risks" section in `docs/PROFORGE-PIPELINE.md`.
+- **Test coverage for newer subsystems (+101 tests):** collab-transport E2E crypto (the vendored y-webrtc C-1 fork), the ProForge Core Capability Layer + adapters (`proForgeCapabilityCore`, schemas, `agentRegistry`, `nodeInferenceGateway`, `browserProForgeCapability`), and the 5 previously-untested Copilot components (`CopilotPanel`, `CopilotLauncher`, `InlineAnnotationLayer`, `InsightSection`, `HeuristicsModeToggle`).
 - **Language expansion — 6 new locales (11 → 17):** Finnish (`fi`), Swedish (`sv`), Hungarian (`hu`), Icelandic (`is`), Basque (`eu`) and Persian/Farsi (`fa`, **RTL**, Arabic script). All ship as Beta. The high-traffic chrome (`portal`, `sidebar`, `dashboard`, top `common.*` verbs) plus native cold-start strings (`i18nBootstrap`) and glossary blocks are hand-translated; the remaining modules were then completed via the glossary-anchored bulk translator (see the bulk-translation entry below). `fa` direction/fonts are automatic via `RTL_LOCALES` + the existing `[dir="rtl"]` Noto Arabic swap — no App/CSS/font changes. New guide: [`docs/LANGUAGE-EXPANSION-2026.md`](docs/LANGUAGE-EXPANSION-2026.md).
 - **Bulk-translate hardening (`scripts/bulk-translate-locales.mjs`):** placeholder masking (`{{token}}` → sentinel → restore, so MT can't mangle interpolation) and a `--dry-run` mode (per-file key + glossary-hit counts, no network calls, no writes). The 6 new languages are added to `SUPPORTED_LANGS`, `check-i18n-keys.mjs`, and `build-i18n.mjs`. The `i18nPlaceholders` guard now covers all 17 locale bundles.
 - **Localized language picker:** `LanguageSelector` now resolves each language's exonym label (e.g. "Finnish", "Swedish") through `t('portal.language.names.<code>')` at render time instead of a hardcoded string — the native endonym (`Suomi`, `Svenska`, …) stays hardcoded by design so users always find their own language regardless of the active UI locale. Adds `portal.language.names.*` (17 names) to all 17 locales, hand-translated for the 5 core + 6 new languages (other Beta locales' exonyms filled by the bulk translator). `portal` chrome is now fully localized for the 6 new languages.
 - **Beta-locale bulk translation (10 languages):** ran the glossary-anchored, placeholder-masked `bulk-translate-locales.mjs` pipeline for `fi/sv/hu/is/eu/fa` (full) and topped up `ja/zh/pt/el`, lifting the 6 new locales from ~8 % to **90-93 %** coverage (machine-translated, **Beta** quality, human native review tracked as follow-up). `help.json` (long-form rich HTML) stays English fallback for the new langs and is excluded from `--all` — its tag-dense markup is not safely machine-translatable. Glossary expanded to **v2.0** (~44 anchor terms/locale: + `Co-Pilot`, `ProForge`, `Subplot`, `Timeline`, `Snapshot`, `Synopsis`, `Mind Map`, `Word Count`, `Continue Writing`, `Improve Writing`, `Consistency Checker`, `Plot Hole`, …). Two bulk-script bugs fixed: `glossaryTranslate` partial-match (→ exact-match only) and `--all` mangling `help.json` HTML (→ excluded).
 - **New `docs/TRANSLATION-GUIDE.md`:** end-to-end localization guide — architecture/build flow, placeholder/token rules, tone-by-category, RTL guidelines + per-locale verification checklist, glossary usage, native-review checklist, common pitfalls, and the new-language contribution workflow. `docs/I18N-GLOSSARY.md` updated for the v2.0 anchor set.
 
+### Fixed
+
+- **`enableIdbAtRestEncryption` default drift:** `featureCatalog` declared `defaultOn: false`, contradicting the slice (`true`, the source of truth) — reconciled.
+- **README metric drift:** `scripts/sync-readme-metrics.mjs` hard-coded the locale count to `11`, so its regexes stopped matching after the 11→17 expansion and silently froze the i18n key count. Locale count is now dynamic and the regexes match any digit count — README reads the live **17 locales / 2786 keys** with the drift guard green.
+
 ### Changed
 
+- **Dependency hygiene + onboarding + docs truth-up:** documented the `joi` accepted-risk override (GHSA-q7cg-457f-vx79; still required via `wait-on`) and the SBOM deferral in `AUDIT.md` (`pnpm audit --audit-level=high` clean); corrected the stale `public/sw.js` "must hand-sync `APP_VERSION`" note in `CLAUDE.md`; added a "Do NOT run heavy suites locally" callout + Minimal Change Checklist to `CONTRIBUTING.md` and mirrored the heavy-suite warning into `.github/copilot-instructions.md`.
+
 - **Docs completion (language-expansion pass):** README i18n badge, language list, capability table and metrics line updated to **17 locales / 2716 keys**; Persian added to the RTL-Beta section; `AUDIT.md` follow-up chain + quality-gate entry for 2026-06-17.
+
+
+## [1.23.1] — 2026-06-17
+
+### Fixed
+
+- **Tauri desktop app stuck on "WorldScript Studio ist offline."**: the PWA Service Worker was registering inside the Tauri WebView (WebView2 supports SWs) and hijacking the root navigation. When its versioned caches were empty (precache fails under the `tauri.localhost` custom protocol while a version bump had already pruned the previous caches), the SW's network-first navigation strategy fell through to the hardcoded inline offline fallback (`public/sw.js`), rendering a bare "<APP> ist offline." page instead of the app. A Service Worker has no place in Tauri — the desktop app is already served locally and offline-first. Two-layer fix: (1) `register-sw.ts` now detects the Tauri runtime and never registers, additionally unregistering any SW + deleting `worldscript-*` caches so already-broken installs self-heal; (2) `public/sw.js` detects the Tauri origin (`tauri://` / `tauri.localhost`) and becomes a no-op — it precaches nothing, never intercepts `fetch`, and self-unregisters on `activate`. The browser PWA path is unchanged.
 
 ## [1.23.0] — 2026-06-16
 
