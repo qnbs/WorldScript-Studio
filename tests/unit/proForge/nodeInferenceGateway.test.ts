@@ -5,6 +5,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { GenerateRequest } from '../../../services/ai/inferenceGateway';
+import type { AIRequestOptions } from '../../../services/aiProviderService';
+
 const { mockGenerate, mockEmbed } = vi.hoisted(() => ({
   mockGenerate: vi.fn(),
   mockEmbed: vi.fn(),
@@ -23,13 +26,22 @@ import {
 } from '../../../services/proForge/adapters/nodeInferenceGateway';
 
 const gw = () => new NodeInferenceGateway({ apiKey: 'test-key' });
-const genReq = (over: Record<string, unknown> = {}) =>
-  ({
+
+// Fully-typed GenerateRequest fixture. Empty model intentionally exercises the gateway's
+// `request.options.model || this.defaultModel` fallback (the only narrow cast).
+function genReq(
+  over: { creativity?: GenerateRequest['creativity']; options?: Partial<AIRequestOptions> } = {},
+): GenerateRequest {
+  return {
     prompt: 'hello',
-    creativity: 'Balanced',
-    options: { model: '', maxTokens: undefined },
-    ...over,
-  }) as unknown as Parameters<NodeInferenceGateway['generate']>[0];
+    creativity: over.creativity ?? 'Balanced',
+    options: {
+      model: '' as AIRequestOptions['model'],
+      provider: 'gemini',
+      ...over.options,
+    },
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -78,9 +90,9 @@ describe('NodeInferenceGateway.generate', () => {
   });
 
   it('honours a custom model from the request and forwards maxTokens', async () => {
-    await gw().generate(genReq({ options: { model: 'gemini-1.5-pro', maxTokens: 512 } }));
+    await gw().generate(genReq({ options: { model: 'gemini-3.5-flash', maxTokens: 512 } }));
     const arg = mockGenerate.mock.calls[0]?.[0];
-    expect(arg.model).toBe('gemini-1.5-pro');
+    expect(arg.model).toBe('gemini-3.5-flash');
     expect(arg.config.maxOutputTokens).toBe(512);
   });
 

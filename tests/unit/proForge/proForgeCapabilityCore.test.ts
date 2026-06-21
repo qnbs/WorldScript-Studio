@@ -152,15 +152,45 @@ describe('applyEditsPure', () => {
     expect(applyEditsPure(snapshot.manuscript, [], false).dryRun).toBe(false);
   });
 
-  it('ignores review items that are not accepted manuscript edits', () => {
-    const item = {
+  it('ignores an advisory review item that carries no proposed replacement', () => {
+    // QNBS-v3: only items with a `proposed` are text edits; advisory items are ignored and NOT
+    // counted as skipped (status filtering happens upstream of applyEditsPure).
+    const advisory: ReviewItem = {
       id: 'ri1',
-      stage: 'lineProse',
-      accepted: false,
-      type: 'suggestion',
-    } as unknown as ReviewItem;
-    const res = applyEditsPure(snapshot.manuscript, [item], true);
+      stage: 'structural',
+      type: 'arcIssue',
+      severity: 'warning',
+      sectionId: 's1',
+      description: 'consider raising the stakes earlier',
+      confidence: 0.7,
+      status: 'accepted',
+      createdAt: '2026-01-01T00:00:00Z',
+      // no `proposed` → advisory, not an edit
+    };
+    const res = applyEditsPure(snapshot.manuscript, [advisory], true);
     expect(res.applied).toBe(0);
+    expect(res.skipped).toBe(0);
+  });
+
+  it('applies an accepted edit whose original text anchors in the section', () => {
+    const edit: ReviewItem = {
+      id: 'ri2',
+      stage: 'lineProse',
+      type: 'proseEdit',
+      severity: 'info',
+      sectionId: 's1',
+      range: { start: 0, end: 4 },
+      description: 'tighten the opening',
+      original: 'Once',
+      proposed: 'Then',
+      confidence: 0.9,
+      status: 'accepted',
+      createdAt: '2026-01-01T00:00:00Z',
+    };
+    const res = applyEditsPure(snapshot.manuscript, [edit], false);
+    expect(res.applied).toBe(1);
+    expect(res.updates[0]).toMatchObject({ id: 's1' });
+    expect(res.updates[0]?.content).toContain('Then');
   });
 });
 
