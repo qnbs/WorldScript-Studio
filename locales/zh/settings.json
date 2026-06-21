@@ -644,6 +644,7 @@
   "settings.plugins.title": "插件",
   "settings.plugins.uninstallBtn": "卸载",
   "settings.privacy.analyticsEnabled": "启用分析",
+  "settings.privacy.analyticsHint": "仅本地分析 — 绝不会离开您的设备。关闭可停止所有分析收集。",
   "settings.privacy.crashReporting": "崩溃报告",
   "settings.privacy.dataEncryption": "数据加密",
   "settings.privacy.encryptionActiveStatus": "加密处于活动状态 — 此会话的数据受到保护",

@@ -2155,6 +2155,7 @@
   "settings.plugins.title": "プラグイン",
   "settings.plugins.uninstallBtn": "アンインストール",
   "settings.privacy.analyticsEnabled": "分析を有効にする",
+  "settings.privacy.analyticsHint": "ローカル分析のみ — デバイスから外部に送信されません。オフにするとすべての分析収集が停止します。",
   "settings.privacy.crashReporting": "クラッシュレポート",
   "settings.privacy.dataEncryption": "データの暗号化",
   "settings.privacy.encryptionActiveStatus": "暗号化がアクティブ - このセッションのデータは保護されています",

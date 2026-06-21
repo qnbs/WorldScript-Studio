@@ -2155,6 +2155,7 @@
   "settings.plugins.title": "Viðbætur",
   "settings.plugins.uninstallBtn": "Fjarlægðu",
   "settings.privacy.analyticsEnabled": "Virkja greiningu",
+  "settings.privacy.analyticsHint": "Aðeins staðbundin greining — fer aldrei úr tækinu þínu. Slökktu til að stöðva alla greiningarsöfnun.",
   "settings.privacy.crashReporting": "Hrunskýrslur",
   "settings.privacy.dataEncryption": "Gagna dulkóðun",
   "settings.privacy.encryptionActiveStatus": "Dulkóðun virk — gögn eru vernduð fyrir þessa lotu",

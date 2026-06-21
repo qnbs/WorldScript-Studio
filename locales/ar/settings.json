@@ -644,6 +644,7 @@
   "settings.plugins.title": "الإضافات",
   "settings.plugins.uninstallBtn": "إلغاء التثبيت",
   "settings.privacy.analyticsEnabled": "تفعيل التحليلات",
+  "settings.privacy.analyticsHint": "تحليلات محلية فقط — لا تغادر جهازك أبدًا. أوقف التشغيل لإيقاف جمع كل التحليلات.",
   "settings.privacy.crashReporting": "الإبلاغ عن الأعطال",
   "settings.privacy.dataEncryption": "تشفير البيانات",
   "settings.privacy.encryptionActiveStatus": "التشفير نشط — البيانات محمية لهذه الجلسة",

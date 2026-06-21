@@ -413,7 +413,10 @@ export const FEATURE_CATALOG: FeatureCatalogEntry[] = [
     // QNBS-v3: B-1 complete (f0afca3) — passphrase UX shipped; maturity updated from ghost→beta
     maturity: 'beta',
     tier: 'privacy',
-    defaultOn: false,
+    // QNBS-v3: reconciled with featureFlagsSlice defaultFeatureFlagsState (enableIdbAtRestEncryption:
+    // true). Catalog previously declared false, contradicting the slice — the slice is the source of
+    // truth; new installs get encryption-ready defaults (passphrase UX, B-1).
+    defaultOn: true,
     gateLocations: [
       {
         file: 'App.tsx:288',

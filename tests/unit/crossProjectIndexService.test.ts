@@ -15,6 +15,13 @@ vi.mock('../../services/ai/localEmbeddingService', () => ({
   cosineSimilarity: (...args: unknown[]) => mockCosineSimilarity(...args),
 }));
 
+// QNBS-v3: SEC — mock the DuckDB loader so we can assert the cross-project mirror write is gated by
+// the duckDbEnabled callback (re-evaluated at the write site) without touching real DuckDB-WASM.
+const { mockCrossProjectWrite } = vi.hoisted(() => ({ mockCrossProjectWrite: vi.fn() }));
+vi.mock('../../services/duckdb/duckdbListenerLoader', () => ({
+  loadDuckdbAnalytics: () => Promise.resolve({ duckdbCrossProjectWrite: mockCrossProjectWrite }),
+}));
+
 import type { ProjectData } from '../../features/project/projectSlice';
 import {
   enrichProjectIndex,
@@ -54,10 +61,18 @@ beforeEach(async () => {
   // Default: embedding succeeds with a small Float32Array
   mockEmbedText.mockResolvedValue(new Float32Array([0.5, 0.5, 0.0]));
   mockCosineSimilarity.mockReturnValue(0.8);
+  mockCrossProjectWrite.mockResolvedValue(undefined);
   for (const id of TEST_IDS) {
     await removeProjectIndex(id).catch(() => {});
   }
 });
+
+// Flush the fire-and-forget DuckDB write chain (loadDuckdbAnalytics().then(...)) deterministically —
+// it is a pure microtask chain (mocked loader resolves synchronously), so awaiting a few microtask
+// ticks settles it without depending on real timers / wall-clock scheduling.
+async function flushMicrotasks() {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+}
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -139,6 +154,25 @@ describe('crossProjectIndexService', () => {
     const found = results.find((r) => r.projectId === 'proj-1');
     expect(found?.lastIndexed).toBeGreaterThanOrEqual(before);
     expect(found?.lastIndexed).toBeLessThanOrEqual(after);
+  });
+
+  // QNBS-v3: SEC — the DuckDB mirror write is gated by the duckDbEnabled callback, evaluated AFTER the
+  // IDB put (so a mid-call opt-out is honoured). The IDB index itself is written regardless.
+  it('indexProject writes the DuckDB mirror when the gate callback returns true', async () => {
+    await indexProject('proj-1', makeProjectData(), () => true);
+    await flushMicrotasks();
+    expect(mockCrossProjectWrite).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'proj-1', title: 'My Novel' }),
+    );
+  });
+
+  it('indexProject skips the DuckDB mirror when the gate callback returns false (IDB still written)', async () => {
+    await indexProject('proj-1', makeProjectData(), () => false);
+    await flushMicrotasks();
+    expect(mockCrossProjectWrite).not.toHaveBeenCalled();
+    // IDB search index is still populated — search works regardless of analytics opt-out.
+    const results = await listIndexedProjects();
+    expect(results.find((r) => r.projectId === 'proj-1')).toBeDefined();
   });
 });
 

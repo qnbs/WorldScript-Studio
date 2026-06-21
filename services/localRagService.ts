@@ -94,8 +94,11 @@ interface HybridRagRecord extends LocalRagChunkRecord {
 export async function rebuildHybridRagIndex(
   projectId: string,
   manuscript: StorySection[],
-  // QNBS-v3: P2 dual-write — vectors (not text) mirrored to DuckDB when analytics flag is on.
-  duckDbEnabled = false,
+  // QNBS-v3: P2 dual-write — vectors (not text) mirrored to DuckDB when analytics persistence is
+  // allowed. SEC: accepts a callback so the caller can re-evaluate the privacy gate at write time
+  // (the embedding loop is async — a boolean captured up-front would let an opt-out toggled mid-rebuild
+  // leak one stale mirror write). A plain boolean is still accepted for simple/synchronous callers.
+  duckDbEnabled: boolean | (() => boolean) = false,
 ): Promise<number> {
   const records: HybridRagRecord[] = [];
 
@@ -134,7 +137,13 @@ export async function rebuildHybridRagIndex(
   await storageService.saveRagVectors(projectId, records);
 
   // QNBS-v3: Mirror vector-only data to DuckDB; text stays in IDB to avoid BLOB encryption.
-  if (duckDbEnabled && records.length > 0) {
+  // SEC: normalize the gate to a function and re-evaluate it at the LAST synchronous moment before the
+  // mirror write (after the async embedding loop AND after building duckChunks), so a mid-rebuild
+  // opt-out is honored. The only irreducible window is an opt-out landing during the in-flight DB
+  // insert itself, which cannot be interrupted without transactional rollback.
+  const gateAllows: () => boolean =
+    typeof duckDbEnabled === 'function' ? duckDbEnabled : () => duckDbEnabled;
+  if (gateAllows() && records.length > 0) {
     const duckChunks = records
       .filter((r) => r.semanticVec && r.semanticVec.length > 0)
       .map((r) => ({
@@ -144,7 +153,7 @@ export async function rebuildHybridRagIndex(
         embedding: r.semanticVec as Float32Array,
         vector: r.vector,
       }));
-    if (duckChunks.length > 0) {
+    if (duckChunks.length > 0 && gateAllows()) {
       void duckdbRagWrite(projectId, duckChunks).catch((err: unknown) =>
         logger.warn('DuckDB RAG vector write failed (non-critical):', err),
       );

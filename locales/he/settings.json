@@ -644,6 +644,7 @@
   "settings.plugins.title": "תוספים",
   "settings.plugins.uninstallBtn": "הסרת התקנה",
   "settings.privacy.analyticsEnabled": "הפעלת אנליטיקה",
+  "settings.privacy.analyticsHint": "ניתוח מקומי בלבד — לעולם לא עוזב את המכשיר שלך. כבה כדי לעצור את כל איסוף הנתונים.",
   "settings.privacy.crashReporting": "דיווח קריסות",
   "settings.privacy.dataEncryption": "הצפנת נתונים",
   "settings.privacy.encryptionActiveStatus": "הצפנה פעילה — הנתונים מוגנים להפעלה זו",

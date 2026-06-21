@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { useState } from 'react';
+import { analyticsPersistenceAllowedNow } from '../../app/analyticsGate';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import {
   selectAllCharacters,
@@ -179,7 +180,6 @@ export const ReferencePanelView: FC<{ section: StorySection }> = ({ section }) =
   const [reindexBusy, setReindexBusy] = useState(false);
   const dispatch = useAppDispatch();
   const projectData = useAppSelector(selectProjectData);
-  const duckDbEnabled = useAppSelector((s) => s.featureFlags.enableDuckDbAnalytics);
   const commentCount = useAppSelector(selectCommentsBySection(section.id)).filter(
     (c) => !c.resolved,
   ).length;
@@ -189,10 +189,12 @@ export const ReferencePanelView: FC<{ section: StorySection }> = ({ section }) =
     setReindexBusy(true);
     try {
       // QNBS-v3: re-index from the panel so the AI context is fresh after heavy edits.
+      // SEC: gate the DuckDB mirror on the live analytics opt-out (flag + privacy), re-checked at
+      // write time — not on the feature flag alone.
       const chunks = await rebuildHybridRagIndex(
         projectData.id ?? 'browser-project',
         projectData.manuscript,
-        duckDbEnabled,
+        analyticsPersistenceAllowedNow,
       );
       dispatch(
         statusActions.addNotification({

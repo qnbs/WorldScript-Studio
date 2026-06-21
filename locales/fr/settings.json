@@ -643,6 +643,7 @@
   "settings.plugins.title": "Plugins",
   "settings.plugins.uninstallBtn": "Désinstaller",
   "settings.privacy.analyticsEnabled": "Activer les analyses",
+  "settings.privacy.analyticsHint": "Analytique locale uniquement — ne quitte jamais votre appareil. Désactivez pour arrêter toute collecte.",
   "settings.privacy.crashReporting": "Rapports de pannes",
   "settings.privacy.dataEncryption": "Chiffrement des données",
   "settings.privacy.encryptionActiveStatus": "Chiffrement actif — les données sont protégées pour cette session",

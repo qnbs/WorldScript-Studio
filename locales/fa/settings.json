@@ -644,6 +644,7 @@
   "settings.plugins.title": "پلاگین ها",
   "settings.plugins.uninstallBtn": "حذف نصب کنید",
   "settings.privacy.analyticsEnabled": "Analytics را فعال کنید",
+  "settings.privacy.analyticsHint": "فقط تحلیل محلی — هرگز از دستگاه شما خارج نمی‌شود. برای توقف همه جمع‌آوری تحلیل‌ها خاموش کنید.",
   "settings.privacy.crashReporting": "گزارش خرابی",
   "settings.privacy.dataEncryption": "رمزگذاری داده ها",
   "settings.privacy.encryptionActiveStatus": "رمزگذاری فعال - داده ها برای این جلسه محافظت می شوند",

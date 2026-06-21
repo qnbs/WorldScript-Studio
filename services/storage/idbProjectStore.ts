@@ -59,15 +59,27 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
 
   validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
 
+  const incomingPrivacy = incoming['privacy'] as Partial<Settings['privacy']> | undefined;
+  // QNBS-v3: SEC — analytics default ON (local-only metadata, never leaves device), gated by
+  // isAnalyticsPersistenceAllowed; persisted user choice overrides the default via the spread.
   validSettings.privacy = {
-    analyticsEnabled: false,
+    analyticsEnabled: true,
     crashReporting: false,
     dataEncryption: true,
     localStorageOnly: true,
     shareUsageData: false,
     euDataResidency: true,
-    ...(incoming['privacy'] as Partial<Settings['privacy']> | undefined),
+    ...incomingPrivacy,
   };
+  // QNBS-v3: SEC one-time migration — before the gate shipped, analyticsEnabled was cosmetic and
+  // analytics persistence was controlled solely by enableDuckDbAnalytics (default on). Legacy persisted
+  // settings therefore hold a meaningless analyticsEnabled (default false). On the FIRST load after this
+  // upgrade, reset it to the new default (ON) to PRESERVE prior behavior; the marker then ensures every
+  // subsequent load respects the user's real choice (so a future genuine opt-out is never re-flipped).
+  if (incomingPrivacy?.analyticsGateMigrated !== true) {
+    validSettings.privacy.analyticsEnabled = true;
+  }
+  validSettings.privacy.analyticsGateMigrated = true;
 
   const incomingCollab = incoming['collaboration'] as
     | Partial<Settings['collaboration']>

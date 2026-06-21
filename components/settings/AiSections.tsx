@@ -1,6 +1,7 @@
 import { WEBLLM_SUPPORTED_MODELS } from '@domain/ai-core';
 import type { FC } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { analyticsPersistenceAllowedNow } from '../../app/analyticsGate';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { selectEnableAdaptiveAiEngine } from '../../features/featureFlags/featureFlagsSlice';
@@ -233,7 +234,7 @@ export const AiSection: FC = () => {
 };
 
 export const AdvancedAiSection: FC = () => {
-  const { t, settings, featureFlags, handleSettingChange } = useSettingsViewContext();
+  const { t, settings, handleSettingChange } = useSettingsViewContext();
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectProjectData);
   const [ragBusy, setRagBusy] = useState(false);
@@ -285,10 +286,12 @@ export const AdvancedAiSection: FC = () => {
     setRagBusy(true);
     try {
       // QNBS-v3: use hybrid rebuilder so semantic embeddings + DuckDB dual-write fire together.
+      // SEC: gate the DuckDB mirror on the live analytics opt-out (flag + privacy), re-checked at
+      // write time — not on the feature flag alone.
       const chunks = await rebuildHybridRagIndex(
         pid,
         project.manuscript,
-        featureFlags.enableDuckDbAnalytics,
+        analyticsPersistenceAllowedNow,
       );
       dispatch(
         statusActions.addNotification({

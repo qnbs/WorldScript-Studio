@@ -321,13 +321,15 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     pluginRegistry.setEnabled(featureFlags.enablePluginSystem);
   }, [featureFlags.enablePluginSystem]);
 
-  // QNBS-v3: Sync enableDuckDbAnalytics into telemetryService — the service cannot import
-  // the Redux store without a circular dep, so App.tsx acts as the bridge.
+  // QNBS-v3: Sync inference telemetry into telemetryService — the service cannot import the Redux
+  // store without a circular dep, so App.tsx acts as the bridge. SEC: telemetry now also honours the
+  // Settings → Privacy "Analytics" opt-out, mirroring the DuckDB persistence gate in listenerMiddleware
+  // (isAnalyticsPersistenceAllowed). Re-runs on either input change so toggling the opt-out is live.
   useEffect(() => {
     void import('./services/ai/telemetryService').then(({ setTelemetryEnabled }) => {
-      setTelemetryEnabled(featureFlags.enableDuckDbAnalytics);
+      setTelemetryEnabled(featureFlags.enableDuckDbAnalytics && settings.privacy.analyticsEnabled);
     });
-  }, [featureFlags.enableDuckDbAnalytics]);
+  }, [featureFlags.enableDuckDbAnalytics, settings.privacy.analyticsEnabled]);
 
   // QNBS-v3: Issue 5 — set the window adaptive-AI gate on cold start if the flag is already on
   //          (listener only fires on OFF→ON transitions, not on initial true state from localStorage)

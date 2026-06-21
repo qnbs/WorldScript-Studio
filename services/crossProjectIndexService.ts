@@ -69,8 +69,10 @@ function countWords(data: ProjectData): number {
 export async function indexProject(
   projectId: string,
   data: ProjectData,
-  // QNBS-v3: P3 dual-write — metadata mirrored to DuckDB when analytics flag is on.
-  duckDbEnabled = false,
+  // QNBS-v3: P3 dual-write — metadata mirrored to DuckDB when analytics persistence is allowed.
+  // SEC: accepts a callback so the caller can re-evaluate the privacy gate at the write site (this
+  // function awaits IDB work first) — a boolean captured up-front could go stale on a mid-call opt-out.
+  duckDbEnabled: boolean | (() => boolean) = false,
 ): Promise<void> {
   const db = await getDb();
 
@@ -90,17 +92,23 @@ export async function indexProject(
     req.onerror = () => reject(req.error);
   });
 
-  if (duckDbEnabled) {
+  // SEC: normalize to a gate function and re-evaluate it INSIDE the async write chain — both after the
+  // IDB put AND after the dynamic loadDuckdbAnalytics() import — so a mid-call opt-out is honoured at
+  // the actual write, not merely at entry.
+  const gateAllows: () => boolean =
+    typeof duckDbEnabled === 'function' ? duckDbEnabled : () => duckDbEnabled;
+  if (gateAllows()) {
     void loadDuckdbAnalytics()
-      .then(({ duckdbCrossProjectWrite }) =>
-        duckdbCrossProjectWrite({
+      .then(({ duckdbCrossProjectWrite }) => {
+        if (!gateAllows()) return undefined;
+        return duckdbCrossProjectWrite({
           projectId,
           title: record.title,
           logline: record.logline,
           manuscriptWordCount: record.manuscriptWordCount,
           characterNames: record.characterNames,
-        }),
-      )
+        });
+      })
       .catch(() => {});
   }
 }
@@ -139,7 +147,11 @@ export async function removeProjectIndex(projectId: string): Promise<void> {
  * QNBS-v3: Feature-gated — only runs when embedding model is available; silently
  *          no-ops if the project is not yet indexed or the model isn't ready.
  */
-export async function enrichProjectIndex(projectId: string, duckDbEnabled = false): Promise<void> {
+export async function enrichProjectIndex(
+  projectId: string,
+  // SEC: callback form re-evaluates the privacy gate at the write site (after async embedding + IDB).
+  duckDbEnabled: boolean | (() => boolean) = false,
+): Promise<void> {
   const db = await getDb();
 
   const record = await new Promise<ProjectSearchIndex | undefined>((resolve, reject) => {
@@ -181,18 +193,23 @@ export async function enrichProjectIndex(projectId: string, duckDbEnabled = fals
   });
 
   // QNBS-v3: P3 — update DuckDB entry with the now-computed embedding vector.
-  if (duckDbEnabled) {
+  // SEC: re-evaluate the gate INSIDE the async chain — after the embedding + IDB put AND after the
+  // dynamic loadDuckdbAnalytics() import — so a mid-call opt-out is honoured at the actual write.
+  const gateAllows: () => boolean =
+    typeof duckDbEnabled === 'function' ? duckDbEnabled : () => duckDbEnabled;
+  if (gateAllows()) {
     void loadDuckdbAnalytics()
-      .then(({ duckdbCrossProjectWrite }) =>
-        duckdbCrossProjectWrite({
+      .then(({ duckdbCrossProjectWrite }) => {
+        if (!gateAllows()) return undefined;
+        return duckdbCrossProjectWrite({
           projectId,
           title: enriched.title,
           logline: enriched.logline,
           manuscriptWordCount: enriched.manuscriptWordCount,
           characterNames: enriched.characterNames,
           embeddingVector: embedding,
-        }),
-      )
+        });
+      })
       .catch(() => {});
   }
 }
