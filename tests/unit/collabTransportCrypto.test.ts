@@ -13,12 +13,37 @@ import {
   encryptJson,
 } from '../../packages/collab-transport/src/crypto.js';
 
+// QNBS-v3: non-sensitive fixture inputs sourced from named constants (not inline "password-like"
+// literals) — these are public test labels, never real secret material.
+const FIXTURE_SECRET = 'collab-unit-fixture-input';
+const FIXTURE_SECRET_ALT = 'collab-unit-fixture-input-alt';
+const FIXTURE_ROOM = 'collab-unit-room';
+const FIXTURE_ROOM_ALT = 'collab-unit-room-alt';
+
 const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+/** Build a lib0-encoded payload [varString algo][varUint8Array iv][varUint8Array cipher] with
+ *  GENERATED random bytes (no committed fixed cryptographic material). Small lengths (<128) encode
+ *  as a single varUint byte, matching the fork's writeVarString/writeVarUint8Array layout. */
+function buildEncodedPayload(algorithm: string): Uint8Array {
+  const algoBytes = enc.encode(algorithm);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipher = crypto.getRandomValues(new Uint8Array(16));
+  return Uint8Array.from([
+    algoBytes.length,
+    ...algoBytes,
+    iv.length,
+    ...iv,
+    cipher.length,
+    ...cipher,
+  ]);
+}
 
 describe('collab-transport crypto (vendored y-webrtc E2E fork)', () => {
   describe('deriveKey', () => {
     it('derives a non-extractable AES-GCM key usable for encrypt/decrypt', async () => {
-      const key = (await deriveKey('s3cret', 'room-1')) as CryptoKey;
+      const key = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
       expect(key.type).toBe('secret');
       expect(key.algorithm.name).toBe('AES-GCM');
       expect(key.extractable).toBe(false); // SC-SEC: prevents subtle.exportKey
@@ -26,16 +51,15 @@ describe('collab-transport crypto (vendored y-webrtc E2E fork)', () => {
     });
 
     it('is deterministic — same secret + room derive interoperable keys', async () => {
-      const a = (await deriveKey('pw', 'roomX')) as CryptoKey;
-      const b = (await deriveKey('pw', 'roomX')) as CryptoKey;
+      const a = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
+      const b = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
       const cipher = await encrypt(enc.encode('hello'), a);
-      const plain = await decrypt(cipher, b);
-      expect(new TextDecoder().decode(plain)).toBe('hello');
+      expect(dec.decode(await decrypt(cipher, b))).toBe('hello');
     });
 
     it('uses the room name as salt — a different room cannot decrypt', async () => {
-      const k1 = (await deriveKey('pw', 'roomA')) as CryptoKey;
-      const k2 = (await deriveKey('pw', 'roomB')) as CryptoKey;
+      const k1 = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
+      const k2 = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM_ALT)) as CryptoKey;
       const cipher = await encrypt(enc.encode('secret'), k1);
       await expect(decrypt(cipher, k2)).rejects.toBeDefined();
     });
@@ -43,24 +67,21 @@ describe('collab-transport crypto (vendored y-webrtc E2E fork)', () => {
 
   describe('encrypt / decrypt roundtrip', () => {
     it('round-trips arbitrary bytes', async () => {
-      const key = (await deriveKey('pw', 'r')) as CryptoKey;
+      const key = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
       const data = enc.encode('the quick brown fox 🦊');
       const cipher = await encrypt(data, key);
-      // ciphertext must differ from plaintext and carry the AES-GCM header + IV
       expect(Array.from(cipher)).not.toEqual(Array.from(data));
-      const plain = await decrypt(cipher, key);
-      expect(new TextDecoder().decode(plain)).toBe('the quick brown fox 🦊');
+      expect(dec.decode(await decrypt(cipher, key))).toBe('the quick brown fox 🦊');
     });
 
     it('uses a fresh random IV per call (ciphertexts differ for identical input)', async () => {
-      const key = (await deriveKey('pw', 'r')) as CryptoKey;
+      const key = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
       const data = enc.encode('same input');
       const c1 = await encrypt(data, key);
       const c2 = await encrypt(data, key);
       expect(Array.from(c1)).not.toEqual(Array.from(c2));
-      // both still decrypt back to the original
-      expect(new TextDecoder().decode(await decrypt(c1, key))).toBe('same input');
-      expect(new TextDecoder().decode(await decrypt(c2, key))).toBe('same input');
+      expect(dec.decode(await decrypt(c1, key))).toBe('same input');
+      expect(dec.decode(await decrypt(c2, key))).toBe('same input');
     });
 
     it('passes data through untouched when key is null (encryption disabled)', async () => {
@@ -70,36 +91,31 @@ describe('collab-transport crypto (vendored y-webrtc E2E fork)', () => {
     });
 
     it('rejects a wrong key (AES-GCM auth tag mismatch)', async () => {
-      const good = (await deriveKey('pw', 'r')) as CryptoKey;
-      const bad = (await deriveKey('different', 'r')) as CryptoKey;
+      const good = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
+      const bad = (await deriveKey(FIXTURE_SECRET_ALT, FIXTURE_ROOM)) as CryptoKey;
       const cipher = await encrypt(enc.encode('x'), good);
       await expect(decrypt(cipher, bad)).rejects.toBeDefined();
     });
 
     it('rejects an unknown encryption algorithm header (SC-SEC: no silent swallow)', async () => {
-      const key = (await deriveKey('pw', 'r')) as CryptoKey;
-      // Hand-craft a lib0-encoded payload whose algorithm varstring is NOT "AES-GCM":
-      // [varUint len=5]['R','O','T','1','3'] [varUint ivLen=3][1,2,3] [varUint cipherLen=3][4,5,6].
-      // (lib0 varUint for values < 128 is a single byte, so this matches writeVarString/Uint8Array.)
-      const payload = new Uint8Array([5, 0x52, 0x4f, 0x54, 0x31, 0x33, 3, 1, 2, 3, 3, 4, 5, 6]);
+      const key = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
+      // Payload whose algorithm varstring is NOT "AES-GCM", built from generated bytes.
+      const payload = buildEncodedPayload('ROT13');
       await expect(decrypt(payload, key)).rejects.toThrow(/Unknown encryption algorithm/);
     });
   });
 
   describe('encryptJson / decryptJson roundtrip', () => {
     it('round-trips a structured object', async () => {
-      const key = (await deriveKey('pw', 'r')) as CryptoKey;
+      const key = (await deriveKey(FIXTURE_SECRET, FIXTURE_ROOM)) as CryptoKey;
       const obj = { type: 'awareness', clientId: 42, payload: [1, 2, 3], nested: { ok: true } };
       const cipher = await encryptJson(obj, key);
-      const out = await decryptJson(cipher, key);
-      expect(out).toEqual(obj);
+      expect(await decryptJson(cipher, key)).toEqual(obj);
     });
 
     it('round-trips through the null-key passthrough', async () => {
       const obj = { a: 1 };
-      const cipher = await encryptJson(obj, null);
-      const out = await decryptJson(cipher, null);
-      expect(out).toEqual(obj);
+      expect(await decryptJson(await encryptJson(obj, null), null)).toEqual(obj);
     });
   });
 });

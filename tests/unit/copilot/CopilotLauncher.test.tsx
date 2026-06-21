@@ -13,16 +13,7 @@ const { mockOpen, mockAnnounce } = vi.hoisted(() => ({
   mockAnnounce: vi.fn(),
 }));
 
-let mockIsOpen = false;
-
-vi.mock('../../../hooks/useGlobalCopilot', () => ({
-  useGlobalCopilot: () => ({
-    t: (k: string, p?: Record<string, unknown>) => (p ? `${k}:${JSON.stringify(p)}` : k),
-    isOpen: mockIsOpen,
-    open: mockOpen,
-  }),
-}));
-
+vi.mock('../../../hooks/useGlobalCopilot', () => ({ useGlobalCopilot: vi.fn() }));
 vi.mock('../../../contexts/LiveRegionContext', () => ({ useAnnounce: () => mockAnnounce }));
 vi.mock('../../../services/viewNavigationLabels', () => ({
   viewNavigationLabelKey: (v: string) => `nav.${v}`,
@@ -35,10 +26,21 @@ vi.mock('../../../components/copilot/CopilotPanel', () => ({
 }));
 
 import { CopilotLauncher } from '../../../components/copilot/CopilotLauncher';
+import { useGlobalCopilot } from '../../../hooks/useGlobalCopilot';
+
+// QNBS-v3: per-test mock config (no shared module-level mutable state) — each test sets the open
+// state explicitly via mockReturnValue.
+function setCopilot(isOpen: boolean) {
+  vi.mocked(useGlobalCopilot).mockReturnValue({
+    t: (k: string, p?: Record<string, unknown>) => (p ? `${k}:${JSON.stringify(p)}` : k),
+    isOpen,
+    open: mockOpen,
+  } as unknown as ReturnType<typeof useGlobalCopilot>);
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockIsOpen = false;
+  setCopilot(false);
 });
 
 describe('CopilotLauncher', () => {
@@ -56,7 +58,7 @@ describe('CopilotLauncher', () => {
   });
 
   it('renders the CopilotPanel (and no FAB) when open', () => {
-    mockIsOpen = true;
+    setCopilot(true);
     render(<CopilotLauncher currentView="manuscript" />);
     expect(screen.getByTestId('copilot-panel')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'copilot.launcherLabel' })).toBeNull();
@@ -65,7 +67,7 @@ describe('CopilotLauncher', () => {
   it('announces a state change when the panel opens', () => {
     const { rerender } = render(<CopilotLauncher currentView="manuscript" />);
     expect(mockAnnounce).not.toHaveBeenCalled();
-    mockIsOpen = true;
+    setCopilot(true);
     rerender(<CopilotLauncher currentView="manuscript" />);
     expect(mockAnnounce).toHaveBeenCalledWith('copilot.announceOpened', 'polite');
   });
