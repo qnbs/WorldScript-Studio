@@ -417,7 +417,7 @@ See `AUDIT.md` and `TODO.md`. Key items:
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
 - **B-1 (IDB encryption):** Passphrase UX complete (`IdbUnlockModal`, `PassphraseModal`). Actual IDB read/write integration for stores is Phase 4 (service-layer only currently).
 - **B-2 (Voice WASM):** Engine + download UI shipped. Remaining: E2E integration test coverage.
-- **SW version sync:** `public/sw.js` `APP_VERSION` is hardcoded and must be manually kept in sync with `package.json` `version` on every release. Long-term fix: move `sw.js` → `src/sw.ts` so Vite's `define` can inject `__APP_VERSION__` at build time.
+- **SW version sync:** `public/sw.js` `APP_VERSION` and the Tauri versions are **auto-synced** from `package.json` `version` by `scripts/sync-sw-version.mjs` + `scripts/sync-tauri-version.mjs`, which run on every `predev`/`prebuild` — no manual edit needed (just bump `package.json` for a release). The earlier "must hand-sync" note is obsolete.
 
 ## graphify
 
