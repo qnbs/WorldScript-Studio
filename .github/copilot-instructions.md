@@ -32,7 +32,7 @@ contexts/         → React context providers (one per major view + I18nContext 
 features/         → Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
 hooks/            → Custom hooks with view business logic (one hook per view)
 services/         → External adapters: geminiService, aiProviderService, dbService (dual IndexedDB + migration), storageService, collaborationService; **ai/** (aiModeService — execution modes, aiPolicy, aiRetry; **providers/** — openrouterProvider with circuit breaker); **copilot/** (heuristicEngine 8 rules, insightGenerator, copilotContextService, actionApplier); **commands/** (palette registry); **keyboard/** (shortcut matching); **help/** (doc retrieval for AI); **settingsExchange** (settings JSON)
-locales/          → i18n source files — de/en/es/fr/it (core) + ar/he (RTL Beta) + el/ja/pt/zh (Beta) × 15-20 JSON modules (2 594 keys × 11 locales)
+locales/          → i18n source files — de/en/es/fr/it (core) + ar/he/fa (RTL Beta) + el/ja/pt/zh/fi/sv/hu/is/eu (Beta) × ~20 JSON modules (17 locales; see the README badge for the live key count)
 public/locales/   → i18n runtime files served at BASE_URL
 tests/            → Unit + E2E tests (Vitest + Playwright)
 types/            → Additional TypeScript type definitions
@@ -144,7 +144,7 @@ types.ts          → Core shared interfaces and types
 
 - All user-facing strings must use `t('key.path')` from `useTranslation()`
 - Source files: `locales/{lang}/{module}.json` (15 modules). Runtime: **one** merged **`public/locales/{lang}/bundle.json`** per language — regenerate with **`pnpm run i18n:bundle`** or **`pnpm run i18n:check`** (parity check **and** bundle build); **`predev`** / **`prebuild`** also rebuild bundles so the UI never shows raw keys after editing locale JSON.
-- **the in-app selector exposes five locales:** **de**, **en**, **fr**, **es**, **it** — keep key parity with English (`pnpm run i18n:check` in CI)
+- **17 locales ship** (de/en/es/fr/it core + ar/he/fa RTL + el/ja/pt/zh/fi/sv/hu/is/eu Beta); all must keep key parity with English (`pnpm run i18n:check` in CI). The `/i18n-key` skill auto-fills the **5 core** (de/en/es/fr/it); update Beta/RTL locales manually afterward.
 - English is the fallback language
 - New keys: add to **`locales/en/`** first, then **de**, **fr**, **es**, **it** (or run `node scripts/check-i18n-keys.mjs --fix` and translate), then commit updated **`bundle.json`** files
 
@@ -152,12 +152,8 @@ types.ts          → Core shared interfaces and types
 
 - Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - Pre-commit: `simple-git-hooks` runs Biome check on staged files
-- Before every commit and push, run the full local preflight:
-  - `pnpm install --frozen-lockfile`
-  - `pnpm run lint`
-  - `pnpm run typecheck`
-  - `pnpm run test:run`
-  - `pnpm run build`
+- **⚠️ Constrained local hardware — do NOT run heavy suites locally.** This machine has ~3–4 GB RAM. **Never** run the full Vitest **coverage** suite, **Playwright E2E**, **Stryker mutation**, **Lighthouse CI**, or the **Storybook test-runner** locally — they are **CI-only by design**. Run **one heavy command at a time** (no parallel `vitest`/`biome`/`tsc`/`vite`).
+- Local preflight (sequential, minimal): `pnpm run lint` → `pnpm run typecheck` → `pnpm run i18n:check` (only when locale JSON changed) → **targeted** `pnpm exec vitest run <path>` (no `--coverage`). Run `pnpm run build && pnpm run smoke:prod` only when you touched `vite.config.ts`, `packages/ai-core`, or `workers/`. Coverage, E2E, Lighthouse, Stryker, and Storybook are **CI gate jobs** — let GitHub Actions run them.
 - CI pipeline (see [`docs/CI.md`](../docs/CI.md)): **`security` → `quality`** (Biome + `tsc` + Vitest matrix) **→ `build` / `e2e` / `storybook` in parallel** → **`lighthouse`** after build → **`deploy`** on `main` after build+e2e
 - Branch protection should require the **`quality`** job (and other checks your team enables); job ids match `.github/workflows/ci.yml`
 - CI runs **`pnpm audit`** every workflow; **dependency-review** on pull requests

@@ -8,6 +8,16 @@
 
 **Quality gate (2026-06-16 — v1.23.0):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2709 keys × 11 locales**) · placeholder guard ✅ · unit tests ✅ (5807+ / 485 files) · coverage thresholds L74/B60/F67/S72 ✅. Toolchain: Node 22/24, **pnpm 11**, Vite 8, TypeScript 7 (tsgo).
 
+**Quality gate (2026-06-21 — v1.24.0 Critical & Immediate hardening sequence):** lint ✅ · typecheck ✅ (tsgo) · i18n:check ✅ (**2786 keys × 17 locales**) · suppressions ratchet ✅ (52, no new) · targeted unit tests ✅. Stacked PRs A–F: privacy analytics gating (SEC-6), reusable Badge + experimental labeling, coverage (collab-transport/ProForge/copilot, +101 tests), voice consent clarity, device-aware Ollama pull, hygiene/docs. Coverage/E2E/Lighthouse/Stryker remain CI-gate jobs.
+
+## v1.24.0 Dependency Hygiene + Onboarding + Docs Truth-up (2026-06-21, PR F)
+
+- **`joi` override (accepted risk, KEPT):** `pnpm-workspace.yaml` `overrides.joi: ^18.2.1` pins the patched `joi` pulled transitively via `wait-on` (Storybook/test-runner wait helper), mitigating **GHSA-q7cg-457f-vx79** (unpublished jsdom exposure in `@hapi/statehood`). Still required — `wait-on@9.x` still depends on `joi`. `pnpm audit --audit-level=high` clean with the override in place; rationale documented inline in `pnpm-workspace.yaml` and here.
+- **SBOM — deferred (decision):** evaluated a `@cyclonedx/cyclonedx-npm` generate-on-tag step; **not adopted in 1.24.0** to keep the release scope tight. Socket Security (PR + project report) already runs every CI run and provides dependency-risk + an SBOM dashboard, so the marginal value is low. Revisit when a formal SBOM artifact is required by a downstream consumer.
+- **README metric drift fixed:** `scripts/sync-readme-metrics.mjs` had its locale count **hard-coded to `11`**, so its regexes stopped matching after the 11→17 expansion and silently froze the key count at a stale value. Locale count is now **dynamic** (counts `locales/` dirs) and the regexes match any digit count; re-run → README reads **2786 keys × 17 locales** with the drift guard green.
+- **Docs truth-up:** corrected the stale `public/sw.js` "must hand-sync `APP_VERSION`" note in `CLAUDE.md` (it is auto-synced by `scripts/sync-sw-version.mjs` + `sync-tauri-version.mjs` via `predev`/`prebuild`); refreshed the stale 5-locale / `2 594 keys × 11 locales` strings in `CONTRIBUTING.md` + `.github/copilot-instructions.md` to 17 locales.
+- **Onboarding:** added a prominent **"Do NOT run heavy suites locally"** callout + a **Minimal Change Checklist** to `CONTRIBUTING.md`, and mirrored the heavy-suite warning into `.github/copilot-instructions.md` (its old preflight wrongly told contributors to run `test:run` + `build` on every commit — now aligned with the low-end CI-first policy already in `AGENTS.md`).
+
 ## v1.23.0 Post-Release Documentation Perfection Pass (2026-06-16)
 
 **Scope:** Bring the entire doc corpus into lockstep with the shipped v1.23.0 code, curate/restructure historical material, clear the Dependabot queue, and complete the GitHub release/package rebrand.
