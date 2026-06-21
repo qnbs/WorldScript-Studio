@@ -27,7 +27,11 @@ jobs:
         include:
           - os: ubuntu-22.04
           - os: windows-latest
+          # QNBS-v3: macos-latest is the Apple-Silicon (aarch64) runner; macos-13 is the last
+          # Intel (x86_64) runner. Both are needed so Intel Macs get a native build + auto-update
+          # (the latest.json generator already maps *_x64.app.tar.gz → darwin-x86_64).
           - os: macos-latest
+          - os: macos-13
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -184,7 +188,7 @@ jobs:
               *_aarch64.app.tar.gz)
                 # QNBS-v3: macOS updater bundle is .app.tar.gz (not .dmg).
                 # .dmg is the user-facing installer; .app.tar.gz is what Tauri downloads for in-app updates.
-                # aarch64 = macos-latest ARM runner. x64 runner not yet in matrix.
+                # aarch64 = macos-latest ARM runner; x64 = macos-13 Intel runner (both in matrix).
                 MAC_AARCH64_URL="${REPO_URL}/${URLNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
               *_x64.app.tar.gz)
                 MAC_X64_URL="${REPO_URL}/${URLNAME}"; MAC_X64_SIG="$SIG_CONTENT" ;;
@@ -194,7 +198,16 @@ jobs:
             esac
           done
 
-          # Hard-fail if secrets are set but no .sig files were produced
+          # QNBS-v3: report per-arch sig coverage so a half-failed matrix (e.g. macos-13 dropped its
+          # bundle while macos-latest succeeded) is diagnosable instead of a bare "no sigs" failure.
+          MISSING=""
+          [ -z "$LINUX_SIG" ]       && MISSING="${MISSING} linux-x86_64"
+          [ -z "$WIN_SIG" ]         && MISSING="${MISSING} windows-x86_64"
+          [ -z "$MAC_AARCH64_SIG" ] && MISSING="${MISSING} darwin-aarch64"
+          [ -z "$MAC_X64_SIG" ]     && MISSING="${MISSING} darwin-x86_64"
+          [ -n "$MISSING" ] && echo "::warning::No signed bundle for platform(s):${MISSING}. They will be omitted from latest.json."
+
+          # Hard-fail only if NO platform produced a signed bundle.
           if [ -z "$LINUX_SIG" ] && [ -z "$WIN_SIG" ] && [ -z "$MAC_AARCH64_SIG" ] && [ -z "$MAC_X64_SIG" ]; then
             echo "::error::No signed bundles found in release-assets/. Verify TAURI_SIGNING_PRIVATE_KEY secret and that createUpdaterArtifacts=true."
             exit 1

@@ -32,17 +32,47 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.cache/ms-playwright
+          # QNBS-v3: the lockfile hash already changes when @playwright/test bumps, so this key is
+          # version-sensitive; restore-keys gives a graceful partial-restore on a lockfile-only churn.
           key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run real Whisper E2E
-        run: pnpm exec playwright test tests/e2e/deep/voice/whisper-real.spec.ts --project=chromium
+        id: realwhisper
+        # QNBS-v3: step-level continue-on-error keeps a transient HF-CDN download timeout from
+        # surfacing as a red "Process completed with exit code 1" annotation. The job is already
+        # non-blocking; moving neutrality to the step silences the annotation while the summary
+        # step below preserves the pass/fail signal. Two attempts absorb CDN flakiness.
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for attempt in 1 2; do
+            echo "::group::Real Whisper E2E — attempt ${attempt}/2"
+            if pnpm exec playwright test tests/e2e/deep/voice/whisper-real.spec.ts --project=chromium; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "Attempt ${attempt} failed (likely transient HF-CDN slowness)."
+          done
+          exit 1
         env:
           CI: 'true'
           RUN_DEEP_E2E: '1'
           RUN_REAL_VOICE_E2E: '1'
+
+      - name: Report result to summary
+        if: always()
+        run: |
+          if [ "${{ steps.realwhisper.outcome }}" = "success" ]; then
+            echo "✅ **Real Whisper pipeline:** download + init succeeded." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ **Real Whisper pipeline:** failed (non-blocking — usually transient HF-CDN download timeout). See the uploaded report artifact." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload report
         if: always()
