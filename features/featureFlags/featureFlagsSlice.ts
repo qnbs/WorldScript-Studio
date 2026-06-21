@@ -32,7 +32,7 @@ export interface FeatureFlagsState {
   enablePluginSystem: boolean;
   /** Voice Full Support — opt-in voice command, dictation and audio navigation (default: false — requires browser mic permission). */
   enableVoiceSupport: boolean;
-  /** ProForge Ultimate Author Pipeline — agentic 8-stage manuscript pipeline (default: true). */
+  /** ProForge Ultimate Author Pipeline — agentic 8-stage manuscript pipeline (default: false — experimental, token-heavy multi-agent run; user opt-in). */
   enableProForge: boolean;
   /** IDB at-rest encryption — AES-256-GCM passphrase-derived key for all manuscript stores (default: true). */
   enableIdbAtRestEncryption: boolean;
@@ -54,8 +54,11 @@ export interface FeatureFlagsState {
   enableLocalFirstSync: boolean;
 }
 
-const defaultFeatureFlagsState: FeatureFlagsState = {
-  // QNBS-v3: all flags on by default so new installs get the full feature set immediately
+// QNBS-v3: exported so featureCatalog.ts can DERIVE each entry's defaultOn from this single source,
+// instead of hand-keying it (which drifted: catalog said false while the slice said true for ~12 flags).
+export const defaultFeatureFlagsState: FeatureFlagsState = {
+  // QNBS-v3: flags default on so new installs get the full feature set immediately, EXCEPT the
+  // user-opt-in set (RTL, voice, voice-WASM, ProForge, global copilot, local-first sync).
   enableStoryBibleAdvanced: true,
   enableBinderResearch: true,
   enableCompileWizard: true,
@@ -71,7 +74,9 @@ const defaultFeatureFlagsState: FeatureFlagsState = {
   enablePluginSystem: true,
   // QNBS-v3: voice off by default — requires browser permission + optional WASM download; user opt-in
   enableVoiceSupport: false,
-  enableProForge: true,
+  // QNBS-v3: ProForge off by default — experimental agentic 8-stage pipeline with significant
+  // token cost + loop risk; too heavy for a first-run default, so it's user opt-in (Settings → Experimental).
+  enableProForge: false,
   enableIdbAtRestEncryption: true,
   // QNBS-v3: voice WASM off by default — ~57 MB Whisper model download; requires explicit opt-in
   enableVoiceWasm: false,
