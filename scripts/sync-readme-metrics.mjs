@@ -74,6 +74,14 @@ function getKeyCount() {
   return total;
 }
 
+// QNBS-v3: locale count is the number of per-language directories under locales/ (each ships a
+// bundle). Dynamic so the README never drifts when a locale is added (was hard-coded "11" — went
+// stale at the 11→17 expansion, which silently froze the key-count sync too).
+function getLocaleCount() {
+  return readdirSync(join(root, 'locales'), { withFileTypes: true }).filter((e) => e.isDirectory())
+    .length;
+}
+
 /** numTotalTests from test-results.json, else the current README badge value (preserve). */
 function getTestCaseCount(readme) {
   const resultsPath = join(root, 'test-results.json');
@@ -97,11 +105,15 @@ const original = readme;
 
 const fileCount = getTestFileCount();
 const keyCount = getKeyCount();
+const localeCount = getLocaleCount();
 const testCount = getTestCaseCount(readme);
 
 // --- Badges (shields.io URL + alt text) -------------------------------------
-readme = readme.replace(/i18n-11_locales-\d+_keys/g, `i18n-11_locales-${keyCount}_keys`);
-readme = readme.replace(/(11 locales — )\d+( keys)/g, `$1${keyCount}$2`);
+readme = readme.replace(
+  /i18n-\d+_locales-\d+_keys/g,
+  `i18n-${localeCount}_locales-${keyCount}_keys`,
+);
+readme = readme.replace(/\d+ locales — \d+ keys/g, `${localeCount} locales — ${keyCount} keys`);
 if (testCount != null) {
   readme = readme.replace(
     /Tests-\d+%2B_%2F_\d+_files/g,
@@ -119,12 +131,15 @@ readme = readme.replace(
   new RegExp(`(Shipped UI locales with \\*\\*)${NUM}( i18n keys\\*\\*)`),
   `$1${keyCount}$2`,
 );
-// Line ~453: "| 2 594 keys × 11 locales" — keep the table-cell leading space.
-readme = readme.replace(new RegExp(`(\\| )${NUM}(keys × 11 locales)`), `$1${keyCount} $2`);
-// Line ~652: "- i18n: **2 594 keys × 11 locales**" — non-table bold summary bullet.
+// Line ~453: "| 2716 keys × 17 locales" — keep the table-cell leading space; locale count dynamic.
 readme = readme.replace(
-  new RegExp(`(i18n: \\*\\*)${NUM}(keys × 11 locales\\*\\*)`),
-  `$1${keyCount} $2`,
+  new RegExp(`(\\| )${NUM}keys × \\d+ locales`),
+  `$1${keyCount} keys × ${localeCount} locales`,
+);
+// Line ~652: "- i18n: **2716 keys × 17 locales**" — non-table bold summary bullet.
+readme = readme.replace(
+  new RegExp(`(i18n: \\*\\*)${NUM}keys × \\d+ locales(\\*\\*)`),
+  `$1${keyCount} keys × ${localeCount} locales$2`,
 );
 if (testCount != null) {
   // Line ~454: "Vitest 4.x (5 475+ tests / 449 files)"
@@ -159,7 +174,8 @@ const assertAll = (label, regex, expected) => {
       drift.push(`${label}: found "${m[1].trim()}", expected ${expected}`);
   }
 };
-assertAll('i18n keys (× 11 locales)', new RegExp(`(${NUM_D})keys × 11 locales`, 'g'), keyCount);
+assertAll('i18n keys (× locales)', new RegExp(`(${NUM_D})keys × \\d+ locales`, 'g'), keyCount);
+assertAll('locale count', new RegExp(`keys × (${NUM_D})locales`, 'g'), localeCount);
 assertAll('i18n keys (bold)', new RegExp(`\\*\\*(${NUM_D})i18n keys\\*\\*`, 'g'), keyCount);
 assertAll('test cases', new RegExp(`(${NUM_D})\\+ (?:unit )?tests\\b`, 'g'), testCount);
 assertAll('test files', new RegExp(`(${NUM_D})(?:test )?files\\b`, 'g'), fileCount);

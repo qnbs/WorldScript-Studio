@@ -122,7 +122,7 @@ WorldScript-Studio/
 ├── contexts/         # React contexts per view + I18n + CommandExecutor
 ├── features/         # Redux slices (project, settings, writer, status, featureFlags, plotBoard, progressTracker, sceneComments)
 ├── hooks/            # Custom React hooks per view + shared hooks (e.g. useGlobalKeyboardShortcuts)
-├── locales/          # i18n source JSON (de, en, fr, es, it — key parity vs en)
+├── locales/          # i18n source JSON — 17 locales: de/en/es/fr/it core + ar/he/fa RTL + el/ja/pt/zh/fi/sv/hu/is/eu Beta (key parity vs en)
 ├── services/         # Adapters: AI, DB, storage, collaboration, EPUB; commands/, keyboard/, help/, settingsExchange
 ├── stories/          # Storybook stories for UI components
 ├── docs/             # Deep-dive docs (CI reference, history, graphify)
@@ -170,6 +170,25 @@ chore: update dependencies
 ---
 
 ## Testing
+
+> ### ⚠️ Do NOT run the heavy suites locally
+>
+> This repo is developed on constrained hardware (~3–4 GB RAM). **Never** run the full Vitest **coverage** suite, **Playwright E2E**, **Stryker mutation**, **Lighthouse CI**, or the **Storybook test-runner** locally — they OOM weak machines and are **CI-only by design**. Push to a branch and let GitHub Actions run the heavy tier; a green CI run is the merge bar.
+
+### Minimal Change Checklist (what to actually run locally)
+
+Run the smallest gate that matches your change — sequentially, one heavy command at a time:
+
+| Your change… | Run locally before pushing |
+|---|---|
+| **Always** | `pnpm run lint` · `pnpm run typecheck` · targeted `pnpm exec vitest run <path>` (no `--coverage`) |
+| **Touched any locale JSON** | `pnpm run i18n:check` (parity + bundle rebuild) |
+| **Added/removed a feature flag** | `pnpm exec tsx scripts/audit-feature-parity.ts` (must report 0 drifts) |
+| **Touched `packages/ai-core`, `workers/`, or `vite.config.ts`** | `pnpm run build && pnpm run smoke:prod` (prod-only crash guard) |
+| **Added a `components/ui/` primitive** | add a `.stories.tsx`; the Storybook test-runner verifies it in CI |
+| **Added a dependency** | `pnpm audit --audit-level=high` (override + document in `AUDIT.md` if needed) |
+
+Coverage, E2E, Lighthouse, Stryker, and Storybook test-runner are **CI gate jobs** — do not attempt them locally.
 
 ### Local vs CI (low-end friendly)
 
