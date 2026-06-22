@@ -83,9 +83,15 @@ function curate(md) {
     i++;
   }
   let result = out.join('\n');
-  // Rewrite relative repo links → absolute GitHub blob URLs; drop in-page TOC anchors (#...) to plain text.
+  // Rewrite relative repo links → absolute GitHub blob URLs.
   result = result.replace(/\]\((?!https?:\/\/|#)([^)]+)\)/g, (_m, p) => `](${GH_BLOB}${p})`);
-  result = result.replace(/\]\(#[^)]*\)/g, ']'); // a bare [text](#anchor) → just text (anchor is GH-only)
+  // QNBS-v3: in-page anchors (#section) point at README headings that exist on GitHub but not in this
+  // standalone page. Rewrite them to the absolute GitHub README anchor so they stay CLICKABLE — do NOT
+  // strip the `(#anchor)` to a bare `[text]`, which marked renders as non-clickable bracketed text.
+  result = result.replace(
+    /\]\((#[^)]*)\)/g,
+    (_m, anchor) => `](https://github.com/qnbs/WorldScript-Studio${anchor})`,
+  );
   // Collapse 3+ blank lines.
   result = result.replace(/\n{3,}/g, '\n\n');
   return result.trim();

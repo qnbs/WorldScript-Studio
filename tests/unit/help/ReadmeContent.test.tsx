@@ -52,6 +52,9 @@ describe('ReadmeContent', () => {
     render(<ReadmeContent />);
     await waitFor(() => expect(screen.getByText('Hello world')).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/readme/en.html'));
+    // QNBS-v3: fell back to the English README → the content IS English, so the machine-translated
+    // notice must NOT show even though the requested locale (ru) is a Beta tier.
+    expect(screen.queryByText('help.machineTranslatedNotice')).not.toBeInTheDocument();
   });
 
   it('shows the machine-translated notice for a non-Production locale', async () => {
