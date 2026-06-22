@@ -24,23 +24,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getMtLocales } from './i18n-locales.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
-const SUPPORTED_LANGS = {
-  ja: 'Japanese',
-  zh: 'Chinese (Simplified)',
-  pt: 'Portuguese',
-  el: 'Greek',
-  // QNBS-v3: Phase X — Google `tl` codes map 1:1 (fa = Persian).
-  fi: 'Finnish',
-  sv: 'Swedish',
-  hu: 'Hungarian',
-  is: 'Icelandic',
-  eu: 'Basque',
-  fa: 'Persian',
-};
+// QNBS-v3: MT-eligible locales are derived from the SSOT bridge (filesystem minus the hand-translated
+// set) — a new language folder is translatable the moment it exists, with no edit here. The Google
+// Translate `tl` code is 1:1 with the locale code for every current locale; the human-readable name
+// (logging only) comes from Intl.DisplayNames so there is no hand-maintained name table to drift.
+const LANG_DISPLAY = new Intl.DisplayNames(['en'], { type: 'language' });
+const SUPPORTED_LANGS = Object.fromEntries(
+  getMtLocales().map((code) => [code, LANG_DISPLAY.of(code) ?? code]),
+);
 
 const FREE_ENDPOINT =
   'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl={{tl}}&dt=t&q={{q}}';

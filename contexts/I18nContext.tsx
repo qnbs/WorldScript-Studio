@@ -1,66 +1,15 @@
 import type React from 'react';
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
+import { isLanguage, type Language, RTL_LOCALES, SUPPORTED_LOCALES } from '../i18n/locales';
 import { bootstrapTranslation } from '../services/i18nBootstrap';
 import { logger } from '../services/logger';
 
-export type Language =
-  | 'en'
-  | 'de'
-  | 'fr'
-  | 'es'
-  | 'it'
-  | 'ar'
-  | 'he'
-  | 'ja'
-  | 'zh'
-  | 'pt'
-  | 'el'
-  | 'fi'
-  | 'sv'
-  | 'hu'
-  | 'is'
-  | 'eu'
-  | 'fa';
-
-// QNBS-v3: Phase 2 B-5 — ar/he are beta stubs (English placeholder text); RTL direction is active.
-// QNBS-v3: Phase 3 — ja/zh/pt/el are beta stubs (English placeholder text); LTR direction.
-// QNBS-v3: Phase X — fi/sv/hu/is/eu (LTR) + fa (RTL) beta stubs; priority files hand-translated.
-/** Languages whose natural writing direction is right-to-left. */
-export const RTL_LOCALES: ReadonlySet<Language> = new Set(['ar', 'he', 'fa']);
-
-// QNBS-v3: Phase 3 — Language metadata for UI display and font handling
-export interface LanguageInfo {
-  code: Language;
-  nativeName: string;
-  dir: 'ltr' | 'rtl';
-  isBeta?: boolean;
-  fontScript?: 'latin' | 'arabic' | 'hebrew' | 'cjk' | 'cyrillic' | 'greek';
-}
-
-// QNBS-v3: Phase 3 — Supported locales with metadata (used by LanguageSelector, Settings, etc.)
-export const SUPPORTED_LOCALES: ReadonlyArray<LanguageInfo> = [
-  { code: 'de', nativeName: 'Deutsch', dir: 'ltr', fontScript: 'latin' },
-  { code: 'en', nativeName: 'English', dir: 'ltr', fontScript: 'latin' },
-  { code: 'fr', nativeName: 'Français', dir: 'ltr', fontScript: 'latin' },
-  { code: 'es', nativeName: 'Español', dir: 'ltr', fontScript: 'latin' },
-  { code: 'it', nativeName: 'Italiano', dir: 'ltr', fontScript: 'latin' },
-  // RTL Beta (B-5)
-  { code: 'ar', nativeName: 'العربية', dir: 'rtl', fontScript: 'arabic', isBeta: true },
-  { code: 'he', nativeName: 'עברית', dir: 'rtl', fontScript: 'hebrew', isBeta: true },
-  // Phase 3 Beta — ja/zh/pt/el
-  { code: 'ja', nativeName: '日本語', dir: 'ltr', fontScript: 'cjk', isBeta: true },
-  { code: 'zh', nativeName: '简体中文', dir: 'ltr', fontScript: 'cjk', isBeta: true },
-  { code: 'pt', nativeName: 'Português', dir: 'ltr', fontScript: 'latin', isBeta: true },
-  { code: 'el', nativeName: 'Ελληνικά', dir: 'ltr', fontScript: 'greek', isBeta: true },
-  // QNBS-v3: Phase X Beta — Nordic/Uralic/Basque (LTR) + Persian (RTL, Arabic script)
-  { code: 'fi', nativeName: 'Suomi', dir: 'ltr', fontScript: 'latin', isBeta: true },
-  { code: 'sv', nativeName: 'Svenska', dir: 'ltr', fontScript: 'latin', isBeta: true },
-  { code: 'hu', nativeName: 'Magyar', dir: 'ltr', fontScript: 'latin', isBeta: true },
-  { code: 'is', nativeName: 'Íslenska', dir: 'ltr', fontScript: 'latin', isBeta: true },
-  { code: 'eu', nativeName: 'Euskara', dir: 'ltr', fontScript: 'latin', isBeta: true },
-  { code: 'fa', nativeName: 'فارسی', dir: 'rtl', fontScript: 'arabic', isBeta: true },
-];
+// QNBS-v3: locale metadata now lives in the SSOT registry (i18n/locales.ts). Re-exported here so the
+// existing `from 'contexts/I18nContext'` import sites (Language, LanguageInfo, RTL_LOCALES,
+// SUPPORTED_LOCALES) keep working unchanged — adding a language is now a single registry entry.
+export type { FontScript, Language, LanguageInfo, LocaleStatus } from '../i18n/locales';
+export { RTL_LOCALES, SUPPORTED_LOCALES };
 
 interface I18nContextType {
   language: Language;
@@ -228,30 +177,13 @@ interface I18nProviderProps {
 }
 
 const LANG_KEY = 'worldscript-language';
-const VALID_LANGS: Language[] = [
-  'en',
-  'de',
-  'fr',
-  'es',
-  'it',
-  'ar',
-  'he',
-  'ja',
-  'zh',
-  'pt',
-  'el',
-  'fi',
-  'sv',
-  'hu',
-  'is',
-  'eu',
-  'fa',
-];
 
 const getInitialLanguage = (): Language => {
   try {
-    const saved = localStorage.getItem(LANG_KEY) as Language;
-    if (saved && VALID_LANGS.includes(saved)) return saved;
+    // QNBS-v3: validate the persisted value against the SSOT registry (isLanguage) instead of a
+    // hand-maintained VALID_LANGS array — a retired/unknown code falls back to English.
+    const saved = localStorage.getItem(LANG_KEY);
+    if (isLanguage(saved)) return saved;
   } catch {
     /* localStorage may be unavailable */
   }

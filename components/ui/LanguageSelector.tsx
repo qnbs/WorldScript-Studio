@@ -2,33 +2,25 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import type { Language } from '../../contexts/I18nContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import { LOCALES } from '../../i18n/locales';
 import { Icon } from './Icon';
 
-// QNBS-v3: Language metadata. nativeName is the endonym — intentionally NOT localized so users
-// always find their own language regardless of the active UI language (standard language-picker UX).
-// The exonym label is resolved at render time via t('portal.language.names.<code>') to satisfy the
-// no-hardcoded-user-facing-strings rule. flag is an emoji (non-translatable).
+// QNBS-v3: Language metadata derived from the SSOT registry (i18n/locales.ts) — no longer a parallel
+// hand-maintained table. nativeName is the endonym (intentionally NOT localized so users always find
+// their own language). The exonym label is resolved at render time via t('portal.language.names.<code>')
+// to satisfy the no-hardcoded-user-facing-strings rule. flag is an emoji (non-translatable); isBeta is
+// derived from the registry status.
 const LANGUAGE_METADATA: Record<Language, { nativeName: string; flag: string; isBeta?: boolean }> =
-  {
-    en: { nativeName: 'English', flag: '🇺🇸' },
-    de: { nativeName: 'Deutsch', flag: '🇩🇪' },
-    fr: { nativeName: 'Français', flag: '🇫🇷' },
-    es: { nativeName: 'Español', flag: '🇪🇸' },
-    it: { nativeName: 'Italiano', flag: '🇮🇹' },
-    ar: { nativeName: 'العربية', flag: '🇸🇦', isBeta: true },
-    he: { nativeName: 'עברית', flag: '🇮🇱', isBeta: true },
-    ja: { nativeName: '日本語', flag: '🇯🇵', isBeta: true },
-    zh: { nativeName: '简体中文', flag: '🇨🇳', isBeta: true },
-    pt: { nativeName: 'Português', flag: '🇵🇹', isBeta: true },
-    el: { nativeName: 'Ελληνικά', flag: '🇬🇷', isBeta: true },
-    // QNBS-v3: Phase X Beta — Basque has no Unicode flag emoji (ikurriña absent); use 🌐 globe.
-    fi: { nativeName: 'Suomi', flag: '🇫🇮', isBeta: true },
-    sv: { nativeName: 'Svenska', flag: '🇸🇪', isBeta: true },
-    hu: { nativeName: 'Magyar', flag: '🇭🇺', isBeta: true },
-    is: { nativeName: 'Íslenska', flag: '🇮🇸', isBeta: true },
-    eu: { nativeName: 'Euskara', flag: '🌐', isBeta: true },
-    fa: { nativeName: 'فارسی', flag: '🇮🇷', isBeta: true },
-  };
+  Object.fromEntries(
+    LOCALES.map((l) => [
+      l.code,
+      {
+        nativeName: l.nativeName,
+        flag: l.flag,
+        ...(l.status !== 'production' ? { isBeta: true } : {}),
+      },
+    ]),
+  ) as Record<Language, { nativeName: string; flag: string; isBeta?: boolean }>;
 
 interface LanguageSelectorProps {
   value: Language;

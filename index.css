@@ -915,6 +915,19 @@ select option {
   direction: ltr;
 }
 
+/* QNBS-v3: PR1 i18n — bind the per-script UI font stacks (registry `fontScript`) to the active
+   <html lang>. These vars existed (--font-ui-cjk / --font-ui-greek) but NO selector consumed them,
+   so ja/zh/el rendered via the Latin base stack and only hit Noto as a late fallback. Leading the
+   stack with the right Noto family fixes glyph coverage + metrics. RTL scripts (ar/he/fa) keep their
+   own [dir="rtl"] token swap above; `:lang(zh)` also covers a future zh-Hant. */
+:lang(ja),
+:lang(zh) {
+  --font-ui: var(--font-ui-cjk);
+}
+:lang(el) {
+  --font-ui: var(--font-ui-greek);
+}
+
 /* ==========================================================================
    Desktop (Tauri) scoped layer — QNBS-v3
    Applied only inside the Tauri WebView: `applyDesktopRuntimeFlags()`

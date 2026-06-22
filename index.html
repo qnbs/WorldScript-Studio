@@ -89,7 +89,9 @@
     <!-- QNBS-v3: Phase 3 — CJK/Greek/Arabic/Hebrew fonts via Google Fonts CDN -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+GR:wght@400;500;700&family=Noto+Sans+Arabic:wght@400;500;700&family=Noto+Sans+Hebrew:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- QNBS-v3: PR1 i18n — Noto Naskh Arabic added: it leads the RTL *editor* stack (--font-editor-rtl
+         in index.css) but was never fetched, so the manuscript serif fell back to a system Arabic face. -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+GR:wght@400;500;700&family=Noto+Sans+Arabic:wght@400;500;700&family=Noto+Naskh+Arabic:wght@400;500;700&family=Noto+Sans+Hebrew:wght@400;500;700&display=swap" rel="stylesheet">
 
     <title>WorldScript Studio</title>
 </head>
