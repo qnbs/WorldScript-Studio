@@ -15,14 +15,26 @@ const MODULES = readdirSync(join(LOCALES_DIR, REF))
   .map((f) => f.slice(0, -5));
 
 const PLACEHOLDER = /\{\{\s*([\p{L}\d_]+)\s*\}\}/gu;
-const tokens = (s: string): Set<string> =>
-  new Set([...s.matchAll(PLACEHOLDER)].map((m) => m[1] as string));
+// QNBS-v3: narrow the optional regex capture group via a guard instead of `as string`.
+const tokens = (s: string): Set<string> => {
+  const out = new Set<string>();
+  for (const m of s.matchAll(PLACEHOLDER)) {
+    if (m[1] !== undefined) out.add(m[1]);
+  }
+  return out;
+};
 const sameTokens = (a: Set<string>, b: Set<string>): boolean =>
   a.size === b.size && [...a].every((x) => b.has(x));
 
+// QNBS-v3: type-guard so a non-object JSON value can't be treated as a translation map (no `as`).
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
 function load(lang: string, mod: string): Record<string, unknown> {
   const p = join(LOCALES_DIR, lang, `${mod}.json`);
-  return existsSync(p) ? (JSON.parse(readFileSync(p, 'utf8')) as Record<string, unknown>) : {};
+  if (!existsSync(p)) return {};
+  const parsed: unknown = JSON.parse(readFileSync(p, 'utf8'));
+  return isRecord(parsed) ? parsed : {};
 }
 
 interface Row {
