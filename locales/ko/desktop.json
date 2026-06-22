@@ -1,0 +1,19 @@
+{
+  "desktop.menu.commandPalette": "명령 팔레트",
+  "desktop.menu.edit": "편집",
+  "desktop.menu.export": "프로젝트 내보내기…",
+  "desktop.menu.file": "파일",
+  "desktop.menu.help": "도움말",
+  "desktop.menu.helpCenter": "도움말 센터",
+  "desktop.menu.settings": "설정",
+  "desktop.menu.view": "보다",
+  "desktop.menu.window": "창문",
+  "desktop.settings.minimizeToTray": "닫을 때 트레이로 최소화",
+  "desktop.settings.minimizeToTrayHint": "창을 닫을 때 종료하는 대신 WorldScript Studio를 시스템 트레이에서 계속 실행하십시오.",
+  "desktop.settings.sectionTitle": "데스크탑",
+  "desktop.tray.commandPalette": "명령 팔레트",
+  "desktop.tray.quit": "그만두다",
+  "desktop.tray.settings": "설정",
+  "desktop.tray.show": "WorldScript Studio 표시",
+  "desktop.tray.tooltip": "WorldScript Studio"
+}

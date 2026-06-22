@@ -96,6 +96,12 @@ export const I18N_BOOTSTRAP: Record<Language, Record<string, string>> = {
     'initialProject.logline': 'Путешествие в тысячу ли начинается с одного шага...',
     'initialProject.chapter1': 'Глава 1',
   },
+  // QNBS-v3: Tier-1 expansion (2026) — Korean cold-start fallbacks.
+  ko: {
+    'initialProject.title': '제목 없는 이야기',
+    'initialProject.logline': '천 리 길도 한 걸음부터 시작됩니다...',
+    'initialProject.chapter1': '1장',
+  },
 };
 
 const KNOWN_PERSISTED_KEYS = new Set([

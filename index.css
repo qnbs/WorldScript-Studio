@@ -35,6 +35,8 @@
      Greek: Noto Sans GR covers monotonic and polytonic Greek (loaded via Google Fonts). */
   --font-ui-cjk: "Noto Sans JP", "Inter", system-ui, -apple-system, sans-serif;
   --font-ui-greek: "Noto Sans GR", "Inter", system-ui, -apple-system, sans-serif;
+  /* QNBS-v3: Korean (Hangul) — Noto Sans KR (loaded via Google Fonts CDN); Inter lacks Hangul glyphs. */
+  --font-ui-kr: "Noto Sans KR", "Inter", system-ui, -apple-system, sans-serif;
   --sc-prose-measure: 65ch;
 
   /* QNBS-v3 (D3): pointer-aware touch-target size. 44px (AAA) is the default for touch/coarse
@@ -926,6 +928,9 @@ select option {
 }
 :lang(el) {
   --font-ui: var(--font-ui-greek);
+}
+:lang(ko) {
+  --font-ui: var(--font-ui-kr);
 }
 
 /* ==========================================================================

@@ -86,13 +86,13 @@
             upgrade-insecure-requests;
           " />
 
-    <!-- QNBS-v3: CJK (Noto Sans JP) + Greek (Noto Sans GR) via Google Fonts CDN — these are the only
-         non-Latin scripts NOT self-hosted via @fontsource in index.tsx. Arabic/Hebrew (incl. Noto Naskh
-         Arabic) are self-hosted there, so they are intentionally NOT requested here to avoid duplicate
-         font downloads and RTL typography drift (CodeAnt). -->
+    <!-- QNBS-v3: CJK (Noto Sans JP) + Korean (Noto Sans KR) + Greek (Noto Sans GR) via Google Fonts
+         CDN — these are the non-Latin scripts NOT self-hosted via @fontsource in index.tsx. Arabic/
+         Hebrew (incl. Noto Naskh Arabic) are self-hosted there, so they are intentionally NOT requested
+         here to avoid duplicate font downloads and RTL typography drift. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+GR:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+GR:wght@400;500;700&display=swap" rel="stylesheet">
 
     <title>WorldScript Studio</title>
 </head>

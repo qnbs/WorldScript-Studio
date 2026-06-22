@@ -30,8 +30,9 @@ const TTS_LOCALE: Record<Language, string> = {
   is: 'is-IS',
   eu: 'eu-ES',
   fa: 'fa-IR',
-  // QNBS-v3: Tier-1 expansion (2026) — Russian TTS locale.
+  // QNBS-v3: Tier-1 expansion (2026) — Russian + Korean TTS locales.
   ru: 'ru-RU',
+  ko: 'ko-KR',
 };
 
 const AiScratchpad: FC = React.memo(() => {
