@@ -7,58 +7,19 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getLocales, getModules, REF_LANG } from './i18n-locales.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const root = join(__dirname, '..');
 
-// QNBS-v3: ar/he promoted into the parity gate (RTL Beta) — key coverage is now enforced.
-// Translation *quality* is still Beta (help.json bodies remain English fallback by design).
-// QNBS-v3: ja/zh/pt/el are Phase 3 beta stubs — English placeholders until human review completes.
-// QNBS-v3: Phase X — fi/sv/hu/is/eu (LTR) + fa (RTL) added to the parity gate.
-const LANGS = [
-  'en',
-  'de',
-  'fr',
-  'es',
-  'it',
-  'ar',
-  'he',
-  'ja',
-  'zh',
-  'pt',
-  'el',
-  'fi',
-  'sv',
-  'hu',
-  'is',
-  'eu',
-  'fa',
-];
-const MODULES = [
-  'common',
-  'tour',
-  'sidebar',
-  'portal',
-  'dashboard',
-  'manuscript',
-  'writer',
-  'templates',
-  'tags',
-  'outline',
-  'characters',
-  'worlds',
-  'export',
-  'settings',
-  'help',
-  'objects',
-  'mindmap',
-  'characterInterviews',
-  'lora',
-  'copilot',
-  'desktop',
-];
+// QNBS-v3: locale + module lists are derived from the filesystem via the shared SSOT bridge
+// (scripts/i18n-locales.mjs) instead of being hand-maintained here — a new locale folder is picked up
+// automatically. Translation *quality* is still Beta for non-core locales (help.json bodies remain
+// English fallback by design); parity (key coverage) is what this gate enforces.
+const LANGS = getLocales();
+const MODULES = getModules();
 
-const REF = 'en';
+const REF = REF_LANG;
 
 function loadBundleKeys(lang) {
   const keys = new Set();

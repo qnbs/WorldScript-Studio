@@ -18,55 +18,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getLocales, getModules } from './i18n-locales.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
-// QNBS-v3: ar/he are Phase 2 beta stubs — English placeholders until human review completes.
-// QNBS-v3: ja/zh/pt/el are Phase 3 beta stubs — English placeholders until human review completes.
-// QNBS-v3: Phase X — fi/sv/hu/is/eu (LTR) + fa (RTL) Beta locales.
-const langs = [
-  'en',
-  'de',
-  'fr',
-  'es',
-  'it',
-  'ar',
-  'he',
-  'ja',
-  'zh',
-  'pt',
-  'el',
-  'fi',
-  'sv',
-  'hu',
-  'is',
-  'eu',
-  'fa',
-];
-const modules = [
-  'common',
-  'tour',
-  'sidebar',
-  'portal',
-  'dashboard',
-  'manuscript',
-  'writer',
-  'templates',
-  'tags',
-  'outline',
-  'characters',
-  'worlds',
-  'export',
-  'settings',
-  'help',
-  'objects',
-  'mindmap',
-  'characterInterviews',
-  'lora',
-  'copilot',
-  'desktop',
-];
+// QNBS-v3: locale + module lists derived from the filesystem via the shared SSOT bridge
+// (scripts/i18n-locales.mjs) — a new locale folder is bundled automatically with no edit here.
+const langs = getLocales();
+const modules = getModules();
 
 let totalKeys = 0;
 
