@@ -126,11 +126,14 @@ if (testCount != null) {
 }
 
 // --- Prose occurrences ------------------------------------------------------
-// Line ~352: "Shipped UI locales with **2 594 i18n keys**"
+// Line ~352: "Shipped UI locales with **2 594 i18n keys** across all 17 languages"
 readme = readme.replace(
   new RegExp(`(Shipped UI locales with \\*\\*)${NUM}( i18n keys\\*\\*)`),
   `$1${keyCount}$2`,
 );
+// QNBS-v3: keep the prose language count in lockstep with the locale dirs too — it was hand-maintained
+// and went stale (said "17" after ru/ko brought it to 19), surfacing as a README contradiction.
+readme = readme.replace(/across all \d+ languages/g, `across all ${localeCount} languages`);
 // Line ~453: "| 2716 keys × 17 locales" — keep the table-cell leading space; locale count dynamic.
 readme = readme.replace(
   new RegExp(`(\\| )${NUM}keys × \\d+ locales`),

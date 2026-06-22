@@ -341,7 +341,7 @@
 <li><strong>Irisgarritasun ezarpenak</strong> osoa (kontraste handia, mugimendu murriztua, daltoniko moduak) — WCAG 2.2 AAra zuzenduta</li>
 </ul>
 <h3>🌐 Hizkuntza anitzeko laguntza osoa</h3>
-<p>17 hizkuntza guztietan <strong>2806 i18n gako</strong> dituzten interfaze-interfaze lokalak bidaltzen dira - erabiltzaileari begirako kate gogor kodetuta:</p>
+<p>19 hizkuntza guztietan <strong>2810 i18n gako</strong> dituzten UI lokalak bidaltzen dira — erabiltzaileari begirako kate gogor kodetuta:</p>
 <ul>
 <li>🇩🇪 <strong>Alemaniera</strong> (Alemaniera)</li>
 <li>🇬🇧 <strong>Ingelesa</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>Erreakzio-testuinguru pertsonalizatua (<code>I18nContext.tsx</code>)</td>
-<td>2806 gako × 19 lokalizazio (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; <code>localStorage</code> iraunkortasuna</td>
+<td>2810 gako × 19 lokalizazio (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; <code>localStorage</code> iraunkortasuna</td>
 </tr>
 <tr>
 <td><strong>Probak</strong></td>
-<td>Vitest 4.x (5807+ proba / 509 fitxategi) + Playwright E2E</td>
+<td>Vitest 4.x (5807+ proba / 512 fitxategi) + Playwright E2E</td>
 <td>Unitatea/integrazioa + nabigatzaile gurutzatua E2E; Stryker mutazioa (eskuzko lan-fluxua)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>Probako uneko neurketak (2026-06-16):</strong></p>
 <ul>
-<li><strong>5807+ unitate-proba</strong> <strong>509 proba-fitxategietan</strong> - guztiak gaindituz</li>
+<li><strong>5807+ unitate-proba</strong> <strong>512 proba-fitxategietan</strong> - guztiak gaindituz</li>
 <li>Estaldura-atalaseak: lerroak ≥ 74 · adarrak ≥ 60 · funtzioak ≥ 67 · adierazpenak ≥ 72 — CI-n ezarrita (ikus Codecov bereizgarria zuzeneko metriketarako)</li>
-<li>i18n: <strong>2806 gako × 19 lokalizazio</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 gako × 19 lokalizazio</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p><strong>CI-cloud-first workflow (gomendatua):</strong> Murriztutako hardwarean exekutatu <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> lokalean, gero bultzatu eta utzi CI kudeatzen estaldura, E2E, Lighthouse eta Stryker. Zenbaki autoritarioak CI artefaktuetatik datoz (Codecov, JUnit). CI berde bihurtu ondoren, eguneratu IRAKURRI txapak eta <code>AUDIT.md</code> kalitate-ateko lerroa jakinarazitako neurketetatik. Ikusi <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first vs local development</strong> bateratze osteko dokumentu-eguneratze-zerrenda osoa ikusteko.</p>
 <p>**Baliabide gutxiko/ordenagailu eramangarriaren lan-fluxua: ** <strong><code>pnpm run test:run</code></strong> Vitest ariketak <code>--coverage</code> gabe — bizkorra eta memoria arina. Estaldura osoa (<code>pnpm exec vitest run --coverage</code>) nahita RAM pisu handia du; fidatu CI <code>quality</code> lanean, atalase zehatz bat arazketan ari ez bazara.</p>

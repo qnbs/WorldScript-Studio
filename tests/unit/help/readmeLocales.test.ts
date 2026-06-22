@@ -40,7 +40,9 @@ describe('localized README pages', () => {
     const count = (html: string, re: RegExp) => (html.match(re) || []).length;
     const ELEMENTS: Array<[string, RegExp]> = [
       ['links', /<a\s/g],
-      ['code', /<code>/g],
+      // QNBS-v3: match `<code` with attributes too — fenced blocks render as `<code class="language-…">`,
+      // so a bare `<code>` regex would undercount and let a dropped fenced-code tag slip past (CodeAnt).
+      ['code', /<code[\s>]/g],
       ['headings', /<h[1-6][\s>]/g],
       ['list items', /<li>/g],
       ['code blocks', /<pre>/g],

@@ -341,7 +341,7 @@
 <li>Полные <strong>Настройки специальных возможностей</strong> (высокая контрастность, пониженное движение, режимы дальтонизма) — WCAG 2.2, ориентированный на AA</li>
 </ul>
 <h3>🌐 Полная многоязычная поддержка</h3>
-<p>Поставлены локали пользовательского интерфейса с <strong>2806 ключами i18n</strong> на всех 17 языках — ноль жестко запрограммированных строк, ориентированных на пользователя:</p>
+<p>Поставлены локали пользовательского интерфейса с <strong>2810 ключами i18n</strong> на всех 19 языках — ноль жестко закодированных строк, ориентированных на пользователя:</p>
 <ul>
 <li>🇩🇪 <strong>Немецкий</strong> (Немецкий)</li>
 <li>🇬🇧 <strong>Английский</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>Пользовательский контекст реагирования (<code>I18nContext.tsx</code>)</td>
-<td>2806 ключей × 19 локалей (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); резервный вариант EN; <code>localStorage</code> настойчивость</td>
+<td>2810 ключей × 19 локалей (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); резервный вариант EN; <code>localStorage</code> настойчивость</td>
 </tr>
 <tr>
 <td><strong>Тестирование</strong></td>
-<td>Vitest 4.x (5807+ тестов / 509 файлов) + Драматург E2E</td>
+<td>Vitest 4.x (5807+ тестов / 512 файлов) + Драматург E2E</td>
 <td>Модуль/интеграция + кроссбраузерность E2E; Мутация Страйкера (ручной рабочий процесс)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>Текущие показатели теста (16.06.2026):</strong></p>
 <ul>
-<li><strong>5807+ модульных тестов</strong> в <strong>509 тестовых файлах</strong> — все пройдено</li>
+<li><strong>5807+ модульных тестов</strong> в <strong>512 тестовых файлах</strong> — все пройдено</li>
 <li>Пороги покрытия: строки ≥ 74 · ветки ≥ 60 · функции ≥ 67 · операторы ≥ 72 — применяются в CI (живые показатели см. в значке Codecov)</li>
-<li>i18n: <strong>2806 ключей × 19 локалей</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 ключей × 19 локалей</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p><strong>Рабочий процесс CI-cloud-first (рекомендуется):</strong> На ограниченном оборудовании запустите <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> локально, затем нажмите и позвольте CI обрабатывать покрытие, E2E, Lighthouse и Stryker. Авторитетные цифры взяты из артефактов CI (Codecov, JUnit). После того как CI станет зеленым, обновите значки README и строку контроля качества <code>AUDIT.md</code> на основе сообщаемых показателей. Полный контрольный список обновления документации после слияния см. в <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first и локальной разработке</strong>.</p>
 <p><strong>Рабочий процесс на ноутбуке с низкими ресурсами:</strong> <strong><code>pnpm run test:run</code></strong> упражнения Vitest без <code>--coverage</code> — быстрый и мало памяти. Полное покрытие (<code>pnpm exec vitest run --coverage</code>) намеренно требует большого количества оперативной памяти; полагайтесь на задание CI <code>quality</code>, если только вы не отлаживаете определенный порог.</p>

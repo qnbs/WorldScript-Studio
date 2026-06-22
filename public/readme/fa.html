@@ -341,7 +341,7 @@
 <li><strong>تنظیمات دسترسی</strong> کامل (کنتراست بالا، حرکت کاهش یافته، حالت‌های کوررنگ) - WCAG 2.2 AA</li>
 </ul>
 <h3>🌐 پشتیبانی کامل از چند زبان</h3>
-<p>زبان‌های UI با کلیدهای <strong>2806 i18n</strong> در تمامی 17 زبان ارسال شد - رشته‌های رو به روی کاربر با کد سخت صفر:</p>
+<p>زبان‌های محلی رابط کاربری با کلیدهای <strong>2810 i18n</strong> در تمام ۱۹ زبان ارسال شد - رشته‌های رو به روی کاربر با کد سخت صفر:</p>
 <ul>
 <li>🇩🇪 <strong>آلمانی</strong> (دویچ)</li>
 <li>🇬🇧 <strong>انگلیسی</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>متن واکنش سفارشی (<code>I18nContext.tsx</code>)</td>
-<td>2806 کلید × 19 زبان (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu بتا)؛ EN بازگشتی; <code>localStorage</code> پشتکار</td>
+<td>2810 کلید × 19 زبان (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu بتا)؛ EN بازگشتی; <code>localStorage</code> پشتکار</td>
 </tr>
 <tr>
 <td><strong>آزمایش</strong></td>
-<td>Vitest 4.x (5807+ تست / 509 فایل) + نمایشنامه نویس E2E</td>
+<td>Vitest 4.x (5807+ تست / 512 فایل) + نمایشنامه نویس E2E</td>
 <td>واحد/ادغام + مرورگر متقابل E2E؛ جهش Stryker (گردش کار دستی)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p>** معیارهای آزمون فعلی (16/06/2026):**</p>
 <ul>
-<li><strong>5807+ تست واحد</strong> در سراسر <strong>509 فایل تست</strong> — همه با موفقیت</li>
+<li><strong>5807+ تست واحد</strong> در سراسر <strong>512 فایل آزمایش</strong> — همه با موفقیت</li>
 <li>آستانه پوشش: خطوط ≥ 74 · شاخه ها ≥ 60 · توابع ≥ 67 · عبارات ≥ 72 — در CI اجرا می شود (برای معیارهای زنده به نشان Codecov مراجعه کنید)</li>
-<li>i18n: <strong>2806 کلید × 19 زبان</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu بتا)</li>
+<li>i18n: <strong>2810 کلید × 19 زبان</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu بتا)</li>
 </ul>
 <p><strong>CI-Cloud-first Workflow (توصیه می شود):</strong> در سخت افزار محدود <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> را به صورت محلی اجرا کنید، سپس فشار دهید و اجازه دهید CI پوشش، E2E، Lighthouse و Stryker را کنترل کند. اعداد معتبر از مصنوعات CI (Codecov، JUnit) می آیند. پس از سبز شدن CI، نشان‌های README و خط دروازه کیفیت <code>AUDIT.md</code> را از معیارهای گزارش‌شده به‌روزرسانی کنید. برای چک لیست کامل به‌روزرسانی سند پس از ادغام، به <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first vs local development</strong> مراجعه کنید.</p>
 <p>** گردش کار با منابع کم / لپ تاپ:** <strong><code>pnpm run test:run</code></strong> تمرینات Vitest بدون <code>--coverage</code> — سریع و کم حافظه. پوشش کامل (<code>pnpm exec vitest run --coverage</code>) عمداً دارای RAM سنگین است. به کار CI <code>quality</code> تکیه کنید مگر اینکه آستانه خاصی را اشکال‌زدایی کنید.</p>
@@ -1052,7 +1052,7 @@ act push --job build --job e2e
 </tr>
 <tr>
 <td><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/history/completed-v1.1.md"><code>docs/history/completed-v1.1.md</code></a></td>
-<td>Archived release notes (v1.1.x)</td>
+<td>یادداشت‌های انتشار بایگانی شده (نسخه 1.1.x)</td>
 </tr>
 <tr>
 <td><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/tests/e2e/helpers.ts"><code>tests/e2e/helpers.ts</code></a></td>

@@ -222,14 +222,14 @@
 <p>设计要点：</p>
 <ul>
 <li><strong>永远不要自动修改</strong>稿件——每个代理输出都等待审查小组中明确的作者批准。</li>
-<li><strong>SupervisorAgent</strong> 在阶段之间应用启发式质量门，并在检测到后备输出或低质量分数时触发一次自动重试。</li>
+<li><strong>SupervisorAgent</strong> 在阶段之间应用启发式质量门，并在检测到回退输出或低质量分数时触发一次自动重试。</li>
 <li><strong>自我评估循环</strong> (<code>BaseAgent.selfReflect()</code>) 在向作者展示之前标记第二遍不连贯的 AI 输出。</li>
 <li><strong>关键行动摘要卡</strong> + 按严重性分组的审核小组，可快速接受高置信度建议 (≥ 0.85)。</li>
 <li>通过<strong>设置→实验功能→ProForge Pipeline</strong>启用。</li>
 </ul>
 <p>请参阅 <a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/PROFORGE-PIPELINE.md"><code>docs/PROFORGE-PIPELINE.md</code></a> 了解完整的架构、类型和代理参考。</p>
 <h3>✦ 全球AI副驾驶_(v2 — 环境智能层)_</h3>
-<p>始终存在的人工智能写作助手，可提供主动见解，让您无需离开编辑器即可聊天。通过<strong>设置 → 实验 → 启用 Global AI Copilot</strong> 启用。</p>
+<p>始终存在的人工智能写作助手，可提供主动见解，让您无需离开编辑器即可聊天。通过<strong>设置→实验→启用全局AI Copilot</strong>启用。</p>
 <p><strong>面板模式：</strong></p>
 <ul>
 <li><strong>Dialog</strong>（默认）- 浮动面板，右下角</li>
@@ -267,7 +267,7 @@
 <li><strong>功能标志</strong> — <code>enableProjectHealthScore</code>（仪表板卡）位于<code>features/featureFlags/featureFlagsSlice.ts</code>中。 （跨项目搜索在 v1.8 中被提升为永久核心行为，并且不再有标志。）</li>
 </ul>
 <h3>🔭 跨项目搜索_(v2 — 隐私保护索引)_</h3>
-<p>搜索<strong>所有项目</strong>，而不将它们加载到内存中。基于 IndexedDB 的隐私保护索引（DB v8，<code>projects-index-store</code>）仅存储每个项目的轻量级元数据 - 标题、日志行、字数、字符名称 - 从不手写明文。</p>
+<p>搜索<strong>所有项目</strong>，而不将它们加载到内存中。基于 IndexedDB 的隐私保护索引（DB v8，<code>projects-index-store</code>）仅存储每个项目的轻量级元数据 - 标题、日志行、字数、字符名称 - 从不手写纯文本。</p>
 <ul>
 <li>**两阶段查找：**第一阶段查询索引（即时）；第 2 阶段根据深度匹配摘录的需求加载完整项目。</li>
 <li>每次通过 <code>listenerMiddleware</code> 保存时<strong>自动索引</strong>（自 v1.8 起的永久核心行为）。</li>
@@ -341,7 +341,7 @@
 <li>完整<strong>辅助功能设置</strong>（高对比度、减少运动、色盲模式）— WCAG 2.2 AA 导向</li>
 </ul>
 <h3>🌐 全面的多语言支持</h3>
-<p>在所有 17 种语言中提供了带有 <strong>2806 i18n 键</strong> 的 UI 区域设置 — 零硬编码的面向用户的字符串：</p>
+<p>在所有 19 种语言中提供了带有 <strong>2810 i18n 键</strong> 的 UI 区域设置 — 零硬编码的面向用户的字符串：</p>
 <ul>
 <li>🇩🇪<strong>德语</strong>（德语）</li>
 <li>🇬🇧<strong>英语</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>自定义 React 上下文 (<code>I18nContext.tsx</code>)</td>
-<td>2806 个按键 × 19 个语言环境（de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta）； CN 后备; <code>localStorage</code>坚持</td>
+<td>2810 个按键 × 19 个区域设置（de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta）； CN 后备; <code>localStorage</code>坚持</td>
 </tr>
 <tr>
 <td><strong>测试</strong></td>
-<td>Vitest 4.x（5807+ 测试/509 个文件）+ Playwright E2E</td>
+<td>Vitest 4.x（5807+ 测试/512 个文件）+ Playwright E2E</td>
 <td>单元/集成+跨浏览器E2E； Stryker 突变（手动工作流程）</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>当前测试指标（2026-06-16）：</strong></p>
 <ul>
-<li><strong>5807+ 单元测试</strong> 跨<strong>509 个测试文件</strong> — 全部通过</li>
+<li><strong>5807+ 单元测试</strong> 跨<strong>512 个测试文件</strong> — 全部通过</li>
 <li>覆盖阈值：行 ≥ 74 · 分支 ≥ 60 · 函数 ≥ 67 · 语句 ≥ 72 — 在 CI 中强制执行（有关实时指标，请参阅 Codecov 徽章）</li>
-<li>i18n：<strong>2806 个按键 × 19 个语言环境</strong>（en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta）</li>
+<li>i18n：<strong>2810 个按键 × 19 个语言环境</strong>（en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta）</li>
 </ul>
 <p><strong>CI-云优先工作流程（推荐）：</strong> 在受限硬件上本地运行**<code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code>**，然后推送并让 CI 处理覆盖、E2E、Lighthouse 和 Stryker。权威数字来自 CI 工件（Codecov、JUnit）。 CI 变绿后，根据报告的指标更新 README 徽章和 <code>AUDIT.md</code> 质量门线。请参阅 <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § 云 CI 优先与本地开发</strong> 了解完整的合并后文档更新清单。</p>
 <p>*<em>低资源/笔记本电脑工作流程：</em>***<code>pnpm run test:run</code>**练习Vitest，无需<code>--coverage</code>——快速且占用内存少。完全覆盖 (<code>pnpm exec vitest run --coverage</code>) 是故意占用大量 RAM 的；除非您正在调试特定阈值，否则依赖 CI <code>quality</code> 作业。</p>
@@ -867,7 +867,7 @@ pnpm run tauri:dev
 act pull_request --job security --job quality
 act push --job build --job e2e
 </code></pre>
-<p>共享 Playwright 助手 (<code>waitForSpaReady</code>、<code>ensureBlankProject</code>、<code>clickNavItem</code>) 位于 <strong><code>tests/e2e/helpers.ts</code></strong> — <strong>不</strong> 依赖于 <code>networkidle</code> 和 Vite 开发服务器 (HMR/WebSocket)。详情：<strong><code>docs/CI.md</code></strong>。</p>
+<p>共享剧作家助手（<code>waitForSpaReady</code>、<code>ensureBlankProject</code>、<code>clickNavItem</code>）位于**<code>tests/e2e/helpers.ts</code>** — <strong>不</strong>依赖于<code>networkidle</code>和Vite开发服务器（HMR/WebSocket）。详情：<strong><code>docs/CI.md</code></strong>。</p>
 <hr>
 <h2>🚀 创意工作流程</h2>
 <ol>
@@ -883,7 +883,7 @@ act push --job build --job e2e
 <hr>
 <h2>🤝 贡献</h2>
 <ul>
-<li><strong>🐛 报告错误</strong> — 打开 GitHub 问题，其中包含详细信息和重现步骤</li>
+<li><strong>🐛 报告错误</strong> — 打开包含详细信息和重现步骤的 GitHub 问题</li>
 <li><strong>💡建议功能</strong> — 展开讨论或问题</li>
 <li><strong>🌍改进翻译</strong> — 五个语言环境树（<code>en</code>是参考）； FR/ES/IT 的原生波兰语在 PR 中尤其受欢迎</li>
 <li><strong>🧪 编写测试</strong> — 覆盖率阈值：分支 ≥ 60 %，函数 ≥ 67 %，行 ≥ 74 %；对大型组件（协作、AI 流路径、OpenRouter 提供商）的贡献特别有价值</li>

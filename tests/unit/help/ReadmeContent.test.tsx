@@ -57,19 +57,24 @@ describe('ReadmeContent', () => {
     expect(screen.queryByText('help.machineTranslatedNotice')).not.toBeInTheDocument();
   });
 
-  it('shows the machine-translated notice for a non-Production locale', async () => {
-    setLocale('ru'); // Beta tier → helpFallback true
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((u: string) => (u.includes('/readme/') ? okHtml('<p>x</p>') : notOk())),
-    );
-    render(<ReadmeContent />);
-    await waitFor(() =>
-      expect(screen.getByText('help.machineTranslatedNotice')).toBeInTheDocument(),
-    );
+  it('shows the machine-translated notice for any non-English locale (incl. Production de/es)', async () => {
+    // QNBS-v3: the README is MT'd for EVERY non-English locale — Production locales included — so the
+    // notice shows for de (Production) just as for ru (Beta), unlike the help.json fallback rule.
+    for (const code of ['ru', 'de'] as const) {
+      setLocale(code);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((u: string) => (u.includes('/readme/') ? okHtml('<p>x</p>') : notOk())),
+      );
+      const { unmount } = render(<ReadmeContent />);
+      await waitFor(() =>
+        expect(screen.getByText('help.machineTranslatedNotice')).toBeInTheDocument(),
+      );
+      unmount();
+    }
   });
 
-  it('does NOT show the machine-translated notice for a Production locale', async () => {
+  it('does NOT show the machine-translated notice for English (the source)', async () => {
     setLocale('en');
     vi.stubGlobal(
       'fetch',

@@ -341,7 +341,7 @@
 <li><strong>הגדרות נגישות מלאות</strong> (ניגודיות גבוהה, תנועה מופחתת, מצבים עיוורי צבעים) - מונחה WCAG 2.2 AA</li>
 </ul>
 <h3>🌐 תמיכה מלאה בריבוי שפות</h3>
-<p>אזורי ממשק משתמש נשלחים עם <strong>2806 i18n keys</strong> בכל 17 השפות - אפס מחרוזות מקודדות למשתמש הפונות למשתמש:</p>
+<p>אזורי ממשק משתמש נשלחים עם <strong>2810 i18n keys</strong> בכל 19 השפות - אפס מחרוזות מקודדות למשתמש:</p>
 <ul>
 <li>🇩🇪 <strong>גרמנית</strong> (גרמנית)</li>
 <li>🇬🇧 <strong>אנגלית</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>הקשר תגובה מותאם אישית (<code>I18nContext.tsx</code>)</td>
-<td>2806 מפתחות × 19 מקומות (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; <code>localStorage</code> התמדה</td>
+<td>2810 מפתחות × 19 מקומות (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; <code>localStorage</code> התמדה</td>
 </tr>
 <tr>
 <td><strong>בדיקות</strong></td>
-<td>Vitest 4.x (5807+ בדיקות / 509 קבצים) + מחזאי E2E</td>
+<td>Vitest 4.x (5807+ בדיקות / 512 קבצים) + מחזאי E2E</td>
 <td>יחידה/אינטגרציה + E2E חוצה דפדפנים; מוטציה של סטרייקר (זרימת עבודה ידנית)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>מדדי בדיקה נוכחיים (2026-06-16):</strong></p>
 <ul>
-<li><strong>5807+ בדיקות יחידה</strong> על פני <strong>509 קובצי בדיקה</strong> - כולם עוברים</li>
+<li><strong>5807+ בדיקות יחידה</strong> על פני <strong>512 קובצי בדיקה</strong> - כולם עוברים</li>
 <li>ספי כיסוי: שורות ≥ 74 · סניפים ≥ 60 · פונקציות ≥ 67 · הצהרות ≥ 72 - נאכף ב-CI (ראה תג Codecov עבור מדדים חיים)</li>
-<li>i18n: <strong>2806 keys × 19 locales</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 keys × 19 locales</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p><strong>זרימת עבודה CI-cloud-first (מומלץ):</strong> בחומרה מוגבלת הפעל <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> באופן מקומי, ואז דחוף ותן ל-CI לטפל בכיסוי, E2E, Lighthouse ו- Stryker. מספרים סמכותיים מגיעים מחפצי CI (Codecov, JUnit). לאחר שה-CI הופך לירוק, עדכן את תגי ה-README ואת קו שער האיכות <code>AUDIT.md</code> מהמדדים המדווחים. ראה <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first לעומת פיתוח מקומי</strong> לרשימת הבדיקה המלאה שלאחר המיזוג לעדכון מסמכים.</p>
 <p><strong>זרימת עבודה נמוכה במשאבים / מחשב נייד:</strong> <strong><code>pnpm run test:run</code></strong> תרגילים Vitest ללא <code>--coverage</code> — מהיר וקל לזיכרון. כיסוי מלא (<code>pnpm exec vitest run --coverage</code>) כבד בכוונה זיכרון RAM; הסתמכו על עבודת CI <code>quality</code> אלא אם כן אתם מנפים באגים בסף ספציפי.</p>

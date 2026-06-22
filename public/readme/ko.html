@@ -341,7 +341,7 @@
 <li>전체 <strong>접근성 설정</strong>(고대비, 움직임 감소, 색맹 모드) — WCAG 2.2 AA 지향</li>
 </ul>
 <h3>🌐 완전한 다국어 지원</h3>
-<p>17개 언어 전체에 걸쳐 <strong>2806 i18n 키</strong>가 포함된 UI 로케일 제공 — 하드코딩된 사용자 표시 문자열 없음:</p>
+<p>19개 언어 전체에 걸쳐 <strong>2810 i18n 키</strong>가 포함된 UI 로케일 제공 — 하드코딩된 사용자 표시 문자열 없음:</p>
 <ul>
 <li>🇩🇪 <strong>독일어</strong>(독일어)</li>
 <li>🇬🇧 <strong>영어</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>사용자 정의 React 컨텍스트(<code>I18nContext.tsx</code>)</td>
-<td>2806개 키 × 19개 로캘(de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN 대체; <code>localStorage</code> 끈기</td>
+<td>2810개 키 × 19개 로캘(de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN 대체; <code>localStorage</code> 끈기</td>
 </tr>
 <tr>
 <td><strong>테스트 중</strong></td>
-<td>Vitest 4.x(5807개 이상의 테스트 / 509개 파일) + Playwright E2E</td>
+<td>Vitest 4.x(5807개 이상의 테스트 / 512개 파일) + Playwright E2E</td>
 <td>유닛/통합 + 크로스 브라우저 E2E; Stryker 돌연변이(수동 작업 흐름)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -670,7 +670,7 @@
 </ul>
 <h4>옵션 B: Ollama(로컬 서버)</h4>
 <ol>
-<li><strong>Ollama</strong> 설치 및 모델 가져오기: <code>ollama pull qwen3:8b</code></li>
+<li><strong>Ollama</strong>를 설치하고 모델 가져오기: <code>ollama pull qwen3:8b</code></li>
 <li>Ollama 시작(기본적으로 <code>http://localhost:11434</code>에서 로컬 HTTP 서버를 실행함)</li>
 <li>설정 → AI 제공자 → <strong>Ollama</strong> 선택 후 연결 확인</li>
 </ol>
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>현재 테스트 지표(2026-06-16):</strong></p>
 <ul>
-<li><strong>5807+ 단위 테스트</strong> 전체 <strong>509 테스트 파일</strong> — 모두 통과</li>
+<li><strong>5807+ 단위 테스트</strong> 전체 <strong>512 테스트 파일</strong> — 모두 통과</li>
 <li>적용 범위 임계값: 라인 ≥ 74 · 분기 ≥ 60 · 기능 ≥ 67 · 명령문 ≥ 72 — CI에서 시행됩니다(실시간 측정 항목은 Codecov 배지 참조).</li>
-<li>i18n: <strong>2806개 키 × 19개 로캘</strong>(en/de/fr/es/it + ar/he/fa RTL 베타 + ja/zh/pt/el/fi/sv/hu/is/eu 베타)</li>
+<li>i18n: <strong>2810개 키 × 19개 로캘</strong>(en/de/fr/es/it + ar/he/fa RTL 베타 + ja/zh/pt/el/fi/sv/hu/is/eu 베타)</li>
 </ul>
 <p><strong>CI 클라우드 우선 워크플로(권장):</strong> 제한된 하드웨어에서 로컬로 **<code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code>**를 실행한 다음 푸시하고 CI가 적용 범위, E2E, Lighthouse 및 Stryker를 처리하도록 합니다. 신뢰할 수 있는 숫자는 CI 아티팩트(Codecov, JUnit)에서 나옵니다. CI가 녹색으로 바뀌면 보고된 지표에서 README 배지와 <code>AUDIT.md</code> 품질 게이트 라인을 업데이트합니다. 전체 병합 후 문서 업데이트 체크리스트는 <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § 클라우드 CI 우선 및 로컬 개발</strong>을 참조하세요.</p>
 <p><strong>저자원/노트북 작업 흐름:</strong> <strong><code>pnpm run test:run</code></strong> <code>--coverage</code> 없이 Vitest를 연습합니다 — 빠르고 메모리가 가볍습니다. 전체 적용 범위(<code>pnpm exec vitest run --coverage</code>)는 의도적으로 RAM을 많이 사용합니다. 특정 임계값을 디버깅하지 않는 한 CI <code>quality</code> 작업에 의존하세요.</p>

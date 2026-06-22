@@ -341,7 +341,7 @@
 <li><strong>إعدادات إمكانية الوصول</strong> كاملة (التباين العالي، الحركة المنخفضة، أوضاع عمى الألوان) — WCAG 2.2 AA-موجهة</li>
 </ul>
 <h3>🌐 دعم كامل متعدد اللغات</h3>
-<p>لغات واجهة المستخدم التي تم شحنها باستخدام <strong>2806 مفاتيح i18n</strong> عبر جميع اللغات الـ 17 - صفر سلاسل مضمنة تواجه المستخدم:</p>
+<p>لغات واجهة المستخدم التي تم شحنها باستخدام <strong>2810 مفاتيح i18n</strong> عبر جميع اللغات الـ 19 - صفر سلاسل مضمنة تواجه المستخدم:</p>
 <ul>
 <li>🇩🇪 <strong>الألمانية</strong> (الألمانية)</li>
 <li>🇬🇧 <strong>الإنجليزية</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>سياق التفاعل المخصص (<code>I18nContext.tsx</code>)</td>
-<td>2806 مفتاحًا × 19 لغة (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)؛ احتياطي EN؛ <code>localStorage</code> الإصرار</td>
+<td>2810 مفاتيح × 19 لغة (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)؛ احتياطي EN؛ <code>localStorage</code> الإصرار</td>
 </tr>
 <tr>
 <td><strong>الاختبار</strong></td>
-<td>Vitest 4.x (5807+ اختبارات / 509 ملفات) + الكاتب المسرحي E2E</td>
+<td>Vitest 4.x (5807+ اختبارات / 512 ملفًا) + الكاتب المسرحي E2E</td>
 <td>الوحدة/التكامل + المتصفح المتقاطع E2E؛ طفرة سترايكر (سير العمل اليدوي)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>مقاييس الاختبار الحالية (2026-06-16):</strong></p>
 <ul>
-<li><strong>5807+ اختبارات الوحدة</strong> عبر <strong>509 ملفات الاختبار</strong> — كلها ناجحة</li>
+<li><strong>5807+ اختبارات الوحدة</strong> عبر <strong>512 ملف اختبار</strong> — جميعها ناجحة</li>
 <li>حدود التغطية: السطور ≥ 74 · الفروع ≥ 60 · الوظائف ≥ 67 · البيانات ≥ 72 - المطبقة في CI (راجع شارة Codecov للمقاييس المباشرة)</li>
-<li>i18n: <strong>2806 مفاتيح × 19 لغة</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 مفاتيح × 19 لغة</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p><strong>سير عمل CI-cloud-first (مستحسن):</strong> على الأجهزة المقيدة، قم بتشغيل <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> محليًا، ثم ادفع CI واتركه يتعامل مع التغطية وE2E وLighthouse وStryker. تأتي الأرقام الرسمية من منتجات CI (Codecov، JUnit). بعد أن يصبح CI باللون الأخضر، قم بتحديث شارات README وخط بوابة الجودة <code>AUDIT.md</code> من المقاييس المُبلغ عنها. راجع <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first مقابل التطوير المحلي</strong> للحصول على القائمة المرجعية الكاملة لتحديث المستندات بعد الدمج.</p>
 <p><strong>سير عمل منخفض الموارد / الكمبيوتر المحمول:</strong> <strong><code>pnpm run test:run</code></strong> تمارين Vitest بدون <code>--coverage</code> — سريعة وخفيفة الذاكرة. التغطية الكاملة (<code>pnpm exec vitest run --coverage</code>) ثقيلة على ذاكرة الوصول العشوائي (RAM) عمدًا؛ اعتمد على مهمة CI <code>quality</code> إلا إذا كنت تقوم بتصحيح عتبة معينة.</p>

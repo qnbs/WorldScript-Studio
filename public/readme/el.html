@@ -341,7 +341,7 @@
 <li>Πλήρεις <strong>Ρυθμίσεις προσβασιμότητας</strong> (υψηλή αντίθεση, μειωμένη κίνηση, λειτουργίες αχρωματοψίας) — WCAG 2.2 AA-oriented</li>
 </ul>
 <h3>🌐 Πλήρης πολυγλωσσική υποστήριξη</h3>
-<p>Αποστέλλονται τοπικές ρυθμίσεις διεπαφής χρήστη με <strong>2806 κλειδιά i18n</strong> και στις 17 γλώσσες — μηδενικές συμβολοσειρές με σκληρό κώδικα:</p>
+<p>Αποστέλλονται τοπικές ρυθμίσεις διεπαφής χρήστη με <strong>2810 πλήκτρα i18n</strong> και στις 19 γλώσσες — μηδενικές συμβολοσειρές με σκληρό κώδικα που αντιμετωπίζουν τον χρήστη:</p>
 <ul>
 <li>🇩🇪 <strong>Γερμανικά</strong> (Deutsch)</li>
 <li>🇬🇧 <strong>Αγγλικά</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>Custom React Context (<code>I18nContext.tsx</code>)</td>
-<td>2806 κλειδιά × 19 τοπικές ρυθμίσεις (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN εναλλακτική; <code>localStorage</code> επιμονή</td>
+<td>2810 κλειδιά × 19 τοπικές ρυθμίσεις (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN εναλλακτική; <code>localStorage</code> επιμονή</td>
 </tr>
 <tr>
 <td><strong>Δοκιμή</strong></td>
-<td>Vitest 4.x (5807+ δοκιμές / 509 αρχεία) + Θεατρικός συγγραφέας E2E</td>
+<td>Vitest 4.x (5807+ δοκιμές / 512 αρχεία) + Θεατρικός συγγραφέας E2E</td>
 <td>Μονάδα/ενσωμάτωση + cross-browser E2E; Μετάλλαξη Stryker (μη αυτόματη ροή εργασίας)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>Τρέχουσες μετρήσεις δοκιμής (2026-06-16):</strong></p>
 <ul>
-<li><strong>5807+ δοκιμές μονάδας</strong> σε <strong>509 δοκιμαστικά αρχεία</strong> — όλα με επιτυχία</li>
+<li><strong>5807+ δοκιμές μονάδας</strong> σε <strong>512 δοκιμαστικά αρχεία</strong> — όλα με επιτυχία</li>
 <li>Όρια κάλυψης: γραμμές ≥ 74 · κλάδοι ≥ 60 · συναρτήσεις ≥ 67 · δηλώσεις ≥ 72 — επιβάλλονται στο CI (δείτε το σήμα Codecov για ζωντανές μετρήσεις)</li>
-<li>i18n: <strong>2806 πλήκτρα × 19 τοπικές ρυθμίσεις</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 πλήκτρα × 19 τοπικές ρυθμίσεις</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p>Ροή εργασίας <strong>CI-cloud-first (συνιστάται):</strong> Σε περιορισμένο υλικό, εκτελέστε το <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> τοπικά, στη συνέχεια πιέστε και αφήστε το CI να χειριστεί την κάλυψη, το E2E, το Lighthouse και το Stryker. Οι έγκυροι αριθμοί προέρχονται από τεχνουργήματα CI (Codecov, JUnit). Αφού το CI γίνει πράσινο, ενημερώστε τα σήματα README και τη γραμμή πύλης ποιότητας <code>AUDIT.md</code> από τις αναφερόμενες μετρήσεις. Δείτε <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first vs local development</strong> για την πλήρη λίστα ελέγχου ενημέρωσης εγγράφων μετά τη συγχώνευση.</p>
 <p><strong>Ροή εργασιών χαμηλών πόρων / φορητού υπολογιστή:</strong> <strong><code>pnpm run test:run</code></strong> Ασκήσεις Vitest χωρίς <code>--coverage</code> — γρήγορες και ελαφριές στη μνήμη. Η πλήρης κάλυψη (<code>pnpm exec vitest run --coverage</code>) είναι σκόπιμα βαριά σε RAM. βασιστείτε στην εργασία CI <code>quality</code> εκτός και αν κάνετε εντοπισμό σφαλμάτων σε ένα συγκεκριμένο όριο.</p>

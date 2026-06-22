@@ -341,7 +341,7 @@
 <li>Täysi <strong>Esteettömyysasetukset</strong> (suuri kontrasti, vähennetty liike, värisokeat tilat) — WCAG 2.2 AA-suuntautunut</li>
 </ul>
 <h3>🌐 Täysi monikielinen tuki</h3>
-<p>Toimitetaan käyttöliittymäalueet <strong>2806 i18n-avaimella</strong> kaikilla 17 kielellä – nolla kovakoodattua käyttäjäkohtaista merkkijonoa:</p>
+<p>Toimitetaan käyttöliittymäalueet <strong>2810 i18n-avaimilla</strong> kaikilla 19 kielellä – nolla kovakoodattua käyttäjäkohtaista merkkijonoa:</p>
 <ul>
 <li>🇩🇪 <strong>saksa</strong> (saksa)</li>
 <li>🇬🇧 <strong>englanti</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>Muokattu reagointikonteksti (<code>I18nContext.tsx</code>)</td>
-<td>2806 näppäintä × 19 aluetta (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); FI varaosia; <code>localStorage</code> pysyvyys</td>
+<td>2810 näppäintä × 19 aluetta (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); FI varaosia; <code>localStorage</code> pysyvyys</td>
 </tr>
 <tr>
 <td><strong>Testaus</strong></td>
-<td>Vitest 4.x (5807+ testiä / 509 tiedostoa) + Playwright E2E</td>
+<td>Vitest 4.x (5807+ testiä / 512 tiedostoa) + Playwright E2E</td>
 <td>Yksikkö/integrointi + cross-selain E2E; Stryker-mutaatio (manuaalinen työnkulku)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>Nykyiset testitiedot (2026-06-16):</strong></p>
 <ul>
-<li><strong>5807+ yksikkötestiä</strong> <strong>509 testitiedostossa</strong> — kaikki läpäisevät</li>
+<li><strong>5807+ yksikkötestiä</strong> <strong>512 testitiedostossa</strong> — kaikki läpäisevät</li>
 <li>Kattavuuden kynnysarvot: rivit ≥ 74 · haarat ≥ 60 · funktiot ≥ 67 · lausekkeet ≥ 72 — pakotettu CI:ssä (katso Codecov-tunnus reaaliaikaisista mittareista)</li>
-<li>i18n: <strong>2806 avainta × 19 aluetta</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 avainta × 19 aluetta</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p><strong>CI-pilvi ensin -työnkulku (suositus):</strong> Suorita rajoitetulla laitteistolla <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> paikallisesti, paina sitten ja anna CI:n käsitellä peittoa, E2E:tä, Lighthousea ja Strykeriä. Arvovaltaiset luvut tulevat CI-artefakteista (Codecov, JUnit). Kun CI muuttuu vihreäksi, päivitä README-merkit ja <code>AUDIT.md</code> laatuporttirivi raportoiduista mittareista. Katso kohdasta <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first vs paikallinen kehitys</strong> saadaksesi täydellisen yhdistämisen jälkeisen dokumenttien päivityksen tarkistuslistan.</p>
 <p><strong>Vähän resursseja / kannettavan tietokoneen työnkulku:</strong> <strong><code>pnpm run test:run</code></strong> harjoituksia Vitest ilman <code>--coverage</code> - nopeaa ja muistia säästävää. Täysi kattavuus (<code>pnpm exec vitest run --coverage</code>) on tarkoituksella paljon RAM-muistia; luottaa CI <code>quality</code> -työhön, ellet tee virheenkorjausta tiettyä kynnystä.</p>

@@ -341,7 +341,7 @@
 <li><strong>Impostazioni di accessibilità complete</strong> (contrasto elevato, movimento ridotto, modalità daltonici) — WCAG 2.2 AA-orientato</li>
 </ul>
 <h3>🌐 Supporto multilingue completo</h3>
-<p>Versioni locali dell&#39;interfaccia utente fornite con <strong>2806 chiavi i18n</strong> in tutte le 17 lingue: zero stringhe hardcoded rivolte all&#39;utente:</p>
+<p>Versioni locali dell&#39;interfaccia utente fornite con <strong>2810 chiavi i18n</strong> in tutte le 19 lingue: zero stringhe hardcoded rivolte all&#39;utente:</p>
 <ul>
 <li>🇩🇪 <strong>Tedesco</strong> (Tedesco)</li>
 <li>🇬🇧 <strong>Inglese</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>Contesto di reazione personalizzato (<code>I18nContext.tsx</code>)</td>
-<td>2806 chiavi × 19 lingue (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); IT fallback; <code>localStorage</code> persistenza</td>
+<td>2810 chiavi × 19 lingue (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); IT fallback; <code>localStorage</code> persistenza</td>
 </tr>
 <tr>
 <td><strong>Test</strong></td>
-<td>Vitest 4.x (5807+ test / 509 file) + Drammaturgo E2E</td>
+<td>Vitest 4.x (5807+ test / 512 file) + Drammaturgo E2E</td>
 <td>Unità/integrazione + cross-browser E2E; Mutazione Stryker (flusso di lavoro manuale)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>Metriche di test attuali (16-06-2026):</strong></p>
 <ul>
-<li><strong>5807+ test unitari</strong> su <strong>509 file di test</strong>: tutti superati</li>
+<li><strong>5807+ test unitari</strong> su <strong>512 file di test</strong>: tutti superati</li>
 <li>Soglie di copertura: linee ≥ 74 · rami ≥ 60 · funzioni ≥ 67 · istruzioni ≥ 72 — applicate in CI (vedere badge Codecov per le metriche in tempo reale)</li>
-<li>i18n: <strong>2806 chiavi × 19 lingue</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 chiavi × 19 lingue</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p><strong>Flusso di lavoro CI-cloud-first (consigliato):</strong> Su hardware limitato esegui <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> localmente, quindi premi e lascia che CI gestisca la copertura, E2E, Lighthouse e Stryker. I numeri autorevoli provengono da artefatti CI (Codecov, JUnit). Dopo che CI diventa verde, aggiorna i badge README e la linea <code>AUDIT.md</code> Quality Gate dalle metriche riportate. Vedi <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first vs sviluppo locale</strong> per l&#39;elenco completo di controllo dell&#39;aggiornamento dei documenti post-unione.</p>
 <p><strong>Flusso di lavoro con poche risorse/laptop:</strong> <strong><code>pnpm run test:run</code></strong> esercizi Vitest senza <code>--coverage</code>: veloce e leggero con la memoria. La copertura completa (<code>pnpm exec vitest run --coverage</code>) è intenzionalmente pesante in termini di RAM; fare affidamento sul lavoro CI <code>quality</code> a meno che non si stia eseguendo il debug di una soglia specifica.</p>

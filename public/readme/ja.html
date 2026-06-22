@@ -341,7 +341,7 @@
 <li>フル <strong>アクセシビリティ設定</strong> (ハイ コントラスト、モーション軽減、色覚異常モード) — WCAG 2.2 AA 指向</li>
 </ul>
 <h3>🌐 完全な多言語サポート</h3>
-<p>17 言語すべてで <strong>2806 i18n キー</strong> を備えた出荷された UI ロケール — ハードコードされたユーザー向け文字列はありません:</p>
+<p>19 言語すべてで <strong>2810 i18n キー</strong> を備えた出荷された UI ロケール — ハードコーディングされたユーザー向け文字列はありません:</p>
 <ul>
 <li>🇩🇪 <strong>ドイツ語</strong> (ドイツ語)</li>
 <li>🇬🇧 <strong>英語</strong></li>
@@ -588,17 +588,17 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>カスタム React コンテキスト (<code>I18nContext.tsx</code>)</td>
-<td>2806 キー × 19 ロケール (de/en/es/fr/it + ar/he/fa RTL ベータ + ja/zh/pt/el/fi/sv/hu/is/eu ベータ); JP フォールバック。 <code>localStorage</code> 持続性</td>
+<td>2810 キー × 19 ロケール (de/en/es/fr/it + ar/he/fa RTL ベータ + ja/zh/pt/el/fi/sv/hu/is/eu ベータ); JP フォールバック。 <code>localStorage</code> 持続性</td>
 </tr>
 <tr>
 <td><strong>テスト</strong></td>
-<td>Vitest 4.x (5807+ テスト / 509 ファイル) + Playwright E2E</td>
+<td>Vitest 4.x (5807+ テスト / 512 ファイル) + Playwright E2E</td>
 <td>ユニット/統合 + クロスブラウザ E2E。ストライカーの突然変異 (手動ワークフロー)</td>
 </tr>
 <tr>
 <td><strong>コード品質</strong></td>
 <td>Biome (lint + フォーマット) + TypeScript 7 (tsgo) strict</td>
-<td>CIでは<code>--error-on-warnings</code>。 zero <code>any</code> policy</td>
+<td>CIでは<code>--error-on-warnings</code>。ゼロ<code>any</code>政策</td>
 </tr>
 <tr>
 <td><strong>視覚化</strong></td>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>現在のテスト指標 (2026-06-16):</strong></p>
 <ul>
-<li><strong>509 個のテスト ファイル</strong> にわたる<strong>5807+ 単体テスト</strong> — すべて合格</li>
+<li><strong>512 個のテスト ファイル</strong> にわたる<strong>5807+ 単体テスト</strong> — すべて合格</li>
 <li>カバレッジのしきい値: 行 ≥ 74 · ブランチ ≥ 60 · 関数 ≥ 67 · ステートメント ≥ 72 — CI で強制されます (ライブ メトリクスについては Codecov バッジを参照)</li>
-<li>i18n: <strong>2806 キー × 19 ロケール</strong> (en/de/fr/es/it + ar/he/fa RTL ベータ + ja/zh/pt/el/fi/sv/hu/is/eu ベータ)</li>
+<li>i18n: <strong>2810 キー × 19 ロケール</strong> (en/de/fr/es/it + ar/he/fa RTL ベータ + ja/zh/pt/el/fi/sv/hu/is/eu ベータ)</li>
 </ul>
 <p><strong>CI クラウドファースト ワークフロー (推奨):</strong> 制約のあるハードウェアで <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> をローカルで実行し、プッシュして CI にカバレッジ、E2E、Lighthouse、および Stryker を処理させます。権限のある番号は CI アーティファクト (Codecov、JUnit) から取得されます。 CI が緑色になったら、報告されたメトリクスから README バッジと <code>AUDIT.md</code> 品質ゲート ラインを更新します。完全なマージ後のドキュメント更新チェックリストについては、<strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § クラウド CI ファーストとローカル開発</strong> を参照してください。</p>
 <p><strong>低リソース/ラップトップワークフロー:</strong> <strong><code>pnpm run test:run</code></strong> <code>--coverage</code> を使用せずに Vitest を実行します — 高速かつメモリの消費が少ないです。フルカバレッジ (<code>pnpm exec vitest run --coverage</code>) は意図的に RAM を大量に使用します。特定のしきい値をデバッグする場合を除き、CI <code>quality</code> ジョブに依存してください。</p>

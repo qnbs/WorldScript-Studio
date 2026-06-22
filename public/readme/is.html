@@ -341,7 +341,7 @@
 <li>Fullar <strong>Aðgengisstillingar</strong> (mikil birtuskil, minni hreyfing, litblindar stillingar) — WCAG 2.2 AA-stillt</li>
 </ul>
 <h3>🌐 Fullur stuðningur á mörgum tungumálum</h3>
-<p>Sendt notendaviðmót með <strong>2806 i18n lyklum</strong> á öllum 17 tungumálum — núll harðkóðaða strengi sem snúa að notanda:</p>
+<p>Sendt notendaviðmót með <strong>2810 i18n lyklum</strong> á öllum 19 tungumálum — núll harðkóðaða strengi sem snúa að notanda:</p>
 <ul>
 <li>🇩🇪 <strong>Þýska</strong> (þýska)</li>
 <li>🇬🇧 <strong>Enskt</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>Sérsniðið viðbragðssamhengi (<code>I18nContext.tsx</code>)</td>
-<td>2806 lyklar × 19 staðsetningar (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; <code>localStorage</code> þrautseigja</td>
+<td>2810 lyklar × 19 staðsetningar (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; <code>localStorage</code> þrautseigja</td>
 </tr>
 <tr>
 <td><strong>Próf</strong></td>
-<td>Vitest 4.x (5807+ próf / 509 skrár) + Leikritahöfundur E2E</td>
+<td>Vitest 4.x (5807+ próf / 512 skrár) + Leikritahöfundur E2E</td>
 <td>Eining/samþætting + kross-vafra E2E; Stryker stökkbreyting (handvirkt verkflæði)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>Núverandi prófunartölur (2026-06-16):</strong></p>
 <ul>
-<li><strong>5807+ einingarpróf</strong> yfir <strong>509 prófunarskrár</strong> — allar standast</li>
+<li><strong>5807+ einingarpróf</strong> yfir <strong>512 prófunarskrár</strong> — allar standast</li>
 <li>Þekjuþröskuldar: línur ≥ 74 · greinar ≥ 60 · aðgerðir ≥ 67 · staðhæfingar ≥ 72 — framfylgt í CI (sjá Codecov merki fyrir lifandi mælingar)</li>
-<li>i18n: <strong>2806 lyklar × 19 staðsetningar</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 lyklar × 19 staðsetningar</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p><strong>CI-ský-fyrsta verkflæði (ráðlagt):</strong> Á þröngum vélbúnaði keyrðu <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> á staðnum, ýttu síðan á og láttu CI sjá um umfang, E2E, Lighthouse og Stryker. Viðurkenndar tölur koma frá CI artifacts (Codecov, JUnit). Eftir að CI er orðið grænt skaltu uppfæra README merkin og <code>AUDIT.md</code> gæðahliðarlínuna úr greindum mæligildum. Sjá <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first vs local development</strong> fyrir allan gátlistann eftir sameiningu skjalauppfærslu.</p>
 <p>** Lítið úrræði / fartölvu vinnuflæði:** <strong><code>pnpm run test:run</code></strong> æfingar. Vitest án <code>--coverage</code> — hratt og minnislétt. Full umfjöllun (<code>pnpm exec vitest run --coverage</code>) er viljandi vinnsluminni-þungt; treysta á CI <code>quality</code> starfið nema þú sért að kemba ákveðinn þröskuld.</p>

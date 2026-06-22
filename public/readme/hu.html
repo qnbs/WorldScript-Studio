@@ -341,7 +341,7 @@
 <li>Teljes <strong>Kisegítő lehetőségek</strong> (nagy kontraszt, csökkentett mozgás, színvak módok) – WCAG 2.2 AA-orientált</li>
 </ul>
 <h3>🌐 Teljes többnyelvű támogatás</h3>
-<p>Szállított felhasználói felületi területi beállítások <strong>2806 i18n kulcsokkal</strong> mind a 17 nyelven – nulla keménykódolt, felhasználó felé forduló karakterlánc:</p>
+<p>Szállított felhasználói felületi területi beállítások <strong>2810 i18n kulcsokkal</strong> mind a 19 nyelven – nulla keménykódolt, felhasználó felé forduló karakterlánc:</p>
 <ul>
 <li>🇩🇪 <strong>német</strong> (német)</li>
 <li>🇬🇧 <strong>angol</strong></li>
@@ -588,11 +588,11 @@
 <tr>
 <td><strong>i18n</strong></td>
 <td>Egyéni reakciókörnyezet (<code>I18nContext.tsx</code>)</td>
-<td>2806 kulcs × 19 nyelv (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); HU tartalék; <code>localStorage</code> kitartás</td>
+<td>2810 kulcs × 19 nyelvi beállítás (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); HU tartalék; <code>localStorage</code> kitartás</td>
 </tr>
 <tr>
 <td><strong>Tesztelés</strong></td>
-<td>Vitest 4.x (5807+ teszt / 509 fájl) + Playwright E2E</td>
+<td>Vitest 4.x (5807+ teszt / 512 fájl) + Playwright E2E</td>
 <td>Egység/integráció + cross-browser E2E; Stryker mutáció (kézi munkafolyamat)</td>
 </tr>
 <tr>
@@ -640,7 +640,7 @@
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 509 files)
+│   ├── unit/             # Vitest unit tests (5807+ tests, 512 files)
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -853,9 +853,9 @@ pnpm run tauri:dev
 </tbody></table>
 <p><strong>Aktuális tesztmutatók (2026-06-16):</strong></p>
 <ul>
-<li><strong>5807+ egységteszt</strong> <strong>509 tesztfájlon</strong> – mindegyik sikeres</li>
+<li><strong>5807+ egységteszt</strong> <strong>512 tesztfájlon</strong> – mindegyik sikeres</li>
 <li>Lefedettségi küszöbértékek: vonalak ≥ 74 · elágazások ≥ 60 · függvények ≥ 67 · utasítások ≥ 72 – CI-ben kényszerítve (lásd a Codecov jelvényt az élő mérőszámokhoz)</li>
-<li>i18n: <strong>2806 kulcs × 19 nyelvi beállítás</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
+<li>i18n: <strong>2810 kulcs × 19 nyelvi beállítás</strong> (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)</li>
 </ul>
 <p><strong>CI-felhő-először munkafolyamat (ajánlott):</strong> Korlátozott hardver esetén futtassa a <strong><code>pnpm run lint &amp;&amp; pnpm run i18n:check &amp;&amp; pnpm run typecheck</code></strong> parancsot helyileg, majd nyomja meg, és hagyja, hogy a CI kezelje a lefedettséget, az E2E-t, a Lighthouse-t és a Strykert. A hiteles számok a CI műtermékekből származnak (Codecov, JUnit). Miután a CI zöldre vált, frissítse a README jelvényeket és az <code>AUDIT.md</code> minőségi kapu sort a jelentett mérőszámokból. Lásd: <strong><a href="https://github.com/qnbs/WorldScript-Studio/blob/main/docs/CI.md"><code>docs/CI.md</code></a> § Cloud CI-first vs local development</strong> az egyesítés utáni dokumentumfrissítések teljes ellenőrzőlistájáért.</p>
 <p><strong>Alacsony erőforrásigényű/laptop munkafolyamat:</strong> <strong><code>pnpm run test:run</code></strong> gyakorlatok Vitest <code>--coverage</code> nélkül – gyors és memória-könnyű. A teljes lefedettség (<code>pnpm exec vitest run --coverage</code>) szándékosan sok RAM-ot tartalmaz; hagyatkozzon a CI <code>quality</code> feladatra, hacsak nem egy meghatározott küszöbértéket keres.</p>

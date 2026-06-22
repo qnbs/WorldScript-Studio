@@ -20,7 +20,11 @@ export const ReadmeContent: FC = () => {
   // locale is missing and we fall back to en.html, the shown content is the original English README,
   // so no "machine-translated" notice should appear (CodeAnt).
   const loadedInfo = loadedLang ? getLocaleInfo(loadedLang) : undefined;
-  const showFallbackNotice = loadedInfo?.helpFallback ?? false;
+  // QNBS-v3: the README is machine-translated for EVERY non-English locale (including Production
+  // de/es/fr/it — unlike help.json, which is only English-fallback for Beta locales). So the
+  // machine-translated notice is keyed off "loaded a non-English page", NOT helpFallback — otherwise
+  // Spanish/German users would see MT'd README prose with no notice (CodeAnt). English shows none.
+  const showFallbackNotice = !!loadedLang && loadedLang !== 'en';
   // QNBS-v3: use the loaded locale's direction (rtl for ar/he/fa) rather than `dir="auto"` — the README
   // starts with Latin "WorldScript Studio", so `auto` would infer LTR for the whole RTL page (CodeAnt).
   const contentDir = loadedInfo?.dir ?? 'ltr';
