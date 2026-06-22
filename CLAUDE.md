@@ -270,6 +270,8 @@ Custom React Context in `I18nContext.tsx` — not i18next. Source locales: **de,
 
 **Community templates:** `community-templates/index.json` → `public/community-templates/`. Run `pnpm run content:guard` before committing (rejects secrets + `eval`-like payloads).
 
+**Localized README pages (LOCKSTEP — MANDATORY):** The Help center renders the project README per locale from static `public/readme/<lang>.html` (built by `scripts/build-readme-locales.mjs`; component `components/help/ReadmeContent.tsx`; SSOT registry drives the locale list). These are NOT in the i18n bundle (zero boot-load cost). **Whenever `README.md` changes, you MUST regenerate them: `pnpm run readme:locales`** (curates README → MT per locale → renders HTML), then commit the updated `public/readme/*.html`. The MT step is **networked** (Google free endpoint, markdown-masked) and slow (~1 min/locale); for an EN-only/structure change the curation+render of `en.html` is deterministic and network-free. A CI guard (`tests/unit/help/readmeDrift.test.ts`) fails when `public/readme/en.html` is stale vs the current curated `README.md`, so a forgotten regen is caught. Do not hand-edit `public/readme/*.html` (generated).
+
 ### Code comment convention (QNBS-v3)
 
 On any non-trivial code change add a single-line comment explaining **why**, not what:

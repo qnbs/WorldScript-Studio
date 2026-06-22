@@ -68,6 +68,9 @@ export default defineConfig({
           '**/vendor-transformers*',
           '**/vendor-voice-wasm*',
           '**/*.wasm',
+          // QNBS-v3: PR5 — localized README pages (~30 KB × 19 locales) are runtime-cached on first
+          // view by public/sw.js, not precached, to keep the install footprint small.
+          'readme/**/*.html',
         ],
       },
       // Manifest bereits in public/manifest.json eingebunden

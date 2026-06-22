@@ -1,10 +1,9 @@
 {
-  "total": 52,
+  "total": 50,
   "byRule": {
     "lint/suspicious/noExplicitAny": 33,
     "lint/correctness/useExhaustiveDependencies": 6,
     "lint/a11y/useSemanticElements": 5,
-    "lint/security/noDangerouslySetInnerHtml": 2,
     "lint/complexity/useArrowFunction": 2,
     "lint/suspicious/noThenProperty": 1,
     "lint/a11y/useAriaPropsSupportedByRole": 1,

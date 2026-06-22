@@ -65,5 +65,31 @@ generates `docs/i18n/TRANSLATION_STATUS.md`. The Help view shows `help.machineTr
 pointer. Docs: BETA_TO_PRODUCTION_PLAYBOOK, BETA_QUALITY_AUDIT, BETA_COMPLETION_LOG. Honest limit
 documented: true Production needs a native pass + translated help.
 
-### Deferred (roadmap, not this program)
+## PR5 — Localized README in the Help center · in review
+
+Adds a **README** page to the Help center showing the full project README, localized into all 19
+locales — **without** bundle bloat. The README is a long-form, rarely-changing document, so it does
+**not** live in `bundle.json` (that would add ~30 KB of prose to every locale's boot-time fetch).
+
+- **Static per-locale assets:** `scripts/build-readme-locales.mjs` (`pnpm run readme:locales`) curates
+  `README.md` (strips shields badges, the TOC, the duplicate German section, HTML comments; rewrites
+  relative links to absolute GitHub URLs), machine-translates the curated markdown per locale with
+  **markdown-aware masking** (links/code/emphasis survive the free MT endpoint — the same sentinel
+  technique `bulk-translate` uses for `{{placeholders}}`, with a bracket-tolerant restore + safety
+  net), renders markdown→HTML at build time via `marked` (build-only devDependency), and writes
+  `public/readme/<lang>.html`.
+- **Lazy rendering:** `components/help/ReadmeContent.tsx` fetches `public/readme/<active>.html` on
+  demand (English fallback), rendered via the new `components/ui/SanitizedHtml.tsx` (DOMPurify via the
+  project's ref/`innerHTML` pattern — consolidates the help/README HTML rendering into one audited
+  place, **net −2 lint suppressions**, baseline 52→50). A `readme` Help category (sentinel
+  `README_CONTENT_KEY`) routes to it. Non-Production locales show the `help.machineTranslatedNotice`
+  banner + a "view original on GitHub" link.
+- **Caching:** `public/readme/*.html` is excluded from SW precache (`vite.config.ts` globIgnores) and
+  runtime-cached Network-First by `public/sw.js` — offline-available after first view, zero precache
+  weight.
+- **Guards:** `tests/unit/help/ReadmeContent.test.tsx` (fetch/fallback/notice/error) +
+  `tests/unit/help/readmeLocales.test.ts` (every locale has a non-empty README page, no leftover MT
+  sentinels). 4 new i18n keys (core 5 translated; betas English via `--fix`).
+
+## Deferred (roadmap, not this program)
 BCP-47 variants (`zh-Hant`, `pt-BR`), Tier 2/3 languages (nl, pl, tr, id, hi, th, vi, da, no, cs, uk).

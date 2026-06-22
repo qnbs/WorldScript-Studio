@@ -246,6 +246,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // 3b. Localized README pages — Network-First (fresh after a README rebuild; cache fallback offline).
+  // QNBS-v3: PR5 — these public/readme/<lang>.html files are excluded from precache (globIgnores), so
+  // they are cached on first view here and then available offline. ~30 KB each, fetched on demand.
+  if (url.origin === self.location.origin && url.pathname.includes('/readme/')) {
+    event.respondWith(
+      caches.open(CACHE_DYNAMIC).then(async (cache) => {
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            cache.put(request, response.clone());
+            return response;
+          }
+          return (await cache.match(request)) || response;
+        } catch {
+          return (await cache.match(request)) || offlineFallback(request);
+        }
+      })
+    );
+    return;
+  }
+
   // 4. Locale JSON — Network-First (always-fresh translations; cache fallback when offline)
   // QNBS-v3: SWR returned the *cached* bundle first, so returning users kept STALE translations
   // after an i18n update (e.g. ar/he stub → full Beta) until a second reload — the cache name is

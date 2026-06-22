@@ -1,0 +1,89 @@
+/**
+ * QNBS-v3: PR5 — tests the localized README help page. The README body is lazily fetched from
+ * public/readme/<lang>.html (not an i18n bundle), with English fallback and a machine-translated notice
+ * for non-Production locales.
+ */
+import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { mockUseTranslation } = vi.hoisted(() => ({
+  mockUseTranslation: vi.fn(),
+}));
+
+vi.mock('../../../hooks/useTranslation', () => ({ useTranslation: mockUseTranslation }));
+vi.mock('../../../app/hooks', () => ({ useAppSelector: () => 'light' }));
+vi.mock('../../../services/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
+
+import { ReadmeContent } from '../../../components/help/ReadmeContent';
+
+function setLocale(language: string) {
+  mockUseTranslation.mockReturnValue({ language, t: (k: string) => k });
+}
+
+const okHtml = (body: string) =>
+  Promise.resolve({ ok: true, text: () => Promise.resolve(body) } as Response);
+const notOk = () => Promise.resolve({ ok: false, text: () => Promise.resolve('') } as Response);
+
+describe('ReadmeContent', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('fetches and renders the active-locale README', async () => {
+    setLocale('fr');
+    const fetchMock = vi.fn((u: string) =>
+      u.includes('/readme/fr.html') ? okHtml('<h1>Bonjour le monde</h1>') : notOk(),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ReadmeContent />);
+    await waitFor(() => expect(screen.getByText('Bonjour le monde')).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/readme/fr.html'));
+  });
+
+  it('falls back to the English README when the active locale is missing', async () => {
+    setLocale('ru');
+    const fetchMock = vi.fn((u: string) =>
+      u.includes('/readme/en.html') ? okHtml('<h1>Hello world</h1>') : notOk(),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ReadmeContent />);
+    await waitFor(() => expect(screen.getByText('Hello world')).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/readme/en.html'));
+  });
+
+  it('shows the machine-translated notice for a non-Production locale', async () => {
+    setLocale('ru'); // Beta tier → helpFallback true
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((u: string) => (u.includes('/readme/') ? okHtml('<p>x</p>') : notOk())),
+    );
+    render(<ReadmeContent />);
+    await waitFor(() =>
+      expect(screen.getByText('help.machineTranslatedNotice')).toBeInTheDocument(),
+    );
+  });
+
+  it('does NOT show the machine-translated notice for a Production locale', async () => {
+    setLocale('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => okHtml('<p>x</p>')),
+    );
+    render(<ReadmeContent />);
+    await waitFor(() => expect(screen.getByText('help.readme.viewOnGithub')).toBeInTheDocument());
+    expect(screen.queryByText('help.machineTranslatedNotice')).not.toBeInTheDocument();
+  });
+
+  it('shows the load error when every fetch fails', async () => {
+    setLocale('de');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => notOk()),
+    );
+    render(<ReadmeContent />);
+    await waitFor(() => expect(screen.getByText('help.readme.loadError')).toBeInTheDocument());
+  });
+});

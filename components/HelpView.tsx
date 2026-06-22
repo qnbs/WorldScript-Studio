@@ -1,4 +1,3 @@
-import DOMPurify from 'dompurify';
 import type { FC } from 'react';
 import React from 'react';
 import { useAppSelector } from '../app/hooks';
@@ -8,12 +7,15 @@ import { HelpViewContext, useHelpViewContext } from '../contexts/HelpViewContext
 import { useHelpView } from '../hooks/useHelpView';
 import { useTranslation } from '../hooks/useTranslation';
 import { getLocaleInfo } from '../i18n/locales';
+import { README_CONTENT_KEY } from '../services/help/helpCatalog';
 import { startSpotlightTour } from '../services/spotlightTour';
 import type { HelpCategory } from '../types';
 import { HelpSearchInput, HelpSearchPanel } from './help/HelpSearchPanel';
+import { ReadmeContent } from './help/ReadmeContent';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { PageContainer } from './ui/PageContainer';
+import { SanitizedHtml } from './ui/SanitizedHtml';
 
 // --- SUB-COMPONENTS ---
 
@@ -71,6 +73,9 @@ const ArticleViewer: FC = () => {
 
   if (!selectedArticle) return null;
 
+  // QNBS-v3: PR5 — the README article renders the lazy, locale-fetched ReadmeContent (its body is a
+  // static public/readme/<lang>.html, not an i18n key), not the i18n article content.
+  const isReadme = selectedArticle.content === README_CONTENT_KEY;
   const tryId = selectedArticle.tryActionId;
 
   return (
@@ -111,7 +116,8 @@ const ArticleViewer: FC = () => {
         </div>
       </CardHeader>
       <CardContent>
-        {showFallbackNotice ? (
+        {isReadme ? <ReadmeContent /> : null}
+        {!isReadme && showFallbackNotice ? (
           <p
             role="note"
             className="mb-4 rounded-sc-md border border-[var(--sc-info-fg)]/30 bg-[var(--sc-info-bg)] px-3 py-2 text-sm text-[var(--sc-info-fg)]"
@@ -119,12 +125,12 @@ const ArticleViewer: FC = () => {
             {t('help.machineTranslatedNotice')}
           </p>
         ) : null}
-        {/* biome-ignore-start lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
-        <div
-          className={`prose max-w-[var(--sc-prose-measure)] prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--sc-text-secondary)] prose-strong:text-[var(--sc-text-primary)] prose-a:text-[var(--sc-accent)] prose-ul:list-disc prose-li:text-[var(--sc-text-secondary)] prose-ol:text-[var(--sc-text-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(t(selectedArticle.content)) }}
-        />
-        {/* biome-ignore-end lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
+        {!isReadme ? (
+          <SanitizedHtml
+            className={`prose max-w-[var(--sc-prose-measure)] prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--sc-text-secondary)] prose-strong:text-[var(--sc-text-primary)] prose-a:text-[var(--sc-accent)] prose-ul:list-disc prose-li:text-[var(--sc-text-secondary)] prose-ol:text-[var(--sc-text-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
+            html={t(selectedArticle.content)}
+          />
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -13,6 +13,9 @@ export type HelpCategoryDef = {
   articles: HelpArticleDef[];
 };
 
+/** Sentinel content key for the README article — rendered by ReadmeContent, not via i18n `t()`. */
+export const README_CONTENT_KEY = '__README__';
+
 export const HELP_CATALOG: HelpCategoryDef[] = [
   {
     id: 'getting-started',
@@ -367,6 +370,15 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
       { titleKey: 'help.faq.offline.title', contentKey: 'help.faq.offline.content' },
       { titleKey: 'help.faq.providers.title', contentKey: 'help.faq.providers.content' },
     ],
+  },
+  // QNBS-v3: PR5 — the full project README, localized per locale. Its content is NOT an i18n key
+  // (that would bloat the bundle); the sentinel contentKey '__README__' tells the Help view to render
+  // the lazy ReadmeContent component, which fetches the static public/readme/<lang>.html on demand.
+  {
+    id: 'readme',
+    titleKey: 'help.category.readme',
+    icon: 'DOCUMENT_TEXT',
+    articles: [{ titleKey: 'help.readme.title', contentKey: README_CONTENT_KEY }],
   },
 ];
 
