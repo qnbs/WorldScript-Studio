@@ -20,7 +20,7 @@ export interface LocaleDescriptor {
   readonly flag: string;
   readonly dir: 'ltr' | 'rtl';
   readonly status: 'production' | 'near-production' | 'beta';
-  readonly script: 'latin' | 'arabic' | 'hebrew' | 'cjk' | 'greek' | 'cyrillic';
+  readonly script: 'latin' | 'arabic' | 'hebrew' | 'cjk' | 'greek' | 'cyrillic' | 'hangul';
   readonly helpFallback: boolean;
 }
 
@@ -212,6 +212,18 @@ export const LOCALES = [
     dir: 'ltr',
     status: 'beta',
     script: 'cyrillic',
+    helpFallback: true,
+  },
+  // QNBS-v3: Tier-1 expansion (2026) — Korean (Hangul). Inter does NOT cover Hangul, so this needs
+  // Noto Sans KR via the Google Fonts CDN (index.html) + a `:lang(ko)` font rule (index.css).
+  {
+    code: 'ko',
+    nativeName: '한국어',
+    englishName: 'Korean',
+    flag: '🇰🇷',
+    dir: 'ltr',
+    status: 'beta',
+    script: 'hangul',
     helpFallback: true,
   },
 ] as const satisfies ReadonlyArray<LocaleDescriptor>;

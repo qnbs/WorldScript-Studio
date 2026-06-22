@@ -44,5 +44,14 @@ Wiring: `i18nBootstrap` cold-start, `AiScratchpad` TTS (`ru-RU`), `portal.langua
 all 18 locales, README. **Coverage 94%, 0 placeholder issues** (`help.json` stays English by design).
 Verification: parity OK (18 bundles), typecheck clean, registry + placeholder tests green.
 
-## PR3 — Korean (`ko`) · planned
+## PR3 — Korean (`ko`) · in review
+
+Hangul, Beta. Unlike Russian, Hangul is **not** in the Inter/@fontsource set, so this added font
+wiring: `Noto Sans KR` to the Google Fonts CDN (`index.html`), a `--font-ui-kr` var + `:lang(ko)`
+rule (`index.css`), and `'hangul'` to `LocaleDescriptor['script']`. Otherwise identical to the ru
+flow: registry entry, scaffold, 44-term `ko` glossary, `bulk-translate --lang=ko --all`,
+`i18nBootstrap` cold-start, TTS (`ko-KR`), `portal.language.names.ko` in all 19 locales, README.
+**Coverage 94%, 0 placeholder issues.** Verification: parity OK (19 bundles), typecheck clean,
+registry + placeholder + I18nContext tests green (the count assertion is now registry-derived).
+
 ## PR4 — Beta-to-Production elevation · planned

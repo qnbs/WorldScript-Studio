@@ -1,0 +1,20 @@
+{
+  "tour.btn.done": "완료",
+  "tour.btn.next": "다음",
+  "tour.btn.prev": "뒤로",
+  "tour.help.startButton": "가이드 투어 시작",
+  "tour.intro.body": "WorldScript Studio에 대한 간단한 둘러보기: 탐색, 명령 팔레트 및 설정.",
+  "tour.intro.title": "탑승을 환영합니다",
+  "tour.nav.body": "대시보드, 원고, 캐릭터, 내보내기 등을 열려면 데스크탑의 사이드바나 휴대폰의 하단 바를 사용하세요.",
+  "tour.nav.title": "앱 내에서 이동",
+  "tour.navigationOnly.introBody": "데스크톱과 모바일에서 앱을 어떻게 이동하는지에 집중해 보겠습니다.",
+  "tour.navigationOnly.outroBody": "도움말에서 언제든지 탐색 전용 둘러보기를 재생할 수 있습니다.",
+  "tour.navigationOnly.startButton": "내비게이션 투어 전용",
+  "tour.outro.body": "작업 내용은 이 장치에 자동으로 저장됩니다. 이 둘러보기를 다시 실행하려면 언제든지 도움말을 여세요.",
+  "tour.outro.helpCta": "팁: 기사, FAQ 및 AI 가이드에 대한 사이드바에서 도움말을 연 다음 \"지금 사용해 보기\"를 사용하여 바로 보기로 이동하세요.",
+  "tour.outro.title": "설정 완료",
+  "tour.palette.body": "Ctrl+K(Mac의 경우 ⌘K)를 눌러 명령을 검색하고, 테마 또는 언어를 전환하고, 원하는 보기로 이동할 수 있습니다.",
+  "tour.palette.title": "명령 팔레트",
+  "tour.settings.body": "API 키, AI 공급자(Gemini 클라우드 또는 로컬 Ollama), 모양, 편집기, 백업 및 내보내기를 구성합니다.",
+  "tour.settings.title": "설정"
+}
