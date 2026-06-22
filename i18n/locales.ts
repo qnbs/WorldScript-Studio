@@ -202,6 +202,18 @@ export const LOCALES = [
     script: 'arabic',
     helpFallback: true,
   },
+  // QNBS-v3: Tier-1 expansion (2026) — Russian (Cyrillic). Inter + Merriweather self-host the
+  // Cyrillic subset via @fontsource, so no CDN/`:lang()` font wiring is needed.
+  {
+    code: 'ru',
+    nativeName: 'Русский',
+    englishName: 'Russian',
+    flag: '🇷🇺',
+    dir: 'ltr',
+    status: 'beta',
+    script: 'cyrillic',
+    helpFallback: true,
+  },
 ] as const satisfies ReadonlyArray<LocaleDescriptor>;
 
 /** Union of all supported locale codes — derived from LOCALES so it can never drift. */

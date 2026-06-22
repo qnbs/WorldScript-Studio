@@ -34,6 +34,15 @@ the process. No new languages → small i18n fan-out.
 `i18nPlaceholders` (33) + `localesRegistry` (7) green; `i18n:report` shows placeholder issues 0 across
 all locales (consistent with the hard gate).
 
-## PR2 — Russian (`ru`) · planned
+## PR2 — Russian (`ru`) · in review
+
+First language added via the new playbook (Cyrillic, Beta). **One** `LOCALES` registry entry — no
+font work needed (Inter + Merriweather self-host the Cyrillic subset via @fontsource). Scaffolded
+`locales/ru/` from `en/`, seeded a 44-term `ru` glossary block, ran
+`bulk-translate-locales.mjs --lang=ru --all` (glossary-anchored, placeholder-masked) + `i18n:bundle`.
+Wiring: `i18nBootstrap` cold-start, `AiScratchpad` TTS (`ru-RU`), `portal.language.names.ru` exonym in
+all 18 locales, README. **Coverage 94%, 0 placeholder issues** (`help.json` stays English by design).
+Verification: parity OK (18 bundles), typecheck clean, registry + placeholder tests green.
+
 ## PR3 — Korean (`ko`) · planned
 ## PR4 — Beta-to-Production elevation · planned

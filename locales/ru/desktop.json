@@ -1,0 +1,19 @@
+{
+  "desktop.menu.commandPalette": "Палитра команд",
+  "desktop.menu.edit": "Редактировать",
+  "desktop.menu.export": "Экспортный проект…",
+  "desktop.menu.file": "Файл",
+  "desktop.menu.help": "Помощь",
+  "desktop.menu.helpCenter": "Справочный центр",
+  "desktop.menu.settings": "Настройки",
+  "desktop.menu.view": "Вид",
+  "desktop.menu.window": "Окно",
+  "desktop.settings.minimizeToTray": "Свернуть в трей при закрытии",
+  "desktop.settings.minimizeToTrayHint": "Оставляйте WorldScript Studio работающей на панели задач, а не закрывайте ее при закрытии окна.",
+  "desktop.settings.sectionTitle": "Рабочий стол",
+  "desktop.tray.commandPalette": "Палитра команд",
+  "desktop.tray.quit": "Покидать",
+  "desktop.tray.settings": "Настройки",
+  "desktop.tray.show": "Показать студию WorldScript",
+  "desktop.tray.tooltip": "WorldScript Studio"
+}

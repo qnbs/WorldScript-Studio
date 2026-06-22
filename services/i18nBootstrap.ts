@@ -90,6 +90,12 @@ export const I18N_BOOTSTRAP: Record<Language, Record<string, string>> = {
     'initialProject.logline': 'سفر هزار فرسنگی با یک گام آغاز می‌شود...',
     'initialProject.chapter1': 'فصل ۱',
   },
+  // QNBS-v3: Tier-1 expansion (2026) — Russian cold-start fallbacks.
+  ru: {
+    'initialProject.title': 'Моя история без названия',
+    'initialProject.logline': 'Путешествие в тысячу ли начинается с одного шага...',
+    'initialProject.chapter1': 'Глава 1',
+  },
 };
 
 const KNOWN_PERSISTED_KEYS = new Set([

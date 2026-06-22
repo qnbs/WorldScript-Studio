@@ -515,12 +515,16 @@ describe('Intl.ListFormat - Extended', () => {
 // SUPPORTED_LOCALES metadata
 // ---------------------------------------------------------------------------
 describe('SUPPORTED_LOCALES', () => {
-  it('contains all 17 languages', async () => {
+  it('exposes the full locale registry (matches LOCALE_CODES)', async () => {
     const { result } = renderHook(() => useContext(I18nContext), { wrapper });
     await waitFor(() => expect(result.current.isReady).toBe(true));
-    // Import the constant directly for testing
+    // QNBS-v3: assert against the SSOT registry rather than a magic count, so adding a language does
+    // not break this test — the canonical registry==filesystem integrity check lives in
+    // tests/unit/i18n/localesRegistry.test.ts. The floor guards against an empty/broken derivation.
     const { SUPPORTED_LOCALES } = await import('../../contexts/I18nContext');
-    expect(SUPPORTED_LOCALES.length).toBe(17);
+    const { LOCALE_CODES } = await import('../../i18n/locales');
+    expect(SUPPORTED_LOCALES.map((l) => l.code).sort()).toEqual([...LOCALE_CODES].sort());
+    expect(SUPPORTED_LOCALES.length).toBeGreaterThanOrEqual(18);
   });
 
   it('marks ar, he and fa as RTL beta', async () => {

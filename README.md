@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Version-v1.24.0-6366F1" alt="v1.24.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-17_locales-2803_keys-0EA5E9" alt="i18n 17 locales — 2803 keys">
+  <img src="https://img.shields.io/badge/i18n-18_locales-2804_keys-0EA5E9" alt="i18n 18 locales — 2804 keys">
   <img src="https://img.shields.io/badge/Tests-5807%2B_%2F_509_files-22C55E" alt="5807+ tests / 509 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
@@ -351,7 +351,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2803 i18n keys** across all 17 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2804 i18n keys** across all 17 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -370,8 +370,9 @@ Shipped UI locales with **2803 i18n keys** across all 17 languages — zero hard
 - 🇭🇺 **Hungarian** (Magyar) — *Beta*
 - 🇮🇸 **Icelandic** (Íslenska) — *Beta*
 - 🌐 **Basque** (Euskara) — *Beta*
+- 🇷🇺 **Russian** (Русский) — *Beta*
 
-All seventeen trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette.
+All trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette.
 
 **RTL Layout Beta** (Arabic / Hebrew / Persian): for Arabic & Hebrew all 18 UI modules are fully translated; `help.json` long-form prose remains English fallback (community follow-up). Self-hosted **Noto Sans Arabic / Hebrew** + **Noto Naskh Arabic** (manuscript editor) provide proper glyph coverage — including Persian's پ چ ژ گ ک ی. **Persian (`fa`)** ships as RTL Beta, **machine-translated** (glossary-anchored, ~93 % coverage; `help.json` long-form articles stay English fallback; human native review pending); direction and fonts are automatic (no App/CSS/font changes). Switching to ar/he/fa sets `html[dir="rtl"]`; a global `[dir="rtl"]` CSS net plus logical-property shell layout mirror the UI, while canvas/SVG boards (Plot Board, Character Graph) stay LTR to keep pointer/geometry math correct. The `enableRtlLayout` flag (off by default) additionally forces RTL for layout testing regardless of locale.
 
@@ -456,7 +457,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2803 keys × 17 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; `localStorage` persistence |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2804 keys × 18 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; `localStorage` persistence |
 | **Testing**          | Vitest 4.x (5807+ tests / 509 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
@@ -655,7 +656,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 **Current test metrics (2026-06-16):**
 - **5807+ unit tests** across **509 test files** — all passing
 - Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2803 keys × 17 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)
+- i18n: **2804 keys × 18 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 
