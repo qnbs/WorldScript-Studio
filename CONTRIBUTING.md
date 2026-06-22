@@ -340,7 +340,7 @@ We target **WCAG 2.2 AA** patterns where practical (Biome `a11y` rules are stric
 
 - Prefer semantic HTML; avoid redundant roles on native elements unless fixing SR gaps.
 - Icon-only buttons require `aria-label` (or tooltip + focus pattern that meets WCAG).
-- New copy goes through **all five** locale trees — [`pnpm run i18n:check`](package.json).
+- New copy is authored in the **5 core** locale trees (de/en/es/fr/it); `i18n:check` enforces key parity across all 17 — [`pnpm run i18n:check`](package.json).
 
 **Further reading:** [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md); automated smoke — [`tests/e2e/a11y.spec.ts`](tests/e2e/a11y.spec.ts).
 
@@ -367,7 +367,7 @@ Authoritative list: [`AUDIT.md`](AUDIT.md) and [`TODO.md`](TODO.md). Short point
 1. **`StorageBackend` contract** — implement `services/storageBackend.ts` on both backends; use `storageService` in UI (not `dbService` directly) so Tauri and browser stay consistent.
 2. **`app/listenerMiddleware.ts`** — occasional TypeScript friction with `redux-undo`'s `StateWithHistory` (typed carefully at boundaries).
 3. **Collaboration** — optional configurable signaling URL; E2E encryption deferred (roadmap).
-4. **i18n** — All five locale trees must share the same keys as English (`pnpm run i18n:check`). The in-app selector exposes **de**, **en**, **fr**, **es**, and **it**; prefer native copy over English placeholders in PRs.
+4. **i18n** — All **17** locale trees must share the same keys as English (`pnpm run i18n:check`). The in-app selector exposes all 17 (5 core + 12 Beta). You author new copy in the 5 core trees (de/en/es/fr/it); `check-i18n-keys.mjs --fix` backfills the Beta locales with English placeholders, which the machine-translation pass then fills. Locale metadata lives in the SSOT registry `i18n/locales.ts`. To add a whole new language, follow [`docs/i18n/ADDING_A_NEW_LANGUAGE.md`](docs/i18n/ADDING_A_NEW_LANGUAGE.md).
 
 Open a **focused PR per theme** (storage vs. i18n vs. collaboration) to keep review manageable.
 

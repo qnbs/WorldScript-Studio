@@ -17,26 +17,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { LOCALE_CODES } from '../../i18n/locales';
 
-const LOCALES = [
-  'en',
-  'de',
-  'es',
-  'fr',
-  'it',
-  'ar',
-  'he',
-  'el',
-  'ja',
-  'pt',
-  'zh',
-  'fi',
-  'sv',
-  'hu',
-  'is',
-  'eu',
-  'fa',
-] as const;
+// QNBS-v3: derived from the SSOT registry so every shipped locale is automatically placeholder-checked
+// (a new locale can no longer be silently omitted from this gate).
+const LOCALES = LOCALE_CODES;
 
 function loadBundle(lang: string): Record<string, string> {
   const path = join(process.cwd(), 'public', 'locales', lang, 'bundle.json');
