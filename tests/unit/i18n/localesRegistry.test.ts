@@ -70,6 +70,30 @@ describe('i18n locale registry (SSOT)', () => {
     expect(isLanguage(42)).toBe(false);
   });
 
+  it('every locale has a valid status tier', () => {
+    const valid = new Set(['production', 'near-production', 'beta']);
+    for (const l of LOCALES) {
+      expect(valid.has(l.status), `${l.code}: ${l.status}`).toBe(true);
+    }
+  });
+
+  it('production locales ship translated help (helpFallback false); others fall back', () => {
+    for (const l of LOCALES) {
+      if (l.status === 'production') {
+        expect(l.helpFallback, l.code).toBe(false);
+      } else {
+        expect(l.helpFallback, l.code).toBe(true);
+      }
+    }
+  });
+
+  it('the core 5 are the production tier', () => {
+    const production = LOCALES.filter((l) => l.status === 'production')
+      .map((l) => l.code)
+      .sort();
+    expect(production).toEqual(['de', 'en', 'es', 'fr', 'it']);
+  });
+
   it('English is present and is production (the ultimate fallback)', () => {
     const en = getLocaleInfo('en');
     expect(en?.status).toBe('production');

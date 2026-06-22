@@ -28,6 +28,7 @@
     "i18n:bundle": "node scripts/build-i18n.mjs",
     "i18n:check": "node scripts/check-i18n-keys.mjs && node scripts/build-i18n.mjs && node scripts/content-guard.mjs",
     "i18n:report": "node scripts/i18n-quality-report.mjs",
+    "i18n:status": "tsx scripts/i18n-status-dashboard.ts",
     "content:guard": "node scripts/content-guard.mjs",
     "parity:check": "tsx scripts/audit-feature-parity.ts",
     "suppressions:check": "node scripts/check-suppressions.mjs",

@@ -6,6 +6,8 @@ import { ICONS } from '../constants';
 import { useCommandExecutor } from '../contexts/CommandExecutorContext';
 import { HelpViewContext, useHelpViewContext } from '../contexts/HelpViewContext';
 import { useHelpView } from '../hooks/useHelpView';
+import { useTranslation } from '../hooks/useTranslation';
+import { getLocaleInfo } from '../i18n/locales';
 import { startSpotlightTour } from '../services/spotlightTour';
 import type { HelpCategory } from '../types';
 import { HelpSearchInput, HelpSearchPanel } from './help/HelpSearchPanel';
@@ -61,6 +63,11 @@ const ArticleViewer: FC = () => {
   const { t, selectedArticle, handleBackToList } = useHelpViewContext();
   const executeCommand = useCommandExecutor();
   const theme = useAppSelector((state) => state.settings.theme);
+  // QNBS-v3: PR4 i18n — help.json long-form content stays English for non-Production locales
+  // (helpFallback in the SSOT registry). Surface that honestly so users know the article body is
+  // English even though the surrounding UI is localized.
+  const { language } = useTranslation();
+  const showFallbackNotice = getLocaleInfo(language)?.helpFallback ?? false;
 
   if (!selectedArticle) return null;
 
@@ -104,6 +111,14 @@ const ArticleViewer: FC = () => {
         </div>
       </CardHeader>
       <CardContent>
+        {showFallbackNotice ? (
+          <p
+            role="note"
+            className="mb-4 rounded-sc-md border border-[var(--sc-info-fg)]/30 bg-[var(--sc-info-bg)] px-3 py-2 text-sm text-[var(--sc-info-fg)]"
+          >
+            {t('help.machineTranslatedNotice')}
+          </p>
+        ) : null}
         {/* biome-ignore-start lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
         <div
           className={`prose max-w-[var(--sc-prose-measure)] prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--sc-text-secondary)] prose-strong:text-[var(--sc-text-primary)] prose-a:text-[var(--sc-accent)] prose-ul:list-disc prose-li:text-[var(--sc-text-secondary)] prose-ol:text-[var(--sc-text-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}

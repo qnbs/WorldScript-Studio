@@ -99,14 +99,16 @@ export const LOCALES = [
     script: 'hebrew',
     helpFallback: true,
   },
-  // Phase 3 Beta — CJK + Portuguese + Greek.
+  // QNBS-v3: Near-Production (PR4) — ≥96% UI string coverage with 0 placeholder-integrity issues
+  // (per `pnpm run i18n:report`); help.json still falls back to English (helpFallback: true), which is
+  // the one gap keeping them out of full Production. Promoted from Beta on this data basis.
   {
     code: 'ja',
     nativeName: '日本語',
     englishName: 'Japanese',
     flag: '🇯🇵',
     dir: 'ltr',
-    status: 'beta',
+    status: 'near-production',
     script: 'cjk',
     helpFallback: true,
   },
@@ -116,7 +118,7 @@ export const LOCALES = [
     englishName: 'Chinese (Simplified)',
     flag: '🇨🇳',
     dir: 'ltr',
-    status: 'beta',
+    status: 'near-production',
     script: 'cjk',
     helpFallback: true,
   },
@@ -126,7 +128,7 @@ export const LOCALES = [
     englishName: 'Portuguese',
     flag: '🇵🇹',
     dir: 'ltr',
-    status: 'beta',
+    status: 'near-production',
     script: 'latin',
     helpFallback: true,
   },
@@ -136,7 +138,7 @@ export const LOCALES = [
     englishName: 'Greek',
     flag: '🇬🇷',
     dir: 'ltr',
-    status: 'beta',
+    status: 'near-production',
     script: 'greek',
     helpFallback: true,
   },
