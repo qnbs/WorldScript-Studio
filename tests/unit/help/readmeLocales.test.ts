@@ -76,11 +76,17 @@ describe('localized README pages', () => {
       const locLines = readFileSync(pageFor(code), 'utf8').split('\n');
       let total = 0;
       let translated = 0;
+      // QNBS-v3: a line counts as translated only if it differs from English AND shows no raw markdown
+      // artifacts in the rendered text (`](`, leftover `**`/backticks) — so a corrupted-but-not-
+      // byte-identical line isn't mistaken for a real translation (CodeAnt). The structural-parity guard
+      // above is the primary corruption gate; this keeps the coverage metric honest too.
+      const looksCorrupt = (s: string) => /]\(|\*\*|`/.test(s);
       for (let i = 0; i < Math.min(enLines.length, locLines.length); i++) {
         const enLine = enLines[i] ?? '';
         if (!isContent(enLine)) continue;
         total += 1;
-        if (text(enLine) !== text(locLines[i] ?? '')) translated += 1;
+        const locText = text(locLines[i] ?? '');
+        if (locText !== text(enLine) && !looksCorrupt(locText)) translated += 1;
       }
       const pct = total ? Math.round((translated / total) * 100) : 100;
       expect(
