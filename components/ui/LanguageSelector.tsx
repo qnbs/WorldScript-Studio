@@ -9,7 +9,8 @@ import { Icon } from './Icon';
 // hand-maintained table. nativeName is the endonym (intentionally NOT localized so users always find
 // their own language). The exonym label is resolved at render time via t('portal.language.names.<code>')
 // to satisfy the no-hardcoded-user-facing-strings rule. flag is an emoji (non-translatable); isBeta is
-// derived from the registry status.
+// derived from the registry status. isBeta = the *beta* tier only, so the β badge distinguishes beta
+// from near-production (ja/zh/pt/el show no β; the finer tier lives in the README + status dashboard).
 const LANGUAGE_METADATA: Record<Language, { nativeName: string; flag: string; isBeta?: boolean }> =
   Object.fromEntries(
     LOCALES.map((l) => [
@@ -17,7 +18,7 @@ const LANGUAGE_METADATA: Record<Language, { nativeName: string; flag: string; is
       {
         nativeName: l.nativeName,
         flag: l.flag,
-        ...(l.status !== 'production' ? { isBeta: true } : {}),
+        ...(l.status === 'beta' ? { isBeta: true } : {}),
       },
     ]),
   ) as Record<Language, { nativeName: string; flag: string; isBeta?: boolean }>;

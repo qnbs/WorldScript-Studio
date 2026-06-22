@@ -99,14 +99,16 @@ export const LOCALES = [
     script: 'hebrew',
     helpFallback: true,
   },
-  // Phase 3 Beta — CJK + Portuguese + Greek.
+  // QNBS-v3: Near-Production (PR4) — ≥96% UI string coverage with 0 placeholder-integrity issues
+  // (per `pnpm run i18n:report`); help.json still falls back to English (helpFallback: true), which is
+  // the one gap keeping them out of full Production. Promoted from Beta on this data basis.
   {
     code: 'ja',
     nativeName: '日本語',
     englishName: 'Japanese',
     flag: '🇯🇵',
     dir: 'ltr',
-    status: 'beta',
+    status: 'near-production',
     script: 'cjk',
     helpFallback: true,
   },
@@ -116,7 +118,7 @@ export const LOCALES = [
     englishName: 'Chinese (Simplified)',
     flag: '🇨🇳',
     dir: 'ltr',
-    status: 'beta',
+    status: 'near-production',
     script: 'cjk',
     helpFallback: true,
   },
@@ -126,7 +128,7 @@ export const LOCALES = [
     englishName: 'Portuguese',
     flag: '🇵🇹',
     dir: 'ltr',
-    status: 'beta',
+    status: 'near-production',
     script: 'latin',
     helpFallback: true,
   },
@@ -136,7 +138,7 @@ export const LOCALES = [
     englishName: 'Greek',
     flag: '🇬🇷',
     dir: 'ltr',
-    status: 'beta',
+    status: 'near-production',
     script: 'greek',
     helpFallback: true,
   },
@@ -242,7 +244,8 @@ export const RTL_LOCALES: ReadonlySet<Language> = new Set(
 );
 
 // QNBS-v3: backward-compatible shape consumed by LanguageSelector/Settings (was hand-maintained in
-// I18nContext). `isBeta` is derived from `status` so the two can never disagree.
+// I18nContext). `isBeta` means the *beta* tier specifically — NOT merely "non-production" — so the
+// near-production tier (ja/zh/pt/el) is distinguished from beta (the β badge shows for beta only).
 export interface LanguageInfo {
   code: Language;
   nativeName: string;
@@ -256,7 +259,7 @@ export const SUPPORTED_LOCALES: ReadonlyArray<LanguageInfo> = LOCALES.map((l) =>
   nativeName: l.nativeName,
   dir: l.dir,
   fontScript: l.script,
-  ...(l.status !== 'production' ? { isBeta: true as const } : {}),
+  ...(l.status === 'beta' ? { isBeta: true as const } : {}),
 }));
 
 // QNBS-v3: keyed by `string` (not `Language`) so the runtime guard below can call `.has(value)` on a

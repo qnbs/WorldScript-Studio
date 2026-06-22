@@ -38,7 +38,9 @@ function sameTokens(a, b) {
 }
 
 const langs = getLocales().filter((l) => l !== REF_LANG);
-const modules = getModules();
+// QNBS-v3: exclude 'help' — this is a UI-coverage report; help.json is intentionally English fallback
+// for non-Production locales, so including it would understate real UI coverage (CodeAnt).
+const modules = getModules().filter((m) => m !== 'help');
 const glossary = loadGlossary();
 
 let placeholderIssues = 0;
@@ -56,7 +58,12 @@ for (const lang of langs) {
       if (typeof enVal !== 'string') continue;
       total++;
       const locVal = loc[k];
-      if (typeof locVal !== 'string') continue;
+      // QNBS-v3: a missing/non-string localized value is untranslated — count it, don't skip it, or
+      // coverage is overstated (same correctness fix as the status dashboard).
+      if (typeof locVal !== 'string') {
+        untranslated++;
+        continue;
+      }
       // Approximate "untranslated" = value identical to the English source (brand/technical terms
       // that are legitimately identical inflate this slightly; it is a guide, not a gate).
       if (locVal === enVal && enVal.trim().length > 2) untranslated++;

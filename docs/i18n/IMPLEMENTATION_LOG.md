@@ -54,4 +54,16 @@ flow: registry entry, scaffold, 44-term `ko` glossary, `bulk-translate --lang=ko
 **Coverage 94%, 0 placeholder issues.** Verification: parity OK (19 bundles), typecheck clean,
 registry + placeholder + I18nContext tests green (the count assertion is now registry-derived).
 
-## PR4 — Beta-to-Production elevation · planned
+## PR4 — Beta-to-Production elevation · in review
+
+Surfaces the three-tier `status` system (production / near-production / beta) from the SSOT and raises
+transparency — no mass re-translation (small footprint). Promoted `ja`/`zh`/`pt`/`el` →
+near-production (≥96% coverage, 0 placeholder issues; `help.json` still English is the only gap).
+`scripts/i18n-status-dashboard.ts` (`pnpm run i18n:status`, tsx so it can import the typed registry)
+generates `docs/i18n/TRANSLATION_STATUS.md`. The Help view shows `help.machineTranslatedNotice` for
+`helpFallback` locales (key in all 19; core 5 translated, rest English). README tier tags + dashboard
+pointer. Docs: BETA_TO_PRODUCTION_PLAYBOOK, BETA_QUALITY_AUDIT, BETA_COMPLETION_LOG. Honest limit
+documented: true Production needs a native pass + translated help.
+
+### Deferred (roadmap, not this program)
+BCP-47 variants (`zh-Hant`, `pt-BR`), Tier 2/3 languages (nl, pl, tr, id, hi, th, vi, da, no, cs, uk).

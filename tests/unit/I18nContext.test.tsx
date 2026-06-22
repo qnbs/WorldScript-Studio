@@ -552,16 +552,15 @@ describe('SUPPORTED_LOCALES', () => {
     }
   });
 
-  it('marks ja, zh, pt, el as beta', async () => {
+  // QNBS-v3: ja/zh/pt/el were promoted to the near-production tier (PR4) — they are NOT beta, so the
+  // β badge (driven by isBeta) must not show for them. The finer tier lives in the status dashboard.
+  it('marks ja, zh, pt, el as near-production (not beta)', async () => {
     const { SUPPORTED_LOCALES } = await import('../../contexts/I18nContext');
-    const jaLocale = SUPPORTED_LOCALES.find((l) => l.code === 'ja');
-    const zhLocale = SUPPORTED_LOCALES.find((l) => l.code === 'zh');
-    const ptLocale = SUPPORTED_LOCALES.find((l) => l.code === 'pt');
-    const elLocale = SUPPORTED_LOCALES.find((l) => l.code === 'el');
-    expect(jaLocale?.isBeta).toBe(true);
-    expect(zhLocale?.isBeta).toBe(true);
-    expect(ptLocale?.isBeta).toBe(true);
-    expect(elLocale?.isBeta).toBe(true);
+    for (const code of ['ja', 'zh', 'pt', 'el'] as const) {
+      const locale = SUPPORTED_LOCALES.find((l) => l.code === code);
+      expect(locale, `${code} should be present`).toBeDefined();
+      expect(locale?.isBeta, `${code} should not be flagged beta`).toBeFalsy();
+    }
   });
 });
 
