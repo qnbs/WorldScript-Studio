@@ -69,6 +69,7 @@ vi.mock('../../../app/hooks', () => ({
         ttsStatus: mockTtsStatus,
         microphonePermission: mockMicPermission,
         dictationActive: mockDictationActive,
+        lastConfidence: 0,
       },
     }),
 }));

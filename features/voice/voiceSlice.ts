@@ -60,8 +60,15 @@ export const voiceSlice = createSlice({
   initialState,
   reducers: {
     setVoiceMode: (state, action: PayloadAction<VoiceMode>) => {
-      state.mode = action.payload;
-      if (action.payload !== 'inactive') {
+      const next = action.payload;
+      // QNBS-v3 (CodeAnt): a fresh listening/dictation cycle starts with no confidence — drop any
+      // prior utterance's score at the source so the UI never shows a stale value before a new
+      // result arrives (the transcript-gated display is the second line of defence).
+      if ((next === 'listening' || next === 'dictating') && state.mode !== next) {
+        state.lastConfidence = 0;
+      }
+      state.mode = next;
+      if (next !== 'inactive') {
         state.lastActivityAt = new Date().toISOString();
       }
     },
