@@ -9,8 +9,19 @@ describe('useMicLevel', () => {
   });
 
   it('returns 0 (does not throw) when Web Audio / getUserMedia are unavailable', () => {
-    const { result } = renderHook(() => useMicLevel(true));
-    expect(result.current).toBe(0);
+    // QNBS-v3 (CodeAnt): explicitly make both APIs unavailable so this asserts the unsupported path
+    // deterministically, rather than relying on jsdom happening to lack them.
+    vi.stubGlobal('AudioContext', undefined);
+    const orig = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+    Object.defineProperty(navigator, 'mediaDevices', { value: undefined, configurable: true });
+    try {
+      const { result } = renderHook(() => useMicLevel(true));
+      expect(result.current).toBe(0);
+    } finally {
+      if (orig) Object.defineProperty(navigator, 'mediaDevices', orig);
+      else Reflect.deleteProperty(navigator, 'mediaDevices');
+      vi.unstubAllGlobals();
+    }
   });
 
   it('cleans up without error when toggled off and unmounted', () => {
