@@ -658,6 +658,7 @@
   "voice.cancelSpeech": "Peruuta puhe",
   "voice.modeChip.commands": "Komennot",
   "voice.modeChip.dictation": "Sanelu",
+  "voice.feedback.confidence": "Varmuus {{percent}} %",
   "voice.panelLabel": "Ääniohjaus",
   "voice.permissionDenied": "Mikrofonin käyttö estetty. Salli mikrofonin käyttö selaimesi asetuksista, jotta voit käyttää ääniominaisuuksia.",
   "voice.startDictation": "Aloita sanelu",

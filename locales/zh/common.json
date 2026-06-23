@@ -658,6 +658,7 @@
   "voice.cancelSpeech": "取消 speech",
   "voice.modeChip.commands": "命令",
   "voice.modeChip.dictation": "听写",
+  "voice.feedback.confidence": "置信度 {{percent}}%",
   "voice.panelLabel": "语音控制",
   "voice.permissionDenied": "麦克风访问被拒绝。请在浏览器设置中允许麦克风访问才能使用语音功能。",
   "voice.startDictation": "开始听写",

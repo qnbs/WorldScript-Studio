@@ -13,12 +13,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 let mockMode = 'inactive';
 let mockEnabled = false;
 let mockTranscript = '';
+let mockConfidence = 0;
 
 vi.mock('../../hooks/useVoice', () => ({
   useVoice: () => ({
     mode: mockMode,
     enabled: mockEnabled,
     transcript: mockTranscript,
+    confidence: mockConfidence,
   }),
 }));
 
@@ -38,6 +40,7 @@ describe('VoiceIndicator', () => {
     mockMode = 'inactive';
     mockEnabled = false;
     mockTranscript = '';
+    mockConfidence = 0;
   });
 
   it('renders nothing when voice is not enabled', () => {
@@ -71,6 +74,36 @@ describe('VoiceIndicator', () => {
     const { container } = render(<VoiceIndicator />);
     const dot = container.querySelector('.animate-pulse');
     expect(dot).toBeInTheDocument();
+  });
+
+  it('shows the level meter and confidence when listening with a current transcript', () => {
+    mockEnabled = true;
+    mockMode = 'listening';
+    mockConfidence = 0.9;
+    mockTranscript = 'open the writer';
+    render(<VoiceIndicator />);
+    // meter rendered while active …
+    expect(screen.getByTestId('voice-level-meter')).toBeInTheDocument();
+    // … and the confidence label (current transcript + confidence > 0).
+    expect(screen.getByText(/confidence/i)).toBeInTheDocument();
+  });
+
+  it('hides confidence when there is no current transcript (stale guard)', () => {
+    mockEnabled = true;
+    mockMode = 'listening';
+    mockConfidence = 0.9;
+    mockTranscript = '';
+    render(<VoiceIndicator />);
+    expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
+  });
+
+  it('hides the confidence label when confidence is 0', () => {
+    mockEnabled = true;
+    mockMode = 'listening';
+    mockConfidence = 0;
+    mockTranscript = 'hi';
+    render(<VoiceIndicator />);
+    expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
   });
 
   it('indicator dot has no animate-pulse class when processing', () => {

@@ -22,6 +22,8 @@ let mockMode = 'inactive';
 let mockIsListening = false;
 let mockDictationActive = false;
 let mockMicPermission: 'granted' | 'denied' | 'prompt' = 'prompt';
+let mockTranscript = '';
+let mockConfidence = 0;
 
 vi.mock('../../hooks/useVoice', () => ({
   useVoice: () => ({
@@ -35,6 +37,8 @@ vi.mock('../../hooks/useVoice', () => ({
     stopDictation: mockStopDictation,
     cancelSpeech: mockCancelSpeech,
     microphonePermission: mockMicPermission,
+    transcript: mockTranscript,
+    confidence: mockConfidence,
   }),
 }));
 
@@ -60,6 +64,8 @@ describe('VoiceControlPanel', () => {
     mockIsListening = false;
     mockDictationActive = false;
     mockMicPermission = 'prompt';
+    mockTranscript = '';
+    mockConfidence = 0;
   });
 
   it('renders nothing when voice is not enabled', () => {
@@ -167,5 +173,17 @@ describe('VoiceControlPanel', () => {
     mockDictationActive = true;
     render(<VoiceControlPanel />);
     expect(screen.getByText('voice.modeChip.dictation')).toBeInTheDocument();
+  });
+
+  it('shows the live feedback (meter, interim transcript, confidence) while listening', () => {
+    mockEnabled = true;
+    mockMode = 'listening';
+    mockIsListening = true;
+    mockTranscript = 'open the writer';
+    mockConfidence = 0.8;
+    render(<VoiceControlPanel />);
+    expect(screen.getByTestId('voice-level-meter')).toBeInTheDocument();
+    expect(screen.getByText('open the writer')).toBeInTheDocument();
+    expect(screen.getByText('voice.feedback.confidence')).toBeInTheDocument();
   });
 });

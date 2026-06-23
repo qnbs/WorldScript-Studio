@@ -658,6 +658,7 @@
   "voice.cancelSpeech": "キャンセル speech",
   "voice.modeChip.commands": "コマンド",
   "voice.modeChip.dictation": "ディクテーション",
+  "voice.feedback.confidence": "信頼度 {{percent}}%",
   "voice.panelLabel": "音声制御",
   "voice.permissionDenied": "マイクへのアクセスが拒否されました。音声機能を使用するには、ブラウザの設定でマイクへのアクセスを許可してください。",
   "voice.startDictation": "ディクテーションを開始する",

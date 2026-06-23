@@ -766,6 +766,7 @@
   "voice.cancelSpeech": "Avbryt tal",
   "voice.modeChip.commands": "Kommandon",
   "voice.modeChip.dictation": "Diktering",
+  "voice.feedback.confidence": "Säkerhet {{percent}} %",
   "voice.panelLabel": "Röststyrning",
   "voice.permissionDenied": "Mikrofonåtkomst nekad. Tillåt mikrofonåtkomst i webbläsarinställningarna för att använda röstfunktioner.",
   "voice.startDictation": "Börja diktering",

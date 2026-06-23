@@ -766,6 +766,7 @@
   "voice.cancelSpeech": "Отменить речь",
   "voice.modeChip.commands": "Команды",
   "voice.modeChip.dictation": "Диктант",
+  "voice.feedback.confidence": "Уверенность {{percent}}%",
   "voice.panelLabel": "Голосовое управление",
   "voice.permissionDenied": "Доступ к микрофону запрещен. Разрешите доступ к микрофону в настройках браузера, чтобы использовать голосовые функции.",
   "voice.startDictation": "Начать диктовку",
