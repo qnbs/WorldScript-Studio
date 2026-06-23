@@ -39,6 +39,10 @@ interface TransientUiState {
   // QNBS-v3: Phase 3 — ProForge "Ask Copilot" chip pre-fills the composer without prop-drilling.
   copilotDraftMessage: string | null;
   setCopilotDraftMessage: (msg: string | null) => void;
+  // QNBS-v3: Book Preview → Export hand-off — preselect the Export view's format when arriving
+  // from the preview's "Export" button, without coupling the two views or a URL query param.
+  exportInitialFormat: string | null;
+  setExportInitialFormat: (format: string | null) => void;
 }
 
 export const useTransientUiStore = create<TransientUiState>((set) => ({
@@ -70,4 +74,6 @@ export const useTransientUiStore = create<TransientUiState>((set) => ({
   setCopilotInsightExpanded: (value) => set({ copilotInsightExpanded: value }),
   copilotDraftMessage: null,
   setCopilotDraftMessage: (msg) => set({ copilotDraftMessage: msg }),
+  exportInitialFormat: null,
+  setExportInitialFormat: (format) => set({ exportInitialFormat: format }),
 }));

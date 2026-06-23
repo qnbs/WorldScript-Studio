@@ -43,6 +43,7 @@ vi.mock('../../../features/project/projectSelectors', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
+import { useTransientUiStore } from '../../../app/transientUiStore';
 import { useBookPreviewView } from '../../../hooks/useBookPreviewView';
 
 // ---------------------------------------------------------------------------
@@ -53,6 +54,9 @@ describe('useBookPreviewView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSections = [{ ...SEC_1 }, { ...SEC_2 }];
+    // QNBS-v3: reading prefs persist to localStorage — clear so each test starts from defaults.
+    localStorage.clear();
+    useTransientUiStore.getState().setExportInitialFormat(null);
   });
 
   it('returns sections from Redux', () => {
@@ -73,9 +77,9 @@ describe('useBookPreviewView', () => {
     expect(result.current.isTocOpen).toBe(false);
   });
 
-  it('sets activeId to first section on init', () => {
+  it('initializes isPaginated=false', () => {
     const { result } = renderHook(() => useBookPreviewView());
-    expect(result.current.activeId).toBe('sec-1');
+    expect(result.current.isPaginated).toBe(false);
   });
 
   describe('setFontSize', () => {
@@ -162,25 +166,42 @@ describe('useBookPreviewView', () => {
     });
   });
 
-  describe('scrollToSection', () => {
-    it('updates activeId when sectionRef exists', () => {
+  describe('togglePaginated', () => {
+    it('toggles isPaginated', () => {
       const { result } = renderHook(() => useBookPreviewView());
-      // Inject a mock element into sectionRefs
-      const mockEl = { scrollIntoView: vi.fn() };
-      result.current.sectionRefs.current.set('sec-2', mockEl as unknown as HTMLElement);
+      act(() => result.current.togglePaginated());
+      expect(result.current.isPaginated).toBe(true);
+      act(() => result.current.togglePaginated());
+      expect(result.current.isPaginated).toBe(false);
+    });
+  });
 
-      act(() => result.current.scrollToSection('sec-2'));
+  describe('persistence', () => {
+    it('restores persisted preferences on mount', () => {
+      const first = renderHook(() => useBookPreviewView());
+      act(() => first.result.current.setFontSize(22));
+      act(() => first.result.current.togglePaginated());
+      first.unmount();
 
-      expect(result.current.activeId).toBe('sec-2');
-      expect(mockEl.scrollIntoView).toHaveBeenCalled();
+      const second = renderHook(() => useBookPreviewView());
+      expect(second.result.current.fontSize).toBe(22);
+      expect(second.result.current.isPaginated).toBe(true);
+    });
+  });
+
+  describe('onExport', () => {
+    it('navigates to the export view and preselects EPUB', () => {
+      const onNavigate = vi.fn();
+      const { result } = renderHook(() => useBookPreviewView(onNavigate));
+      act(() => result.current.onExport());
+      expect(onNavigate).toHaveBeenCalledWith('export');
+      expect(useTransientUiStore.getState().exportInitialFormat).toBe('epub');
     });
 
-    it('does nothing when sectionRef does not exist', () => {
+    it('does not set the preselection flag when no navigation callback is provided', () => {
       const { result } = renderHook(() => useBookPreviewView());
-      // No ref registered for sec-3
-      act(() => result.current.scrollToSection('sec-3'));
-      // activeId stays as first section
-      expect(result.current.activeId).toBe('sec-1');
+      act(() => result.current.onExport());
+      expect(useTransientUiStore.getState().exportInitialFormat).toBeNull();
     });
   });
 });

@@ -1,16 +1,22 @@
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FC } from 'react';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookPreviewContext, useBookPreviewContext } from '../contexts/BookPreviewContext';
 import { useBookPreviewView } from '../hooks/useBookPreviewView';
-import type { StorySection } from '../types';
+import type { StorySection, View } from '../types';
 import { EmptyState } from './ui/EmptyState';
 import { SectionIcon } from './ui/SectionIcon';
 import { Select } from './ui/Select';
 
 // ── TOC Sidebar ──────────────────────────────────────────────────────────────
 
-const TocSidebar: FC = () => {
-  const { t, sections, isTocOpen, activeId, scrollToSection, toggleToc } = useBookPreviewContext();
+// QNBS-v3: activeId/onScrollTo are component-local (driven by the virtualizer's scroll), not the
+// hook — so they're passed as props rather than threaded through the context.
+const TocSidebar: FC<{ activeId: string | null; onScrollTo: (id: string) => void }> = ({
+  activeId,
+  onScrollTo,
+}) => {
+  const { t, sections, isTocOpen, toggleToc } = useBookPreviewContext();
   if (!isTocOpen) return null;
   return (
     <nav
@@ -35,7 +41,8 @@ const TocSidebar: FC = () => {
           <li key={s.id}>
             <button
               type="button"
-              onClick={() => scrollToSection(s.id)}
+              onClick={() => onScrollTo(s.id)}
+              aria-current={activeId === s.id ? 'true' : undefined}
               className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors truncate ${
                 activeId === s.id
                   ? 'bg-[var(--sc-accent)] text-[white]'
@@ -61,11 +68,14 @@ const ControlsBar: FC = () => {
     showWordCount,
     isFullscreen,
     isTocOpen,
+    isPaginated,
     setFontSize,
     setFontFamily,
     toggleWordCount,
     toggleFullscreen,
     toggleToc,
+    togglePaginated,
+    onExport,
   } = useBookPreviewContext();
 
   return (
@@ -129,6 +139,27 @@ const ControlsBar: FC = () => {
         {t('preview.controls.wordCount')}
       </button>
 
+      {/* Paged reading mode toggle */}
+      <button
+        type="button"
+        onClick={togglePaginated}
+        aria-pressed={isPaginated}
+        aria-label={t('preview.controls.pagedMode')}
+        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
+      >
+        {t('preview.controls.pagedMode')}
+      </button>
+
+      {/* Export → Export view (EPUB) */}
+      <button
+        type="button"
+        onClick={onExport}
+        aria-label={t('preview.controls.export')}
+        className="ml-auto px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
+      >
+        {t('preview.controls.export')}
+      </button>
+
       {/* Fullscreen */}
       <button
         type="button"
@@ -136,7 +167,7 @@ const ControlsBar: FC = () => {
         aria-label={
           isFullscreen ? t('preview.controls.exitFullscreen') : t('preview.controls.fullscreen')
         }
-        className="ml-auto px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
+        className="px-2 py-1 rounded text-sm border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-surface-overlay)]"
       >
         {isFullscreen ? '⊡' : '⊞'}{' '}
         {isFullscreen ? t('preview.controls.exitFullscreen') : t('preview.controls.fullscreen')}
@@ -147,32 +178,32 @@ const ControlsBar: FC = () => {
 
 // ── Section Article ───────────────────────────────────────────────────────────
 
-const SectionArticle: FC<{
-  section: StorySection;
-  refCallback: (el: HTMLElement | null) => void;
-}> = ({ section, refCallback }) => {
-  const { t, fontSize, fontFamily, showWordCount } = useBookPreviewContext();
+const SectionArticle: FC<{ section: StorySection }> = ({ section }) => {
+  const { t, fontSize, fontFamily, showWordCount, isPaginated } = useBookPreviewContext();
   const wordCount = section.content?.trim().split(/\s+/).filter(Boolean).length ?? 0;
 
   return (
     <article
       id={section.id}
-      ref={refCallback}
       aria-label={section.title || t('preview.untitledScene')}
-      className="mb-12"
+      className={
+        isPaginated
+          ? 'mb-8 mx-auto max-w-[760px] bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] shadow-sc-xl rounded-sc-lg px-8 py-10'
+          : 'mb-12'
+      }
       style={{ fontFamily, fontSize }}
     >
-      <h2
-        className="text-2xl font-bold mb-4 text-[var(--sc-text-primary)] border-b border-[var(--sc-border-subtle)] pb-2"
-        style={{ fontFamily }}
-      >
-        {section.title || t('preview.untitledScene')}
-      </h2>
-      {showWordCount && (
-        <p className="text-xs text-[var(--sc-text-secondary)] mb-2 text-right">
-          {t('preview.wordCount', { count: String(wordCount) })}
-        </p>
-      )}
+      {/* QNBS-v3: heading row doubles as the margin annotation gutter for the per-section word count. */}
+      <div className="flex items-baseline justify-between gap-4 mb-4 border-b border-[var(--sc-border-subtle)] pb-2">
+        <h2 className="text-2xl font-bold text-[var(--sc-text-primary)]" style={{ fontFamily }}>
+          {section.title || t('preview.untitledScene')}
+        </h2>
+        {showWordCount && (
+          <span className="shrink-0 text-xs text-[var(--sc-text-muted)] tabular-nums">
+            {t('preview.wordCount', { count: String(wordCount) })}
+          </span>
+        )}
+      </div>
       <div
         className="whitespace-pre-wrap leading-relaxed text-[var(--sc-text-primary)]"
         style={{ maxWidth: '70ch', lineHeight: 1.8 }}
@@ -188,14 +219,66 @@ const SectionArticle: FC<{
 // ── Main Component ────────────────────────────────────────────────────────────
 
 const BookPreviewInner: FC = () => {
-  const { t, sections, isFullscreen, isTocOpen, sectionRefs } = useBookPreviewContext();
-  const refCallback = useCallback(
-    (id: string) => (el: HTMLElement | null) => {
-      if (el) sectionRefs.current.set(id, el);
-      else sectionRefs.current.delete(id);
+  const { t, sections, isFullscreen, isTocOpen } = useBookPreviewContext();
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>(sections[0]?.id ?? null);
+  const [progress, setProgress] = useState(0);
+
+  // QNBS-v3: variable-height virtualization — only on-screen sections are in the DOM, which keeps
+  // very long manuscripts responsive (the old plain .map() rendered every section at once).
+  const virtualizer = useVirtualizer({
+    count: sections.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 600,
+    overscan: 4,
+  });
+
+  // QNBS-v3: scroll-driven reading progress + active-chapter highlight, computed from the virtualizer
+  // window. This replaces the previous IntersectionObserver, which observed an empty ref map on the
+  // first commit (empty-deps effect) and so never tracked scrolling reliably.
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const max = scrollHeight - clientHeight;
+    setProgress(max > 0 ? Math.min(100, Math.max(0, (scrollTop / max) * 100)) : 0);
+
+    const line = scrollTop + clientHeight * 0.25;
+    const items = virtualizer.getVirtualItems();
+    let activeIndex = items[0]?.index ?? 0;
+    for (const item of items) {
+      if (item.start <= line) activeIndex = item.index;
+      else break;
+    }
+    const section = sections[activeIndex];
+    if (section) setActiveId(section.id);
+  }, [virtualizer, sections]);
+
+  const scrollToSection = useCallback(
+    (id: string) => {
+      const index = sections.findIndex((s) => s.id === id);
+      if (index >= 0) {
+        virtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' });
+        setActiveId(id);
+      }
     },
-    [sectionRefs],
+    [sections, virtualizer],
   );
+
+  // QNBS-v3 (CodeAnt): progress + active-chapter were only recomputed inside onScroll, so non-scroll
+  // changes left them stale. A ResizeObserver on the content recomputes whenever its height changes —
+  // which covers font-size/family, the paged toggle, the word-count gutter, and section add/remove —
+  // without listing layout values that the effect body never reads. Re-attaches when handleScroll
+  // changes (its identity tracks `sections`), so it also binds once the content first mounts.
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => handleScroll());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [handleScroll]);
 
   return (
     <div
@@ -208,9 +291,25 @@ const BookPreviewInner: FC = () => {
         </h1>
       </div>
       <ControlsBar />
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        <TocSidebar />
+      {/* Reading progress bar */}
+      <div
+        role="progressbar"
+        aria-label={t('preview.progress.ariaLabel')}
+        aria-valuenow={Math.round(progress)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className="h-1 bg-[var(--sc-surface-overlay)] shrink-0"
+      >
         <div
+          className="h-full bg-[var(--sc-accent)] transition-[width] duration-150"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+        <TocSidebar activeId={activeId} onScrollTo={scrollToSection} />
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
           aria-live="off"
           className={`flex-1 overflow-y-auto p-6 sm:p-10 ${isTocOpen ? 'ml-56' : ''}`}
         >
@@ -238,9 +337,31 @@ const BookPreviewInner: FC = () => {
               />
             </div>
           ) : (
-            sections.map((s) => (
-              <SectionArticle key={s.id} section={s} refCallback={refCallback(s.id)} />
-            ))
+            <div
+              ref={contentRef}
+              style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const section = sections[virtualRow.index];
+                if (!section) return null;
+                return (
+                  <div
+                    key={section.id}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <SectionArticle section={section} />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -248,8 +369,8 @@ const BookPreviewInner: FC = () => {
   );
 };
 
-export const BookPreviewView: FC = () => {
-  const contextValue = useBookPreviewView();
+export const BookPreviewView: FC<{ onNavigate?: (view: View) => void }> = ({ onNavigate }) => {
+  const contextValue = useBookPreviewView(onNavigate);
   return (
     <BookPreviewContext.Provider value={contextValue}>
       <BookPreviewInner />

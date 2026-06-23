@@ -1,11 +1,18 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { useTransientUiStore } from '../app/transientUiStore';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { generateSynopsisThunk } from '../features/project/thunks/writingThunks';
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from './useTranslation';
 
 type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt';
+// QNBS-v3: gate the Book Preview → Export hand-off so only valid formats can preselect the dropdown.
+const VALID_FORMATS: readonly Format[] = ['md', 'txt', 'pdf', 'docx', 'epub', 'norm-txt'];
+// QNBS-v3 (CodeAnt): runtime type guard instead of an `as Format` assertion on store-supplied input.
+function isFormat(value: string | null): value is Format {
+  return value !== null && (VALID_FORMATS as readonly string[]).includes(value);
+}
 interface ContentToExport {
   title: boolean;
   characters: boolean;
@@ -31,6 +38,16 @@ export const useExportView = () => {
   const worlds = useAppSelector(selectAllWorlds);
 
   const [format, setFormat] = useState<Format>('md');
+  // QNBS-v3: consume a one-shot preselected format from the Book Preview "Export" hand-off, then clear it.
+  const exportInitialFormat = useTransientUiStore((s) => s.exportInitialFormat);
+  const setExportInitialFormat = useTransientUiStore((s) => s.setExportInitialFormat);
+  useEffect(() => {
+    if (isFormat(exportInitialFormat)) {
+      setFormat(exportInitialFormat);
+      setExportInitialFormat(null);
+    }
+  }, [exportInitialFormat, setExportInitialFormat]);
+
   const [contentToExport, setContentToExport] = useState<ContentToExport>({
     title: true,
     characters: true,

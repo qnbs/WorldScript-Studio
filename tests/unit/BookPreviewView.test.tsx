@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RootState } from '../../app/store';
 import { BookPreviewView } from '../../components/BookPreviewView';
 
@@ -43,6 +43,23 @@ vi.mock('../../components/ui/SectionIcon', () => ({
   SectionIcon: () => null,
 }));
 
+// QNBS-v3: jsdom has 0-height containers so useVirtualizer renders no items — mock it to render all.
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, i) => ({
+        index: i,
+        start: i * 600,
+        size: 600,
+        key: i,
+        lane: 0,
+      })),
+    getTotalSize: () => count * 600,
+    measureElement: vi.fn((_el: unknown) => {}),
+    scrollToIndex: vi.fn(),
+  }),
+}));
+
 class MockIntersectionObserver {
   observe = vi.fn();
   disconnect = vi.fn();
@@ -51,6 +68,11 @@ class MockIntersectionObserver {
 vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 
 describe('BookPreviewView', () => {
+  // QNBS-v3: reading prefs persist to localStorage now — clear so font-size/toggle tests stay isolated.
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it('renders section titles in h2 elements', () => {
     render(<BookPreviewView />);
     const headings = screen.getAllByRole('heading', { level: 2 });
@@ -141,6 +163,27 @@ describe('BookPreviewView', () => {
   it('renders toolbar with correct role', () => {
     render(<BookPreviewView />);
     expect(screen.getByRole('toolbar', { name: 'preview.controls.ariaLabel' })).toBeDefined();
+  });
+
+  it('renders a reading-progress bar', () => {
+    render(<BookPreviewView />);
+    const bar = screen.getByRole('progressbar', { name: 'preview.progress.ariaLabel' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('0');
+  });
+
+  it('toggles paged reading mode', () => {
+    render(<BookPreviewView />);
+    const pagedBtn = screen.getByLabelText('preview.controls.pagedMode');
+    expect(pagedBtn.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(pagedBtn);
+    expect(pagedBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('hands off to the export view when Export is clicked', () => {
+    const onNavigate = vi.fn();
+    render(<BookPreviewView onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByLabelText('preview.controls.export'));
+    expect(onNavigate).toHaveBeenCalledWith('export');
   });
 
   it('shows no-scenes message when manuscript is empty', async () => {

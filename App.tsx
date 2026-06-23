@@ -629,7 +629,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       case 'critic':
         return <CriticView />;
       case 'preview':
-        return <BookPreviewView />;
+        return <BookPreviewView onNavigate={handleNavigate} />;
       case 'progress':
         return <ProgressTrackerView />;
       case 'objects':
