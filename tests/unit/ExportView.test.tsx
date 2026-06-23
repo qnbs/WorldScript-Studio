@@ -149,4 +149,14 @@ describe('ExportView', () => {
     expect(screen.getByText('export.options.downloadButton')).toBeTruthy();
     expect(screen.getByText('common.copyToClipboard')).toBeTruthy();
   });
+
+  it('switches the preview to rendered HTML mode', () => {
+    render(<ExportView />);
+    // Text mode is the default — the <pre> preview is present.
+    expect(screen.getByTestId('export-preview')).toBeTruthy();
+    fireEvent.click(screen.getByText('export.preview.modeRendered'));
+    // Rendered mode swaps in the sanitized-HTML container.
+    expect(screen.getByTestId('export-preview-rendered')).toBeTruthy();
+    expect(screen.queryByTestId('export-preview')).toBeNull();
+  });
 });

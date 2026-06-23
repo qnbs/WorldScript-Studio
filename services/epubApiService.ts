@@ -21,11 +21,65 @@ const esc = (s: string) =>
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
   );
 
-const toParagraphs = (text: string) =>
-  text
+// QNBS-v3: markdown image token — `![alt](src)`. Only data: URLs are bundled into the EPUB; remote
+// URLs are non-conformant inside an EPUB container, so they degrade to their alt text.
+const IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
+
+/** Registers a data-URL image into the EPUB, returning its in-package href (or null to skip). */
+type ImageRegistrar = (src: string) => string | null;
+
+interface OebpsFolder {
+  file: (name: string, data: string, opts?: { base64?: boolean }) => unknown;
+}
+
+/** Book-scoped image registrar: emits data-URL images under images/, dedupes, appends to manifest. */
+function createImageRegistrar(oebps: OebpsFolder, manifest: string[]): ImageRegistrar {
+  let n = 0;
+  const cache = new Map<string, string>();
+  return (src: string): string | null => {
+    if (!src.startsWith('data:image/')) return null;
+    const cached = cache.get(src);
+    if (cached) return cached;
+    const meta = src.split(';')[0] ?? '';
+    const mime = meta.split(':')[1] ?? 'application/octet-stream';
+    const ext = (mime.split('/')[1] ?? 'bin').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+    const base64 = src.split(',')[1] ?? '';
+    if (!base64) return null;
+    n += 1;
+    const href = `images/img${n}.${ext}`;
+    oebps.file(href, base64, { base64: true });
+    manifest.push(`<item id="img${n}" href="${href}" media-type="${mime}"/>`);
+    cache.set(src, href);
+    return href;
+  };
+}
+
+/** Escape a line of text while rewriting markdown image tokens to bundled <img> (or alt fallback). */
+function renderLine(line: string, registerImage: ImageRegistrar): string {
+  let out = '';
+  let last = 0;
+  for (const m of line.matchAll(IMG_RE)) {
+    const idx = m.index ?? 0;
+    out += esc(line.slice(last, idx));
+    const alt = m[1] ?? '';
+    const href = registerImage(m[2] ?? '');
+    out += href ? `<img src="${esc(href)}" alt="${esc(alt)}"/>` : esc(alt);
+    last = idx + m[0].length;
+  }
+  out += esc(line.slice(last));
+  return out;
+}
+
+/** Split text into <p> blocks, rewriting any inline/standalone markdown images to bundled <img>. */
+function renderBody(text: string, registerImage: ImageRegistrar): string {
+  return text
     .split('\n')
-    .map((l) => (l.trim() ? `<p>${esc(l.trim())}</p>` : ''))
+    .map((l) => {
+      const trimmed = l.trim();
+      return trimmed ? `<p>${renderLine(trimmed, registerImage)}</p>` : '';
+    })
     .join('');
+}
 
 export async function exportEpub(options: EpubExportOptions): Promise<void> {
   const { title, author, synopsis, chapters, lang = 'de', coverImage, compileProfile } = options;
@@ -67,9 +121,14 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
   const manifest: string[] = [
     `<item id="css" href="style.css" media-type="text/css"/>`,
     `<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
+    // QNBS-v3: NCX for EPUB-2 backward compatibility (older e-readers ignore the EPUB-3 nav doc).
+    `<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`,
   ];
   const spine: string[] = [];
-  const tocEntries: string[] = [];
+  // QNBS-v3: structured TOC entries — drive BOTH the EPUB-3 nav.xhtml and the EPUB-2 toc.ncx.
+  const navList: Array<{ href: string; label: string }> = [];
+  // QNBS-v3: bundle data-URL images referenced from manuscript/front-matter markdown into the EPUB.
+  const registerImage = createImageRegistrar(oebps, manifest);
 
   // Optional cover image
   if (coverImage?.startsWith('data:image/')) {
@@ -96,7 +155,7 @@ p{margin:.6em 0;text-indent:1.6em}p:first-child,.no-indent{text-indent:0}
 
   // Title page — optional Markdown body from compile profile (Scrivener-style front matter).
   const titleInner = compileProfile?.titlePageMarkdown?.trim()
-    ? `<div class="titlepage">${toParagraphs(compileProfile.titlePageMarkdown)}</div>`
+    ? `<div class="titlepage">${renderBody(compileProfile.titlePageMarkdown, registerImage)}</div>`
     : `<div class="titlepage"><h1>${esc(title)}</h1>
 ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div>`;
   oebps.file(
@@ -108,7 +167,7 @@ ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div>`;
   );
   manifest.push(`<item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>`);
   spine.push(`<itemref idref="titlepage"/>`);
-  tocEntries.push(`<li><a href="titlepage.xhtml">${esc(title)}</a></li>`);
+  navList.push({ href: 'titlepage.xhtml', label: title });
 
   let extraIdx = 0;
   const pushCompilePage = (navLabel: string, markdown: string) => {
@@ -119,11 +178,11 @@ ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div>`;
       `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>${esc(navLabel)}</title><link rel="stylesheet" href="style.css"/></head>
-<body><h2>${esc(navLabel)}</h2>${toParagraphs(markdown)}</body></html>`,
+<body><h2>${esc(navLabel)}</h2>${renderBody(markdown, registerImage)}</body></html>`,
     );
     manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="${id}"/>`);
-    tocEntries.push(`<li><a href="${file}">${esc(navLabel)}</a></li>`);
+    navList.push({ href: file, label: navLabel });
   };
 
   if (compileProfile?.dedicationMarkdown?.trim()) {
@@ -140,11 +199,11 @@ ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div>`;
       `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>${esc(block.title)}</title><link rel="stylesheet" href="style.css"/></head>
-<body><h2>${esc(block.title)}</h2>${toParagraphs(block.bodyMarkdown)}</body></html>`,
+<body><h2>${esc(block.title)}</h2>${renderBody(block.bodyMarkdown, registerImage)}</body></html>`,
     );
     manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="${id}"/>`);
-    tocEntries.push(`<li><a href="${file}">${esc(block.title)}</a></li>`);
+    navList.push({ href: file, label: block.title });
   }
 
   // Synopsis
@@ -154,11 +213,11 @@ ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div>`;
       `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>Synopsis</title><link rel="stylesheet" href="style.css"/></head>
-<body><h2>Synopsis</h2><div class="synopsis-box">${toParagraphs(synopsis)}</div></body></html>`,
+<body><h2>Synopsis</h2><div class="synopsis-box">${renderBody(synopsis, registerImage)}</div></body></html>`,
     );
     manifest.push(`<item id="synopsis" href="synopsis.xhtml" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="synopsis"/>`);
-    tocEntries.push(`<li><a href="synopsis.xhtml">Synopsis</a></li>`);
+    navList.push({ href: 'synopsis.xhtml', label: 'Synopsis' });
   }
 
   // Chapters
@@ -171,11 +230,11 @@ ${author ? `<p class="subtitle">${esc(author)}</p>` : ''}</div>`;
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>${esc(ch.title)}</title><link rel="stylesheet" href="style.css"/></head>
 <body><h2 class="chapter-title">${esc(ch.title)}</h2>
-${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Empty Chapter)</em></p>'}</body></html>`,
+${ch.content?.trim() ? renderBody(ch.content, registerImage) : '<p class="no-indent"><em>(Empty Chapter)</em></p>'}</body></html>`,
     );
     manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="${id}"/>`);
-    tocEntries.push(`<li><a href="${file}">${esc(ch.title)}</a></li>`);
+    navList.push({ href: file, label: ch.title });
   });
 
   if (compileProfile?.acknowledgementsMarkdown?.trim()) {
@@ -189,20 +248,49 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Emp
       `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}"><head>
 <title>${esc(block.title)}</title><link rel="stylesheet" href="style.css"/></head>
-<body><h2>${esc(block.title)}</h2>${toParagraphs(block.bodyMarkdown)}</body></html>`,
+<body><h2>${esc(block.title)}</h2>${renderBody(block.bodyMarkdown, registerImage)}</body></html>`,
     );
     manifest.push(`<item id="${id}" href="${file}" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="${id}"/>`);
-    tocEntries.push(`<li><a href="${file}">${esc(block.title)}</a></li>`);
+    navList.push({ href: file, label: block.title });
   }
 
   // Navigation (EPUB 3)
+  const navItems = navList
+    .map((e) => `<li><a href="${esc(e.href)}">${esc(e.label)}</a></li>`)
+    .join('\n');
   oebps.file(
     'nav.xhtml',
     `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${lang}">
 <head><title>Table of Contents</title></head>
-<body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>${tocEntries.join('\n')}</ol></nav></body></html>`,
+<body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>${navItems}</ol></nav></body></html>`,
+  );
+
+  // QNBS-v3: NCX (EPUB-2) — same entries as nav.xhtml so EPUB-2-only readers still get a working TOC.
+  const navPoints = navList
+    .map(
+      (e, i) =>
+        `<navPoint id="navpt-${i + 1}" playOrder="${i + 1}"><navLabel><text>${esc(
+          e.label,
+        )}</text></navLabel><content src="${esc(e.href)}"/></navPoint>`,
+    )
+    .join('\n    ');
+  oebps.file(
+    'toc.ncx',
+    `<?xml version="1.0" encoding="utf-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="${lang}">
+  <head>
+    <meta name="dtb:uid" content="${uid}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle><text>${esc(title)}</text></docTitle>
+  <navMap>
+    ${navPoints}
+  </navMap>
+</ncx>`,
   );
 
   // content.opf
@@ -222,7 +310,7 @@ ${ch.content?.trim() ? toParagraphs(ch.content) : '<p class="no-indent"><em>(Emp
   <manifest>
     ${manifest.join('\n    ')}
   </manifest>
-  <spine>
+  <spine toc="ncx">
     ${spine.join('\n    ')}
   </spine>
 </package>`,

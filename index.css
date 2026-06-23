@@ -1017,3 +1017,43 @@ body.is-desktop
     --glass-border: var(--sc-border-subtle);
   }
 }
+
+/* QNBS-v3 (PR2): scoped typography for the Export view's "Rendered" preview. DOMPurify strips
+   class/style from the sanitized markdown HTML, so these element selectors carry the styling. */
+.export-rendered-preview h1 {
+  font-size: 1.8em;
+  font-weight: 700;
+  text-align: center;
+  margin: 0.6em 0;
+}
+.export-rendered-preview h2 {
+  font-size: 1.4em;
+  font-weight: 700;
+  border-bottom: 1px solid var(--sc-border-subtle);
+  padding-bottom: 0.2em;
+  margin: 1em 0 0.4em;
+}
+.export-rendered-preview h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.8em 0 0.3em;
+}
+.export-rendered-preview p {
+  margin: 0.5em 0;
+  line-height: 1.7;
+}
+.export-rendered-preview ul {
+  margin: 0.5em 0;
+  padding-inline-start: 1.4em;
+  list-style: disc;
+}
+.export-rendered-preview img {
+  max-width: 100%;
+  height: auto;
+}
+.export-rendered-preview code {
+  font-family: monospace;
+  background: var(--sc-surface-overlay);
+  padding: 0 0.25em;
+  border-radius: 3px;
+}
