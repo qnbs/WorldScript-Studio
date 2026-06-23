@@ -131,6 +131,32 @@ describe('PipelineProgressPanel', () => {
   });
 
   describe('with active run', () => {
+    // QNBS-v3: PR7 — determinate overall progress bar (stage N of M / percent).
+    it('renders a determinate progress bar reflecting completed selected stages', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentRun: {
+          ...baseRun,
+          config: {
+            ...mockContextBase.defaultConfig,
+            selectedStages: ['intake', 'structural', 'lineProse', 'copyEdit'],
+          },
+          activeStage: 'lineProse',
+          stages: [
+            makeStage('intake', 'accepted', defaultMetrics),
+            makeStage('structural', 'accepted', defaultMetrics),
+          ],
+        },
+      });
+      render(<PipelineProgressPanel />);
+
+      const bar = screen.getByRole('progressbar');
+      // 2 of 4 selected stages accepted → 50%
+      expect(bar).toHaveAttribute('aria-valuenow', '50');
+      expect(bar).toHaveAttribute('aria-valuemin', '0');
+      expect(bar).toHaveAttribute('aria-valuemax', '100');
+    });
+
     it('renders Current Status section with activeStage', () => {
       vi.mocked(useProForgeViewContext).mockReturnValue({
         ...mockContextBase,

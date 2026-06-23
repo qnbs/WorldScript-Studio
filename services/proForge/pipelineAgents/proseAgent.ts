@@ -64,6 +64,8 @@ export class ProseAgent extends BaseAgent {
 
     for (const section of sectionsToProcess) {
       if (signal.aborted) break;
+      // QNBS-v3: PR7 — yield between sections to keep the UI responsive during synchronous work.
+      await this.cooperativeYield();
 
       const content = section.content ?? '';
       const wordCount = content.trim().split(/\s+/).length;

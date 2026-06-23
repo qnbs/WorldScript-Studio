@@ -43,6 +43,9 @@ export class CopyEditAgent extends BaseAgent {
 
     for (const section of sectionsToProcess) {
       if (signal.aborted) break;
+      // QNBS-v3: PR7 — yield between sections so the UI stays responsive during synchronous
+      // post-AI processing (validation, dedup) on large manuscripts.
+      await this.cooperativeYield();
       const content = section.content ?? '';
       if (content.trim().split(/\s+/).length < 50) continue;
 

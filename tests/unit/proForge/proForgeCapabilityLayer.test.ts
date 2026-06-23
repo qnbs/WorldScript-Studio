@@ -11,6 +11,7 @@ vi.mock('../../../services/proForge/pipelineAgents/agentRegistry', () => ({
   EXECUTABLE_STAGES: ['intake'],
   loadAgent: vi.fn(async () => {
     return class FakeAgent {
+      bindAbortSignal() {}
       async execute() {
         return {
           reviewItems: [{ id: 'r1' }],

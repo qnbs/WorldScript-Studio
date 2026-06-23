@@ -96,6 +96,8 @@ export class ProForgeCapabilityLayer {
       const agent = new AgentClass(context);
 
       const controller = new AbortController();
+      // QNBS-v3: PR7 — bind the signal so AI calls are cancellable (parity with the orchestrator).
+      agent.bindAbortSignal(controller.signal);
       let result: Awaited<ReturnType<typeof agent.execute>>;
       try {
         result = await agent.execute(controller.signal);

@@ -85,6 +85,9 @@ class StubAgent extends BaseAgent {
   async publicSelfReflect(excerpt: string, summary: string, signal: AbortSignal) {
     return this.selfReflect(excerpt, summary, signal);
   }
+  async publicCooperativeYield() {
+    return this.cooperativeYield();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -345,6 +348,31 @@ describe('BaseAgent', () => {
       expect(callArg.prompt).toContain('No structural edits found.');
       expect(callArg.prompt).toContain('Original prompt.');
     });
+
+    // QNBS-v3: PR7 — abort signal must reach the AI call so the request is cancellable mid-flight.
+    it('does NOT include a signal in options when none is bound', async () => {
+      mockGenerate.mockResolvedValueOnce({ text: 'OK', usage: {} });
+      await agent.publicGenerate('Prompt');
+      const opts = (mockGenerate.mock.calls.at(-1)?.[0] as { options: { signal?: AbortSignal } })
+        .options;
+      expect(opts.signal).toBeUndefined();
+    });
+
+    it('threads the bound abort signal into the AI call options', async () => {
+      mockGenerate.mockResolvedValueOnce({ text: 'OK', usage: {} });
+      const controller = new AbortController();
+      agent.bindAbortSignal(controller.signal);
+      await agent.publicGenerate('Prompt');
+      const opts = (mockGenerate.mock.calls.at(-1)?.[0] as { options: { signal?: AbortSignal } })
+        .options;
+      expect(opts.signal).toBe(controller.signal);
+    });
+  });
+
+  describe('cooperativeYield()', () => {
+    it('resolves on a later macrotask without throwing', async () => {
+      await expect(agent.publicCooperativeYield()).resolves.toBeUndefined();
+    });
   });
 
   describe('selfReflect()', () => {
@@ -399,6 +427,16 @@ describe('BaseAgent', () => {
       const excerptInPrompt =
         callArg.prompt.split('MANUSCRIPT EXCERPT:\n')[1]?.split('\n\nANALYSIS')[0] ?? '';
       expect(excerptInPrompt.length).toBeLessThanOrEqual(800);
+    });
+
+    // QNBS-v3: PR7 — reflection passes its caller's signal into the AI call so it is cancellable.
+    it('threads the provided signal into the reflection AI call', async () => {
+      mockGenerate.mockResolvedValueOnce({ text: 'COHERENT: ok', usage: {} });
+      const controller = new AbortController();
+      await agent.publicSelfReflect('excerpt', 'summary', controller.signal);
+      const opts = (mockGenerate.mock.calls.at(-1)?.[0] as { options: { signal?: AbortSignal } })
+        .options;
+      expect(opts.signal).toBe(controller.signal);
     });
   });
 });
