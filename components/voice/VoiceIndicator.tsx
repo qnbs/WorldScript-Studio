@@ -4,7 +4,10 @@
  */
 
 import React from 'react';
+import { useMicLevel } from '../../hooks/useMicLevel';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useVoice } from '../../hooks/useVoice';
+import { VoiceLevelMeter } from './VoiceLevelMeter';
 
 type VoiceModeKey = 'inactive' | 'listening' | 'processing' | 'speaking' | 'dictating';
 
@@ -38,11 +41,15 @@ const MODE_CONFIG: Record<VoiceModeKey, { labelKey: string; colorClass: string; 
   };
 
 export const VoiceIndicator = React.memo(function VoiceIndicator() {
-  const { mode, enabled, transcript } = useVoice();
+  const { mode, enabled, transcript, confidence } = useVoice();
+  const { t } = useTranslation();
+  const isActive = mode === 'listening' || mode === 'dictating';
+  const level = useMicLevel(isActive);
 
   if (!enabled) return null;
 
   const config = MODE_CONFIG[mode as VoiceModeKey] ?? MODE_CONFIG.inactive;
+  const confidencePct = Math.round(Math.min(1, Math.max(0, confidence)) * 100);
 
   return (
     <div
@@ -57,9 +64,15 @@ export const VoiceIndicator = React.memo(function VoiceIndicator() {
         aria-hidden="true"
       />
       <span className="text-xs font-medium capitalize">{mode}</span>
+      {isActive && <VoiceLevelMeter level={level} />}
       {transcript && mode !== 'inactive' && (
         <span className="text-xs text-[var(--sc-text-muted)] truncate max-w-[120px]">
           {transcript}
+        </span>
+      )}
+      {isActive && confidencePct > 0 && (
+        <span className="text-[10px] text-[var(--sc-text-muted)] tabular-nums shrink-0">
+          {t('voice.feedback.confidence', { percent: String(confidencePct) })}
         </span>
       )}
     </div>

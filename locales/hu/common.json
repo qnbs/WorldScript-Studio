@@ -658,6 +658,7 @@
   "voice.cancelSpeech": "Beszéd megszakítása",
   "voice.modeChip.commands": "Parancsok",
   "voice.modeChip.dictation": "Diktálás",
+  "voice.feedback.confidence": "Megbízhatóság {{percent}}%",
   "voice.panelLabel": "Hangvezérlés",
   "voice.permissionDenied": "Mikrofon hozzáférés megtagadva. A hangfunkciók használatához engedélyezze a mikrofonhoz való hozzáférést a böngésző beállításaiban.",
   "voice.startDictation": "Indítsa el a diktálást",

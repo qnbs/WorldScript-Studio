@@ -4,9 +4,11 @@
  */
 
 import React, { useCallback } from 'react';
+import { useMicLevel } from '../../hooks/useMicLevel';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useVoice } from '../../hooks/useVoice';
 import { Icon } from '../ui/Icon';
+import { VoiceLevelMeter } from './VoiceLevelMeter';
 
 export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
   const { t } = useTranslation();
@@ -21,7 +23,11 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
     stopDictation,
     cancelSpeech,
     microphonePermission,
+    transcript,
+    confidence,
   } = useVoice();
+  const level = useMicLevel(isListening);
+  const confidencePct = Math.round(Math.min(1, Math.max(0, confidence)) * 100);
 
   const handleToggleListening = useCallback(() => {
     if (isListening) {
@@ -65,6 +71,22 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
         <span className="text-[10px] text-center px-2 py-0.5 rounded-full bg-[var(--sc-surface-subtle)] text-[var(--sc-text-secondary)]">
           {dictationActive ? t('voice.modeChip.dictation') : t('voice.modeChip.commands')}
         </span>
+      )}
+      {/* QNBS-v3: PR5 — live feedback: mic level meter, interim transcript, and confidence. */}
+      {isActive && (
+        <div className="flex flex-col items-center gap-1 px-1">
+          {isListening && <VoiceLevelMeter level={level} />}
+          {transcript && (
+            <p className="text-[10px] text-[var(--sc-text-secondary)] text-center max-w-[140px] line-clamp-2">
+              {transcript}
+            </p>
+          )}
+          {confidencePct > 0 && (
+            <span className="text-[10px] text-[var(--sc-text-muted)] tabular-nums">
+              {t('voice.feedback.confidence', { percent: String(confidencePct) })}
+            </span>
+          )}
+        </div>
       )}
       <button
         type="button"

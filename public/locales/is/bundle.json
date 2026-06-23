@@ -766,6 +766,7 @@
   "voice.cancelSpeech": "Hætta við ræðu",
   "voice.modeChip.commands": "Skipanir",
   "voice.modeChip.dictation": "Upplestur",
+  "voice.feedback.confidence": "Vissa {{percent}}%",
   "voice.panelLabel": "Raddstýring",
   "voice.permissionDenied": "Aðgangi hljóðnema hafnað. Vinsamlegast leyfðu aðgang að hljóðnema í stillingum vafrans til að nota raddaðgerðir.",
   "voice.startDictation": "Byrjaðu á einræði",

@@ -161,3 +161,5 @@ export const selectWakeWordStatus = (state: { voice: VoiceState }) => state.voic
 export const selectMicrophonePermission = (state: { voice: VoiceState }) =>
   state.voice.microphonePermission;
 export const selectDictationActive = (state: { voice: VoiceState }) => state.voice.dictationActive;
+// QNBS-v3: PR5 — confidence of the last transcription (0-1), surfaced for voice feedback UI.
+export const selectLastConfidence = (state: { voice: VoiceState }) => state.voice.lastConfidence;
