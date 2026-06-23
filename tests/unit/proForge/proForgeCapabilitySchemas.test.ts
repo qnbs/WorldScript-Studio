@@ -31,6 +31,41 @@ describe('runStageInputSchema', () => {
   it('rejects an empty projectId', () => {
     expect(runStageInputSchema.safeParse({ stage: 'intake', projectId: '' }).success).toBe(false);
   });
+
+  // QNBS-v3: PR6 CodeAnt finding — capability-layer callers must be able to override supervisor
+  // thresholds; previously the schema lacked `qualityThresholds` so Zod silently stripped the key.
+  it('preserves qualityThresholds overrides for non-Redux callers', () => {
+    const parsed = runStageInputSchema.parse({
+      stage: 'intake',
+      projectId: 'p1',
+      config: { qualityThresholds: { largeManuscriptWords: 5000, intakeHardGate: 10 } },
+    });
+    expect(parsed.config?.qualityThresholds).toEqual({
+      largeManuscriptWords: 5000,
+      intakeHardGate: 10,
+    });
+  });
+
+  it('rejects a partial / malformed qualityThresholds override', () => {
+    expect(
+      runStageInputSchema.safeParse({
+        stage: 'intake',
+        projectId: 'p1',
+        config: { qualityThresholds: { largeManuscriptWords: -1, intakeHardGate: 10 } },
+      }).success,
+    ).toBe(false);
+  });
+
+  // QNBS-v3: PR6 CodeAnt — intake scores are 0–100; a >100 gate would fail every intake.
+  it('rejects an intakeHardGate above the 0–100 score scale', () => {
+    expect(
+      runStageInputSchema.safeParse({
+        stage: 'intake',
+        projectId: 'p1',
+        config: { qualityThresholds: { largeManuscriptWords: 1000, intakeHardGate: 150 } },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('getHistoryInputSchema', () => {

@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "세상을 준비하는…",
   "proforge.loading.structural": "이야기의 형태를 살펴보면…",
   "proforge.pipeline.noneActive": "활성 파이프라인 없음",
+  "proforge.pipeline.reviewRequired": "실험적 기능 — 검토가 필요합니다. 승인 없이 원고가 변경되지 않습니다.",
   "proforge.pipeline.title": "궁극적인 작성자 파이프라인",
   "proforge.progress.activeStage": "액티브 스테이지",
   "proforge.progress.awaitingReviewHint": "⚠️ 이 단계는 귀하의 검토를 기다리고 있습니다. 항목을 검토하려면 위의 단계 버튼을 클릭하세요.",

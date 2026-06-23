@@ -164,6 +164,8 @@ export class ProForgeOrchestrator {
     maxRetries: number,
   ): Promise<void> {
     const { dispatch } = this.context;
+    // QNBS-v3: PR6 — tunable supervisor thresholds from the run config (defaults applied downstream).
+    const qualityThresholds = this.context.getState().proForge.currentRun?.config.qualityThresholds;
     // QNBS-v3: Carries the prior attempt's rejection reasons into the next prompt.
     let retryFeedback = '';
 
@@ -180,7 +182,7 @@ export class ProForgeOrchestrator {
 
         // QNBS-v3: Supervisor evaluates heuristic quality gates before advancing.
         const { SupervisorAgent } = await import('./pipelineAgents/supervisorAgent');
-        const supervisor = new SupervisorAgent(this.context);
+        const supervisor = new SupervisorAgent(this.context, qualityThresholds);
         const decision = supervisor.evaluate(stage, result);
 
         if (!decision.pass && attempt < maxRetries) {
@@ -198,8 +200,10 @@ export class ProForgeOrchestrator {
           continue;
         }
 
-        // Hard gate: intake with qualityScore < 30 → fail with honest message.
-        if (stage === 'intake' && decision.qualityScore < 30) {
+        // QNBS-v3: Hard gate via the centralized supervisor rule — fails ONLY when intake was
+        // actually flagged (fallback/no real analysis) AND scored below the floor, so a legitimately
+        // weak-but-analyzed manuscript is not mislabeled as an AI-provider failure.
+        if (stage === 'intake' && supervisor.intakeHardGateFailed(decision)) {
           const message =
             "The diagnostic couldn't analyze your manuscript. Check your AI provider connection and try again.";
           dispatch(stageFailed({ stage, error: message }));

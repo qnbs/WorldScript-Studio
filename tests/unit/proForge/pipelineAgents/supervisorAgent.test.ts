@@ -110,10 +110,11 @@ describe('SupervisorAgent', () => {
   });
 
   describe('evaluateLineProse', () => {
-    it('passes with score 85 when prose edits are present', () => {
+    it('passes with a measured score in the pass band when prose edits are present', () => {
       const result = agent.evaluate('lineProse', { reviewItems: [], agentOutput: { edits: [{}] } });
       expect(result.pass).toBe(true);
-      expect(result.qualityScore).toBe(85);
+      expect(result.qualityScore).toBeGreaterThanOrEqual(60);
+      expect(result.qualityScore).toBeLessThanOrEqual(95);
     });
 
     it('passes for a short manuscript even with zero edits', () => {
@@ -293,17 +294,76 @@ describe('SupervisorAgent', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // Tests: intakeHardGateFailed — centralized gate shared by orchestrator + capability layer
+  // ---------------------------------------------------------------------------
+
+  describe('intakeHardGateFailed', () => {
+    it('fails a fallback intake (pass:false + score below the floor)', () => {
+      const decision = agent.evaluate('intake', {
+        reviewItems: [],
+        agentOutput: {
+          isFallback: true,
+          qualityScore: ZERO_QUALITY_SCORE,
+          consistencyIssues: [],
+          structuralGaps: [],
+        },
+      });
+      expect(agent.intakeHardGateFailed(decision)).toBe(true);
+    });
+
+    it('does NOT fail a legitimately weak-but-analyzed manuscript (pass:true, low score)', () => {
+      // QNBS-v3: gating on score alone would mislabel a real low-quality analysis as a provider
+      // failure; the gate must require the supervisor to have actually flagged it (pass:false).
+      const lowButReal = agent.intakeHardGateFailed({
+        pass: true,
+        retryRecommended: false,
+        qualityScore: 5,
+        reasons: [],
+      });
+      expect(lowButReal).toBe(false);
+    });
+
+    it('does NOT fail a passing high-score intake', () => {
+      const decision = agent.evaluate('intake', {
+        reviewItems: [],
+        agentOutput: {
+          qualityScore: REAL_QUALITY_SCORE,
+          consistencyIssues: [{ id: 'ci-1' }],
+          structuralGaps: [],
+        },
+      });
+      expect(agent.intakeHardGateFailed(decision)).toBe(false);
+    });
+
+    it('respects a custom intakeHardGate threshold', () => {
+      // With the gate floored at 0, even a fallback (score 0) does not trip it.
+      const lenient = new SupervisorAgent(makeContext(), { intakeHardGate: 0 });
+      const decision = lenient.evaluate('intake', {
+        reviewItems: [],
+        agentOutput: {
+          isFallback: true,
+          qualityScore: ZERO_QUALITY_SCORE,
+          consistencyIssues: [],
+          structuralGaps: [],
+        },
+      });
+      expect(lenient.intakeHardGateFailed(decision)).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Tests: structural stage
   // ---------------------------------------------------------------------------
 
   describe('evaluateStructural', () => {
-    it('passes with score 80 when edits are present', () => {
+    it('passes with a measured score in the pass band when edits are present', () => {
       const result = agent.evaluate('structural', {
         reviewItems: [],
         agentOutput: { edits: [{ id: 'e1' }] },
       });
       expect(result.pass).toBe(true);
-      expect(result.qualityScore).toBe(80);
+      expect(result.qualityScore).toBeGreaterThanOrEqual(60);
+      expect(result.qualityScore).toBeLessThanOrEqual(95);
     });
 
     it('passes when no edits but reviewItems are present', () => {
@@ -335,7 +395,7 @@ describe('SupervisorAgent', () => {
       });
       expect(result.pass).toBe(false);
       expect(result.retryRecommended).toBe(true);
-      expect(result.qualityScore).toBe(40);
+      expect(result.qualityScore).toBeLessThan(60);
       expect(result.reasons.some((r) => r.includes('structural edits'))).toBe(true);
     });
 
@@ -347,6 +407,27 @@ describe('SupervisorAgent', () => {
       });
       expect(result.pass).toBe(true);
     });
+
+    it('does NOT double-count edits + their derived reviewItems (canonical max, not sum)', () => {
+      // QNBS-v3: PR6 CodeAnt — reviewItems are derived 1:1 from edits, so the score with BOTH
+      // present must equal the score from the single canonical source, never the inflated sum.
+      const reviewItems = Array.from({ length: 3 }, (_, i) => ({
+        id: `ri-${i}`,
+        stage: 'structural' as const,
+        type: 'structuralEdit' as const,
+        severity: 'info' as const,
+        description: 'derived from edit',
+        status: 'pending' as const,
+        confidence: 0.8,
+        createdAt: new Date(0).toISOString(),
+      }));
+      const edits = [{ id: 'e1' }, { id: 'e2' }, { id: 'e3' }];
+
+      const both = agent.evaluate('structural', { reviewItems, agentOutput: { edits } });
+      const editsOnly = agent.evaluate('structural', { reviewItems: [], agentOutput: { edits } });
+      // max(3,3) === 3 → identical score; the old `edits + reviewItems` sum (6) would inflate it.
+      expect(both.qualityScore).toBe(editsOnly.qualityScore);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -354,7 +435,7 @@ describe('SupervisorAgent', () => {
   // ---------------------------------------------------------------------------
 
   describe('evaluateProof', () => {
-    it('passes with score 90 when grammar issues exist', () => {
+    it('passes with a measured score in the pass band when grammar issues exist', () => {
       const result = agent.evaluate('proof', {
         reviewItems: [],
         agentOutput: {
@@ -363,7 +444,8 @@ describe('SupervisorAgent', () => {
         },
       });
       expect(result.pass).toBe(true);
-      expect(result.qualityScore).toBe(90);
+      expect(result.qualityScore).toBeGreaterThanOrEqual(70);
+      expect(result.qualityScore).toBeLessThanOrEqual(95);
     });
 
     it('passes when overallPass is false (not the suspicious pattern)', () => {
@@ -384,8 +466,25 @@ describe('SupervisorAgent', () => {
       });
       expect(result.pass).toBe(false);
       expect(result.retryRecommended).toBe(true);
-      expect(result.qualityScore).toBe(40);
-      expect(result.reasons.some((r) => r.includes('zero grammar issues'))).toBe(true);
+      expect(result.qualityScore).toBeLessThan(70);
+      expect(result.reasons.some((r) => r.includes('grammar/style/technical/legal'))).toBe(true);
+    });
+
+    it('does NOT flag a long manuscript when proof found non-grammar (style/legal) issues', () => {
+      // QNBS-v3: PR6 CodeAnt — proof signal must count style/technical/legal findings, not only
+      // grammar; a clean-grammar report with real style/legal findings is NOT a fallback.
+      const longContent = 'word '.repeat(510).trim();
+      const longAgent = new SupervisorAgent(makeContext(longContent));
+      const result = longAgent.evaluate('proof', {
+        reviewItems: [],
+        agentOutput: {
+          overallPass: true,
+          grammar: { issues: [] },
+          style: { issues: [{ id: 's1' }, { id: 's2' }] },
+          legal: { warnings: [{ id: 'l1' }] },
+        },
+      });
+      expect(result.pass).toBe(true);
     });
 
     it('passes for short manuscript with overallPass and zero grammar issues (under 500 words)', () => {
@@ -397,13 +496,14 @@ describe('SupervisorAgent', () => {
       expect(result.pass).toBe(true);
     });
 
-    it('passes when agentOutput is undefined (no sentinel)', () => {
+    it('passes with a measured score when agentOutput is undefined (no sentinel)', () => {
       const result = agent.evaluate('proof', {
         reviewItems: [],
         agentOutput: undefined,
       });
       expect(result.pass).toBe(true);
-      expect(result.qualityScore).toBe(90);
+      expect(result.qualityScore).toBeGreaterThanOrEqual(70);
+      expect(result.qualityScore).toBeLessThanOrEqual(95);
     });
   });
 
@@ -453,6 +553,47 @@ describe('SupervisorAgent', () => {
         agentOutput: { overallPass: true, grammar: { issues: [] } },
       });
       expect(result.pass).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Tests: PR6 — measured scoring + configurable thresholds
+  // ---------------------------------------------------------------------------
+
+  describe('measured scoring', () => {
+    it('scores higher with more findings (not a flat constant)', () => {
+      const longAgent = new SupervisorAgent(makeContext('word '.repeat(2000)));
+      const few = longAgent.evaluate('structural', {
+        reviewItems: [],
+        agentOutput: { edits: [{ id: 'a' }] },
+      });
+      const many = longAgent.evaluate('structural', {
+        reviewItems: [],
+        agentOutput: { edits: Array.from({ length: 12 }, (_, i) => ({ id: `e${i}` })) },
+      });
+      expect(many.qualityScore).toBeGreaterThan(few.qualityScore);
+    });
+  });
+
+  describe('configurable thresholds', () => {
+    it('a lower largeManuscriptWords threshold flags a smaller manuscript as suspicious', () => {
+      // ~600 words: passes under the default 1000 threshold...
+      const ctx = makeContext('word '.repeat(600));
+      const dflt = new SupervisorAgent(ctx).evaluate('structural', {
+        reviewItems: [],
+        agentOutput: { edits: [] },
+      });
+      expect(dflt.pass).toBe(true);
+      // ...but fails when the threshold is lowered to 300.
+      const strict = new SupervisorAgent(ctx, { largeManuscriptWords: 300 }).evaluate(
+        'structural',
+        {
+          reviewItems: [],
+          agentOutput: { edits: [] },
+        },
+      );
+      expect(strict.pass).toBe(false);
+      expect(strict.retryRecommended).toBe(true);
     });
   });
 });

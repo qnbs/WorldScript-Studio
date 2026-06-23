@@ -29,10 +29,15 @@ vi.mock('../../../services/proForge/pipelineAgents/agentRegistry', () => ({
   }),
 }));
 
+// QNBS-v3: controllable supervisor mock — lets a test force the intake hard gate to fire.
+const supervisorState = vi.hoisted(() => ({ hardGateFailed: false }));
 vi.mock('../../../services/proForge/pipelineAgents/supervisorAgent', () => ({
   SupervisorAgent: class {
     evaluate() {
       return { pass: true, retryRecommended: false, qualityScore: 90, reasons: [] };
+    }
+    intakeHardGateFailed() {
+      return supervisorState.hardGateFailed;
     }
   },
 }));
@@ -87,6 +92,7 @@ describe('ProForgeCapabilityLayer', () => {
   beforeEach(() => {
     ports = makePorts();
     layer = createProForgeCapabilityLayer(ports);
+    supervisorState.hardGateFailed = false;
   });
 
   describe('permission gating', () => {
@@ -145,6 +151,15 @@ describe('ProForgeCapabilityLayer', () => {
       const l = createProForgeCapabilityLayer(p);
       await expect(l.runStage({ stage: 'intake', projectId: 'ghost' })).rejects.toMatchObject({
         code: 'NOT_FOUND',
+      });
+    });
+
+    // QNBS-v3: PR6 CodeAnt — capability layer must enforce the SAME intake hard gate as the
+    // orchestrator, so a fallback/unanalyzable intake throws instead of returning "success".
+    it('throws STAGE_FAILED when the intake hard gate fails', async () => {
+      supervisorState.hardGateFailed = true;
+      await expect(layer.runStage({ stage: 'intake', projectId: 'p1' })).rejects.toMatchObject({
+        code: 'STAGE_FAILED',
       });
     });
   });

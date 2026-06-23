@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "Prêt pour le monde…",
   "proforge.loading.structural": "Examen de la structure de votre histoire…",
   "proforge.pipeline.noneActive": "Aucune pipeline active",
+  "proforge.pipeline.reviewRequired": "Expérimental — votre relecture est requise ; le manuscrit n'est jamais modifié sans votre accord.",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.progress.activeStage": "Étape active",
   "proforge.progress.awaitingReviewHint": "⚠️ Cette étape attend votre relecture. Cliquez sur le bouton de l'étape ci-dessus pour examiner les éléments.",

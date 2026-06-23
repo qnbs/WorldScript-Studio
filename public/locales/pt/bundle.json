@@ -435,6 +435,7 @@
   "proforge.loading.publishing": "Preparando-se para o mundo…",
   "proforge.loading.structural": "Olhando para a forma da sua história…",
   "proforge.pipeline.noneActive": "Nenhum pipeline ativo",
+  "proforge.pipeline.reviewRequired": "Experimental — a sua revisão é necessária; o manuscrito nunca é alterado sem a sua aprovação.",
   "proforge.pipeline.title": "Pipeline final do autor",
   "proforge.progress.activeStage": "Estágio Ativo",
   "proforge.progress.awaitingReviewHint": "⚠️ Esta etapa aguarda sua análise. Clique no botão de estágio acima para revisar os itens.",

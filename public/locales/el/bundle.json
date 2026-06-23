@@ -435,6 +435,7 @@
   "proforge.loading.publishing": "Προετοιμασία για τον κόσμο…",
   "proforge.loading.structural": "Κοιτάζοντας τη μορφή της ιστορίας σας…",
   "proforge.pipeline.noneActive": "Δεν υπάρχει ενεργός αγωγός",
+  "proforge.pipeline.reviewRequired": "Πειραματικό — απαιτείται η αξιολόγησή σας· το χειρόγραφο δεν αλλάζει ποτέ χωρίς την έγκρισή σας.",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.progress.activeStage": "Ενεργό Στάδιο",
   "proforge.progress.awaitingReviewHint": "⚠️ Αυτό το στάδιο περιμένει την κριτική σας. Κάντε κλικ στο κουμπί του σταδίου παραπάνω για να ελέγξετε τα στοιχεία.",

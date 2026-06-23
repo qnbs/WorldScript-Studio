@@ -435,6 +435,7 @@
   "proforge.loading.publishing": "آماده شدن برای جهان…",
   "proforge.loading.structural": "با نگاه کردن به شکل داستان شما…",
   "proforge.pipeline.noneActive": "بدون خط لوله فعال",
+  "proforge.pipeline.reviewRequired": "آزمایشی — بازبینی شما لازم است؛ نسخه هرگز بدون تأیید شما تغییر نمی‌کند.",
   "proforge.pipeline.title": "خط لوله نویسنده نهایی",
   "proforge.progress.activeStage": "مرحله فعال",
   "proforge.progress.awaitingReviewHint": "⚠️ این مرحله منتظر بررسی شماست. برای بررسی موارد روی دکمه مرحله بالا کلیک کنید.",

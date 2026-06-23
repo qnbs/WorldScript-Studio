@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "Valmistautuminen maailmaan…",
   "proforge.loading.structural": "Tarinasi muotoa katsoessani…",
   "proforge.pipeline.noneActive": "Ei aktiivista putkistoa",
+  "proforge.pipeline.reviewRequired": "Kokeellinen — tarkistuksesi vaaditaan; käsikirjoitusta ei koskaan muuteta ilman hyväksyntääsi.",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.progress.activeStage": "Aktiivinen vaihe",
   "proforge.progress.awaitingReviewHint": "⚠️ Tämä vaihe odottaa arvosteluasi. Napsauta yllä olevaa vaihepainiketta tarkastellaksesi kohteita.",

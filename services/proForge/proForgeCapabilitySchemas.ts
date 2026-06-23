@@ -62,6 +62,18 @@ export const memoryEntrySeedSchema = z.object({
   sourceStage: pipelineStageSchema.default('idle'),
 });
 
+/**
+ * Supervisor quality-gate thresholds. Sub-fields are required so the inferred type matches
+ * `QualityThresholds` exactly (both fields present); callers override the pair as a unit, and the
+ * SupervisorAgent re-merges against DEFAULT_QUALITY_THRESHOLDS internally.
+ */
+export const qualityThresholdsSchema = z.object({
+  largeManuscriptWords: z.number().int().positive(),
+  // QNBS-v3: intake quality scores are on a 0–100 scale; bound the gate so an impossible
+  // threshold (>100) can't make every intake fail unconditionally via misconfiguration.
+  intakeHardGate: z.number().min(0).max(100),
+});
+
 /** Overridable run configuration (all optional — merged onto defaults). */
 export const partialPipelineConfigSchema = z.object({
   genrePreset: z.string().optional(),
@@ -73,6 +85,9 @@ export const partialPipelineConfigSchema = z.object({
   language: z.string().optional(),
   useDuckDb: z.boolean().optional(),
   autoAcceptThreshold: z.number().min(0).max(1).optional(),
+  // QNBS-v3: PR6 — accept supervisor threshold overrides so Node/MCP capability callers can tune
+  // quality gates (the schema previously stripped this key, silently dropping caller overrides).
+  qualityThresholds: qualityThresholdsSchema.optional(),
 });
 export type PartialPipelineConfigInput = z.infer<typeof partialPipelineConfigSchema>;
 

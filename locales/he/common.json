@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "מתכונן לעולם…",
   "proforge.loading.structural": "מתבונן במבנה הסיפור שלכם…",
   "proforge.pipeline.noneActive": "אין צינור פעיל",
+  "proforge.pipeline.reviewRequired": "ניסיוני — נדרשת הבדיקה שלך; כתב היד לעולם לא משתנה ללא אישורך.",
   "proforge.pipeline.title": "צינור הסופר האולטימטיבי",
   "proforge.progress.activeStage": "Active Stage",
   "proforge.progress.awaitingReviewHint": "⚠️ This stage is awaiting your review. Click the stage button above to review items.",

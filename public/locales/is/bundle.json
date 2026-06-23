@@ -435,6 +435,7 @@
   "proforge.loading.publishing": "Undirbúningur fyrir heiminn…",
   "proforge.loading.structural": "Þegar þú horfir á lögun sögunnar þinnar...",
   "proforge.pipeline.noneActive": "Engin virk leiðsla",
+  "proforge.pipeline.reviewRequired": "Tilraunaverkefni — yfirferð þín er nauðsynleg; handritinu er aldrei breytt án samþykkis þíns.",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.progress.activeStage": "Virkt stig",
   "proforge.progress.awaitingReviewHint": "⚠️ Þetta stig bíður skoðunar þinnar. Smelltu á sviðshnappinn hér að ofan til að skoða atriði.",

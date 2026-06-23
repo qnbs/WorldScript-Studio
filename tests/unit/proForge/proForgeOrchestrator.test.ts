@@ -833,6 +833,75 @@ describe('ProForgeOrchestrator', () => {
     });
   });
 
+  describe('integration: intake hard gate', () => {
+    // QNBS-v3: PR6 CodeAnt — the hard gate must fire on an ACTUAL supervisor failure (fallback /
+    // unanalyzable), not on a low score alone.
+    it('fails the run when intake is flagged (pass:false) and scored below the floor', async () => {
+      const { SupervisorAgent } = await import(
+        '../../../services/proForge/pipelineAgents/supervisorAgent'
+      );
+      const evaluateSpy = vi.spyOn(SupervisorAgent.prototype, 'evaluate').mockReturnValue({
+        pass: false,
+        retryRecommended: true,
+        qualityScore: 0,
+        reasons: ['fallback'],
+      });
+
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [],
+          config: { ...DEFAULT_CONFIG, selectedStages: ['intake'], maxRetries: 0 },
+          label: 'Hard Gate',
+        },
+        isRunning: true,
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.executeStage('intake');
+
+      const { stageFailed } = await import('../../../features/proForge/proForgeSlice');
+      expect(vi.mocked(stageFailed)).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'intake' }),
+      );
+      evaluateSpy.mockRestore();
+    });
+
+    it('does NOT fail the run for a legitimately weak-but-analyzed intake (pass:true, low score)', async () => {
+      const { SupervisorAgent } = await import(
+        '../../../services/proForge/pipelineAgents/supervisorAgent'
+      );
+      const evaluateSpy = vi.spyOn(SupervisorAgent.prototype, 'evaluate').mockReturnValue({
+        pass: true,
+        retryRecommended: false,
+        qualityScore: 5,
+        reasons: [],
+      });
+
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'running',
+          stages: [],
+          config: { ...DEFAULT_CONFIG, selectedStages: ['intake'], maxRetries: 0 },
+          label: 'Weak Manuscript',
+        },
+        isRunning: true,
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.executeStage('intake');
+
+      const { stageCompleted, stageFailed } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      expect(vi.mocked(stageFailed)).not.toHaveBeenCalled();
+      expect(vi.mocked(stageCompleted)).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'intake' }),
+      );
+      evaluateSpy.mockRestore();
+    });
+  });
+
   describe('integration: snapshot rollback after failure', () => {
     // QNBS-v3: When a stage fails mid-run, rollbackTo restores the pre-stage snapshot.
     it('dispatches restoreSnapshot when rolling back after a failed stage', async () => {

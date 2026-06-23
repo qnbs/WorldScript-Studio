@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "为世界做好准备……",
   "proforge.loading.structural": "看看你的故事的形状……",
   "proforge.pipeline.noneActive": "无活动管道",
+  "proforge.pipeline.reviewRequired": "实验性功能——需要您审阅；未经您批准，稿件绝不会被修改。",
   "proforge.pipeline.title": "最终作者管道",
   "proforge.progress.activeStage": "活跃阶段",
   "proforge.progress.awaitingReviewHint": "⚠️此阶段正在等待您的审核。单击上面的阶段按钮以查看项目。",
