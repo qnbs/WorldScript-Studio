@@ -4,6 +4,9 @@ import { useApp } from '../../hooks/useApp';
 
 beforeEach(() => {
   localStorage.clear();
+  // QNBS-v3: handleNavigate/pushHash mutate window.location.hash, and jsdom does not reset it
+  // between tests — a leaked hash makes readInitialView() non-deterministic (it reads hash first).
+  window.history.replaceState(null, '', '/');
 });
 
 describe('useApp', () => {
@@ -54,6 +57,19 @@ describe('useApp', () => {
 
     // previousView is the view the user came from before opening Help.
     expect(result.current.previousView).toBe('manuscript');
+  });
+
+  it('does not change previousView when navigating to the already-active view', () => {
+    const { result } = renderHook(() => useApp({ isNewUser: false }));
+    act(() => {
+      result.current.handleNavigate('manuscript');
+    });
+    // Re-navigating to the same view must NOT overwrite previousView with the current view.
+    act(() => {
+      result.current.handleNavigate('manuscript');
+    });
+    expect(result.current.currentView).toBe('manuscript');
+    expect(result.current.previousView).toBe('dashboard');
   });
 
   it('handlePortalExit sets isPortalActive to false', () => {
