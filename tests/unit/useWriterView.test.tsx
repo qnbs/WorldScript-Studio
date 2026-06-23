@@ -32,6 +32,9 @@ const mockDispatch = vi.fn((action: unknown) => {
   return { unwrap: () => Promise.resolve('') };
 });
 
+// QNBS-v3: PR4 — mock the RAG assembly so the useRagContext branch is exercised deterministically.
+const { mockAssembleRAGPrompt } = vi.hoisted(() => ({ mockAssembleRAGPrompt: vi.fn() }));
+
 const mockState: {
   projectData: {
     characters: { id: string; name: string }[];
@@ -186,6 +189,9 @@ vi.mock('../../features/project/thunks/writingThunks', () => ({
     unwrap: () => Promise.resolve(''),
   }),
 }));
+vi.mock('../../services/ragPromptAssembly', () => ({
+  assembleRAGPrompt: (...args: unknown[]) => mockAssembleRAGPrompt(...args),
+}));
 
 const createHookWrapper = async () => {
   const { useWriterView } = await import('../../hooks/useWriterView');
@@ -289,6 +295,44 @@ describe('useWriterView', () => {
       type: 'updateManuscriptSection',
       payload: { id: 's1', changes: { content: 'Hello  worldworld' } },
     });
+  });
+
+  it('stores RAG chunk previews (injected set) when useRagContext is on', async () => {
+    mockState.writer.useRagContext = true;
+    mockState.writer.selection = { text: '', start: 0, end: 0 };
+    mockState.writer.activeTool = 'continue';
+    mockAssembleRAGPrompt.mockResolvedValue({
+      prompt: 'rag-prompt',
+      chunks: [
+        {
+          sectionId: 's1',
+          chunkIndex: 0,
+          score: 0.91,
+          text: 'A retrieved passage about the hero.',
+        },
+      ],
+      estimatedTokens: 10,
+      ragUsed: true,
+    });
+
+    const view = await createHookWrapper();
+    await act(async () => {
+      await view.handleGenerate();
+    });
+
+    const ragCall = mockDispatch.mock.calls.find(
+      ([a]) => isDispatcherAction(a) && a.type === 'setLastRagChunks',
+    );
+    expect(ragCall).toBeDefined();
+    expect((ragCall?.[0] as DispatcherAction).payload).toEqual([
+      {
+        sectionId: 's1',
+        chunkIndex: 0,
+        score: 0.91,
+        snippet: 'A retrieved passage about the hero.',
+      },
+    ]);
+    mockState.writer.useRagContext = false; // restore for other tests
   });
 
   it('dispatches generation actions when handleGenerate is called', async () => {

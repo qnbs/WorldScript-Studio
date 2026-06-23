@@ -256,4 +256,16 @@ describe('worldScriptCompletionFetch — unexpected error', () => {
       expect.objectContaining({ correlationId: 'ai-zzz999' }),
     );
   });
+
+  it('reports streamText onFinish usage into the aiUsageTracker, scoped to writer', async () => {
+    const { aiUsageTracker } = await import('../../../services/ai/aiUsageTracker');
+    aiUsageTracker.reset();
+    mockStreamText.mockImplementation((opts: { onFinish?: (e: unknown) => void }) => {
+      opts.onFinish?.({ usage: { promptTokens: 12, completionTokens: 8, totalTokens: 20 } });
+      return mockStreamTextResult;
+    });
+    await worldScriptCompletionFetch(WORLDSCRIPT_COMPLETION_URL, makeInit(makeBody()));
+    expect(aiUsageTracker.getLast('writer')?.totalTokens).toBe(20);
+    aiUsageTracker.reset();
+  });
 });

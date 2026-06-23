@@ -5,7 +5,8 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { aiUsageTracker } from '../../services/ai/aiUsageTracker';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -219,5 +220,25 @@ describe('ToolsPanel', () => {
   it('renders ToolInputs component', () => {
     render(<ToolsPanel />);
     expect(screen.getByTestId('tool-inputs')).toBeInTheDocument();
+  });
+
+  describe('token usage badge', () => {
+    afterEach(() => aiUsageTracker.reset());
+
+    it('shows the last writer-scoped token usage', () => {
+      aiUsageTracker.reset();
+      // A copilot completion must NOT surface in the writer badge.
+      aiUsageTracker.record({ totalTokens: 999 }, 'copilot', 1);
+      aiUsageTracker.record({ totalTokens: 123 }, 'writer', 2);
+      render(<ToolsPanel />);
+      expect(screen.getByTitle('writer.studio.tokens.hint')).toBeInTheDocument();
+      expect(screen.getByText('writer.studio.tokens.badge')).toBeInTheDocument();
+    });
+
+    it('hides the badge when there is no writer usage', () => {
+      aiUsageTracker.reset();
+      render(<ToolsPanel />);
+      expect(screen.queryByTitle('writer.studio.tokens.hint')).not.toBeInTheDocument();
+    });
   });
 });
