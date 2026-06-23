@@ -129,7 +129,10 @@ export class SupervisorAgent {
 
     const wordCount = this.estimateManuscriptWordCount();
     const editCount = output?.edits?.length ?? 0;
-    const signal = editCount + result.reviewItems.length;
+    // QNBS-v3: reviewItems are derived 1:1 from these same edits (StructuralAgent maps plan.edits
+    // into reviewItems), so the canonical signal is the max of the two — summing would double-count
+    // and inflate the measured confidence.
+    const signal = Math.max(editCount, result.reviewItems.length);
 
     // QNBS-v3: A large manuscript with zero structural edits is suspicious (likely a fallback).
     if (signal === 0 && wordCount > this.thresholds.largeManuscriptWords) {
@@ -165,15 +168,21 @@ export class SupervisorAgent {
     }
 
     const wordCount = this.estimateManuscriptWordCount();
-    const grammarIssues = output?.grammar?.issues?.length ?? 0;
+    // QNBS-v3: count ALL proof-stage signal (grammar + style + technical + legal), not just grammar
+    // — a report with substantial non-grammar findings was previously scored as if it found nothing.
+    const proofFindings =
+      (output?.grammar?.issues?.length ?? 0) +
+      (output?.style?.issues?.length ?? 0) +
+      (output?.technical?.issues?.length ?? 0) +
+      (output?.legal?.warnings?.length ?? 0);
     // Proof is more sensitive than structural edits — half the large-manuscript threshold.
     const proofThreshold = Math.round(this.thresholds.largeManuscriptWords / 2);
     const seemsFallback =
-      output?.overallPass === true && grammarIssues === 0 && wordCount > proofThreshold;
+      output?.overallPass === true && proofFindings === 0 && wordCount > proofThreshold;
 
     if (seemsFallback) {
       reasons.push(
-        'Proof passed with zero grammar issues on a substantial manuscript — verify AI ran correctly.',
+        'Proof passed with zero issues across grammar/style/technical/legal on a substantial manuscript — verify AI ran correctly.',
       );
       return {
         pass: false,
@@ -186,7 +195,7 @@ export class SupervisorAgent {
     return {
       pass: true,
       retryRecommended: false,
-      qualityScore: this.confidenceScore(grammarIssues, wordCount, 70, 95),
+      qualityScore: this.confidenceScore(proofFindings, wordCount, 70, 95),
       reasons,
     };
   }
@@ -196,7 +205,9 @@ export class SupervisorAgent {
   ): SupervisionDecision {
     const output = result.agentOutput as { edits?: unknown[] } | undefined;
     const wordCount = this.estimateManuscriptWordCount();
-    const signal = (output?.edits?.length ?? 0) + result.reviewItems.length;
+    // QNBS-v3: ProseAgent builds reviewItems directly from output.edits, so take the canonical count
+    // (max), not the sum — summing double-counts and overstates line-prose confidence.
+    const signal = Math.max(output?.edits?.length ?? 0, result.reviewItems.length);
 
     // QNBS-v3: A substantial manuscript with zero prose edits suggests the AI call didn't land.
     if (signal === 0 && wordCount > this.thresholds.largeManuscriptWords) {
@@ -227,7 +238,9 @@ export class SupervisorAgent {
       (output?.repetitionHits?.length ?? 0) +
       (output?.formatIssues?.length ?? 0);
     const wordCount = this.estimateManuscriptWordCount();
-    const signal = total + result.reviewItems.length;
+    // QNBS-v3: reviewItems are generated from these same grammar/style/repetition/format findings,
+    // so take the canonical count (max), not the sum — summing double-counts confidence.
+    const signal = Math.max(total, result.reviewItems.length);
     // Copy-edit is the least sensitive editing stage — 1.5× the large-manuscript threshold.
     const copyEditThreshold = Math.round(this.thresholds.largeManuscriptWords * 1.5);
 

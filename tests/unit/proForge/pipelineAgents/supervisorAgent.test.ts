@@ -407,6 +407,27 @@ describe('SupervisorAgent', () => {
       });
       expect(result.pass).toBe(true);
     });
+
+    it('does NOT double-count edits + their derived reviewItems (canonical max, not sum)', () => {
+      // QNBS-v3: PR6 CodeAnt — reviewItems are derived 1:1 from edits, so the score with BOTH
+      // present must equal the score from the single canonical source, never the inflated sum.
+      const reviewItems = Array.from({ length: 3 }, (_, i) => ({
+        id: `ri-${i}`,
+        stage: 'structural' as const,
+        type: 'structuralEdit' as const,
+        severity: 'info' as const,
+        description: 'derived from edit',
+        status: 'pending' as const,
+        confidence: 0.8,
+        createdAt: new Date(0).toISOString(),
+      }));
+      const edits = [{ id: 'e1' }, { id: 'e2' }, { id: 'e3' }];
+
+      const both = agent.evaluate('structural', { reviewItems, agentOutput: { edits } });
+      const editsOnly = agent.evaluate('structural', { reviewItems: [], agentOutput: { edits } });
+      // max(3,3) === 3 → identical score; the old `edits + reviewItems` sum (6) would inflate it.
+      expect(both.qualityScore).toBe(editsOnly.qualityScore);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -446,7 +467,24 @@ describe('SupervisorAgent', () => {
       expect(result.pass).toBe(false);
       expect(result.retryRecommended).toBe(true);
       expect(result.qualityScore).toBeLessThan(70);
-      expect(result.reasons.some((r) => r.includes('zero grammar issues'))).toBe(true);
+      expect(result.reasons.some((r) => r.includes('grammar/style/technical/legal'))).toBe(true);
+    });
+
+    it('does NOT flag a long manuscript when proof found non-grammar (style/legal) issues', () => {
+      // QNBS-v3: PR6 CodeAnt — proof signal must count style/technical/legal findings, not only
+      // grammar; a clean-grammar report with real style/legal findings is NOT a fallback.
+      const longContent = 'word '.repeat(510).trim();
+      const longAgent = new SupervisorAgent(makeContext(longContent));
+      const result = longAgent.evaluate('proof', {
+        reviewItems: [],
+        agentOutput: {
+          overallPass: true,
+          grammar: { issues: [] },
+          style: { issues: [{ id: 's1' }, { id: 's2' }] },
+          legal: { warnings: [{ id: 'l1' }] },
+        },
+      });
+      expect(result.pass).toBe(true);
     });
 
     it('passes for short manuscript with overallPass and zero grammar issues (under 500 words)', () => {
