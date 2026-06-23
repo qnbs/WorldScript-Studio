@@ -11,6 +11,7 @@ import { selectVoiceSettings } from '../features/settings/settingsSlice';
 import {
   resetVoiceState,
   selectDictationActive,
+  selectLastConfidence,
   selectMicrophonePermission,
   selectSttStatus,
   selectTtsStatus,
@@ -78,6 +79,7 @@ export const useVoice = () => {
   const ttsStatus = useAppSelector(selectTtsStatus);
   const microphonePermission = useAppSelector(selectMicrophonePermission);
   const dictationActive = useAppSelector(selectDictationActive);
+  const confidence = useAppSelector(selectLastConfidence);
 
   const startListening = useCallback(async () => {
     if (!voiceSettings.enabled) {
@@ -144,6 +146,7 @@ export const useVoice = () => {
       ttsStatus,
       microphonePermission,
       dictationActive,
+      confidence,
       enabled: voiceSettings.enabled,
       // Actions
       startListening,
@@ -165,6 +168,7 @@ export const useVoice = () => {
       ttsStatus,
       microphonePermission,
       dictationActive,
+      confidence,
       voiceSettings.enabled,
       startListening,
       stopListening,

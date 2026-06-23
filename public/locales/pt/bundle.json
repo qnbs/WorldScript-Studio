@@ -766,6 +766,7 @@
   "voice.cancelSpeech": "Cancelar speech",
   "voice.modeChip.commands": "Comandos",
   "voice.modeChip.dictation": "Ditado",
+  "voice.feedback.confidence": "Confiança {{percent}}%",
   "voice.panelLabel": "Controle de voz",
   "voice.permissionDenied": "Acesso ao microfone negado. Permita o acesso ao microfone nas configurações do seu navegador para usar os recursos de voz.",
   "voice.startDictation": "Iniciar ditado",

@@ -69,6 +69,7 @@ vi.mock('../../../app/hooks', () => ({
         ttsStatus: mockTtsStatus,
         microphonePermission: mockMicPermission,
         dictationActive: mockDictationActive,
+        lastConfidence: 0,
       },
     }),
 }));
@@ -92,6 +93,7 @@ vi.mock('../../../features/voice/voiceSlice', () => ({
   selectMicrophonePermission: (s: { voice: { microphonePermission: string } }) =>
     s.voice.microphonePermission,
   selectDictationActive: (s: { voice: { dictationActive: boolean } }) => s.voice.dictationActive,
+  selectLastConfidence: (s: { voice: { lastConfidence: number } }) => s.voice.lastConfidence,
 }));
 
 const mockStartListening = vi.fn().mockResolvedValue(undefined);

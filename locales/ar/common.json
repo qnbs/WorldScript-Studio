@@ -658,6 +658,7 @@
   "voice.cancelSpeech": "إلغاء النطق",
   "voice.modeChip.commands": "أوامر",
   "voice.modeChip.dictation": "إملاء",
+  "voice.feedback.confidence": "الثقة {{percent}}%",
   "voice.panelLabel": "التحكم الصوتي",
   "voice.permissionDenied": "تم رفض الوصول إلى الميكروفون. يرجى السماح بالوصول إلى الميكروفون في إعدادات متصفّحك لاستخدام الميزات الصوتية.",
   "voice.startDictation": "بدء الإملاء",

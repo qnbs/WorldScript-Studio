@@ -658,6 +658,7 @@
   "voice.cancelSpeech": "음성 취소",
   "voice.modeChip.commands": "명령",
   "voice.modeChip.dictation": "받아쓰기",
+  "voice.feedback.confidence": "신뢰도 {{percent}}%",
   "voice.panelLabel": "음성 제어",
   "voice.permissionDenied": "마이크 액세스가 거부되었습니다. 음성 기능을 사용하려면 브라우저 설정에서 마이크 접근을 허용해주세요.",
   "voice.startDictation": "받아쓰기 시작",

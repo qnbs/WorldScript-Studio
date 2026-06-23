@@ -658,6 +658,7 @@
   "voice.cancelSpeech": "لغو سخنرانی",
   "voice.modeChip.commands": "دستورات",
   "voice.modeChip.dictation": "دیکته",
+  "voice.feedback.confidence": "اطمینان {{percent}}%",
   "voice.panelLabel": "کنترل صدا",
   "voice.permissionDenied": "دسترسی به میکروفون رد شد. برای استفاده از ویژگی‌های صوتی، لطفاً به میکروفون در تنظیمات مرورگر خود اجازه دهید.",
   "voice.startDictation": "دیکته را شروع کنید",

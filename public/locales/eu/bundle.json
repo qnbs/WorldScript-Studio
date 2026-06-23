@@ -766,6 +766,7 @@
   "voice.cancelSpeech": "Hitzaldia bertan behera utzi",
   "voice.modeChip.commands": "Komandoak",
   "voice.modeChip.dictation": "Diktaketa",
+  "voice.feedback.confidence": "Konfiantza %{{percent}}",
   "voice.panelLabel": "Ahots kontrola",
   "voice.permissionDenied": "Mikrofonorako sarbidea ukatu da. Mesedez, baimendu mikrofonorako sarbidea zure arakatzailearen ezarpenetan ahots-eginbideak erabiltzeko.",
   "voice.startDictation": "Hasi diktaketa",

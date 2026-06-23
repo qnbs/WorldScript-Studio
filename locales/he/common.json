@@ -658,6 +658,7 @@
   "voice.cancelSpeech": "ביטול דיבור",
   "voice.modeChip.commands": "פקודות",
   "voice.modeChip.dictation": "הכתבה",
+  "voice.feedback.confidence": "ביטחון {{percent}}%",
   "voice.panelLabel": "בקרה קולית",
   "voice.permissionDenied": "הגישה למיקרופון נדחתה. אנא אפשרו גישה למיקרופון בהגדרות הדפדפן כדי להשתמש בתכונות הקוליות.",
   "voice.startDictation": "התחלת הכתבה",
