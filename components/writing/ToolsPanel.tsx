@@ -17,9 +17,10 @@ const ToolsPanel: FC = React.memo(() => {
   const { t } = useTranslation();
   const { writerState, dispatch, isGenerateDisabled, handleGenerate } = useWriterViewContext();
   const { activeTool, tone, style, isLoading } = writerState;
-  // QNBS-v3: PR4 — AI transparency: expandable RAG context inspector + last-request token usage.
+  // QNBS-v3: PR4 — AI transparency: expandable RAG context inspector + last-request token usage,
+  // scoped to the 'writer' surface so the badge never shows another surface's completion.
   const [showContext, setShowContext] = React.useState(false);
-  const aiUsage = useAiUsage();
+  const aiUsage = useAiUsage('writer');
 
   const presetTones = [
     'More Cinematic',

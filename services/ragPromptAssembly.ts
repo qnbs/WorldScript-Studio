@@ -73,25 +73,37 @@ export function deduplicateChunksBySection(chunks: RagChunk[]): RagChunk[] {
   return Array.from(bySection.values()).sort((a, b) => b.score - a.score);
 }
 
-export function buildRAGContextBlock(
+// QNBS-v3 (CodeAnt): fit chunks under the token budget, returning BOTH the rendered block and the
+// chunks actually included. The tail that doesn't fit is dropped — so callers (e.g. the transparency
+// inspector) can show only the chunks that really made it into the prompt, not all retrieved ones.
+export function fitRagChunks(
   chunks: RagChunk[],
   manuscript: StorySection[] | undefined,
   tokenBudget: number,
-): string {
-  if (chunks.length === 0) return '';
-  let used = 0;
+): { used: RagChunk[]; block: string } {
+  const used: RagChunk[] = [];
   const lines: string[] = [];
+  let cost = 0;
   for (const c of chunks) {
     const title = sectionTitleFor(c.sectionId, manuscript);
     const header = `[${title} · chunk ${c.chunkIndex + 1} · score ${c.score.toFixed(2)}]`;
     const body = truncateAtSentence(c.text, MAX_TOKENS_PER_CHUNK * 4);
     const block = `${header}\n${body}`;
-    const cost = estimateTokens(block);
-    if (used + cost > tokenBudget) break;
+    const blockCost = estimateTokens(block);
+    if (cost + blockCost > tokenBudget) break;
+    used.push(c);
     lines.push(block);
-    used += cost;
+    cost += blockCost;
   }
-  return lines.join('\n\n---\n\n');
+  return { used, block: lines.join('\n\n---\n\n') };
+}
+
+export function buildRAGContextBlock(
+  chunks: RagChunk[],
+  manuscript: StorySection[] | undefined,
+  tokenBudget: number,
+): string {
+  return fitRagChunks(chunks, manuscript, tokenBudget).block;
 }
 
 async function fetchRagChunks(
@@ -139,7 +151,14 @@ export async function assembleRAGPrompt(
   }
 
   const ragTokenBudget = Math.floor(options.maxTokens * RAG_BUDGET_RATIO);
-  const ragBlock = buildRAGContextBlock(chunks, context.manuscript, ragTokenBudget);
+  // QNBS-v3 (CodeAnt): keep only the chunks that actually fit the budget (were injected), so the
+  // transparency inspector never lists passages that were dropped before reaching the prompt.
+  const { used: injectedChunks, block: ragBlock } = fitRagChunks(
+    chunks,
+    context.manuscript,
+    ragTokenBudget,
+  );
+  chunks = injectedChunks;
 
   const templateId =
     task === 'writerContinuation'

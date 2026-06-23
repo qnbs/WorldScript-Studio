@@ -189,9 +189,10 @@ export async function worldScriptCompletionFetch(
       ...(signal !== undefined ? { abortSignal: signal } : {}),
       temperature,
       maxOutputTokens,
-      // QNBS-v3: PR4 — report token usage to the transparency tracker (no payload/token logging).
+      // QNBS-v3: PR4 — report token usage to the transparency tracker, scoped to the 'writer'
+      // surface so the Writer badge never reflects another surface's completion (no payload logging).
       onFinish: (event) => {
-        if (event.usage) aiUsageTracker.record(event.usage);
+        if (event.usage) aiUsageTracker.record(event.usage, 'writer');
       },
     });
 
