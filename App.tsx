@@ -440,6 +440,10 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const tourStartedRef = useRef(false);
   useEffect(() => {
     if (!isNewUser || isInitialLoad || isPortalActive) return;
+    // QNBS-v3: never hijack an automated browser session — the tour's full-screen overlay intercepts
+    // pointer events and breaks E2E. navigator.webdriver is true only under automation, never for
+    // real users, so this is invisible in production.
+    if (typeof navigator !== 'undefined' && navigator.webdriver) return;
     if (tourStartedRef.current || hasCompletedSpotlightTour()) return;
     tourStartedRef.current = true;
     const id = window.setTimeout(() => startSpotlightTour(t), 600);
