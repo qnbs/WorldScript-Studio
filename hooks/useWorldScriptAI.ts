@@ -21,6 +21,10 @@ export interface UseWorldScriptAIOptions {
   onIncremental: WorldScriptIncrementalHandler;
   onFinish?: (prompt: string, completion: string) => void;
   onError?: (error: Error) => void;
+  // QNBS-v3 (CodeAnt): which surface owns this stream ('writer' | 'copilot' | …). Threaded into the
+  // request body so token usage is recorded per surface — a Copilot completion must not overwrite
+  // the Writer's "last request" badge. Defaults to 'unknown' downstream.
+  source?: string;
 }
 
 /**
@@ -55,6 +59,7 @@ export function useWorldScriptAI(options: UseWorldScriptAIOptions) {
       openAiSiteUrl,
       openAiSiteTitle,
       ...(loraModelPath !== undefined && { loraModelPath }),
+      ...(options.source !== undefined && { source: options.source }),
     }),
     [
       provider,
@@ -66,6 +71,7 @@ export function useWorldScriptAI(options: UseWorldScriptAIOptions) {
       openAiSiteUrl,
       openAiSiteTitle,
       loraModelPath,
+      options.source,
     ],
   );
 

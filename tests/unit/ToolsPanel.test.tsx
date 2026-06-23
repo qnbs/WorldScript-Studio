@@ -3,9 +3,10 @@
  * QNBS-v3: Mocks WriterViewContext; tests tool button grid, generate button, RAG checkbox.
  */
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { aiUsageTracker } from '../../services/ai/aiUsageTracker';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -22,6 +23,12 @@ let mockWriterState = {
   isLoading: false,
   useRagContext: true,
   lastRagChunkCount: 0,
+  lastRagChunks: [] as Array<{
+    sectionId: string;
+    chunkIndex: number;
+    score: number;
+    snippet: string;
+  }>,
   selection: { start: 0, end: 0, text: '' },
   selectedSectionId: null as string | null,
 };
@@ -106,6 +113,7 @@ describe('ToolsPanel', () => {
       isLoading: false,
       useRagContext: true,
       lastRagChunkCount: 0,
+      lastRagChunks: [],
       selection: { start: 0, end: 0, text: '' },
       selectedSectionId: null,
     };
@@ -193,8 +201,44 @@ describe('ToolsPanel', () => {
     expect(screen.getByTitle('writer.studio.rag.chunksHint')).toBeInTheDocument();
   });
 
+  it('expands the RAG context inspector when the badge is clicked', () => {
+    mockWriterState = {
+      ...mockWriterState,
+      lastRagChunkCount: 1,
+      lastRagChunks: [
+        { sectionId: 'sec-1', chunkIndex: 0, score: 0.87, snippet: 'A revealing passage.' },
+      ],
+    };
+    render(<ToolsPanel />);
+    // Inspector is collapsed by default.
+    expect(screen.queryByText('A revealing passage.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('writer.studio.rag.chunksHint'));
+    // After expanding, the retrieved snippet is shown.
+    expect(screen.getByText('A revealing passage.')).toBeInTheDocument();
+  });
+
   it('renders ToolInputs component', () => {
     render(<ToolsPanel />);
     expect(screen.getByTestId('tool-inputs')).toBeInTheDocument();
+  });
+
+  describe('token usage badge', () => {
+    afterEach(() => aiUsageTracker.reset());
+
+    it('shows the last writer-scoped token usage', () => {
+      aiUsageTracker.reset();
+      // A copilot completion must NOT surface in the writer badge.
+      aiUsageTracker.record({ totalTokens: 999 }, 'copilot', 1);
+      aiUsageTracker.record({ totalTokens: 123 }, 'writer', 2);
+      render(<ToolsPanel />);
+      expect(screen.getByTitle('writer.studio.tokens.hint')).toBeInTheDocument();
+      expect(screen.getByText('writer.studio.tokens.badge')).toBeInTheDocument();
+    });
+
+    it('hides the badge when there is no writer usage', () => {
+      aiUsageTracker.reset();
+      render(<ToolsPanel />);
+      expect(screen.queryByTitle('writer.studio.tokens.hint')).not.toBeInTheDocument();
+    });
   });
 });

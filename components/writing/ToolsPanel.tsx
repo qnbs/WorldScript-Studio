@@ -5,6 +5,7 @@ import { ICONS } from '../../constants';
 import { useWriterViewContext } from '../../contexts/WriterViewContext';
 import type { WriterTool } from '../../features/writer/writerSlice';
 import { writerActions } from '../../features/writer/writerSlice';
+import { useAiUsage } from '../../hooks/useAiUsage';
 import { useTranslation } from '../../hooks/useTranslation';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
@@ -16,6 +17,10 @@ const ToolsPanel: FC = React.memo(() => {
   const { t } = useTranslation();
   const { writerState, dispatch, isGenerateDisabled, handleGenerate } = useWriterViewContext();
   const { activeTool, tone, style, isLoading } = writerState;
+  // QNBS-v3: PR4 — AI transparency: expandable RAG context inspector + last-request token usage,
+  // scoped to the 'writer' surface so the badge never shows another surface's completion.
+  const [showContext, setShowContext] = React.useState(false);
+  const aiUsage = useAiUsage('writer');
 
   const presetTones = [
     'More Cinematic',
@@ -66,16 +71,53 @@ const ToolsPanel: FC = React.memo(() => {
               {t('writer.studio.rag.useContext')}
             </label>
             {writerState.lastRagChunkCount > 0 && (
-              <span
-                className="px-2 py-0.5 rounded-full bg-[var(--sc-accent)]/15 text-[var(--sc-ring-focus)] border border-[var(--sc-border-subtle)]"
+              <button
+                type="button"
+                onClick={() => setShowContext((v) => !v)}
+                aria-expanded={showContext}
+                className="px-2 py-0.5 rounded-full bg-[var(--sc-accent)]/15 text-[var(--sc-ring-focus)] border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-accent)]/25 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
                 title={t('writer.studio.rag.chunksHint')}
               >
                 {t('writer.studio.rag.chunksBadge', {
                   count: String(writerState.lastRagChunkCount),
                 })}
+              </button>
+            )}
+            {aiUsage && aiUsage.totalTokens > 0 && (
+              <span
+                className="px-2 py-0.5 rounded-full bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] border border-[var(--sc-border-subtle)] tabular-nums"
+                title={t('writer.studio.tokens.hint')}
+              >
+                {/* QNBS-v3 (CodeAnt): pass the numeric count so t() applies locale number formatting. */}
+                {t('writer.studio.tokens.badge', { count: aiUsage.totalTokens })}
               </span>
             )}
           </div>
+          {showContext && writerState.lastRagChunks.length > 0 && (
+            <ul
+              aria-label={t('writer.studio.rag.inspectorLabel')}
+              className="mt-1 space-y-1.5 max-h-48 overflow-y-auto"
+            >
+              {writerState.lastRagChunks.map((c) => (
+                <li
+                  key={`${c.sectionId}-${c.chunkIndex}`}
+                  className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] p-2"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-[10px] uppercase tracking-wide text-[var(--sc-text-muted)] truncate">
+                      {c.sectionId}
+                    </span>
+                    <span className="text-[10px] text-[var(--sc-text-muted)] tabular-nums shrink-0">
+                      {t('writer.studio.rag.chunkScore', { score: c.score.toFixed(2) })}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[var(--sc-text-secondary)] line-clamp-3">
+                    {c.snippet}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardHeader>
         <CardContent className="flex flex-col space-y-4 flex-grow overflow-hidden p-4 sm:p-6">
           {/* biome-ignore lint/a11y/useSemanticElements: role="group" on a div is appropriate for a toolbar of tool-select buttons; fieldset requires a legend child and the grid layout makes that impractical. */}
