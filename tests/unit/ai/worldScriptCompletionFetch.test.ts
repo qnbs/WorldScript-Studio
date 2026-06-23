@@ -256,4 +256,48 @@ describe('worldScriptCompletionFetch — unexpected error', () => {
       expect.objectContaining({ correlationId: 'ai-zzz999' }),
     );
   });
+
+  it('reports streamText onFinish usage scoped to the request source', async () => {
+    const { aiUsageTracker } = await import('../../../services/ai/aiUsageTracker');
+    aiUsageTracker.reset();
+    mockStreamText.mockImplementation((opts: { onFinish?: (e: unknown) => void }) => {
+      opts.onFinish?.({ usage: { promptTokens: 12, completionTokens: 8, totalTokens: 20 } });
+      return mockStreamTextResult;
+    });
+    // A copilot request must record under 'copilot', not overwrite the writer's badge.
+    await worldScriptCompletionFetch(
+      WORLDSCRIPT_COMPLETION_URL,
+      makeInit(makeBody({ source: 'copilot' })),
+    );
+    expect(aiUsageTracker.getLast('copilot')?.totalTokens).toBe(20);
+    expect(aiUsageTracker.getLast('writer')).toBeNull();
+    aiUsageTracker.reset();
+  });
+
+  it('records usage under "unknown" when no source is provided', async () => {
+    const { aiUsageTracker } = await import('../../../services/ai/aiUsageTracker');
+    aiUsageTracker.reset();
+    mockStreamText.mockImplementation((opts: { onFinish?: (e: unknown) => void }) => {
+      opts.onFinish?.({ usage: { totalTokens: 7 } });
+      return mockStreamTextResult;
+    });
+    await worldScriptCompletionFetch(WORLDSCRIPT_COMPLETION_URL, makeInit(makeBody()));
+    expect(aiUsageTracker.getLast('unknown')?.totalTokens).toBe(7);
+    aiUsageTracker.reset();
+  });
+
+  it('records nothing when onFinish reports no usage', async () => {
+    const { aiUsageTracker } = await import('../../../services/ai/aiUsageTracker');
+    aiUsageTracker.reset();
+    mockStreamText.mockImplementation((opts: { onFinish?: (e: unknown) => void }) => {
+      opts.onFinish?.({}); // no usage field → the guard's false branch
+      return mockStreamTextResult;
+    });
+    await worldScriptCompletionFetch(
+      WORLDSCRIPT_COMPLETION_URL,
+      makeInit(makeBody({ source: 'writer' })),
+    );
+    expect(aiUsageTracker.getLast('writer')).toBeNull();
+    aiUsageTracker.reset();
+  });
 });

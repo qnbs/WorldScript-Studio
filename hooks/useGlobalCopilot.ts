@@ -97,6 +97,7 @@ export function useGlobalCopilot(currentView: View) {
   const enableProForge = useAppSelector(selectEnableProForge);
 
   const { runCompletion, stop, isLoading } = useWorldScriptAI({
+    source: 'copilot',
     onIncremental: (full) => {
       dispatch(copilotActions.setLastAssistantContent(full));
     },

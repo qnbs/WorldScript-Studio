@@ -10,6 +10,7 @@ import { projectActions } from '../features/project/projectSlice';
 import { streamGenerationThunk } from '../features/project/thunks/writingThunks';
 import { writerActions } from '../features/writer/writerSlice';
 import { getAiErrorMessage } from '../services/ai/aiErrorTaxonomy';
+import { aiUsageTracker } from '../services/ai/aiUsageTracker';
 import { isOrchestrationReadyProvider } from '../services/ai/orchestrationProviders';
 import { logger } from '../services/logger';
 import { assembleRAGPrompt } from '../services/ragPromptAssembly';
@@ -49,6 +50,7 @@ export const useWriterView = () => {
   const fullStreamRef = useRef('');
 
   const { runCompletion, stop: stopOrchestrationStreaming } = useWorldScriptAI({
+    source: 'writer',
     onIncremental: useCallback(
       (fullText: string, delta: string) => {
         fullStreamRef.current = fullText;
@@ -209,6 +211,12 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
     if (isGenerateDisabled()) return;
 
+    // QNBS-v3 (CodeAnt): clear the previous request's writer-scoped token usage up front. Only the
+    // orchestration path (worldScriptCompletionFetch onFinish) reports usage; when the Writer falls
+    // back to the legacy streamGenerationThunk/aiProviderService path no usage arrives, so without
+    // this the badge would keep showing a stale count from an earlier request.
+    aiUsageTracker.clear('writer');
+
     const basePrompt = getPromptForTool();
     if (!basePrompt) return;
 
@@ -242,13 +250,23 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
           },
         );
         fullPrompt = assembled.prompt;
-        dispatch(writerActions.setLastRagChunkCount(assembled.chunks.length));
+        // QNBS-v3: PR4 — store chunk previews (section, score, snippet) for the transparency inspector.
+        dispatch(
+          writerActions.setLastRagChunks(
+            assembled.chunks.map((c) => ({
+              sectionId: c.sectionId,
+              chunkIndex: c.chunkIndex,
+              score: c.score,
+              snippet: c.text.slice(0, 160),
+            })),
+          ),
+        );
       } catch (ragErr) {
         logger.warn('Writer RAG assembly failed, using base prompt:', ragErr);
-        dispatch(writerActions.setLastRagChunkCount(0));
+        dispatch(writerActions.setLastRagChunks([]));
       }
     } else {
-      dispatch(writerActions.setLastRagChunkCount(0));
+      dispatch(writerActions.setLastRagChunks([]));
     }
 
     dispatch(writerActions.startLoading());

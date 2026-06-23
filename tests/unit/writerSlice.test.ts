@@ -196,4 +196,26 @@ describe('writerSlice', () => {
       expect(state.generationHistory).toEqual([]);
     });
   });
+
+  describe('setLastRagChunks', () => {
+    it('stores chunk previews and keeps the count in sync', () => {
+      const chunks = [
+        { sectionId: 's1', chunkIndex: 0, score: 0.9, snippet: 'A' },
+        { sectionId: 's2', chunkIndex: 0, score: 0.5, snippet: 'B' },
+      ];
+      state = writerReducer(state, { type: 'writer/setLastRagChunks', payload: chunks });
+      expect(state.lastRagChunks).toEqual(chunks);
+      expect(state.lastRagChunkCount).toBe(2);
+    });
+
+    it('clears chunks and count when given an empty list', () => {
+      state = writerReducer(state, {
+        type: 'writer/setLastRagChunks',
+        payload: [{ sectionId: 's1', chunkIndex: 0, score: 1, snippet: 'A' }],
+      });
+      state = writerReducer(state, { type: 'writer/setLastRagChunks', payload: [] });
+      expect(state.lastRagChunks).toEqual([]);
+      expect(state.lastRagChunkCount).toBe(0);
+    });
+  });
 });
