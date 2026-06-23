@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseHash, pushHash } from '../services/deepLinkService';
 import { logger } from '../services/logger';
 import type { View } from '../types';
@@ -61,9 +61,22 @@ function readInitialView(): View {
 
 export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   const [currentView, setCurrentView] = useState<View>(() => readInitialView());
+  // QNBS-v3: remember the view navigated away from, so view-aware Help can open to the matching
+  // category (once inside Help, currentView is 'help' and no longer tells us where the user was).
+  const previousViewRef = useRef<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPortalActive, setIsPortalActive] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // QNBS-v3 (CodeAnt): the single place that mutates currentView, so previousView is tracked on
+  // EVERY navigation path — handleNavigate, hashchange (browser back/forward + deep links), and
+  // portal exit — not just sidebar clicks. Otherwise view-aware Help opens with a stale origin view.
+  const switchView = useCallback((view: View) => {
+    setCurrentView((prev) => {
+      if (prev !== view) previousViewRef.current = prev;
+      return view;
+    });
+  }, []);
 
   useEffect(() => {
     if (isNewUser) {
@@ -98,12 +111,12 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
     function onHashChange() {
       const { view } = parseHash(window.location.hash);
       if (view && view !== currentView) {
-        setCurrentView(view);
+        switchView(view);
       }
     }
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
-  }, [currentView]);
+  }, [currentView, switchView]);
 
   // Save the current view to localStorage whenever it changes.
   useEffect(() => {
@@ -114,22 +127,29 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
     }
   }, [currentView]);
 
-  const handlePortalExit = useCallback((view?: View) => {
-    if (view) {
-      setCurrentView(view);
-      pushHash(view);
-    }
-    setIsPortalActive(false);
-  }, []);
+  const handlePortalExit = useCallback(
+    (view?: View) => {
+      if (view) {
+        switchView(view);
+        pushHash(view);
+      }
+      setIsPortalActive(false);
+    },
+    [switchView],
+  );
 
   // QNBS-v3: Keep URL hash in sync with navigation so all views are shareable/bookmarkable.
-  const handleNavigate = useCallback((view: View) => {
-    setCurrentView(view);
-    pushHash(view);
-  }, []);
+  const handleNavigate = useCallback(
+    (view: View) => {
+      switchView(view);
+      pushHash(view);
+    },
+    [switchView],
+  );
 
   return {
     currentView,
+    previousView: previousViewRef.current,
     isSidebarOpen,
     isPortalActive,
     isInitialLoad,

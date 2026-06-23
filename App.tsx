@@ -64,6 +64,7 @@ import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
+import { hasCompletedSpotlightTour, startSpotlightTour } from './services/spotlightTour';
 import {
   clearIdbPassphrase,
   hasPassphraseSentinel,
@@ -433,6 +434,27 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     }
   }, [project, isPortalActive, isI18nReady, dispatch, t]);
 
+  // QNBS-v3: PR3 — auto-launch the product tour once for first-run installs, after the welcome
+  // portal closes and the nav has rendered. Returning users (or anyone who already finished/closed
+  // it) are never interrupted; they can still start it manually from the Dashboard or Help.
+  const tourStartedRef = useRef(false);
+  useEffect(() => {
+    if (!isNewUser || isInitialLoad || isPortalActive) return;
+    // QNBS-v3: never hijack an automated browser session — the tour's full-screen overlay intercepts
+    // pointer events and breaks E2E. navigator.webdriver is true only under automation, never for
+    // real users, so this is invisible in production.
+    if (typeof navigator !== 'undefined' && navigator.webdriver) return;
+    if (tourStartedRef.current || hasCompletedSpotlightTour()) return;
+    // QNBS-v3 (CodeAnt): set the once-guard when the timer actually fires, not before it. If a dep
+    // changes during the 600ms delay the effect cleanup cancels the timer; setting the guard early
+    // would then permanently suppress the tour for a genuine first-run user.
+    const id = window.setTimeout(() => {
+      tourStartedRef.current = true;
+      startSpotlightTour(t);
+    }, 600);
+    return () => window.clearTimeout(id);
+  }, [isNewUser, isInitialLoad, isPortalActive, t]);
+
   const wordCountApprox = useMemo(() => approximateManuscriptWordCount(project), [project]);
 
   const togglePalette = useCallback(() => {
@@ -619,7 +641,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       case 'settings':
         return <SettingsView />;
       case 'help':
-        return <HelpView />;
+        return <HelpView contextView={appState.previousView} />;
       case 'sceneboard':
         return <SceneBoardView />;
       case 'characterGraph':

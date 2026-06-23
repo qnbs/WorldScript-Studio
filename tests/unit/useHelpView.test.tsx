@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { useHelpView } from '../../hooks/useHelpView';
+import { helpCategoryForView, useHelpView } from '../../hooks/useHelpView';
 
 vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (key: string) => key, language: 'en' }),
@@ -12,6 +12,21 @@ describe('useHelpView', () => {
     expect(result.current.activeCategory).toBe('getting-started');
     expect(result.current.selectedArticle).toBeNull();
     expect(result.current.searchQuery).toBe('');
+  });
+
+  it('opens to the help category matching the originating view (view-aware help)', () => {
+    const { result } = renderHook(() => useHelpView('manuscript'));
+    expect(result.current.activeCategory).toBe('writing');
+  });
+
+  it('helpCategoryForView maps views and falls back to getting-started', () => {
+    expect(helpCategoryForView('export')).toBe('management');
+    expect(helpCategoryForView('settings')).toBe('settings-guide');
+    expect(helpCategoryForView('world')).toBe('worldbuilding');
+    // LoRA docs live under the 'advanced' help category, not 'ai-studio'.
+    expect(helpCategoryForView('lora')).toBe('advanced');
+    expect(helpCategoryForView('help')).toBe('getting-started');
+    expect(helpCategoryForView(undefined)).toBe('getting-started');
   });
 
   it('handleSelectCategory changes category and clears article + search', () => {
