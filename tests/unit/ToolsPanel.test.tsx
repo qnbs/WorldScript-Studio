@@ -3,7 +3,7 @@
  * QNBS-v3: Mocks WriterViewContext; tests tool button grid, generate button, RAG checkbox.
  */
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +22,12 @@ let mockWriterState = {
   isLoading: false,
   useRagContext: true,
   lastRagChunkCount: 0,
+  lastRagChunks: [] as Array<{
+    sectionId: string;
+    chunkIndex: number;
+    score: number;
+    snippet: string;
+  }>,
   selection: { start: 0, end: 0, text: '' },
   selectedSectionId: null as string | null,
 };
@@ -106,6 +112,7 @@ describe('ToolsPanel', () => {
       isLoading: false,
       useRagContext: true,
       lastRagChunkCount: 0,
+      lastRagChunks: [],
       selection: { start: 0, end: 0, text: '' },
       selectedSectionId: null,
     };
@@ -191,6 +198,22 @@ describe('ToolsPanel', () => {
     mockWriterState = { ...mockWriterState, lastRagChunkCount: 3 };
     render(<ToolsPanel />);
     expect(screen.getByTitle('writer.studio.rag.chunksHint')).toBeInTheDocument();
+  });
+
+  it('expands the RAG context inspector when the badge is clicked', () => {
+    mockWriterState = {
+      ...mockWriterState,
+      lastRagChunkCount: 1,
+      lastRagChunks: [
+        { sectionId: 'sec-1', chunkIndex: 0, score: 0.87, snippet: 'A revealing passage.' },
+      ],
+    };
+    render(<ToolsPanel />);
+    // Inspector is collapsed by default.
+    expect(screen.queryByText('A revealing passage.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('writer.studio.rag.chunksHint'));
+    // After expanding, the retrieved snippet is shown.
+    expect(screen.getByText('A revealing passage.')).toBeInTheDocument();
   });
 
   it('renders ToolInputs component', () => {

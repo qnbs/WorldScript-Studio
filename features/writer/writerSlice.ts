@@ -31,6 +31,16 @@ export interface WriterState {
   /** When true, Writer AI tools use hybrid RAG context (v1.8). */
   useRagContext: boolean;
   lastRagChunkCount: number;
+  // QNBS-v3: PR4 — transparency: a preview of the RAG chunks injected into the last AI request.
+  lastRagChunks: RagChunkPreview[];
+}
+
+/** A display-safe summary of a retrieved RAG chunk (no full text payload kept in Redux). */
+export interface RagChunkPreview {
+  sectionId: string;
+  chunkIndex: number;
+  score: number;
+  snippet: string;
 }
 
 const initialState: WriterState = {
@@ -48,6 +58,7 @@ const initialState: WriterState = {
   selectedSectionId: null,
   useRagContext: true,
   lastRagChunkCount: 0,
+  lastRagChunks: [],
 };
 
 const writerSlice = createSlice({
@@ -129,6 +140,11 @@ const writerSlice = createSlice({
     },
     setLastRagChunkCount: (state, action: PayloadAction<number>) => {
       state.lastRagChunkCount = action.payload;
+    },
+    // QNBS-v3: PR4 — store chunk previews + count together so the inspector and badge stay in sync.
+    setLastRagChunks: (state, action: PayloadAction<RagChunkPreview[]>) => {
+      state.lastRagChunks = action.payload;
+      state.lastRagChunkCount = action.payload.length;
     },
   },
 });

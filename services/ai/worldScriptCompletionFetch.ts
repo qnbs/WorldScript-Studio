@@ -1,10 +1,10 @@
 import { streamText } from 'ai';
 import { z } from 'zod';
-
 import type { AIProvider, AiCreativity, AiModel } from '../../types';
 import { createLogger } from '../logger';
 import { storageService } from '../storageService';
 import { assertCloudAiAllowed } from './aiPolicy';
+import { aiUsageTracker } from './aiUsageTracker';
 import { CREATIVITY_TO_TEMPERATURE } from './creativityTemperature';
 import {
   buildOpenRouterStyleHeaders,
@@ -189,6 +189,10 @@ export async function worldScriptCompletionFetch(
       ...(signal !== undefined ? { abortSignal: signal } : {}),
       temperature,
       maxOutputTokens,
+      // QNBS-v3: PR4 — report token usage to the transparency tracker (no payload/token logging).
+      onFinish: (event) => {
+        if (event.usage) aiUsageTracker.record(event.usage);
+      },
     });
 
     return result.toTextStreamResponse();

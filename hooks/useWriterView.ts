@@ -242,13 +242,23 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
           },
         );
         fullPrompt = assembled.prompt;
-        dispatch(writerActions.setLastRagChunkCount(assembled.chunks.length));
+        // QNBS-v3: PR4 — store chunk previews (section, score, snippet) for the transparency inspector.
+        dispatch(
+          writerActions.setLastRagChunks(
+            assembled.chunks.map((c) => ({
+              sectionId: c.sectionId,
+              chunkIndex: c.chunkIndex,
+              score: c.score,
+              snippet: c.text.slice(0, 160),
+            })),
+          ),
+        );
       } catch (ragErr) {
         logger.warn('Writer RAG assembly failed, using base prompt:', ragErr);
-        dispatch(writerActions.setLastRagChunkCount(0));
+        dispatch(writerActions.setLastRagChunks([]));
       }
     } else {
-      dispatch(writerActions.setLastRagChunkCount(0));
+      dispatch(writerActions.setLastRagChunks([]));
     }
 
     dispatch(writerActions.startLoading());
