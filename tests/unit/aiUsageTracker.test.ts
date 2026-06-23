@@ -83,6 +83,23 @@ describe('aiUsageTracker', () => {
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
+  it('clear(source) removes only that surface and notifies; no-op for an unknown source', () => {
+    const cb = vi.fn();
+    aiUsageTracker.record({ totalTokens: 10 }, 'writer', 1);
+    aiUsageTracker.record({ totalTokens: 20 }, 'copilot', 2);
+    const unsub = aiUsageTracker.subscribe(cb);
+
+    aiUsageTracker.clear('writer');
+    expect(aiUsageTracker.getLast('writer')).toBeNull();
+    expect(aiUsageTracker.getLast('copilot')?.totalTokens).toBe(20);
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    // Clearing an unknown source must not notify (delete returns false).
+    aiUsageTracker.clear('nope');
+    expect(cb).toHaveBeenCalledTimes(1);
+    unsub();
+  });
+
   it('reset clears the snapshot and notifies', () => {
     const cb = vi.fn();
     // QNBS-v3 (CodeAnt): capture + call unsubscribe so this listener doesn't leak across tests

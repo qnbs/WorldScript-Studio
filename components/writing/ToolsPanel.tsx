@@ -88,7 +88,8 @@ const ToolsPanel: FC = React.memo(() => {
                 className="px-2 py-0.5 rounded-full bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)] border border-[var(--sc-border-subtle)] tabular-nums"
                 title={t('writer.studio.tokens.hint')}
               >
-                {t('writer.studio.tokens.badge', { count: String(aiUsage.totalTokens) })}
+                {/* QNBS-v3 (CodeAnt): pass the numeric count so t() applies locale number formatting. */}
+                {t('writer.studio.tokens.badge', { count: aiUsage.totalTokens })}
               </span>
             )}
           </div>

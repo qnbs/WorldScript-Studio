@@ -66,6 +66,10 @@ export const aiUsageTracker = {
     lastBySource.clear();
     for (const l of listeners) l();
   },
+  /** Clear one surface's usage (e.g. at the start of a request whose path may not report usage). */
+  clear(source: string): void {
+    if (lastBySource.delete(source)) for (const l of listeners) l();
+  },
   subscribe(listener: () => void): () => void {
     listeners.add(listener);
     return () => {
