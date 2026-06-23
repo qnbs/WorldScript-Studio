@@ -64,6 +64,7 @@ import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
+import { hasCompletedSpotlightTour, startSpotlightTour } from './services/spotlightTour';
 import {
   clearIdbPassphrase,
   hasPassphraseSentinel,
@@ -433,6 +434,18 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     }
   }, [project, isPortalActive, isI18nReady, dispatch, t]);
 
+  // QNBS-v3: PR3 — auto-launch the product tour once for first-run installs, after the welcome
+  // portal closes and the nav has rendered. Returning users (or anyone who already finished/closed
+  // it) are never interrupted; they can still start it manually from the Dashboard or Help.
+  const tourStartedRef = useRef(false);
+  useEffect(() => {
+    if (!isNewUser || isInitialLoad || isPortalActive) return;
+    if (tourStartedRef.current || hasCompletedSpotlightTour()) return;
+    tourStartedRef.current = true;
+    const id = window.setTimeout(() => startSpotlightTour(t), 600);
+    return () => window.clearTimeout(id);
+  }, [isNewUser, isInitialLoad, isPortalActive, t]);
+
   const wordCountApprox = useMemo(() => approximateManuscriptWordCount(project), [project]);
 
   const togglePalette = useCallback(() => {
@@ -619,7 +632,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       case 'settings':
         return <SettingsView />;
       case 'help':
-        return <HelpView />;
+        return <HelpView contextView={appState.previousView} />;
       case 'sceneboard':
         return <SceneBoardView />;
       case 'characterGraph':

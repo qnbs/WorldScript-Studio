@@ -9,7 +9,7 @@ import { useHelpView } from '../hooks/useHelpView';
 import { useTranslation } from '../hooks/useTranslation';
 import { getLocaleInfo } from '../i18n/locales';
 import { startSpotlightTour } from '../services/spotlightTour';
-import type { HelpCategory } from '../types';
+import type { HelpCategory, View } from '../types';
 import { HelpSearchInput, HelpSearchPanel } from './help/HelpSearchPanel';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
@@ -247,8 +247,8 @@ const HelpViewUI: FC = () => {
   );
 };
 
-export const HelpView: FC = () => {
-  const contextValue = useHelpView();
+export const HelpView: FC<{ contextView?: View }> = ({ contextView }) => {
+  const contextValue = useHelpView(contextView);
   return (
     <HelpViewContext.Provider value={contextValue}>
       <PageContainer>

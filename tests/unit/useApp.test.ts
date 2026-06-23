@@ -41,6 +41,21 @@ describe('useApp', () => {
     expect(localStorage.getItem('worldscript-last-view')).toBe('settings');
   });
 
+  it('tracks the previous view across navigations (for view-aware Help)', () => {
+    const { result } = renderHook(() => useApp({ isNewUser: false }));
+    expect(result.current.previousView).toBe('dashboard');
+
+    act(() => {
+      result.current.handleNavigate('manuscript');
+    });
+    act(() => {
+      result.current.handleNavigate('help');
+    });
+
+    // previousView is the view the user came from before opening Help.
+    expect(result.current.previousView).toBe('manuscript');
+  });
+
   it('handlePortalExit sets isPortalActive to false', () => {
     const { result } = renderHook(() => useApp({ isNewUser: true }));
 

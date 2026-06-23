@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseHash, pushHash } from '../services/deepLinkService';
 import { logger } from '../services/logger';
 import type { View } from '../types';
@@ -61,6 +61,9 @@ function readInitialView(): View {
 
 export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   const [currentView, setCurrentView] = useState<View>(() => readInitialView());
+  // QNBS-v3: remember the view navigated away from, so view-aware Help can open to the matching
+  // category (once inside Help, currentView is 'help' and no longer tells us where the user was).
+  const previousViewRef = useRef<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPortalActive, setIsPortalActive] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -124,12 +127,16 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
 
   // QNBS-v3: Keep URL hash in sync with navigation so all views are shareable/bookmarkable.
   const handleNavigate = useCallback((view: View) => {
-    setCurrentView(view);
+    setCurrentView((prev) => {
+      if (prev !== view) previousViewRef.current = prev;
+      return view;
+    });
     pushHash(view);
   }, []);
 
   return {
     currentView,
+    previousView: previousViewRef.current,
     isSidebarOpen,
     isPortalActive,
     isInitialLoad,
