@@ -169,6 +169,7 @@ const writerActions = {
   addHistory: (payload: unknown) => ({ type: 'addHistory', payload }),
   navigateHistory: (payload: unknown) => ({ type: 'navigateHistory', payload }),
   setLastRagChunkCount: (payload: unknown) => ({ type: 'setLastRagChunkCount', payload }),
+  setLastRagChunks: (payload: unknown) => ({ type: 'setLastRagChunks', payload }),
   setUseRagContext: (payload: unknown) => ({ type: 'setUseRagContext', payload }),
 };
 
