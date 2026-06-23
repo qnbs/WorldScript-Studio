@@ -28,6 +28,9 @@ describe('localized README pages', () => {
       expect(html.length, `${code}.html is empty`).toBeGreaterThan(100);
       // The MT masking sentinels (⟦ ⟧) must never survive into shipped HTML.
       expect(/[⟦⟧]/.test(html), `${code}.html has leftover sentinels`).toBe(false);
+      // QNBS-v3: raw markdown emphasis markers must never leak into the rendered help page (CodeAnt:
+      // `** ... **` left literal in every non-English page). Emphasis is now masked as <strong>/<em> tags.
+      expect(/\*\*/.test(html), `${code}.html has raw ** bold markers`).toBe(false);
     }
   });
 
@@ -43,6 +46,9 @@ describe('localized README pages', () => {
       // QNBS-v3: match `<code` with attributes too — fenced blocks render as `<code class="language-…">`,
       // so a bare `<code>` regex would undercount and let a dropped fenced-code tag slip past (CodeAnt).
       ['code', /<code[\s>]/g],
+      // QNBS-v3: emphasis is masked as opaque <strong>/<em> tag-sentinels, so bold/italic now round-trips
+      // and its count must match en exactly — this catches the raw-`**` leakage CodeAnt flagged.
+      ['bold', /<strong>/g],
       ['headings', /<h[1-6][\s>]/g],
       ['list items', /<li>/g],
       ['code blocks', /<pre>/g],

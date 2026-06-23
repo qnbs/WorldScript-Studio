@@ -108,8 +108,26 @@ function maskInline(text) {
   t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, push); // images (whole)
   t = t.replace(/`[^`]+`/g, push); // inline code (whole span — includes the backticks)
   t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => `[${label}]${push(`(${url})`)}`); // keep link text, mask url
-  t = t.replace(/https?:\/\/\S+/g, push); // bare URLs
-  t = t.replace(/\*\*/g, push); // bold markers (paired, restored verbatim)
+  t = t.replace(/https?:\/\/\S+/g, push); // bare URLs (mask BEFORE emphasis so `_` in a URL isn't read as <em>)
+  // QNBS-v3: emphasis is converted to HTML tags up-front and the TAGS (not the inner text) are masked as
+  // opaque sentinels. The free MT endpoint spaces/shifts paired `**` delimiters, so restoring them as
+  // markdown produced invalid `** text **` that marked left as literal `**` in the rendered help page
+  // (CodeAnt: raw `**` leaked into every non-English page). A single opaque `<strong>` sentinel round-trips
+  // as cleanly as a link/code sentinel; the inner text still gets translated. marked passes the inline HTML
+  // through verbatim at build time, so the final page renders proper bold/italic.
+  t = t.replace(
+    /\*\*([^*]+?)\*\*/g,
+    (_m, inner) => `${push('<strong>')}${inner}${push('</strong>')}`,
+  );
+  t = t.replace(
+    /(^|[^\w*])_([^_\n]+?)_(?=[^\w]|$)/g,
+    (_m, pre, inner) => `${pre}${push('<em>')}${inner}${push('</em>')}`,
+  );
+  t = t.replace(/\*\*/g, ''); // drop any UNPAIRED `**` from malformed source/MT so it can never leak
+  // QNBS-v3: protect security-critical crypto identifiers + size units from number-mangling MT
+  // (CodeAnt: `AES-256-GCM, 12-byte` came back as `AES-2516-byte` in he.html — a wrong crypto parameter).
+  t = t.replace(/\b(?:AES-256-GCM|AES-256|SHA-256|SHA-1|PBKDF2|HMAC|RSA|ECDSA)\b/g, push);
+  t = t.replace(/\b\d[\d,. ]*-(?:byte|bit)\b/g, push); // 12-byte / 256-bit units
   return { masked: t, tokens };
 }
 
@@ -173,12 +191,16 @@ function inlineSignature(md) {
   } catch {
     return null; // unrenderable → treat as not-sound (fall back to English)
   }
-  // QNBS-v3: only LINKS and CODE/filenames are corruption-critical and must match exactly (these were
-  // the CodeAnt findings: dropped links, duplicated `.msi`/`.dmg`). Emphasis (<strong>/<em>) is
-  // cosmetic — the free MT endpoint routinely shifts `*`/`_` markers, and requiring emphasis parity
-  // rejected ~86% of prose lines (English-heavy pages). Emphasis is NOT checked by the structural
-  // guard either, so being lenient here is safe and dramatically raises translation coverage.
-  return [(html.match(/<a\s/g) || []).length, (html.match(/<code>/g) || []).length].join(',');
+  // QNBS-v3: links, code/filenames AND emphasis must all match exactly. Emphasis is now masked as opaque
+  // <strong>/<em> tag-sentinels (not fragile paired `**`), so it round-trips reliably — requiring parity
+  // no longer rejects prose lines, and it deterministically catches the raw-`**`/`<em>` leakage CodeAnt
+  // flagged (a corrupted line gets a different tag count → falls back to English instead of shipping garbage).
+  return [
+    (html.match(/<a\s/g) || []).length,
+    (html.match(/<code>/g) || []).length,
+    (html.match(/<strong>/g) || []).length,
+    (html.match(/<em>/g) || []).length,
+  ].join(',');
 }
 
 function isStructurallySound(body, restored) {
