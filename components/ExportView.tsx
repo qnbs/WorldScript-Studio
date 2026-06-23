@@ -7,6 +7,7 @@ import { ExportViewContext, useExportViewContext } from '../contexts/ExportViewC
 import { selectEnableCompileWizard } from '../features/featureFlags/featureFlagsSlice';
 import { projectActions } from '../features/project/projectSlice';
 import { useExportView } from '../hooks/useExportView';
+import { renderExportMarkdownToHtml } from '../services/exportPreviewMarkdown';
 import { AdvancedImportExport } from './AdvancedImportExport';
 import { CompileWizardModal } from './CompileWizardModal';
 import { Button } from './ui/Button';
@@ -445,9 +446,29 @@ const ExportControls: FC = () => {
   );
 };
 
+// QNBS-v3: renders the compiled markdown as sanitized HTML so the preview matches real output.
+const RenderedPreview: FC<{ markdown: string; style: React.CSSProperties }> = ({
+  markdown,
+  style,
+}) => {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (ref.current) ref.current.innerHTML = renderExportMarkdownToHtml(markdown);
+  }, [markdown]);
+  return (
+    <div
+      ref={ref}
+      data-testid="export-preview-rendered"
+      className="export-rendered-preview bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--sc-border-subtle)] p-6 rounded-xl text-[var(--sc-text-primary)] h-full overflow-y-auto shadow-inner"
+      style={style}
+    />
+  );
+};
+
 const ExportPreview: FC = () => {
   const { t, formattedOutput } = useExportViewContext();
   const settings = useAppSelector((state) => state.settings);
+  const [mode, setMode] = React.useState<'text' | 'rendered'>('text');
 
   const fontMap: Record<string, string> = {
     serif: 'serif',
@@ -464,23 +485,49 @@ const ExportPreview: FC = () => {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
-        <div className="flex items-center gap-3">
-          <SectionIcon section="export" size="sm" />
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('export.preview.title')}
-          </h2>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <SectionIcon section="export" size="sm" />
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+              {t('export.preview.title')}
+            </h2>
+          </div>
+          {/* QNBS-v3: Text vs Rendered preview toggle */}
+          <fieldset className="flex items-center m-0 p-0 rounded-sc-md border border-[var(--sc-border-subtle)] overflow-hidden text-sm">
+            <legend className="sr-only">{t('export.preview.modeLabel')}</legend>
+            <button
+              type="button"
+              onClick={() => setMode('text')}
+              aria-pressed={mode === 'text'}
+              className={`px-3 py-1 ${mode === 'text' ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]' : 'hover:bg-[var(--sc-surface-overlay)]'}`}
+            >
+              {t('export.preview.modeText')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('rendered')}
+              aria-pressed={mode === 'rendered'}
+              className={`px-3 py-1 ${mode === 'rendered' ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)]' : 'hover:bg-[var(--sc-surface-overlay)]'}`}
+            >
+              {t('export.preview.modeRendered')}
+            </button>
+          </fieldset>
         </div>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col min-h-0">
         {/* QNBS-v3: data-testid disambiguates this preview <pre> from ConsistencyChecker/CriticView <pre> elements */}
         {formattedOutput ? (
-          <pre
-            data-testid="export-preview"
-            className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--sc-border-subtle)] p-6 rounded-xl text-[var(--sc-text-secondary)] h-full overflow-y-auto whitespace-pre-wrap shadow-inner"
-            style={editorStyles}
-          >
-            {formattedOutput}
-          </pre>
+          mode === 'rendered' ? (
+            <RenderedPreview markdown={formattedOutput} style={editorStyles} />
+          ) : (
+            <pre
+              data-testid="export-preview"
+              className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--sc-border-subtle)] p-6 rounded-xl text-[var(--sc-text-secondary)] h-full overflow-y-auto whitespace-pre-wrap shadow-inner"
+              style={editorStyles}
+            >
+              {formattedOutput}
+            </pre>
+          )
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-[var(--sc-text-muted)] border-2 border-dashed border-[var(--sc-border-subtle)] rounded-xl bg-[var(--sc-surface-raised)]/30 p-8">
             <div className="p-4 rounded-full bg-[var(--sc-surface-overlay)] mb-4">
