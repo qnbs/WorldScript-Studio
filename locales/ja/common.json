@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "世界に向けて準備中…",
   "proforge.loading.structural": "あなたの物語の形を見てみると…",
   "proforge.pipeline.noneActive": "アクティブなパイプラインがありません",
+  "proforge.pipeline.reviewRequired": "実験的 — あなたのレビューが必要です。承認なしに原稿が変更されることはありません。",
   "proforge.pipeline.title": "究極の著者パイプライン",
   "proforge.progress.activeStage": "アクティブステージ",
   "proforge.progress.awaitingReviewHint": "⚠️ このステージはあなたのレビューを待っています。項目を確認するには、上のステージ ボタンをクリックしてください。",

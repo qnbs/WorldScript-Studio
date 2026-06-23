@@ -110,10 +110,11 @@ describe('SupervisorAgent', () => {
   });
 
   describe('evaluateLineProse', () => {
-    it('passes with score 85 when prose edits are present', () => {
+    it('passes with a measured score in the pass band when prose edits are present', () => {
       const result = agent.evaluate('lineProse', { reviewItems: [], agentOutput: { edits: [{}] } });
       expect(result.pass).toBe(true);
-      expect(result.qualityScore).toBe(85);
+      expect(result.qualityScore).toBeGreaterThanOrEqual(60);
+      expect(result.qualityScore).toBeLessThanOrEqual(95);
     });
 
     it('passes for a short manuscript even with zero edits', () => {
@@ -297,13 +298,14 @@ describe('SupervisorAgent', () => {
   // ---------------------------------------------------------------------------
 
   describe('evaluateStructural', () => {
-    it('passes with score 80 when edits are present', () => {
+    it('passes with a measured score in the pass band when edits are present', () => {
       const result = agent.evaluate('structural', {
         reviewItems: [],
         agentOutput: { edits: [{ id: 'e1' }] },
       });
       expect(result.pass).toBe(true);
-      expect(result.qualityScore).toBe(80);
+      expect(result.qualityScore).toBeGreaterThanOrEqual(60);
+      expect(result.qualityScore).toBeLessThanOrEqual(95);
     });
 
     it('passes when no edits but reviewItems are present', () => {
@@ -335,7 +337,7 @@ describe('SupervisorAgent', () => {
       });
       expect(result.pass).toBe(false);
       expect(result.retryRecommended).toBe(true);
-      expect(result.qualityScore).toBe(40);
+      expect(result.qualityScore).toBeLessThan(60);
       expect(result.reasons.some((r) => r.includes('structural edits'))).toBe(true);
     });
 
@@ -354,7 +356,7 @@ describe('SupervisorAgent', () => {
   // ---------------------------------------------------------------------------
 
   describe('evaluateProof', () => {
-    it('passes with score 90 when grammar issues exist', () => {
+    it('passes with a measured score in the pass band when grammar issues exist', () => {
       const result = agent.evaluate('proof', {
         reviewItems: [],
         agentOutput: {
@@ -363,7 +365,8 @@ describe('SupervisorAgent', () => {
         },
       });
       expect(result.pass).toBe(true);
-      expect(result.qualityScore).toBe(90);
+      expect(result.qualityScore).toBeGreaterThanOrEqual(70);
+      expect(result.qualityScore).toBeLessThanOrEqual(95);
     });
 
     it('passes when overallPass is false (not the suspicious pattern)', () => {
@@ -384,7 +387,7 @@ describe('SupervisorAgent', () => {
       });
       expect(result.pass).toBe(false);
       expect(result.retryRecommended).toBe(true);
-      expect(result.qualityScore).toBe(40);
+      expect(result.qualityScore).toBeLessThan(70);
       expect(result.reasons.some((r) => r.includes('zero grammar issues'))).toBe(true);
     });
 
@@ -397,13 +400,14 @@ describe('SupervisorAgent', () => {
       expect(result.pass).toBe(true);
     });
 
-    it('passes when agentOutput is undefined (no sentinel)', () => {
+    it('passes with a measured score when agentOutput is undefined (no sentinel)', () => {
       const result = agent.evaluate('proof', {
         reviewItems: [],
         agentOutput: undefined,
       });
       expect(result.pass).toBe(true);
-      expect(result.qualityScore).toBe(90);
+      expect(result.qualityScore).toBeGreaterThanOrEqual(70);
+      expect(result.qualityScore).toBeLessThanOrEqual(95);
     });
   });
 
@@ -453,6 +457,47 @@ describe('SupervisorAgent', () => {
         agentOutput: { overallPass: true, grammar: { issues: [] } },
       });
       expect(result.pass).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Tests: PR6 — measured scoring + configurable thresholds
+  // ---------------------------------------------------------------------------
+
+  describe('measured scoring', () => {
+    it('scores higher with more findings (not a flat constant)', () => {
+      const longAgent = new SupervisorAgent(makeContext('word '.repeat(2000)));
+      const few = longAgent.evaluate('structural', {
+        reviewItems: [],
+        agentOutput: { edits: [{ id: 'a' }] },
+      });
+      const many = longAgent.evaluate('structural', {
+        reviewItems: [],
+        agentOutput: { edits: Array.from({ length: 12 }, (_, i) => ({ id: `e${i}` })) },
+      });
+      expect(many.qualityScore).toBeGreaterThan(few.qualityScore);
+    });
+  });
+
+  describe('configurable thresholds', () => {
+    it('a lower largeManuscriptWords threshold flags a smaller manuscript as suspicious', () => {
+      // ~600 words: passes under the default 1000 threshold...
+      const ctx = makeContext('word '.repeat(600));
+      const dflt = new SupervisorAgent(ctx).evaluate('structural', {
+        reviewItems: [],
+        agentOutput: { edits: [] },
+      });
+      expect(dflt.pass).toBe(true);
+      // ...but fails when the threshold is lowered to 300.
+      const strict = new SupervisorAgent(ctx, { largeManuscriptWords: 300 }).evaluate(
+        'structural',
+        {
+          reviewItems: [],
+          agentOutput: { edits: [] },
+        },
+      );
+      expect(strict.pass).toBe(false);
+      expect(strict.retryRecommended).toBe(true);
     });
   });
 });

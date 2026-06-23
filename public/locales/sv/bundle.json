@@ -435,6 +435,7 @@
   "proforge.loading.publishing": "Förbereder sig för världen...",
   "proforge.loading.structural": "Titta på din berättelses form...",
   "proforge.pipeline.noneActive": "Ingen aktiv pipeline",
+  "proforge.pipeline.reviewRequired": "Experimentell — din granskning krävs; manuskriptet ändras aldrig utan ditt godkännande.",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.progress.activeStage": "Aktiv scen",
   "proforge.progress.awaitingReviewHint": "⚠️ Det här steget väntar på din recension. Klicka på scenknappen ovan för att granska objekt.",

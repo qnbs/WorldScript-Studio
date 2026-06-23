@@ -86,11 +86,15 @@ export const ProForgeDashboard: React.FC = () => {
             <span className="text-[var(--sc-text-on-accent)] font-bold text-sm">P</span>
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-semibold">{t('proforge.pipeline.title')}</h2>
               {/* QNBS-v3: ProForge is an on-by-default but experimental agentic pipeline — label it. */}
               <Badge variant="experimental">{t('common.badge.experimental')}</Badge>
             </div>
+            {/* QNBS-v3: PR6 — make the human-in-the-loop expectation explicit, not just implied in help. */}
+            <p className="text-[11px] text-[var(--sc-warning-fg)] font-medium">
+              {t('proforge.pipeline.reviewRequired')}
+            </p>
             <p className="text-xs text-[var(--sc-text-tertiary)]">
               {currentRun ? currentRun.label : t('proforge.pipeline.noneActive')}
             </p>

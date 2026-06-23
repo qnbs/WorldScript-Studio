@@ -95,7 +95,22 @@ export interface PipelineConfig {
   language: string;
   /** Max supervisor-triggered retries per stage (0 = no retry, 1 = one retry) */
   maxRetries?: 0 | 1;
+  /** Tunable supervisor quality-gate thresholds (defaults applied when omitted). */
+  qualityThresholds?: QualityThresholds;
 }
+
+/** Tunable thresholds for the heuristic supervisor quality gates. */
+export interface QualityThresholds {
+  /** Word count above which a stage producing zero edits/findings is treated as a fallback signal. */
+  largeManuscriptWords: number;
+  /** Intake qualityScore below this hard-fails the run. */
+  intakeHardGate: number;
+}
+
+export const DEFAULT_QUALITY_THRESHOLDS: QualityThresholds = {
+  largeManuscriptWords: 1000,
+  intakeHardGate: 30,
+};
 
 export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
   genrePreset: 'general-fiction',
@@ -117,6 +132,7 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
   autoAcceptThreshold: 0,
   language: 'en',
   maxRetries: 1,
+  qualityThresholds: DEFAULT_QUALITY_THRESHOLDS,
 };
 
 // ---------------------------------------------------------------------------

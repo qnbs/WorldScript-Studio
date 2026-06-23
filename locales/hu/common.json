@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "Felkészülés a világra…",
   "proforge.loading.structural": "Elnézve a történeted alakját…",
   "proforge.pipeline.noneActive": "Nincs aktív csővezeték",
+  "proforge.pipeline.reviewRequired": "Kísérleti — szükség van az átnézésedre; a kézirat soha nem módosul a jóváhagyásod nélkül.",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.progress.activeStage": "Aktív szakasz",
   "proforge.progress.awaitingReviewHint": "⚠️ Ez a szakasz az értékelésedre vár. Kattintson a fenti szakasz gombra az elemek áttekintéséhez.",

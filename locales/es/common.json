@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "Preparándose para el mundo…",
   "proforge.loading.structural": "Observando la forma de tu historia…",
   "proforge.pipeline.noneActive": "Sin pipeline activa",
+  "proforge.pipeline.reviewRequired": "Experimental: se requiere tu revisión; el manuscrito nunca se modifica sin tu aprobación.",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.progress.activeStage": "Etapa activa",
   "proforge.progress.awaitingReviewHint": "⚠️ Esta etapa está esperando tu revisión. Haz clic en el botón de la etapa de arriba para revisar los elementos.",

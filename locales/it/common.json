@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "Pronto per il mondo…",
   "proforge.loading.structural": "Osservando la forma della tua storia…",
   "proforge.pipeline.noneActive": "Nessuna pipeline attiva",
+  "proforge.pipeline.reviewRequired": "Sperimentale — è richiesta la tua revisione; il manoscritto non viene mai modificato senza la tua approvazione.",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.progress.activeStage": "Fase attiva",
   "proforge.progress.awaitingReviewHint": "⚠️ Questa fase è in attesa della tua revisione. Fai clic sul pulsante della fase qui sopra per esaminare gli elementi.",

@@ -531,6 +531,7 @@
   "proforge.loading.analytics": "Summing up the run…",
   "proforge.pipeline.title": "Ultimate Author Pipeline",
   "proforge.pipeline.noneActive": "No active pipeline",
+  "proforge.pipeline.reviewRequired": "Experimental — your review is required; the manuscript is never changed without your approval.",
   "proforge.emptyState.title": "Your manuscript, refined.",
   "proforge.emptyState.description": "ProForge reads every chapter, then walks you through editing stage by stage. Nothing gets lost — every change is reversible.",
   "proforge.enabledHint": "ProForge Pipeline enabled. Open the Writer view and click the ProForge button in the tools panel to start.",

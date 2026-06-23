@@ -435,6 +435,7 @@
   "proforge.loading.publishing": "Macht sich für die Welt bereit…",
   "proforge.loading.structural": "Betrachtet die Struktur deiner Geschichte…",
   "proforge.pipeline.noneActive": "Keine aktive Pipeline",
+  "proforge.pipeline.reviewRequired": "Experimentell — deine Prüfung ist erforderlich; das Manuskript wird nie ohne deine Zustimmung geändert.",
   "proforge.pipeline.title": "Ultimative Autoren-Pipeline",
   "proforge.progress.activeStage": "Aktive Phase",
   "proforge.progress.awaitingReviewHint": "⚠️ Diese Phase wartet auf Ihre Prüfung. Klicken Sie oben auf die Phasenschaltfläche, um die Einträge zu prüfen.",

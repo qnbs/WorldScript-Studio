@@ -435,6 +435,7 @@
   "proforge.loading.publishing": "Mundurako prestatzen...",
   "proforge.loading.structural": "Zure istorioaren formari begira...",
   "proforge.pipeline.noneActive": "Ez dago kanalizazio aktiborik",
+  "proforge.pipeline.reviewRequired": "Esperimentala — zure berrikuspena beharrezkoa da; eskuizkribua ez da inoiz aldatzen zure oniritzirik gabe.",
   "proforge.pipeline.title": "Azken egilearen kanalizazioa",
   "proforge.progress.activeStage": "Etapa Aktiboa",
   "proforge.progress.awaitingReviewHint": "⚠️ Etapa hau zure iritziaren zain dago. Egin klik goiko faseko botoian elementuak berrikusteko.",

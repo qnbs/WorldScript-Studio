@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "Готовимся к миру…",
   "proforge.loading.structural": "Глядя на форму вашей истории…",
   "proforge.pipeline.noneActive": "Нет активного конвейера",
+  "proforge.pipeline.reviewRequired": "Экспериментально — требуется ваша проверка; рукопись никогда не изменяется без вашего одобрения.",
   "proforge.pipeline.title": "Конечный авторский конвейер",
   "proforge.progress.activeStage": "Активная стадия",
   "proforge.progress.awaitingReviewHint": "⚠️Этот этап ожидает вашего рассмотрения. Нажмите кнопку этапа выше, чтобы просмотреть элементы.",

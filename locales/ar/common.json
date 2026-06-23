@@ -327,6 +327,7 @@
   "proforge.loading.publishing": "جارٍ التحضير للعالم…",
   "proforge.loading.structural": "جارٍ النظر في شكل قصتك…",
   "proforge.pipeline.noneActive": "لا يوجد خط أنابيب نشط",
+  "proforge.pipeline.reviewRequired": "تجريبي — مراجعتك مطلوبة؛ لا يتم تغيير المخطوطة أبدًا دون موافقتك.",
   "proforge.pipeline.title": "خط أنابيب المؤلّف الأمثل",
   "proforge.progress.activeStage": "Active Stage",
   "proforge.progress.awaitingReviewHint": "⚠️ This stage is awaiting your review. Click the stage button above to review items.",
