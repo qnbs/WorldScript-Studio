@@ -3,7 +3,6 @@ import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../../services/collaborationService';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Textarea } from '../ui/Textarea';
-import { ToggleSwitch } from './SettingsShared';
 
 export const CollaborationSection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
@@ -24,48 +23,6 @@ export const CollaborationSection: FC = () => {
           >
             <p className="font-semibold">{t('collab.securityWarning')}</p>
             <p>{t('collab.securityWarningDetail')}</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ToggleSwitch
-              label={t('settings.collaboration.realTimeCollaboration')}
-              checked={settings.collaboration.realTimeCollaboration}
-              onChange={(v) =>
-                handleSettingChange('collaboration', {
-                  ...settings.collaboration,
-                  realTimeCollaboration: v,
-                })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.collaboration.publicSharing')}
-              checked={settings.collaboration.publicSharing}
-              onChange={(v) =>
-                handleSettingChange('collaboration', {
-                  ...settings.collaboration,
-                  publicSharing: v,
-                })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.collaboration.commentSystem')}
-              checked={settings.collaboration.commentSystem}
-              onChange={(v) =>
-                handleSettingChange('collaboration', {
-                  ...settings.collaboration,
-                  commentSystem: v,
-                })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.collaboration.versionHistory')}
-              checked={settings.collaboration.versionHistory}
-              onChange={(v) =>
-                handleSettingChange('collaboration', {
-                  ...settings.collaboration,
-                  versionHistory: v,
-                })
-              }
-            />
           </div>
           <div>
             <label

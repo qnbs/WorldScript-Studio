@@ -99,10 +99,6 @@ const defaultSettings: Settings = {
     analyticsGateMigrated: true,
   },
   collaboration: {
-    realTimeCollaboration: false,
-    publicSharing: false,
-    commentSystem: true,
-    versionHistory: true,
     webrtcSignalingUrls: ['wss://y-webrtc-signaling.fly.dev', 'wss://signaling.yjs.dev'],
   },
   integrations: {
