@@ -73,9 +73,14 @@ export const LoraAdapterSection: React.FC = () => {
     return (
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('settings.loraAdapters.title')}
-          </h2>
+          {/* QNBS-v3: badge also in the flag-gated header so maturity signalling stays consistent
+              whether or not the feature is enabled. */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+              {t('settings.loraAdapters.title')}
+            </h2>
+            <MaturityBadge flagKey="enableLoraAdapters" />
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-[var(--sc-text-muted)]">

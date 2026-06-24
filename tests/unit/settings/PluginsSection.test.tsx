@@ -57,6 +57,12 @@ describe('PluginsSection', () => {
     expect(screen.getByText('settings.plugins.flagGate')).toBeInTheDocument();
   });
 
+  // QNBS-v3: maturity signalling must stay consistent whether the flag is on or off.
+  it('shows the Beta maturity badge even when the plugin system is disabled', () => {
+    render(<PluginsSection />);
+    expect(screen.getByText('common.badge.beta')).toBeInTheDocument();
+  });
+
   it('shows empty state when feature enabled but no plugins', () => {
     mockIsEnabled = true;
     render(<PluginsSection />);

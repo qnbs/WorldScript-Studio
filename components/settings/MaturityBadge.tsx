@@ -28,20 +28,16 @@ export function maturityBadgeVariant(flagKey: keyof FeatureFlagsState): BadgeVar
 export const MaturityBadge: FC<{
   flagKey: keyof FeatureFlagsState;
   className?: string;
-  /** When true the pill is decorative (already-labelled context) and hidden from the a11y tree. */
-  decorative?: boolean;
-}> = ({ flagKey, className, decorative }) => {
+}> = ({ flagKey, className }) => {
   const { t } = useTranslation();
   const variant = maturityBadgeVariant(flagKey);
   if (!variant) return null;
   const label = variant === 'beta' ? t('common.badge.beta') : t('common.badge.experimental');
-  // QNBS-v3: exactOptionalPropertyTypes — only pass optional props when defined (never `undefined`).
+  // QNBS-v3: the badge is always announced — "Experimental/Beta" conveys feature readiness (real
+  // status), not decoration, so it must reach screen-reader users. exactOptionalPropertyTypes:
+  // only pass className when defined.
   return (
-    <Badge
-      variant={variant}
-      {...(className !== undefined && { className })}
-      {...(decorative ? { srLabel: '' } : {})}
-    >
+    <Badge variant={variant} {...(className !== undefined && { className })}>
       {label}
     </Badge>
   );

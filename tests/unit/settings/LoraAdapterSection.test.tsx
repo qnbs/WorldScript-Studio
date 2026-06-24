@@ -60,6 +60,12 @@ describe('LoraAdapterSection', () => {
     expect(screen.getByText('settings.loraAdapters.flagGate')).toBeInTheDocument();
   });
 
+  // QNBS-v3: maturity signalling must stay consistent whether the flag is on or off.
+  it('shows the Experimental maturity badge even when the feature is disabled', () => {
+    render(<LoraAdapterSection />);
+    expect(screen.getByText('common.badge.experimental')).toBeInTheDocument();
+  });
+
   it('does not show upload button when feature is disabled', () => {
     render(<LoraAdapterSection />);
     expect(

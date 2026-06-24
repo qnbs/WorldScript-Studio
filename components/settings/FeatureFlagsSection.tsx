@@ -129,7 +129,7 @@ export const FeatureFlagsSection: FC = () => {
                     <ToggleSwitch
                       key={entry.flagKey}
                       label={t(`settings.featureFlags.${entry.flagKey}`)}
-                      badge={<MaturityBadge flagKey={entry.flagKey} decorative />}
+                      badge={<MaturityBadge flagKey={entry.flagKey} />}
                       hint={buildHint(entry)}
                       checked={isOn}
                       disabled={disabled}
