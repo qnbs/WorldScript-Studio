@@ -58,10 +58,10 @@ describe('languageToolService.checkText', () => {
 
     expect(result.status).toBe('ok');
     expect(result.matches).toHaveLength(1);
-    const m = result.matches[0]!;
-    expect(m.matchedText).toBe('go');
-    expect(m.replacements).toEqual(['goes']);
-    expect(m.offset).toBe(4);
+    const firstMatch = result.matches[0]!;
+    expect(firstMatch.matchedText).toBe('go');
+    expect(firstMatch.replacements).toEqual(['goes']);
+    expect(firstMatch.offset).toBe(4);
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
