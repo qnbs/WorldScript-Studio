@@ -41,3 +41,21 @@ Production: de, en, fr, es, it · Near-Production: ja, zh, pt, el · Beta: ar, h
 > for every non-core locale, plus a native pass over UI microcopy. See
 > [`BETA_TO_PRODUCTION_PLAYBOOK.md`](./BETA_TO_PRODUCTION_PLAYBOOK.md).
 
+## Review & Elevation Log
+
+Append-only record of every tier decision (and the data behind it), so promotions are auditable and we
+never over-promote without evidence. See
+[`ADAPTIVE_CURRENT_STATE_REPORT_v3.md`](./ADAPTIVE_CURRENT_STATE_REPORT_v3.md) for the program context.
+
+| Date | Locale | Tier | Decision | Basis |
+|------|--------|------|----------|-------|
+| 2026-06-24 | ja, zh, pt, el | Near-Production | held | ≥96% UI coverage, 0 placeholder issues; **blocked from Production** solely by English-fallback `help.json` |
+| 2026-06-24 | ar, he, fi, sv, hu, is, eu, fa, ru, ko | Beta | held | translated UI but no native review pass; `help.json` English-fallback |
+| 2026-06-24 | de, en, es, fr, it | Production | held | full parity + native `help.json` |
+
+**LanguageTool coverage** is tracked in `i18n/locales.ts` (`languageToolSupport`) and the
+[Phase-0 report §5](./ADAPTIVE_CURRENT_STATE_REPORT_v3.md#5-verified-languagetool-support-matrix), and
+is **orthogonal** to the translation tier — a Production locale can have weak LT (it: partial) and a
+Beta locale can have strong LT (pl/nl/uk, once added). No promotion in this PR; this log is the seam
+for future, data-gated elevations.
+
