@@ -5,6 +5,9 @@
 > this repository — from CodeAnt AI **and any other reviewer or bot**. All instruction files
 > (`CLAUDE.md`, `AGENTS.md`, `KIMI-INSTRUCT.md`, `.cursorrules`, `.github/copilot-instructions.md`)
 > point here. Keep this file current when the workflow or tooling changes.
+>
+> **See also:** [`DEEPSOURCE-REVIEW-LOOP.md`](DEEPSOURCE-REVIEW-LOOP.md) — the complementary,
+> token-free static-analysis loop. A PR is "review-quiescent" only when **both** are satisfied.
 
 ## 0. When this runs — proactively, automatically, every PR
 
