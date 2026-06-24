@@ -52,11 +52,6 @@ const baseSettings = (): Settings => ({
     webrtcSignalingUrls: [],
   },
   integrations: {
-    syncProvider: 'none',
-    evernoteSync: false,
-    notionSync: false,
-    scrivenerExport: false,
-    googleDocsImport: false,
     languageToolEnabled: true,
     languageToolBaseUrl: 'http://localhost:8010',
   },

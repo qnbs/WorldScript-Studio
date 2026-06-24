@@ -270,14 +270,13 @@ describe('settingsSlice', () => {
     const state = settingsReducer(
       initState(),
       settingsActions.setIntegrations({
-        syncProvider: 'google-drive',
-        googleDocsImport: true,
+        languageToolEnabled: true,
+        languageToolBaseUrl: 'http://localhost:9000',
       }),
     );
 
-    expect(state.integrations.syncProvider).toBe('google-drive');
-    expect(state.integrations.googleDocsImport).toBe(true);
-    expect(state.integrations.notionSync).toBe(false);
+    expect(state.integrations.languageToolEnabled).toBe(true);
+    expect(state.integrations.languageToolBaseUrl).toBe('http://localhost:9000');
   });
 
   it('setAdvancedEditor merges editor settings', () => {

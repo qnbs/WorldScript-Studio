@@ -449,7 +449,6 @@ export interface ProjectAiPreset {
 }
 
 export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
-export type SyncProvider = 'none' | 'google-drive' | 'dropbox' | 'onedrive' | 'icloud';
 
 export interface CustomFont {
   name: string;
@@ -544,11 +543,6 @@ export interface CollaborationSettings {
 }
 
 export interface IntegrationSettings {
-  syncProvider: SyncProvider;
-  evernoteSync: boolean;
-  notionSync: boolean;
-  scrivenerExport: boolean;
-  googleDocsImport: boolean;
   /** Opt-in: nur eigener LanguageTool-Server (typ. localhost) — kein stiller Cloud-Upload. */
   languageToolEnabled: boolean;
   languageToolBaseUrl: string;

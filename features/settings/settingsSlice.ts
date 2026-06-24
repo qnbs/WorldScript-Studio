@@ -102,11 +102,6 @@ const defaultSettings: Settings = {
     webrtcSignalingUrls: ['wss://y-webrtc-signaling.fly.dev', 'wss://signaling.yjs.dev'],
   },
   integrations: {
-    syncProvider: 'none',
-    evernoteSync: false,
-    notionSync: false,
-    scrivenerExport: false,
-    googleDocsImport: false,
     languageToolEnabled: false,
     languageToolBaseUrl: 'http://localhost:8010',
   },
