@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (4×429 → 5 min pause, RPM tracking), which shipped without a Help entry. Added to the AI Studio help
   category, deep-linking to Settings; translated into the five Production locales, English fallback for
   the other 14 (per the tag-dense-HTML help-body policy).
+- **DeepSource static-analysis integration (token-free).** Added [`.deepsource.toml`](.deepsource.toml)
+  (analysis-only — no autofix transformers, so it never fights Biome and needs no repo token; activates
+  once the free DeepSource OSS app is installed). Auto-detects JavaScript/Rust/Docker/CSS analyzers.
+  Complements the existing CI gate as a second review layer while CodeAnt's free-tier quota is
+  exhausted. Process: [`docs/DEEPSOURCE-REVIEW-LOOP.md`](docs/DEEPSOURCE-REVIEW-LOOP.md) (living runbook,
+  complements the CodeAnt one); backlog tracking: [`docs/DEEPSOURCE-REMEDIATION-PLAN.md`](docs/DEEPSOURCE-REMEDIATION-PLAN.md)
+  (prioritised P0-security→P5-docs, with the triage principle: rule-ignore findings already governed by
+  Biome/strict-TS/test convention, fix DeepSource-unique real issues).
 
 ### Changed
 
@@ -67,6 +75,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audit. WebNN execution-provider selection remains available internally in
   `packages/ai-core/src/webnnBridge.ts` (always attempted when the browser exposes WebNN); only the
   no-op user toggle is gone.
+- **Dead Settings toggles removed (19 no-op toggles across 6 sections).** A full audit found settings
+  that persisted a value **no service or hook ever read**. Removed the whole **Notifications**,
+  **Performance**, and **Backup** sections (all no-ops; the real one-click encrypted backup lives in
+  Settings → Data, untouched), the dead sync/import card in **Integrations** (Notion/Evernote/Google
+  Docs/Scrivener — the **LanguageTool** integration is real and kept), the 4 dead **Collaboration**
+  toggles (the **WebRTC signaling URLs** field is real and kept), and Privacy's `crashReporting` /
+  `shareUsageData` (analytics/encryption/data-residency stay). Also cleaned `settingsSearchHints.ts`
+  (stale hints for the removed categories; retargeted Integrations hints to grammar/spell). Each was a
+  stacked PR with its own tests + i18n removal across 19 locales.
 
 ## [1.24.0] — 2026-06-21
 
