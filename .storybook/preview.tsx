@@ -4,13 +4,21 @@ import '../index.css';
 
 const APPEARANCE_CLASSES = ['appearance-sepia', 'appearance-fantasy', 'appearance-romance'];
 
-const withTheme: DecoratorFunction = (Story, context) => {
+// QNBS-v3: the theme effect lives in a component, not the decorator callback (DeepSource JS-0820 /
+// rules-of-hooks). Storybook renders ThemeWrapper as a component, so useEffect is valid here.
+const ThemeWrapper = ({
+  theme,
+  appearance,
+  children,
+}: {
+  theme: string;
+  appearance: string;
+  children: React.ReactNode;
+}) => {
   useEffect(() => {
-    const theme = context.globals.theme ?? 'dark';
     document.body.classList.remove('light-theme', 'dark-theme');
     document.body.classList.add(`${theme}-theme`);
 
-    const appearance = context.globals.appearance ?? 'default';
     document.body.classList.remove(...APPEARANCE_CLASSES);
     if (appearance === 'sepia') document.body.classList.add('appearance-sepia');
     if (appearance === 'fantasy') document.body.classList.add('appearance-fantasy');
@@ -19,14 +27,21 @@ const withTheme: DecoratorFunction = (Story, context) => {
     return () => {
       document.body.classList.remove('light-theme', 'dark-theme', ...APPEARANCE_CLASSES);
     };
-  }, [context.globals.theme, context.globals.appearance]);
+  }, [theme, appearance]);
 
   return (
-    <div className="min-h-screen p-6 bg-sc-surface-base text-sc-text-primary">
-      <Story />
-    </div>
+    <div className="min-h-screen p-6 bg-sc-surface-base text-sc-text-primary">{children}</div>
   );
 };
+
+const withTheme: DecoratorFunction = (Story, context) => (
+  <ThemeWrapper
+    theme={context.globals.theme ?? 'dark'}
+    appearance={context.globals.appearance ?? 'default'}
+  >
+    <Story />
+  </ThemeWrapper>
+);
 
 const preview: Preview = {
   decorators: [withTheme],
