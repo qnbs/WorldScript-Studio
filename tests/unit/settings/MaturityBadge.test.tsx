@@ -43,4 +43,9 @@ describe('MaturityBadge', () => {
     render(<MaturityBadge flagKey="enableLoraAdapters" />);
     expect(screen.getByText('common.badge.experimental')).toBeInTheDocument();
   });
+
+  it('forwards a custom className to the badge', () => {
+    render(<MaturityBadge flagKey="enableVoiceSupport" className="my-pill" />);
+    expect(screen.getByText('common.badge.experimental')).toHaveClass('my-pill');
+  });
 });
