@@ -37,16 +37,23 @@ DeepSource has **two** layers:
 | Aspect | CodeAnt | DeepSource |
 |---|---|---|
 | Trigger | manual `@codeant-ai review` per push | **static**: auto on every push (the operative layer) · **AI review**: paid feature, unavailable on the free tier — not triggered (§0a) |
-| Where findings appear | GitHub **review threads** (resolvable) | **check-run annotations** (per file/line) + the DeepSource **dashboard**; *not* review threads |
-| Resolution mechanism | reply + `resolveReviewThread` (GraphQL) | **fix the code** (check goes green) · `# skipcq` inline · or "Ignore" in the dashboard |
+| Where findings appear | GitHub **review threads** (resolvable) | per-analyzer **commit statuses** + the DeepSource **dashboard** **+ inline PR review comments in resolvable threads** (`deepsource-io[bot]`, one per finding) + a summary issue-comment |
+| Resolution mechanism | reply + `resolveReviewThread` (GraphQL) | **fix the code** (status goes green) · `# skipcq` inline · "Ignore" in the dashboard — **then reply citing the commit + `resolveReviewThread`** on the inline thread (same as CodeAnt) so 0 stay unresolved |
 | Suppression token | `// biome-ignore` | `# skipcq: <ISSUE_CODE>` / `// skipcq: <ISSUE_CODE>` |
 | Per-language split | one review | one **check per analyzer** (`DeepSource: JavaScript`, `Rust`, `Docker`, `CSS`, …) |
 | Autofix | — | **dashboard-driven** — opens its own PR (review it like any PR) |
 
-**Consequence:** there is **no `resolveReviewThread` step** here. You make a check green by fixing the
-code (preferred), by a justified `# skipcq`, or by ignoring it in the dashboard. The **static**
-re-analysis re-runs **automatically on every push** — no trigger comment is needed (and the on-demand
-AI review is a paid feature that is unavailable on this account; see §0a).
+**Consequence:** the **commit status** (`DeepSource: JavaScript`/`Rust`/`Docker`) is the merge gate —
+make it green by fixing the code (preferred), a justified `# skipcq`, or a dashboard "Ignore". The
+**static** re-analysis re-runs **automatically on every push** — no trigger comment is needed (and the
+on-demand AI review is a paid feature that is unavailable on this account; see §0a).
+
+**Update (observed #235/#236, 2026-06-24):** DeepSource **does now post inline PR review comments in
+resolvable threads** (the earlier "no `resolveReviewThread` step" note is obsolete). Threads only
+appear when a *touched* file actually has a finding (docs-only PRs get none). So the loop now mirrors
+CodeAnt: after the fixing commit lands and the analyzer status is green, **reply to each
+`deepsource-io[bot]` thread citing the commit and `resolveReviewThread` it** — leave **0 unresolved**.
+List + resolve via the GraphQL snippet in §3a.
 
 ## 2. The Iron Rule — loop until quiescent
 
@@ -71,8 +78,9 @@ caused by the fix (a "wave"). Handle each wave like the first.
         (next wave, go to 1)        DONE → merge when CI green
 ```
 
-> **Termination condition:** the latest DeepSource run reports **no new actionable findings** and
-> every prior finding is fixed or justified. Then merge once all CI is green.
+> **Termination condition:** the latest DeepSource run reports **no new actionable findings**, every
+> prior finding is fixed or justified, **and every `deepsource-io` inline thread is resolved** (§3a).
+> Then merge once all CI is green.
 
 ## 3. Fetch DeepSource findings from the CLI
 
@@ -97,6 +105,41 @@ gh api repos/qnbs/WorldScript-Studio/check-runs/<CHECK_RUN_ID> \
 The **DeepSource dashboard** (https://app.deepsource.com → repo → Issues) is the richest view —
 issue code (e.g. `JS-0123`), category, occurrences, and the one-click **Autofix**/**Ignore** buttons.
 The CLI annotations above are enough for the agent loop; use the dashboard for triage at scale.
+
+> **Reality note:** the JS/Rust/Docker analyzers report as **commit statuses**, not check-runs, so
+> `commits/$SHA/status` (not `/check-runs`) is the reliable place to read pass/fail, and the status's
+> `target_url` points at the run page — `WebFetch` it (or the dashboard) to read the exact issue
+> codes/lines. `/check-runs` reliably shows only `DeepSource: CSS` (the AI-only analyzer).
+>
+> ```bash
+> gh api repos/qnbs/WorldScript-Studio/commits/$SHA/status \
+>   --jq '.statuses[] | select(.context|test("DeepSource")) | "\(.context)\t\(.state)\t\(.target_url)"'
+> ```
+
+## 3a. Find and resolve DeepSource inline threads
+
+DeepSource posts an inline review comment (resolvable thread) per finding on a touched file. After the
+fix lands and the analyzer status is green, **reply citing the commit and resolve each thread** so none
+stay open (mirrors the CodeAnt loop).
+
+```bash
+# List unresolved deepsource-io threads on a PR (thread id + first comment's databaseId + path)
+gh api graphql -f query='
+query($pr:Int!){ repository(owner:"qnbs",name:"WorldScript-Studio"){ pullRequest(number:$pr){
+  reviewThreads(first:50){ nodes{ id isResolved
+    comments(first:1){ nodes{ databaseId author{login} path body } } } } } } }' -F pr=PR_NUMBER \
+  --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+        | select(.isResolved==false and .comments.nodes[0].author.login=="deepsource-io")
+        | {threadId:.id, commentDbId:.comments.nodes[0].databaseId, path:.comments.nodes[0].path}'
+
+# Reply citing the fixing commit
+gh api repos/qnbs/WorldScript-Studio/pulls/PR_NUMBER/comments/<COMMENT_DB_ID>/replies \
+  -f body="Fixed in <SHA> — <one-line how>."
+
+# Resolve the thread
+gh api graphql -f query='mutation($t:ID!){ resolveReviewThread(input:{threadId:$t}){ thread{ isResolved } } }' \
+  -F t="<THREAD_NODE_ID>"
+```
 
 ## 4. Validate, then fix or justify
 
@@ -215,6 +258,18 @@ GitHub App resumes auto-reviewing, run **both** loops: CodeAnt for narrative/AI 
   AI Agents off / not on the OSS free tier. **Conclusion (#233):** AI Review is a paid feature
   unavailable here — **stop triggering it** and gate merges on the **static** layer's quiescence
   (§0a). Re-introduce the per-PR trigger only if the account is upgraded to include AI Agents.
+- **2026-06-24/25** — On code PRs #235/#236 DeepSource began posting **inline PR review comments in
+  resolvable threads** (`deepsource-io[bot]`, one per finding) + a summary issue-comment — *not* just
+  statuses. So the loop now mirrors CodeAnt: fix → status green → **reply citing the commit +
+  `resolveReviewThread`** (see §1, §3a). Confirmed: **DeepSource analyzes `tests/unit/` too** (the toml
+  exclusion doesn't cover it) — a new test file's anti-patterns count as "introduced". **JS-C1002**
+  flags `const`/`let` declarations, not arrow params; **JS-0357** is use-before-define (declare
+  components before use). Each fix triggers a fresh ~20-min static run, so rename/reorder all short or
+  out-of-order identifiers in one pass.
+- **2026-06-24/25** — `codecov/patch` reminder (not DeepSource, but part of the same per-PR loop): a
+  new service/hook needs its branches tested or patch coverage dips below the ~72% target and the
+  `codecov/patch` check fails. #236's hook+panel needed a dedicated hook test (offline/error/disabled/
+  stale-apply/dictionary/clear branches) to clear it — same posture as #232's binderDepth test.
 
 ---
 
