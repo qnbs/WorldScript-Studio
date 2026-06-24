@@ -83,10 +83,6 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     | Partial<Settings['collaboration']>
     | undefined;
   validSettings.collaboration = {
-    realTimeCollaboration: false,
-    publicSharing: false,
-    commentSystem: true,
-    versionHistory: true,
     webrtcSignalingUrls: [...DEFAULT_WEBRTC_SIGNALING_URLS],
     ...(incomingCollab ?? {}),
   };

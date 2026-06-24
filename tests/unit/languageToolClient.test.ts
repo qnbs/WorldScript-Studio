@@ -49,10 +49,6 @@ const baseSettings = (): Settings => ({
     euDataResidency: true,
   },
   collaboration: {
-    realTimeCollaboration: false,
-    publicSharing: false,
-    commentSystem: false,
-    versionHistory: true,
     webrtcSignalingUrls: [],
   },
   integrations: {

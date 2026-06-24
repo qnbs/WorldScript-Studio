@@ -260,13 +260,10 @@ describe('settingsSlice', () => {
   it('setCollaboration merges collaboration settings', () => {
     const state = settingsReducer(
       initState(),
-      settingsActions.setCollaboration({ realTimeCollaboration: true, commentSystem: true }),
+      settingsActions.setCollaboration({ webrtcSignalingUrls: ['wss://custom.example'] }),
     );
 
-    expect(state.collaboration.realTimeCollaboration).toBe(true);
-    expect(state.collaboration.commentSystem).toBe(true);
-    expect(state.collaboration.versionHistory).toBe(true);
-    expect(state.collaboration.webrtcSignalingUrls.length).toBeGreaterThan(0);
+    expect(state.collaboration.webrtcSignalingUrls).toEqual(['wss://custom.example']);
   });
 
   it('setIntegrations merges integration settings', () => {
