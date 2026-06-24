@@ -40,7 +40,6 @@ import type {
   EditorFont,
   IntegrationSettings,
   KeyboardShortcut,
-  NotificationSettings,
   PerformanceSettings,
   PrivacySettings,
   ProjectSnapshot,
@@ -160,11 +159,6 @@ export const useSettingsView = () => {
         case 'performance':
           dispatch(
             settingsActions.setPerformance(value as unknown as Partial<PerformanceSettings>),
-          );
-          break;
-        case 'notifications':
-          dispatch(
-            settingsActions.setNotifications(value as unknown as Partial<NotificationSettings>),
           );
           break;
         case 'collaboration':

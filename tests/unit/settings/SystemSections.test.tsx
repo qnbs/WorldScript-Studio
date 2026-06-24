@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AccessibilitySection,
   CollaborationSection,
-  NotificationsSection,
   PrivacySection,
 } from '../../../components/settings/SystemSections';
 
@@ -31,7 +30,6 @@ const baseContextValue = {
       screenReaderMode: false,
     },
     collaboration: { webrtcSignalingUrls: [] },
-    notifications: { showSaveNotifications: true, showAiNotifications: true },
     privacy: { analyticsEnabled: false, crashReportsEnabled: false },
     performance: { hardwareAcceleration: true },
     featureFlags: {},
@@ -152,11 +150,5 @@ describe('CollaborationSection', () => {
 describe('PrivacySection', () => {
   it('renders without throwing', () => {
     expect(() => render(<PrivacySection />)).not.toThrow();
-  });
-});
-
-describe('NotificationsSection', () => {
-  it('renders without throwing', () => {
-    expect(() => render(<NotificationsSection />)).not.toThrow();
   });
 });

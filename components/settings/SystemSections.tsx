@@ -3,6 +3,5 @@ export { AccessibilitySection } from './AccessibilitySection';
 export { BackupSection } from './BackupSection';
 export { CollaborationSection } from './CollaborationSection';
 export { IntegrationsSection } from './IntegrationsSection';
-export { NotificationsSection } from './NotificationsSection';
 export { PerformanceSection } from './PerformanceSection';
 export { PrivacySection } from './PrivacySection';

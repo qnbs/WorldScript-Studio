@@ -14,7 +14,6 @@ import type {
   EditorFont,
   IntegrationSettings,
   KeyboardShortcut,
-  NotificationSettings,
   OpenRouterSettings,
   PerformanceSettings,
   PrivacySettings,
@@ -106,13 +105,6 @@ const defaultSettings: Settings = {
     preloadContent: true,
     lazyLoadImages: true,
     offlineMode: false,
-  },
-  notifications: {
-    desktopNotifications: false,
-    emailNotifications: false,
-    writingReminders: 'never',
-    goalAchievements: true,
-    collaborationUpdates: false,
   },
   collaboration: {
     realTimeCollaboration: false,
@@ -260,9 +252,6 @@ const settingsSlice = createSlice({
     },
     setPerformance(state, action: PayloadAction<Partial<PerformanceSettings>>) {
       state.performance = { ...state.performance, ...action.payload };
-    },
-    setNotifications(state, action: PayloadAction<Partial<NotificationSettings>>) {
-      state.notifications = { ...state.notifications, ...action.payload };
     },
     setCollaboration(state, action: PayloadAction<Partial<CollaborationSettings>>) {
       state.collaboration = { ...state.collaboration, ...action.payload };

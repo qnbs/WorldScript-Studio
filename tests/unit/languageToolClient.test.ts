@@ -55,13 +55,6 @@ const baseSettings = (): Settings => ({
     lazyLoadImages: true,
     offlineMode: false,
   },
-  notifications: {
-    desktopNotifications: false,
-    emailNotifications: false,
-    writingReminders: 'never',
-    goalAchievements: true,
-    collaborationUpdates: false,
-  },
   collaboration: {
     realTimeCollaboration: false,
     publicSharing: false,

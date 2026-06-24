@@ -41,7 +41,15 @@ const defaultFeatureFlags = {
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
     t: (k: string) => k,
-    settings: { privacy: {}, notifications: {} },
+    // QNBS-v3: fully-shaped PrivacySettings (no type-safety bypass via an empty object).
+    settings: {
+      privacy: {
+        analyticsEnabled: true,
+        dataEncryption: true,
+        localStorageOnly: true,
+        euDataResidency: true,
+      },
+    },
     handleSettingChange: mockHandleSettingChange,
     featureFlags: defaultFeatureFlags,
     setActiveCategory: mockSetActiveCategory,
