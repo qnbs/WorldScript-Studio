@@ -6,11 +6,17 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// QNBS-v3: PR7 — records the signal the layer binds onto the agent, to assert caller-signal forwarding.
+const boundSignals = vi.hoisted(() => ({ last: undefined as AbortSignal | undefined }));
+
 // QNBS-v3: isolate runStage from the real agents — the layer's contract is "run agent + supervise".
 vi.mock('../../../services/proForge/pipelineAgents/agentRegistry', () => ({
   EXECUTABLE_STAGES: ['intake'],
   loadAgent: vi.fn(async () => {
     return class FakeAgent {
+      bindAbortSignal(signal: AbortSignal) {
+        boundSignals.last = signal;
+      }
       async execute() {
         return {
           reviewItems: [{ id: 'r1' }],
@@ -93,6 +99,7 @@ describe('ProForgeCapabilityLayer', () => {
     ports = makePorts();
     layer = createProForgeCapabilityLayer(ports);
     supervisorState.hardGateFailed = false;
+    boundSignals.last = undefined;
   });
 
   describe('permission gating', () => {
@@ -161,6 +168,23 @@ describe('ProForgeCapabilityLayer', () => {
       await expect(layer.runStage({ stage: 'intake', projectId: 'p1' })).rejects.toMatchObject({
         code: 'STAGE_FAILED',
       });
+    });
+
+    // QNBS-v3: PR7 — a caller-provided signal must be bound to the agent so the run is cancellable.
+    it('forwards a caller-provided abort signal to the agent', async () => {
+      const controller = new AbortController();
+      await layer.runStage({ stage: 'intake', projectId: 'p1' }, controller.signal);
+      expect(boundSignals.last).toBe(controller.signal);
+    });
+
+    // QNBS-v3: PR7 — an aborted run must surface as a cancellation, not a "successful" empty result,
+    // even for agents that complete without honouring the signal themselves.
+    it('throws STAGE_FAILED when the signal is aborted by the time the agent returns', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        layer.runStage({ stage: 'intake', projectId: 'p1' }, controller.signal),
+      ).rejects.toMatchObject({ code: 'STAGE_FAILED' });
     });
   });
 

@@ -232,9 +232,30 @@ describe('CopyEditAgent', () => {
 
       const ctx = makeContext(sections);
       const agent = new CopyEditAgent(ctx);
-      await agent.execute(ac.signal);
+      // QNBS-v3: PR7 — an aborted run throws (explicit cancellation), not a silent empty success.
+      await expect(agent.execute(ac.signal)).rejects.toThrow('Stage aborted');
 
       expect(mockGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    // QNBS-v3: PR7 — abort during the cooperative yield must stop BEFORE the next AI call (no extra
+    // section slips through the async gap). Counting getter: top-of-loop check passes, post-yield
+    // check reports aborted; the stage then throws instead of doing post-loop work.
+    it('re-checks abort after the cooperative yield (no extra AI call)', async () => {
+      const ac = new AbortController();
+      let reads = 0;
+      Object.defineProperty(ac.signal, 'aborted', {
+        configurable: true,
+        get() {
+          reads += 1;
+          return reads >= 2;
+        },
+      });
+      const ctx = makeContext([{ id: 's0', title: 'Ch', content: longContent() }]);
+      const agent = new CopyEditAgent(ctx);
+      await expect(agent.execute(ac.signal)).rejects.toThrow('Stage aborted');
+
+      expect(mockGenerate).not.toHaveBeenCalled();
     });
   });
 

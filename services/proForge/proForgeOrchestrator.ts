@@ -174,6 +174,8 @@ export class ProForgeOrchestrator {
         const AgentClass = await loadAgent(stage);
         const agent = new AgentClass(this.context);
         if (retryFeedback) agent.setRetryFeedback(retryFeedback);
+        // QNBS-v3: PR7 — bind the run's abort signal so in-flight AI calls cancel on abort.
+        agent.bindAbortSignal(this.abortController.signal);
         const result = await agent.execute(this.abortController.signal);
 
         if (this.abortController.signal.aborted) {

@@ -23,10 +23,34 @@ export abstract class BaseAgent {
   // QNBS-v3: Supervisor feedback from the previous failed attempt; prepended to the next prompt
   // so a retry is materially different instead of re-rolling the identical request.
   private retryFeedback = '';
+  // QNBS-v3: PR7 — the run's abort signal, bound by the orchestrator/capability layer before
+  // execute(). Threaded into every AI call so aborting the pipeline cancels the in-flight request
+  // instead of waiting for it to finish (non-blocking abort).
+  private boundSignal: AbortSignal | undefined;
 
   constructor(context: OrchestratorContext) {
     this.context = context;
     this.gatewayOverride = context.gateway;
+  }
+
+  /**
+   * QNBS-v3: PR7 — bind the pipeline's abort signal so AI calls made via generate()/selfReflect()
+   * are cancellable. Called by the orchestrator and the capability layer right before execute().
+   */
+  bindAbortSignal(signal: AbortSignal): void {
+    this.boundSignal = signal;
+  }
+
+  /**
+   * QNBS-v3: PR7 — yield a macrotask so the UI can repaint/handle input between units of
+   * synchronous work (e.g. per-section processing). The pipeline is network-bound, but bursts of
+   * client-side text work (dedup, repetition scans) can still starve the event loop on large
+   * manuscripts; this keeps the dashboard responsive and abort honoured mid-stage.
+   */
+  protected async cooperativeYield(): Promise<void> {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
   }
 
   // QNBS-v3: Resolve the gateway lazily. Injected gateway wins; otherwise the browser singleton is
@@ -90,7 +114,11 @@ export abstract class BaseAgent {
     const result = await gateway.generate({
       prompt: this.withRetryPreamble(prompt),
       creativity: this.context.config.creativity,
-      options: this.buildAiOpts(maxTokens !== undefined ? { maxTokens } : undefined),
+      // QNBS-v3: PR7 — pass the bound abort signal so the request is cancellable mid-flight.
+      options: this.buildAiOpts({
+        ...(maxTokens !== undefined && { maxTokens }),
+        ...(this.boundSignal !== undefined && { signal: this.boundSignal }),
+      }),
     });
     return result.text;
   }
@@ -171,7 +199,8 @@ ${analysisSummary.substring(0, 400)}`;
       const response = await gateway.generate({
         prompt,
         creativity: 'Focused',
-        options: this.buildAiOpts({ maxTokens: 100 }),
+        // QNBS-v3: PR7 — reflection honours the caller's abort signal too.
+        options: this.buildAiOpts({ maxTokens: 100, signal }),
       });
       const coherent = response.text.trim().toUpperCase().startsWith('COHERENT');
       return { coherent, note: response.text.trim(), tokensUsed: response.text.length };

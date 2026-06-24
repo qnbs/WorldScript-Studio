@@ -131,6 +131,54 @@ describe('PipelineProgressPanel', () => {
   });
 
   describe('with active run', () => {
+    // QNBS-v3: PR7 — determinate overall progress bar (stage N of M / percent).
+    it('renders a determinate progress bar reflecting completed selected stages', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentRun: {
+          ...baseRun,
+          config: {
+            ...mockContextBase.defaultConfig,
+            selectedStages: ['intake', 'structural', 'lineProse', 'copyEdit'],
+          },
+          activeStage: 'lineProse',
+          stages: [
+            makeStage('intake', 'accepted', defaultMetrics),
+            makeStage('structural', 'accepted', defaultMetrics),
+          ],
+        },
+      });
+      render(<PipelineProgressPanel />);
+
+      const bar = screen.getByRole('progressbar');
+      // 2 of 4 selected stages accepted → 50%
+      expect(bar).toHaveAttribute('aria-valuenow', '50');
+      expect(bar).toHaveAttribute('aria-valuemin', '0');
+      expect(bar).toHaveAttribute('aria-valuemax', '100');
+    });
+
+    // QNBS-v3: PR7 — when the active stage isn't among selected stages (activeIndex 0), show a
+    // neutral "Preparing…" label rather than coercing to "Stage 1/0 of M".
+    it('shows a neutral label when the active stage is not selected', () => {
+      vi.mocked(useProForgeViewContext).mockReturnValue({
+        ...mockContextBase,
+        currentRun: {
+          ...baseRun,
+          config: { ...mockContextBase.defaultConfig, selectedStages: ['intake', 'structural'] },
+          // 'idle' is not in selectedStages → computePipelineProgress returns activeIndex 0.
+          activeStage: 'idle',
+          stages: [],
+        },
+      });
+      render(<PipelineProgressPanel />);
+
+      // The progress bar still renders at 0% (nothing completed) without crashing…
+      expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+      // …and shows the neutral fallback, NOT a "Stage N of M" index.
+      expect(screen.getByText('proforge.progress.preparing')).toBeInTheDocument();
+      expect(screen.queryByText('proforge.progress.stageOfTotal')).not.toBeInTheDocument();
+    });
+
     it('renders Current Status section with activeStage', () => {
       vi.mocked(useProForgeViewContext).mockReturnValue({
         ...mockContextBase,
