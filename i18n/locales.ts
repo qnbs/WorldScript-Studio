@@ -6,12 +6,23 @@
 // asserts the two stay in sync.
 
 /**
+ * LanguageTool grammar-coverage tier for a locale (drives the optional in-editor grammar feature).
+ * - `strong`  — large mature rule set + spell check (de/en/fr/es/pt/nl/pl/uk).
+ * - `partial` — supported but limited: low rule count and/or no spell check (it/ru/ja/zh/el/ar/fa/sv/ro).
+ * - `none`    — not supported by LanguageTool at all → the grammar feature is simply absent, honestly
+ *               (tr/fi/hu/is/eu/he/ko). Verified against dev.languagetool.org/languages (2026-06-24).
+ */
+export type LanguageToolSupport = 'strong' | 'partial' | 'none';
+
+/**
  * One locale's display + behaviour metadata.
  * - `nativeName` is the endonym (intentionally NOT localized so users always find their own language).
  * - `englishName` is the exonym used in docs/README; the in-UI exonym is `t('portal.language.names.<code>')`.
  * - `flag` is an emoji (non-translatable); Basque has no flag emoji → globe.
  * - `status` drives the Production / Near-Production / Beta tier surfaced in the UI + README.
  * - `helpFallback` = true when `help.json` long-form content still falls back to English.
+ * - `languageToolSupport` = LanguageTool grammar tier (SSOT for the editor grammar feature's gating).
+ * - `languageToolCode` = the LanguageTool API `language` parameter; present iff support !== 'none'.
  */
 export interface LocaleDescriptor {
   readonly code: string;
@@ -22,6 +33,8 @@ export interface LocaleDescriptor {
   readonly status: 'production' | 'near-production' | 'beta';
   readonly script: 'latin' | 'arabic' | 'hebrew' | 'cjk' | 'greek' | 'cyrillic' | 'hangul';
   readonly helpFallback: boolean;
+  readonly languageToolSupport: LanguageToolSupport;
+  readonly languageToolCode?: string;
 }
 
 // QNBS-v3: `as const` keeps each `code` a string literal so `Language` stays an exhaustive union
@@ -37,6 +50,8 @@ export const LOCALES = [
     status: 'production',
     script: 'latin',
     helpFallback: false,
+    languageToolSupport: 'strong',
+    languageToolCode: 'de-DE',
   },
   {
     code: 'en',
@@ -47,6 +62,8 @@ export const LOCALES = [
     status: 'production',
     script: 'latin',
     helpFallback: false,
+    languageToolSupport: 'strong',
+    languageToolCode: 'en-US',
   },
   {
     code: 'fr',
@@ -57,6 +74,8 @@ export const LOCALES = [
     status: 'production',
     script: 'latin',
     helpFallback: false,
+    languageToolSupport: 'strong',
+    languageToolCode: 'fr',
   },
   {
     code: 'es',
@@ -67,6 +86,8 @@ export const LOCALES = [
     status: 'production',
     script: 'latin',
     helpFallback: false,
+    languageToolSupport: 'strong',
+    languageToolCode: 'es',
   },
   {
     code: 'it',
@@ -77,6 +98,9 @@ export const LOCALES = [
     status: 'production',
     script: 'latin',
     helpFallback: false,
+    // QNBS-v3: Italian is supported but has a small rule set (~141 XML rules) → partial, not strong.
+    languageToolSupport: 'partial',
+    languageToolCode: 'it',
   },
   // RTL Beta (B-5).
   {
@@ -88,6 +112,8 @@ export const LOCALES = [
     status: 'beta',
     script: 'arabic',
     helpFallback: true,
+    languageToolSupport: 'partial',
+    languageToolCode: 'ar',
   },
   {
     code: 'he',
@@ -98,6 +124,8 @@ export const LOCALES = [
     status: 'beta',
     script: 'hebrew',
     helpFallback: true,
+    // QNBS-v3: Hebrew is not in LanguageTool's supported languages → grammar feature absent.
+    languageToolSupport: 'none',
   },
   // QNBS-v3: Near-Production (PR4) — ≥96% UI string coverage with 0 placeholder-integrity issues
   // (per `pnpm run i18n:report`); help.json still falls back to English (helpFallback: true), which is
@@ -111,6 +139,9 @@ export const LOCALES = [
     status: 'near-production',
     script: 'cjk',
     helpFallback: true,
+    // QNBS-v3: Japanese has rules but no spell check → partial.
+    languageToolSupport: 'partial',
+    languageToolCode: 'ja-JP',
   },
   {
     code: 'zh',
@@ -121,6 +152,9 @@ export const LOCALES = [
     status: 'near-production',
     script: 'cjk',
     helpFallback: true,
+    // QNBS-v3: Chinese has rules but no spell check → partial.
+    languageToolSupport: 'partial',
+    languageToolCode: 'zh-CN',
   },
   {
     code: 'pt',
@@ -131,6 +165,8 @@ export const LOCALES = [
     status: 'near-production',
     script: 'latin',
     helpFallback: true,
+    languageToolSupport: 'strong',
+    languageToolCode: 'pt-PT',
   },
   {
     code: 'el',
@@ -141,6 +177,9 @@ export const LOCALES = [
     status: 'near-production',
     script: 'greek',
     helpFallback: true,
+    // QNBS-v3: Greek is supported but has a very small rule set (~55) → partial.
+    languageToolSupport: 'partial',
+    languageToolCode: 'el-GR',
   },
   // Phase X Beta — Nordic / Uralic / Basque (LTR) + Persian (RTL, Arabic script).
   {
@@ -152,6 +191,8 @@ export const LOCALES = [
     status: 'beta',
     script: 'latin',
     helpFallback: true,
+    // QNBS-v3: Finnish is not in LanguageTool's supported languages → grammar feature absent.
+    languageToolSupport: 'none',
   },
   {
     code: 'sv',
@@ -162,6 +203,9 @@ export const LOCALES = [
     status: 'beta',
     script: 'latin',
     helpFallback: true,
+    // QNBS-v3: Swedish is spell-check + ~32 rules only → partial.
+    languageToolSupport: 'partial',
+    languageToolCode: 'sv',
   },
   {
     code: 'hu',
@@ -172,6 +216,8 @@ export const LOCALES = [
     status: 'beta',
     script: 'latin',
     helpFallback: true,
+    // QNBS-v3: Hungarian is not in LanguageTool's supported languages → grammar feature absent.
+    languageToolSupport: 'none',
   },
   {
     code: 'is',
@@ -182,6 +228,8 @@ export const LOCALES = [
     status: 'beta',
     script: 'latin',
     helpFallback: true,
+    // QNBS-v3: Icelandic is not in LanguageTool's supported languages → grammar feature absent.
+    languageToolSupport: 'none',
   },
   // QNBS-v3: Basque has no Unicode flag emoji (ikurriña absent) → globe.
   {
@@ -193,6 +241,8 @@ export const LOCALES = [
     status: 'beta',
     script: 'latin',
     helpFallback: true,
+    // QNBS-v3: Basque is not in LanguageTool's supported languages → grammar feature absent.
+    languageToolSupport: 'none',
   },
   {
     code: 'fa',
@@ -203,6 +253,9 @@ export const LOCALES = [
     status: 'beta',
     script: 'arabic',
     helpFallback: true,
+    // QNBS-v3: Persian has rules but no spell check → partial.
+    languageToolSupport: 'partial',
+    languageToolCode: 'fa',
   },
   // QNBS-v3: Tier-1 expansion (2026) — Russian (Cyrillic). Inter + Merriweather self-host the
   // Cyrillic subset via @fontsource, so no CDN/`:lang()` font wiring is needed.
@@ -215,6 +268,9 @@ export const LOCALES = [
     status: 'beta',
     script: 'cyrillic',
     helpFallback: true,
+    // QNBS-v3: Russian has ~892 rules + spell but no recent rule maintenance → partial (conservative).
+    languageToolSupport: 'partial',
+    languageToolCode: 'ru-RU',
   },
   // QNBS-v3: Tier-1 expansion (2026) — Korean (Hangul). Inter does NOT cover Hangul, so this needs
   // Noto Sans KR via the Google Fonts CDN (index.html) + a `:lang(ko)` font rule (index.css).
@@ -227,6 +283,8 @@ export const LOCALES = [
     status: 'beta',
     script: 'hangul',
     helpFallback: true,
+    // QNBS-v3: Korean is not in LanguageTool's supported languages → grammar feature absent.
+    languageToolSupport: 'none',
   },
 ] as const satisfies ReadonlyArray<LocaleDescriptor>;
 
@@ -276,3 +334,14 @@ export const getLocaleInfo = (code: Language): LocaleDescriptor | undefined =>
 /** True when `value` is a supported locale code (runtime-safe guard for persisted/URL values). */
 export const isLanguage = (value: unknown): value is Language =>
   typeof value === 'string' && LOCALE_BY_CODE.has(value);
+
+/**
+ * The LanguageTool API `language` code for a locale, or null when LanguageTool does not support it
+ * (the grammar feature must be hidden/disabled for that locale). SSOT for the editor grammar layer.
+ */
+export const getLanguageToolCode = (code: Language): string | null =>
+  LOCALE_BY_CODE.get(code)?.languageToolCode ?? null;
+
+/** True when a locale has any (strong or partial) LanguageTool grammar coverage. */
+export const hasLanguageToolSupport = (code: Language): boolean =>
+  (LOCALE_BY_CODE.get(code)?.languageToolSupport ?? 'none') !== 'none';

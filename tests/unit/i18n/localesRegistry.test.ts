@@ -11,7 +11,9 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  getLanguageToolCode,
   getLocaleInfo,
+  hasLanguageToolSupport,
   isLanguage,
   LOCALE_CODES,
   LOCALES,
@@ -98,5 +100,41 @@ describe('i18n locale registry (SSOT)', () => {
     const en = getLocaleInfo('en');
     expect(en?.status).toBe('production');
     expect(en?.dir).toBe('ltr');
+  });
+
+  it('every locale declares a valid LanguageTool support tier', () => {
+    const valid = new Set(['strong', 'partial', 'none']);
+    for (const l of LOCALES) {
+      expect(valid.has(l.languageToolSupport), `${l.code}: ${l.languageToolSupport}`).toBe(true);
+    }
+  });
+
+  it('languageToolCode is present iff the locale has LanguageTool support', () => {
+    // QNBS-v3: SSOT invariant — a usable LT code exists exactly when support !== 'none', so the
+    // editor grammar feature can gate on getLanguageToolCode() returning non-null.
+    for (const l of LOCALES) {
+      // QNBS-v3: read the code via the LocaleDescriptor-typed lookup — the `as const` literal type of
+      // `none` entries omits the optional `languageToolCode`, so direct access there is a type error.
+      const hasCode = Boolean(getLocaleInfo(l.code)?.languageToolCode);
+      const supported = l.languageToolSupport !== 'none';
+      expect(hasCode, `${l.code}: code/support mismatch`).toBe(supported);
+      expect(hasLanguageToolSupport(l.code), l.code).toBe(supported);
+      expect(getLanguageToolCode(l.code) !== null, l.code).toBe(supported);
+    }
+  });
+
+  it('LanguageTool-unsupported locales (verified) expose no grammar feature', () => {
+    // QNBS-v3: verified against dev.languagetool.org/languages (2026-06-24); these must stay 'none'
+    // so we never promise grammar checking we cannot deliver.
+    for (const code of ['he', 'fi', 'hu', 'is', 'eu', 'ko'] as const) {
+      expect(getLocaleInfo(code)?.languageToolSupport, code).toBe('none');
+      expect(getLanguageToolCode(code), code).toBeNull();
+    }
+  });
+
+  it('the core 5 production locales all have LanguageTool coverage', () => {
+    for (const code of ['de', 'en', 'es', 'fr', 'it'] as const) {
+      expect(hasLanguageToolSupport(code), code).toBe(true);
+    }
   });
 });
