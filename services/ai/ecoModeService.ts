@@ -39,11 +39,9 @@ class EcoModeService {
 
   isEcoMode(): boolean {
     if (this.explicitEcoMode !== null) return this.explicitEcoMode;
-    // Auto: eco when battery is low
-    if (this.cachedBatteryLevel !== null && this.cachedBatteryLevel < LOW_BATTERY_THRESHOLD) {
-      return true;
-    }
-    return false;
+    // QNBS-v3: Auto — eco when battery is low. Direct boolean return (DeepSource JS-W1041),
+    // mirroring isCriticalBattery() below.
+    return this.cachedBatteryLevel !== null && this.cachedBatteryLevel < LOW_BATTERY_THRESHOLD;
   }
 
   isCriticalBattery(): boolean {
