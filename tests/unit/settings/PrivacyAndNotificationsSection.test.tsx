@@ -16,10 +16,8 @@ const mockHandleSettingChange = vi.fn();
 const defaultSettings = {
   privacy: {
     analyticsEnabled: true,
-    crashReporting: false,
     dataEncryption: true,
     localStorageOnly: false,
-    shareUsageData: false,
     euDataResidency: false,
   },
   notifications: {
@@ -117,22 +115,15 @@ describe('PrivacySection', () => {
     ).toBe('true');
   });
 
-  it('crashReporting toggle is off', () => {
-    render(<PrivacySection />);
-    expect(
-      screen
-        .getByRole('switch', { name: 'settings.privacy.crashReporting' })
-        .getAttribute('aria-checked'),
-    ).toBe('false');
-  });
-
-  it('calls handleSettingChange when toggle clicked', async () => {
+  it('calls handleSettingChange when a toggle is clicked', async () => {
     const user = userEvent.setup();
     render(<PrivacySection />);
-    await user.click(screen.getByRole('switch', { name: 'settings.privacy.crashReporting' }));
+    // QNBS-v3: localStorageOnly replaces the removed crashReporting toggle here; the mock has it
+    // off, so clicking flips it on.
+    await user.click(screen.getByRole('switch', { name: 'settings.privacy.localStorageOnly' }));
     expect(mockHandleSettingChange).toHaveBeenCalledWith(
       'privacy',
-      expect.objectContaining({ crashReporting: true }),
+      expect.objectContaining({ localStorageOnly: true }),
     );
   });
 });

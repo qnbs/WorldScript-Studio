@@ -21,10 +21,8 @@ const makeCtx = (overrides?: Record<string, unknown>) => ({
   settings: {
     privacy: {
       analyticsEnabled: true,
-      crashReporting: false,
       dataEncryption: true,
       localStorageOnly: false,
-      shareUsageData: false,
       euDataResidency: true,
     },
   },
@@ -71,11 +69,6 @@ describe('PrivacySection', () => {
     expect(screen.getByText('settings.privacy.analyticsEnabled')).toBeInTheDocument();
   });
 
-  it('renders crash reporting toggle', () => {
-    render(<PrivacySection />);
-    expect(screen.getByText('settings.privacy.crashReporting')).toBeInTheDocument();
-  });
-
   it('renders data encryption toggle', () => {
     render(<PrivacySection />);
     expect(screen.getByText('settings.privacy.dataEncryption')).toBeInTheDocument();
@@ -86,14 +79,10 @@ describe('PrivacySection', () => {
     expect(screen.getByText('settings.privacy.localStorageOnly')).toBeInTheDocument();
   });
 
-  it('renders share usage data toggle', () => {
+  // QNBS-v3: dead crashReporting + shareUsageData toggles removed (no functional reads); 4 remain.
+  it('renders four toggles total (analytics, encryption, localStorageOnly, euDataResidency)', () => {
     render(<PrivacySection />);
-    expect(screen.getByText('settings.privacy.shareUsageData')).toBeInTheDocument();
-  });
-
-  it('renders six toggles total (including euDataResidency)', () => {
-    render(<PrivacySection />);
-    expect(screen.getAllByRole('switch').length).toBe(6);
+    expect(screen.getAllByRole('switch').length).toBe(4);
   });
 
   it('analytics toggle calls handleSettingChange when clicked', async () => {

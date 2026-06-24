@@ -74,9 +74,7 @@ describe('assertCloudAiAllowedSync', () => {
       localStorageOnly: false,
       euDataResidency: false,
       analyticsEnabled: false,
-      crashReporting: false,
       dataEncryption: true,
-      shareUsageData: false,
     };
     expect(() => assertCloudAiAllowedSync('gemini', privacy)).not.toThrow();
   });
@@ -86,9 +84,7 @@ describe('assertCloudAiAllowedSync', () => {
       localStorageOnly: true,
       euDataResidency: false,
       analyticsEnabled: false,
-      crashReporting: false,
       dataEncryption: true,
-      shareUsageData: false,
     };
     expect(() => assertCloudAiAllowedSync('gemini', privacy)).toThrow(
       'Cloud provider blocked: local-only mode is active.',
@@ -100,9 +96,7 @@ describe('assertCloudAiAllowedSync', () => {
       localStorageOnly: false,
       euDataResidency: true,
       analyticsEnabled: false,
-      crashReporting: false,
       dataEncryption: true,
-      shareUsageData: false,
     };
     expect(() => assertCloudAiAllowedSync('openai', privacy)).toThrow(
       'Cloud provider blocked by EU residency policy: openai',
@@ -114,9 +108,7 @@ describe('assertCloudAiAllowedSync', () => {
       localStorageOnly: false,
       euDataResidency: true,
       analyticsEnabled: false,
-      crashReporting: false,
       dataEncryption: true,
-      shareUsageData: false,
     };
     expect(() => assertCloudAiAllowedSync('grok', privacy)).toThrow(
       'Cloud provider blocked by EU residency policy: grok',
@@ -129,9 +121,7 @@ describe('assertCloudAiAllowedSync', () => {
       localStorageOnly: false,
       euDataResidency: false,
       analyticsEnabled: false,
-      crashReporting: false,
       dataEncryption: true,
-      shareUsageData: false,
     };
     expect(() => assertCloudAiAllowedSync('gemini', privacy)).toThrow('local-only');
   });
@@ -142,9 +132,7 @@ describe('assertCloudAiAllowedSync', () => {
       localStorageOnly: false,
       euDataResidency: true,
       analyticsEnabled: false,
-      crashReporting: false,
       dataEncryption: true,
-      shareUsageData: false,
     };
     expect(() => assertCloudAiAllowedSync('gemini', privacy)).not.toThrow();
   });
