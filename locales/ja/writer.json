@@ -98,5 +98,19 @@
   "writer.tts.start": "声に出して読む",
   "writer.tts.stop": "読むのをやめる",
   "writer.versionControl.label": "バージョン",
-  "writer.versionControl.tooltip": "バージョン管理 (ブランチとスナップショット)"
+  "writer.versionControl.tooltip": "バージョン管理 (ブランチとスナップショット)",
+  "writer.grammar.title": "Grammar & Spelling",
+  "writer.grammar.checkButton": "Check this scene",
+  "writer.grammar.checking": "Checking…",
+  "writer.grammar.issuesFound": "{{count}} issues found",
+  "writer.grammar.noIssues": "No issues found.",
+  "writer.grammar.selectScene": "Select a scene to check.",
+  "writer.grammar.unsupported": "Grammar check isn't available for this language.",
+  "writer.grammar.disabled": "Enable LanguageTool in Settings → Connections to check this scene.",
+  "writer.grammar.offline": "Couldn't reach the LanguageTool server. Is it running?",
+  "writer.grammar.error": "The LanguageTool server returned an error.",
+  "writer.grammar.apply": "Apply",
+  "writer.grammar.ignore": "Ignore",
+  "writer.grammar.addToDictionary": "Add to dictionary",
+  "writer.grammar.noSuggestions": "No suggestions"
 }

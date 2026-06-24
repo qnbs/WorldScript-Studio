@@ -98,5 +98,19 @@
   "writer.tts.start": "Vorlesen",
   "writer.tts.stop": "Vorlesen stoppen",
   "writer.versionControl.label": "Versionen",
-  "writer.versionControl.tooltip": "Versionskontrolle (Zweige & Schnappschüsse)"
+  "writer.versionControl.tooltip": "Versionskontrolle (Zweige & Schnappschüsse)",
+  "writer.grammar.title": "Grammatik & Rechtschreibung",
+  "writer.grammar.checkButton": "Diese Szene prüfen",
+  "writer.grammar.checking": "Prüfe…",
+  "writer.grammar.issuesFound": "{{count}} Probleme gefunden",
+  "writer.grammar.noIssues": "Keine Probleme gefunden.",
+  "writer.grammar.selectScene": "Wähle eine Szene zum Prüfen.",
+  "writer.grammar.unsupported": "Die Grammatikprüfung ist für diese Sprache nicht verfügbar.",
+  "writer.grammar.disabled": "Aktiviere LanguageTool in Einstellungen → Verbindungen, um diese Szene zu prüfen.",
+  "writer.grammar.offline": "LanguageTool-Server nicht erreichbar. Läuft er?",
+  "writer.grammar.error": "Der LanguageTool-Server hat einen Fehler zurückgegeben.",
+  "writer.grammar.apply": "Übernehmen",
+  "writer.grammar.ignore": "Ignorieren",
+  "writer.grammar.addToDictionary": "Zum Wörterbuch hinzufügen",
+  "writer.grammar.noSuggestions": "Keine Vorschläge"
 }

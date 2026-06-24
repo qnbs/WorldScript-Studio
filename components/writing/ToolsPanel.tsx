@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { Select } from '../ui/Select';
+import { GrammarCheckPanel } from './GrammarCheckPanel';
 import { ToolInputs } from './ToolInputs';
 
 const ToolsPanel: FC = React.memo(() => {
@@ -242,6 +243,12 @@ const ToolsPanel: FC = React.memo(() => {
                 {t('common.generate')}
               </Button>
             )}
+          </div>
+
+          {/* QNBS-v3: PR-C1 — deterministic, self-hosted LanguageTool grammar check (no AI tokens),
+              separate from the AI generation flow above. Hidden for LanguageTool-unsupported locales. */}
+          <div className="flex-shrink-0 pt-3 mt-1 border-t border-[var(--sc-border-subtle)]">
+            <GrammarCheckPanel />
           </div>
         </CardContent>
       </Card>
