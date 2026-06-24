@@ -56,34 +56,38 @@ export const Underline: Story = {
   render: () => <TabsDemo variant="underline" />,
 };
 
+// QNBS-v3: hooks belong in a component, not a story render callback (DeepSource JS-0820 /
+// rules-of-hooks). Storybook renders this as a component, so useState is valid here.
+const WithPanelsDemo = () => {
+  const [activeTab, setActiveTab] = useState('outline');
+  const groupId = 'story-tabs';
+  return (
+    <div className="space-y-4">
+      <Tabs
+        tabs={TABS}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        ariaLabel="Document sections"
+      />
+      <TabPanel tabId="outline" activeTab={activeTab} groupId={groupId}>
+        <div className="p-4 rounded-sc-lg bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]">
+          Outline content
+        </div>
+      </TabPanel>
+      <TabPanel tabId="manuscript" activeTab={activeTab} groupId={groupId}>
+        <div className="p-4 rounded-sc-lg bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]">
+          Manuscript content
+        </div>
+      </TabPanel>
+      <TabPanel tabId="notes" activeTab={activeTab} groupId={groupId}>
+        <div className="p-4 rounded-sc-lg bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]">
+          Notes content
+        </div>
+      </TabPanel>
+    </div>
+  );
+};
+
 export const WithPanels: Story = {
-  render: () => {
-    const [activeTab, setActiveTab] = useState('outline');
-    const groupId = 'story-tabs';
-    return (
-      <div className="space-y-4">
-        <Tabs
-          tabs={TABS}
-          activeTab={activeTab}
-          onChange={setActiveTab}
-          ariaLabel="Document sections"
-        />
-        <TabPanel tabId="outline" activeTab={activeTab} groupId={groupId}>
-          <div className="p-4 rounded-sc-lg bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]">
-            Outline content
-          </div>
-        </TabPanel>
-        <TabPanel tabId="manuscript" activeTab={activeTab} groupId={groupId}>
-          <div className="p-4 rounded-sc-lg bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]">
-            Manuscript content
-          </div>
-        </TabPanel>
-        <TabPanel tabId="notes" activeTab={activeTab} groupId={groupId}>
-          <div className="p-4 rounded-sc-lg bg-[var(--sc-surface-raised)] text-[var(--sc-text-primary)]">
-            Notes content
-          </div>
-        </TabPanel>
-      </div>
-    );
-  },
+  render: () => <WithPanelsDemo />,
 };
