@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Desktop settings "minimize to tray" is now a proper switch.** `DesktopSection` used the only raw
+  `<input type="checkbox">` left in Settings, with its hint not programmatically associated. It now
+  renders the design-system `ToggleSwitch` (`role="switch"`, `aria-labelledby` + `aria-describedby`
+  hint, focus-visible ring, RTL-aware), matching every other Settings control — consistent styling and
+  screen-reader behaviour. Added a `DesktopSection` component test (web no-op, accessible switch, state
+  reflection, dispatch on toggle).
 - **Help content truthfulness pass (post-release).** Two stale Help articles were corrected against
   code reality: **Languages** now states the real **19 interface languages** with their Production /
   Near-Production / Beta status tiers + the quality dashboard (was "seven languages — German, English,
