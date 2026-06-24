@@ -144,6 +144,13 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
         tryActionId: 'nav-settings',
       },
       {
+        // QNBS-v3: post-release gap-fill — execution modes (hybrid/cloud/local/eco) + OpenRouter
+        // circuit-breaker/free-tier were shipped but had no Help article.
+        titleKey: 'help.aiStudio.executionModes.title',
+        contentKey: 'help.aiStudio.executionModes.content',
+        tryActionId: 'nav-settings',
+      },
+      {
         titleKey: 'help.aiStudio.ragContext.title',
         contentKey: 'help.aiStudio.ragContext.content',
         tryActionId: 'nav-writer',

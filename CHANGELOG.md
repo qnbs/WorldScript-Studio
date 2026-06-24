@@ -15,9 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entry appears automatically; the generator now also emits a per-arch warning when one arch produces
   no signed bundle (a half-failed matrix is diagnosable) and hard-fails only if **no** arch signed.
   Builds remain unsigned/un-notarized (cert provisioning still deferred). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md).
+- **New Help article — "AI execution modes & OpenRouter".** Documents the four live-switchable
+  execution modes (Hybrid / Cloud / Local / Eco) and OpenRouter's free tier + circuit breaker
+  (4×429 → 5 min pause, RPM tracking), which shipped without a Help entry. Added to the AI Studio help
+  category, deep-linking to Settings; translated into the five Production locales, English fallback for
+  the other 14 (per the tag-dense-HTML help-body policy).
 
 ### Changed
 
+- **Help content truthfulness pass (post-release).** Two stale Help articles were corrected against
+  code reality: **Languages** now states the real **19 interface languages** with their Production /
+  Near-Production / Beta status tiers + the quality dashboard (was "seven languages — German, English,
+  French, Spanish, Italian, plus Arabic and Hebrew"); **Feature flags** now states **22 flags
+  (16 default-on / 6 opt-in)**, explains the grouped-by-maturity Experimental UI with dependency-aware
+  disabling, and drops the bullet for the removed `enableWebnnInference` flag (the WebNN execution
+  provider is still described as an adaptive-engine backend). Refreshed in the five Production locales.
 - **ProForge is now opt-in (default off).** The experimental 8-stage agentic editing pipeline
   (`enableProForge`) shipped on by default; it is token-heavy and carries loop risk, so it is now a
   user opt-in like Voice and the Global Copilot. New installs get **17 default-on / 6 default-off**
