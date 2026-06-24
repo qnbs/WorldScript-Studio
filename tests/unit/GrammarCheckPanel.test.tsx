@@ -116,4 +116,36 @@ describe('GrammarCheckPanel', () => {
     render(<GrammarCheckPanel />);
     expect(screen.getByText('writer.grammar.disabled')).toBeTruthy();
   });
+
+  it('shows the no-issues message on a clean check', async () => {
+    mocks.checkText.mockResolvedValue({ matches: [], status: 'ok' });
+    render(<GrammarCheckPanel />);
+    await userEvent.click(screen.getByText('writer.grammar.checkButton'));
+    expect(await screen.findByText('writer.grammar.noIssues')).toBeTruthy();
+  });
+
+  it('shows the offline message when the server is unreachable', async () => {
+    mocks.checkText.mockResolvedValue({ matches: [], status: 'offline' });
+    render(<GrammarCheckPanel />);
+    await userEvent.click(screen.getByText('writer.grammar.checkButton'));
+    expect(await screen.findByText('writer.grammar.offline')).toBeTruthy();
+  });
+
+  it('shows the error message on a server error', async () => {
+    mocks.checkText.mockResolvedValue({ matches: [], status: 'error' });
+    render(<GrammarCheckPanel />);
+    await userEvent.click(screen.getByText('writer.grammar.checkButton'));
+    expect(await screen.findByText('writer.grammar.error')).toBeTruthy();
+  });
+
+  it('offers add-to-dictionary for a spelling match and no-suggestions when empty', async () => {
+    mocks.checkText.mockResolvedValue({
+      matches: [match({ isSpelling: true, replacements: [], matchedText: 'Gandalf' })],
+      status: 'ok',
+    });
+    render(<GrammarCheckPanel />);
+    await userEvent.click(screen.getByText('writer.grammar.checkButton'));
+    expect(await screen.findByText('writer.grammar.addToDictionary')).toBeTruthy();
+    expect(screen.getByText('writer.grammar.noSuggestions')).toBeTruthy();
+  });
 });
