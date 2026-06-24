@@ -161,15 +161,6 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   } else {
     validSettings.desktop = { minimizeToTray: validSettings.desktop.minimizeToTray === true };
   }
-  if (!validSettings.performance || typeof validSettings.performance !== 'object') {
-    validSettings.performance = {
-      autoSaveInterval: 30,
-      cacheSize: 100,
-      preloadContent: true,
-      lazyLoadImages: true,
-      offlineMode: false,
-    };
-  }
   // QNBS-v3: openRouter added in OpenRouter integration — backfill for older persisted settings.
   if (!validSettings.openRouter || typeof validSettings.openRouter !== 'object') {
     validSettings.openRouter = {

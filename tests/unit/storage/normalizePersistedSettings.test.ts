@@ -98,14 +98,6 @@ describe('normalizePersistedSettings', () => {
     expect(result.backup.maxBackups).toBe(10);
   });
 
-  // ── performance ───────────────────────────────────────────────────────────
-
-  it('provides default performance settings when field is absent', () => {
-    const result = normalizePersistedSettings({});
-    expect(result.performance).toBeDefined();
-    expect(result.performance.autoSaveInterval).toBe(30);
-  });
-
   // ── privacy ───────────────────────────────────────────────────────────────
 
   it('provides default privacy settings when field is absent (analytics ON, migrated)', () => {
@@ -196,7 +188,6 @@ describe('normalizePersistedSettings', () => {
     expect(typeof result.accessibility).toBe('object');
     expect(typeof result.voice).toBe('object');
     expect(typeof result.backup).toBe('object');
-    expect(typeof result.performance).toBe('object');
     expect(typeof result.privacy).toBe('object');
     expect(typeof result.advancedAi).toBe('object');
     expect(typeof result.collaboration).toBe('object');

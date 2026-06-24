@@ -31,7 +31,6 @@ const baseContextValue = {
     },
     collaboration: { webrtcSignalingUrls: [] },
     privacy: { analyticsEnabled: false, crashReportsEnabled: false },
-    performance: { hardwareAcceleration: true },
     featureFlags: {},
     appearancePreset: 'default',
     enableLanguageTool: false,

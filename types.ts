@@ -538,14 +538,6 @@ export interface PrivacySettings {
   analyticsGateMigrated?: boolean;
 }
 
-export interface PerformanceSettings {
-  autoSaveInterval: number; // seconds
-  cacheSize: number; // MB
-  preloadContent: boolean;
-  lazyLoadImages: boolean;
-  offlineMode: boolean;
-}
-
 export interface CollaborationSettings {
   realTimeCollaboration: boolean;
   publicSharing: boolean;
@@ -685,7 +677,6 @@ export interface Settings {
   advancedAi: AdvancedAiSettings;
   accessibility: AccessibilitySettings;
   privacy: PrivacySettings;
-  performance: PerformanceSettings;
   collaboration: CollaborationSettings;
   integrations: IntegrationSettings;
   advancedEditor: AdvancedEditorSettings;

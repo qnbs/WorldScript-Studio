@@ -15,7 +15,6 @@ import type {
   IntegrationSettings,
   KeyboardShortcut,
   OpenRouterSettings,
-  PerformanceSettings,
   PrivacySettings,
   Settings,
   Theme,
@@ -98,13 +97,6 @@ const defaultSettings: Settings = {
     euDataResidency: true,
     // QNBS-v3: SEC — fresh installs are born post-migration so the normalizer respects this default.
     analyticsGateMigrated: true,
-  },
-  performance: {
-    autoSaveInterval: 30,
-    cacheSize: 100,
-    preloadContent: true,
-    lazyLoadImages: true,
-    offlineMode: false,
   },
   collaboration: {
     realTimeCollaboration: false,
@@ -249,9 +241,6 @@ const settingsSlice = createSlice({
     },
     setPrivacy(state, action: PayloadAction<Partial<PrivacySettings>>) {
       state.privacy = { ...state.privacy, ...action.payload };
-    },
-    setPerformance(state, action: PayloadAction<Partial<PerformanceSettings>>) {
-      state.performance = { ...state.performance, ...action.payload };
     },
     setCollaboration(state, action: PayloadAction<Partial<CollaborationSettings>>) {
       state.collaboration = { ...state.collaboration, ...action.payload };

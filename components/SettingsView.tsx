@@ -27,7 +27,6 @@ import {
   BackupSection,
   CollaborationSection,
   IntegrationsSection,
-  PerformanceSection,
   PrivacySection,
 } from './settings/SystemSections';
 import { TauriUpdaterBanner } from './settings/TauriUpdaterBanner';
@@ -85,7 +84,7 @@ const NAV_GROUPS = [
     key: 'connections',
     ids: ['collaboration', 'voice', 'integrations', 'community'],
   },
-  { key: 'system', ids: ['performance', 'plugins', 'shortcuts', 'guide', 'experimental', 'about'] },
+  { key: 'system', ids: ['plugins', 'shortcuts', 'guide', 'experimental', 'about'] },
 ] as const satisfies ReadonlyArray<{ key: string; ids: readonly string[] }>;
 
 // ─── Main Settings UI ─────────────────────────────────────────────────────────
@@ -176,11 +175,6 @@ const SettingsViewUI: FC = () => {
         icon: (
           <path d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
         ),
-      },
-      {
-        id: 'performance',
-        label: t('settings.categories.performance'),
-        icon: <path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />,
       },
       {
         id: 'collaboration',
@@ -323,8 +317,6 @@ const SettingsViewUI: FC = () => {
         return <AccessibilitySection />;
       case 'privacy':
         return <PrivacySection />;
-      case 'performance':
-        return <PerformanceSection />;
       case 'collaboration':
         return <CollaborationSection />;
       case 'integrations':
