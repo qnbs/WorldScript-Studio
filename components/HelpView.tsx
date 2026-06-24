@@ -120,6 +120,8 @@ const ArticleViewer: FC = () => {
           </p>
         ) : null}
         {/* biome-ignore-start lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify */}
+        {/* skipcq: JS-0440 — __html is DOMPurify.sanitize()d; the repo's documented safe pattern for
+            rendering trusted help HTML (CLAUDE.md: dangerouslySetInnerHTML only with sanitized content). */}
         <div
           className={`prose max-w-[var(--sc-prose-measure)] prose-h2:text-2xl prose-h2:font-bold prose-h3:font-semibold prose-p:text-[var(--sc-text-secondary)] prose-strong:text-[var(--sc-text-primary)] prose-a:text-[var(--sc-accent)] prose-ul:list-disc prose-li:text-[var(--sc-text-secondary)] prose-ol:text-[var(--sc-text-secondary)] ${theme === 'dark' ? 'prose-invert' : ''}`}
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(t(selectedArticle.content)) }}
