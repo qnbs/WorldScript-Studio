@@ -293,20 +293,6 @@ describe('settingsSlice', () => {
     expect(state.advancedEditor.autoComplete).toBe(true);
   });
 
-  it('setBackup merges backup settings', () => {
-    const state = settingsReducer(
-      initState(),
-      settingsActions.setBackup({
-        backupFrequency: 'daily',
-        backupLocation: '/tmp/worldscript-backups',
-      }),
-    );
-
-    expect(state.backup.backupFrequency).toBe('daily');
-    expect(state.backup.backupLocation).toBe('/tmp/worldscript-backups');
-    expect(state.backup.autoBackup).toBe(true);
-  });
-
   it('setThemeCustomization merges theme customization settings', () => {
     const state = settingsReducer(
       initState(),

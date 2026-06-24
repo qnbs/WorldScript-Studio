@@ -7,7 +7,6 @@ import type {
   AiCreativity,
   AiMode,
   AppearancePreset,
-  BackupSettings,
   CollaborationSettings,
   CustomFont,
   DesktopSettings,
@@ -117,13 +116,6 @@ const defaultSettings: Settings = {
     focusMode: false,
     customDictionary: [],
     writingStats: true,
-  },
-  backup: {
-    autoBackup: true,
-    backupFrequency: 'weekly',
-    backupLocation: './backups',
-    maxBackups: 10,
-    encryptBackups: false,
   },
   themeCustomization: {
     primaryColor: '#3b82f6',
@@ -241,9 +233,6 @@ const settingsSlice = createSlice({
     },
     setAdvancedEditor(state, action: PayloadAction<Partial<AdvancedEditorSettings>>) {
       state.advancedEditor = { ...state.advancedEditor, ...action.payload };
-    },
-    setBackup(state, action: PayloadAction<Partial<BackupSettings>>) {
-      state.backup = { ...state.backup, ...action.payload };
     },
     setThemeCustomization(state, action: PayloadAction<Partial<ThemeCustomization>>) {
       state.themeCustomization = {

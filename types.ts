@@ -448,8 +448,6 @@ export interface ProjectAiPreset {
   loraScale?: number | undefined;
 }
 
-export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
-
 export interface CustomFont {
   name: string;
   url: string;
@@ -562,14 +560,6 @@ export interface AdvancedEditorSettings {
   writingStats: boolean;
 }
 
-export interface BackupSettings {
-  autoBackup: boolean;
-  backupFrequency: BackupFrequency;
-  backupLocation: string;
-  maxBackups: number;
-  encryptBackups: boolean;
-}
-
 export interface ThemeCustomization {
   primaryColor: string;
   secondaryColor: string;
@@ -670,7 +660,6 @@ export interface Settings {
   collaboration: CollaborationSettings;
   integrations: IntegrationSettings;
   advancedEditor: AdvancedEditorSettings;
-  backup: BackupSettings;
   themeCustomization: ThemeCustomization;
   voice: VoiceSettings;
   desktop: DesktopSettings;

@@ -132,15 +132,6 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
       { type: 'time', target: 120, period: 'daily', enabled: false },
     ] as Settings['writingGoals'];
   }
-  if (!validSettings.backup || typeof validSettings.backup !== 'object') {
-    validSettings.backup = {
-      autoBackup: true,
-      backupFrequency: 'weekly',
-      backupLocation: './backups',
-      maxBackups: 10,
-      encryptBackups: false,
-    } as Settings['backup'];
-  }
   if (!validSettings.voice || typeof validSettings.voice !== 'object') {
     validSettings.voice = { ...defaultVoiceSettings };
   }

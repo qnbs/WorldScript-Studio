@@ -68,13 +68,6 @@ const baseSettings = (): Settings => ({
     customDictionary: [],
     writingStats: true,
   },
-  backup: {
-    autoBackup: true,
-    backupFrequency: 'weekly',
-    backupLocation: './backups',
-    maxBackups: 10,
-    encryptBackups: false,
-  },
   themeCustomization: {
     primaryColor: '#3b82f6',
     secondaryColor: '#64748b',
