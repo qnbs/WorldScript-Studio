@@ -64,9 +64,11 @@ export function useLanguageToolCheck(): UseLanguageToolCheckReturn {
 
   const ltCode = getLanguageToolCode(language);
   const unsupportedLocale = ltCode === null;
-  const enabled = settings.integrations.languageToolEnabled;
-  const baseUrl = settings.integrations.languageToolBaseUrl;
-  const dictionary = settings.advancedEditor.customDictionary;
+  // QNBS-v3: defensive against partial persisted settings (normalizePersistedSettings can lag a new
+  // nested object) — a component must never crash on a missing settings branch (project convention).
+  const enabled = settings?.integrations?.languageToolEnabled ?? false;
+  const baseUrl = settings?.integrations?.languageToolBaseUrl ?? '';
+  const dictionary = settings?.advancedEditor?.customDictionary ?? [];
   const available = !unsupportedLocale && enabled;
 
   const sectionContent = useCallback(

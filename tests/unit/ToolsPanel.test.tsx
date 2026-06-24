@@ -54,6 +54,12 @@ vi.mock('../../components/writing/ToolInputs', () => ({
   ToolInputs: () => <div data-testid="tool-inputs" />,
 }));
 
+// QNBS-v3: GrammarCheckPanel pulls in Redux (useLanguageToolCheck) — stub it so ToolsPanel's own
+// behavior is tested in isolation (it has its own test file).
+vi.mock('../../components/writing/GrammarCheckPanel', () => ({
+  GrammarCheckPanel: () => <div data-testid="grammar-check-panel" />,
+}));
+
 vi.mock('../../components/ui/Select', () => ({
   Select: vi.fn(
     ({

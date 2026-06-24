@@ -9,6 +9,64 @@ import { useTranslation } from '../../hooks/useTranslation';
 import type { LanguageToolMatch } from '../../services/languageToolService';
 import { Button } from '../ui/Button';
 
+const GrammarMatchItem: FC<{
+  match: LanguageToolMatch;
+  onApply: (replacement: string) => void;
+  onIgnore: () => void;
+  onAddToDictionary: () => void;
+}> = ({ match, onApply, onIgnore, onAddToDictionary }) => {
+  const { t } = useTranslation();
+  return (
+    <li className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] p-2 space-y-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-[var(--sc-text-muted)]">
+          {match.categoryName || match.category}
+        </span>
+        <code className="text-[11px] text-[var(--sc-danger-fg)] bg-[var(--sc-danger-bg)] px-1 rounded truncate max-w-[50%]">
+          {match.matchedText}
+        </code>
+      </div>
+      <p className="text-xs text-[var(--sc-text-secondary)]">{match.message}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {match.replacements.length > 0 ? (
+          match.replacements.map((replacement) => (
+            <button
+              key={replacement}
+              type="button"
+              onClick={() => onApply(replacement)}
+              className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--sc-accent)]/15 text-[var(--sc-text-primary)] border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-accent)]/25 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+            >
+              {replacement}
+            </button>
+          ))
+        ) : (
+          <span className="text-[11px] text-[var(--sc-text-muted)] italic">
+            {t('writer.grammar.noSuggestions')}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 pt-0.5">
+        <button
+          type="button"
+          onClick={onIgnore}
+          className="text-[11px] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
+        >
+          {t('writer.grammar.ignore')}
+        </button>
+        {match.isSpelling && (
+          <button
+            type="button"
+            onClick={onAddToDictionary}
+            className="text-[11px] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
+          >
+            {t('writer.grammar.addToDictionary')}
+          </button>
+        )}
+      </div>
+    </li>
+  );
+};
+
 const GrammarCheckPanel: FC = React.memo(() => {
   const { t } = useTranslation();
   const { selectedSectionId } = useWriterViewContext();
@@ -93,63 +151,5 @@ const GrammarCheckPanel: FC = React.memo(() => {
   );
 });
 GrammarCheckPanel.displayName = 'GrammarCheckPanel';
-
-const GrammarMatchItem: FC<{
-  match: LanguageToolMatch;
-  onApply: (replacement: string) => void;
-  onIgnore: () => void;
-  onAddToDictionary: () => void;
-}> = ({ match, onApply, onIgnore, onAddToDictionary }) => {
-  const { t } = useTranslation();
-  return (
-    <li className="rounded-sc-md border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] p-2 space-y-1.5">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-wide text-[var(--sc-text-muted)]">
-          {match.categoryName || match.category}
-        </span>
-        <code className="text-[11px] text-[var(--sc-danger-fg)] bg-[var(--sc-danger-bg)] px-1 rounded truncate max-w-[50%]">
-          {match.matchedText}
-        </code>
-      </div>
-      <p className="text-xs text-[var(--sc-text-secondary)]">{match.message}</p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {match.replacements.length > 0 ? (
-          match.replacements.map((replacement) => (
-            <button
-              key={replacement}
-              type="button"
-              onClick={() => onApply(replacement)}
-              className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--sc-accent)]/15 text-[var(--sc-text-primary)] border border-[var(--sc-border-subtle)] hover:bg-[var(--sc-accent)]/25 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
-            >
-              {replacement}
-            </button>
-          ))
-        ) : (
-          <span className="text-[11px] text-[var(--sc-text-muted)] italic">
-            {t('writer.grammar.noSuggestions')}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2 pt-0.5">
-        <button
-          type="button"
-          onClick={onIgnore}
-          className="text-[11px] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
-        >
-          {t('writer.grammar.ignore')}
-        </button>
-        {match.isSpelling && (
-          <button
-            type="button"
-            onClick={onAddToDictionary}
-            className="text-[11px] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] rounded"
-          >
-            {t('writer.grammar.addToDictionary')}
-          </button>
-        )}
-      </div>
-    </li>
-  );
-};
 
 export { GrammarCheckPanel };
