@@ -68,11 +68,11 @@ describe('idbProjectStore', () => {
     it('normalizes integrations settings with defaults', () => {
       const result = normalizePersistedSettings({
         integrations: {
-          syncProvider: 'evernote',
+          languageToolEnabled: true,
         },
       });
-      expect(result.integrations.syncProvider).toBe('evernote');
-      expect(result.integrations.evernoteSync).toBe(false);
+      expect(result.integrations.languageToolEnabled).toBe(true);
+      expect(result.integrations.languageToolBaseUrl).toBe('http://localhost:8010');
     });
 
     it('applies backup defaults when backup is missing', () => {

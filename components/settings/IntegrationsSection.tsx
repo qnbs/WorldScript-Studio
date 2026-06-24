@@ -5,7 +5,6 @@ import { assertLanguageToolAllowed, languageToolPing } from '../../services/lang
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
-import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
 import { ToggleSwitch } from './SettingsShared';
 
@@ -40,83 +39,6 @@ export const IntegrationsSection: FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('settings.integrations.title')}
-          </h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label
-              htmlFor="settings-sync-provider"
-              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
-            >
-              {t('settings.integrations.syncProvider')}
-            </label>
-            <Select
-              id="settings-sync-provider"
-              ariaLabel={t('settings.integrations.syncProvider')}
-              value={settings.integrations.syncProvider}
-              onChange={(v) =>
-                handleSettingChange('integrations', {
-                  ...settings.integrations,
-                  syncProvider: v,
-                })
-              }
-              options={[
-                { value: 'none', label: t('settings.integrations.providers.none') },
-                { value: 'google-drive', label: t('settings.integrations.providers.googleDrive') },
-                { value: 'dropbox', label: t('settings.integrations.providers.dropbox') },
-                { value: 'onedrive', label: t('settings.integrations.providers.onedrive') },
-                { value: 'icloud', label: t('settings.integrations.providers.icloud') },
-              ]}
-            />
-          </div>
-          {/* QNBS-v3: these 4 toggles persist preference state but have no backend implementation yet */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ToggleSwitch
-              label={t('settings.integrations.evernoteSync')}
-              hint={t('settings.integrations.comingSoon')}
-              checked={settings.integrations.evernoteSync}
-              onChange={(v) =>
-                handleSettingChange('integrations', { ...settings.integrations, evernoteSync: v })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.integrations.notionSync')}
-              hint={t('settings.integrations.comingSoon')}
-              checked={settings.integrations.notionSync}
-              onChange={(v) =>
-                handleSettingChange('integrations', { ...settings.integrations, notionSync: v })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.integrations.scrivenerExport')}
-              hint={t('settings.integrations.comingSoon')}
-              checked={settings.integrations.scrivenerExport}
-              onChange={(v) =>
-                handleSettingChange('integrations', {
-                  ...settings.integrations,
-                  scrivenerExport: v,
-                })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.integrations.googleDocsImport')}
-              hint={t('settings.integrations.comingSoon')}
-              checked={settings.integrations.googleDocsImport}
-              onChange={(v) =>
-                handleSettingChange('integrations', {
-                  ...settings.integrations,
-                  googleDocsImport: v,
-                })
-              }
-            />
-          </div>
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader>
           <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">

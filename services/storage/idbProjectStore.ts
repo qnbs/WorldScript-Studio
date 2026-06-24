@@ -94,11 +94,6 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   }
 
   validSettings.integrations = {
-    syncProvider: 'none' as const,
-    evernoteSync: false,
-    notionSync: false,
-    scrivenerExport: false,
-    googleDocsImport: false,
     languageToolEnabled: false,
     languageToolBaseUrl: 'http://localhost:8010',
     ...(incoming['integrations'] as Partial<Settings['integrations']> | undefined),

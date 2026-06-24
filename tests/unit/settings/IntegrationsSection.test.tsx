@@ -25,11 +25,6 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
       integrations: {
         languageToolEnabled: true,
         languageToolBaseUrl: 'http://localhost:8081',
-        syncProvider: 'none',
-        evernoteSync: false,
-        notionSync: false,
-        scrivenerExport: false,
-        googleDocsImport: false,
       },
       privacy: { allowCloudServices: true },
     },
@@ -74,9 +69,11 @@ describe('IntegrationsSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the integrations title', () => {
+  // QNBS-v3: the dead sync/import card (with the generic title) was removed; LanguageTool is the
+  // section's only real integration now.
+  it('renders the LanguageTool title', () => {
     render(<IntegrationsSection />);
-    expect(screen.getByText('settings.integrations.title')).toBeInTheDocument();
+    expect(screen.getByText('settings.integrations.languageToolTitle')).toBeInTheDocument();
   });
 
   it('renders the LanguageTool enabled toggle', () => {
@@ -128,10 +125,5 @@ describe('IntegrationsSection', () => {
     render(<IntegrationsSection />);
     await user.click(screen.getByText('settings.integrations.languageToolTest'));
     await waitFor(() => expect(screen.getByText('Connection refused')).toBeInTheDocument());
-  });
-
-  it('renders the sync provider selector', () => {
-    render(<IntegrationsSection />);
-    expect(screen.getByText('settings.integrations.syncProvider')).toBeInTheDocument();
   });
 });
