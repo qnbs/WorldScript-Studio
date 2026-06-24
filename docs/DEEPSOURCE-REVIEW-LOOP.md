@@ -15,11 +15,25 @@
   **without being asked**. Goal state: **DeepSource checks green** (or every finding fixed/justified)
   with the rest of CI green.
 
-## 1. How DeepSource differs from the CodeAnt loop (read first)
+## 0a. ALWAYS trigger the AI review on every PR (standing rule)
+
+DeepSource runs **two** layers, and only one is automatic:
+
+- **Static analysis** (per-analyzer check-runs: `DeepSource: JavaScript / Rust / Docker / CSS`) —
+  **automatic** on every push.
+- **AI Review** — **on-demand for this team.** It does **not** run on its own; you must trigger it.
+
+> **So on EVERY PR (and after each push that changes code), post:**
+> ```bash
+> gh pr comment <PR_NUMBER> --body "@deepsourcebot review"
+> ```
+> Then run the correction loop (§2) over whatever the AI review surfaces, in addition to the automatic
+> static-analysis findings. A PR is review-quiescent only when **both** layers are clean. Trigger it
+> right after opening the PR and again after every code-changing push (docs-only pushes don't need it).
 
 | Aspect | CodeAnt | DeepSource |
 |---|---|---|
-| Trigger | manual `@codeant-ai review` per push | **automatic on every push** — no comment needed |
+| Trigger | manual `@codeant-ai review` per push | **static**: auto on every push · **AI review**: on-demand → `@deepsourcebot review` on every PR (§0a) |
 | Where findings appear | GitHub **review threads** (resolvable) | **check-run annotations** (per file/line) + the DeepSource **dashboard**; *not* review threads |
 | Resolution mechanism | reply + `resolveReviewThread` (GraphQL) | **fix the code** (check goes green) · `# skipcq` inline · or "Ignore" in the dashboard |
 | Suppression token | `// biome-ignore` | `# skipcq: <ISSUE_CODE>` / `// skipcq: <ISSUE_CODE>` |
@@ -27,8 +41,9 @@
 | Autofix | — | **dashboard-driven** — opens its own PR (review it like any PR) |
 
 **Consequence:** there is **no `resolveReviewThread` step** here. You make a check green by fixing the
-code (preferred), by a justified `# skipcq`, or by ignoring it in the dashboard. Because DeepSource
-re-runs on every push, the loop's "re-trigger" step is **automatic**.
+code (preferred), by a justified `# skipcq`, or by ignoring it in the dashboard. The **static**
+re-analysis re-runs automatically on push — but the **AI review is on-demand**, so re-trigger it with
+`@deepsourcebot review` after each code-changing push (§0a).
 
 ## 2. The Iron Rule — loop until quiescent
 
@@ -45,7 +60,7 @@ caused by the fix (a "wave"). Handle each wave like the first.
         │ 4. Update tests + i18n + docs (lockstep)     │
         │ 5. suppressions + lint + typecheck + vitest  │
         │ 6. Commit + push (one wave = one commit)     │
-        │ 7. DeepSource re-runs AUTOMATICALLY on push  │
+        │ 7. static auto-reruns; re-trigger AI (§0a)   │
         └───────────────┬─────────────────────────────┘
                         │ new findings?
               ┌── yes ──┘         └── no ──┐
