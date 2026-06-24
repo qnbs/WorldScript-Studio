@@ -75,13 +75,6 @@ describe('idbProjectStore', () => {
       expect(result.integrations.languageToolBaseUrl).toBe('http://localhost:8010');
     });
 
-    it('applies backup defaults when backup is missing', () => {
-      const result = normalizePersistedSettings({});
-      expect(result.backup.autoBackup).toBe(true);
-      expect(result.backup.backupFrequency).toBe('weekly');
-      expect(result.backup.maxBackups).toBe(10);
-    });
-
     it('applies voice defaults when voice is missing', () => {
       const result = normalizePersistedSettings({});
       expect(typeof result.voice).toBe('object');

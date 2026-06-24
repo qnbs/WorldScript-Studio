@@ -110,7 +110,6 @@ vi.mock('../../../features/settings/settingsSlice', () => ({
     setCollaboration: (v: unknown) => ({ type: 'settings/setCollaboration', payload: v }),
     setIntegrations: (v: unknown) => ({ type: 'settings/setIntegrations', payload: v }),
     setAdvancedEditor: (v: unknown) => ({ type: 'settings/setAdvancedEditor', payload: v }),
-    setBackup: (v: unknown) => ({ type: 'settings/setBackup', payload: v }),
     setThemeCustomization: (v: unknown) => ({ type: 'settings/setThemeCustomization', payload: v }),
   },
 }));
@@ -351,14 +350,6 @@ describe('handleSettingChange', () => {
     act(() => result.current.handleSettingChange('collaboration', { webrtcSignalingUrls: [] }));
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'settings/setCollaboration' }),
-    );
-  });
-
-  it('dispatches setBackup', () => {
-    const { result } = renderHook(() => useSettingsView());
-    act(() => result.current.handleSettingChange('backup', { autoBackupEnabled: true }));
-    expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'settings/setBackup' }),
     );
   });
 });

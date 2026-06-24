@@ -40,9 +40,10 @@ describe('SettingsOverviewCard', () => {
     expect(screen.getByText('settings.overview.title')).toBeInTheDocument();
   });
 
-  it('renders four quick-link buttons', () => {
+  // QNBS-v3: the dead Backup section was removed, so its overview quick-link is gone (3 remain).
+  it('renders three quick-link buttons', () => {
     render(<SettingsOverviewCard />);
-    expect(screen.getAllByRole('button').length).toBe(4);
+    expect(screen.getAllByRole('button').length).toBe(3);
   });
 
   it('renders guide button', () => {
@@ -53,11 +54,6 @@ describe('SettingsOverviewCard', () => {
   it('renders AI button', () => {
     render(<SettingsOverviewCard />);
     expect(screen.getByText('settings.categories.ai')).toBeInTheDocument();
-  });
-
-  it('renders backup button', () => {
-    render(<SettingsOverviewCard />);
-    expect(screen.getByText('settings.categories.backup')).toBeInTheDocument();
   });
 
   it('renders experimental button', () => {
@@ -77,13 +73,6 @@ describe('SettingsOverviewCard', () => {
     render(<SettingsOverviewCard />);
     await user.click(screen.getByText('settings.categories.ai'));
     expect(mockSetActiveCategory).toHaveBeenCalledWith('ai');
-  });
-
-  it('calls setActiveCategory("backup") when backup button clicked', async () => {
-    const user = userEvent.setup();
-    render(<SettingsOverviewCard />);
-    await user.click(screen.getByText('settings.categories.backup'));
-    expect(mockSetActiveCategory).toHaveBeenCalledWith('backup');
   });
 
   it('calls setActiveCategory("experimental") when experimental button clicked', async () => {

@@ -125,7 +125,6 @@ describe('SettingsOverviewCard', () => {
     render(<SettingsOverviewCard />);
     expect(screen.getByText('settings.overview.openGuide')).toBeInTheDocument();
     expect(screen.getByText('settings.categories.ai')).toBeInTheDocument();
-    expect(screen.getByText('settings.categories.backup')).toBeInTheDocument();
     expect(screen.getByText('settings.categories.experimental')).toBeInTheDocument();
   });
 
@@ -141,12 +140,5 @@ describe('SettingsOverviewCard', () => {
     render(<SettingsOverviewCard />);
     await user.click(screen.getByText('settings.categories.ai'));
     expect(mockSetActiveCategory).toHaveBeenCalledWith('ai');
-  });
-
-  it('calls setActiveCategory("backup") on backup button click', async () => {
-    const user = userEvent.setup();
-    render(<SettingsOverviewCard />);
-    await user.click(screen.getByText('settings.categories.backup'));
-    expect(mockSetActiveCategory).toHaveBeenCalledWith('backup');
   });
 });

@@ -24,7 +24,6 @@ import { SettingsOverviewCard } from './settings/SettingsOverviewCard';
 import { ShortcutsSection } from './settings/ShortcutsSection';
 import {
   AccessibilitySection,
-  BackupSection,
   CollaborationSection,
   IntegrationsSection,
   PrivacySection,
@@ -79,7 +78,7 @@ const NAV_GROUPS = [
   { key: 'writing', ids: ['editor', 'advanced-editor', 'project-ai'] },
   { key: 'aiModels', ids: ['ai', 'local-ai', 'advanced-ai', 'openrouter', 'lora-adapters'] },
   { key: 'appearanceAccessibility', ids: ['appearance', 'accessibility'] },
-  { key: 'privacyData', ids: ['privacy', 'data', 'backup'] },
+  { key: 'privacyData', ids: ['privacy', 'data'] },
   {
     key: 'connections',
     ids: ['collaboration', 'voice', 'integrations', 'community'],
@@ -204,13 +203,6 @@ const SettingsViewUI: FC = () => {
         ),
       },
       {
-        id: 'backup',
-        label: t('settings.categories.backup'),
-        icon: (
-          <path d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0v-7.5A2.25 2.25 0 018.25 2.25h13.5A2.25 2.25 0 0124 4.5v7.5m-19.5 0v7.5a2.25 2.25 0 002.25 2.25h13.5a2.25 2.25 0 002.25-2.25v-7.5" />
-        ),
-      },
-      {
         id: 'data',
         label: t('settings.categories.data'),
         icon: (
@@ -321,8 +313,6 @@ const SettingsViewUI: FC = () => {
         return <CollaborationSection />;
       case 'integrations':
         return <IntegrationsSection />;
-      case 'backup':
-        return <BackupSection />;
       case 'data':
         return <DataSection />;
       case 'about':

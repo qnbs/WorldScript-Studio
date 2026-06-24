@@ -34,7 +34,6 @@ import type {
   AdvancedEditorSettings,
   AiCreativity,
   AppearancePreset,
-  BackupSettings,
   CollaborationSettings,
   CustomFont,
   EditorFont,
@@ -169,9 +168,6 @@ export const useSettingsView = () => {
           dispatch(
             settingsActions.setAdvancedEditor(value as unknown as Partial<AdvancedEditorSettings>),
           );
-          break;
-        case 'backup':
-          dispatch(settingsActions.setBackup(value as unknown as Partial<BackupSettings>));
           break;
         case 'themeCustomization':
           dispatch(

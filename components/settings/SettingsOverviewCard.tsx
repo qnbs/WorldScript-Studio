@@ -30,14 +30,6 @@ export const SettingsOverviewCard: FC = () => {
           type="button"
           variant="secondary"
           size="sm"
-          onClick={() => setActiveCategory('backup')}
-        >
-          {t('settings.categories.backup')}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
           onClick={() => setActiveCategory('experimental')}
         >
           {t('settings.categories.experimental')}
