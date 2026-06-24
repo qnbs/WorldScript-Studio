@@ -31,6 +31,22 @@ DeepSource runs **two** layers, and only one is automatic:
 > static-analysis findings. A PR is review-quiescent only when **both** layers are clean. Trigger it
 > right after opening the PR and again after every code-changing push (docs-only pushes don't need it).
 
+### Prerequisite + reality (DeepSource docs)
+
+The AI review only runs if **AI Agents is enabled**: dashboard → **Policies → AI → "Enable AI Agents"**
+(on by default for new accounts; existing accounts must switch it on). Inline AI findings (vs. only the
+grade summary) are toggled in **Settings → Quality Gates → inline review comments**.
+
+**Observed (2026-06-24):** even after triggering `@deepsourcebot review` on three PRs, the AI review
+produced **no response** (no post-trigger `deepsource-io` comment; the AI-only CSS analyzer stayed
+`skipped`) — AI Agents is off or the OSS/free tier doesn't serve it. **So treat the AI review as
+best-effort, NOT a merge gate:** always trigger it, but if it doesn't respond, proceed on
+**static-analysis quiescence** (same posture as the CodeAnt-unresponsive rule). The static layer
+(JavaScript/Rust/Docker check-runs + dashboard issues) is the reliable one and already covers
+security / bug-risk / anti-pattern.
+
+## 1. How DeepSource differs from the CodeAnt loop (read first)
+
 | Aspect | CodeAnt | DeepSource |
 |---|---|---|
 | Trigger | manual `@codeant-ai review` per push | **static**: auto on every push · **AI review**: on-demand → `@deepsourcebot review` on every PR (§0a) |
@@ -203,6 +219,14 @@ GitHub App resumes auto-reviewing, run **both** loops: CodeAnt for narrative/AI 
   beyond the single `javascript` analyzer declared in the toml. Findings are check annotations, not
   review threads. Autofix enabled by the maintainer (dashboard-driven). First full-codebase pass will
   land when the config reaches `main`.
+- **2026-06-24** — Repo-wide triage done off the **static** layer (dashboard categories via WebFetch):
+  Security clean (JS-0440 dashboard-ignored, reviewed-safe), ~1700 anti-patterns + bug-risk almost all
+  rule-ignored as deliberate-convention/Biome/strict-TS/test false-positives (void/any/non-null/console/
+  async-no-await/…), Performance + Documentation **0**. Genuine fixes: ecoModeService boolean (#230),
+  Storybook rules-of-hooks (#231), PDF-iframe sandbox (#232). **AI review never responded** to
+  `@deepsourcebot review` on #231/#232/#233 (no post-trigger comment; CSS analyzer stayed skipped) →
+  AI Agents off or not on the OSS tier. Adopted the **best-effort** posture above (trigger always,
+  gate on static).
 
 ---
 
