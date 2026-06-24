@@ -43,12 +43,11 @@ export const SETTINGS_CATEGORY_SEARCH_HINTS: Record<string, string[]> = {
     'announcements',
   ],
   privacy: ['analytics', 'encryption', 'data'],
-  performance: ['cache', 'preload', 'offline'],
-  notifications: ['reminder', 'desktop', 'email'],
   collaboration: ['webrtc', 'sharing', 'yjs'],
-  integrations: ['language tool', 'sync', 'notion'],
-  backup: ['snapshot', 'frequency', 'encrypt'],
-  data: ['export', 'import', 'reset', 'json'],
+  // QNBS-v3: Integrations is now LanguageTool-only — the dead sync/import card (Notion/Evernote/etc.)
+  // was removed, so its hints point at the real grammar/spell integration.
+  integrations: ['language tool', 'grammar', 'spell', 'proofread'],
+  data: ['export', 'import', 'reset', 'json', 'backup'],
   about: ['version', 'license', 'credits', 'health', 'diagnostics', 'locale', 'updater', 'tauri'],
   shortcuts: ['keyboard', 'hotkey', 'keybinding', 'ctrl', 'meta'],
   guide: ['overview', 'help', 'map', 'categories', 'leitfaden'],
