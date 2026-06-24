@@ -1,0 +1,38 @@
+# DeepSource configuration — conservative, analysis-only.
+#
+# This file is INERT until the free DeepSource GitHub App is installed on the repository
+# (https://app.deepsource.com — free for public/open-source repos, no in-repo token required).
+# It adds a second static-analysis layer alongside the existing CI gate (Biome + tsgo + CodeQL +
+# Vitest). No [[transformers]] / autofix block is configured, so DeepSource never writes commits
+# and needs no access token. Coverage reporting is intentionally omitted (that path needs a token).
+
+version = 1
+
+# Keep generated artifacts, vendored code, and local render dumps out of analysis to avoid noise.
+exclude_patterns = [
+  "dist/**",
+  "build/**",
+  "coverage/**",
+  "reports/**",
+  "public/locales/**",        # generated i18n bundles (source of truth is locales/**)
+  "graphify-out/**",
+  ".codegraph/**",
+  "src-tauri/target/**",
+  "patches/**",
+  "**/*.tsx.html",            # untracked local render artifacts (defensive)
+  "packages/collab-transport/**",  # vendored y-webrtc fork (see VENDOR-FORKS.md)
+]
+
+test_patterns = [
+  "tests/**",
+  "**/*.test.ts",
+  "**/*.test.tsx",
+]
+
+[[analyzers]]
+name = "javascript"
+
+  [analyzers.meta]
+  environment = ["nodejs", "browser"]
+  dialect = "typescript"
+  plugins = ["react"]
