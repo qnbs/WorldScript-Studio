@@ -6,6 +6,7 @@
 import type React from 'react';
 import { useMemo } from 'react';
 import { useProForgeViewContext } from '../../contexts/ProForgeViewContext';
+import { computePipelineProgress } from '../../features/proForge/pipelineProgress';
 import type { PipelineStage } from '../../features/proForge/types';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -30,6 +31,9 @@ export const PipelineProgressPanel: React.FC = () => {
   const stageName = (stage: string): string => t(`proforge.stageName.${stage}`);
   const statusLabel = (status: string): string => t(`proforge.status.${status}`);
 
+  // QNBS-v3: PR7 — determinate overall progress (stage N of M / percent) for the active run.
+  const progress = useMemo(() => computePipelineProgress(currentRun), [currentRun]);
+
   const totalMetrics = useMemo(() => {
     if (!currentRun) return null;
     const stages = currentRun.stages;
@@ -53,6 +57,39 @@ export const PipelineProgressPanel: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* QNBS-v3: PR7 — determinate overall progress bar */}
+      <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium">{t('proforge.progress.overall')}</h3>
+          <span className="text-xs text-[var(--sc-text-secondary)]">
+            {/* QNBS-v3: PR7 — only show "Stage N of M" when the active stage is actually one of the
+                selected stages (activeIndex >= 1); otherwise a neutral label, never a coerced index. */}
+            {progress.activeIndex > 0
+              ? t('proforge.progress.stageOfTotal', {
+                  current: progress.activeIndex,
+                  total: progress.total,
+                })
+              : t('proforge.progress.preparing')}
+          </span>
+        </div>
+        <div
+          className="h-2 w-full rounded-sc-sm bg-[var(--sc-surface-base)] overflow-hidden"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress.percent}
+          aria-label={t('proforge.progress.overall')}
+        >
+          <div
+            className="h-full bg-[var(--sc-accent)] transition-[width] duration-sc-md ease-sc-out"
+            style={{ width: `${progress.percent}%` }}
+          />
+        </div>
+        <p className="mt-1.5 text-xs text-[var(--sc-text-secondary)]">
+          {t('proforge.progress.percentComplete', { percent: progress.percent })}
+        </p>
+      </div>
+
       {/* Status Card */}
       <div className="rounded-sc-lg bg-[var(--sc-surface-elevated)] border border-[var(--sc-border-subtle)] p-4">
         <div className="flex items-center justify-between mb-3">

@@ -40,9 +40,21 @@ vi.mock('../../../../services/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import type { PipelineConfig, StageResult } from '../../../../features/proForge/types';
+import type { GenerateRequest } from '../../../../services/ai/inferenceGateway';
 import { logger } from '../../../../services/logger';
 import { BaseAgent } from '../../../../services/proForge/pipelineAgents/baseAgent';
 import type { OrchestratorContext } from '../../../../services/proForge/proForgeOrchestrator';
+
+// QNBS-v3: typed accessor for the last gateway.generate() call. Annotating `calls` as
+// GenerateRequest[][] makes the tuple element GenerateRequest (not an `any`-typed element) without
+// any `as` assertion — keeping mockGenerate an untyped vi.fn() so it stays assignable to the gateway.
+function lastGenerateRequest(): GenerateRequest {
+  const calls: GenerateRequest[][] = mockGenerate.mock.calls;
+  const last = calls[calls.length - 1];
+  const req = last?.[0];
+  if (!req) throw new Error('gateway.generate was not called');
+  return req;
+}
 
 // ---------------------------------------------------------------------------
 // Concrete stub — BaseAgent is abstract
@@ -84,6 +96,9 @@ class StubAgent extends BaseAgent {
   }
   async publicSelfReflect(excerpt: string, summary: string, signal: AbortSignal) {
     return this.selfReflect(excerpt, summary, signal);
+  }
+  async publicCooperativeYield() {
+    return this.cooperativeYield();
   }
 }
 
@@ -345,6 +360,35 @@ describe('BaseAgent', () => {
       expect(callArg.prompt).toContain('No structural edits found.');
       expect(callArg.prompt).toContain('Original prompt.');
     });
+
+    // QNBS-v3: PR7 — abort signal must reach the AI call so the request is cancellable mid-flight.
+    it('does NOT include a signal in options when none is bound', async () => {
+      mockGenerate.mockResolvedValueOnce({ text: 'OK', usage: {} });
+      await agent.publicGenerate('Prompt');
+      expect(lastGenerateRequest().options.signal).toBeUndefined();
+    });
+
+    it('threads the bound abort signal into the AI call options', async () => {
+      mockGenerate.mockResolvedValueOnce({ text: 'OK', usage: {} });
+      const controller = new AbortController();
+      agent.bindAbortSignal(controller.signal);
+      await agent.publicGenerate('Prompt');
+      expect(lastGenerateRequest().options.signal).toBe(controller.signal);
+    });
+  });
+
+  describe('cooperativeYield()', () => {
+    it('resolves deterministically when the macrotask is advanced', async () => {
+      vi.useFakeTimers();
+      try {
+        const pending = agent.publicCooperativeYield();
+        // Advance the setTimeout(…, 0) macrotask explicitly — no reliance on real scheduling.
+        await vi.advanceTimersByTimeAsync(0);
+        await expect(pending).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('selfReflect()', () => {
@@ -399,6 +443,14 @@ describe('BaseAgent', () => {
       const excerptInPrompt =
         callArg.prompt.split('MANUSCRIPT EXCERPT:\n')[1]?.split('\n\nANALYSIS')[0] ?? '';
       expect(excerptInPrompt.length).toBeLessThanOrEqual(800);
+    });
+
+    // QNBS-v3: PR7 — reflection passes its caller's signal into the AI call so it is cancellable.
+    it('threads the provided signal into the reflection AI call', async () => {
+      mockGenerate.mockResolvedValueOnce({ text: 'COHERENT: ok', usage: {} });
+      const controller = new AbortController();
+      await agent.publicSelfReflect('excerpt', 'summary', controller.signal);
+      expect(lastGenerateRequest().options.signal).toBe(controller.signal);
     });
   });
 });

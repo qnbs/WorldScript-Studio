@@ -81,7 +81,10 @@ export class ProForgeCapabilityLayer {
   // Op 1: runStage — execute a single pipeline stage agent + supervisor gate
   // -------------------------------------------------------------------------
 
-  async runStage(rawInput: RunStageInput | unknown): Promise<RunStageResult> {
+  // QNBS-v3: PR7 — accept a caller-provided AbortSignal so capability-layer (Node/MCP/Copilot)
+  // stage runs are actually cancellable mid-flight; without one, an internal controller is used
+  // purely so the agent always has a signal to honour.
+  async runStage(rawInput: RunStageInput | unknown, signal?: AbortSignal): Promise<RunStageResult> {
     const input = parseOrThrow(runStageInputSchema, rawInput, 'runStage');
     return this.run('runStage', { stage: input.stage, projectId: input.projectId }, async () => {
       this.assertEnabled('runStage');
@@ -95,13 +98,23 @@ export class ProForgeCapabilityLayer {
       const AgentClass = await loadAgent(input.stage);
       const agent = new AgentClass(context);
 
-      const controller = new AbortController();
+      // QNBS-v3: PR7 — prefer the caller's signal (externally abortable); fall back to a local
+      // controller only so the agent always receives a valid signal.
+      const effectiveSignal = signal ?? new AbortController().signal;
+      agent.bindAbortSignal(effectiveSignal);
       let result: Awaited<ReturnType<typeof agent.execute>>;
       try {
-        result = await agent.execute(controller.signal);
+        result = await agent.execute(effectiveSignal);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         throw ProForgeError.stageFailed(`Stage "${input.stage}" agent failed: ${message}`);
+      }
+
+      // QNBS-v3: PR7 — propagate cancellation explicitly. Some agents complete and return before
+      // honouring the signal; without this, an aborted run would surface as a "successful" (often
+      // empty) result instead of a cancellation. Mirrors the orchestrator's post-execute abort guard.
+      if (effectiveSignal.aborted) {
+        throw ProForgeError.stageFailed(`Stage "${input.stage}" was aborted before completion.`);
       }
 
       // QNBS-v3: heuristic quality gate (no AI) — same gate the orchestrator applies between stages.

@@ -35,6 +35,7 @@ vi.mock('../../../services/proForge/pipelineAgents/diagnosticAgent', () => ({
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
     setRetryFeedback = vi.fn();
+    bindAbortSignal = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/structuralAgent', () => ({
@@ -42,6 +43,7 @@ vi.mock('../../../services/proForge/pipelineAgents/structuralAgent', () => ({
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
     setRetryFeedback = vi.fn();
+    bindAbortSignal = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/proseAgent', () => ({
@@ -49,6 +51,7 @@ vi.mock('../../../services/proForge/pipelineAgents/proseAgent', () => ({
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
     setRetryFeedback = vi.fn();
+    bindAbortSignal = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/copyEditAgent', () => ({
@@ -56,6 +59,7 @@ vi.mock('../../../services/proForge/pipelineAgents/copyEditAgent', () => ({
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
     setRetryFeedback = vi.fn();
+    bindAbortSignal = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/proofAgent', () => ({
@@ -63,6 +67,7 @@ vi.mock('../../../services/proForge/pipelineAgents/proofAgent', () => ({
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
     setRetryFeedback = vi.fn();
+    bindAbortSignal = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/productionAgent', () => ({
@@ -70,6 +75,7 @@ vi.mock('../../../services/proForge/pipelineAgents/productionAgent', () => ({
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
     setRetryFeedback = vi.fn();
+    bindAbortSignal = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/publishingAgent', () => ({
@@ -77,6 +83,7 @@ vi.mock('../../../services/proForge/pipelineAgents/publishingAgent', () => ({
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
     setRetryFeedback = vi.fn();
+    bindAbortSignal = vi.fn();
   },
 }));
 vi.mock('../../../services/proForge/pipelineAgents/analyticsAgent', () => ({
@@ -84,6 +91,7 @@ vi.mock('../../../services/proForge/pipelineAgents/analyticsAgent', () => ({
     constructor(public ctx: unknown) {}
     execute = mockAgentExecute;
     setRetryFeedback = vi.fn();
+    bindAbortSignal = vi.fn();
   },
 }));
 

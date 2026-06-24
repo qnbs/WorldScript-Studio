@@ -40,9 +40,12 @@ export interface DiagnosticSummary {
 export async function runCopilotDiagnostic(
   capability: ProForgeCapabilityLayer,
   projectId: string,
+  signal?: AbortSignal,
 ): Promise<DiagnosticSummary | null> {
   try {
-    const result = await capability.runStage({ stage: 'intake', projectId });
+    // QNBS-v3: PR7 — forward the caller's abort signal so a cancelled diagnostic stops the
+    // in-flight AI call instead of running to completion.
+    const result = await capability.runStage({ stage: 'intake', projectId }, signal);
     const report = result.agentOutput as DiagnosticReport | undefined;
     if (!report || report.isFallback) return null;
     return {

@@ -64,6 +64,11 @@ export class ProseAgent extends BaseAgent {
 
     for (const section of sectionsToProcess) {
       if (signal.aborted) break;
+      // QNBS-v3: PR7 — yield between sections to keep the UI responsive during synchronous work.
+      await this.cooperativeYield();
+      // QNBS-v3: PR7 — re-check after the async yield so an abort mid-yield doesn't run an extra
+      // section / AI call.
+      if (signal.aborted) break;
 
       const content = section.content ?? '';
       const wordCount = content.trim().split(/\s+/).length;
@@ -121,6 +126,11 @@ export class ProseAgent extends BaseAgent {
         logger.warn(`ProseAgent: Failed to analyze section ${section.id}:`, err);
       }
     }
+
+    // QNBS-v3: PR7 — stop promptly on abort BEFORE the expensive post-loop work (filter-word scan,
+    // dedup, memory write, metrics, result assembly). Throw (don't return empty) so cancellation is
+    // EXPLICIT and the capability-layer path can't read an aborted run as a successful completion.
+    if (signal.aborted) throw new Error('Stage aborted');
 
     // Also add client-side filter word detection as supplemental edits
     const filterWordEdits = this.detectFilterWords(sections);

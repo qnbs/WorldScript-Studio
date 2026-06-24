@@ -43,6 +43,12 @@ export class CopyEditAgent extends BaseAgent {
 
     for (const section of sectionsToProcess) {
       if (signal.aborted) break;
+      // QNBS-v3: PR7 — yield between sections so the UI stays responsive during synchronous
+      // post-AI processing (validation, dedup) on large manuscripts.
+      await this.cooperativeYield();
+      // QNBS-v3: PR7 — re-check after the async yield: an abort during the yield must not let one
+      // more section (and its AI call) slip through.
+      if (signal.aborted) break;
       const content = section.content ?? '';
       if (content.trim().split(/\s+/).length < 50) continue;
 
@@ -96,6 +102,12 @@ export class CopyEditAgent extends BaseAgent {
         logger.warn(`CopyEditAgent: Failed section ${section.id}:`, err);
       }
     }
+
+    // QNBS-v3: PR7 — stop promptly on abort BEFORE the expensive post-loop work (repetition scan,
+    // dedup, memory write, result assembly). Throwing (rather than returning an empty result) makes
+    // cancellation EXPLICIT, so the capability-layer path can't mistake an aborted run for a
+    // successful empty completion. The orchestrator catches this the same as its own abort guard.
+    if (signal.aborted) throw new Error('Stage aborted');
 
     // Client-side repetition detection
     const clientRepetitions = this.detectRepetitions(sections);
