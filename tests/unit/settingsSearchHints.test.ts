@@ -40,4 +40,14 @@ describe('SETTINGS_CATEGORY_SEARCH_HINTS', () => {
       }
     }
   });
+
+  // QNBS-v3: guard against hints for removed settings categories (the dead-toggle audit deleted the
+  // performance/notifications/backup sections) — a stale hint would surface a nav category that no
+  // longer exists.
+  it('has no hints for removed settings categories', () => {
+    const keys = Object.keys(SETTINGS_CATEGORY_SEARCH_HINTS);
+    expect(keys).not.toContain('performance');
+    expect(keys).not.toContain('notifications');
+    expect(keys).not.toContain('backup');
+  });
 });
