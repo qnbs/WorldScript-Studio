@@ -27,14 +27,14 @@ function sortBinderNodes(nodes: BinderNode[]): BinderNode[] {
 
 function binderDepth(node: BinderNode, byId: Map<string, BinderNode>): number {
   if (!node.parentId) return 0;
-  let d = 0;
+  let depth = 0;
   let pid: string | null = node.parentId;
   while (pid) {
-    d++;
-    const p = byId.get(pid);
-    pid = p?.parentId ?? null;
+    depth++;
+    const parent = byId.get(pid);
+    pid = parent?.parentId ?? null;
   }
-  return d;
+  return depth;
 }
 
 function projectStorageId(data: { id?: string } | undefined): string {
@@ -124,6 +124,7 @@ const BinderAssetPreview: FC<{
       <iframe
         title={node.title}
         src={url}
+        sandbox="allow-same-origin"
         className="w-full h-48 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]"
       />
     );
@@ -209,9 +210,7 @@ export const BinderPanel: FC = () => {
   const onImportFiles = async (list: FileList | null) => {
     if (!list?.length) return;
     const parent = ensureResearchRoot();
-    for (let i = 0; i < list.length; i++) {
-      const file = list[i];
-      if (!file) continue;
+    for (const file of Array.from(list)) {
       try {
         const newId = await dispatch(importBinderFileThunk({ parentId: parent, file })).unwrap();
         setSelectedId(newId);

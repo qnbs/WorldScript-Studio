@@ -92,6 +92,7 @@ export const ManuscriptResearchSplit: FC<{
             <iframe
               title={node.title}
               src={blobUrl}
+              sandbox="allow-same-origin"
               className="w-full min-h-[60vh] rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)]"
             />
           ) : (
