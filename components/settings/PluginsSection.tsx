@@ -4,6 +4,7 @@ import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { selectEnablePluginSystem } from '../../features/featureFlags/featureFlagsSlice';
 import { pluginRegistry } from '../../services/pluginRegistry';
 import { Card, CardContent, CardHeader } from '../ui/Card';
+import { MaturityBadge } from './MaturityBadge';
 
 const TYPE_BADGE: Record<string, string> = {
   command: 'bg-[var(--sc-interactive-bg)] text-[var(--sc-interactive-fg)]',
@@ -20,9 +21,13 @@ export const PluginsSection: React.FC = () => {
     return (
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('settings.plugins.title')}
-          </h2>
+          {/* QNBS-v3: badge also in the flag-gated header for consistent maturity signalling. */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+              {t('settings.plugins.title')}
+            </h2>
+            <MaturityBadge flagKey="enablePluginSystem" />
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-[var(--sc-text-muted)]">{t('settings.plugins.flagGate')}</p>
@@ -35,9 +40,13 @@ export const PluginsSection: React.FC = () => {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('settings.plugins.title')}
-          </h2>
+          {/* QNBS-v3: maturity badge (enablePluginSystem → Beta), derived from FEATURE_CATALOG. */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+              {t('settings.plugins.title')}
+            </h2>
+            <MaturityBadge flagKey="enablePluginSystem" />
+          </div>
           <p className="text-sm text-[var(--sc-text-muted)] mt-1">
             {t('settings.plugins.description')}
           </p>

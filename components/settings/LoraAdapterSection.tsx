@@ -11,6 +11,7 @@ import {
 } from '../../services/loraAdapterService';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
+import { MaturityBadge } from './MaturityBadge';
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -72,9 +73,14 @@ export const LoraAdapterSection: React.FC = () => {
     return (
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('settings.loraAdapters.title')}
-          </h2>
+          {/* QNBS-v3: badge also in the flag-gated header so maturity signalling stays consistent
+              whether or not the feature is enabled. */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+              {t('settings.loraAdapters.title')}
+            </h2>
+            <MaturityBadge flagKey="enableLoraAdapters" />
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-[var(--sc-text-muted)]">
@@ -89,9 +95,13 @@ export const LoraAdapterSection: React.FC = () => {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('settings.loraAdapters.title')}
-          </h2>
+          {/* QNBS-v3: maturity badge (enableLoraAdapters → Experimental), derived from FEATURE_CATALOG. */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+              {t('settings.loraAdapters.title')}
+            </h2>
+            <MaturityBadge flagKey="enableLoraAdapters" />
+          </div>
           <p className="text-sm text-[var(--sc-text-muted)] mt-1">
             {t('settings.loraAdapters.description')}
           </p>

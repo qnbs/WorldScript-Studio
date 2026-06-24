@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react';
+import type { FC } from 'react';
 import { useMemo, useState } from 'react';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import {
@@ -12,21 +12,12 @@ import {
 } from '../../features/featureFlags/featureFlagsSlice';
 import { resolveFlagAvailability } from '../../features/featureFlags/flagDependencies';
 import { isTauriRuntime } from '../../services/tauriRuntime';
-import { Badge, type BadgeVariant } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
+import { MaturityBadge } from './MaturityBadge';
 import { ToggleSwitch } from './SettingsShared';
-
-// QNBS-v3: drive the maturity badge from FEATURE_CATALOG (single source of truth) rather than a
-// hand-maintained list — stub/experimental → "Experimental", beta → "Beta", stable/unlisted → none.
-const MATURITY_TO_BADGE: Record<string, BadgeVariant | undefined> = {
-  experimental: 'experimental',
-  stub: 'experimental',
-  beta: 'beta',
-  stable: undefined,
-};
 
 // QNBS-v3: enableIdbAtRestEncryption is intentionally NOT shown here — toggling it without the
 // passphrase setup flow would lock users out. Its dedicated UI lives in Settings → Privacy
@@ -54,13 +45,6 @@ export const FeatureFlagsSection: FC = () => {
       entries: visible.filter((e) => e.tier === tier),
     })).filter((g) => g.entries.length > 0);
   }, []);
-
-  const renderBadge = (entry: FeatureCatalogEntry): ReactNode => {
-    const variant = MATURITY_TO_BADGE[entry.maturity];
-    if (!variant) return undefined;
-    const label = variant === 'beta' ? t('common.badge.beta') : t('common.badge.experimental');
-    return <Badge variant={variant}>{label}</Badge>;
-  };
 
   // QNBS-v3: compose a localized hint from dependency state + risk level (no English catalog text
   // is shown to users — only i18n strings).
@@ -145,7 +129,7 @@ export const FeatureFlagsSection: FC = () => {
                     <ToggleSwitch
                       key={entry.flagKey}
                       label={t(`settings.featureFlags.${entry.flagKey}`)}
-                      badge={renderBadge(entry)}
+                      badge={<MaturityBadge flagKey={entry.flagKey} />}
                       hint={buildHint(entry)}
                       checked={isOn}
                       disabled={disabled}

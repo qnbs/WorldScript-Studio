@@ -11,6 +11,7 @@ import { settingsActions } from '../../features/settings/settingsSlice';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Select } from '../ui/Select';
 import { VoiceModelDownloadModal } from '../voice/VoiceModelDownloadModal';
+import { MaturityBadge } from './MaturityBadge';
 import { ToggleSwitch } from './SettingsShared';
 
 export const VoiceSettingsSection: FC = () => {
@@ -44,9 +45,13 @@ export const VoiceSettingsSection: FC = () => {
       {/* ── Master toggle ── */}
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('settings.voice.title')}
-          </h2>
+          {/* QNBS-v3: maturity badge derived from FEATURE_CATALOG (enableVoiceSupport → Experimental). */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
+              {t('settings.voice.title')}
+            </h2>
+            <MaturityBadge flagKey="enableVoiceSupport" />
+          </div>
           <p className="text-sm text-[var(--sc-text-muted)] mt-2">{t('settings.voice.intro')}</p>
         </CardHeader>
         <CardContent className="space-y-6">

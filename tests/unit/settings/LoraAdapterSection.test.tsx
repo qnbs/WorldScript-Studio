@@ -33,10 +33,9 @@ vi.mock('../../../services/loraAdapterService', () => ({
   deleteAdapter: (...args: unknown[]) => mockDeleteAdapter(...args),
 }));
 
-// selectEnableLoraAdapters is used with useAppSelector
-vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
-  selectEnableLoraAdapters: (s: unknown) => s,
-}));
+// QNBS-v3: featureFlagsSlice is NOT mocked — useAppSelector above is mocked to ignore its selector
+// argument (returns mockIsEnabled), so the real, typed selectEnableLoraAdapters is harmlessly unused,
+// and featureCatalog (loaded via the section's MaturityBadge) keeps its real defaultFeatureFlagsState.
 
 // ---------------------------------------------------------------------------
 // Import after mocks
@@ -59,6 +58,12 @@ describe('LoraAdapterSection', () => {
     render(<LoraAdapterSection />);
     expect(screen.getByText('settings.loraAdapters.title')).toBeInTheDocument();
     expect(screen.getByText('settings.loraAdapters.flagGate')).toBeInTheDocument();
+  });
+
+  // QNBS-v3: maturity signalling must stay consistent whether the flag is on or off.
+  it('shows the Experimental maturity badge even when the feature is disabled', () => {
+    render(<LoraAdapterSection />);
+    expect(screen.getByText('common.badge.experimental')).toBeInTheDocument();
   });
 
   it('does not show upload button when feature is disabled', () => {
