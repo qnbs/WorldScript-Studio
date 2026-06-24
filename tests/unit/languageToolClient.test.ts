@@ -44,10 +44,8 @@ const baseSettings = (): Settings => ({
   }),
   privacy: {
     analyticsEnabled: false,
-    crashReporting: false,
     dataEncryption: true,
     localStorageOnly: true,
-    shareUsageData: false,
     euDataResidency: true,
   },
   performance: {

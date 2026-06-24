@@ -64,10 +64,8 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   // isAnalyticsPersistenceAllowed; persisted user choice overrides the default via the spread.
   validSettings.privacy = {
     analyticsEnabled: true,
-    crashReporting: false,
     dataEncryption: true,
     localStorageOnly: true,
-    shareUsageData: false,
     euDataResidency: true,
     ...incomingPrivacy,
   };

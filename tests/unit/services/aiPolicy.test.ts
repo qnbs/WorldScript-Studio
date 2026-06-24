@@ -55,9 +55,7 @@ describe('aiPolicy', () => {
           localStorageOnly: true,
           euDataResidency: false,
           analyticsEnabled: false,
-          crashReporting: false,
           dataEncryption: true,
-          shareUsageData: false,
         }),
       ).toThrow('local-only mode');
     });
@@ -68,9 +66,7 @@ describe('aiPolicy', () => {
           localStorageOnly: false,
           euDataResidency: true,
           analyticsEnabled: false,
-          crashReporting: false,
           dataEncryption: true,
-          shareUsageData: false,
         }),
       ).toThrow('EU residency');
     });
@@ -81,9 +77,7 @@ describe('aiPolicy', () => {
           localStorageOnly: false,
           euDataResidency: true,
           analyticsEnabled: false,
-          crashReporting: false,
           dataEncryption: true,
-          shareUsageData: false,
         }),
       ).toThrow('EU residency');
     });
@@ -94,9 +88,7 @@ describe('aiPolicy', () => {
           localStorageOnly: false,
           euDataResidency: true,
           analyticsEnabled: false,
-          crashReporting: false,
           dataEncryption: true,
-          shareUsageData: false,
         }),
       ).not.toThrow();
     });

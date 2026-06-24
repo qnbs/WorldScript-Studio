@@ -31,12 +31,10 @@ describe('settingsSlice', () => {
 
   it('defaults privacy.analyticsEnabled to true (local-only metadata; toggle is a functional opt-out)', () => {
     // QNBS-v3: SEC — analytics default ON preserves the analytics dashboard (data never leaves the
-    // device); the privacy toggle now gates DuckDB writes via isAnalyticsPersistenceAllowed. Outward
-    // sharing switches stay opt-in.
+    // device); the privacy toggle now gates DuckDB writes via isAnalyticsPersistenceAllowed.
     const privacy = initState().privacy;
     expect(privacy.analyticsEnabled).toBe(true);
-    expect(privacy.crashReporting).toBe(false);
-    expect(privacy.shareUsageData).toBe(false);
+    expect(privacy.localStorageOnly).toBe(true);
   });
 
   it('setDesktopSettings merges the desktop group', () => {
@@ -251,11 +249,11 @@ describe('settingsSlice', () => {
   it('setPrivacy merges privacy settings', () => {
     const state = settingsReducer(
       initState(),
-      settingsActions.setPrivacy({ analyticsEnabled: true, shareUsageData: true }),
+      settingsActions.setPrivacy({ analyticsEnabled: false, localStorageOnly: false }),
     );
 
-    expect(state.privacy.analyticsEnabled).toBe(true);
-    expect(state.privacy.shareUsageData).toBe(true);
+    expect(state.privacy.analyticsEnabled).toBe(false);
+    expect(state.privacy.localStorageOnly).toBe(false);
     expect(state.privacy.dataEncryption).toBe(true);
   });
 

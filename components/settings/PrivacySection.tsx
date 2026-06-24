@@ -51,13 +51,6 @@ export const PrivacySection: FC = () => {
               }
             />
             <ToggleSwitch
-              label={t('settings.privacy.crashReporting')}
-              checked={settings.privacy.crashReporting}
-              onChange={(v) =>
-                handleSettingChange('privacy', { ...settings.privacy, crashReporting: v })
-              }
-            />
-            <ToggleSwitch
               label={t('settings.privacy.dataEncryption')}
               checked={featureFlags.enableIdbAtRestEncryption && encryptionReady}
               onChange={(v) => {
@@ -72,13 +65,6 @@ export const PrivacySection: FC = () => {
               checked={settings.privacy.localStorageOnly}
               onChange={(v) =>
                 handleSettingChange('privacy', { ...settings.privacy, localStorageOnly: v })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.privacy.shareUsageData')}
-              checked={settings.privacy.shareUsageData}
-              onChange={(v) =>
-                handleSettingChange('privacy', { ...settings.privacy, shareUsageData: v })
               }
             />
             <ToggleSwitch

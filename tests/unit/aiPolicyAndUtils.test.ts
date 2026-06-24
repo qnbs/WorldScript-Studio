@@ -34,9 +34,7 @@ import {
 
 const basePrivacy = (overrides: { localStorageOnly: boolean; euDataResidency: boolean }) => ({
   analyticsEnabled: false,
-  crashReporting: false,
   dataEncryption: false,
-  shareUsageData: false,
   ...overrides,
 });
 

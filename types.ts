@@ -528,10 +528,8 @@ export interface AccessibilitySettings {
 
 export interface PrivacySettings {
   analyticsEnabled: boolean;
-  crashReporting: boolean;
   dataEncryption: boolean;
   localStorageOnly: boolean;
-  shareUsageData: boolean;
   euDataResidency: boolean;
   // QNBS-v3: SEC one-time migration marker. Before the analytics gate existed, analyticsEnabled was
   // cosmetic (persistence was controlled solely by enableDuckDbAnalytics, default on), so legacy
