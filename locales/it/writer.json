@@ -98,5 +98,19 @@
   "writer.tts.start": "Leggi ad alta voce",
   "writer.tts.stop": "Interrompi lettura",
   "writer.versionControl.label": "Versioni",
-  "writer.versionControl.tooltip": "Controllo versione (rami e istantanee)"
+  "writer.versionControl.tooltip": "Controllo versione (rami e istantanee)",
+  "writer.grammar.title": "Grammatica e ortografia",
+  "writer.grammar.checkButton": "Controlla questa scena",
+  "writer.grammar.checking": "Controllo…",
+  "writer.grammar.issuesFound": "{{count}} problemi rilevati",
+  "writer.grammar.noIssues": "Nessun problema rilevato.",
+  "writer.grammar.selectScene": "Seleziona una scena da controllare.",
+  "writer.grammar.unsupported": "Il controllo grammaticale non è disponibile per questa lingua.",
+  "writer.grammar.disabled": "Attiva LanguageTool in Impostazioni → Connessioni per controllare questa scena.",
+  "writer.grammar.offline": "Impossibile raggiungere il server LanguageTool. È in esecuzione?",
+  "writer.grammar.error": "Il server LanguageTool ha restituito un errore.",
+  "writer.grammar.apply": "Applica",
+  "writer.grammar.ignore": "Ignora",
+  "writer.grammar.addToDictionary": "Aggiungi al dizionario",
+  "writer.grammar.noSuggestions": "Nessun suggerimento"
 }

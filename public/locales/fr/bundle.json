@@ -2764,5 +2764,19 @@
   "writer.tts.start": "Lire à haute voix",
   "writer.tts.stop": "Arrêter la lecture",
   "writer.versionControl.label": "Versions",
-  "writer.versionControl.tooltip": "Contrôle de version (branches et instantanés)"
+  "writer.versionControl.tooltip": "Contrôle de version (branches et instantanés)",
+  "writer.grammar.title": "Grammaire et orthographe",
+  "writer.grammar.checkButton": "Vérifier cette scène",
+  "writer.grammar.checking": "Vérification…",
+  "writer.grammar.issuesFound": "{{count}} problèmes détectés",
+  "writer.grammar.noIssues": "Aucun problème détecté.",
+  "writer.grammar.selectScene": "Sélectionnez une scène à vérifier.",
+  "writer.grammar.unsupported": "La vérification grammaticale n'est pas disponible pour cette langue.",
+  "writer.grammar.disabled": "Activez LanguageTool dans Paramètres → Connexions pour vérifier cette scène.",
+  "writer.grammar.offline": "Impossible de joindre le serveur LanguageTool. Est-il démarré ?",
+  "writer.grammar.error": "Le serveur LanguageTool a renvoyé une erreur.",
+  "writer.grammar.apply": "Appliquer",
+  "writer.grammar.ignore": "Ignorer",
+  "writer.grammar.addToDictionary": "Ajouter au dictionnaire",
+  "writer.grammar.noSuggestions": "Aucune suggestion"
 }
