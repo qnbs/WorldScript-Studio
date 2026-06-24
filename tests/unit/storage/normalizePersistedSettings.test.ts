@@ -89,15 +89,6 @@ describe('normalizePersistedSettings', () => {
     expect(result.voice.enabled).toBe(false);
   });
 
-  // ── notifications ─────────────────────────────────────────────────────────
-
-  it('provides default notifications when field is absent', () => {
-    const result = normalizePersistedSettings({});
-    expect(result.notifications).toBeDefined();
-    expect(result.notifications.desktopNotifications).toBe(false);
-    expect(result.notifications.goalAchievements).toBe(true);
-  });
-
   // ── backup ────────────────────────────────────────────────────────────────
 
   it('provides default backup settings when field is absent', () => {
@@ -205,7 +196,6 @@ describe('normalizePersistedSettings', () => {
     expect(typeof result.accessibility).toBe('object');
     expect(typeof result.voice).toBe('object');
     expect(typeof result.backup).toBe('object');
-    expect(typeof result.notifications).toBe('object');
     expect(typeof result.performance).toBe('object');
     expect(typeof result.privacy).toBe('object');
     expect(typeof result.advancedAi).toBe('object');

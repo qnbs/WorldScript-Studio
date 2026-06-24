@@ -268,17 +268,6 @@ describe('settingsSlice', () => {
     expect(state.performance.preloadContent).toBe(true);
   });
 
-  it('setNotifications merges notification settings', () => {
-    const state = settingsReducer(
-      initState(),
-      settingsActions.setNotifications({ desktopNotifications: true, writingReminders: 'daily' }),
-    );
-
-    expect(state.notifications.desktopNotifications).toBe(true);
-    expect(state.notifications.writingReminders).toBe('daily');
-    expect(state.notifications.goalAchievements).toBe(true);
-  });
-
   it('setCollaboration merges collaboration settings', () => {
     const state = settingsReducer(
       initState(),

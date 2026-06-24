@@ -104,12 +104,6 @@ describe('idbProjectStore', () => {
       expect(result.performance.preloadContent).toBe(true);
     });
 
-    it('applies notifications defaults when notifications is null', () => {
-      const result = normalizePersistedSettings({ notifications: null });
-      expect(result.notifications.desktopNotifications).toBe(false);
-      expect(result.notifications.writingReminders).toBe('never');
-    });
-
     it('applies advancedAi defaults when advancedAi is missing', () => {
       const result = normalizePersistedSettings({});
       expect(result.advancedAi.provider).toBe('gemini');

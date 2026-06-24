@@ -20,13 +20,6 @@ const defaultSettings = {
     localStorageOnly: false,
     euDataResidency: false,
   },
-  notifications: {
-    desktopNotifications: true,
-    emailNotifications: false,
-    goalAchievements: true,
-    collaborationUpdates: false,
-    writingReminders: 'daily',
-  },
 };
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
@@ -81,7 +74,6 @@ vi.mock('../../../components/ui/Select', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { NotificationsSection } from '../../../components/settings/NotificationsSection';
 import { PrivacySection } from '../../../components/settings/PrivacySection';
 
 // ---------------------------------------------------------------------------
@@ -124,52 +116,6 @@ describe('PrivacySection', () => {
     expect(mockHandleSettingChange).toHaveBeenCalledWith(
       'privacy',
       expect.objectContaining({ localStorageOnly: true }),
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// NotificationsSection tests
-// ---------------------------------------------------------------------------
-
-describe('NotificationsSection', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('renders the notifications title', () => {
-    render(<NotificationsSection />);
-    expect(screen.getByText('settings.notifications.title')).toBeInTheDocument();
-  });
-
-  it('renders desktop notifications toggle', () => {
-    render(<NotificationsSection />);
-    expect(
-      screen.getByRole('switch', { name: 'settings.notifications.desktopNotifications' }),
-    ).toBeInTheDocument();
-  });
-
-  it('desktopNotifications toggle is on', () => {
-    render(<NotificationsSection />);
-    expect(
-      screen
-        .getByRole('switch', { name: 'settings.notifications.desktopNotifications' })
-        .getAttribute('aria-checked'),
-    ).toBe('true');
-  });
-
-  it('renders writing reminders select', () => {
-    render(<NotificationsSection />);
-    expect(screen.getByRole('combobox')).toBeInTheDocument();
-  });
-
-  it('calls handleSettingChange when emailNotifications toggled', async () => {
-    const user = userEvent.setup();
-    render(<NotificationsSection />);
-    await user.click(
-      screen.getByRole('switch', { name: 'settings.notifications.emailNotifications' }),
-    );
-    expect(mockHandleSettingChange).toHaveBeenCalledWith(
-      'notifications',
-      expect.objectContaining({ emailNotifications: true }),
     );
   });
 });

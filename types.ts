@@ -448,7 +448,6 @@ export interface ProjectAiPreset {
   loraScale?: number | undefined;
 }
 
-export type NotificationFrequency = 'never' | 'daily' | 'weekly' | 'monthly';
 export type BackupFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
 export type SyncProvider = 'none' | 'google-drive' | 'dropbox' | 'onedrive' | 'icloud';
 
@@ -545,14 +544,6 @@ export interface PerformanceSettings {
   preloadContent: boolean;
   lazyLoadImages: boolean;
   offlineMode: boolean;
-}
-
-export interface NotificationSettings {
-  desktopNotifications: boolean;
-  emailNotifications: boolean;
-  writingReminders: NotificationFrequency;
-  goalAchievements: boolean;
-  collaborationUpdates: boolean;
 }
 
 export interface CollaborationSettings {
@@ -695,7 +686,6 @@ export interface Settings {
   accessibility: AccessibilitySettings;
   privacy: PrivacySettings;
   performance: PerformanceSettings;
-  notifications: NotificationSettings;
   collaboration: CollaborationSettings;
   integrations: IntegrationSettings;
   advancedEditor: AdvancedEditorSettings;

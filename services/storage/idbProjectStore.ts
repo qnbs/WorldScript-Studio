@@ -141,15 +141,6 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
       { type: 'time', target: 120, period: 'daily', enabled: false },
     ] as Settings['writingGoals'];
   }
-  if (!validSettings.notifications || typeof validSettings.notifications !== 'object') {
-    validSettings.notifications = {
-      desktopNotifications: false,
-      emailNotifications: false,
-      writingReminders: 'never',
-      goalAchievements: true,
-      collaborationUpdates: false,
-    };
-  }
   if (!validSettings.backup || typeof validSettings.backup !== 'object') {
     validSettings.backup = {
       autoBackup: true,
