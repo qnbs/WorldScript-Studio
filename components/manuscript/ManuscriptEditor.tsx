@@ -297,7 +297,9 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
     });
 
     if (lastIndex < text.length) parts.push(text.substring(lastIndex));
-    return <>{parts}</>;
+    // QNBS-v3: return the parts array directly — a single-child fragment is redundant (DeepSource
+    // JS-0424); rendered elements carry keys, bare string segments don't need them.
+    return parts;
   }, [
     deferredContent,
     characters,
