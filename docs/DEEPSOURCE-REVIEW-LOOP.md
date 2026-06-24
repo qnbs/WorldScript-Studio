@@ -78,8 +78,9 @@ caused by the fix (a "wave"). Handle each wave like the first.
         (next wave, go to 1)        DONE → merge when CI green
 ```
 
-> **Termination condition:** the latest DeepSource run reports **no new actionable findings** and
-> every prior finding is fixed or justified. Then merge once all CI is green.
+> **Termination condition:** the latest DeepSource run reports **no new actionable findings**, every
+> prior finding is fixed or justified, **and every `deepsource-io` inline thread is resolved** (§3a).
+> Then merge once all CI is green.
 
 ## 3. Fetch DeepSource findings from the CLI
 
