@@ -20,10 +20,6 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
     t: (k: string) => k,
     settings: {
       collaboration: {
-        realTimeCollaboration: false,
-        publicSharing: false,
-        commentSystem: true,
-        versionHistory: true,
         webrtcSignalingUrls: ['wss://signaling.example.com'],
       },
     },
@@ -74,26 +70,6 @@ describe('CollaborationSection', () => {
     render(<CollaborationSection />);
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByText('collab.securityWarning')).toBeInTheDocument();
-  });
-
-  it('renders real-time collaboration toggle', () => {
-    render(<CollaborationSection />);
-    expect(screen.getByText('settings.collaboration.realTimeCollaboration')).toBeInTheDocument();
-  });
-
-  it('renders public sharing toggle', () => {
-    render(<CollaborationSection />);
-    expect(screen.getByText('settings.collaboration.publicSharing')).toBeInTheDocument();
-  });
-
-  it('renders comment system toggle', () => {
-    render(<CollaborationSection />);
-    expect(screen.getByText('settings.collaboration.commentSystem')).toBeInTheDocument();
-  });
-
-  it('renders version history toggle', () => {
-    render(<CollaborationSection />);
-    expect(screen.getByText('settings.collaboration.versionHistory')).toBeInTheDocument();
   });
 
   it('renders the signaling URLs textarea with current value', () => {

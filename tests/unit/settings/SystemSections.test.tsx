@@ -89,10 +89,6 @@ vi.mock('../../../app/hooks', () => ({
       settings: {
         collaboration: {
           webrtcSignalingUrls: ['wss://signaling.example.com'],
-          realTimeCollaboration: false,
-          publicSharing: false,
-          commentSystem: false,
-          versionHistory: false,
         },
       },
     }),

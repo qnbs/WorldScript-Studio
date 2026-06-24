@@ -539,10 +539,6 @@ export interface PrivacySettings {
 }
 
 export interface CollaborationSettings {
-  realTimeCollaboration: boolean;
-  publicSharing: boolean;
-  commentSystem: boolean;
-  versionHistory: boolean;
   /** WebRTC signaling URLs (wss:// or ws://), one per line in UI; empty uses built-in defaults. */
   webrtcSignalingUrls: string[];
 }

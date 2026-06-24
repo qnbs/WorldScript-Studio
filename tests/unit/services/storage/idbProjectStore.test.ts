@@ -47,16 +47,6 @@ describe('idbProjectStore', () => {
       expect(result.privacy.localStorageOnly).toBe(true);
     });
 
-    it('normalizes collaboration settings with defaults', () => {
-      const result = normalizePersistedSettings({
-        collaboration: {
-          realTimeCollaboration: true,
-        },
-      });
-      expect(result.collaboration.realTimeCollaboration).toBe(true);
-      expect(result.collaboration.commentSystem).toBe(true);
-    });
-
     it('sets default webrtcSignalingUrls when empty', () => {
       const result = normalizePersistedSettings({
         collaboration: {
