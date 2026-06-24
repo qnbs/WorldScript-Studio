@@ -98,12 +98,6 @@ describe('idbProjectStore', () => {
       expect(result.voice).not.toBeNull();
     });
 
-    it('applies performance defaults when performance is missing', () => {
-      const result = normalizePersistedSettings({});
-      expect(result.performance.autoSaveInterval).toBe(30);
-      expect(result.performance.preloadContent).toBe(true);
-    });
-
     it('applies advancedAi defaults when advancedAi is missing', () => {
       const result = normalizePersistedSettings({});
       expect(result.advancedAi.provider).toBe('gemini');

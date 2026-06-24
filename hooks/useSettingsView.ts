@@ -40,7 +40,6 @@ import type {
   EditorFont,
   IntegrationSettings,
   KeyboardShortcut,
-  PerformanceSettings,
   PrivacySettings,
   ProjectSnapshot,
   StoryProject,
@@ -155,11 +154,6 @@ export const useSettingsView = () => {
           break;
         case 'privacy':
           dispatch(settingsActions.setPrivacy(value as unknown as Partial<PrivacySettings>));
-          break;
-        case 'performance':
-          dispatch(
-            settingsActions.setPerformance(value as unknown as Partial<PerformanceSettings>),
-          );
           break;
         case 'collaboration':
           dispatch(

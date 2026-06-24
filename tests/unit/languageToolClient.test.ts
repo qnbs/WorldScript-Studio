@@ -48,13 +48,6 @@ const baseSettings = (): Settings => ({
     localStorageOnly: true,
     euDataResidency: true,
   },
-  performance: {
-    autoSaveInterval: 30,
-    cacheSize: 100,
-    preloadContent: true,
-    lazyLoadImages: true,
-    offlineMode: false,
-  },
   collaboration: {
     realTimeCollaboration: false,
     publicSharing: false,

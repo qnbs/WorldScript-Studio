@@ -107,7 +107,6 @@ vi.mock('../../../features/settings/settingsSlice', () => ({
     setAdvancedAi: (v: unknown) => ({ type: 'settings/setAdvancedAi', payload: v }),
     setAccessibility: (v: unknown) => ({ type: 'settings/setAccessibility', payload: v }),
     setPrivacy: (v: unknown) => ({ type: 'settings/setPrivacy', payload: v }),
-    setPerformance: (v: unknown) => ({ type: 'settings/setPerformance', payload: v }),
     setCollaboration: (v: unknown) => ({ type: 'settings/setCollaboration', payload: v }),
     setIntegrations: (v: unknown) => ({ type: 'settings/setIntegrations', payload: v }),
     setAdvancedEditor: (v: unknown) => ({ type: 'settings/setAdvancedEditor', payload: v }),

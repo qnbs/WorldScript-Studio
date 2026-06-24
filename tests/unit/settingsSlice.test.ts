@@ -257,17 +257,6 @@ describe('settingsSlice', () => {
     expect(state.privacy.dataEncryption).toBe(true);
   });
 
-  it('setPerformance merges performance settings', () => {
-    const state = settingsReducer(
-      initState(),
-      settingsActions.setPerformance({ autoSaveInterval: 10, offlineMode: true }),
-    );
-
-    expect(state.performance.autoSaveInterval).toBe(10);
-    expect(state.performance.offlineMode).toBe(true);
-    expect(state.performance.preloadContent).toBe(true);
-  });
-
   it('setCollaboration merges collaboration settings', () => {
     const state = settingsReducer(
       initState(),
