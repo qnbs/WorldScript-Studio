@@ -487,7 +487,6 @@
   "settings.featureFlags.enableStoryBibleAdvanced": "고급 스토리 성경(Codex의 그래프 + 힌트)",
   "settings.featureFlags.enableVoiceSupport": "음성 명령 및 받아쓰기",
   "settings.featureFlags.enableVoiceWasm": "음성 WASM 엔진(Whisper.cpp — 오프라인)",
-  "settings.featureFlags.enableWebnnInference": "WebNN 추론(NPU/DirectML 가속)",
   "settings.featureFlags.enableWorkerBusV2": "WorkerBus v2(유형화된 작업자 오케스트레이션 - 2단계)",
   "settings.featureFlags.resetConfirm": "이렇게 하면 모든 실험적 기능이 기본 켜짐/꺼짐 상태로 복원됩니다. 귀하의 프로젝트와 콘텐츠는 영향을 받지 않습니다.",
   "settings.featureFlags.resetDone": "실험적 기능이 기본값으로 재설정되었습니다.",

@@ -2057,7 +2057,6 @@
   "settings.featureFlags.enableStoryBibleAdvanced": "Story Bible advanced (graph + hints in Codex)",
   "settings.featureFlags.enableVoiceSupport": "Voice commands & dictation",
   "settings.featureFlags.enableVoiceWasm": "Voice WASM engine (Whisper.cpp — offline)",
-  "settings.featureFlags.enableWebnnInference": "WebNN inference (NPU / DirectML acceleration)",
   "settings.featureFlags.enableWorkerBusV2": "WorkerBus v2 (typed worker orchestration — Phase 2)",
   "settings.featureFlags.title": "Early Access Features",
   "settings.font.custom": "Custom Font",

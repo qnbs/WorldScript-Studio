@@ -50,7 +50,6 @@ const mockFeatureFlags = {
   enableProForge: false,
   enableIdbAtRestEncryption: false,
   enableAdaptiveAiEngine: false,
-  enableWebnnInference: false,
   enableComputeShaders: false,
   enableWorkerBusV2: false,
   enableRustCompute: false,
@@ -93,12 +92,12 @@ describe('FeatureFlagsSection', () => {
     expect(screen.getByText('settings.featureFlags.description')).toBeInTheDocument();
   });
 
-  // QNBS-v3: all 23 catalog flags except enableIdbAtRestEncryption (managed in Settings → Privacy)
-  // = 22 toggles, now grouped by category but the count is unchanged.
-  it('renders 22 feature flag toggles', () => {
+  // QNBS-v3: all 22 catalog flags except enableIdbAtRestEncryption (managed in Settings → Privacy)
+  // = 21 toggles (the ghost WebNN flag was removed).
+  it('renders 21 feature flag toggles', () => {
     render(<FeatureFlagsSection />);
     const switches = screen.getAllByRole('switch');
-    expect(switches.length).toBe(22);
+    expect(switches.length).toBe(21);
   });
 
   it('groups flags under category headings', () => {

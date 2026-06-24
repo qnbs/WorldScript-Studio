@@ -30,7 +30,7 @@ const MATURITY_TO_BADGE: Record<string, BadgeVariant | undefined> = {
 
 // QNBS-v3: enableIdbAtRestEncryption is intentionally NOT shown here — toggling it without the
 // passphrase setup flow would lock users out. Its dedicated UI lives in Settings → Privacy
-// (PrivacySection.tsx). Everything else in the catalog is user-toggleable here (22 flags).
+// (PrivacySection.tsx). Everything else in the catalog is user-toggleable here (21 flags).
 const HIDDEN_FLAGS: ReadonlySet<keyof FeatureFlagsState> = new Set(['enableIdbAtRestEncryption']);
 
 /**

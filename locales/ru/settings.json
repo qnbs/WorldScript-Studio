@@ -487,7 +487,6 @@
   "settings.featureFlags.enableStoryBibleAdvanced": "Расширенная история Библии (график + подсказки в Кодексе)",
   "settings.featureFlags.enableVoiceSupport": "Голосовые команды и диктовка",
   "settings.featureFlags.enableVoiceWasm": "Голосовой движок WASM (Whisper.cpp — оффлайн)",
-  "settings.featureFlags.enableWebnnInference": "Вывод WebNN (ускорение NPU/DirectML)",
   "settings.featureFlags.enableWorkerBusV2": "WorkerBus v2 (оркестрация типизированных рабочих процессов — этап 2)",
   "settings.featureFlags.resetConfirm": "Это восстанавливает каждую экспериментальную функцию в состояние включения/выключения по умолчанию. Ваши проекты и контент не пострадают.",
   "settings.featureFlags.resetDone": "Экспериментальные функции сброшены до значений по умолчанию.",

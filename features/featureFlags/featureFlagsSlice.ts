@@ -40,8 +40,6 @@ export interface FeatureFlagsState {
   enableVoiceWasm: boolean;
   /** Adaptive AI Engine — runtime device profiler + automatic backend/model selection (default: true). */
   enableAdaptiveAiEngine: boolean;
-  /** WebNN inference — NPU/GPU acceleration via ONNX Runtime Web WebNN execution provider (default: true). */
-  enableWebnnInference: boolean;
   /** Compute Shaders — custom WGSL kernels for RAG, plot-board, voice preprocessing (default: true). */
   enableComputeShaders: boolean;
   /** WorkerBus v2 — unified worker orchestration backbone (default: true). */
@@ -81,7 +79,6 @@ export const defaultFeatureFlagsState: FeatureFlagsState = {
   // QNBS-v3: voice WASM off by default — ~57 MB Whisper model download; requires explicit opt-in
   enableVoiceWasm: false,
   enableAdaptiveAiEngine: true,
-  enableWebnnInference: true,
   enableComputeShaders: true,
   enableWorkerBusV2: true,
   enableRustCompute: true,
@@ -170,9 +167,6 @@ const featureFlagsSlice = createSlice({
     setEnableAdaptiveAiEngine(state, action: PayloadAction<boolean>) {
       state.enableAdaptiveAiEngine = action.payload;
     },
-    setEnableWebnnInference(state, action: PayloadAction<boolean>) {
-      state.enableWebnnInference = action.payload;
-    },
     setEnableComputeShaders(state, action: PayloadAction<boolean>) {
       state.enableComputeShaders = action.payload;
     },
@@ -228,8 +222,6 @@ export const selectEnableVoiceWasm = (state: { featureFlags: FeatureFlagsState }
   state.featureFlags.enableVoiceWasm;
 export const selectEnableAdaptiveAiEngine = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableAdaptiveAiEngine;
-export const selectEnableWebnnInference = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enableWebnnInference;
 export const selectEnableComputeShaders = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableComputeShaders;
 export const selectEnableWorkerBusV2 = (state: { featureFlags: FeatureFlagsState }) =>

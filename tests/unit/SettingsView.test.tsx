@@ -76,7 +76,6 @@ vi.mock('../../app/hooks', () => ({
         enableVoiceWasm: false,
         enableRtlLayout: false,
         enableAdaptiveAiEngine: false,
-        enableWebnnInference: false,
         enableComputeShaders: false,
         enableWorkerBusV2: false,
         enableRustCompute: false,

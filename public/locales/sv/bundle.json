@@ -2051,7 +2051,6 @@
   "settings.featureFlags.enableStoryBibleAdvanced": "Story Bible advanced (graf + tips i Codex)",
   "settings.featureFlags.enableVoiceSupport": "Röstkommandon och diktering",
   "settings.featureFlags.enableVoiceWasm": "Voice WASM-motor (Whisper.cpp — offline)",
-  "settings.featureFlags.enableWebnnInference": "WebNN-inferens (NPU / DirectML-acceleration)",
   "settings.featureFlags.enableWorkerBusV2": "WorkerBus v2 (skriven arbetarorkestrering — Fas 2)",
   "settings.featureFlags.resetConfirm": "This restores every experimental feature to its default on/off state. Your projects and content are not affected.",
   "settings.featureFlags.resetDone": "Experimental features reset to defaults.",

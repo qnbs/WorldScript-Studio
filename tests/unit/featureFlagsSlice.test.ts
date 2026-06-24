@@ -46,7 +46,6 @@ const initialState: FeatureFlagsState = {
   enableIdbAtRestEncryption: true,
   enableVoiceWasm: false,
   enableAdaptiveAiEngine: true,
-  enableWebnnInference: true,
   enableComputeShaders: true,
   enableWorkerBusV2: true,
   enableRustCompute: true,
@@ -91,11 +90,12 @@ describe('featureFlagsSlice', () => {
     expect(state.enableStoryBibleAdvanced).toBe(false);
   });
 
-  it('defaults to 17 flags on and 6 user-opt-in flags off', () => {
+  it('defaults to 16 flags on and 6 user-opt-in flags off', () => {
     const state = featureFlagsReducer(undefined, { type: '@@INIT' });
     const values = Object.values(state);
-    expect(values).toHaveLength(23);
-    expect(values.filter((v) => v === true)).toHaveLength(17);
+    // QNBS-v3: WebNN flag (a ghost/no-op toggle) was removed → 22 flags (16 on / 6 opt-in off).
+    expect(values).toHaveLength(22);
+    expect(values.filter((v) => v === true)).toHaveLength(16);
     expect(values.filter((v) => v === false)).toHaveLength(6);
     // The six opt-in flags are exactly these:
     expect(state.enableRtlLayout).toBe(false);

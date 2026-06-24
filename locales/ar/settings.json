@@ -487,7 +487,6 @@
   "settings.featureFlags.enableStoryBibleAdvanced": "Story Bible متقدّم (رسم + تلميحات في الفهرس)",
   "settings.featureFlags.enableVoiceSupport": "أوامر صوتية وإملاء",
   "settings.featureFlags.enableVoiceWasm": "محرّك الصوت WASM ‏(Whisper.cpp — دون اتصال)",
-  "settings.featureFlags.enableWebnnInference": "استدلال WebNN ‏(تسريع NPU ‏/ DirectML)",
   "settings.featureFlags.enableWorkerBusV2": "WorkerBus v2 ‏(تنسيق عمّال مُصنَّف — المرحلة 2)",
   "settings.featureFlags.resetConfirm": "This restores every experimental feature to its default on/off state. Your projects and content are not affected.",
   "settings.featureFlags.resetDone": "Experimental features reset to defaults.",

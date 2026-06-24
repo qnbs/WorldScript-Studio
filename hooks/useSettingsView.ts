@@ -246,9 +246,6 @@ export const useSettingsView = () => {
         case 'enableAdaptiveAiEngine':
           dispatch(featureFlagsActions.setEnableAdaptiveAiEngine(Boolean(value)));
           break;
-        case 'enableWebnnInference':
-          dispatch(featureFlagsActions.setEnableWebnnInference(Boolean(value)));
-          break;
         case 'enableComputeShaders':
           dispatch(featureFlagsActions.setEnableComputeShaders(Boolean(value)));
           break;

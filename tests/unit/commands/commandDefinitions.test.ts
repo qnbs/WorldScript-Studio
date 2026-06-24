@@ -95,7 +95,6 @@ const baseDeps: CommandRuntimeDeps = {
     enableIdbAtRestEncryption: false,
     enableVoiceWasm: false,
     enableAdaptiveAiEngine: false,
-    enableWebnnInference: false,
     enableComputeShaders: false,
     enableWorkerBusV2: false,
     enableRustCompute: false,

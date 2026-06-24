@@ -2051,7 +2051,6 @@
   "settings.featureFlags.enableStoryBibleAdvanced": "Βίβλος ιστορίας για προχωρημένους (γραφική παράσταση + υποδείξεις στον Κώδικα)",
   "settings.featureFlags.enableVoiceSupport": "Φωνητικές εντολές και υπαγόρευση",
   "settings.featureFlags.enableVoiceWasm": "Μηχανή Voice WASM (Whisper.cpp — εκτός σύνδεσης)",
-  "settings.featureFlags.enableWebnnInference": "Συμπεράσματα WebNN (επιτάχυνση NPU / DirectML)",
   "settings.featureFlags.enableWorkerBusV2": "WorkerBus v2 (πληκτρολογημένη ενορχήστρωση εργαζομένων — Φάση 2)",
   "settings.featureFlags.resetConfirm": "This restores every experimental feature to its default on/off state. Your projects and content are not affected.",
   "settings.featureFlags.resetDone": "Experimental features reset to defaults.",

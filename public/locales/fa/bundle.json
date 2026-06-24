@@ -2051,7 +2051,6 @@
   "settings.featureFlags.enableStoryBibleAdvanced": "کتاب مقدس داستان پیشرفته (گراف + نکات در Codex)",
   "settings.featureFlags.enableVoiceSupport": "دستورات صوتی و دیکته",
   "settings.featureFlags.enableVoiceWasm": "موتور WASM صوتی (Whisper.cpp — آفلاین)",
-  "settings.featureFlags.enableWebnnInference": "استنتاج WebNN (شتاب NPU / DirectML)",
   "settings.featureFlags.enableWorkerBusV2": "WorkerBus v2 (ارکستراسیون کارگر تایپ شده - فاز 2)",
   "settings.featureFlags.resetConfirm": "This restores every experimental feature to its default on/off state. Your projects and content are not affected.",
   "settings.featureFlags.resetDone": "Experimental features reset to defaults.",

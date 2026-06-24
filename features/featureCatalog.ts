@@ -477,31 +477,6 @@ const RAW_FEATURE_CATALOG: CatalogEntryInput[] = [
   },
 
   {
-    flagKey: 'enableWebnnInference',
-    name: 'WebNN Inference',
-    description: 'NPU/GPU acceleration via the ONNX Runtime Web WebNN execution provider.',
-    maturity: 'stub',
-    tier: 'performance',
-    riskLevel: 'high',
-    gateLocations: [
-      {
-        file: 'hooks/useSettingsView.ts:249',
-        description: 'Dispatches setEnableWebnnInference on Settings toggle',
-      },
-    ],
-    implementedIn: ['services/ai/'],
-    drifts: [
-      {
-        severity: 'warning',
-        description:
-          'No runtime gate reads selectEnableWebnnInference yet — the flag is plumbed through Settings (toggle + handler) but the WebNN execution-provider selection is not wired, so toggling it has no observable effect (ghost/stub).',
-        fix: 'Wire selectEnableWebnnInference into the ONNX Runtime Web provider selection in services/ai/ and add a runtime gate, or retire the flag.',
-      },
-    ],
-    roadmapTarget: 'v2.0',
-  },
-
-  {
     flagKey: 'enableRustCompute',
     name: 'Rust Compute (Desktop)',
     description:

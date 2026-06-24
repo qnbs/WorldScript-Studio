@@ -40,10 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `defaultFeatureFlagsState` instead of hand-keying it — the class of bug where the catalog said
   `false` while the slice said `true` for ~12 flags can no longer recur (guarded by the new
   `tests/unit/featureCatalog.test.ts`). Added risk-level / desktop-requirement / dependency metadata.
-- **`enableWebnnInference` documented as a ghost/stub.** Corrected `docs/FEATURE-PARITY.md`'s stale
-  "🟢 OK" row — no runtime gate reads `selectEnableWebnnInference` (the WebNN code in
-  `packages/ai-core/src/webnnBridge.ts` is not gated on the flag); `audit-feature-parity.ts` already
-  warns on it.
+### Removed
+
+- **Dead `enableWebnnInference` feature flag removed.** The flag shipped default-on but **no runtime
+  gate ever read `selectEnableWebnnInference`** — toggling it had no observable effect (a ghost/stub,
+  flagged by `audit-feature-parity.ts`). It is removed from the slice, `featureCatalog`, the Settings →
+  Experimental UI (now **22 flags / 21 user-toggleable**), the i18n label (19 locales) and the parity
+  audit. WebNN execution-provider selection remains available internally in
+  `packages/ai-core/src/webnnBridge.ts` (always attempted when the browser exposes WebNN); only the
+  no-op user toggle is gone.
 
 ## [1.24.0] — 2026-06-21
 
