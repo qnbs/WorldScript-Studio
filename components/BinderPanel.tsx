@@ -124,6 +124,7 @@ const BinderAssetPreview: FC<{
       <iframe
         title={node.title}
         src={url}
+        sandbox="allow-same-origin"
         className="w-full h-48 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]"
       />
     );
