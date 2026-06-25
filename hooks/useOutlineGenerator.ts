@@ -7,6 +7,7 @@ import {
   generateOutlineThunk,
   regenerateOutlineSectionThunk,
 } from '../features/project/thunks/outlineThunks';
+import type { OutlineHeuristicLabels } from '../services/ai/heuristicFallback/generators/outlineGenerator';
 import type { OutlineSection, StorySection, View } from '../types';
 import { useTranslation } from './useTranslation';
 
@@ -49,6 +50,28 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   const dragOverItem = useRef<number | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
+  // QNBS-v3: resolve the offline outline labels here (the hook has `t`) so the service-layer heuristic
+  // generator stays pure — it only assembles already-translated copy with the user's idea woven in.
+  const buildOutlineHeuristicLabels = useCallback((): OutlineHeuristicLabels => {
+    const ideaValue = idea.trim() || t('outline.heuristic.fallbackIdea');
+    const beat = (key: string) => ({
+      title: t(`outline.heuristic.beat.${key}.title`),
+      desc: t(`outline.heuristic.beat.${key}.desc`, { idea: ideaValue }),
+    });
+    return {
+      beats: {
+        setup: beat('setup'),
+        incitingIncident: beat('incitingIncident'),
+        risingAction: beat('risingAction'),
+        midpoint: beat('midpoint'),
+        complications: beat('complications'),
+        twist: beat('twist'),
+        climax: beat('climax'),
+        resolution: beat('resolution'),
+      },
+    };
+  }, [idea, t]);
+
   const generate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -62,6 +85,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
         numChapters,
         includeTwist,
         lang: language,
+        heuristicLabels: buildOutlineHeuristicLabels(),
       }),
     );
 
@@ -85,6 +109,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
     language,
     t,
     toast,
+    buildOutlineHeuristicLabels,
   ]);
 
   const handleGenerate = useCallback(() => {

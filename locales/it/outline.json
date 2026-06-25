@@ -42,5 +42,22 @@
   "outline.result.title": "Schema interattivo",
   "outline.result.twistTooltip": "Colpo di scena generato dall'IA",
   "outline.selectSection": "Seleziona la sezione «{{title}}»",
-  "outline.title": "Generatore di schema storia IA"
+  "outline.title": "Generatore di schema storia IA",
+  "outline.heuristic.fallbackIdea": "l'idea centrale",
+  "outline.heuristic.beat.setup.title": "Impostazione",
+  "outline.heuristic.beat.setup.desc": "Presenta il mondo e i personaggi principali e stabilisci lo status quo prima che tutto cambi.",
+  "outline.heuristic.beat.incitingIncident.title": "Incidente scatenante",
+  "outline.heuristic.beat.incitingIncident.desc": "L'evento che mette in moto la storia: {{idea}}.",
+  "outline.heuristic.beat.risingAction.title": "Azione crescente",
+  "outline.heuristic.beat.risingAction.desc": "Le complicazioni aumentano e la posta in gioco cresce mentre i personaggi perseguono il loro obiettivo.",
+  "outline.heuristic.beat.midpoint.title": "Punto centrale",
+  "outline.heuristic.beat.midpoint.desc": "Una svolta cambia la direzione della storia e alza la posta in gioco.",
+  "outline.heuristic.beat.complications.title": "Complicazioni",
+  "outline.heuristic.beat.complications.desc": "Battute d'arresto e conflitti si intensificano; la via da seguire si restringe.",
+  "outline.heuristic.beat.twist.title": "Colpo di scena",
+  "outline.heuristic.beat.twist.desc": "Una rivelazione inaspettata sconvolge ciò che i personaggi credevano vero.",
+  "outline.heuristic.beat.climax.title": "Climax",
+  "outline.heuristic.beat.climax.desc": "Il conflitto centrale raggiunge il culmine nello scontro decisivo della storia.",
+  "outline.heuristic.beat.resolution.title": "Risoluzione",
+  "outline.heuristic.beat.resolution.desc": "I nodi vengono sciolti ed emerge un nuovo status quo."
 }

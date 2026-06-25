@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Heuristic fallback for the Outline Generator.** The first per-feature heuristic on the fallback
+  foundation: when AI is unavailable the outline generator now produces a structurally-sound,
+  schema-valid chapter skeleton — a three-act beat sheet scaled to the requested chapter count
+  (setup → inciting incident → rising action / midpoint / complications → optional twist → climax →
+  resolution) with the user's idea woven in — instead of just showing an error. Fully offline and
+  localized (the hook resolves `outline.heuristic.*` labels; the generator stays pure). See
+  [`docs/AI-HEURISTIC-FALLBACKS.md`](docs/AI-HEURISTIC-FALLBACKS.md).
+
 - **AI heuristic-fallback foundation.** Groundwork so AI features can degrade gracefully (offline,
   quota, error, Eco/Heuristics-only mode) instead of hard-failing. A pluggable heuristic-generator
   registry (`services/ai/heuristicFallback/`, modeled on the Copilot rule engine) + a shared

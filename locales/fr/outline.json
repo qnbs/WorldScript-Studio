@@ -42,5 +42,22 @@
   "outline.result.title": "Plan interactif",
   "outline.result.twistTooltip": "Rebondissement généré par IA",
   "outline.selectSection": "Sélectionner la section « {{title}} »",
-  "outline.title": "Générateur de plan d'histoire IA"
+  "outline.title": "Générateur de plan d'histoire IA",
+  "outline.heuristic.fallbackIdea": "l'idée centrale",
+  "outline.heuristic.beat.setup.title": "Mise en place",
+  "outline.heuristic.beat.setup.desc": "Présentez le monde et les personnages principaux, et établissez le statu quo avant que tout ne change.",
+  "outline.heuristic.beat.incitingIncident.title": "Élément déclencheur",
+  "outline.heuristic.beat.incitingIncident.desc": "L'événement qui met l'histoire en mouvement : {{idea}}.",
+  "outline.heuristic.beat.risingAction.title": "Action montante",
+  "outline.heuristic.beat.risingAction.desc": "Les complications s'intensifient et les enjeux grandissent à mesure que les personnages poursuivent leur but.",
+  "outline.heuristic.beat.midpoint.title": "Point médian",
+  "outline.heuristic.beat.midpoint.desc": "Un tournant change la direction de l'histoire et augmente les enjeux.",
+  "outline.heuristic.beat.complications.title": "Complications",
+  "outline.heuristic.beat.complications.desc": "Les revers et les conflits s'aggravent ; la voie à suivre se rétrécit.",
+  "outline.heuristic.beat.twist.title": "Rebondissement",
+  "outline.heuristic.beat.twist.desc": "Une révélation inattendue bouleverse ce que les personnages croyaient vrai.",
+  "outline.heuristic.beat.climax.title": "Apogée",
+  "outline.heuristic.beat.climax.desc": "Le conflit central atteint son paroxysme lors de la confrontation décisive de l'histoire.",
+  "outline.heuristic.beat.resolution.title": "Dénouement",
+  "outline.heuristic.beat.resolution.desc": "Les fils dénoués se rejoignent et un nouveau statu quo émerge."
 }

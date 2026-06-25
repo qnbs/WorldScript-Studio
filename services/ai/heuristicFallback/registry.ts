@@ -11,7 +11,13 @@
 import { createLogger } from '../../logger';
 import type { HeuristicContext, HeuristicFallbackResult, HeuristicGenerator } from './types';
 
-const log = createLogger('heuristicFallback');
+// QNBS-v3: lazy — never call createLogger at module load, so importing this module can't break tests
+// that mock `services/logger` partially (the registry can sit in any module's static import graph).
+let _log: ReturnType<typeof createLogger> | null = null;
+const log = (): ReturnType<typeof createLogger> => {
+  _log ??= createLogger('heuristicFallback');
+  return _log;
+};
 
 const _registry = new Map<string, HeuristicGenerator>();
 
@@ -47,7 +53,7 @@ export function runHeuristicFallback<T>(
     return generator(ctx) as HeuristicFallbackResult<T> | null;
   } catch {
     // A failing heuristic is itself a non-event: log and fall through to the caller's own behavior.
-    log.warn('heuristic generator threw — no fallback produced', { task });
+    log().warn('heuristic generator threw — no fallback produced', { task });
     return null;
   }
 }

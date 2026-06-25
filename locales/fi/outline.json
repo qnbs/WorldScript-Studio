@@ -42,5 +42,22 @@
   "outline.result.title": "Interaktiivinen ääriviiva",
   "outline.result.twistTooltip": "AI-Generated Plot Twist",
   "outline.selectSection": "Valitse osio '{{title}}'",
-  "outline.title": "AI Story Outline Generator"
+  "outline.title": "AI Story Outline Generator",
+  "outline.heuristic.fallbackIdea": "the central idea",
+  "outline.heuristic.beat.setup.title": "Setup",
+  "outline.heuristic.beat.setup.desc": "Introduce the world and the main characters, and establish the status quo before everything changes.",
+  "outline.heuristic.beat.incitingIncident.title": "Inciting Incident",
+  "outline.heuristic.beat.incitingIncident.desc": "The event that sets the story in motion: {{idea}}.",
+  "outline.heuristic.beat.risingAction.title": "Rising Action",
+  "outline.heuristic.beat.risingAction.desc": "Complications escalate and the stakes grow as the characters pursue their goal.",
+  "outline.heuristic.beat.midpoint.title": "Midpoint",
+  "outline.heuristic.beat.midpoint.desc": "A turning point shifts the direction of the story and raises the stakes.",
+  "outline.heuristic.beat.complications.title": "Complications",
+  "outline.heuristic.beat.complications.desc": "Setbacks and conflicts deepen; the path forward narrows.",
+  "outline.heuristic.beat.twist.title": "Twist",
+  "outline.heuristic.beat.twist.desc": "An unexpected revelation upends what the characters believed to be true.",
+  "outline.heuristic.beat.climax.title": "Climax",
+  "outline.heuristic.beat.climax.desc": "The central conflict comes to a head in the story's defining confrontation.",
+  "outline.heuristic.beat.resolution.title": "Resolution",
+  "outline.heuristic.beat.resolution.desc": "Loose ends are tied up and a new status quo emerges."
 }
