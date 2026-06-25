@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Real LanguageTool grammar & spelling integration (self-hosted, privacy-first).** Replaces the
+  hardcoded fake-typo list with a real, multilingual proofreader running on the user's own machine.
+  Two surfaces share one offset-safe apply path (`hooks/useLanguageToolCheck.ts`): an on-demand
+  **"Check this scene"** panel in the Writer tools sidebar (findings list → apply / ignore /
+  add-to-dictionary) and a **live inline overlay** in the manuscript editor (debounced underline +
+  suggestion popover, reusing the existing aligned-overlay infrastructure). New
+  `services/languageToolService.ts` (`checkText` → parse `matches[]`, text-hash cache, abortable,
+  silent offline degrade, never logs text); the privacy gate (`assertLanguageToolAllowed`) keeps cloud
+  servers blocked under local-only mode. Locale coverage is encoded in the SSOT `i18n/locales.ts`
+  (`languageToolSupport` + `languageToolCode`, verified against dev.languagetool.org) and the feature
+  is hidden for unsupported locales (tr/he/fi/hu/is/eu/ko). Opt-in via Settings → Connections; run a
+  server with `docker run -p 8010:8010 erikvl87/languagetool`. See [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md)
+  and [ADR 0010](docs/adr/0010-languagetool-self-hosted.md).
 - **Native Intel-Mac (x86_64) desktop builds.** `tauri-build.yml` now builds on `macos-13` (Intel) in
   addition to `macos-latest` (Apple Silicon), so Intel Macs get a native bundle and in-app updates.
   The `latest.json` updater manifest already mapped `*_x64.app.tar.gz` → `darwin-x86_64`, so the Intel

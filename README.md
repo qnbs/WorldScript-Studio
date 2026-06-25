@@ -115,7 +115,7 @@ Everything is computed locally without sending manuscript text to the cloud.
 
 ### ✍️ Three-Panel Manuscript Editor
 
-A focused, distraction-free writing environment. The central editor is flanked by a draggable chapter **Navigator** and a project **Inspector**. An advanced overlay provides real-time highlighting and linking for `@character` and `#world` mentions, turning your manuscript into a living document. Includes **Zen Mode** for full-screen distraction-free writing, **spell-check with suggestions**, and **grammar & style hints**.
+A focused, distraction-free writing environment. The central editor is flanked by a draggable chapter **Navigator** and a project **Inspector**. An advanced overlay provides real-time highlighting and linking for `@character` and `#world` mentions, turning your manuscript into a living document. Includes **Zen Mode** for full-screen distraction-free writing and real **grammar & spell checking** via an optional **self-hosted [LanguageTool](https://languagetool.org)** server — live inline underlines plus an on-demand "Check this scene" panel, with one-click offset-safe corrections and a personal dictionary. Privacy-first (manuscript text never leaves your machine); off by default. See [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md).
 
 ### 🎬 Plot-Board v2 _(Visual Story Planning)_
 
@@ -738,6 +738,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/COPILOT.md`](docs/COPILOT.md) | Global AI Copilot v2 — panel modes, heuristics, Apply-to-chapter, ProForge integration |
 | [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md) | Local AI setup & troubleshooting — WebGPU/WASM requirements, model downloads, storage management, fallback chain |
 | [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md) | Heuristic Rules Reference — 8 built-in manuscript analysis rules, how-to-satisfy guidance |
+| [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md) | LanguageTool grammar/spell integration — self-hosted setup, privacy model, locale coverage, architecture |
 | [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge Ultimate Author Pipeline — 8-stage agentic editing system architecture |
 | [`docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0/v1.18.1 ProForge Humanization & Refinement + TypeScript strict-mode sweep |
 | [`docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md) | Sprint handoff: v1.19.0 Phase 2 — B-1..B-8 security, voice WASM, collab-transport, a11y gate, RTL |
