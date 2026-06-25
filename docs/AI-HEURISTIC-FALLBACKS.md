@@ -40,7 +40,7 @@ hooks (have t)  ──build localized labels──►  thunk  ──heuristicTas
 | Outline Generator | `outline` | three-act beat sheet scaled to the requested chapter count (setup → inciting incident → rising action / midpoint / complications → optional twist → climax → resolution), with the user's idea woven in | ✅ shipped |
 | Character profile | `character.profile` | structured field scaffold (backstory / motivation / appearance / arc / …) with the concept woven in | ✅ shipped |
 | World profile | `world.profile` | structured-section scaffold (description / geography / magic / culture) with the concept woven in | ✅ shipped |
-| Plot-Board beat | `plotBoard.beat` | structural rules over existing connections + tension | planned |
+| Plot-Board beat | `plotBoard.beat` | framework-based next-move suggestions (escalate / complicate / reverse) | ✅ shipped |
 | Writing Studio tools | `writer.*` | per-tool heuristics (continue / improve / tone / dialogue / brainstorm / synopsis) | planned |
 | Analysis tools | `critic.*` | structural rule findings (reuses the Copilot rule engine) | planned |
 

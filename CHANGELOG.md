@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Heuristic fallback for Plot-Board "suggest next beat".** Completes offline coverage of the
+  structured generators: when AI is unavailable, the Plot Board now offers localized, framework-based
+  next-move suggestions (raise the stakes / introduce a complication / add a reversal) with rationale,
+  instead of an error. See [`docs/AI-HEURISTIC-FALLBACKS.md`](docs/AI-HEURISTIC-FALLBACKS.md).
+
 - **Heuristic fallback for Character & World profiles.** When AI is unavailable, the Character and
   World generators now produce a schema-valid, localized **starting profile** (structured fields with
   the user's concept woven in; empty `timeline`/`locations` for World) instead of an error toast —
