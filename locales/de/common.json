@@ -676,5 +676,12 @@
   "voice.stopDictation": "Diktat stoppen",
   "voice.stopListening": "Zuhören stoppen",
   "worlds.emptyState.description": "Baue die Orte, Regeln und Geschichten auf, in denen deine Geschichte lebt. Beginne mit einem Ort.",
-  "worlds.emptyState.title": "Die Welt wartet"
+  "worlds.emptyState.title": "Die Welt wartet",
+  "error.fallback.generic": "KI nicht verfügbar – integrierte Hilfe verwendet.",
+  "error.fallback.offline": "Offline – integrierte Hilfe verwendet.",
+  "assisted.badge.label": "Assistiert",
+  "assisted.badge.srLabel": "Assistierter Modus – ohne KI erstellt",
+  "assisted.toast.title": "KI nicht verfügbar",
+  "assisted.toast.description": "Integrierte Hilfe verwendet. Mit KI verbessern, sobald ein Modell verfügbar ist.",
+  "assisted.enhance": "Mit KI verbessern"
 }
