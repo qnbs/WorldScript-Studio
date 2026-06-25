@@ -1,5 +1,7 @@
 import { Type } from '@google/genai';
 import type { RootState } from '../../../app/store';
+// QNBS-v3: type-only (elided); generator lazy-imported inside the thunk (out of the store static graph).
+import type { PlotBeatHeuristicLabels } from '../../../services/ai/heuristicFallback/generators/plotBoardGenerator';
 import { assembleRAGPrompt } from '../../../services/ragPromptAssembly';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
 import { buildAiCreativity, buildAiOptions, loadAiProvider } from './thunkUtils';
@@ -15,6 +17,7 @@ export interface SuggestNextBeatArg {
   plotSummary: string;
   selectedSectionIds: string[];
   lang: string;
+  heuristicLabels?: PlotBeatHeuristicLabels;
 }
 
 export const suggestNextBeatThunk = createDeduplicatedThunk(
@@ -51,6 +54,7 @@ export const suggestNextBeatThunk = createDeduplicatedThunk(
     const creativity = buildAiCreativity(state);
     const aiOptions = buildAiOptions(state);
     const { generateJson } = await loadAiProvider();
+    await import('../../../services/ai/heuristicFallback/generators/plotBoardGenerator');
 
     const schema = {
       type: Type.OBJECT,
@@ -72,11 +76,20 @@ export const suggestNextBeatThunk = createDeduplicatedThunk(
       required: ['beats'],
     };
 
+    const optsWithFallback: typeof aiOptions = {
+      ...aiOptions,
+      heuristicTask: 'plotBoard.beat',
+      heuristicContext: {
+        reasonKey: 'error.fallback.generic',
+        params: { labels: arg.heuristicLabels },
+      },
+    };
+
     const result = await generateJson<{ beats: PlotBeatSuggestion[] }>(
       assembled.prompt,
       creativity,
       schema,
-      aiOptions,
+      optsWithFallback,
       signal,
     );
 

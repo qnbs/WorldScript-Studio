@@ -683,5 +683,15 @@
   "assisted.badge.srLabel": "Assistierter Modus – ohne KI erstellt",
   "assisted.toast.title": "KI nicht verfügbar",
   "assisted.toast.description": "Integrierte Hilfe verwendet. Mit KI verbessern, sobald ein Modell verfügbar ist.",
-  "assisted.enhance": "Mit KI verbessern"
+  "assisted.enhance": "Mit KI verbessern",
+  "plotBoard.heuristic.position": "Direkt nach der ausgewählten Szene",
+  "plotBoard.heuristic.escalate.title": "Den Einsatz erhöhen",
+  "plotBoard.heuristic.escalate.description": "Erhöhe den Druck auf deine Hauptfigur, damit die nächste Entscheidung mehr kostet.",
+  "plotBoard.heuristic.escalate.rationale": "Eskalation hält das Tempo, wenn der Mittelteil durchhängt.",
+  "plotBoard.heuristic.complicate.title": "Eine Komplikation einführen",
+  "plotBoard.heuristic.complicate.description": "Füge ein Hindernis oder eine Enthüllung hinzu, die einen Planwechsel erzwingt.",
+  "plotBoard.heuristic.complicate.rationale": "Eine neue Komplikation fordert die Figuren und eröffnet neue Stränge.",
+  "plotBoard.heuristic.reverse.title": "Eine Wendung hinzufügen",
+  "plotBoard.heuristic.reverse.description": "Kehre eine Erwartung um — ein Verbündeter versagt, ein Sieg wird bitter oder eine verborgene Wahrheit kommt ans Licht.",
+  "plotBoard.heuristic.reverse.rationale": "Wendungen erneuern die Spannung und vertiefen den Bogen."
 }

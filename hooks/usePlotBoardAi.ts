@@ -5,6 +5,7 @@ import {
   type PlotBeatSuggestion,
   suggestNextBeatThunk,
 } from '../features/project/thunks/plotBoardAiThunks';
+import type { PlotBeatHeuristicLabels } from '../services/ai/heuristicFallback/generators/plotBoardGenerator';
 import { useTranslation } from './useTranslation';
 
 export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]) {
@@ -18,6 +19,16 @@ export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]
 
   const suggestNextBeat = useCallback(async () => {
     if (!project || !plotSummary.trim()) return;
+    // QNBS-v3: resolve offline next-beat labels here (the hook has t) so the generator stays pure.
+    const beat = (key: string) => ({
+      title: t(`plotBoard.heuristic.${key}.title`),
+      description: t(`plotBoard.heuristic.${key}.description`),
+      rationale: t(`plotBoard.heuristic.${key}.rationale`),
+    });
+    const heuristicLabels: PlotBeatHeuristicLabels = {
+      position: t('plotBoard.heuristic.position'),
+      beats: [beat('escalate'), beat('complicate'), beat('reverse')],
+    };
     setIsLoading(true);
     setError(null);
     try {
@@ -26,6 +37,7 @@ export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]
           plotSummary,
           selectedSectionIds,
           lang: language,
+          heuristicLabels,
         }),
       ).unwrap();
       setBeats(action.beats);
@@ -36,7 +48,7 @@ export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]
     } finally {
       setIsLoading(false);
     }
-  }, [dispatch, project, plotSummary, selectedSectionIds, language]);
+  }, [dispatch, project, plotSummary, selectedSectionIds, language, t]);
 
   return {
     t,
