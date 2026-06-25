@@ -9,6 +9,7 @@ import {
   generateWorldProfileThunk,
   regenerateWorldFieldThunk,
 } from '../features/project/thunks/worldThunks';
+import type { WorldHeuristicLabels } from '../services/ai/heuristicFallback/generators/worldGenerator';
 import { storageService } from '../services/storageService';
 import type { World, WorldLocation, WorldTimelineEvent } from '../types';
 import { useTranslation } from './useTranslation';
@@ -58,11 +59,28 @@ export const useWorldView = () => {
     setIsAiModalOpen(true);
   }, []);
 
+  // QNBS-v3: resolve offline world-profile labels here (the hook has t) so the generator stays pure.
+  const buildWorldHeuristicLabels = useCallback((): WorldHeuristicLabels => {
+    const concept = aiConcept.trim() || t('outline.heuristic.fallbackIdea');
+    const field = (key: string) => t(`worlds.heuristic.${key}`, { concept });
+    return {
+      name: t('worlds.heuristic.name'),
+      description: field('description'),
+      geography: field('geography'),
+      magicSystem: field('magicSystem'),
+      culture: field('culture'),
+    };
+  }, [aiConcept, t]);
+
   const handleGenerateProfile = useCallback(async () => {
     setIsGeneratingProfile(true);
     setIsAiModalOpen(false);
     const resultAction = await dispatch(
-      generateWorldProfileThunk({ concept: aiConcept, lang: language }),
+      generateWorldProfileThunk({
+        concept: aiConcept,
+        lang: language,
+        heuristicLabels: buildWorldHeuristicLabels(),
+      }),
     );
     if (generateWorldProfileThunk.fulfilled.match(resultAction)) {
       dispatch(projectActions.addWorld(resultAction.payload));
@@ -72,7 +90,7 @@ export const useWorldView = () => {
     }
     setIsGeneratingProfile(false);
     setAiConcept('');
-  }, [dispatch, aiConcept, language, toast, t]);
+  }, [dispatch, aiConcept, language, toast, t, buildWorldHeuristicLabels]);
 
   const handleSelect = useCallback((world: World) => {
     setSelectedWorld(world);

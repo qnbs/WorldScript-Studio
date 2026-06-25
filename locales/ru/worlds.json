@@ -50,5 +50,10 @@
   "worlds.tabs.timeline": "История и хронология",
   "worlds.title": "Мировой Атлас",
   "worlds.uploadImage": "Загрузить изображение",
-  "worlds.yourWorlds": "Ваши миры"
+  "worlds.yourWorlds": "Ваши миры",
+  "worlds.heuristic.name": "New World",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
 }

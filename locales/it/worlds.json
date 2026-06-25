@@ -50,5 +50,10 @@
   "worlds.tabs.timeline": "Storia e cronologia",
   "worlds.title": "Atlante dei mondi",
   "worlds.uploadImage": "Carica immagine",
-  "worlds.yourWorlds": "I tuoi mondi"
+  "worlds.yourWorlds": "I tuoi mondi",
+  "worlds.heuristic.name": "Nuovo mondo",
+  "worlds.heuristic.description": "Un mondo definito dalla sua premessa centrale: {{concept}}.",
+  "worlds.heuristic.geography": "Delinea le principali regioni, i climi e gli elementi naturali di {{concept}}.",
+  "worlds.heuristic.magicSystem": "Definisci le regole, i costi e i limiti del potere in {{concept}}.",
+  "worlds.heuristic.culture": "Descrivi i popoli, le credenze e la vita quotidiana plasmati da {{concept}}."
 }

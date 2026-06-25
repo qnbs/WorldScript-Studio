@@ -69,5 +69,13 @@
   "characters.tabs.relationships": "Relazioni",
   "characters.title": "Dossier personaggi",
   "characters.uploadImage": "Carica immagine",
-  "characters.yourCharacters": "I tuoi personaggi"
+  "characters.yourCharacters": "I tuoi personaggi",
+  "characters.heuristic.name": "Nuovo personaggio",
+  "characters.heuristic.backstory": "Plasmato da esperienze formative, questo personaggio porta un passato legato a {{concept}}.",
+  "characters.heuristic.motivation": "Un desiderio centrale connesso a {{concept}} guida le sue scelte.",
+  "characters.heuristic.appearance": "Descrivi come si presenta — lascia che il suo aspetto suggerisca {{concept}}.",
+  "characters.heuristic.personalityTraits": "Pieno di risorse, guardingo, determinato.",
+  "characters.heuristic.flaws": "Una debolezza che complica i suoi obiettivi.",
+  "characters.heuristic.characterArc": "Inizia guardingo e, nel corso della storia, viene cambiato da {{concept}}.",
+  "characters.heuristic.relationships": "Annota i legami e le rivalità chiave che lo definiscono."
 }

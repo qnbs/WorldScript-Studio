@@ -1,5 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../../app/store';
+// QNBS-v3: type-only (elided); generator lazy-imported inside the thunk (out of the store static graph).
+import type { WorldHeuristicLabels } from '../../../services/ai/heuristicFallback/generators/worldGenerator';
 import { storageService } from '../../../services/storageService';
 import type { World } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
@@ -8,17 +10,36 @@ import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from '
 export const generateWorldProfileThunk = createDeduplicatedThunk(
   'project/generateWorldProfile',
   async (
-    { concept, lang }: { concept: string; lang: string },
+    {
+      concept,
+      lang,
+      heuristicLabels,
+    }: { concept: string; lang: string; heuristicLabels?: WorldHeuristicLabels },
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
+    await import('../../../services/ai/heuristicFallback/generators/worldGenerator');
     const { prompt, schema } = getPrompts('worldProfile', { concept, lang });
     registerDuplicateRequest(prompt, 'worldProfile');
     const creativity = buildAiCreativity(state);
-    return await generateJson<Omit<World, 'id'>>(prompt, creativity, schema!, aiOptions, signal);
+    const optsWithFallback: typeof aiOptions = {
+      ...aiOptions,
+      heuristicTask: 'world.profile',
+      heuristicContext: {
+        reasonKey: 'error.fallback.generic',
+        params: { concept, labels: heuristicLabels },
+      },
+    };
+    return await generateJson<Omit<World, 'id'>>(
+      prompt,
+      creativity,
+      schema!,
+      optsWithFallback,
+      signal,
+    );
   },
 );
 

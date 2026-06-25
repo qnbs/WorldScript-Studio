@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Heuristic fallback for Character & World profiles.** When AI is unavailable, the Character and
+  World generators now produce a schema-valid, localized **starting profile** (structured fields with
+  the user's concept woven in; empty `timeline`/`locations` for World) instead of an error toast —
+  extending the offline heuristic coverage to two more structured generators. Same pure-generator +
+  hook-resolved-labels pattern as the Outline fallback. See
+  [`docs/AI-HEURISTIC-FALLBACKS.md`](docs/AI-HEURISTIC-FALLBACKS.md).
+
 - **Heuristic fallback for the Outline Generator.** The first per-feature heuristic on the fallback
   foundation: when AI is unavailable the outline generator now produces a structurally-sound,
   schema-valid chapter skeleton — a three-act beat sheet scaled to the requested chapter count

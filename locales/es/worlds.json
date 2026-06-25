@@ -50,5 +50,10 @@
   "worlds.tabs.timeline": "Historia y cronología",
   "worlds.title": "Atlas de mundos",
   "worlds.uploadImage": "Subir imagen",
-  "worlds.yourWorlds": "Tus mundos"
+  "worlds.yourWorlds": "Tus mundos",
+  "worlds.heuristic.name": "Nuevo mundo",
+  "worlds.heuristic.description": "Un mundo definido por su premisa central: {{concept}}.",
+  "worlds.heuristic.geography": "Esboza las principales regiones, climas y rasgos naturales de {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define las reglas, los costes y los límites del poder en {{concept}}.",
+  "worlds.heuristic.culture": "Describe los pueblos, creencias y la vida cotidiana moldeados por {{concept}}."
 }

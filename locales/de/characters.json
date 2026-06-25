@@ -69,5 +69,13 @@
   "characters.tabs.relationships": "Beziehungen",
   "characters.title": "Charakter-Dossiers",
   "characters.uploadImage": "Bild hochladen",
-  "characters.yourCharacters": "Ihre Charaktere"
+  "characters.yourCharacters": "Ihre Charaktere",
+  "characters.heuristic.name": "Neue Figur",
+  "characters.heuristic.backstory": "Geprägt von prägenden Erfahrungen trägt diese Figur eine Vergangenheit, die mit {{concept}} verbunden ist.",
+  "characters.heuristic.motivation": "Ein zentrales Verlangen, das mit {{concept}} verknüpft ist, bestimmt ihre Entscheidungen.",
+  "characters.heuristic.appearance": "Beschreibe, wie sie sich präsentiert — lass ihr Aussehen auf {{concept}} hindeuten.",
+  "characters.heuristic.personalityTraits": "Einfallsreich, zurückhaltend, entschlossen.",
+  "characters.heuristic.flaws": "Eine Schwäche, die ihre Ziele erschwert.",
+  "characters.heuristic.characterArc": "Sie beginnt zurückhaltend und wird im Verlauf der Geschichte durch {{concept}} verändert.",
+  "characters.heuristic.relationships": "Notiere die wichtigsten Bindungen und Rivalitäten, die sie ausmachen."
 }

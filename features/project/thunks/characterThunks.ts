@@ -1,5 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../../app/store';
+// QNBS-v3: type-only (elided); the generator is lazy-imported inside the thunk to keep it out of the
+// store's static graph (see docs/AI-HEURISTIC-FALLBACKS.md).
+import type { CharacterHeuristicLabels } from '../../../services/ai/heuristicFallback/generators/characterGenerator';
 import { storageService } from '../../../services/storageService';
 import type { Character } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
@@ -8,7 +11,11 @@ import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from '
 export const generateCharacterProfileThunk = createDeduplicatedThunk(
   'project/generateCharacterProfile',
   async (
-    { concept, lang }: { concept: string; lang: string },
+    {
+      concept,
+      lang,
+      heuristicLabels,
+    }: { concept: string; lang: string; heuristicLabels?: CharacterHeuristicLabels },
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
@@ -16,13 +23,22 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
     const creativity = buildAiCreativity(state);
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
+    await import('../../../services/ai/heuristicFallback/generators/characterGenerator');
     const { prompt, schema } = getPrompts('characterProfile', { concept, lang });
     registerDuplicateRequest(prompt, 'characterProfile');
+    const optsWithFallback: typeof aiOptions = {
+      ...aiOptions,
+      heuristicTask: 'character.profile',
+      heuristicContext: {
+        reasonKey: 'error.fallback.generic',
+        params: { concept, labels: heuristicLabels },
+      },
+    };
     return await generateJson<Omit<Character, 'id'>>(
       prompt,
       creativity,
       schema!,
-      aiOptions,
+      optsWithFallback,
       signal,
     );
   },
