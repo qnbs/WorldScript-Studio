@@ -1,11 +1,17 @@
 import type { RootState } from '../../../app/store';
+// QNBS-v3: side-effect import registers the 'outline' heuristic generator (used when AI is unavailable).
+import '../../../services/ai/heuristicFallback/generators/outlineGenerator';
+import type { OutlineHeuristicLabels } from '../../../services/ai/heuristicFallback/generators/outlineGenerator';
 import type { CustomTemplateParams, OutlineGenerationParams, OutlineSection } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
 import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateOutlineThunk = createDeduplicatedThunk(
   'project/generateOutline',
-  async (params: OutlineGenerationParams, { getState, signal, registerDuplicateRequest }) => {
+  async (
+    params: OutlineGenerationParams & { heuristicLabels?: OutlineHeuristicLabels },
+    { getState, signal, registerDuplicateRequest },
+  ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const creativity = buildAiCreativity(state);
@@ -13,7 +19,28 @@ export const generateOutlineThunk = createDeduplicatedThunk(
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('outline', params);
     registerDuplicateRequest(prompt, 'outline');
-    return await generateJson<OutlineSection[]>(prompt, creativity, schema!, aiOptions, signal);
+    // QNBS-v3: attach the heuristic fallback — schema-valid OutlineSection[] from pre-resolved labels
+    // when the AI call is terminally unavailable (generateJson otherwise just throws for Gemini).
+    const optsWithFallback: typeof aiOptions = {
+      ...aiOptions,
+      heuristicTask: 'outline',
+      heuristicContext: {
+        reasonKey: 'error.fallback.generic',
+        params: {
+          numChapters: params.numChapters,
+          includeTwist: params.includeTwist,
+          idea: params.idea,
+          labels: params.heuristicLabels,
+        },
+      },
+    };
+    return await generateJson<OutlineSection[]>(
+      prompt,
+      creativity,
+      schema!,
+      optsWithFallback,
+      signal,
+    );
   },
 );
 
