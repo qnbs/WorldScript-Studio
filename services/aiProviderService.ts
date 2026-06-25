@@ -18,6 +18,8 @@ import {
   shouldUseOpenRouter,
 } from './ai/aiModeService';
 import { assertCloudAiAllowed } from './ai/aiPolicy';
+import type { HeuristicContext } from './ai/heuristicFallback';
+import { applyHeuristicFallback } from './ai/heuristicFallback';
 import { resolveProviderFallbackChain } from './ai/hybridFallback';
 import {
   buildOpenRouterStyleHeaders,
@@ -65,6 +67,10 @@ export interface AIRequestOptions {
   // QNBS-v3: C-3 LoRA wiring — when set and provider is 'ollama', this tag overrides opts.model.
   // Tag must be created via `ollama create <tag> -f Modelfile` with the adapter baked in.
   loraModelPath?: string;
+  // QNBS-v3: heuristic-fallback wiring — task id + context for the registered per-feature generator
+  // used when the AI path is terminally unavailable. Absent → no heuristic fallback (legacy behavior).
+  heuristicTask?: string;
+  heuristicContext?: HeuristicContext;
 }
 
 export interface AIStreamCallbacks {
@@ -278,13 +284,13 @@ async function streamProvider(
   callbacks: AIStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const o = withMergedAbortSignal(opts, signal);
-  await assertCloudAiAllowed(o.provider);
+  const mergedOpts = withMergedAbortSignal(opts, signal);
+  await assertCloudAiAllowed(mergedOpts.provider);
   // QNBS-v3: C-3 LoRA — override model with Ollama adapter tag when set
   const oWithLora: AIRequestOptions =
-    o.provider === 'ollama' && o.loraModelPath
-      ? { ...o, model: o.loraModelPath as typeof o.model }
-      : o;
+    mergedOpts.provider === 'ollama' && mergedOpts.loraModelPath
+      ? { ...mergedOpts, model: mergedOpts.loraModelPath as typeof mergedOpts.model }
+      : mergedOpts;
   switch (oWithLora.provider) {
     case 'openai':
       return streamOpenAI(prompt, oWithLora, callbacks);
@@ -317,13 +323,13 @@ async function streamProvider(
     }
     default:
       return streamTextGemini(
-        o.systemPrompt
-          ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
+        mergedOpts.systemPrompt
+          ? `${sanitizePromptValue(mergedOpts.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
           : prompt,
         creativity,
         callbacks.onChunk,
-        o.signal,
-        o.model,
+        mergedOpts.signal,
+        mergedOpts.model,
       );
   }
 }
@@ -440,8 +446,8 @@ export async function generateText(
     resolvedOpts.model,
     prompt,
   );
-  const o = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
-  const chain = resolveProviderFallbackChain(o);
+  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
+  const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
   try {
     for (let i = 0; i < chain.length; i++) {
@@ -452,14 +458,14 @@ export async function generateText(
         const result = await withTransientRetry(
           () =>
             generateTextSingleProvider(prompt, creativity, {
-              ...o,
+              ...mergedOpts,
               provider: nextProvider,
             }),
           { attempts: 2 },
         );
         // QNBS-v3: Clear fallback reason on success — the chain worked.
         if (i > 0) {
-          _lastFallbackReason = `Primary provider ${o.provider} failed; fell back to ${nextProvider}.`;
+          _lastFallbackReason = `Primary provider ${mergedOpts.provider} failed; fell back to ${nextProvider}.`;
         } else {
           _lastFallbackReason = '';
         }
@@ -486,7 +492,7 @@ export async function generateText(
             const result = await withTransientRetry(
               () =>
                 generateTextSingleProvider(prompt, creativity, {
-                  ...o,
+                  ...mergedOpts,
                   provider: fallback as AIRequestOptions['provider'],
                 }),
               { attempts: 2 },
@@ -499,6 +505,15 @@ export async function generateText(
         }
         if (i === chain.length - 1) break;
       }
+    }
+    // QNBS-v3: prefer a registered per-feature heuristic generator over the generic local stub.
+    const heuristic = applyHeuristicFallback<string>(
+      opts.heuristicTask,
+      opts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
+    );
+    if (heuristic) {
+      _lastFallbackReason = `All providers in chain failed (${chain.join(' → ')}). Using registered heuristic fallback.`;
+      return heuristic.data;
     }
     try {
       const local = await generateLocalText(prompt);
@@ -519,19 +534,32 @@ export async function generateJson<T>(
   opts: AIRequestOptions,
   signal?: AbortSignal,
 ): Promise<T> {
-  if (opts.provider === 'gemini') {
-    return generateJsonGemini(prompt, creativity, schema, signal, undefined, opts.model);
-  }
-
-  const raw = await generateText(prompt, creativity, opts, signal);
-  const jsonText = stripJsonFences(raw);
-
   try {
-    return JSON.parse(jsonText) as T;
-  } catch (parseError) {
-    const parseErr = new Error('The AI model response is not valid JSON. Please try again.');
-    attachCause(parseErr, parseError);
-    throw parseErr;
+    if (opts.provider === 'gemini') {
+      return await generateJsonGemini(prompt, creativity, schema, signal, undefined, opts.model);
+    }
+
+    const raw = await generateText(prompt, creativity, opts, signal);
+    const jsonText = stripJsonFences(raw);
+
+    try {
+      return JSON.parse(jsonText) as T;
+    } catch (parseError) {
+      const parseErr = new Error('The AI model response is not valid JSON. Please try again.');
+      attachCause(parseErr, parseError);
+      throw parseErr;
+    }
+  } catch (err) {
+    // QNBS-v3: structured generators bypass generateText's local fallback chain (Gemini-direct), so
+    // this is their only degrade seam. A user cancel is surfaced; otherwise a registered heuristic
+    // generator for this task produces schema-shaped data, else the original error propagates.
+    if (isAbortError(err) || signal?.aborted || opts.signal?.aborted) throw err;
+    const heuristic = applyHeuristicFallback<T>(
+      opts.heuristicTask,
+      opts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
+    );
+    if (heuristic) return heuristic.data;
+    throw err;
   }
 }
 
@@ -572,9 +600,21 @@ export async function streamText(
   signal?: AbortSignal,
 ): Promise<void> {
   const { key, controller } = _deduplicateRequest(opts.provider, opts.model, prompt);
-  const o = withMergedAbortSignal(opts, signal ?? controller.signal);
-  const chain = resolveProviderFallbackChain(o);
+  const mergedOpts = withMergedAbortSignal(opts, signal ?? controller.signal);
+  const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
+  // QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream
+  // (onChunk + onDone) instead of erroring — so streaming features (Writer tools) stay useful offline.
+  const tryHeuristicStream = (): boolean => {
+    const heuristic = applyHeuristicFallback<string>(
+      mergedOpts.heuristicTask,
+      mergedOpts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
+    );
+    if (!heuristic) return false;
+    callbacks.onChunk(heuristic.data);
+    callbacks.onDone?.();
+    return true;
+  };
   try {
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
@@ -583,7 +623,7 @@ export async function streamText(
         await streamProvider(
           prompt,
           creativity,
-          { ...o, provider: nextProvider },
+          { ...mergedOpts, provider: nextProvider },
           callbacks,
           signal,
         );
@@ -592,7 +632,7 @@ export async function streamText(
         // QNBS-v3: A user-cancelled request is NOT a provider failure. Don't fall back to the next
         // provider and don't fire a terminal onError — surface the cancellation directly so callers
         // run their silent cancel flow instead of an error path.
-        if (isAbortError(error) || o.signal?.aborted || signal?.aborted) {
+        if (isAbortError(error) || mergedOpts.signal?.aborted || signal?.aborted) {
           throw error instanceof Error ? error : new Error(String(error));
         }
         lastError = error;
@@ -601,12 +641,14 @@ export async function streamText(
           // the whole fallback chain is exhausted, so a failing provider never surfaces a terminal
           // error callback while a subsequent fallback provider is still about to succeed.
           const terminal = error instanceof Error ? error : new Error(String(error));
+          if (tryHeuristicStream()) return;
           callbacks.onError?.(terminal);
           throw terminal;
         }
       }
     }
     const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
+    if (tryHeuristicStream()) return;
     callbacks.onError?.(terminal);
     throw terminal;
   } finally {

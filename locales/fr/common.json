@@ -676,5 +676,12 @@
   "voice.stopDictation": "Arrêter la dictée",
   "voice.stopListening": "Arrêter l’écoute",
   "worlds.emptyState.description": "Construisez les lieux, les règles et les histoires dans lesquels votre récit prend vie. Commencez par un lieu.",
-  "worlds.emptyState.title": "Le monde vous attend"
+  "worlds.emptyState.title": "Le monde vous attend",
+  "error.fallback.generic": "IA indisponible — assistance intégrée utilisée.",
+  "error.fallback.offline": "Vous êtes hors ligne — assistance intégrée utilisée.",
+  "assisted.badge.label": "Assisté",
+  "assisted.badge.srLabel": "Mode assisté — généré sans IA",
+  "assisted.toast.title": "IA indisponible",
+  "assisted.toast.description": "Assistance intégrée utilisée. Améliorez avec l'IA quand un modèle est disponible.",
+  "assisted.enhance": "Améliorer avec l'IA"
 }

@@ -676,5 +676,12 @@
   "voice.stopDictation": "ディクテーションを停止する",
   "voice.stopListening": "聞くのをやめる",
   "worlds.emptyState.description": "あなたの物語が生きる場所、ルール、歴史を構築します。場所から始めます。",
-  "worlds.emptyState.title": "世界が待っています"
+  "worlds.emptyState.title": "世界が待っています",
+  "error.fallback.generic": "AI is unavailable — used built-in assistance.",
+  "error.fallback.offline": "You're offline — used built-in assistance.",
+  "assisted.badge.label": "Assisted",
+  "assisted.badge.srLabel": "Assisted mode — generated without AI",
+  "assisted.toast.title": "AI unavailable",
+  "assisted.toast.description": "Used built-in assistance. Enhance with AI when a model is available.",
+  "assisted.enhance": "Enhance with AI"
 }

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **AI heuristic-fallback foundation.** Groundwork so AI features can degrade gracefully (offline,
+  quota, error, Eco/Heuristics-only mode) instead of hard-failing. A pluggable heuristic-generator
+  registry (`services/ai/heuristicFallback/`, modeled on the Copilot rule engine) + a shared
+  `HeuristicFallbackResult` envelope (reuses ProForge's `isFallback` + a calibrated `confidence`), wired
+  into the provider choke points that previously had no degrade path — `generateText`'s terminal,
+  `generateJson` (Gemini-direct), and `streamText`. A `useHeuristicFallback()` hook + reusable
+  `AssistedModeBadge` surface the "Assisted (offline)" state and record fallbacks to telemetry. Ships
+  **inert** (no per-feature generators yet → unchanged behavior); see
+  [ADR 0011](docs/adr/0011-ai-heuristic-fallbacks.md). Per-feature generators (Outline/Character/World,
+  Writing Studio tools, analysis tools) land in follow-up PRs.
+
 - **Real LanguageTool grammar & spelling integration (self-hosted, privacy-first).** Replaces the
   hardcoded fake-typo list with a real, multilingual proofreader running on the user's own machine.
   Two surfaces share one offset-safe apply path (`hooks/useLanguageToolCheck.ts`): an on-demand

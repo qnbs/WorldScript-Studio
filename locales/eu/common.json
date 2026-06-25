@@ -676,5 +676,12 @@
   "voice.stopDictation": "Utzi diktaketari",
   "voice.stopListening": "Utzi entzuteari",
   "worlds.emptyState.description": "Eraiki zure istorioa bizi den lekuak, arauak eta historiak. Hasi kokapen batekin.",
-  "worlds.emptyState.title": "Mundua zain dago"
+  "worlds.emptyState.title": "Mundua zain dago",
+  "error.fallback.generic": "AI is unavailable — used built-in assistance.",
+  "error.fallback.offline": "You're offline — used built-in assistance.",
+  "assisted.badge.label": "Assisted",
+  "assisted.badge.srLabel": "Assisted mode — generated without AI",
+  "assisted.toast.title": "AI unavailable",
+  "assisted.toast.description": "Used built-in assistance. Enhance with AI when a model is available.",
+  "assisted.enhance": "Enhance with AI"
 }

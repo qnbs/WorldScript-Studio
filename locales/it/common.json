@@ -676,5 +676,12 @@
   "voice.stopDictation": "Ferma dettatura",
   "voice.stopListening": "Ferma ascolto",
   "worlds.emptyState.description": "Costruisci i luoghi, le regole e le storie in cui vive la tua narrazione. Inizia con una location.",
-  "worlds.emptyState.title": "Il mondo ti aspetta"
+  "worlds.emptyState.title": "Il mondo ti aspetta",
+  "error.fallback.generic": "IA non disponibile: usata l'assistenza integrata.",
+  "error.fallback.offline": "Sei offline: usata l'assistenza integrata.",
+  "assisted.badge.label": "Assistito",
+  "assisted.badge.srLabel": "Modalità assistita: generato senza IA",
+  "assisted.toast.title": "IA non disponibile",
+  "assisted.toast.description": "Usata l'assistenza integrata. Migliora con l'IA quando un modello è disponibile.",
+  "assisted.enhance": "Migliora con l'IA"
 }

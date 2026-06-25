@@ -676,5 +676,12 @@
   "error.ai.policy": "This request is blocked by your privacy or AI-mode settings. Adjust them in Settings → AI & Models.",
   "error.ai.invalidRequest": "The AI request was rejected as invalid. Try rephrasing or shortening your prompt.",
   "error.ai.canceled": "The AI request was cancelled.",
-  "error.ai.permanent": "The AI request failed. Please try again later."
+  "error.ai.permanent": "The AI request failed. Please try again later.",
+  "error.fallback.generic": "AI is unavailable — used built-in assistance.",
+  "error.fallback.offline": "You're offline — used built-in assistance.",
+  "assisted.badge.label": "Assisted",
+  "assisted.badge.srLabel": "Assisted mode — generated without AI",
+  "assisted.toast.title": "AI unavailable",
+  "assisted.toast.description": "Used built-in assistance. Enhance with AI when a model is available.",
+  "assisted.enhance": "Enhance with AI"
 }

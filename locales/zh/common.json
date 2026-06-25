@@ -676,5 +676,12 @@
   "voice.stopDictation": "停止听写",
   "voice.stopListening": "停止聆听",
   "worlds.emptyState.description": "构建你的故事所存在的地点、规则和历史。从一个地点开始。",
-  "worlds.emptyState.title": "世界等待着"
+  "worlds.emptyState.title": "世界等待着",
+  "error.fallback.generic": "AI is unavailable — used built-in assistance.",
+  "error.fallback.offline": "You're offline — used built-in assistance.",
+  "assisted.badge.label": "Assisted",
+  "assisted.badge.srLabel": "Assisted mode — generated without AI",
+  "assisted.toast.title": "AI unavailable",
+  "assisted.toast.description": "Used built-in assistance. Enhance with AI when a model is available.",
+  "assisted.enhance": "Enhance with AI"
 }
