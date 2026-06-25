@@ -63,16 +63,16 @@ export const useCharacterView = () => {
   // QNBS-v3: resolve offline character-profile labels here (the hook has t) so the generator stays pure.
   const buildCharacterHeuristicLabels = useCallback((): CharacterHeuristicLabels => {
     const concept = aiConcept.trim() || t('outline.heuristic.fallbackIdea');
-    const f = (key: string) => t(`characters.heuristic.${key}`, { concept });
+    const field = (key: string) => t(`characters.heuristic.${key}`, { concept });
     return {
       name: t('characters.heuristic.name'),
-      backstory: f('backstory'),
-      motivation: f('motivation'),
-      appearance: f('appearance'),
-      personalityTraits: f('personalityTraits'),
-      flaws: f('flaws'),
-      characterArc: f('characterArc'),
-      relationships: f('relationships'),
+      backstory: field('backstory'),
+      motivation: field('motivation'),
+      appearance: field('appearance'),
+      personalityTraits: field('personalityTraits'),
+      flaws: field('flaws'),
+      characterArc: field('characterArc'),
+      relationships: field('relationships'),
     };
   }, [aiConcept, t]);
 

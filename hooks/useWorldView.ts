@@ -62,13 +62,13 @@ export const useWorldView = () => {
   // QNBS-v3: resolve offline world-profile labels here (the hook has t) so the generator stays pure.
   const buildWorldHeuristicLabels = useCallback((): WorldHeuristicLabels => {
     const concept = aiConcept.trim() || t('outline.heuristic.fallbackIdea');
-    const f = (key: string) => t(`worlds.heuristic.${key}`, { concept });
+    const field = (key: string) => t(`worlds.heuristic.${key}`, { concept });
     return {
       name: t('worlds.heuristic.name'),
-      description: f('description'),
-      geography: f('geography'),
-      magicSystem: f('magicSystem'),
-      culture: f('culture'),
+      description: field('description'),
+      geography: field('geography'),
+      magicSystem: field('magicSystem'),
+      culture: field('culture'),
     };
   }, [aiConcept, t]);
 
