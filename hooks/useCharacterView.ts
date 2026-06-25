@@ -9,6 +9,7 @@ import {
   generateCharacterProfileThunk,
   regenerateCharacterFieldThunk,
 } from '../features/project/thunks/characterThunks';
+import type { CharacterHeuristicLabels } from '../services/ai/heuristicFallback/generators/characterGenerator';
 import { storageService } from '../services/storageService';
 import type { Character } from '../types';
 import { useTranslation } from './useTranslation';
@@ -59,12 +60,32 @@ export const useCharacterView = () => {
     setIsAiModalOpen(true);
   }, []);
 
+  // QNBS-v3: resolve offline character-profile labels here (the hook has t) so the generator stays pure.
+  const buildCharacterHeuristicLabels = useCallback((): CharacterHeuristicLabels => {
+    const concept = aiConcept.trim() || t('outline.heuristic.fallbackIdea');
+    const f = (key: string) => t(`characters.heuristic.${key}`, { concept });
+    return {
+      name: t('characters.heuristic.name'),
+      backstory: f('backstory'),
+      motivation: f('motivation'),
+      appearance: f('appearance'),
+      personalityTraits: f('personalityTraits'),
+      flaws: f('flaws'),
+      characterArc: f('characterArc'),
+      relationships: f('relationships'),
+    };
+  }, [aiConcept, t]);
+
   const handleGenerateProfile = useCallback(async () => {
     setIsGeneratingProfile(true);
     setIsAiModalOpen(false);
 
     const resultAction = await dispatch(
-      generateCharacterProfileThunk({ concept: aiConcept, lang: language }),
+      generateCharacterProfileThunk({
+        concept: aiConcept,
+        lang: language,
+        heuristicLabels: buildCharacterHeuristicLabels(),
+      }),
     );
     if (generateCharacterProfileThunk.fulfilled.match(resultAction)) {
       const newChar = resultAction.payload;
@@ -76,7 +97,7 @@ export const useCharacterView = () => {
 
     setIsGeneratingProfile(false);
     setAiConcept('');
-  }, [dispatch, aiConcept, language, toast, t]);
+  }, [dispatch, aiConcept, language, toast, t, buildCharacterHeuristicLabels]);
 
   const handleSelect = useCallback((character: Character) => {
     setSelectedCharacter(character);

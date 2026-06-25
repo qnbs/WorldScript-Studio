@@ -50,5 +50,10 @@
   "worlds.tabs.timeline": "Geschichte & Zeitachse",
   "worlds.title": "Welt-Atlas",
   "worlds.uploadImage": "Bild hochladen",
-  "worlds.yourWorlds": "Ihre Welten"
+  "worlds.yourWorlds": "Ihre Welten",
+  "worlds.heuristic.name": "Neue Welt",
+  "worlds.heuristic.description": "Eine Welt, die durch ihre zentrale Prämisse bestimmt wird: {{concept}}.",
+  "worlds.heuristic.geography": "Skizziere die wichtigsten Regionen, Klimazonen und natürlichen Merkmale von {{concept}}.",
+  "worlds.heuristic.magicSystem": "Lege die Regeln, Kosten und Grenzen der Macht in {{concept}} fest.",
+  "worlds.heuristic.culture": "Beschreibe die Völker, Überzeugungen und das tägliche Leben, die von {{concept}} geprägt sind."
 }

@@ -50,5 +50,10 @@
   "worlds.tabs.timeline": "历史与时间表",
   "worlds.title": "世界 Atlas",
   "worlds.uploadImage": "上传图片",
-  "worlds.yourWorlds": "你的世界"
+  "worlds.yourWorlds": "你的世界",
+  "worlds.heuristic.name": "New World",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
 }

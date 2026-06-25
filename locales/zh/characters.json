@@ -69,5 +69,13 @@
   "characters.tabs.relationships": "人际关系",
   "characters.title": "角色 Dossiers",
   "characters.uploadImage": "上传图片",
-  "characters.yourCharacters": "你的角色"
+  "characters.yourCharacters": "你的角色",
+  "characters.heuristic.name": "New Character",
+  "characters.heuristic.backstory": "Shaped by formative experiences, this character carries a past tied to {{concept}}.",
+  "characters.heuristic.motivation": "A core desire connected to {{concept}} drives their choices.",
+  "characters.heuristic.appearance": "Describe how they present themselves — let their look hint at {{concept}}.",
+  "characters.heuristic.personalityTraits": "Resourceful, guarded, determined.",
+  "characters.heuristic.flaws": "A weakness that complicates their goals.",
+  "characters.heuristic.characterArc": "They begin guarded and, through the story, are changed by {{concept}}.",
+  "characters.heuristic.relationships": "Note the key bonds and rivalries that define them."
 }
