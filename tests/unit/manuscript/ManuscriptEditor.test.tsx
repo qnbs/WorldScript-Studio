@@ -53,6 +53,28 @@ vi.mock('../../../hooks/useVoiceDictation', () => ({
   useVoiceDictation: vi.fn(),
 }));
 
+// QNBS-v3: stub the LanguageTool hook (it pulls Redux selectors). Mutable so the default tests stay on
+// the static TYPOS fallback (available:false) while the PR-C2 block drives the live LanguageTool path.
+const ltMock = vi.hoisted(() => ({
+  available: false,
+  matches: [] as Array<Record<string, unknown>>,
+  applySuggestion: vi.fn(),
+}));
+
+vi.mock('../../../hooks/useLanguageToolCheck', () => ({
+  useLanguageToolCheck: () => ({
+    available: ltMock.available,
+    unsupportedLocale: false,
+    status: 'idle',
+    matches: ltMock.matches,
+    check: vi.fn(),
+    applySuggestion: ltMock.applySuggestion,
+    ignore: vi.fn(),
+    addToDictionary: vi.fn(),
+    clear: vi.fn(),
+  }),
+}));
+
 vi.mock('../../../app/hooks', () => ({
   useAppSelector: vi.fn(() => ({
     editorFont: 'Georgia',
@@ -134,6 +156,9 @@ describe('ManuscriptEditor', () => {
     };
     mockMentions = [];
     mockMentionPosition = null;
+    ltMock.available = false;
+    ltMock.matches = [];
+    ltMock.applySuggestion.mockReset();
   });
 
   it('shows empty state when no section is selected', () => {
@@ -212,5 +237,47 @@ describe('ManuscriptEditor', () => {
     render(<ManuscriptEditor isFocusMode={false} />);
     const textarea = screen.getByTestId('editor-textarea');
     expect(textarea).toHaveAttribute('placeholder', 'Write about adventure');
+  });
+
+  describe('PR-C2 live LanguageTool overlay', () => {
+    // "Hello world teh quick brown fox" — "teh" starts at offset 12.
+    const tehMatch = {
+      offset: 12,
+      length: 3,
+      message: 'Possible spelling mistake',
+      shortMessage: '',
+      replacements: ['the'],
+      ruleId: 'MORFOLOGIK',
+      category: 'TYPOS',
+      categoryName: 'Typos',
+      matchedText: 'teh',
+      isSpelling: true,
+    };
+
+    it('underlines a LanguageTool-flagged word and applies its replacement offset-safe', async () => {
+      ltMock.available = true;
+      ltMock.matches = [tehMatch];
+      // The overlay is aria-hidden, so query the spell-error button by class via the container.
+      const { container } = render(<ManuscriptEditor isFocusMode={false} />);
+
+      const flagged = container.querySelector('.spell-error');
+      expect(flagged?.textContent).toBe('teh');
+      await userEvent.click(flagged as Element);
+
+      // Popover (role=dialog, not hidden) shows the LanguageTool message + the replacement chip.
+      expect(await screen.findByText('Possible spelling mistake')).toBeTruthy();
+      await userEvent.click(screen.getByRole('button', { name: 'the' }));
+
+      // Applies via the hook (offset-safe), not the legacy regex path.
+      expect(ltMock.applySuggestion).toHaveBeenCalledWith('sec-1', tehMatch, 'the');
+    });
+
+    it('does not use the static TYPOS fallback when LanguageTool is active', () => {
+      ltMock.available = true;
+      ltMock.matches = []; // LT active but found nothing → no underline at all
+      const { container } = render(<ManuscriptEditor isFocusMode={false} />);
+      // "teh" is in the static TYPOS map but must NOT be flagged while LT is the source of truth.
+      expect(container.querySelector('.spell-error')).toBeNull();
+    });
   });
 });

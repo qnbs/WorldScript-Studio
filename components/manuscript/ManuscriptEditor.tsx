@@ -2,8 +2,10 @@ import type { FC, ReactNode } from 'react';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/hooks';
 import { useManuscriptViewContext } from '../../contexts/ManuscriptViewContext';
+import { useLanguageToolCheck } from '../../hooks/useLanguageToolCheck';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useVoiceDictation } from '../../hooks/useVoiceDictation';
+import type { LanguageToolMatch } from '../../services/languageToolService';
 import { InlineAnnotationLayer } from '../copilot/InlineAnnotationLayer';
 import { DebouncedInput } from '../ui/DebouncedInput';
 import { Icon } from '../ui/Icon';
@@ -79,7 +81,12 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
     x: number;
     y: number;
     word: string;
-    suggestion: string;
+    // QNBS-v3: PR-C2 — `suggestion` is the legacy single fallback (TYPOS); when `match` is set the
+    // popover renders the real LanguageTool message + replacement chips (offset-safe apply).
+    suggestion?: string;
+    message?: string;
+    replacements?: string[];
+    match?: LanguageToolMatch;
   } | null>(null);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
 
@@ -119,9 +126,48 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
 
   const currentTypos = language === 'de' ? TYPOS_DE : TYPOS_EN;
 
+  // QNBS-v3: PR-C2 — live LanguageTool spell/grammar check feeding the existing overlay. Active only
+  // when the integration is enabled + the locale is LT-supported (lt.available); otherwise the overlay
+  // falls back to the static TYPOS map below. Debounced so typing stays smooth; the service caches by
+  // text hash + degrades silently offline.
+  const lt = useLanguageToolCheck();
+  const ltCheck = lt.check;
+  const ltAvailable = lt.available;
+  const activeSectionId = activeSection?.id;
+  useEffect(() => {
+    // QNBS-v3: re-run on each settled edit; skip empty content (also makes deferredContent a real dep).
+    if (!ltAvailable || !activeSectionId || deferredContent.trim().length === 0) return;
+    const handle = setTimeout(() => {
+      void ltCheck(activeSectionId);
+    }, 700);
+    return () => clearTimeout(handle);
+  }, [deferredContent, activeSectionId, ltAvailable, ltCheck]);
+
+  // QNBS-v3: map single-word LanguageTool matches to their start offset so the word-token overlay can
+  // underline them precisely (multi-word grammar matches are covered by the on-demand panel, PR-C1).
+  const ltMatchByOffset = useMemo(() => {
+    const map = new Map<number, LanguageToolMatch>();
+    if (!ltAvailable) return map;
+    for (const match of lt.matches) {
+      if (/^[\wÀ-ſ']+$/.test(match.matchedText)) map.set(match.offset, match);
+    }
+    return map;
+  }, [ltAvailable, lt.matches]);
+
   const handleSpellErrorClick = useCallback(
-    (e: React.MouseEvent, word: string) => {
+    (e: React.MouseEvent, word: string, ltMatch?: LanguageToolMatch) => {
       e.stopPropagation();
+      if (ltMatch) {
+        setSpellCheckPopover({
+          x: e.clientX,
+          y: e.clientY,
+          word,
+          message: ltMatch.message,
+          replacements: ltMatch.replacements,
+          match: ltMatch,
+        });
+        return;
+      }
       const suggestion = currentTypos[word.toLowerCase()] || '';
       if (suggestion) {
         setSpellCheckPopover({ x: e.clientX, y: e.clientY, word, suggestion });
@@ -131,10 +177,19 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
   );
 
   const applyCorrection = () => {
-    if (spellCheckPopover && activeSection) {
+    if (spellCheckPopover?.suggestion && activeSection) {
       const regex = new RegExp(`\\b${spellCheckPopover.word}\\b`);
       const newContent = activeSection.content.replace(regex, spellCheckPopover.suggestion);
       handleContentChange(activeSection.id, newContent);
+      setSpellCheckPopover(null);
+    }
+  };
+
+  // QNBS-v3: PR-C2 — apply a LanguageTool suggestion offset-safe via the PR-C1 hook (anchor-checked,
+  // redux-undo-wrapped, then re-checks), so the inline popover and the panel share one apply path.
+  const applyLtReplacement = (replacement: string) => {
+    if (spellCheckPopover?.match && activeSectionId) {
+      lt.applySuggestion(activeSectionId, spellCheckPopover.match, replacement);
       setSpellCheckPopover(null);
     }
   };
@@ -203,14 +258,19 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
         }
       } else if (word) {
         const lowerWord = word.toLowerCase();
-        if (Object.hasOwn(currentTypos, lowerWord)) {
+        // QNBS-v3: PR-C2 — prefer a real LanguageTool match at this exact offset; only fall back to the
+        // static TYPOS map when LanguageTool is not active (disabled or unsupported locale).
+        const ltMatch = ltMatchByOffset.get(offset);
+        const isLtFlagged = Boolean(ltMatch && ltMatch.matchedText === word);
+        const matchForClick = isLtFlagged ? ltMatch : undefined;
+        if (isLtFlagged || (!ltAvailable && Object.hasOwn(currentTypos, lowerWord))) {
           parts.push(
             // QNBS-v3: button replaces span[role=button] for native semantics; keyboard path derives position from bounding rect since no clientX/Y on KeyboardEvent.
             <button
               key={offset}
               type="button"
               className="spell-error bg-transparent border-0 p-0 font-[inherit] text-[inherit]"
-              onClick={(e) => handleSpellErrorClick(e, word)}
+              onClick={(e) => handleSpellErrorClick(e, word, matchForClick)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -220,7 +280,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
                     clientY: rect.bottom,
                     stopPropagation: () => {},
                   } as React.MouseEvent;
-                  handleSpellErrorClick(synthetic, word);
+                  handleSpellErrorClick(synthetic, word, matchForClick);
                 }
               }}
             >
@@ -237,8 +297,18 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
     });
 
     if (lastIndex < text.length) parts.push(text.substring(lastIndex));
-    return <>{parts}</>;
-  }, [deferredContent, characters, worlds, currentTypos, handleSpellErrorClick]);
+    // QNBS-v3: return the parts array directly — a single-child fragment is redundant (DeepSource
+    // JS-0424); rendered elements carry keys, bare string segments don't need them.
+    return parts;
+  }, [
+    deferredContent,
+    characters,
+    worlds,
+    currentTypos,
+    handleSpellErrorClick,
+    ltMatchByOffset,
+    ltAvailable,
+  ]);
 
   if (!activeSection) {
     return (
@@ -384,16 +454,46 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
-          <p className="text-xs text-[var(--sc-text-muted)] mb-1 uppercase tracking-wide px-2">
-            {t('manuscript.spellcheck.didYouMean')}
-          </p>
-          <button
-            type="button"
-            onClick={applyCorrection}
-            className="block w-full text-left px-3 py-2 min-h-[44px] rounded hover:bg-[var(--sc-accent)] hover:text-[var(--sc-text-on-accent)] text-[var(--sc-text-primary)] font-medium flex items-center"
-          >
-            {spellCheckPopover.suggestion}
-          </button>
+          {spellCheckPopover.match ? (
+            <>
+              {/* QNBS-v3: PR-C2 — real LanguageTool finding: message + replacement chips. */}
+              <p className="text-xs text-[var(--sc-text-secondary)] mb-1.5 px-2 max-w-[260px]">
+                {spellCheckPopover.message}
+              </p>
+              {spellCheckPopover.replacements && spellCheckPopover.replacements.length > 0 ? (
+                <ul className="space-y-0.5">
+                  {spellCheckPopover.replacements.slice(0, 5).map((replacement) => (
+                    <li key={replacement}>
+                      <button
+                        type="button"
+                        onClick={() => applyLtReplacement(replacement)}
+                        className="block w-full text-left px-3 py-2 min-h-[44px] rounded hover:bg-[var(--sc-accent)] hover:text-[var(--sc-text-on-accent)] text-[var(--sc-text-primary)] font-medium flex items-center"
+                      >
+                        {replacement}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-[var(--sc-text-muted)] italic px-2 py-1">
+                  {t('writer.grammar.noSuggestions')}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-[var(--sc-text-muted)] mb-1 uppercase tracking-wide px-2">
+                {t('manuscript.spellcheck.didYouMean')}
+              </p>
+              <button
+                type="button"
+                onClick={applyCorrection}
+                className="block w-full text-left px-3 py-2 min-h-[44px] rounded hover:bg-[var(--sc-accent)] hover:text-[var(--sc-text-on-accent)] text-[var(--sc-text-primary)] font-medium flex items-center"
+              >
+                {spellCheckPopover.suggestion}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
