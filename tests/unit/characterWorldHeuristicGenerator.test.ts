@@ -62,6 +62,14 @@ describe('characterHeuristicGenerator', () => {
     expect(characterHeuristicGenerator({ params: { labels: charLabels } })?.confidence).toBe(0.35);
   });
 
+  it('carries a provided reasonKey through the envelope', () => {
+    const r = characterHeuristicGenerator({
+      params: { labels: charLabels },
+      reasonKey: 'error.fallback.offline',
+    });
+    expect(r?.reasonKey).toBe('error.fallback.offline');
+  });
+
   it('resolves through the registry under "character.profile"', () => {
     _clearHeuristicRegistry();
     registerHeuristicGenerator('character.profile', characterHeuristicGenerator);
@@ -91,6 +99,16 @@ describe('worldHeuristicGenerator', () => {
       locations: [],
     });
     expect('id' in (r?.data ?? {})).toBe(false);
+  });
+
+  it('lowers confidence without a concept and carries a provided reasonKey', () => {
+    expect(worldHeuristicGenerator({ params: { labels: worldLabels } })?.confidence).toBe(0.35);
+    expect(
+      worldHeuristicGenerator({
+        params: { labels: worldLabels },
+        reasonKey: 'error.fallback.offline',
+      })?.reasonKey,
+    ).toBe('error.fallback.offline');
   });
 
   it('resolves through the registry under "world.profile"', () => {
