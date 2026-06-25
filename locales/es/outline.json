@@ -42,5 +42,22 @@
   "outline.result.title": "Esquema interactivo",
   "outline.result.twistTooltip": "Giro de trama generado por IA",
   "outline.selectSection": "Seleccionar sección «{{title}}»",
-  "outline.title": "Generador de esquema de historia IA"
+  "outline.title": "Generador de esquema de historia IA",
+  "outline.heuristic.fallbackIdea": "la idea central",
+  "outline.heuristic.beat.setup.title": "Planteamiento",
+  "outline.heuristic.beat.setup.desc": "Presenta el mundo y los personajes principales, y establece el statu quo antes de que todo cambie.",
+  "outline.heuristic.beat.incitingIncident.title": "Incidente incitador",
+  "outline.heuristic.beat.incitingIncident.desc": "El acontecimiento que pone en marcha la historia: {{idea}}.",
+  "outline.heuristic.beat.risingAction.title": "Acción ascendente",
+  "outline.heuristic.beat.risingAction.desc": "Las complicaciones aumentan y lo que está en juego crece mientras los personajes persiguen su objetivo.",
+  "outline.heuristic.beat.midpoint.title": "Punto medio",
+  "outline.heuristic.beat.midpoint.desc": "Un punto de inflexión cambia el rumbo de la historia y eleva lo que está en juego.",
+  "outline.heuristic.beat.complications.title": "Complicaciones",
+  "outline.heuristic.beat.complications.desc": "Los reveses y los conflictos se intensifican; el camino a seguir se estrecha.",
+  "outline.heuristic.beat.twist.title": "Giro",
+  "outline.heuristic.beat.twist.desc": "Una revelación inesperada trastoca lo que los personajes creían cierto.",
+  "outline.heuristic.beat.climax.title": "Clímax",
+  "outline.heuristic.beat.climax.desc": "El conflicto central llega a su punto culminante en la confrontación decisiva de la historia.",
+  "outline.heuristic.beat.resolution.title": "Resolución",
+  "outline.heuristic.beat.resolution.desc": "Se atan los cabos sueltos y surge un nuevo statu quo."
 }
