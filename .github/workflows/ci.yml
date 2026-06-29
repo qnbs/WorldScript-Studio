@@ -40,7 +40,7 @@ jobs:
       pull-requests: read
     steps:
       # QNBS-v3: fetch-depth:0 gives gitleaks access to parent commits (sha^) needed for PR diff scans; shallow clone causes "ambiguous argument" errors.
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup
@@ -82,7 +82,7 @@ jobs:
         # QNBS-v3: Explicit versions — `node` (= 'current') breaks CI without code changes when Node N+1 is released.
         node-version: ['22', '24']
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
@@ -163,7 +163,7 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
 
       - name: Build application
@@ -251,7 +251,7 @@ jobs:
     timeout-minutes: 50
     needs: [quality]
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
 
       # QNBS-v3: cache Playwright browsers by version so re-runs don't re-download ~400 MB each time.
@@ -304,7 +304,7 @@ jobs:
     needs: [quality]
     continue-on-error: true
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
 
       - name: Cache Playwright browsers
@@ -341,7 +341,7 @@ jobs:
     needs: [build]
     continue-on-error: false
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
 
       - name: Download build artifact
@@ -386,7 +386,7 @@ jobs:
     timeout-minutes: 25
     needs: [quality]
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
 
       # QNBS-v3: Cache Playwright browsers between runs — saves ~60 s install time.
@@ -443,7 +443,7 @@ jobs:
     timeout-minutes: 15
     needs: [build]
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
 
       - name: Download dist artifact
