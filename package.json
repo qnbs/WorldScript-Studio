@@ -96,7 +96,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.82",
-    "@ai-sdk/openai": "^3.0.71",
+    "@ai-sdk/openai": "^3.0.74",
     "@ai-sdk/react": "^3.0.201",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
