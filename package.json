@@ -126,7 +126,7 @@
     "ai": "^6.0.206",
     "diff-match-patch": "^1.0.5",
     "docx": "^9.7.1",
-    "dompurify": "^3.4.6",
+    "dompurify": "^3.4.12",
     "driver.js": "^1.4.0",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
