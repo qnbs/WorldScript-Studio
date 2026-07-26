@@ -1,6 +1,6 @@
 {
   "name": "@domain/collab-transport",
-  "version": "10.3.0-sc1",
+  "version": "10.3.0-sc2",
   "private": true,
   "type": "module",
   "description": "Vendored y-webrtc with WorldScript RTCDataChannel E2E encryption patch",

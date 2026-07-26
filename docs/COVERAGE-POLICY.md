@@ -50,3 +50,20 @@ one-time jump that would risk inverting the gate again.
 > Related: the suppression-debt ratchet ([`scripts/check-suppressions.mjs`](../scripts/check-suppressions.mjs),
 > `suppressions-baseline.json`) follows the same monotonic principle for `biome-ignore` counts —
 > baseline may only fall. Vendored-dependency CVE process: [`VENDOR-FORKS.md`](../VENDOR-FORKS.md).
+
+## Deferred patch-coverage follow-ups
+
+Codecov reports a **patch-coverage** metric per PR (changed lines only). It is **informational,
+not a gate** — no `codecov.yml` target is configured and the `codecov/patch` status check passes
+regardless of the percentage. The enforced coverage gate remains the project-wide Vitest
+threshold above. Larger gaps are tracked here and backfilled with targeted tests instead of
+blocking the originating PR.
+
+| Date | Origin | Files / paths | Gap | Status |
+|------|--------|---------------|-----|--------|
+| 2026-07-26 | PR #269 (#266/#60) | `components/settings/AiProviderCard.tsx` — PWA `!isDesktop` disabled-button branches (`Load models`, `Test connection`) | 4 partials (patch 82.6%) | ⬜ open |
+| 2026-07-26 | PR #269 | `services/localServerHttp.ts` — error-classification / Tauri-import-cache edge paths | 1 missing + 2 partials (patch 90.6%) | ⬜ open |
+| 2026-07-26 | PR #269 | `services/ollamaService.ts` — `isAbortError` rethrow branch in `streamOllama` (review fix) | 1 partial (patch 87.5%) | ⬜ open |
+
+Backfill target: bring each file's patch coverage ≥ 90% with focused unit tests (no threshold
+change — rule 1 applies).

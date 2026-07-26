@@ -7,7 +7,7 @@ import type React from 'react';
 import { useCallback, useState } from 'react';
 import { useProForgeViewContext } from '../../contexts/ProForgeViewContext';
 import { PIPELINE_STAGES, type PipelineStage } from '../../features/proForge/types';
-import { Badge } from '../ui/Badge';
+import { MaturityBadge } from '../settings/MaturityBadge';
 import { PipelineProgressPanel } from './PipelineProgressPanel';
 import { PipelineReviewPanel } from './PipelineReviewPanel';
 
@@ -88,8 +88,9 @@ export const ProForgeDashboard: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-semibold">{t('proforge.pipeline.title')}</h2>
-              {/* QNBS-v3: ProForge is an on-by-default but experimental agentic pipeline — label it. */}
-              <Badge variant="experimental">{t('common.badge.experimental')}</Badge>
+              {/* QNBS-v3: ProForge is opt-in + experimental — label driven by FEATURE_CATALOG so it
+                  can never drift from the catalog/slice (MaturityBadge convention, v1.24). */}
+              <MaturityBadge flagKey="enableProForge" />
             </div>
             {/* QNBS-v3: PR6 — make the human-in-the-loop expectation explicit, not just implied in help. */}
             <p className="text-[11px] text-[var(--sc-warning-fg)] font-medium">

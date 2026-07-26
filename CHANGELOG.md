@@ -75,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Settings hygiene.** Removed stale Experimental-category search hints (`plot board`, `codex`,
+  `cross project` — retired/promoted flags) in favor of current features; `ProForgeDashboard` now
+  uses the catalog-driven `MaturityBadge` instead of a hard-coded Experimental pill, keeping the
+  v1.24 maturity-label convention consistent.
+
 - **Desktop settings "minimize to tray" is now a proper switch.** `DesktopSection` used the only raw
   `<input type="checkbox">` left in Settings, with its hint not programmatically associated. It now
   renders the design-system `ToggleSwitch` (`role="switch"`, `aria-labelledby` + `aria-describedby`
@@ -90,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider is still described as an adaptive-engine backend). Refreshed in the five Production locales.
 - **ProForge is now opt-in (default off).** The experimental 8-stage agentic editing pipeline
   (`enableProForge`) shipped on by default; it is token-heavy and carries loop risk, so it is now a
-  user opt-in like Voice and the Global Copilot. New installs get **17 default-on / 6 default-off**
+  user opt-in like Voice and the Global Copilot. New installs get **16 default-on / 6 default-off**
   flags. Existing users who enabled or relied on it are unaffected (the persisted value wins);
   everyone can still turn it on under Settings → Experimental.
 - **Settings → Experimental features are grouped by category** (Writing, AI, Editing Pipeline,
@@ -105,11 +110,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Ollama / LM Studio / vLLM discovery & connectivity on desktop, CORS noise in the PWA
+  (#266).** Root cause: all local-server traffic (`services/ollamaService.ts`,
+  `scanLocalOpenAiCompatibleEndpoints()`) used the WebView's `fetch`, so inside the Tauri shell the
+  cross-origin `localhost` requests died on CORS/PNA, and in the PWA the settings auto-effect probed
+  `localhost:11434` on every visit (loud CORS console errors). All local-server calls now go through
+  the new thin `services/localServerHttp.ts`, which routes via `@tauri-apps/plugin-http` (native,
+  CORS-free) on desktop and keeps browser `fetch` on the web, with shared URL normalization, timeout
+  composition and `unreachable`/`timeout` classification (user aborts still propagate unchanged).
+  The Settings → AI card no longer auto-probes localhost in the PWA — it shows a quiet "desktop app
+  required" banner with a download CTA instead — and the desktop scan gained per-endpoint status
+  badges (reachable / no response / timeout / HTTP error) plus a one-click **Use this URL** action.
+  All new strings localized in 19 locales. See
+  [ADR 0012](docs/adr/0012-local-server-connectivity-tauri-http.md) and
+  [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md).
+
 - **Feature-catalog / slice default drift made structurally impossible.** `features/featureCatalog.ts`
-  now covers all **23** flags (was 16) and **derives** each entry's `defaultOn` from the slice's
+  now covers all **22** flags (was 16) and **derives** each entry's `defaultOn` from the slice's
   `defaultFeatureFlagsState` instead of hand-keying it — the class of bug where the catalog said
   `false` while the slice said `true` for ~12 flags can no longer recur (guarded by the new
   `tests/unit/featureCatalog.test.ts`). Added risk-level / desktop-requirement / dependency metadata.
+
+### Security
+
+- **Tauri HTTP-plugin capability scope pinned (#266).** `http:default` alone grants **no** URL
+  scope — every plugin-http call (including AI-SDK cloud calls on desktop) was silently denied by
+  the plugin's allow-list check. The capability now explicitly allows loopback any-port
+  (`http://localhost:*/*`, `http://127.0.0.1:*/*` — Ollama/LM Studio/vLLM + custom ports) and the
+  cloud endpoints mirroring the Tauri CSP `connect-src` (Gemini, OpenAI, x.ai, OpenRouter, Groq).
+- **y-webrtc vendor-fork audit + CI invariant guard (#60).** Full-file diff of
+  `packages/collab-transport` against upstream `y-webrtc@10.3.0`: no deviations beyond the three
+  documented SC patches (PBKDF2 600k iterations, `extractable: false`, `return promise.reject`) plus
+  the DataChannel E2E encryption — recorded in `packages/collab-transport/AUDIT.md`, fork bumped to
+  `10.3.0-sc2`. The deprecated `patches/y-webrtc@10.3.0.patch` and the dead root `y-webrtc`
+  dependency (zero imports) are removed, and the previously-referenced-but-missing
+  `scripts/verify-vendor-fork.mjs` now exists and runs in the CI security job (`verify:vendor`).
+- **Advisory batch remediated (2026-07-26, CI security gate).** Cargo.lock: `quick-xml` 0.39.4 →
+  0.41.0 via `plist` 1.10.0 (RUSTSEC-2026-0194/0195, CVSS 7.5), `anyhow` → 1.0.104,
+  `crossbeam-epoch` → 0.9.20, `serde_with` → 3.21.0. pnpm overrides raised: `dompurify` → 3.4.12,
+  `protobufjs` → 8.7.1, `body-parser` → 1.20.6 (bounded `<2` for express-4 compat). The two stale
+  no-longer-matching OSV ignores (dompurify GHSA-x4vx-rjvf-j5p4, js-yaml-3.x GHSA-h67p-54hq-rp68)
+  were dropped from `src-tauri/osv-scanner.toml`. The `pnpm audit` CI step is now advisory
+  (`continue-on-error`): some npm CDN edge nodes force-gzip the bulk-advisories response which
+  pnpm cannot decode (`ERR_PNPM_AUDIT_BAD_RESPONSE`, deterministic per edge — retries useless);
+  the OSV scan of both lockfiles remains the enforced gate.
+
 ### Removed
 
 - **Dead `enableWebnnInference` feature flag removed.** The flag shipped default-on but **no runtime

@@ -1,6 +1,12 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AiProviderCard } from '../../../components/settings/AiProviderCard';
+import {
+  listOllamaModels,
+  scanLocalOpenAiCompatibleEndpoints,
+  testAIConnection,
+} from '../../../services/aiProviderService';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -25,7 +31,12 @@ vi.mock('../../../services/aiProviderService', () => ({
 }));
 
 vi.mock('../../../services/ai/localBackendPresets', () => ({
-  LOCAL_BACKEND_PRESET_DEFAULT_URL: 'http://localhost:11434',
+  LOCAL_BACKEND_PRESET_DEFAULT_URL: {
+    ollama_default: 'http://localhost:11434',
+    lm_studio: 'http://localhost:1234',
+    vllm: 'http://localhost:8000',
+    custom: 'http://localhost:11434',
+  },
 }));
 
 const mockAdvancedAi = {
@@ -50,6 +61,22 @@ const mockAdvancedAi = {
 
 const mockOnAdvancedAiPatch = vi.fn();
 const mockOnProviderChange = vi.fn();
+
+const ollamaAdvancedAi = { ...mockAdvancedAi, provider: 'ollama' as const };
+
+function setDesktopRuntime(enabled: boolean): void {
+  const w = window as Window & { __TAURI_INTERNALS__?: unknown };
+  if (enabled) {
+    w.__TAURI_INTERNALS__ = {};
+  } else {
+    delete w.__TAURI_INTERNALS__;
+  }
+}
+
+afterEach(() => {
+  setDesktopRuntime(false);
+  vi.clearAllMocks();
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -101,5 +128,98 @@ describe('AiProviderCard', () => {
       />,
     );
     expect(screen.getByText('settings.ai.providerDescription')).toBeTruthy();
+  });
+});
+
+// ─── #266: ollama in the PWA vs desktop ──────────────────────────────────────
+
+describe('AiProviderCard — ollama provider (#266)', () => {
+  it('PWA: shows the desktop-only banner with download CTA and never probes localhost', async () => {
+    setDesktopRuntime(false);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    expect(screen.getByText('settings.ai.ollamaDesktopOnlyTitle')).toBeTruthy();
+    expect(screen.getByText('settings.ai.ollamaDesktopOnlyBody')).toBeTruthy();
+    const cta = screen.getByRole('link', { name: /downloadDesktopCta/ });
+    expect(cta.getAttribute('href')).toContain('github.com/qnbs/WorldScript-Studio/releases');
+    expect(cta.getAttribute('rel')).toContain('noreferrer');
+
+    // QNBS-v3 (#266): no auto-fetch in the browser — this is what killed the CORS console noise.
+    await waitFor(() => {
+      expect(screen.getByText('settings.ai.ollamaDesktopOnlyTitle')).toBeTruthy();
+    });
+    expect(listOllamaModels).not.toHaveBeenCalled();
+    expect(testAIConnection).not.toHaveBeenCalled();
+  });
+
+  it('desktop: auto-loads models and tests the connection when ollama is selected', async () => {
+    setDesktopRuntime(true);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(listOllamaModels).toHaveBeenCalled();
+      expect(testAIConnection).toHaveBeenCalledWith('ollama', expect.any(Object));
+    });
+    expect(screen.queryByText('settings.ai.ollamaDesktopOnlyTitle')).toBeNull();
+  });
+
+  it('desktop: scan renders classified status badges and the use-url action patches settings', async () => {
+    setDesktopRuntime(true);
+    vi.mocked(scanLocalOpenAiCompatibleEndpoints).mockResolvedValueOnce([
+      {
+        labelKey: 'settings.ai.scanLabelOllama',
+        baseUrl: 'http://localhost:11434',
+        ok: true,
+        state: 'ok',
+        status: 200,
+      },
+      {
+        labelKey: 'settings.ai.scanLabelLmStudio',
+        baseUrl: 'http://localhost:1234',
+        ok: false,
+        state: 'timeout',
+      },
+      {
+        labelKey: 'settings.ai.scanLabelVllm',
+        baseUrl: 'http://localhost:8000',
+        ok: false,
+        state: 'http',
+        status: 500,
+      },
+    ]);
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.scanLocalPorts' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('settings.ai.scanOk')).toBeTruthy();
+    });
+    expect(screen.getByText('settings.ai.scanStateTimeout')).toBeTruthy();
+    expect(screen.getByText(/scanStateHttp/)).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.scanUseUrl' }));
+    expect(mockOnAdvancedAiPatch).toHaveBeenCalledWith({
+      ollamaBaseUrl: 'http://localhost:11434',
+      localBackendPreset: 'ollama_default',
+    });
   });
 });

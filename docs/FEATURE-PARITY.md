@@ -22,7 +22,7 @@
 ## Feature Parity Matrix
 
 > **Defaults (v1.24 post-release):** the slice ships the **full feature set** —
-> 23 flags, **17 default-on**, **6 opt-in default-off** (`enableProForge`, `enableRtlLayout`,
+> 22 flags, **16 default-on**, **6 opt-in default-off** (`enableProForge`, `enableRtlLayout`,
 > `enableVoiceSupport`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`).
 > `enableProForge` was flipped to opt-in (experimental, token-heavy 8-stage pipeline). The retired/promoted
 > flags `enableCodexAutoTracking`, `enableCrossProjectSearch` (both promoted to permanent core),

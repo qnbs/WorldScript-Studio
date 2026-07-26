@@ -287,6 +287,33 @@ describe('testAIConnection', () => {
   });
 });
 
+describe('testAIConnection — ollama desktop branch', () => {
+  afterEach(() => {
+    delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  });
+
+  it('delegates to testOllamaConnection under Tauri and returns its result', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    vi.mocked(testOllamaConnection).mockResolvedValueOnce({ ok: true });
+    const result = await testAIConnection('ollama', { ollamaBaseUrl: 'http://host:11434' });
+    expect(result.ok).toBe(true);
+    expect(testOllamaConnection).toHaveBeenCalledWith('http://host:11434');
+  });
+
+  it('propagates the service error under Tauri (e.g. classified timeout)', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    vi.mocked(testOllamaConnection).mockResolvedValueOnce({
+      ok: false,
+      error: 'Ollama timed out (http://localhost:11434)',
+    });
+    const result = await testAIConnection('ollama', {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('timed out');
+  });
+});
+
 // ─── streamText (OpenAI signal + Ollama→Gemini fallback) ────────────────────
 
 describe('streamText OpenAI', () => {
@@ -630,14 +657,14 @@ describe('testAIConnection additional branches', () => {
 
 // QNBS-v3: scanLocalOpenAiCompatibleEndpoints-Branches — fetch wirft / HTTP-401 gilt als ok.
 describe('scanLocalOpenAiCompatibleEndpoints', () => {
-  const originalFetch = globalThis.fetch;
-
+  // QNBS-v3 (#266 review): stubGlobal + unstubAllGlobals statt manueller Zuweisung —
+  // Vitest stellt so auch bei einem Test-Abbruch den echten fetch wieder her.
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    vi.unstubAllGlobals();
   });
 
   it('returns ok:false for all candidates when fetch throws', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
     const results = await scanLocalOpenAiCompatibleEndpoints();
     expect(results).toHaveLength(3);
     for (const r of results) {
@@ -646,11 +673,43 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
   });
 
   it('returns ok:true when HTTP 401 (auth required but reachable)', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
     const results = await scanLocalOpenAiCompatibleEndpoints();
     for (const r of results) {
       expect(r.ok).toBe(true);
+      expect(r.state).toBe('ok');
       expect(r.status).toBe(401);
+    }
+  });
+
+  it('classifies non-ok HTTP responses as state:http with the numeric status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response));
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    for (const r of results) {
+      expect(r.ok).toBe(false);
+      expect(r.state).toBe('http');
+      expect(r.status).toBe(500);
+    }
+  });
+
+  it('classifies TimeoutError-shaped rejections as state:timeout', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(Object.assign(new Error('timed out'), { name: 'TimeoutError' })),
+    );
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    for (const r of results) {
+      expect(r.ok).toBe(false);
+      expect(r.state).toBe('timeout');
+    }
+  });
+
+  it('classifies plain network failures as state:unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('ECONNREFUSED')));
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    for (const r of results) {
+      expect(r.ok).toBe(false);
+      expect(r.state).toBe('unreachable');
     }
   });
 });

@@ -1,12 +1,16 @@
 /**
- * VENDORED FORK — y-webrtc 10.3.0
+ * QNBS-v3 (#60): VENDORED FORK — y-webrtc 10.3.0
  * Upstream: https://github.com/yjs/y-webrtc  |  npm tag: v10.3.0
- * Package:  @domain/collab-transport v10.3.0-sc1  (vendored 2026-05-28)
+ * Package:  @domain/collab-transport v10.3.0-sc2  (vendored 2026-05-28, audited 2026-07-25)
  *
- * WorldScript patches (C-1, 2026-05-28 — commit 63afa69):
+ * SC patches (C-1, 2026-05-28 — commit 63afa69):
  *   1. PBKDF2 iterations raised 100k → 310k → 600k (OWASP 2024 SHA-256 minimum)
  *   2. deriveKey: extractable=false  (prevents key export via subtle.exportKey)
- *   3. encryptMessageContent: added `return` before promise.reject() (was silent swallow)
+ *   3. decrypt(): added `return` before promise.reject() (was silent swallow)
+ *   (y-webrtc.js: RTCDataChannel payloads encrypted/decrypted via cryptoutils when room.key set)
+ *
+ * 2026-07-25 audit (#60): full-file diff vs upstream 10.3.0 — no deviations beyond the patches
+ * above. See AUDIT.md. Invariant guard: `pnpm run verify:vendor`.
  *
  * SECURITY MAINTENANCE — Renovate cannot auto-update this fork.
  * On any new y-webrtc release: diff crypto.js + y-webrtc.js against the new tag,
