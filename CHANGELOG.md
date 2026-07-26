@@ -126,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md).
 
 - **Feature-catalog / slice default drift made structurally impossible.** `features/featureCatalog.ts`
-  now covers all **23** flags (was 16) and **derives** each entry's `defaultOn` from the slice's
+  now covers all **22** flags (was 16) and **derives** each entry's `defaultOn` from the slice's
   `defaultFeatureFlagsState` instead of hand-keying it — the class of bug where the catalog said
   `false` while the slice said `true` for ~12 flags can no longer recur (guarded by the new
   `tests/unit/featureCatalog.test.ts`). Added risk-level / desktop-requirement / dependency metadata.
