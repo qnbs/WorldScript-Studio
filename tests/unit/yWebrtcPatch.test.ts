@@ -11,13 +11,14 @@ describe('y-webrtc RTCDataChannel encryption patch', () => {
     '../../packages/collab-transport/src/y-webrtc.js',
   );
 
-  it('patch file exists and is non-empty', () => {
+  it('deprecated pnpm patch file is gone — the vendored fork is the single source (#60)', () => {
+    // QNBS-v3 (#60): patches/y-webrtc@10.3.0.patch was removed when the fork moved from
+    // pnpm-patched node_modules to the vendored @domain/collab-transport workspace package.
+    // verify:vendor (CI security job) guards the full invariant set; here we pin the file-level
+    // contract so a stray patch reintroduction fails fast in unit tests too.
     const patchPath = path.resolve(import.meta.dirname, '../../patches/y-webrtc@10.3.0.patch');
-    expect(fs.existsSync(patchPath)).toBe(true);
-    const patchContent = fs.readFileSync(patchPath, 'utf-8');
-    expect(patchContent.length).toBeGreaterThan(0);
-    expect(patchContent).toContain('cryptoutils.encrypt');
-    expect(patchContent).toContain('cryptoutils.decrypt');
+    expect(fs.existsSync(patchPath)).toBe(false);
+    expect(fs.existsSync(yWebrtcPath)).toBe(true);
   });
 
   it('sendWebrtcConn encrypts before peer.send when room.key is set', () => {
