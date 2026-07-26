@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider is still described as an adaptive-engine backend). Refreshed in the five Production locales.
 - **ProForge is now opt-in (default off).** The experimental 8-stage agentic editing pipeline
   (`enableProForge`) shipped on by default; it is token-heavy and carries loop risk, so it is now a
-  user opt-in like Voice and the Global Copilot. New installs get **17 default-on / 6 default-off**
+  user opt-in like Voice and the Global Copilot. New installs get **16 default-on / 6 default-off**
   flags. Existing users who enabled or relied on it are unaffected (the persisted value wins);
   everyone can still turn it on under Settings → Experimental.
 - **Settings → Experimental features are grouped by category** (Writing, AI, Editing Pipeline,

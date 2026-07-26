@@ -1814,7 +1814,7 @@
   "settings.ai.localAi.webgpuUnavailable": "Μη διαθέσιμο",
   "settings.ai.localBackendPreset": "Τοπική προεπιλογή υποστήριξης",
   "settings.ai.ollamaBrowserNote": "Το Olama είναι διαθέσιμο μόνο στην εφαρμογή για υπολογιστές. Η Πολιτική Ασφάλειας Περιεχομένου του προγράμματος περιήγησης αποκλείει τις άμεσες συνδέσεις με τον localhost.",
-  "settings.ai.ollamaDesktopOnlyBody": "Το Ollama και οι τοπικοί διακομιστές συμβατοί με OpenAI (LM Studio, vLLM) είναι διαθέσιμοι μόνο στην εφαρμογή επιφάνειας εργασίας. Τα προγράμματα περιήγησης αποκλείουν απευθείας συνδέσεις με το localhost (Content Security Policy και Private Network Access).",
+  "settings.ai.ollamaDesktopOnlyBody": "Το Ollama και οι τοπικοί διακομιστές συμβατοί με OpenAI (LM Studio, vLLM) είναι διαθέσιμοι μόνο στην εφαρμογή επιφάνειας εργασίας. Τα προγράμματα περιήγησης αποκλείουν απευθείας συνδέσεις από ιστοσελίδες με το localhost (CORS και Private Network Access).",
   "settings.ai.ollamaDesktopOnlyTitle": "Απαιτείται εφαρμογή επιφάνειας εργασίας για τοπικούς διακομιστές",
   "settings.ai.ollamaHint": "Βεβαιωθείτε ότι ο διακομιστής εκτελείται (π.χ. ollama serve). Η εφαρμογή επιφάνειας εργασίας συνδέεται απευθείας — δεν απαιτείται ρύθμιση CORS.",
   "settings.ai.ollamaModelHint": "Γρήγορη επιλογή μοντέλων που αναφέρονται από τον διακομιστή σας — πατήστε για χρήση.",

@@ -206,7 +206,7 @@
   "settings.ai.localAi.webgpuUnavailable": "Non disponibile",
   "settings.ai.localBackendPreset": "Preset backend locale",
   "settings.ai.ollamaBrowserNote": "Ollama è disponibile solo nell'app desktop. La politica di sicurezza dei contenuti del browser blocca le connessioni dirette a localhost.",
-  "settings.ai.ollamaDesktopOnlyBody": "Ollama e i server locali compatibili con OpenAI (LM Studio, vLLM) sono disponibili solo nell'app desktop. I browser bloccano le connessioni dirette a localhost (Content Security Policy e Private Network Access).",
+  "settings.ai.ollamaDesktopOnlyBody": "Ollama e i server locali compatibili con OpenAI (LM Studio, vLLM) sono disponibili solo nell'app desktop. I browser bloccano le connessioni dirette dalle pagine web a localhost (CORS e Private Network Access).",
   "settings.ai.ollamaDesktopOnlyTitle": "App desktop richiesta per i server locali",
   "settings.ai.ollamaHint": "Assicurati che il server sia in esecuzione (es. ollama serve). L'app desktop si connette direttamente — nessuna configurazione CORS necessaria.",
   "settings.ai.ollamaModelHint": "Selezione rapida dei modelli segnalati dal tuo server — tocca per usare.",

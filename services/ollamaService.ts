@@ -196,6 +196,10 @@ export async function streamOllama(
       signal: opts.signal ?? null,
     });
   } catch (err) {
+    // QNBS-v3 (#266 review): caller cancellation must propagate unchanged — wrapping an abort as
+    // 'not reachable' would push a deliberate cancel into the fallback chain. localServerFetch
+    // already rethrows AbortError untouched; keep it that way here.
+    if (isAbortError(err)) throw err;
     const error = new Error(
       `Ollama not reachable (${baseUrl}). Make sure Ollama is running: ollama serve`,
       { cause: err as Error },

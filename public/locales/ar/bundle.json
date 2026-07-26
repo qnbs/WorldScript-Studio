@@ -1814,7 +1814,7 @@
   "settings.ai.localAi.webgpuUnavailable": "Not available",
   "settings.ai.localBackendPreset": "إعداد مسبق للخلفية المحلية",
   "settings.ai.ollamaBrowserNote": "‏Ollama متاح فقط في تطبيق سطح المكتب. تمنع سياسة أمان المحتوى للمتصفّح الاتصالات المباشرة بـ localhost.",
-  "settings.ai.ollamaDesktopOnlyBody": "يتوفر Ollama والخوادم المحلية المتوافقة مع OpenAI (LM Studio وvLLM) فقط في تطبيق سطح المكتب. تحظر المتصفحات الاتصالات المباشرة بـ localhost (سياسة أمان المحتوى والوصول إلى الشبكة الخاصة).",
+  "settings.ai.ollamaDesktopOnlyBody": "يتوفر Ollama والخوادم المحلية المتوافقة مع OpenAI (LM Studio وvLLM) فقط في تطبيق سطح المكتب. تحظر المتصفحات الاتصالات المباشرة من صفحات الويب بـ localhost (CORS والوصول إلى الشبكة الخاصة).",
   "settings.ai.ollamaDesktopOnlyTitle": "تطبيق سطح المكتب مطلوب للخوادم المحلية",
   "settings.ai.ollamaHint": "تأكد من تشغيل الخادم (مثل ollama serve). يتصل تطبيق سطح المكتب مباشرة — دون الحاجة إلى إعداد CORS.",
   "settings.ai.ollamaModelHint": "نماذج اختيار سريع مُبلَّغ عنها من خادمك — انقر للاستخدام.",

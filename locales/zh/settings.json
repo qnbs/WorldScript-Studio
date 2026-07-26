@@ -206,7 +206,7 @@
   "settings.ai.localAi.webgpuUnavailable": "不可用",
   "settings.ai.localBackendPreset": "本地后端预设",
   "settings.ai.ollamaBrowserNote": "Ollama 仅在桌面应用程序中可用。浏览器的内容安全策略阻止与本地主机的直接连接。",
-  "settings.ai.ollamaDesktopOnlyBody": "Ollama 和本地 OpenAI 兼容服务器（LM Studio、vLLM）仅在桌面应用中可用。浏览器会阻止与 localhost 的直接连接（内容安全策略和专用网络访问）。",
+  "settings.ai.ollamaDesktopOnlyBody": "Ollama 和本地 OpenAI 兼容服务器（LM Studio、vLLM）仅在桌面应用中可用。浏览器会阻止网页与 localhost 的直接连接（CORS 和专用网络访问）。",
   "settings.ai.ollamaDesktopOnlyTitle": "本地服务器需要桌面应用",
   "settings.ai.ollamaHint": "请确保服务器正在运行（例如 ollama serve）。桌面应用直接连接，无需配置 CORS。",
   "settings.ai.ollamaModelHint": "快速选择服务器报告的模型 - 点击即可使用。",

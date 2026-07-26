@@ -1814,7 +1814,7 @@
   "settings.ai.localAi.webgpuUnavailable": "Ei saatavilla",
   "settings.ai.localBackendPreset": "Paikallinen taustajärjestelmän esiasetus",
   "settings.ai.ollamaBrowserNote": "Ollama on saatavilla vain työpöytäsovelluksessa. Selaimen sisällön suojauskäytäntö estää suorat yhteydet localhostiin.",
-  "settings.ai.ollamaDesktopOnlyBody": "Ollama ja paikalliset OpenAI-yhteensopivat palvelimet (LM Studio, vLLM) ovat käytettävissä vain työpöytäsovelluksessa. Selaimet estävät suorat yhteydet localhostiin (Content Security Policy ja Private Network Access).",
+  "settings.ai.ollamaDesktopOnlyBody": "Ollama ja paikalliset OpenAI-yhteensopivat palvelimet (LM Studio, vLLM) ovat käytettävissä vain työpöytäsovelluksessa. Selaimet estävät suorat yhteydet verkkosivuilta localhostiin (CORS ja Private Network Access).",
   "settings.ai.ollamaDesktopOnlyTitle": "Paikalliset palvelimet vaativat työpöytäsovelluksen",
   "settings.ai.ollamaHint": "Varmista, että palvelin on käynnissä (esim. ollama serve). Työpöytäsovellus yhdistää suoraan — CORS-asetuksia ei tarvita.",
   "settings.ai.ollamaModelHint": "Palvelimesi ilmoittamat pikavalintamallit – käytä napauttamalla.",

@@ -84,7 +84,7 @@ WorldScript-Studio/
 │   ├── status/             # App-wide status / loading flags
 │   ├── writer/             # Writer view state
 │   ├── versionControl/     # Snapshots and branches
-│   ├── featureFlags/       # 23 flags — full set on by default; 5 opt-in (default-off)
+│   ├── featureFlags/       # 22 flags — full set on by default; 6 opt-in (default-off)
 │   ├── plotBoard/          # Ephemeral viewport/draw state (NOT undo-able; localStorage)
 │   ├── progressTracker/    # Writing sessions, streaks, goals
 │   ├── sceneComments/      # Per-scene comments (EntityAdapter)
@@ -387,7 +387,7 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 ### Feature Flags
 
-- `features/featureFlags/featureFlagsSlice.ts` gates **23 flags**. New installs get the **full feature set**: all default **on** except six opt-in flags that default **off** — `enableRtlLayout`, `enableVoiceSupport`, `enableProForge`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`. (`enableCodexAutoTracking` + `enableCrossProjectSearch` were promoted to permanent core; `enablePlotBoardV2` + `enableCloudSync` were retired — none remain in the slice.) See `docs/FEATURE-PARITY.md` for the per-flag matrix.
+- `features/featureFlags/featureFlagsSlice.ts` gates **22 flags**. New installs get the **full feature set**: all default **on** except six opt-in flags that default **off** — `enableRtlLayout`, `enableVoiceSupport`, `enableProForge`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`. (`enableCodexAutoTracking` + `enableCrossProjectSearch` were promoted to permanent core; `enablePlotBoardV2` + `enableCloudSync` were retired — none remain in the slice.) See `docs/FEATURE-PARITY.md` for the per-flag matrix.
 - UI: Settings → Experimental flags.
 - Do not use scattered `if (true)` hacks.
 

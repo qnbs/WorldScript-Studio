@@ -1814,7 +1814,7 @@
   "settings.ai.localAi.webgpuUnavailable": "Ekki í boði",
   "settings.ai.localBackendPreset": "Forstilla staðbundin bakenda",
   "settings.ai.ollamaBrowserNote": "Ollama er aðeins fáanlegt í skjáborðsforritinu. Innihaldsöryggisstefna vafrans lokar á beinar tengingar við localhost.",
-  "settings.ai.ollamaDesktopOnlyBody": "Ollama og staðværir OpenAI-samhæfðir þjónar (LM Studio, vLLM) eru aðeins í boði í skjáborðsforritinu. Vafrar loka beinum tengingum við localhost (Content Security Policy og Private Network Access).",
+  "settings.ai.ollamaDesktopOnlyBody": "Ollama og staðværir OpenAI-samhæfðir þjónar (LM Studio, vLLM) eru aðeins í boði í skjáborðsforritinu. Vafrar loka beinum tengingum frá vefsíðum við localhost (CORS og Private Network Access).",
   "settings.ai.ollamaDesktopOnlyTitle": "Skjáborðsforrits er krafist fyrir staðværa þjóna",
   "settings.ai.ollamaHint": "Gakktu úr skugga um að þjónninn sé í gangi (t.d. ollama serve). Skjáborðsforritið tengist beint — engin CORS-uppsetning nauðsynleg.",
   "settings.ai.ollamaModelHint": "Flýtivalsgerðir sem miðlarinn þinn hefur tilkynnt um – bankaðu til að nota.",

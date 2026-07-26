@@ -4,7 +4,7 @@
  * Wired into the CI security job as `verify:vendor` — fails the build if any of the
  * three SC security patches or the fork bookkeeping drifts. See VENDOR-FORKS.md + issue #60.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,20 +38,58 @@ check(
 // ── Invariant 3: decrypt() returns the rejection (no silent swallow) ──────────
 check('decrypt() returns promise.reject()', /return promise\.reject\(/.test(cryptoSrc));
 
-// ── Invariant 4: DataChannel payloads are encrypted/decrypted ─────────────────
+// ── Invariant 4: DataChannel payloads are encrypted/decrypted at the three sites ─
+// QNBS-v3 (#60 review): path-sensitive — a bare "occurs somewhere" check would pass even if the
+// actual send/receive paths reverted to plaintext. Bounded windows keep the check robust against
+// unrelated edits elsewhere in the file.
 check(
-  'DataChannel encrypt/decrypt applied',
-  /cryptoutils\.encrypt\(/.test(webrtcSrc) && /cryptoutils\.decrypt\(/.test(webrtcSrc),
+  'sendWebrtcConn encrypts before peer.send',
+  /const sendWebrtcConn = \(webrtcConn, encoder\) => \{[\s\S]{0,900}?cryptoutils\.encrypt\(/.test(
+    webrtcSrc,
+  ),
+);
+check(
+  'broadcastWebrtcConn encrypts the broadcast',
+  /const broadcastWebrtcConn = \(room, m\) => \{[\s\S]{0,900}?cryptoutils\.encrypt\(/.test(
+    webrtcSrc,
+  ),
+);
+check(
+  "peer.on('data') decrypts before readPeerMessage",
+  /peer\.on\('data'[\s\S]{0,900}?cryptoutils\.decrypt\([\s\S]{0,900}?readPeerMessage/.test(
+    webrtcSrc,
+  ),
 );
 
 // ── Invariant 5: fork version carries the -scN suffix ─────────────────────────
 check('fork version matches <semver>-scN', /^\d+\.\d+\.\d+-sc\d+$/.test(pkg.version));
 
-// ── Invariant 6: no dangling upstream dependency / pnpm patch ─────────────────
+// ── Invariant 6: no dangling upstream dependency / pnpm patch anywhere ────────
+// QNBS-v3 (#60 review): check the FULL surface — root + workspace manifests, lockfile, and any
+// patches/y-webrtc@*.patch file, not just one exact filename.
 const deps = { ...rootPkg.dependencies, ...rootPkg.devDependencies };
 check('root package.json has no y-webrtc dependency', !('y-webrtc' in deps));
+
+const workspaceManifests = readdirSync(join(root, 'packages'), { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => join(root, 'packages', d.name, 'package.json'))
+  .filter((p) => existsSync(p) && p !== join(forkDir, 'package.json'));
+const workspaceHasUpstreamDep = workspaceManifests.some((p) => {
+  const manifest = JSON.parse(readFileSync(p, 'utf8'));
+  return 'y-webrtc' in { ...manifest.dependencies, ...manifest.devDependencies };
+});
+check('no workspace package depends on upstream y-webrtc', !workspaceHasUpstreamDep);
+
+const lockfile = readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8');
+check('pnpm-lock.yaml has no y-webrtc resolution', !/y-webrtc@/.test(lockfile));
+
 check('pnpm-workspace has no y-webrtc patchedDependency', !workspace.includes('y-webrtc@'));
-check('deprecated patch file removed', !existsSync(join(root, 'patches', 'y-webrtc@10.3.0.patch')));
+
+const patchDir = join(root, 'patches');
+const leftoverPatches = existsSync(patchDir)
+  ? readdirSync(patchDir).filter((f) => /^y-webrtc@.*\.patch$/.test(f))
+  : [];
+check('no patches/y-webrtc@*.patch files remain', leftoverPatches.length === 0);
 
 if (failures.length > 0) {
   console.error(`\nverify:vendor FAILED — ${failures.length} invariant(s) violated:`);

@@ -657,14 +657,14 @@ describe('testAIConnection additional branches', () => {
 
 // QNBS-v3: scanLocalOpenAiCompatibleEndpoints-Branches — fetch wirft / HTTP-401 gilt als ok.
 describe('scanLocalOpenAiCompatibleEndpoints', () => {
-  const originalFetch = globalThis.fetch;
-
+  // QNBS-v3 (#266 review): stubGlobal + unstubAllGlobals statt manueller Zuweisung —
+  // Vitest stellt so auch bei einem Test-Abbruch den echten fetch wieder her.
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    vi.unstubAllGlobals();
   });
 
   it('returns ok:false for all candidates when fetch throws', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
     const results = await scanLocalOpenAiCompatibleEndpoints();
     expect(results).toHaveLength(3);
     for (const r of results) {
@@ -673,7 +673,7 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
   });
 
   it('returns ok:true when HTTP 401 (auth required but reachable)', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
     const results = await scanLocalOpenAiCompatibleEndpoints();
     for (const r of results) {
       expect(r.ok).toBe(true);
@@ -683,7 +683,7 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
   });
 
   it('classifies non-ok HTTP responses as state:http with the numeric status', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response));
     const results = await scanLocalOpenAiCompatibleEndpoints();
     for (const r of results) {
       expect(r.ok).toBe(false);
@@ -693,9 +693,10 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
   });
 
   it('classifies TimeoutError-shaped rejections as state:timeout', async () => {
-    globalThis.fetch = vi
-      .fn()
-      .mockRejectedValue(Object.assign(new Error('timed out'), { name: 'TimeoutError' }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(Object.assign(new Error('timed out'), { name: 'TimeoutError' })),
+    );
     const results = await scanLocalOpenAiCompatibleEndpoints();
     for (const r of results) {
       expect(r.ok).toBe(false);
@@ -704,7 +705,7 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
   });
 
   it('classifies plain network failures as state:unreachable', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('ECONNREFUSED'));
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('ECONNREFUSED')));
     const results = await scanLocalOpenAiCompatibleEndpoints();
     for (const r of results) {
       expect(r.ok).toBe(false);

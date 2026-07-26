@@ -1814,7 +1814,7 @@
   "settings.ai.localAi.webgpuUnavailable": "در دسترس نیست",
   "settings.ai.localBackendPreset": "از پیش تنظیم شده باطن محلی",
   "settings.ai.ollamaBrowserNote": "Ollama فقط در برنامه دسکتاپ در دسترس است. خط مشی امنیت محتوای مرورگر اتصال مستقیم به لوکال هاست را مسدود می کند.",
-  "settings.ai.ollamaDesktopOnlyBody": "Ollama و سرورهای محلی سازگار با OpenAI (LM Studio، vLLM) فقط در برنامه دسکتاپ در دسترس هستند. مرورگرها اتصالات مستقیم به localhost را مسدود می‌کنند (سیاست امنیت محتوا و دسترسی به شبکه خصوصی).",
+  "settings.ai.ollamaDesktopOnlyBody": "Ollama و سرورهای محلی سازگار با OpenAI (LM Studio، vLLM) فقط در برنامه دسکتاپ در دسترس هستند. مرورگرها اتصالات مستقیم از صفحات وب به localhost را مسدود می‌کنند (CORS و دسترسی به شبکه خصوصی).",
   "settings.ai.ollamaDesktopOnlyTitle": "برنامه دسکتاپ برای سرورهای محلی لازم است",
   "settings.ai.ollamaHint": "مطمئن شوید سرور در حال اجراست (مثلاً ollama serve). برنامه دسکتاپ مستقیم متصل می‌شود — نیازی به تنظیم CORS نیست.",
   "settings.ai.ollamaModelHint": "مدل‌های گزارش‌شده توسط سرورتان را سریع انتخاب کنید — برای استفاده ضربه بزنید.",

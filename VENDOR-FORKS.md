@@ -59,7 +59,7 @@ see advisories against it. Therefore, on every fork-maintenance review (and at m
    and the project's release notes — for anything at or below our base `10.3.0`.
 2. If a relevant advisory exists, port the upstream fix into the vendored `src/` alongside the three
    encryption patches, run the `packages/collab-transport` test suite + `pnpm run verify:vendor`,
-   bump the `-scN` suffix, and record it in `VENDOR-DIFF.md`.
+   bump the `-scN` suffix, and record it in `packages/collab-transport/AUDIT.md`.
 3. The fork's npm dependencies need no manual step — rely on the OSV `pnpm-lock.yaml` scan + Dependabot.
 
 > Coverage policy for unit tests lives in [`docs/COVERAGE-POLICY.md`](docs/COVERAGE-POLICY.md).

@@ -1814,7 +1814,7 @@
   "settings.ai.localAi.webgpuUnavailable": "Нет в наличии",
   "settings.ai.localBackendPreset": "Локальная настройка серверной части",
   "settings.ai.ollamaBrowserNote": "Оллама доступен только в настольном приложении. Политика безопасности контента браузера блокирует прямые подключения к локальному хосту.",
-  "settings.ai.ollamaDesktopOnlyBody": "Ollama и локальные OpenAI-совместимые серверы (LM Studio, vLLM) доступны только в настольном приложении. Браузеры блокируют прямые подключения к localhost (Content Security Policy и Private Network Access).",
+  "settings.ai.ollamaDesktopOnlyBody": "Ollama и локальные OpenAI-совместимые серверы (LM Studio, vLLM) доступны только в настольном приложении. Браузеры блокируют прямые подключения веб-страниц к localhost (CORS и Private Network Access).",
   "settings.ai.ollamaDesktopOnlyTitle": "Для локальных серверов требуется настольное приложение",
   "settings.ai.ollamaHint": "Убедитесь, что сервер запущен (например, ollama serve). Настольное приложение подключается напрямую — настройка CORS не требуется.",
   "settings.ai.ollamaModelHint": "Быстрый выбор моделей, о которых сообщает ваш сервер. Нажмите, чтобы использовать.",

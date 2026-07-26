@@ -358,7 +358,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               />
               <Button
                 onClick={handleLoadOllamaModels}
-                disabled={isLoadingModels}
+                disabled={isLoadingModels || !isDesktop}
                 variant="secondary"
               >
                 {isLoadingModels ? <Spinner className="w-4 h-4" /> : t('settings.ai.loadModels')}
@@ -563,7 +563,13 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
         {provider !== 'gemini' && (
           <div className="flex items-center gap-3 pt-1">
-            <Button onClick={handleTest} disabled={testStatus === 'loading'} variant="secondary">
+            {/* QNBS-v3 (#266 review): in the PWA the ollama test would re-create CORS noise —
+                the banner + CTA above is the only actionable path there. */}
+            <Button
+              onClick={handleTest}
+              disabled={testStatus === 'loading' || (provider === 'ollama' && !isDesktop)}
+              variant="secondary"
+            >
               {testStatus === 'loading' ? (
                 <Spinner className="w-4 h-4" />
               ) : (

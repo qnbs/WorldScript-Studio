@@ -1814,7 +1814,7 @@
   "settings.ai.localAi.webgpuUnavailable": "Not available",
   "settings.ai.localBackendPreset": "הגדרה מוגדרת מראש של מנוע אחורי מקומי",
   "settings.ai.ollamaBrowserNote": "‏Ollama זמין רק באפליקציית שולחן העבודה. מדיניות אבטחת התוכן של הדפדפן חוסמת חיבורים ישירים ל‑localhost.",
-  "settings.ai.ollamaDesktopOnlyBody": "Ollama ושרתים מקומיים תואמי-OpenAI (LM Studio, vLLM) זמינים רק ביישום שולחן העבודה. דפדפנים חוסמים חיבורים ישירים אל localhost (Content Security Policy ו-Private Network Access).",
+  "settings.ai.ollamaDesktopOnlyBody": "Ollama ושרתים מקומיים תואמי-OpenAI (LM Studio, vLLM) זמינים רק ביישום שולחן העבודה. דפדפנים חוסמים חיבורים ישירים מדפי אינטרנט אל localhost (CORS ו-Private Network Access).",
   "settings.ai.ollamaDesktopOnlyTitle": "נדרש יישום שולחני עבור שרתים מקומיים",
   "settings.ai.ollamaHint": "ודא שהשרת פועל (למשל ollama serve). יישום שולחן העבודה מתחבר ישירות — אין צורך בהגדרת CORS.",
   "settings.ai.ollamaModelHint": "מודלי בחירה מהירה שדווחו על ידי השרת שלכם — הקישו לשימוש.",

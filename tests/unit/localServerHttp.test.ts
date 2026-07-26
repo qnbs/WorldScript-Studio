@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// QNBS-v3 (#266): covers the runtime routing (Tauri plugin-http vs web fetch) and the
+// transport-error contract (unreachable/timeout classified, caller aborts rethrown unchanged).
+
 const tauriFetchMock = vi.fn();
 
 vi.mock('@tauri-apps/plugin-http', () => ({
