@@ -14,7 +14,7 @@
 - **Version:** `1.23.0`
 - **License:** MIT
 
-The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRouter, Ollama, WebLLM, ONNX Runtime Web, Transformers.js), four AI execution modes (Hybrid / Cloud / Local / Eco), real-time collaboration with E2E encryption, a Plot Board v2 with swimlane/canvas/timeline modes, character/world management, manuscript export, voice dictation, and an 11-locale i18n layer.
+The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRouter, Ollama, WebLLM, ONNX Runtime Web, Transformers.js), four AI execution modes (Hybrid / Cloud / Local / Eco), real-time collaboration with E2E encryption, a Plot Board v2 with swimlane/canvas/timeline modes, character/world management, manuscript export, voice dictation, and a 19-locale i18n layer.
 
 ---
 
@@ -114,7 +114,7 @@ WorldScript-Studio/
 │   ├── collab-transport/   # Vendor fork of y-webrtc 10.3.0 with E2E encryption patch
 │   ├── ui/                 # Tailwind preset + design tokens
 │   └── worker-bus/         # Typed worker pool, circuit breakers, dead-letter queue
-├── locales/                # i18n source JSON modules (11 locales)
+├── locales/                # i18n source JSON modules (19 locales)
 ├── public/                 # Static assets; runtime i18n bundles `public/locales/<lang>/bundle.json`
 ├── tests/
 │   ├── unit/               # Vitest tests (co-located naming convention)
@@ -387,7 +387,7 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 ### Feature Flags
 
-- `features/featureFlags/featureFlagsSlice.ts` gates **23 flags**. New installs get the **full feature set**: all default **on** except five opt-in flags that default **off** — `enableRtlLayout`, `enableVoiceSupport`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`. (`enableCodexAutoTracking` + `enableCrossProjectSearch` were promoted to permanent core; `enablePlotBoardV2` + `enableCloudSync` were retired — none remain in the slice.) See `docs/FEATURE-PARITY.md` for the per-flag matrix.
+- `features/featureFlags/featureFlagsSlice.ts` gates **23 flags**. New installs get the **full feature set**: all default **on** except six opt-in flags that default **off** — `enableRtlLayout`, `enableVoiceSupport`, `enableProForge`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`. (`enableCodexAutoTracking` + `enableCrossProjectSearch` were promoted to permanent core; `enablePlotBoardV2` + `enableCloudSync` were retired — none remain in the slice.) See `docs/FEATURE-PARITY.md` for the per-flag matrix.
 - UI: Settings → Experimental flags.
 - Do not use scattered `if (true)` hacks.
 
@@ -486,10 +486,10 @@ Central orchestration layer for all background worker tasks. Messages use short 
 ## Internationalization (i18n)
 
 - **Custom React Context** (`contexts/I18nContext.tsx`) — not i18next.
-- Source modules: `locales/<lang>/*.json` for **11 locales**: `ar`, `de`, `el`, `en`, `es`, `fr`, `he`, `it`, `ja`, `pt`, `zh`.
+- Source modules: `locales/<lang>/*.json` for **19 locales**: `ar`, `de`, `el`, `en`, `es`, `eu`, `fa`, `fi`, `fr`, `he`, `hu`, `is`, `it`, `ja`, `ko`, `pt`, `ru`, `sv`, `zh`.
 - Runtime bundles: `public/locales/<lang>/bundle.json` (rebuilt by `pnpm run i18n:bundle` or automatically via `predev` / `prebuild`).
 - Hook: `useTranslation()` returns `t('key.path')`. **No hardcoded text** in UI.
-- Key parity is enforced in CI (`pnpm run i18n:check`). Add keys to **all eleven** locale trees.
+- Key parity is enforced in CI (`pnpm run i18n:check`). Add keys to **all nineteen** locale trees.
 - Repair scripts: `services/i18nBootstrap.ts` and `services/i18nRepair.ts` handle missing keys / bundle corruption.
 - RTL Beta: Arabic (`ar`) and Hebrew (`he`) set `html[dir="rtl"]`. Layout mirroring uses logical properties and a global `[dir="rtl"]` CSS net. Canvas/SVG boards (Plot Board, Character Graph) stay LTR to keep pointer/geometry math correct. `enableRtlLayout` flag forces RTL for testing.
 
