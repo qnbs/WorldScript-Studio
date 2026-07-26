@@ -37,6 +37,7 @@ import {
   streamText as streamTextGemini,
 } from './geminiService';
 import { generateLocalText } from './localAiFacade';
+import { LocalServerError, localServerFetch } from './localServerHttp';
 import {
   listOllamaModels as listOllamaModelsFromService,
   streamOllama,
@@ -686,24 +687,40 @@ export async function listOllamaModels(baseUrl = 'http://localhost:11434'): Prom
   return listOllamaModelsFromService(baseUrl);
 }
 
-/** QNBS-v3: Schneller Desktop-Check typischer lokaler /v1-Endpunkte — keine Secrets, nur Erreichbarkeit. */
-export async function scanLocalOpenAiCompatibleEndpoints(): Promise<
-  { labelKey: string; baseUrl: string; ok: boolean; status?: number }[]
-> {
+/** QNBS-v3: classified reachability of a scanned local endpoint (#266). */
+export type LocalEndpointScanState = 'ok' | 'unreachable' | 'timeout' | 'http';
+
+export interface LocalEndpointScanResult {
+  labelKey: string;
+  baseUrl: string;
+  ok: boolean;
+  state: LocalEndpointScanState;
+  /** Numeric HTTP status when the server answered (incl. error statuses). */
+  status?: number;
+}
+
+/**
+ * QNBS-v3: Schneller Desktop-Check typischer lokaler /v1-Endpunkte — keine Secrets, nur
+ * Erreichbarkeit. #266: routed through localServerFetch (Tauri plugin-http on desktop) so the
+ * scan works inside the WebView, with per-endpoint state classification for actionable UI badges.
+ */
+export async function scanLocalOpenAiCompatibleEndpoints(): Promise<LocalEndpointScanResult[]> {
   const candidates = [
     { labelKey: 'settings.ai.scanLabelOllama', baseUrl: 'http://localhost:11434' },
     { labelKey: 'settings.ai.scanLabelLmStudio', baseUrl: 'http://localhost:1234' },
     { labelKey: 'settings.ai.scanLabelVllm', baseUrl: 'http://localhost:8000' },
   ];
   return Promise.all(
-    candidates.map(async ({ labelKey, baseUrl }) => {
+    candidates.map(async ({ labelKey, baseUrl }): Promise<LocalEndpointScanResult> => {
       try {
         const root = normalizeOpenAiCompatibleBaseUrl(baseUrl);
-        const res = await fetch(`${root}/models`, { signal: AbortSignal.timeout(2800) });
+        const res = await localServerFetch(`${root}/models`, { timeoutMs: 2800 });
         const ok = res.ok || res.status === 401;
-        return { labelKey, baseUrl, ok, status: res.status };
-      } catch {
-        return { labelKey, baseUrl, ok: false };
+        return { labelKey, baseUrl, ok, state: ok ? 'ok' : 'http', status: res.status };
+      } catch (err) {
+        const state: LocalEndpointScanState =
+          err instanceof LocalServerError && err.kind === 'timeout' ? 'timeout' : 'unreachable';
+        return { labelKey, baseUrl, ok: false, state };
       }
     }),
   );

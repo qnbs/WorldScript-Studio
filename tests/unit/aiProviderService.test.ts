@@ -287,6 +287,33 @@ describe('testAIConnection', () => {
   });
 });
 
+describe('testAIConnection — ollama desktop branch', () => {
+  afterEach(() => {
+    delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  });
+
+  it('delegates to testOllamaConnection under Tauri and returns its result', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    vi.mocked(testOllamaConnection).mockResolvedValueOnce({ ok: true });
+    const result = await testAIConnection('ollama', { ollamaBaseUrl: 'http://host:11434' });
+    expect(result.ok).toBe(true);
+    expect(testOllamaConnection).toHaveBeenCalledWith('http://host:11434');
+  });
+
+  it('propagates the service error under Tauri (e.g. classified timeout)', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    vi.mocked(testOllamaConnection).mockResolvedValueOnce({
+      ok: false,
+      error: 'Ollama timed out (http://localhost:11434)',
+    });
+    const result = await testAIConnection('ollama', {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('timed out');
+  });
+});
+
 // ─── streamText (OpenAI signal + Ollama→Gemini fallback) ────────────────────
 
 describe('streamText OpenAI', () => {
@@ -650,7 +677,38 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
     const results = await scanLocalOpenAiCompatibleEndpoints();
     for (const r of results) {
       expect(r.ok).toBe(true);
+      expect(r.state).toBe('ok');
       expect(r.status).toBe(401);
+    }
+  });
+
+  it('classifies non-ok HTTP responses as state:http with the numeric status', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response);
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    for (const r of results) {
+      expect(r.ok).toBe(false);
+      expect(r.state).toBe('http');
+      expect(r.status).toBe(500);
+    }
+  });
+
+  it('classifies TimeoutError-shaped rejections as state:timeout', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('timed out'), { name: 'TimeoutError' }));
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    for (const r of results) {
+      expect(r.ok).toBe(false);
+      expect(r.state).toBe('timeout');
+    }
+  });
+
+  it('classifies plain network failures as state:unreachable', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('ECONNREFUSED'));
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    for (const r of results) {
+      expect(r.ok).toBe(false);
+      expect(r.state).toBe('unreachable');
     }
   });
 });
