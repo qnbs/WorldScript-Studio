@@ -13,7 +13,7 @@
     "tauri"
   ],
   "type": "module",
-  "packageManager": "pnpm@11.5.2",
+  "packageManager": "pnpm@11.17.0",
   "engines": {
     "node": ">=22.0.0",
     "pnpm": ">=11.0.0"
@@ -28,6 +28,7 @@
     "i18n:bundle": "node scripts/build-i18n.mjs",
     "i18n:check": "node scripts/check-i18n-keys.mjs && node scripts/build-i18n.mjs && node scripts/content-guard.mjs",
     "i18n:report": "node scripts/i18n-quality-report.mjs",
+    "verify:vendor": "node scripts/verify-vendor-fork.mjs",
     "i18n:status": "tsx scripts/i18n-status-dashboard.ts",
     "content:guard": "node scripts/content-guard.mjs",
     "parity:check": "tsx scripts/audit-feature-parity.ts",
@@ -141,7 +142,6 @@
     "uuid": "14",
     "xstate": "^5.32.1",
     "y-indexeddb": "^9.0.12",
-    "y-webrtc": "^10.3.0",
     "yjs": "^13.6.31",
     "zod": "^4.1.5",
     "zustand": "^5.0.14"

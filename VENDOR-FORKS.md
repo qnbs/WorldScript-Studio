@@ -8,19 +8,24 @@ upstream monitoring and patch porting.
 | Attribute | Value |
 |-----------|-------|
 | **Upstream** | `y-webrtc@10.3.0` |
-| **Fork version** | `10.3.0-sc1` |
+| **Fork version** | `10.3.0-sc2` |
 | **Reason for fork** | E2E encryption (AES-256-GCM via Web Crypto) is not available upstream. The fork adds PBKDF2 key derivation, non-extractable CryptoKeys, and encrypted WebRTC DataChannels compatible with the y-webrtc signalling protocol. |
 | **Critical invariants** | 1. PBKDF2 iterations must remain **600,000** (OWASP 2024 SHA-256 minimum).<br>2. All derived `CryptoKey` instances must have `extractable: false`.<br>3. `promise.reject()` in `decrypt()` must be prefixed with `return`. |
-| **Update protocol** | 1. Watch upstream releases via GitHub API or Renovate (excluded in config).<br>2. On new upstream release, create a diff branch `vendor/y-webrtc-<version>`.<br>3. Port the three encryption patches manually; run `packages/collab-transport` test suite.<br>4. Update `VENDOR-DIFF.md` baseline and bump the `-scN` suffix. |
+| **Update protocol** | 1. Watch upstream releases via GitHub API or Renovate (excluded in config).<br>2. On new upstream release, create a diff branch `vendor/y-webrtc-<version>`.<br>3. Port the three encryption patches manually; run `packages/collab-transport` test suite.<br>4. Update `packages/collab-transport/AUDIT.md` and bump the `-scN` suffix. |
 | **Owner** | qnbs |
 | **Issue tracker** | #60 |
+
+## Audit log
+
+| Date | Auditor | Result |
+|------|---------|--------|
+| 2026-07-25 | Kimi Code | Full-file diff vs upstream `10.3.0`: no deviations beyond the three SC patches. Deprecated `patches/y-webrtc@10.3.0.patch` + dead root dependency removed; `verify-vendor-fork.mjs` created and wired into CI (`verify:vendor`); fork bumped to `10.3.0-sc2`. Details: `packages/collab-transport/AUDIT.md`. |
 
 ## `patches/y-webrtc@10.3.0.patch`
 
 | Attribute | Value |
 |-----------|-------|
-| **Status** | **DEPRECATED** — the vendor fork above supersedes this patch. |
-| **Action** | Safe to remove once the fork is confirmed stable in production (v1.19.0+). |
+| **Status** | **REMOVED** (2026-07-25, #60 audit) — the vendor fork above superseded this patch in v1.19.0. |
 
 ## Audit automation
 
@@ -28,9 +33,11 @@ upstream monitoring and patch porting.
 - Asserts PBKDF2 iterations == 600k
 - Asserts `extractable: false`
 - Asserts `return promise.reject(...)`
-- Asserts version string matches expected `-scN` suffix
+- Asserts DataChannel encrypt/decrypt wiring, `-scN` version suffix, and no dangling upstream dep/patch
 
-Wired into CI security job as `verify:vendor`.
+Wired into the CI security job as `verify:vendor` (created 2026-07-25 during the #60 audit).
+The per-release diff record lives in `packages/collab-transport/AUDIT.md` (replaces the formerly
+planned `VENDOR-DIFF.md`).
 
 ## CVE / advisory monitoring (audit finding F-7)
 

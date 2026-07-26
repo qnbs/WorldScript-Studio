@@ -48,6 +48,11 @@ jobs:
       - name: pnpm audit (high + critical)
         run: pnpm audit --audit-level=high
 
+      # QNBS-v3 (#60): vendored y-webrtc fork invariant guard (PBKDF2 600k, non-extractable keys,
+      # DataChannel encryption, no dangling upstream dep) — fails the build on fork drift.
+      - name: Vendor fork invariant guard
+        run: pnpm run verify:vendor
+
       # QNBS-v3: osv-scanner.toml (in src-tauri/) suppresses accepted RUSTSEC advisories for Cargo.lock;
       # scan both lockfiles so npm + Rust advisories are caught on every push
       - name: OSV vulnerability scan
