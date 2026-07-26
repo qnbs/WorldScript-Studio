@@ -6,6 +6,7 @@ import { LOCAL_BACKEND_PRESET_DEFAULT_URL } from '../../services/ai/localBackend
 import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService';
 import { detectWebGpuDetails } from '../../services/ai/webGpuDetectorService';
 import {
+  type LocalEndpointScanResult,
   listOllamaModels,
   scanLocalOpenAiCompatibleEndpoints,
   testAIConnection,
@@ -46,9 +47,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
-  const [scanRows, setScanRows] = useState<{ labelKey: string; baseUrl: string; ok: boolean }[]>(
-    [],
-  );
+  const [scanRows, setScanRows] = useState<LocalEndpointScanResult[]>([]);
   // QNBS-v3: GPU probe runs once when WebLLM tab is selected — no polling.
   const [gpuInfo, setGpuInfo] = useState<WebGpuAdapterInfo | null>(null);
 
@@ -73,6 +72,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   }, [openaiKey]);
 
   const handleLoadOllamaModels = useCallback(async () => {
+    // QNBS-v3 (#266): never probe localhost from the PWA — the request is CORS/PNA-blocked anyway
+    // and only produces console noise. Local servers are a desktop-only feature by policy.
+    if (!isTauriRuntime()) {
+      setOllamaModels([]);
+      return;
+    }
     setIsLoadingModels(true);
     try {
       const models = await listOllamaModels(ollamaBaseUrl);
@@ -107,15 +112,30 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const handleScanLocals = useCallback(async () => {
     setScanBusy(true);
     try {
-      const rows = await scanLocalOpenAiCompatibleEndpoints();
-      setScanRows(rows.map((r) => ({ labelKey: r.labelKey, baseUrl: r.baseUrl, ok: r.ok })));
+      setScanRows(await scanLocalOpenAiCompatibleEndpoints());
     } finally {
       setScanBusy(false);
     }
   }, []);
 
+  // QNBS-v3 (#266): one-click adopt of a discovered server URL (+ matching preset when known).
+  const handleUseScannedUrl = useCallback(
+    (baseUrl: string) => {
+      const presetEntry = (
+        Object.entries(LOCAL_BACKEND_PRESET_DEFAULT_URL) as [LocalBackendPreset, string][]
+      ).find(([preset, url]) => preset !== 'custom' && url === baseUrl);
+      onAdvancedAiPatch({
+        ollamaBaseUrl: baseUrl,
+        localBackendPreset: presetEntry ? presetEntry[0] : 'custom',
+      });
+    },
+    [onAdvancedAiPatch],
+  );
+
   useEffect(() => {
-    if (provider === 'ollama') {
+    // QNBS-v3 (#266): the ollama auto-probe (models + connection test) only runs on desktop.
+    // In the PWA it fired CORS-blocked localhost requests on every settings visit.
+    if (provider === 'ollama' && isDesktop) {
       void handleLoadOllamaModels();
       void handleTest();
     } else if (provider === 'webllm') {
@@ -125,7 +145,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         .then(setGpuInfo)
         .catch(() => setGpuInfo({ status: 'unknown' }));
     }
-  }, [provider, handleLoadOllamaModels, handleTest]);
+  }, [provider, isDesktop, handleLoadOllamaModels, handleTest]);
 
   const providers: { id: AIProvider; label: string }[] = [
     { id: 'gemini', label: 'Google Gemini' },
@@ -272,12 +292,23 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         {provider === 'ollama' && (
           <div className="space-y-3">
             {!isDesktop && (
-              <div className="p-3 rounded-lg bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)]">
-                <p className="font-semibold mb-1 flex items-center gap-1">
+              // QNBS-v3 (#266): quiet banner instead of CORS console noise — the PWA never
+              // auto-probes localhost, so this is the only place the restriction surfaces.
+              <div className="p-3 rounded-lg bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)] space-y-2">
+                <p className="font-semibold flex items-center gap-1">
                   <Icon name="warning" size="sm" aria-hidden="true" />
-                  {t('settings.ai.corsRestriction')}
+                  {t('settings.ai.ollamaDesktopOnlyTitle')}
                 </p>
-                <p>{t('settings.ai.ollamaBrowserNote')}</p>
+                <p>{t('settings.ai.ollamaDesktopOnlyBody')}</p>
+                <a
+                  href="https://github.com/qnbs/WorldScript-Studio/releases"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:opacity-80"
+                >
+                  <Icon name="download" size="sm" aria-hidden="true" />
+                  {t('settings.ai.downloadDesktopCta')}
+                </a>
               </div>
             )}
             {isDesktop && (
@@ -327,7 +358,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               />
               <Button
                 onClick={handleLoadOllamaModels}
-                disabled={isLoadingModels}
+                disabled={isLoadingModels || !isDesktop}
                 variant="secondary"
               >
                 {isLoadingModels ? <Spinner className="w-4 h-4" /> : t('settings.ai.loadModels')}
@@ -345,17 +376,36 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                   {scanBusy ? <Spinner className="w-4 h-4" /> : t('settings.ai.scanLocalPorts')}
                 </Button>
                 {scanRows.length > 0 && (
-                  <ul className="text-xs text-[var(--sc-text-muted)] space-y-1 list-disc pl-4">
+                  <ul className="text-xs text-[var(--sc-text-muted)] space-y-1" aria-live="polite">
                     {scanRows.map((row) => (
-                      <li key={row.baseUrl}>
-                        {t(row.labelKey)} — {row.baseUrl}{' '}
-                        <span
-                          className={
-                            row.ok ? 'text-[var(--sc-success-fg)]' : 'text-[var(--sc-danger-fg)]'
-                          }
-                        >
-                          {row.ok ? t('settings.ai.scanOk') : t('settings.ai.scanNo')}
+                      <li key={row.baseUrl} className="flex items-center gap-2 flex-wrap">
+                        <span>
+                          {t(row.labelKey)} — {row.baseUrl}
                         </span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold ${
+                            row.state === 'ok'
+                              ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
+                              : row.state === 'unreachable'
+                                ? 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]'
+                                : 'bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]'
+                          }`}
+                        >
+                          {row.state === 'ok' && t('settings.ai.scanOk')}
+                          {row.state === 'unreachable' && t('settings.ai.scanNo')}
+                          {row.state === 'timeout' && t('settings.ai.scanStateTimeout')}
+                          {row.state === 'http' &&
+                            `${t('settings.ai.scanStateHttp')}${row.status ? ` (${row.status})` : ''}`}
+                        </span>
+                        {row.ok && (
+                          <button
+                            type="button"
+                            onClick={() => handleUseScannedUrl(row.baseUrl)}
+                            className="underline underline-offset-2 text-[var(--sc-accent)] hover:opacity-80"
+                          >
+                            {t('settings.ai.scanUseUrl')}
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -513,7 +563,13 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
         {provider !== 'gemini' && (
           <div className="flex items-center gap-3 pt-1">
-            <Button onClick={handleTest} disabled={testStatus === 'loading'} variant="secondary">
+            {/* QNBS-v3 (#266 review): in the PWA the ollama test would re-create CORS noise —
+                the banner + CTA above is the only actionable path there. */}
+            <Button
+              onClick={handleTest}
+              disabled={testStatus === 'loading' || (provider === 'ollama' && !isDesktop)}
+              variant="secondary"
+            >
               {testStatus === 'loading' ? (
                 <Spinner className="w-4 h-4" />
               ) : (

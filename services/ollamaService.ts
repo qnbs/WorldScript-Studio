@@ -1,7 +1,12 @@
-const normalizeBaseUrl = (baseUrl?: string): string => {
-  const resolved = baseUrl?.trim() || 'http://localhost:11434';
-  return resolved.replace(/\/+$/, '');
-};
+import {
+  isAbortError,
+  LocalServerError,
+  localServerFetch,
+  normalizeLocalBaseUrl,
+} from './localServerHttp';
+
+// QNBS-v3 (#266): canonical normalization lives in localServerHttp (shared with the scanner).
+const normalizeBaseUrl = normalizeLocalBaseUrl;
 
 const stripControlChars = (value: string): string => {
   let output = '';
@@ -35,13 +40,6 @@ export interface OllamaStreamCallbacks {
   onError?: (error: Error) => void;
 }
 
-// QNBS-v3: shape-based AbortError check — DOMException is not an instanceof Error in some runtimes.
-function isAbortError(err: unknown): boolean {
-  return (
-    typeof err === 'object' && err !== null && (err as { name?: string }).name === 'AbortError'
-  );
-}
-
 export interface OllamaPullProgress {
   /** Ollama status line, e.g. "pulling manifest", "downloading …", "verifying", "success". */
   status: string;
@@ -70,7 +68,8 @@ export async function pullOllamaModel(name: string, opts: OllamaPullOptions = {}
 
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}/api/pull`, {
+    // QNBS-v3 (#266): Tauri-aware fetch — native plugin-http on desktop (CORS-free), web fetch else.
+    response = await localServerFetch(`${baseUrl}/api/pull`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: model, stream: true }),
@@ -139,7 +138,7 @@ export async function pullOllamaModel(name: string, opts: OllamaPullOptions = {}
 export async function listOllamaModels(baseUrl?: string): Promise<string[]> {
   const url = `${normalizeBaseUrl(baseUrl)}/api/tags`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) as unknown as AbortSignal });
+    const res = await localServerFetch(url, { timeoutMs: 5000 });
     if (!res.ok) return [];
     const payload = await res.json();
     return Array.isArray(payload.models)
@@ -155,10 +154,14 @@ export async function testOllamaConnection(
 ): Promise<{ ok: boolean; error?: string }> {
   const url = `${normalizeBaseUrl(baseUrl)}/api/tags`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) as unknown as AbortSignal });
+    const res = await localServerFetch(url, { timeoutMs: 5000 });
     if (!res.ok) return { ok: false, error: `Ollama HTTP ${res.status}` };
     return { ok: true };
   } catch (error: unknown) {
+    // QNBS-v3 (#266): classified failures — distinguish a hanging server from a missing one.
+    if (error instanceof LocalServerError && error.kind === 'timeout') {
+      return { ok: false, error: `Ollama timed out (${normalizeBaseUrl(baseUrl)})` };
+    }
     const message = error instanceof Error ? error.message : String(error);
     return {
       ok: false,
@@ -186,13 +189,17 @@ export async function streamOllama(
 
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}/api/generate`, {
+    response = await localServerFetch(`${baseUrl}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal: opts.signal ?? null,
     });
   } catch (err) {
+    // QNBS-v3 (#266 review): caller cancellation must propagate unchanged — wrapping an abort as
+    // 'not reachable' would push a deliberate cancel into the fallback chain. localServerFetch
+    // already rethrows AbortError untouched; keep it that way here.
+    if (isAbortError(err)) throw err;
     const error = new Error(
       `Ollama not reachable (${baseUrl}). Make sure Ollama is running: ollama serve`,
       { cause: err as Error },

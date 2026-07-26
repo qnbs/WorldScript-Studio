@@ -85,6 +85,14 @@ describe('testOllamaConnection', () => {
     expect(result.error).toContain('localhost:11434');
     expect(result.error).toContain('Connection refused');
   });
+
+  it('classifies a TimeoutError-shaped rejection as a timeout (#266)', async () => {
+    const timeoutErr = Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+    vi.mocked(fetch).mockRejectedValueOnce(timeoutErr);
+    const result = await testOllamaConnection('http://localhost:11434');
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('timed out');
+  });
 });
 
 // ─── streamOllama ─────────────────────────────────────────────────────────────
