@@ -96,7 +96,7 @@
     "deploy:cloudflare": "node scripts/cf-pages-deploy.mjs"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.82",
+    "@ai-sdk/google": "^4.0.18",
     "@ai-sdk/openai": "^3.0.71",
     "@ai-sdk/react": "^3.0.201",
     "@dnd-kit/core": "^6.3.1",
