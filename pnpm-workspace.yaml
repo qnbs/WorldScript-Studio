@@ -11,7 +11,8 @@ strictPeerDependencies: false
 # - chrome-launcher: CVE-2024-XXXX - command injection fix
 # - tmp: GHSA-7c78-jf6q-g5cm - type-confusion _assertPath bypass (fixed 0.2.7)
 # - @xmldom/xmldom: CVE-2024-XXXX - XSS fix
-# - protobufjs: GHSA-wcpc-wj8m-hjx6 - DoS via unbounded Any expansion in JSON conversion (fixed 8.4.1)
+# - protobufjs: GHSA-wcpc-wj8m-hjx6 - DoS via unbounded Any expansion in JSON conversion (fixed 8.4.1);
+#     raised to >=8.6.6 for GHSA-j3f2-48v5-ccww / GHSA-jfj6-75fj-8934 (2026-07)
 # - axios: CVE-2024-XXXX - SSRF fix
 # - basic-ftp: CVE-2024-XXXX - path traversal fix
 # - fast-uri: CVE-2024-XXXX - path traversal fix
@@ -46,7 +47,7 @@ overrides:
   chrome-launcher: "^1.2.1"
   tmp: ">=0.2.7"
   "@xmldom/xmldom": ">=0.8.13"
-  protobufjs: ">=8.4.1"
+  protobufjs: ">=8.6.6"
   axios: ">=1.18.0"
   basic-ftp: ">=5.3.1"
   fast-uri: ">=3.1.4 <4"
@@ -56,7 +57,7 @@ overrides:
   brace-expansion: ">=5.0.8"
   uuid: ">=11.1.1"
   qs: ">=6.15.2"
-  dompurify: ">=3.4.11"
+  dompurify: ">=3.4.12"
   "@babel/core": ">=7.29.6"
   undici: ">=7.28.0 <8"
   js-yaml: ">=4.3.0 <5"
@@ -64,6 +65,7 @@ overrides:
   adm-zip: ">=0.6.0" # GHSA-xcpc-8h2w-3j85 — 4GB memory allocation via crafted ZIP (onnxruntime-node)
   postcss: ">=8.5.18" # GHSA — path traversal in previous source map (vite/storybook chain)
   sharp: ">=0.35.0" # inherited libvips vulnerabilities (@huggingface/transformers, miniflare)
+  body-parser: ">=1.20.6 <2" # GHSA-v422-hmwv-36x6 — DoS via empty urlencoded body (express via @lhci/cli, dev-only)
 
 peerDependencyRules:
   allowedVersions:

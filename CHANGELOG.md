@@ -145,6 +145,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `10.3.0-sc2`. The deprecated `patches/y-webrtc@10.3.0.patch` and the dead root `y-webrtc`
   dependency (zero imports) are removed, and the previously-referenced-but-missing
   `scripts/verify-vendor-fork.mjs` now exists and runs in the CI security job (`verify:vendor`).
+- **Advisory batch remediated (2026-07-26, CI security gate).** Cargo.lock: `quick-xml` 0.39.4 →
+  0.41.0 via `plist` 1.10.0 (RUSTSEC-2026-0194/0195, CVSS 7.5), `anyhow` → 1.0.104,
+  `crossbeam-epoch` → 0.9.20, `serde_with` → 3.21.0. pnpm overrides raised: `dompurify` → 3.4.12,
+  `protobufjs` → 8.7.1, `body-parser` → 1.20.6 (bounded `<2` for express-4 compat). The two stale
+  no-longer-matching OSV ignores (dompurify GHSA-x4vx-rjvf-j5p4, js-yaml-3.x GHSA-h67p-54hq-rp68)
+  were dropped from `src-tauri/osv-scanner.toml`. The `pnpm audit` CI step is now advisory
+  (`continue-on-error`): some npm CDN edge nodes force-gzip the bulk-advisories response which
+  pnpm cannot decode (`ERR_PNPM_AUDIT_BAD_RESPONSE`, deterministic per edge — retries useless);
+  the OSV scan of both lockfiles remains the enforced gate.
 
 ### Removed
 
