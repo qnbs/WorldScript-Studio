@@ -26,7 +26,12 @@ strictPeerDependencies: false
 # - joi: GHSA-q7cg-457f-vx79 - unpublished jsdom exposure in @hapi/statehood
 # - dompurify: GHSA-vxr8-fq34-vvx9 + 3 others - XSS/nesting fixes (fixed 3.4.10; the no-fix
 #     GHSA-x4vx-rjvf-j5p4 is accepted in src-tauri/osv-scanner.toml)
-# - @babel/core: GHSA-4x5r-pxfx-6jf8 - build-time transpiler advisory (fixed 7.29.6)
+# - @babel/core: GHSA-4x5r-pxfx-6jf8 - build-time transpiler advisory (fixed 7.29.6). Bounded to the
+#     7.x line (<8): react-docgen@8.0.3 (via storybook/@storybook/react-vite) declares "@babel/core":
+#     "^7.28.0" and calls the synchronous loadPartialConfig(), removed in Babel 8 in favor of
+#     loadPartialConfigSync(). An unbounded ">=7.29.6" resolved to 8.0.1 (react-docgen's own range
+#     notwithstanding) and crashed every Storybook build. Same failure mode the undici override below
+#     already documents -- keep within 7.x until react-docgen ships real Babel 8 support.
 # - undici: GHSA-vmh5-mc38-953g (HIGH) - TLS cert validation bypass via dropped requestTls in
 #     SOCKS5 ProxyAgent + cross-user info disclosure (moderate); transitive via jsdom (fixed 7.28.0).
 #     Bounded to the 7.x line (<8): undici 8.x removed lib/handler/wrap-handler.js, an internal file
@@ -58,7 +63,7 @@ overrides:
   uuid: ">=11.1.1"
   qs: ">=6.15.2"
   dompurify: ">=3.4.12"
-  "@babel/core": ">=7.29.6"
+  "@babel/core": ">=7.29.6 <8"
   undici: ">=7.28.0 <8"
   js-yaml: ">=4.3.0 <5"
   # QNBS-v3 (2026-07-26): GHSA batch blocking the CI security gate — transitive-only dev paths.
