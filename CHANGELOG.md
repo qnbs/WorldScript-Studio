@@ -159,6 +159,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **`@babel/core` security override bounded to the 7.x line, fixing a broken Storybook build.**
+  The `pnpm-workspace.yaml` override for GHSA-4x5r-pxfx-6jf8 (`>=7.29.6`) had no upper bound, unlike
+  every sibling override in the same block. When Babel 8.0.1 was published, pnpm resolved it for
+  **every** consumer — including `react-docgen@8.0.3` (via the Storybook toolchain), which declares
+  its own `"@babel/core": "^7.28.0"` and calls the synchronous `loadPartialConfig()`, removed in
+  Babel 8 in favor of `loadPartialConfigSync()`. This crashed every Storybook build
+  (`Error: Starting from Babel 8.0.0, the 'loadPartialConfig' function expects a callback`).
+  Bounded to `>=7.29.6 <8`, matching the pattern the `undici` override right below it already
+  documents for the identical failure class. Verified: `pnpm run build-storybook` completes
+  successfully again.
 - **Tauri HTTP-plugin capability scope pinned (#266).** `http:default` alone grants **no** URL
   scope — every plugin-http call (including AI-SDK cloud calls on desktop) was silently denied by
   the plugin's allow-list check. The capability now explicitly allows loopback any-port
