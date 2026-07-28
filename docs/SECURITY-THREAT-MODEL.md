@@ -128,6 +128,7 @@ Goal: Intercept/decrypt collaboration traffic
 | `sw.js` | I | Network-only for AI hosts | ✅ Complete |
 | `tauri.conf.json` | I | Strict CSP — explicit `connect-src` allowlist, no `https:` blanket | ✅ Complete |
 | `index.html` (web PWA) | I | CSP `connect-src 'self' https:` — broad HTTPS by design for BYOK; no `http:`/`ws:` wildcards | ⚠️ Documented tradeoff ([ADR-0004](adr/0004-csp-connect-src-byok-tradeoff.md)) |
+| `vercel.json` / `public/_headers` / `nginx.conf` | I | `Content-Security-Policy` response header, mirrors the meta CSP (`frame-ancestors 'none'` only takes effect as a header) | ✅ Complete on Vercel/CF/Docker. **GitHub Pages cannot set response headers at all** — the `index.html` meta CSP is the sole enforcement there. |
 
 ### CSP connect-src: web-vs-Tauri asymmetry (ADR-0004)
 
@@ -138,10 +139,18 @@ CSP. The redundant explicit cloud-provider entries were removed (they changed no
 and implied a hardening the policy did not provide). **Residual risk:** a `fetch` driven in the web
 PWA (e.g. via AI prompt injection) can reach any HTTPS origin. Mitigations: no secrets in
 `connect-src`-reachable globals; keys encrypted at rest and only attached to the user's chosen
-provider request; AI output never `eval`'d; host HTTP-header CSP tightens production further.
-`http:`/`ws:` scheme-wildcards remain disallowed (cleartext exfiltration blocked). The native **Tauri**
-CSP stays strict (no `https:`). Closing this fully = build-time CSP generation (Option C, v2.0).
-Regression test: `tests/unit/csp.test.ts`.
+provider request; AI output never `eval`'d. `http:`/`ws:` scheme-wildcards remain disallowed
+(cleartext exfiltration blocked). The native **Tauri** CSP stays strict (no `https:`). Closing this
+fully = build-time CSP generation (Option C, v2.0). Regression test: `tests/unit/csp.test.ts`.
+
+**Host header CSP (2026-07-28):** `vercel.json`, `public/_headers`, and `nginx.conf` now set a real
+`Content-Security-Policy` response header, identical to the meta CSP above — `connect-src` is
+unchanged (this tradeoff still applies there), but `frame-ancestors 'none'` only takes effect as a
+header, never as a meta tag, so that's a genuine additional control on Vercel/Cloudflare Pages/Docker.
+**GitHub Pages — the canonical upstream mirror — cannot set any HTTP response header**, so the meta
+CSP above remains its *only* enforcement point, and `Permissions-Policy` cannot be set there under any
+circumstance (no meta-tag equivalent exists for it). Regression test:
+`tests/unit/deploymentHeaders.test.ts`.
 
 ## Security Checklist
 
