@@ -38,6 +38,7 @@ import {
 } from './geminiService';
 import { generateLocalText } from './localAiFacade';
 import { LocalServerError, localServerFetch } from './localServerHttp';
+import { createLogger } from './logger';
 import {
   listOllamaModels as listOllamaModelsFromService,
   streamOllama,
@@ -45,6 +46,8 @@ import {
 } from './ollamaService';
 import { storageService } from './storageService';
 import { isTauriRuntime } from './tauriRuntime';
+
+const log = createLogger('aiProviderService');
 
 const providerTextSchema = z.object({
   text: z.string().min(1),
@@ -873,11 +876,13 @@ export async function testAIConnection(
     }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    // QNBS-v3 (CodeAnt CWE-209): log the raw exception for diagnostics; never interpolate it into
+    // the user-facing i18n string, which could otherwise leak internal error detail to the UI.
+    log.error('testAIConnection: unexpected failure', { provider, message });
     return {
       ok: false,
       error: message,
       kind: 'unexpected',
-      params: { message },
     };
   }
 }

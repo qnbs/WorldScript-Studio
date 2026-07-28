@@ -4,9 +4,12 @@ import {
   localServerFetch,
   normalizeLocalBaseUrl,
 } from './localServerHttp';
+import { createLogger } from './logger';
 
 // QNBS-v3 (#266): canonical normalization lives in localServerHttp (shared with the scanner).
 const normalizeBaseUrl = normalizeLocalBaseUrl;
+
+const log = createLogger('ollamaService');
 
 const stripControlChars = (value: string): string => {
   let output = '';
@@ -194,11 +197,15 @@ export async function testOllamaConnection(baseUrl?: string): Promise<TestConnec
       return { ok: false, error: error.message, kind: 'pluginUnavailable' };
     }
     const message = error instanceof Error ? error.message : String(error);
+    // QNBS-v3 (CodeAnt CWE-209): the raw transport message (could be a TypeError message with
+    // internal detail) is logged for diagnostics but never interpolated into the user-facing
+    // i18n string — only the endpoint URL, which the user already configured, is safe to show.
+    log.warn('Ollama connection unreachable', { url: resolvedUrl, message });
     return {
       ok: false,
       error: `Ollama not reachable (${resolvedUrl}): ${message}`,
       kind: 'unreachable',
-      params: { url: resolvedUrl, message },
+      params: { url: resolvedUrl },
     };
   }
 }

@@ -669,7 +669,9 @@ describe('testAIConnection additional branches', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('network error');
     expect(result.kind).toBe('unexpected');
-    expect(result.params).toEqual({ message: 'network error' });
+    // QNBS-v3 (CodeAnt CWE-209): the raw message stays in `error` (for logs) only -- `unexpected`
+    // has no `params`, since the i18n string for it never interpolates the raw exception text.
+    expect(result.params).toBeUndefined();
   });
 });
 

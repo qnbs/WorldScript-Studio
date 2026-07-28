@@ -245,4 +245,24 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     });
     expect(screen.queryByText('Ollama HTTP 503')).toBeNull();
   });
+
+  it('desktop: an unexpected failure (no params) renders the translated key without crashing', async () => {
+    setDesktopRuntime(true);
+    vi.mocked(testAIConnection).mockResolvedValue({
+      ok: false,
+      error: 'TypeError: something internal broke at services/foo.ts:42',
+      kind: 'unexpected',
+    });
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText('settings.ai.testError.unexpected').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText(/something internal broke/)).toBeNull();
+  });
 });

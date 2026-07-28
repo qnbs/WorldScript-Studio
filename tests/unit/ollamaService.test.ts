@@ -97,13 +97,9 @@ describe('testOllamaConnection', () => {
     expect(result.error).toContain('localhost:11434');
     expect(result.error).toContain('Connection refused');
     expect(result.kind).toBe('unreachable');
-    // QNBS-v3: `message` here is localServerFetch's already-classified LocalServerError message
-    // (it wraps the raw fetch rejection before testOllamaConnection's catch ever sees it), not
-    // the original raw "Connection refused" string.
-    expect(result.params).toEqual({
-      url: 'http://localhost:11434',
-      message: 'Local server not reachable (http://localhost:11434/api/tags): Connection refused',
-    });
+    // QNBS-v3 (CodeAnt CWE-209): the raw technical message stays in `error` (for logs) only —
+    // `params` must never carry it, since it's interpolated into the user-facing i18n string.
+    expect(result.params).toEqual({ url: 'http://localhost:11434' });
   });
 
   it('classifies a TimeoutError-shaped rejection as a timeout (#266)', async () => {
