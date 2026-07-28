@@ -120,6 +120,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`pnpm run build` warnings: invalid `[dir:ltr]`/`[dir:rtl]` Tailwind arbitrary variants and 3
+  ineffective dynamic imports.** `ToggleSwitch`'s thumb translate used a malformed custom variant
+  (`[dir:ltr]:translate-x-5 [dir:rtl]:-translate-x-5`) that Tailwind compiled to the invalid CSS
+  pseudo-class `:is(dir:ltr)` (lightningcss minify warning on every production build) — replaced
+  with Tailwind's built-in `ltr:`/`rtl:` direction variants, which correctly target the `dir`
+  attribute `App.tsx` already sets on `<html>`. Separately, Rolldown flagged 3 dynamic `import()`
+  calls (`app/transientUiStore.ts`, `services/ai/ecoModeService.ts`, `services/spotlightTour.ts`)
+  as unable to move their module into a separate chunk because each was also statically imported
+  elsewhere in the eager bundle — converted all three call sites to plain static imports, removing
+  the dead-weight async indirection with no bundle-size change.
+- **PR #274 review findings that failed to post inline (CodeRabbit/GitHub API error).** A rate-limited
+  re-review posted its 10 findings as review-body text instead of inline comments; the 2 that did
+  post (missing `persist-credentials: false`) were already fixed. Of the 7 that only existed in the
+  review body text: `AiProviderCard`'s status badge now has `role="status" aria-live="polite"`; a
+  stale in-flight connection-test result (CWE-209) could overwrite `testError` after switching to
+  Ollama-in-browser — added a monotonic request-id guard in `handleTest` and gated the action-row
+  error span with the same `!ollamaUntestable` check the paragraph above it already used;
+  `ollamaService.ts`'s `plugin_unavailable` branch returned `LocalServerError.message` directly (a
+  public class whose message isn't guaranteed safe for every kind) — now builds its own fixed safe
+  string, matching the `timeout`/`unreachable` branches; and a scan-endpoint test asserted a loose
+  `/models` substring instead of the exact `/v1/models` path. The remaining findings (missing
+  `// QNBS-v3:` comments on several already-commented files/lines; `services/CLAUDE.md`'s
+  LanguageTool wording) were verified already covered by existing file-level rationale comments or
+  already fixed in an earlier commit — not re-applied to avoid redundant/stale documentation.
 - **Ollama / LM Studio / vLLM discovery & connectivity on desktop, CORS noise in the PWA
   (#266).** Root cause: all local-server traffic (`services/ollamaService.ts`,
   `scanLocalOpenAiCompatibleEndpoints()`) used the WebView's `fetch`, so inside the Tauri shell the

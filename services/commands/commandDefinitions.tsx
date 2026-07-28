@@ -5,6 +5,7 @@ import { projectActions } from '../../features/project/projectSlice';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
 import { isCircuitOpen, resetOpenRouterCircuit } from '../ai/providers/openrouterProvider';
+import { startSpotlightTour } from '../spotlightTour';
 import type { CommandDefinition, CommandRuntimeDeps } from './commandTypes';
 
 const SparkIcon = () => (
@@ -632,9 +633,7 @@ export function getStaticCommandDefinitions(): CommandDefinition[] {
       keywords: ['tour', 'onboarding', 'spotlight'],
       icon: iconBtn(ICONS.LIGHTNING_BOLT),
       run: (deps) => {
-        void import('../../services/spotlightTour').then(({ startSpotlightTour }) => {
-          startSpotlightTour(deps.t, 'default');
-        });
+        startSpotlightTour(deps.t, 'default');
       },
     },
   ];
