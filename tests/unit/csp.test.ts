@@ -2,6 +2,18 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+  extractHeadersFileValue,
+  extractNginxHeaderValue,
+  extractVercelHeaderValue,
+  group1,
+} from '../utils/deploymentConfigParsers';
+
+// QNBS-v3: Regression guard for the ADR-0004 revision (2026-07-28) — the ADR previously claimed
+// "the host tightens CSP further via HTTP response headers in production", which was false: none
+// of vercel.json/_headers/nginx.conf set a Content-Security-Policy header. This block asserts the
+// header CSP now actually exists on all three, is identical across them, and is never looser than
+// the meta CSP (a divergence would make the meta tag misleading — see docs/DEPLOYMENT.md).
 
 // QNBS-v3: Regression guard for ADR-0004 (audit finding F-2). The web PWA connect-src keeps a
 // `https:` scheme-source ON PURPOSE — it is required by the shipped BYOK `openAiCompatibleBaseUrl`
@@ -14,12 +26,6 @@ const tauriConf = readFileSync(
   fileURLToPath(new URL('../../src-tauri/tauri.conf.json', import.meta.url)),
   'utf8',
 );
-
-/** Extract capture group 1 with a narrowing guard (noUncheckedIndexedAccess-safe). */
-function group1(m: RegExpMatchArray | null, msg: string): string {
-  if (!m || m[1] === undefined) throw new Error(msg);
-  return m[1];
-}
 
 /** Pull the `connect-src …;` directive value out of a CSP string, normalized to whitespace tokens. */
 function connectSrcTokens(csp: string): string[] {
@@ -91,5 +97,68 @@ describe('CSP connect-src — ADR-0004 BYOK tradeoff', () => {
     it('enumerates cloud providers explicitly (allowlist is meaningful here)', () => {
       expect(tokens).toContain('https://api.openai.com');
     });
+  });
+});
+
+describe('CSP response headers — ADR-0004 revision (host header actually exists now)', () => {
+  const vercelJson = readFileSync(
+    fileURLToPath(new URL('../../vercel.json', import.meta.url)),
+    'utf8',
+  );
+  const headersFile = readFileSync(
+    fileURLToPath(new URL('../../public/_headers', import.meta.url)),
+    'utf8',
+  );
+  const nginxConf = readFileSync(
+    fileURLToPath(new URL('../../nginx.conf', import.meta.url)),
+    'utf8',
+  );
+
+  function vercelCsp(): string {
+    return extractVercelHeaderValue(vercelJson, 'Content-Security-Policy');
+  }
+  function headersCsp(): string {
+    return extractHeadersFileValue(headersFile, 'Content-Security-Policy');
+  }
+  function nginxHeaderCsp(): string {
+    return extractNginxHeaderValue(nginxConf, 'Content-Security-Policy');
+  }
+
+  /** Split a CSP string into a directive -> token-set map for per-directive comparison. */
+  function directiveMap(csp: string): Map<string, Set<string>> {
+    const map = new Map<string, Set<string>>();
+    for (const part of csp.split(';')) {
+      const tokens = part.trim().split(/\s+/).filter(Boolean);
+      const directive = tokens[0];
+      if (!directive) continue;
+      map.set(directive, new Set(tokens.slice(1)));
+    }
+    return map;
+  }
+
+  it('all three hosts that can set headers set an identical Content-Security-Policy', () => {
+    expect(vercelCsp()).toBe(headersCsp());
+    expect(headersCsp()).toBe(nginxHeaderCsp());
+  });
+
+  it('the header CSP is never looser than the meta CSP for any shared directive', () => {
+    const metaDirectives = directiveMap(webCsp());
+    const headerDirectives = directiveMap(vercelCsp());
+    for (const [directive, headerTokens] of headerDirectives) {
+      const metaTokens = metaDirectives.get(directive);
+      if (!metaTokens) continue; // a header-only directive (e.g. frame-ancestors) adds hardening
+      for (const token of headerTokens) {
+        expect(
+          metaTokens.has(token),
+          `header ${directive} allows "${token}" that the meta CSP does not`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('gains frame-ancestors as real enforcement (inert in the meta tag, effective as a header)', () => {
+    const headerDirectives = directiveMap(vercelCsp());
+    expect(headerDirectives.get('frame-ancestors')).toBeDefined();
+    expect(headerDirectives.get('frame-ancestors')?.has("'none'")).toBe(true);
   });
 });

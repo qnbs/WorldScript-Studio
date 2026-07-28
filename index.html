@@ -48,8 +48,9 @@
     <!--
       CSP-Strategie:
       - script-src: nur eigene Skripte (Vite ES modules, kein inline nötig)
-      - style-src: eigene + unsafe-inline (React inline-styles) + fonts.googleapis.com für CJK/Greek
-      - font-src: self + fonts.gstatic.com für CJK/Greek (Google Fonts)
+      - style-src: eigene + unsafe-inline (React inline-styles) — keine Fremd-Font-CDN mehr,
+        CJK/Greek sind über @fontsource self-hosted (siehe index.tsx)
+      - font-src: self + data: — keine Fremd-Font-CDN mehr nötig (self-hosted, siehe index.tsx)
       - connect-src: 'self'
                     + https:  — intentional broad HTTPS scheme-source. REQUIRED by the
                       shipped BYOK feature `openAiCompatibleBaseUrl` (Settings → AI →
@@ -67,14 +68,14 @@
                     connect-src with no `https:` blanket; only the web PWA accepts the
                     broader scheme for BYOK. See ADR-0004 for the web-vs-Tauri rationale.
       - img-src: data: URLs für Base64-Bilder erlaubt
-      - Produktions-CSP wird über HTTP-Header des Hosts verschärft
+      - Produktions-CSP wird über HTTP-Header des Hosts verschärft (siehe ADR-0004, docs/DEPLOYMENT.md)
     -->
     <meta http-equiv="Content-Security-Policy"
           content="
             default-src 'self';
             script-src  'self';
-            style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
-            font-src    'self' https://fonts.gstatic.com data:;
+            style-src   'self' 'unsafe-inline';
+            font-src    'self' data:;
             img-src     'self' data: blob:;
             connect-src 'self' https: http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev;
             worker-src  'self' blob:;
@@ -86,13 +87,7 @@
             upgrade-insecure-requests;
           " />
 
-    <!-- QNBS-v3: CJK (Noto Sans JP) + Korean (Noto Sans KR) + Greek (Noto Sans GR) via Google Fonts
-         CDN — these are the non-Latin scripts NOT self-hosted via @fontsource in index.tsx. Arabic/
-         Hebrew (incl. Noto Naskh Arabic) are self-hosted there, so they are intentionally NOT requested
-         here to avoid duplicate font downloads and RTL typography drift. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+GR:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- QNBS-v3: CJK/Greek self-hosted via @fontsource in index.tsx (no external font CDN) — "Noto Sans GR" doesn't exist at Google Fonts and 400'd the combined request, silently dropping JP/KR too. -->
 
     <title>WorldScript Studio</title>
 </head>
