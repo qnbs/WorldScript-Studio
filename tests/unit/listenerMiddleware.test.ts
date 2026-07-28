@@ -2,6 +2,7 @@ import { configureStore, type Reducer } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listenerMiddleware } from '../../app/listenerMiddleware';
+import { useTransientUiStore } from '../../app/transientUiStore';
 import featureFlagsReducer from '../../features/featureFlags/featureFlagsSlice';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
@@ -328,6 +329,36 @@ describe('codex auto-tracking listener', () => {
     store.dispatch(projectActions.addManuscriptSection({ title: 'Error Chapter' }));
     await vi.advanceTimersByTimeAsync(1500);
     expect(mockLoggerWarn).toHaveBeenCalled();
+  });
+});
+
+describe('binder-node pin reconciliation listener', () => {
+  afterEach(() => {
+    useTransientUiStore.getState().setManuscriptPinnedBinderNodeId(null);
+  });
+
+  it('clears a stale manuscriptPinnedBinderNodeId after its node is removed', async () => {
+    const store = makeFullStore();
+    useTransientUiStore.getState().setManuscriptPinnedBinderNodeId('node-1');
+    store.dispatch(
+      projectActions.setBinderNodes([
+        { id: 'node-2', parentId: null, type: 'note', title: 'Other', sortIndex: 0 },
+      ]),
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    expect(useTransientUiStore.getState().manuscriptPinnedBinderNodeId).toBeNull();
+  });
+
+  it('leaves manuscriptPinnedBinderNodeId untouched when the pinned node still exists', async () => {
+    const store = makeFullStore();
+    useTransientUiStore.getState().setManuscriptPinnedBinderNodeId('node-1');
+    store.dispatch(
+      projectActions.setBinderNodes([
+        { id: 'node-1', parentId: null, type: 'note', title: 'Kept', sortIndex: 0 },
+      ]),
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    expect(useTransientUiStore.getState().manuscriptPinnedBinderNodeId).toBe('node-1');
   });
 });
 

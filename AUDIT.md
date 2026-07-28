@@ -12,6 +12,15 @@
 
 **Quality gate (2026-06-21 — feature-flag catalog + grouped Settings + ProForge opt-in):** lint ✅ · typecheck ✅ (tsgo) · i18n:check ✅ (**2793 keys × 17 locales**) · parity:check ✅ (0 drifts) · suppressions ratchet ✅ (52, no new) · targeted unit tests ✅ (127: slice 89, catalog 7, flagDependencies 5, FeatureFlagsSection 15, FeatureFlagsAndOverview 11). `enableProForge` default flipped to opt-in (now **17 on / 6 off**); `featureCatalog.ts` reconciled to all 23 flags with `defaultOn` **derived** from the slice (drift now structurally impossible — guarded by `tests/unit/featureCatalog.test.ts`). Shipped as a standalone PR off `main`.
 
+## v1.24.1 Local-AI reliability + Dependabot batch (2026-07-28)
+
+**Quality gate (2026-07-28):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2834 keys × 19 locales** — `ru`/`ko` added since the v1.24.0 count above; `settings.ai.providerStatusUnavailableBrowser` new key) · targeted unit tests ✅ (PR #272: 40 · PR #273: 64, incl. new badge-reconciliation + scan-endpoint-order coverage).
+
+- **#266 (Ollama/LM Studio/vLLM), two remaining halves fixed**, both root-caused with a real build+runtime repro rather than guessed: (1) desktop discovery was still broken after #269 because `vite.config.ts` externalized `@tauri-apps/*` even for the Tauri build itself, leaving `services/localServerHttp.ts`'s plugin-http import unresolvable in the packaged app — fixed via a shared `isTauriBuild()` check (PR #272); (2) the browser status badge and the desktop-only banner were driven by two unreconciled state signals, so the badge always read "Ready" next to a banner saying otherwise — fixed with a distinct "Not available in browser" label (PR #273).
+- **Dependabot backlog triaged:** 13 of 18 open PRs merged directly; the remaining 5 (AI-SDK v4 family, biome 2.5.x, dev-tooling/Babel 8) each had a real breaking-change blocker, root-caused and fixed with real code (AI-SDK family combined into PR #275; biome and dev-tooling fixes pushed directly onto their Dependabot branches) rather than force-merged or suppressed. See `TODO.md` § v1.24.1 for the full breakdown.
+- **Issue #60 (vendor-fork audit):** confirmed done (fork `10.3.0-sc2`, `verify:vendor` CI guard); status comment posted, issue stays open per its own standing-reminder policy.
+- **CLAUDE.md doc-drift correction:** locale roster count (17→19) and per-locale module count (20→21) were stale relative to `i18n/locales.ts` (the actual SSOT).
+
 ## v1.24.0 Dependency Hygiene + Onboarding + Docs Truth-up (2026-06-21, PR F)
 
 - **`joi` override (accepted risk, KEPT):** `pnpm-workspace.yaml` `overrides.joi: ^18.2.1` pins the patched `joi` pulled transitively via `wait-on` (Storybook/test-runner wait helper), mitigating **GHSA-q7cg-457f-vx79** (unpublished jsdom exposure in `@hapi/statehood`). Still required — `wait-on@9.x` still depends on `joi`. `pnpm audit --audit-level=high` clean with the override in place; rationale documented inline in `pnpm-workspace.yaml` and here.
