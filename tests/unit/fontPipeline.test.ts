@@ -14,26 +14,30 @@ const indexTsx = readFileSync(fileURLToPath(new URL('../../index.tsx', import.me
 const indexCss = readFileSync(fileURLToPath(new URL('../../index.css', import.meta.url)), 'utf8');
 
 /**
- * Strip HTML (`<!-- -->`) and block (`/* *​/`) comments before a "must not contain" check. The
- * QNBS-v3 convention requires explaining *why* a value was removed, which means the historical
- * broken value (e.g. "Noto Sans GR", "fonts.gstatic.com") legitimately appears in prose — this
- * must not trip a regression test meant to catch an actual re-introduced *live* reference.
- *
- * Applies the two replacements repeatedly until a fixed point (not just once): a single pass can
- * leave a residual `<!--`/`/*` behind when one comment marker sits inside another (e.g. a `/*`
- * inside an HTML comment, exposed after the HTML comment around it is stripped), which is exactly
- * the "incomplete multi-character sanitization" pattern static analysis flags in one-pass regex
- * strippers. This is test-only code reading trusted local source files, but the loop is free and
- * removes the whole class of residual-marker findings.
+ * Repeatedly apply a single-pattern replace until a fixed point, so a marker nested inside
+ * another (e.g. a `/*` inside an HTML comment, exposed once the HTML comment around it is
+ * stripped) can't survive as a residual match — the canonical fix for CodeQL's
+ * js/incomplete-multi-character-sanitization, applied to exactly one pattern per call so its
+ * dataflow analysis can verify each loop independently.
  */
-function stripComments(src: string): string {
+function stripToFixedPoint(src: string, pattern: RegExp): string {
   let result = src;
   let previous: string;
   do {
     previous = result;
-    result = result.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    result = result.replace(pattern, '');
   } while (result !== previous);
   return result;
+}
+
+/**
+ * Strip HTML (`<!-- -->`) and block (`/* *​/`) comments before a "must not contain" check. The
+ * QNBS-v3 convention requires explaining *why* a value was removed, which means the historical
+ * broken value (e.g. "Noto Sans GR", "fonts.gstatic.com") legitimately appears in prose — this
+ * must not trip a regression test meant to catch an actual re-introduced *live* reference.
+ */
+function stripComments(src: string): string {
+  return stripToFixedPoint(stripToFixedPoint(src, /<!--[\s\S]*?-->/g), /\/\*[\s\S]*?\*\//g);
 }
 
 /** Extract capture group 1 with a narrowing guard (noUncheckedIndexedAccess-safe). */

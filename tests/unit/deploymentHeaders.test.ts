@@ -6,6 +6,7 @@ import {
   extractHeadersFileValue,
   extractNginxHeaderValue,
   extractVercelHeaderValue,
+  parsePermissionsPolicy,
 } from '../utils/deploymentConfigParsers';
 
 // QNBS-v3: Regression guard for the Permissions-Policy microphone block. `microphone=()` is the
@@ -35,17 +36,20 @@ function nginxPolicyValue(): string {
 }
 
 describe('Permissions-Policy — microphone must stay usable same-origin', () => {
-  it('allows the microphone for self on all three hosts (not an empty allowlist)', () => {
+  it('allows the microphone for self on all three hosts (exact directive value)', () => {
+    // QNBS-v3: assert the exact parsed value, not toContain('microphone=(self)') — that substring
+    // check would also pass for a broader allowlist like `microphone=(self https://evil.example)`
+    // or a duplicated directive where a later, looser value is the one actually in effect.
     for (const value of [vercelPolicyValue(), headersPolicyValue(), nginxPolicyValue()]) {
-      expect(value).toContain('microphone=(self)');
-      expect(value).not.toMatch(/microphone=\(\)/);
+      expect(parsePermissionsPolicy(value).get('microphone')).toBe('(self)');
     }
   });
 
-  it('keeps camera and geolocation restrictive (the app uses neither)', () => {
+  it('keeps camera and geolocation restrictive with the exact empty-allowlist value', () => {
     for (const value of [vercelPolicyValue(), headersPolicyValue(), nginxPolicyValue()]) {
-      expect(value).toContain('camera=()');
-      expect(value).toContain('geolocation=()');
+      const directives = parsePermissionsPolicy(value);
+      expect(directives.get('camera')).toBe('()');
+      expect(directives.get('geolocation')).toBe('()');
     }
   });
 
