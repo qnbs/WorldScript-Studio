@@ -134,6 +134,32 @@ function extractSectionFlags(sectionSrc: string, catalogSrc: string): Set<string
   return new Set([...extractCatalogFlags(catalogSrc)].filter((flag) => !hidden.has(flag)));
 }
 
+// QNBS-v3: a flag hidden from FeatureFlagsSection.tsx (e.g. enableIdbAtRestEncryption, whose toggle
+// would lock users out without the passphrase setup flow) can still have a real UI toggle — just a
+// dedicated one elsewhere (PrivacySection.tsx), not the generic catalog-driven list. Each catalog
+// entry's own `gateLocations` already documents this; a flag counts as having a dedicated toggle if
+// any gateLocation file lives under components/settings/ and isn't FeatureFlagsSection.tsx itself
+// (that generic list is what extractSectionFlags/inSection already checks).
+function extractDedicatedUiFlags(catalogSrc: string): Set<string> {
+  const dedicated = new Set<string>();
+  const flagKeyMatches = [...catalogSrc.matchAll(/flagKey:\s*['"`](enable\w+)['"`]/g)];
+  for (let i = 0; i < flagKeyMatches.length; i++) {
+    const match = flagKeyMatches[i];
+    const flag = match?.[1];
+    if (!flag || match.index === undefined) continue;
+    const nextIndex = flagKeyMatches[i + 1]?.index ?? catalogSrc.length;
+    const entrySrc = catalogSrc.slice(match.index, nextIndex);
+    const gateLocationsInner = entrySrc.match(/gateLocations:\s*\[([\s\S]*?)\n\s*\],/)?.[1];
+    if (
+      gateLocationsInner &&
+      /components\/settings\/(?!FeatureFlagsSection\.tsx)[\w-]+\.tsx/.test(gateLocationsInner)
+    ) {
+      dedicated.add(flag);
+    }
+  }
+  return dedicated;
+}
+
 // ---------------------------------------------------------------------------
 // Step 5: Extract flags from useSettingsView.ts switch
 // ---------------------------------------------------------------------------
@@ -165,6 +191,7 @@ const sliceFlags = extractFlagsFromSlice(sliceSrc);
 const defaultFlags = extractDefaultsFromSlice(sliceSrc);
 const localeFlags = extractLocaleFlags(localeSrc);
 const sectionFlags = extractSectionFlags(sectionSrc, catalogSrc);
+const dedicatedUiFlags = extractDedicatedUiFlags(catalogSrc);
 const handlerFlags = extractHandlerFlags(hookSrc);
 
 let errors = 0;
@@ -178,6 +205,7 @@ const rows: Array<{
   inDefaults: boolean;
   inLocale: boolean;
   inSection: boolean;
+  hasDedicatedUi: boolean;
   inHandler: boolean;
   hasRuntime: boolean;
 }> = [];
@@ -186,9 +214,10 @@ for (const flag of sliceFlags) {
   const inDefaults = defaultFlags.has(flag);
   const inLocale = localeFlags.has(flag);
   const inSection = sectionFlags.has(flag);
+  const hasDedicatedUi = dedicatedUiFlags.has(flag);
   const inHandler = handlerFlags.has(flag);
   const hasRuntime = hasRuntimeConsumption(flag);
-  rows.push({ flag, inDefaults, inLocale, inSection, inHandler, hasRuntime });
+  rows.push({ flag, inDefaults, inLocale, inSection, hasDedicatedUi, inHandler, hasRuntime });
 }
 
 // Print table header
@@ -207,13 +236,16 @@ console.log('─'.repeat(90));
 for (const row of rows) {
   const check = (v: boolean) => (v ? green('✅') : red('❌'));
   const runtimeCheck = row.hasRuntime ? green('✅') : yellow('⚠️ ');
+  // QNBS-v3: a dedicated toggle elsewhere (e.g. PrivacySection.tsx) is a real UI toggle, just not
+  // the generic catalog-driven one — show it distinctly rather than as a flat ❌ "no toggle at all".
+  const sectionCheck = row.inSection ? green('✅') : row.hasDedicatedUi ? green('◆') : red('❌');
 
   const flagLabel = row.flag.padEnd(34);
   const line = [
     flagLabel,
     check(row.inDefaults).padEnd(18),
     check(row.inLocale).padEnd(16),
-    check(row.inSection).padEnd(18),
+    sectionCheck.padEnd(18),
     check(row.inHandler).padEnd(18),
     runtimeCheck,
   ].join('');
@@ -223,7 +255,7 @@ for (const row of rows) {
   // Count issues
   if (!row.inDefaults) errors++;
   if (!row.inLocale) errors++;
-  if (!row.inSection) warnings++; // warning — dev-only flags may intentionally skip UI
+  if (!row.inSection && !row.hasDedicatedUi) warnings++; // warning — dev-only flags may intentionally skip UI entirely
   if (!row.inSection && row.inHandler) errors++; // handler without UI toggle is dead code
   if (row.inSection && !row.inHandler) errors++; // UI toggle with no handler = critical bug
   if (!row.hasRuntime) warnings++; // ghost flag
@@ -280,10 +312,20 @@ if (ghostFlags.length > 0) {
   console.log();
 }
 
-// Warnings: flags in section but not in handler
-const noUiToggle = rows.filter((r) => !r.inSection);
+// Info: flags with a dedicated toggle outside the generic catalog-driven section (real UI, not missing)
+const dedicatedUiOnly = rows.filter((r) => !r.inSection && r.hasDedicatedUi);
+if (dedicatedUiOnly.length > 0) {
+  console.log(green('INFO — Flags with a dedicated UI toggle outside FeatureFlagsSection.tsx:'));
+  for (const r of dedicatedUiOnly) {
+    console.log(green(`  • ${r.flag} — see its gateLocations entry in featureCatalog.ts`));
+  }
+  console.log();
+}
+
+// Warnings: flags with no UI toggle anywhere (neither the generic section nor a dedicated one)
+const noUiToggle = rows.filter((r) => !r.inSection && !r.hasDedicatedUi);
 if (noUiToggle.length > 0) {
-  console.log(yellow('INFO — Flags with no UI toggle (Settings cannot change them):'));
+  console.log(yellow('WARNING — Flags with no UI toggle anywhere (Settings cannot change them):'));
   for (const r of noUiToggle) {
     console.log(yellow(`  • ${r.flag}`));
   }
