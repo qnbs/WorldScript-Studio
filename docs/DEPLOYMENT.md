@@ -113,6 +113,21 @@ pnpm run build:edge && pnpm exec vite preview --base /
 
 ---
 
+## Header invariants per host
+
+HTTP response headers are **not** portable across targets — each host has its own config file, and one target can't set headers at all. Voice (`hooks/useMicLevel.ts`, `hooks/useSpeechRecognition.ts`) depends on `Permissions-Policy: microphone=(self)`; an empty `microphone=()` allowlist silently breaks it even for same-origin calls.
+
+| Host | Config file | Permissions-Policy | Content-Security-Policy |
+|------|-------------|---------------------|--------------------------|
+| **GitHub Pages** (canonical upstream) | *(none — platform has no header-injection mechanism)* | ❌ not settable at all (no meta-tag equivalent exists) | ⚠️ meta tag in [`index.html`](../index.html) only — this is the **sole** enforcement point on this host |
+| **Vercel** | [`vercel.json`](../vercel.json) `headers[]` | not set | header set, mirrors the `index.html` meta CSP |
+| **Cloudflare Pages** | [`public/_headers`](../public/_headers) | `microphone=(self)` | header set, mirrors the `index.html` meta CSP |
+| **Docker / nginx** (`.github/workflows/docker.yml` image) | [`nginx.conf`](../nginx.conf) | `microphone=(self)` | header set, mirrors the `index.html` meta CSP |
+
+If the header CSP and the `index.html` meta CSP ever diverge, the **header wins** in the browser and the meta tag becomes misleading — see [ADR-0004](adr/0004-csp-connect-src-byok-tradeoff.md) and the regression tests in `tests/unit/csp.test.ts` / `tests/unit/deploymentHeaders.test.ts`. **New header-origin rule:** any new external endpoint or directive change must be applied to all three header configs plus both test files, not just `index.html`.
+
+---
+
 ## Security notes
 
 - No server-side storage of manuscripts or API keys.

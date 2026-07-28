@@ -3,7 +3,10 @@
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  # QNBS-v3: microphone=(self), NOT (): Voice (hooks/useMicLevel.ts, hooks/useSpeechRecognition.ts)
+  # calls getUserMedia/SpeechRecognition from same-origin. An empty allowlist blocks that same-origin
+  # call too, so it silently kills Whisper STT, push-to-talk, and the mic-level meter on this host.
+  Permissions-Policy: camera=(), microphone=(self), geolocation=()
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
