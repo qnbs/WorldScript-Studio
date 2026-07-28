@@ -7,7 +7,7 @@ Workflow: [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build
 ## Triggers
 
 - **Manual:** Actions → “Tauri desktop build” → Run workflow  
-- **Tags:** pushing `v*` (e.g. `v1.2.0`) starts a build on Ubuntu, Windows, and **both macOS arches** in parallel.
+- **Tags:** pushing `v*` (e.g. `v1.2.0`) starts a build on Ubuntu, Windows, and macOS (Apple Silicon) in parallel.
 
 ### Build matrix
 
@@ -16,13 +16,18 @@ Workflow: [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build
 | `ubuntu-22.04` | x86_64 (AppImage / deb / rpm) | `linux-x86_64` |
 | `windows-latest` | x86_64 (NSIS `-setup.exe`, MSI fallback) | `windows-x86_64` |
 | `macos-latest` | **aarch64** (Apple Silicon) | `darwin-aarch64` |
-| `macos-13` | **x86_64** (Intel) | `darwin-x86_64` |
 
-`macos-latest` is GitHub's Apple-Silicon runner and `macos-13` is the last Intel runner — both are
-required so Intel Macs get a native build and in-app updates. Tauri infers the target arch from the
-runner (no `--target` flag needed), and the `latest.json` generator maps `*_x64.app.tar.gz` →
-`darwin-x86_64` automatically. A **per-arch warning** is emitted (and that platform omitted from
-`latest.json`) if any arch produces no signed bundle; the step hard-fails only if **no** arch did.
+**Native Intel-Mac (x86_64) builds are currently unavailable.** `macos-13` (the last GitHub-hosted
+Intel runner) was removed from the matrix on 2026-07-28: 3 consecutive tagged-release runs each had
+the `macos-13` job sit in GitHub's runner queue indefinitely (never reaching `in_progress`, so the
+job's own `timeout-minutes: 45` never applied) until GitHub's ~24h queue ceiling auto-cancelled it —
+and because the `release` job's `needs: [bundle]` only resolves once every matrix leg reaches a
+terminal state, this blocked the entire release for 24h even though Ubuntu/Windows/macOS-ARM all
+finished in ~12 minutes. This is a GitHub-hosted-runner availability issue (Intel macOS images are
+being phased out), not a bug in this repo's build logic — the `latest.json` generator already
+tolerates a missing arch (per-arch warning, hard-fail only if *no* arch signs), so once a working
+Intel runner option exists again (self-hosted, `macos-latest-large`, or a new hosted image), re-adding
+it to the matrix needs no other changes. Tracked as a re-opened follow-up in `TODO.md`.
 
 ## Outputs
 
@@ -119,8 +124,8 @@ Complete these steps once before pushing the first signed release tag:
    - tauri-bundle-ubuntu-22.04  → .deb, .AppImage + .sig files
    - tauri-bundle-windows-latest → .msi/.exe + .sig files
    - tauri-bundle-macos-latest  → .dmg + .app.tar.gz (aarch64) + .sig files
-   - tauri-bundle-macos-13      → .dmg + .app.tar.gz (x64 / Intel) + .sig files
-   - latest.json  (auto-updater manifest with linux/windows/darwin-aarch64/darwin-x86_64 entries)
+   - latest.json  (auto-updater manifest with linux/windows/darwin-aarch64 entries — no
+     darwin-x86_64; Intel Mac builds are deferred, see the Build matrix section above)
 
 5. Download the installer for your OS, install the app, open it.
 
