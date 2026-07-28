@@ -118,6 +118,9 @@ jobs:
       - name: i18n key parity (vs en)
         run: pnpm run i18n:check
 
+      - name: Doc metrics drift gate (locale/key counts, stale PLANNED status)
+        run: pnpm run docs:check
+
       - name: Feature parity audit
         run: pnpm run parity:check
 
