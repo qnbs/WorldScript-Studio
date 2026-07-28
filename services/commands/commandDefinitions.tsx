@@ -632,6 +632,9 @@ export function getStaticCommandDefinitions(): CommandDefinition[] {
       titleKey: 'help.tryTour',
       keywords: ['tour', 'onboarding', 'spotlight'],
       icon: iconBtn(ICONS.LIGHTNING_BOLT),
+      // QNBS-v3: static import — App.tsx already statically imports spotlightTour (driver.js) for
+      // the first-run auto-tour effect, so the prior dynamic import() here never actually kept it
+      // out of the eager bundle; Rolldown flagged it as dead weight with no chunking benefit.
       run: (deps) => {
         startSpotlightTour(deps.t, 'default');
       },

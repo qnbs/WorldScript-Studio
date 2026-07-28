@@ -567,6 +567,9 @@ listenerMiddleware.startListening({
   },
   effect: async (_action, listenerApi) => {
     const state = listenerApi.getState() as RootState;
+    // QNBS-v3: static import — transientUiStore is already statically imported by many components
+    // (BinderPanel, ExportView, etc.), so the prior dynamic import() never actually code-split it;
+    // Rolldown flagged it as dead weight with no chunking benefit.
     const { manuscriptPinnedBinderNodeId, setManuscriptPinnedBinderNodeId } =
       useTransientUiStore.getState();
     if (!manuscriptPinnedBinderNodeId) return;
@@ -595,6 +598,9 @@ listenerMiddleware.startListening({
     const { setActiveAiMode } = await import('../services/ai/aiModeService');
     setActiveAiMode(mode);
     // QNBS-v3: Bridge eco mode — keeps voice/adaptive-AI/GpuMetricsPanel consumers in sync.
+    // Static import (unlike aiModeService above): ecoModeService is already statically imported
+    // elsewhere (GpuMetricsPanel, useAdaptiveAi, useVoice), so its own dynamic import() never
+    // actually code-split it — Rolldown flagged it as dead weight with no chunking benefit.
     ecoModeService.setAiModeEco(mode === 'eco');
   },
 });

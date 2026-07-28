@@ -62,6 +62,9 @@ export const ToggleSwitch: FC<{
       >
         {/* QNBS-v3: --sc-surface-base adapts to all themes; bg-white breaks sepia/high-contrast */}
         {/* Reduced motion: disable transform transition */}
+        {/* QNBS-v3: ltr:/rtl: (Tailwind's built-in direction variants, targeting the `dir` attribute
+            App.tsx sets on <html>) — the prior custom [dir:ltr]/[dir:rtl] arbitrary variant compiled
+            to the invalid CSS pseudo-class :is(dir:ltr), warning on every production build. */}
         <span
           className={`${checked ? 'ltr:translate-x-5 rtl:-translate-x-5' : 'translate-x-0'} inline-block h-5 w-5 transform rounded-full bg-[var(--sc-surface-base)] shadow ring-0 transition-transform duration-sc-fast ease-in-out`}
         />
