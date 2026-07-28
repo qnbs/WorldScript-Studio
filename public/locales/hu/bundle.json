@@ -2237,7 +2237,7 @@
   "settings.openRouter.preferredModel": "Preferált modell",
   "settings.openRouter.refreshModels": "Modellek frissítése",
   "settings.openRouter.refreshModelsAriaLabel": "Az OpenRouter modellkatalógus frissítése",
-  "settings.openRouter.resetCircuit": "Reset",
+  "settings.openRouter.resetCircuit": "Visszaállítás",
   "settings.openRouter.resetCircuitAria": "Állítsa vissza az OpenRouter megszakítót",
   "settings.openRouter.rpmLabel": "Kérések / perc (legutóbbi 60 mp)",
   "settings.openRouter.saveKey": "Mentés",
