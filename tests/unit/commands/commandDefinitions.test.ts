@@ -40,9 +40,11 @@ vi.mock('../../../constants', () => ({
   },
 }));
 
-// QNBS-v3: dynamic import in help-tour run() — mock so tests don't trigger real import
+// QNBS-v3: startSpotlightTour is statically imported by commandDefinitions.tsx — mock so tests
+// don't pull in the real driver.js tour implementation.
+const mockStartSpotlightTour = vi.fn();
 vi.mock('../../../services/spotlightTour', () => ({
-  startSpotlightTour: vi.fn(),
+  startSpotlightTour: (...args: unknown[]) => mockStartSpotlightTour(...args),
 }));
 
 // QNBS-v3: OpenRouter circuit state is module-level in the provider — mock for determinism.
@@ -169,6 +171,13 @@ describe('getStaticCommandDefinitions', () => {
     const ids = cmds.map((c) => c.id);
     expect(ids).toContain('help-open');
     expect(ids).toContain('help-tour');
+  });
+
+  it('help-tour calls startSpotlightTour with the default tour on run', () => {
+    const cmds = getStaticCommandDefinitions();
+    const cmd = cmds.find((c) => c.id === 'help-tour');
+    cmd?.run(baseDeps);
+    expect(mockStartSpotlightTour).toHaveBeenCalledWith(baseDeps.t, 'default');
   });
 
   it('includes global command IDs', () => {

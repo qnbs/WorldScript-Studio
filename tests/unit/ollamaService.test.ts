@@ -115,12 +115,14 @@ describe('testOllamaConnection', () => {
   it('surfaces a plugin_unavailable LocalServerError distinctly, not as generic "not reachable"', async () => {
     const pluginErr = new LocalServerError(
       'plugin_unavailable',
-      'Local server networking is unavailable: the desktop HTTP plugin failed to load.',
+      'some internal message that must never reach the UI',
     );
     vi.mocked(localServerFetch).mockRejectedValueOnce(pluginErr);
     const result = await testOllamaConnection('http://localhost:11434');
     expect(result.ok).toBe(false);
-    expect(result.error).toBe(pluginErr.message);
+    // QNBS-v3 (CodeRabbit CWE-209): a fixed safe string, never the instance's own .message —
+    // LocalServerError is a public class and its message isn't guaranteed safe for every kind.
+    expect(result.error).not.toBe(pluginErr.message);
     expect(result.error).not.toContain('not reachable');
     expect(result.kind).toBe('pluginUnavailable');
     expect(result.params).toBeUndefined();

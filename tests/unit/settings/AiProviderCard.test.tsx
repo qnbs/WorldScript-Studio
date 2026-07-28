@@ -187,6 +187,48 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(screen.queryByText('settings.ai.providerStatusUnavailableBrowser')).toBeNull();
   });
 
+  it('ignores stale connection-test results after switching to Ollama-in-browser mid-flight (CWE-209 race guard)', async () => {
+    setDesktopRuntime(true);
+    // QNBS-v3: queue every call's resolver rather than asserting an exact call count — the auto-test
+    // effect's own invocation count isn't the point under test; what matters is that whichever
+    // in-flight request(s) are still pending when the context moves on get discarded, not rendered.
+    const resolvers: Array<(v: { ok: boolean }) => void> = [];
+    vi.mocked(testAIConnection).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => expect(resolvers.length).toBeGreaterThan(0));
+
+    // Switch to the browser before any in-flight request resolves — this must invalidate them all.
+    setDesktopRuntime(false);
+    rerender(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('settings.ai.providerStatusUnavailableBrowser')).toBeTruthy();
+    });
+
+    // Now resolve every stale (superseded) request with an error — none may surface.
+    for (const resolve of resolvers) resolve({ ok: false });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByText('settings.ai.providerStatusUnavailableBrowser')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.providerStatusDisconnected')).toBeNull();
+    expect(screen.queryByText(/testError/)).toBeNull();
+  });
+
   it('desktop: auto-loads models and tests the connection when ollama is selected', async () => {
     setDesktopRuntime(true);
     render(

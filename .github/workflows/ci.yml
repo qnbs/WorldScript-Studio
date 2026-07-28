@@ -43,6 +43,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/setup
 
       # QNBS-v3: pnpm's audit client cannot decode force-gzipped responses from some npm CDN edge
@@ -99,6 +100,8 @@ jobs:
         node-version: ['22', '24']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
@@ -180,6 +183,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
 
       - name: Build application
@@ -268,6 +273,8 @@ jobs:
     needs: [quality]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
 
       # QNBS-v3: cache Playwright browsers by version so re-runs don't re-download ~400 MB each time.
@@ -321,6 +328,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
 
       - name: Cache Playwright browsers
@@ -358,6 +367,8 @@ jobs:
     continue-on-error: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
 
       - name: Download build artifact
@@ -403,6 +414,8 @@ jobs:
     needs: [quality]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
 
       # QNBS-v3: Cache Playwright browsers between runs — saves ~60 s install time.
@@ -460,6 +473,8 @@ jobs:
     needs: [build]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
 
       - name: Download dist artifact

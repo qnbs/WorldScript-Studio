@@ -1,6 +1,6 @@
 import { ONNX_SUPPORTED_MODELS, WEBLLM_SUPPORTED_MODELS } from '@domain/ai-core';
 import type { FC } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { LOCAL_BACKEND_PRESET_DEFAULT_URL } from '../../services/ai/localBackendPresets';
 import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService';
@@ -55,6 +55,11 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const [scanRows, setScanRows] = useState<LocalEndpointScanResult[]>([]);
   // QNBS-v3: GPU probe runs once when WebLLM tab is selected — no polling.
   const [gpuInfo, setGpuInfo] = useState<WebGpuAdapterInfo | null>(null);
+  // QNBS-v3 (CodeRabbit CWE-209): monotonic guard against a stale in-flight test result
+  // (button click or the auto-test effect) overwriting state after the provider/desktop
+  // context has since moved on — e.g. a switch to Ollama-in-browser must not let an older
+  // request's raw error text land in testError once ollamaUntestable becomes true.
+  const testRequestIdRef = useRef(0);
 
   useEffect(() => {
     storageService
@@ -95,6 +100,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   }, [ollamaBaseUrl]);
 
   const handleTest = useCallback(async () => {
+    const requestId = ++testRequestIdRef.current;
     setTestStatus('loading');
     setTestError('');
     try {
@@ -102,6 +108,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         ollamaBaseUrl,
         openAiCompatibleBaseUrl: advancedAi.openAiCompatibleBaseUrl,
       });
+      if (testRequestIdRef.current !== requestId) return; // stale — superseded by a newer request
       if (result.ok) {
         setTestStatus('ok');
       } else {
@@ -116,6 +123,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         );
       }
     } catch (e) {
+      if (testRequestIdRef.current !== requestId) return; // stale — superseded by a newer request
       setTestStatus('error');
       setTestError(e instanceof Error ? e.message : t('settings.ai.unknownError'));
     }
@@ -145,6 +153,9 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   );
 
   useEffect(() => {
+    // QNBS-v3 (CodeRabbit CWE-209): invalidate any in-flight test from the previous provider
+    // context before deciding whether to start a new one.
+    testRequestIdRef.current++;
     // QNBS-v3 (#266): the ollama auto-probe (models + connection test) only runs on desktop.
     // In the PWA it fired CORS-blocked localhost requests on every settings visit.
     if (provider === 'ollama' && isDesktop) {
@@ -209,6 +220,8 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               {t('settings.ai.providerStatusLabel')}
             </span>
             <span
+              role="status"
+              aria-live="polite"
               className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
                 ollamaUntestable
                   ? 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
@@ -602,7 +615,9 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 {t('settings.ai.connectionSuccess')}
               </span>
             )}
-            {testStatus === 'error' && (
+            {/* QNBS-v3 (CodeRabbit CWE-209): mirror the guard above — a stale in-flight test for a
+                prior provider must not surface raw error text once Ollama-in-browser is selected. */}
+            {!ollamaUntestable && testStatus === 'error' && (
               <span className="text-sm text-[var(--sc-danger-fg)] flex items-center gap-1">
                 <Icon name="error" size="sm" aria-hidden="true" />
                 {testError}

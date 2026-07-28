@@ -3,6 +3,7 @@ import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
+import { ecoModeService } from '../services/ai/ecoModeService';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { checkStorageHealth } from '../services/dbInitialization';
 import {
@@ -18,6 +19,7 @@ import type { Character, StorySection, World } from '../types';
 import { isAnalyticsPersistenceAllowed } from './analyticsGate';
 import type { AppDispatch, RootState } from './store';
 import { appStoreRef } from './storeRef';
+import { useTransientUiStore } from './transientUiStore';
 
 type ProjectStateWithHistory = {
   present?: { data?: ProjectData };
@@ -565,9 +567,11 @@ listenerMiddleware.startListening({
   },
   effect: async (_action, listenerApi) => {
     const state = listenerApi.getState() as RootState;
-    const { manuscriptPinnedBinderNodeId, setManuscriptPinnedBinderNodeId } = (
-      await import('./transientUiStore')
-    ).useTransientUiStore.getState();
+    // QNBS-v3: static import — transientUiStore is already statically imported by many components
+    // (BinderPanel, ExportView, etc.), so the prior dynamic import() never actually code-split it;
+    // Rolldown flagged it as dead weight with no chunking benefit.
+    const { manuscriptPinnedBinderNodeId, setManuscriptPinnedBinderNodeId } =
+      useTransientUiStore.getState();
     if (!manuscriptPinnedBinderNodeId) return;
 
     const nodes = state.project?.present?.data?.binderNodes ?? [];
@@ -594,7 +598,9 @@ listenerMiddleware.startListening({
     const { setActiveAiMode } = await import('../services/ai/aiModeService');
     setActiveAiMode(mode);
     // QNBS-v3: Bridge eco mode — keeps voice/adaptive-AI/GpuMetricsPanel consumers in sync.
-    const { ecoModeService } = await import('../services/ai/ecoModeService');
+    // Static import (unlike aiModeService above): ecoModeService is already statically imported
+    // elsewhere (GpuMetricsPanel, useAdaptiveAi, useVoice), so its own dynamic import() never
+    // actually code-split it — Rolldown flagged it as dead weight with no chunking benefit.
     ecoModeService.setAiModeEco(mode === 'eco');
   },
 });

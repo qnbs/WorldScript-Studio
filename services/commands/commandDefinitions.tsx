@@ -5,6 +5,7 @@ import { projectActions } from '../../features/project/projectSlice';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
 import { isCircuitOpen, resetOpenRouterCircuit } from '../ai/providers/openrouterProvider';
+import { startSpotlightTour } from '../spotlightTour';
 import type { CommandDefinition, CommandRuntimeDeps } from './commandTypes';
 
 const SparkIcon = () => (
@@ -631,10 +632,11 @@ export function getStaticCommandDefinitions(): CommandDefinition[] {
       titleKey: 'help.tryTour',
       keywords: ['tour', 'onboarding', 'spotlight'],
       icon: iconBtn(ICONS.LIGHTNING_BOLT),
+      // QNBS-v3: static import — App.tsx already statically imports spotlightTour (driver.js) for
+      // the first-run auto-tour effect, so the prior dynamic import() here never actually kept it
+      // out of the eager bundle; Rolldown flagged it as dead weight with no chunking benefit.
       run: (deps) => {
-        void import('../../services/spotlightTour').then(({ startSpotlightTour }) => {
-          startSpotlightTour(deps.t, 'default');
-        });
+        startSpotlightTour(deps.t, 'default');
       },
     },
   ];
