@@ -53,6 +53,20 @@ ref.current.innerHTML = DOMPurify.sanitize(html);
 - When you refactor code that allows removing a suppression, remove it and run `node scripts/check-suppressions.mjs --update` to ratchet the baseline down.
 - The CI gate prints a per-rule breakdown; use `node scripts/check-suppressions.mjs --details` for a per-file breakdown.
 
+### Suppression Reduction Plan
+
+The baseline sits at **52/52 — no headroom**; any new suppression fails the gate outright. `lint/suspicious/noExplicitAny` is the largest single rule (33 of 52, across 20 test files — all in `tests/unit/`, none in application code). Grouped by cluster:
+
+| Cluster | Files | Count | Effort |
+|---|---|---|---|
+| Voice/WASM browser-API mocking | `tests/unit/voice/wasmSttEngine.test.ts` (7), `tests/unit/voice/sttEngine.test.ts` (4) | 11 | High — these mock `MediaRecorder`/constructor-style globals and reach into private test internals; a properly-typed mock would need real `MediaRecorder`/Worker type shims, not a quick fix. |
+| `useAppSelector`/`useAppSelectorShallow` mock casts | 10 files per the existing convention note in [`tests/CLAUDE.md`](../tests/CLAUDE.md) (e.g. `tests/unit/SceneBoardView.test.tsx`) | ~10 | Medium — `tests/CLAUDE.md` already identifies the fix: one shared, properly-typed helper (`(selector: (s: RootState) => unknown) => selector(mockState as RootState)`) replacing all 10 call sites removes this whole cluster in one dedicated PR. |
+| Voice service test mocks | `tests/unit/services/voice/voiceDownloadAndIntent.test.ts` (2), `voiceCommandService.test.ts` (2), `voiceActivityCoordinator.test.ts` (1) | 5 | Medium — similar shape to the browser-API cluster above, smaller scope per file. |
+| Single-occurrence hook/thunk mocks | `useSceneBoardView`, `useProForgeOrchestrator`, `usePlotBoardAi`, `useAdaptiveAi`, `interviewThunks`, `loraThunks` tests, etc. (1 each) | ~8 | Low-Medium — each is an isolated mock-typing gap; fix opportunistically when touching that test file rather than as a dedicated sweep. |
+| Remaining rules (`useExhaustiveDependencies` 6, `useSemanticElements` 5, `noDangerouslySetInnerHtml` 2, `useArrowFunction` 2, `noThenProperty` 1, `useAriaPropsSupportedByRole` 1, `noEmptyPattern` 1, `noConstructorReturn` 1) | Scattered across `App.tsx`, `components/`, `hooks/` | 19 | Low — each is a one-off, case-by-case judgment call already documented inline at the suppression site. |
+
+No code changes in this pass — this section exists purely to make the debt visible instead of it silently accumulating one suppression at a time, the state it was in before this table existed. The actual paydown is separate, future work.
+
 ---
 
 ## Security-sensitive coding patterns

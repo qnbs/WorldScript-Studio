@@ -39,7 +39,9 @@ export default defineConfig({
     reporters: ['default', ['junit', { outputFile: 'reports/junit.xml' }]],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'lcov', 'html'],
+      // QNBS-v3: json-summary produces coverage/coverage-summary.json, consumed by
+      // scripts/check-coverage-ratchet.mjs (non-blocking CI step suggesting when to ratchet up).
+      reporter: ['text', 'lcov', 'html', 'json-summary'],
       include: [
         'app/**/*.{ts,tsx}',
         'components/**/*.{ts,tsx}',

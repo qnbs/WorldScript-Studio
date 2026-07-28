@@ -15,7 +15,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 | Tier | Where | Commands / scope |
 |------|--------|------------------|
 | **Quick (local)** | Developer laptop | `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`; optional `pnpm exec vitest run` **without** `--coverage` for a fast smoke |
-| **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Stryker (informational), Storybook static build, bundle budget + analyze |
+| **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Storybook static build, bundle budget + analyze. Mutation testing (Stryker) is **not** part of this pipeline — see [Mutation testing status](#mutation-testing-status). |
 
 **Merge readiness:** A green workflow run on the PR/branch matters more than reproducing every E2E or LHCI step locally. Use CI **artifacts** (Playwright HTML report, coverage, Lighthouse output) to debug failures.
 
@@ -73,26 +73,48 @@ Each job that uses the composite must call `actions/checkout@v6` first (local co
 ```text
 security ──► quality ──┬──► build ──┬──► lighthouse
                        ├──► e2e     └──► vrt
-                       ├──► storybook
-                       └──► mutation (Stryker; informational score gate)
+                       └──► storybook
 
 build (main, non-PR) ──► upload-pages-artifact
 deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 ```
 
+Mutation testing (Stryker) is **not** in this graph — it runs only via manual `workflow_dispatch` on [`mutation.yml`](../.github/workflows/mutation.yml). See [Mutation testing status](#mutation-testing-status).
+
 | Job | Needs | Purpose |
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
-| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run parity:check`**, `tsc`, Vitest + coverage, Codecov (optional token), coverage artifact |
+| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run parity:check`**, `tsc`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation** |
 | `e2e` | `quality` | Playwright **Chromium** + **Mobile Chrome** (Pixel 5) — `CI=true`, 2× retries, 50 min timeout; browser cache via `actions/cache@v5`. Firefox optional locally. `PLAYWRIGHT_SKIP_VRT=true` (VRT is its own job). |
-| `mutation` | `quality` | **`pnpm run mutation`** if `stryker.conf.json` exists; **`break: 75`** → score <75% fails the job (timeout at 20 min is expected on shared runners — not a blocker for deploy) |
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--max-workers=2 --retries=3 --screenshot-on-failure`; artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
 | `vrt` | `build` | Visual regression against production `dist`; `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium); artifacts uploaded always |
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
+
+---
+
+## Mutation testing status
+
+Stryker was removed from the `quality` job on **2026-06-02** — it ran as a flaky, non-gating check
+that added noise to every PR without blocking anything (see the `QNBS-v3` comment above the `build`
+job in [`ci.yml`](../.github/workflows/ci.yml)). It now runs **only** via manual trigger:
+
+```bash
+gh workflow run mutation.yml
+```
+
+`mutation.yml` is `workflow_dispatch`-only — it never runs automatically on push or PR. This means
+the mutation score is **not continuously tracked**; it's a point-in-time snapshot whenever someone
+runs it manually. [`stryker.conf.json`](../stryker.conf.json) still defines the thresholds
+(`break: 75`, `high: 85`, `low: 70`) that would apply if it ran.
+
+**Re-integration criterion:** bring it back into the `quality` job (or a separate required check)
+once a manual run demonstrates the flakiness is resolved — concretely, three consecutive manual
+`workflow_dispatch` runs on `main` completing without a spurious failure or timeout, at the current
+40-target mutate scope. Until then, treat a manual run's score as informational only, not a gate.
 
 ---
 
