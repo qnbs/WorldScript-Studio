@@ -224,12 +224,19 @@ jobs:
           retention-days: 3
 
       # QNBS-v3: SLSA provenance attestation — ties the dist artifact to this exact
-      # workflow run and commit SHA; verifiable with `gh attestation verify`.
+      # workflow run and commit SHA; verifiable with `gh attestation verify`. Excludes
+      # woff/woff2 — self-hosted CJK fonts (@fontsource noto-sans-jp/kr/sc) ship ~2.2k
+      # unicode-range subset files, pushing dist past the action's 1024-subject cap.
+      # Fonts are vendored static assets, not application code, so attesting the app
+      # bundle (JS/CSS/HTML/JSON/wasm/etc.) without them still covers what matters.
       - name: Attest build provenance
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
-          subject-path: ./dist
+          subject-path: |
+            dist/**
+            !dist/**/*.woff
+            !dist/**/*.woff2
 
       - name: Setup Pages
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
