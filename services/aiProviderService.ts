@@ -726,21 +726,60 @@ export async function scanLocalOpenAiCompatibleEndpoints(): Promise<LocalEndpoin
   );
 }
 
+/**
+ * Stable, i18n-mappable classification of a connection-test failure across ALL providers. `error`
+ * stays a raw/technical string for logs; UI code should prefer `kind` (+ `params` for
+ * interpolation) to render a localized message via `settings.ai.testError.*`
+ * (`locales/<lang>/settings.json`) — falling back to `error` only when `kind` is absent.
+ */
+export type TestConnectionErrorKind =
+  | 'noApiKey'
+  | 'httpError'
+  | 'timeout'
+  | 'unreachable'
+  | 'pluginUnavailable'
+  | 'desktopRequired'
+  | 'backendProxyRequired'
+  | 'noWebgpu'
+  | 'unknownProvider'
+  | 'unexpected';
+
+export interface TestConnectionResult {
+  ok: boolean;
+  error?: string;
+  kind?: TestConnectionErrorKind;
+  params?: Record<string, string | number>;
+}
+
 export async function testAIConnection(
   provider: AIProvider,
   opts: Partial<AIRequestOptions>,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<TestConnectionResult> {
   try {
     switch (provider) {
       case 'openai': {
         const apiKey = await storageService.getApiKey('openai');
-        if (!apiKey) return { ok: false, error: 'Kein OpenAI API Key gesetzt' };
+        if (!apiKey) {
+          return {
+            ok: false,
+            error: 'Kein OpenAI API Key gesetzt',
+            kind: 'noApiKey',
+            params: { provider: 'OpenAI' },
+          };
+        }
         const root = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
         const res = await fetch(`${root}/models`, {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),
         });
-        if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+        if (!res.ok) {
+          return {
+            ok: false,
+            error: `HTTP ${res.status}`,
+            kind: 'httpError',
+            params: { status: res.status },
+          };
+        }
         return { ok: true };
       }
       case 'ollama': {
@@ -748,10 +787,14 @@ export async function testAIConnection(
         // desktop Ollama (localhost) path was unreachable there.
         const isDesktop = isTauriRuntime();
         if (!isDesktop) {
+          // QNBS-v3 (ADR-0012): browsers block localhost via CORS/Private Network Access, NOT CSP
+          // — this repo's CSP already allowlists localhost (docs/adr/0004). Matches the corrected
+          // settings.ai.ollamaDesktopOnlyBody wording from #269; this hard-gate string had drifted.
           return {
             ok: false,
             error:
-              'Ollama is only available in the desktop app. The browser Content Security Policy blocks direct connections to localhost.',
+              'Ollama and local OpenAI-compatible servers are only available in the desktop app. Browsers block direct connections from web pages to localhost (CORS and Private Network Access).',
+            kind: 'desktopRequired',
           };
         }
         return testOllamaConnection(opts.ollamaBaseUrl);
@@ -760,25 +803,54 @@ export async function testAIConnection(
         return {
           ok: false,
           error: 'Claude requires a backend proxy (CORS restriction)',
+          kind: 'backendProxyRequired',
         };
       case 'grok': {
         const apiKey = await storageService.getApiKey('grok');
-        if (!apiKey) return { ok: false, error: 'Kein Grok API Key gesetzt' };
+        if (!apiKey) {
+          return {
+            ok: false,
+            error: 'Kein Grok API Key gesetzt',
+            kind: 'noApiKey',
+            params: { provider: 'Grok' },
+          };
+        }
         const res = await fetch('https://api.x.ai/v1/models', {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),
         });
-        if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+        if (!res.ok) {
+          return {
+            ok: false,
+            error: `HTTP ${res.status}`,
+            kind: 'httpError',
+            params: { status: res.status },
+          };
+        }
         return { ok: true };
       }
       case 'gemini': {
         const geminiKey = await storageService.getGeminiApiKey();
-        if (!geminiKey) return { ok: false, error: 'No Gemini API key set' };
+        if (!geminiKey) {
+          return {
+            ok: false,
+            error: 'No Gemini API key set',
+            kind: 'noApiKey',
+            params: { provider: 'Gemini' },
+          };
+        }
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`,
           { signal: AbortSignal.timeout(8000) },
         );
-        if (!res.ok) return { ok: false, error: `Gemini API: HTTP ${res.status}` };
+        if (!res.ok) {
+          return {
+            ok: false,
+            error: `Gemini API: HTTP ${res.status}`,
+            kind: 'httpError',
+            params: { status: res.status },
+          };
+        }
         return { ok: true };
       }
       case 'webllm':
@@ -788,6 +860,7 @@ export async function testAIConnection(
               ok: false,
               error:
                 'WebGPU unavailable in this browser — WebLLM needs WebGPU (try Chrome/Edge or enable flags).',
+              kind: 'noWebgpu',
             };
       case 'onnx':
         // QNBS-v3: ONNX Runtime Web uses WASM — always available, no GPU required.
@@ -796,12 +869,15 @@ export async function testAIConnection(
         // QNBS-v3: Transformers.js uses WASM/WebGPU — connection test is always ok; model loads on first use.
         return { ok: true };
       default:
-        return { ok: false, error: 'Unknown provider' };
+        return { ok: false, error: 'Unknown provider', kind: 'unknownProvider' };
     }
   } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: message,
+      kind: 'unexpected',
+      params: { message },
     };
   }
 }

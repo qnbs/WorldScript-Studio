@@ -86,6 +86,8 @@ describe('testOllamaConnection', () => {
     const result = await testOllamaConnection();
     expect(result.ok).toBe(false);
     expect(result.error).toContain('503');
+    expect(result.kind).toBe('httpError');
+    expect(result.params).toEqual({ status: 503 });
   });
 
   it('returns ok:false with error message on network failure', async () => {
@@ -94,6 +96,14 @@ describe('testOllamaConnection', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('localhost:11434');
     expect(result.error).toContain('Connection refused');
+    expect(result.kind).toBe('unreachable');
+    // QNBS-v3: `message` here is localServerFetch's already-classified LocalServerError message
+    // (it wraps the raw fetch rejection before testOllamaConnection's catch ever sees it), not
+    // the original raw "Connection refused" string.
+    expect(result.params).toEqual({
+      url: 'http://localhost:11434',
+      message: 'Local server not reachable (http://localhost:11434/api/tags): Connection refused',
+    });
   });
 
   it('classifies a TimeoutError-shaped rejection as a timeout (#266)', async () => {
@@ -102,6 +112,8 @@ describe('testOllamaConnection', () => {
     const result = await testOllamaConnection('http://localhost:11434');
     expect(result.ok).toBe(false);
     expect(result.error).toContain('timed out');
+    expect(result.kind).toBe('timeout');
+    expect(result.params).toEqual({ url: 'http://localhost:11434' });
   });
 
   it('surfaces a plugin_unavailable LocalServerError distinctly, not as generic "not reachable"', async () => {
@@ -114,6 +126,8 @@ describe('testOllamaConnection', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toBe(pluginErr.message);
     expect(result.error).not.toContain('not reachable');
+    expect(result.kind).toBe('pluginUnavailable');
+    expect(result.params).toBeUndefined();
   });
 });
 

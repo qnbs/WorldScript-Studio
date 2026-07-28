@@ -17,7 +17,9 @@ export const GITHUB_PAGES_BASE = '/WorldScript-Studio/';
  * docs/adr/0012-local-server-connectivity-tauri-http.md).
  */
 export function isTauriBuild(env: Record<string, string | undefined> = process.env): boolean {
-  return env['TAURI_ENV_PLATFORM'] !== undefined || env['TAURI_PLATFORM'] !== undefined;
+  // QNBS-v3: require a trimmed, non-empty value — an empty-string env var (e.g. a CI matrix
+  // that sets TAURI_ENV_PLATFORM="" to "unset" it) must not be read as "Tauri build".
+  return Boolean(env['TAURI_ENV_PLATFORM']?.trim()) || Boolean(env['TAURI_PLATFORM']?.trim());
 }
 
 /**

@@ -101,7 +101,14 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         setTestStatus('ok');
       } else {
         setTestStatus('error');
-        setTestError(result.error ?? t('settings.ai.connectionFailed'));
+        // QNBS-v3: `kind` is a stable, i18n-mappable classification — prefer it over the raw
+        // `error` string (which is a technical/English message kept for logs) so every failure
+        // path across all providers renders localized text, not leaked English.
+        setTestError(
+          result.kind
+            ? t(`settings.ai.testError.${result.kind}`, result.params)
+            : (result.error ?? t('settings.ai.connectionFailed')),
+        );
       }
     } catch (e) {
       setTestStatus('error');

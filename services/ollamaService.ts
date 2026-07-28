@@ -149,29 +149,56 @@ export async function listOllamaModels(baseUrl?: string): Promise<string[]> {
   }
 }
 
-export async function testOllamaConnection(
-  baseUrl?: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const url = `${normalizeBaseUrl(baseUrl)}/api/tags`;
+/**
+ * Stable, i18n-mappable classification of a connection-test failure. `error` on the result stays
+ * a raw/technical string for logs; UI code should prefer `kind` (+ `params` for interpolation) to
+ * render a localized message, per `settings.ai.testError.*` in `locales/<lang>/settings.json`.
+ */
+export type TestConnectionErrorKind = 'httpError' | 'timeout' | 'unreachable' | 'pluginUnavailable';
+
+export interface TestConnectionResult {
+  ok: boolean;
+  error?: string;
+  kind?: TestConnectionErrorKind;
+  params?: Record<string, string | number>;
+}
+
+export async function testOllamaConnection(baseUrl?: string): Promise<TestConnectionResult> {
+  const resolvedUrl = normalizeBaseUrl(baseUrl);
+  const url = `${resolvedUrl}/api/tags`;
   try {
     const res = await localServerFetch(url, { timeoutMs: 5000 });
-    if (!res.ok) return { ok: false, error: `Ollama HTTP ${res.status}` };
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `Ollama HTTP ${res.status}`,
+        kind: 'httpError',
+        params: { status: res.status },
+      };
+    }
     return { ok: true };
   } catch (error: unknown) {
     // QNBS-v3 (#266): classified failures — distinguish a hanging server from a missing one.
     if (error instanceof LocalServerError && error.kind === 'timeout') {
-      return { ok: false, error: `Ollama timed out (${normalizeBaseUrl(baseUrl)})` };
+      return {
+        ok: false,
+        error: `Ollama timed out (${resolvedUrl})`,
+        kind: 'timeout',
+        params: { url: resolvedUrl },
+      };
     }
     // QNBS-v3: plugin_unavailable means the desktop HTTP transport itself failed to load — not
     // that Ollama is down. Surfacing it distinctly (rather than folding into "not reachable")
     // makes a future build-config regression immediately diagnosable from the UI alone.
     if (error instanceof LocalServerError && error.kind === 'plugin_unavailable') {
-      return { ok: false, error: error.message };
+      return { ok: false, error: error.message, kind: 'pluginUnavailable' };
     }
     const message = error instanceof Error ? error.message : String(error);
     return {
       ok: false,
-      error: `Ollama not reachable (${normalizeBaseUrl(baseUrl)}): ${message}`,
+      error: `Ollama not reachable (${resolvedUrl}): ${message}`,
+      kind: 'unreachable',
+      params: { url: resolvedUrl, message },
     };
   }
 }

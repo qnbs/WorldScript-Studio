@@ -10,7 +10,7 @@
 
 # LanguageTool Integration
 
-Privacy-first, **self-hosted-only** grammar/spell checking wired into the manuscript editor (`docs/LANGUAGETOOL.md`, `docs/adr/0010-languagetool-self-hosted.md`). Off by default via `settings.integrations.languageToolEnabled`. `services/languageToolClient.ts#assertLanguageToolAllowed` blocks any non-`localhost`/`127.0.0.1` base URL whenever `settings.privacy.localStorageOnly` is on, so manuscript text can never reach a cloud LanguageTool instance. `services/languageToolService.ts` never logs manuscript text and degrades silently to an empty result on network failure. Corrections apply offset-safe through `hooks/useLanguageToolCheck.ts` → `applyMatchReplacement` (redux-undo-wrapped); user dictionary persists in `settings.advancedEditor.customDictionary`.
+Privacy-first, **self-hosted-only** grammar/spell checking wired into the manuscript editor (`docs/LANGUAGETOOL.md`, `docs/adr/0010-languagetool-self-hosted.md`). Off by default via `settings.integrations.languageToolEnabled`. `services/languageToolClient.ts#assertLanguageToolAllowed` blocks any non-`localhost`/`127.0.0.1` base URL whenever `settings.privacy.localStorageOnly` is on, so manuscript text can never reach a cloud LanguageTool instance. `services/languageToolService.ts` never logs manuscript text — only match counts and a `status: 'ok' | 'offline' | 'error'` via `services/logger.ts#log.warn` — and returns an empty match list on network/HTTP failure rather than throwing, so a failed check never blocks typing. Corrections apply offset-safe through `hooks/useLanguageToolCheck.ts` → `applyMatchReplacement` (redux-undo-wrapped); user dictionary persists in `settings.advancedEditor.customDictionary`.
 
 # Cross-project & backup
 

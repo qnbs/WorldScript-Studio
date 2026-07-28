@@ -18,6 +18,13 @@ describe('isTauriBuild', () => {
     expect(isTauriBuild({})).toBe(false);
     expect(isTauriBuild({ VITE_BASE: '/foo', DEPLOY_TARGET: 'edge' })).toBe(false);
   });
+
+  it('is false for an empty-string or whitespace-only marker value (not a real platform)', () => {
+    expect(isTauriBuild({ TAURI_ENV_PLATFORM: '' })).toBe(false);
+    expect(isTauriBuild({ TAURI_ENV_PLATFORM: '   ' })).toBe(false);
+    expect(isTauriBuild({ TAURI_PLATFORM: '' })).toBe(false);
+    expect(isTauriBuild({ TAURI_PLATFORM: '   ' })).toBe(false);
+  });
 });
 
 describe('resolveViteBase', () => {
@@ -29,6 +36,10 @@ describe('resolveViteBase', () => {
 
   it('returns a relative base for the legacy Tauri 1.x env var (TAURI_PLATFORM)', () => {
     expect(resolveViteBase({ TAURI_PLATFORM: 'windows' })).toBe('./');
+  });
+
+  it('does not treat an empty-string TAURI_ENV_PLATFORM as a Tauri build', () => {
+    expect(resolveViteBase({ TAURI_ENV_PLATFORM: '' })).toBe(GITHUB_PAGES_BASE);
   });
 
   it('lets Tauri detection win over VITE_BASE and DEPLOY_TARGET', () => {
