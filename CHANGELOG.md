@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Local-AI reliability (desktop Ollama/LM Studio/vLLM discovery, misleading browser status badge),
 > the AI heuristic-fallback foundation + Outline/Character/World/Plot-Board generators, real
-> self-hosted LanguageTool integration, an 18-PR Dependabot backlog triage (AI SDK v4 family,
-> biome 2.5.x, dev-tooling/Babel 8, plus 15 straightforward bumps), the Issue #60 vendor-fork audit
+> self-hosted LanguageTool integration, a 20-PR Dependabot backlog triage (16 merged directly,
+> 4 closed as superseded after the AI SDK v4 family/biome 2.5.x/dev-tooling-Babel-8 blockers were
+> root-caused and fixed), the Issue #60 vendor-fork audit
 > closeout, and security/build hardening (`persist-credentials` CWE-522, `ltr`/`rtl` Tailwind fix,
 > 3 ineffective dynamic imports, 2 CWE-209 fixes).
 

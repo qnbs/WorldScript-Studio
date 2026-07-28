@@ -656,7 +656,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-06-16):**
+**Current test metrics (2026-07-28):**
 - **5807+ unit tests** across **525 test files** — all passing
 - Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
 - i18n: **2844 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)
