@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LocalServerError, localServerFetch } from '../../services/localServerHttp';
 import {
   listOllamaModels,
   type OllamaPullProgress,
@@ -6,6 +7,15 @@ import {
   streamOllama,
   testOllamaConnection,
 } from '../../services/ollamaService';
+
+// QNBS-v3: real implementation by default (all other tests drive it via the stubbed global
+// fetch); only the plugin_unavailable test below overrides it directly, since that error
+// originates in resolveFetch() BEFORE localServerFetch's own try/catch — mocking global fetch
+// can't reproduce it (localServerFetch would just re-wrap it as a generic 'unreachable').
+vi.mock('../../services/localServerHttp', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/localServerHttp')>();
+  return { ...actual, localServerFetch: vi.fn(actual.localServerFetch) };
+});
 
 /** Build a streaming NDJSON Response (one JSON object per line) for /api/pull mocks. */
 function ndjsonResponse(objects: object[], status = 200): Response {
@@ -76,6 +86,8 @@ describe('testOllamaConnection', () => {
     const result = await testOllamaConnection();
     expect(result.ok).toBe(false);
     expect(result.error).toContain('503');
+    expect(result.kind).toBe('httpError');
+    expect(result.params).toEqual({ status: 503 });
   });
 
   it('returns ok:false with error message on network failure', async () => {
@@ -84,6 +96,10 @@ describe('testOllamaConnection', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('localhost:11434');
     expect(result.error).toContain('Connection refused');
+    expect(result.kind).toBe('unreachable');
+    // QNBS-v3 (CodeAnt CWE-209): the raw technical message stays in `error` (for logs) only —
+    // `params` must never carry it, since it's interpolated into the user-facing i18n string.
+    expect(result.params).toEqual({ url: 'http://localhost:11434' });
   });
 
   it('classifies a TimeoutError-shaped rejection as a timeout (#266)', async () => {
@@ -92,6 +108,22 @@ describe('testOllamaConnection', () => {
     const result = await testOllamaConnection('http://localhost:11434');
     expect(result.ok).toBe(false);
     expect(result.error).toContain('timed out');
+    expect(result.kind).toBe('timeout');
+    expect(result.params).toEqual({ url: 'http://localhost:11434' });
+  });
+
+  it('surfaces a plugin_unavailable LocalServerError distinctly, not as generic "not reachable"', async () => {
+    const pluginErr = new LocalServerError(
+      'plugin_unavailable',
+      'Local server networking is unavailable: the desktop HTTP plugin failed to load.',
+    );
+    vi.mocked(localServerFetch).mockRejectedValueOnce(pluginErr);
+    const result = await testOllamaConnection('http://localhost:11434');
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe(pluginErr.message);
+    expect(result.error).not.toContain('not reachable');
+    expect(result.kind).toBe('pluginUnavailable');
+    expect(result.params).toBeUndefined();
   });
 });
 

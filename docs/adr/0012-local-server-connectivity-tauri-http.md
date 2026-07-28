@@ -100,3 +100,32 @@ modes were reported in #266:
 - **Allow PWA status-only probing with Private Network Access permission** — rejected (product
   decision): keeps CORS noise possible, adds a second-class UX path, and conflicts with the
   privacy-first "desktop-only" policy for localhost servers.
+
+## Update (2026-07-28): build-pipeline gap left the desktop path broken in packaged builds
+
+This ADR's decision (route local-server HTTP through `@tauri-apps/plugin-http`) was correct, but
+the packaged desktop build never actually exercised it. `vite.config.ts`'s `rollupOptions.external`
+unconditionally externalized every `@tauri-apps/*` package from **every** `vite build`, including
+the exact build Tauri's `beforeBuildCommand` invokes to produce the `.deb`/`.msi`. Since
+`services/localServerHttp.ts`'s `@tauri-apps/plugin-http` import is dynamic (`await import(...)`),
+externalizing it left an unresolvable bare module specifier in the shipped bundle — confirmed with
+a real build + real-Chromium repro, producing `TypeError: Failed to resolve module specifier
+'@tauri-apps/plugin-http'` the instant `resolveFetch()` ran, before any network request. Every
+caller's catch classified this identically to a genuinely-down server, matching the exact symptom
+reported on issue #266 after #269 merged: no CORS console noise (nothing reached the network
+layer), and no Ollama/LM Studio discovery despite both running.
+
+Root cause: `resolveViteBase.ts` already had the right Tauri-vs-web build detection (via
+`TAURI_ENV_PLATFORM`/`TAURI_PLATFORM`), used for the `base` config, but `rollupOptions.external`
+was never given the same treatment. `tauri dev` was unaffected (Vite's dev server doesn't apply
+`rollupOptions`), so the regression only surfaced in packaged builds — and the unit test suite
+mocks `@tauri-apps/plugin-http` via `vi.mock`, which bypasses real module resolution entirely and
+structurally cannot catch this class of bug.
+
+Fix: extracted the Tauri-build check into a shared `isTauriBuild()` export in `resolveViteBase.ts`
+and made `rollupOptions.external` conditional on it — the desktop build now bundles
+`@tauri-apps/plugin-http` correctly; the web/PWA build is unaffected (those code paths are gated
+by `isTauriRuntime()` and never exercised there). `services/localServerHttp.ts`'s `resolveFetch()`
+also now wraps the dynamic import in its own try/catch, classifying a load failure as a distinct
+`LocalServerError('plugin_unavailable')` and logging it, so a future regression of this class fails
+loudly and distinctly instead of silently misclassifying as "unreachable."

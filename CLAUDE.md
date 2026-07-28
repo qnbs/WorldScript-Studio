@@ -6,15 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Low-End Local Hardware (Current Environment)
 
-**ONE Bash tool call per turn.** Concurrent shells (vitest, biome, tsc, vite, pnpm build) cause OOM and pool-worker timeouts.
-- ONE Bash tool call per turn. Wait for the result. Then proceed.
-- NO `run_in_background` for vitest, biome, tsc, vite, or any pnpm build command.
-- NO parallel Agent tool calls that each issue shell commands.
-- NO multiple Bash tool calls in the same response block.
-- Chain sequential steps inside ONE Bash call using `&&` if needed.
-- DevContainer / Codespaces configuration has been removed; this is a local-only development environment.
-
-**Plan-mode exception — parallel exploration IS allowed.** The OOM risk is from concurrent *heavy shells* (vitest/biome/tsc/vite/build), not from read-only exploration. In **plan mode** (read-only research, no builds), you SHOULD launch parallel `Explore`/`Plan` subagents to map the codebase faster — these read files and run light `grep`/`ls`, which is safe. The ONE-Bash-per-turn rule still governs the **main loop's own heavy commands** at all times, and parallel agents must not each kick off vitest/biome/tsc/vite/build. Outside plan mode (implementation), keep agent spawns sequential when they issue heavy shells.
+Shell-execution rules (one Bash call per turn, no parallel heavy shells, plan-mode exception) live in the user-global `~/.claude/CLAUDE.md` and apply here. Project-specific addition: DevContainer / Codespaces configuration has been removed; this is a local-only development environment.
 
 ## Commands
 
@@ -77,8 +69,6 @@ Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 ## Architecture
 
 WorldScript Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest.
-
-**Stack:** React 19, TypeScript (strict), Vite 8, Tailwind CSS 4.x, Redux Toolkit 2.x, pnpm 11, Node ≥ 22. Four internal workspace packages (`@domain/ai-core`, `@domain/ui`, `collab-transport`, `@domain/worker-bus` in `packages/`) are consumed as `workspace:*` deps.
 
 **Live:** `https://worldscript-studio.vercel.app/` (Vercel, primary) · GitHub Pages: `https://qnbs.github.io/WorldScript-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
 
@@ -194,6 +184,8 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 **Prompt assembly:** `services/ragPromptAssembly.ts` — `assembleRAGPrompt(opts)`. Templates from `services/promptLibrary.ts`.
 
+**Heuristic-fallback layer:** `services/ai/heuristicFallback/` — when every provider in the chain fails terminally (offline, quota, Eco/Heuristics-only mode), `aiProviderService` calls `applyHeuristicFallback(task, ctx)` (`seam.ts`) before falling through to the generic local stub. It looks up a per-feature generator in `registry.ts` (keyed by task id: `outline`, `character.profile`, `world.profile`, `plotBoard.beat`) and builds a `HeuristicFallbackResult` from existing project data — no network call. Returns `null` when no generator is registered for a task, so wiring a new call site is always non-breaking. Generators self-register via `registerHeuristicGenerator(task, fn)` at module load (mirrors the `services/copilot/heuristicEngine.ts` pluggable-rule pattern). `useHeuristicFallback()` + `<AssistedModeBadge>` surface an "Assisted (offline)" badge wherever a result came from this layer; events also feed `telemetryService` as `backend: 'heuristic'`.
+
 ### DuckDB Analytics
 
 `workers/duckdbWorker.ts` off main thread (OPFS → in-memory fallback). `duckdbClient.ts`: singleton, init retry 3× backoff. Schema: 10 tables + 5 views incl. `rag_chunks` (FLOAT[384]). Gate all paths behind `enableDuckDbAnalytics`. Dual-write via `duckdbListenerLoader.ts` (dynamically imported). `ragVectorMigration.ts`: FLOAT[64]→FLOAT[384] upgrade. `useDuckDb.ts` 30s timeout; `useAnalytics.ts` parallelizes 4 queries.
@@ -248,7 +240,7 @@ Production uses **rolldown** (not esbuild/rollup); CI E2E runs `vite dev` — pr
 
 Experimental features are gated behind `features/featureFlags/featureFlagsSlice.ts` (**22 flags**). New installs get the **full feature set**: all flags default **on** except six user-opt-in flags. `enableCodexAutoTracking` + `enableCrossProjectSearch` were promoted to permanent core behaviour (v1.20 / v1.8); `enablePlotBoardV2` and `enableCloudSync` were retired — none of those four remain in the slice. UI: Settings → Experimental flags (`FeatureFlagsSection.tsx`). Do not use scattered `if (true)` hacks.
 
-**Default on (17):** `enableStoryBibleAdvanced`, `enableBinderResearch`, `enableCompileWizard`, `enableProjectHealthScore`, `enableAppHealthPanel`, `enableDuckDbAnalytics`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`, `enableLoraAdapters`, `enablePluginSystem`, `enableIdbAtRestEncryption` (B-1, passphrase UX complete — Settings › Privacy), `enableAdaptiveAiEngine`, `enableWebnnInference`, `enableComputeShaders`, `enableWorkerBusV2`, `enableRustCompute`. **User opt-in — default off (6):** `enableProForge` (experimental, token-heavy 8-stage agentic pipeline — flipped to opt-in in v1.24 post-release), `enableVoiceSupport` (requires browser mic permission), `enableVoiceWasm` (B-2, ~57 MB Whisper download), `enableGlobalCopilot` (ambient AI), `enableRtlLayout` (B-5, ar/he stubs only), `enableLocalFirstSync` (shadow Yjs projection, ADR-0008; Redux stays SoT). The Settings UI groups these by catalog tier; `features/featureCatalog.ts` **derives** each flag's `defaultOn` from the slice (no hand-keyed drift). Note: `enableCloudSync` was **retired** in v1.20 (no UI shipped; `CloudSyncBackend.create()` requires explicit-consent boolean instead).
+**Default on (16):** `enableStoryBibleAdvanced`, `enableBinderResearch`, `enableCompileWizard`, `enableProjectHealthScore`, `enableAppHealthPanel`, `enableDuckDbAnalytics`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`, `enableLoraAdapters`, `enablePluginSystem`, `enableIdbAtRestEncryption` (B-1, passphrase UX complete — Settings › Privacy), `enableAdaptiveAiEngine`, `enableComputeShaders`, `enableWorkerBusV2`, `enableRustCompute`. **User opt-in — default off (6):** `enableProForge` (experimental, token-heavy 8-stage agentic pipeline — flipped to opt-in in v1.24 post-release), `enableVoiceSupport` (requires browser mic permission), `enableVoiceWasm` (B-2, ~57 MB Whisper download), `enableGlobalCopilot` (ambient AI), `enableRtlLayout` (B-5, ar/he stubs only), `enableLocalFirstSync` (shadow Yjs projection, ADR-0008; Redux stays SoT). The Settings UI groups these by catalog tier; `features/featureCatalog.ts` **derives** each flag's `defaultOn` from the slice (no hand-keyed drift). Note: `enableCloudSync` was **retired** in v1.20 (no UI shipped; `CloudSyncBackend.create()` requires explicit-consent boolean instead).
 
 ### Command Center & shortcuts
 
@@ -407,7 +399,7 @@ Reference plugins: `wordCountOverlay.plugin.ts`, `sceneAppender.plugin.ts`. Gate
 
 ### Virtual scrolling
 
-`NavigatorPanel.tsx` uses `useVirtualizer` (`@tanstack/react-virtual`): scrollable `<ul ref={scrollRef}>` + `position: relative`; sentinel `<li>` sets `height: totalSize`; items `position: absolute, transform: translateY(start)`. Items need `data-index` + `ref={measureElement}`. Use `estimateSize: () => 40, overscan: 3`. Never lift `overflow-y: auto` into a parent.
+Feature-specific implementation patterns (Plot Board, ProForge Pipeline, scene-level services, LanguageTool, test mock patterns, Settings Navigation, cross-project & backup, Global AI Copilot, Voice Full Support, local inference, Plugin System, Cloud Sync, LoRA Adapter Inference, virtual scrolling) now live in nested `CLAUDE.md` files, loaded automatically only when working under that directory: `features/plotBoard/`, `services/proForge/`, `services/`, `tests/`, `components/`, `services/copilot/`, `services/voice/`, `services/cloudSync/`, `features/lora/`.
 
 ## Known Technical Debt
 
