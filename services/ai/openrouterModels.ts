@@ -38,7 +38,7 @@ interface CacheEntry {
   // QNBS-v3: Whether this catalog was fetched with an API key. Buckets the cache by credential
   // scope (anonymous vs. authenticated) so an anonymous catalog is never served to an authenticated
   // request, and vice-versa. A plain boolean — NO key-derived material is ever written to storage.
-  authed?: boolean;
+  authed?: boolean | undefined;
 }
 
 function isBrowser(): boolean {
@@ -73,7 +73,7 @@ function readCache(expectedAuthed: boolean): CacheEntry | null {
     const normalized = (parsed.models as unknown[])
       .map(normalizeModel)
       .filter((m): m is OpenRouterModel => m !== null);
-    return { fetchedAt: parsed.fetchedAt, models: normalized };
+    return { fetchedAt: parsed.fetchedAt, models: normalized, authed: parsed.authed };
   } catch {
     return null;
   }
@@ -220,4 +220,15 @@ export function clearOpenRouterModelCache(): void {
 
 export function isOpenRouterFreeModel(modelId: string): boolean {
   return modelId.endsWith(':free');
+}
+
+/**
+ * Test-only accessor for the private readCache(). `authed` isn't read by any current caller of
+ * fetchOpenRouterModels() (only `.models` is used), so the OR-6 fix — readCache() returning the
+ * full CacheEntry instead of silently dropping `authed` — has no behavior observable through the
+ * public API. Exposed here (matching the __*ForTest convention in providers/openrouterProvider.ts)
+ * so the round-trip can still be asserted directly.
+ */
+export function __readCacheForTest(expectedAuthed: boolean): CacheEntry | null {
+  return readCache(expectedAuthed);
 }

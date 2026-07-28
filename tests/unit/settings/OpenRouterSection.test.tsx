@@ -4,7 +4,7 @@
  * circuit reset, and cloud AI policy gating.
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,7 +60,7 @@ vi.mock('../../../services/ai/openrouterModels', () => ({
 vi.mock('../../../services/ai/providers/openrouterProvider', () => ({
   getApproxRpm: () => 0,
   isCircuitOpen: () => mocks.isCircuitOpen(),
-  OPENROUTER_FREE_MODELS: [
+  OPENROUTER_FREE_MODEL_FALLBACK: [
     'deepseek/deepseek-r1:free',
     'meta-llama/llama-3.3-70b-instruct:free',
     'qwen/qwen2.5-72b-instruct:free',
@@ -356,5 +356,82 @@ describe('OpenRouterSection', () => {
     const user = userEvent.setup();
     await user.click(resetBtn);
     expect(mocks.resetCircuit).toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // WS-4: live catalog derives the free-tier group (OR-1..OR-5 regressions)
+  // ---------------------------------------------------------------------------
+
+  it('shows a live-fetched free model that is not in the offline fallback list (OR-1 regression)', async () => {
+    mocks.settingsState.openRouter = { enabled: false, preferredModel: 'brand-new/model:free' };
+    mocks.fetchModels.mockResolvedValue([
+      { id: 'brand-new/model:free', name: 'Brand New Model (free)' },
+    ]);
+    render(<OpenRouterSection />);
+    const select = await waitFor(() => screen.getByLabelText('settings.openRouter.modelAriaLabel'));
+    await waitFor(() => {
+      expect(within(select).getByText('Brand New Model (free)')).toBeInTheDocument();
+    });
+  });
+
+  it('selectValue matches a live-fetched free model instead of falling back to custom (OR-3 regression)', async () => {
+    mocks.settingsState.openRouter = { enabled: false, preferredModel: 'brand-new/model:free' };
+    mocks.fetchModels.mockResolvedValue([
+      { id: 'brand-new/model:free', name: 'Brand New Model (free)' },
+    ]);
+    render(<OpenRouterSection />);
+    const select = (await waitFor(() =>
+      screen.getByLabelText('settings.openRouter.modelAriaLabel'),
+    )) as HTMLSelectElement;
+    await waitFor(() => {
+      expect(select.value).toBe('brand-new/model:free');
+    });
+    // A matched, non-custom model must not show the free-form custom input.
+    expect(
+      screen.queryByLabelText('settings.openRouter.customModelAriaLabel'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('falls back to the offline list and shows a notice when the live catalog fetch fails', async () => {
+    mocks.fetchModels.mockRejectedValue(new Error('network down'));
+    render(<OpenRouterSection />);
+    await waitFor(() => {
+      expect(screen.getByText('settings.openRouter.freeModel.fallbackNotice')).toBeInTheDocument();
+    });
+    const select = screen.getByLabelText('settings.openRouter.modelAriaLabel');
+    expect(
+      within(select).getByText('settings.openRouter.freeModel.deepseekR1'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a stale-model warning and offers a one-click switch when preferredModel is missing from a successfully fetched catalog (OR-2 regression)', async () => {
+    mocks.settingsState.openRouter = { enabled: false, preferredModel: 'now-gone/model:free' };
+    mocks.fetchModels.mockResolvedValue([
+      { id: 'still-here/model:free', name: 'Still Here (free)' },
+    ]);
+    const user = userEvent.setup();
+    render(<OpenRouterSection />);
+    await waitFor(() => {
+      expect(screen.getByText('settings.openRouter.modelUnavailable')).toBeInTheDocument();
+    });
+    await user.click(screen.getByText('settings.openRouter.switchToAvailableModel'));
+    expect(mocks.dispatch).toHaveBeenCalledWith(
+      settingsActions.setOpenRouter({ preferredModel: 'still-here/model:free' }),
+    );
+  });
+
+  it('refresh button clears the cache and re-fetches the catalog', async () => {
+    const user = userEvent.setup();
+    render(<OpenRouterSection />);
+    await waitFor(() => screen.getByLabelText('settings.openRouter.modelAriaLabel'));
+    mocks.clearCache.mockClear();
+    mocks.fetchModels.mockClear();
+    await user.click(
+      screen.getByRole('button', { name: 'settings.openRouter.refreshModelsAriaLabel' }),
+    );
+    await waitFor(() => {
+      expect(mocks.clearCache).toHaveBeenCalled();
+      expect(mocks.fetchModels).toHaveBeenCalled();
+    });
   });
 });
