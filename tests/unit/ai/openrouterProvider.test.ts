@@ -12,7 +12,7 @@ import {
   getApproxRpm,
   isCircuitOpen,
   isOpenRouterFreeModel,
-  OPENROUTER_FREE_MODELS,
+  OPENROUTER_FREE_MODEL_FALLBACK,
   resetOpenRouterCircuit,
   streamOpenRouter,
 } from '../../../services/ai/providers/openrouterProvider';
@@ -78,10 +78,14 @@ describe('isOpenRouterFreeModel()', () => {
     expect(isOpenRouterFreeModel('openai/gpt-4o')).toBe(false);
   });
 
-  it('all OPENROUTER_FREE_MODELS entries are free models', () => {
-    for (const model of OPENROUTER_FREE_MODELS) {
+  it('all OPENROUTER_FREE_MODEL_FALLBACK entries are free models', () => {
+    for (const model of OPENROUTER_FREE_MODEL_FALLBACK) {
       expect(isOpenRouterFreeModel(model)).toBe(true);
     }
+  });
+
+  it('the offline fallback list is never empty (it is the last resort when the live catalog fails)', () => {
+    expect(OPENROUTER_FREE_MODEL_FALLBACK.length).toBeGreaterThan(0);
   });
 });
 

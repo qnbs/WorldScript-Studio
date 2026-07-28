@@ -347,7 +347,7 @@
   "proforge.progress.metric.totalTime": "Total tid",
   "proforge.progress.metric.totalTokens": "Totala tokens",
   "proforge.progress.noneRunning": "Ingen pipeline igång.",
-  "proforge.progress.stageDetails": "Scendetaljer: {{stage}}",
+  "proforge.progress.stageDetails": "Stegdetaljer: {{stage}}",
   "proforge.progress.statusLabel": "Status",
   "proforge.progress.totals": "Rörledningssummor",
   "proforge.review.accept": "Acceptera",

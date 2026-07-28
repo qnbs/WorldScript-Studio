@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  __readCacheForTest,
   clearOpenRouterModelCache,
   fetchOpenRouterModels,
   validateOpenRouterKey,
@@ -100,6 +101,19 @@ describe('openrouterModels', () => {
       const models = await fetchOpenRouterModels('sk-or-v1-secret-key');
       expect(global.fetch).toHaveBeenCalled();
       expect(models).toEqual([{ id: 'authed/model' }]);
+    });
+
+    it('preserves the authed flag across a cache round-trip (OR-6 regression)', () => {
+      // QNBS-v3: readCache() previously returned { fetchedAt, models } only, silently dropping
+      // `authed` from the typed CacheEntry even though the credential-scope check above already
+      // depends on it being present on the STORED entry. This asserts the RETURNED entry also
+      // carries it, honoring the full CacheEntry type.
+      localStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({ fetchedAt: FIXED_NOW, authed: true, models: [{ id: 'x/y:free' }] }),
+      );
+      const entry = __readCacheForTest(true);
+      expect(entry?.authed).toBe(true);
     });
 
     it('ignores stale cached entries', async () => {
