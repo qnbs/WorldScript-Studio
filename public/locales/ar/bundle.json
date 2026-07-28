@@ -1838,6 +1838,7 @@
   "settings.ai.providerStatusDisconnected": "غير متاح",
   "settings.ai.providerStatusLabel": "حالة الاتصال",
   "settings.ai.providerStatusReady": "جاهز",
+  "settings.ai.providerStatusUnavailableBrowser": "غير متوفر في المتصفح",
   "settings.ai.providerTitle": "مزوّد الذكاء الاصطناعي",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM ‏(المتصفّح)",

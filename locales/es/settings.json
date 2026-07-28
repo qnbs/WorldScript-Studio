@@ -230,6 +230,7 @@
   "settings.ai.providerStatusDisconnected": "No disponible",
   "settings.ai.providerStatusLabel": "Estado de conexión",
   "settings.ai.providerStatusReady": "Listo",
+  "settings.ai.providerStatusUnavailableBrowser": "No disponible en el navegador",
   "settings.ai.providerTitle": "Proveedor de IA",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM (navegador)",

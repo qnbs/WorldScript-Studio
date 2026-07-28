@@ -1838,6 +1838,7 @@
   "settings.ai.providerStatusDisconnected": "利用不可",
   "settings.ai.providerStatusLabel": "接続ステータス",
   "settings.ai.providerStatusReady": "準備ができて",
+  "settings.ai.providerStatusUnavailableBrowser": "ブラウザでは利用できません",
   "settings.ai.providerTitle": "AIプロバイダー",
   "settings.ai.providerTransformers": "トランスフォーマー.js",
   "settings.ai.providerWebllm": "WebLLM (ブラウザ)",
