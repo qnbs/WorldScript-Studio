@@ -84,6 +84,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `services/ai/worldScriptCompletionFetch.ts` and `createLanguageModelForWorldScript`'s `LanguageModel`
   return type in `services/ai/providerFactory.ts` are unaffected. Verified with `pnpm run typecheck`,
   `pnpm run lint`, and the full AI-provider/completion-fetch test suites (all passing).
+- **Biome upgraded to 2.5.4** (from 2.4.16), migrated cleanly. Two new rules the version enables
+  required real fixes, not suppressions: `lint/correctness/noUnsafeOptionalChaining` (4 test files —
+  `(x?.[n] as T).prop`-style patterns split into a separate variable assignment so an optional-chain
+  short-circuit can no longer throw at the point of use) and `lint/suspicious/noUndeclaredEnvVars`
+  (16 environment variables used across scripts/config/tests weren't declared in `turbo.json`'s
+  `globalEnv`, so Turborepo's cache correctness couldn't account for them — now declared). Also ran
+  `biome migrate` for the `linter.rules.recommended` → `linter.rules.preset` config rename ahead of
+  Biome's next major version.
 
 - **Settings hygiene.** Removed stale Experimental-category search hints (`plot board`, `codex`,
   `cross project` — retired/promoted flags) in favor of current features; `ProForgeDashboard` now
