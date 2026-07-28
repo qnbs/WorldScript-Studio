@@ -4,6 +4,7 @@ Thank you for your interest in contributing to WorldScript Studio — an AI-powe
 
 ## Table of Contents
 
+- [Code of Conduct](#code-of-conduct)
 - [Development Setup](#development-setup)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
@@ -16,6 +17,10 @@ Thank you for your interest in contributing to WorldScript Studio — an AI-powe
 - [Pull Request Process](#pull-request-process)
 
 ---
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant Code of Conduct](.github/CODE_OF_CONDUCT.md). By participating, you are expected to uphold it — report unacceptable behavior via [GitHub Private Vulnerability Reporting](https://github.com/qnbs/WorldScript-Studio/security/advisories/new), the same private channel documented in [`.github/SECURITY.md`](.github/SECURITY.md).
 
 ## Development Setup
 

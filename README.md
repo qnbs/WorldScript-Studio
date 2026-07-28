@@ -17,11 +17,8 @@
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
-  <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/Lighthouse-90%2B-brightgreen" alt="Lighthouse Score">
   <a href="https://qnbs.github.io/WorldScript-Studio/"><img src="https://img.shields.io/badge/▶_Launch_Live-GitHub_Pages-22C55E?logo=github&logoColor=white" alt="Launch live on GitHub Pages"></a>
-  <!-- CII Best Practices badge — register project at https://bestpractices.coreinfrastructure.org/ to activate -->
-  <a href="https://bestpractices.coreinfrastructure.org/projects/XXXX"><img src="https://bestpractices.coreinfrastructure.org/projects/XXXX/badge" alt="CII Best Practices"></a>
 </p>
 
 ---
