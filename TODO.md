@@ -47,6 +47,17 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## v1.24.1 — Local-AI reliability + Dependabot batch (2026-07-28)
+
+- ✅ **Desktop Ollama/LM Studio/vLLM discovery fixed (#266)** — `vite.config.ts`'s `rollupOptions.external` was unconditionally externalizing `@tauri-apps/*` even for the Tauri desktop build itself, leaving `services/localServerHttp.ts`'s `@tauri-apps/plugin-http` import unresolvable in the packaged `.deb`/`.msi`. Fixed via a shared `isTauriBuild()` check; see the 2026-07-28 update in [ADR 0012](docs/adr/0012-local-server-connectivity-tauri-http.md).
+- ✅ **Misleading "Ready" status badge for Ollama in the browser fixed (#266)** — the status badge and the desktop-only banner were driven by two unreconciled state signals; badge now shows a distinct "Not available in browser" label. Scan also now prefers native `/api/tags` over the OpenAI-compat shim for Ollama.
+- ✅ **Dependabot batch** — 13 of 18 open PRs merged directly (Actions bumps, small JS/dev-tooling patches, Tauri/Rust crates, the tauri-deps group). The remaining 5 all had real breaking-change blockers, root-caused and fixed rather than force-merged or suppressed:
+  - **#255 / #249 / #253 / #250** (`@ai-sdk/google`/`@ai-sdk/openai`/`@ai-sdk/react`/`ai` major bumps) — `@ai-sdk/google@4` alone emits `LanguageModelV4`, incompatible with the pre-upgrade `ai` package's `LanguageModel` type; root cause was a partial-family upgrade. Fixed by bumping all four together in **PR #275** (`feat/ai-sdk-v4-upgrade`), which supersedes these 4 PRs — closed once #275 merges.
+  - **#252** (`@biomejs/biome` 2.4→2.5) — schema-version mismatch plus 2 real new lint findings (`noUnsafeOptionalChaining` ×4, `noUndeclaredEnvVars` ×21 via `turbo.json` `globalEnv`) fixed with real code changes, no suppressions; pushed directly onto the Dependabot branch.
+  - **#265** (dev-tooling group) — `@babel/core@8` transitively broke `react-docgen@8.0.3`'s Storybook build (`loadPartialConfig` removed); fixed by capping the existing `pnpm-workspace.yaml` override at `<8`, verified with a real `build-storybook` run; pushed directly onto the Dependabot branch.
+- ✅ **Issue #60 (vendor-fork audit)** — status comment posted confirming the audit is done (fork at `10.3.0-sc2`, `verify:vendor` CI guard); issue stays open per its own "permanent reminder" note.
+- ✅ **CLAUDE.md locale-count drift fixed** — i18n section undercounted the locale roster (17 vs. the actual 19 — `ru`/`ko` were added in a prior PR but never reflected) and the per-locale module count (20 vs. 21).
+
 ## Dependency-Hygiene Backlog (carried forward)
 
 > `.npmrc` Hardening (`strict-dep-builds=true`, `block-exotic-subdeps=true`, `minimum-release-age=10080`) ist bereits aktiv.
