@@ -599,7 +599,7 @@
   "settings.openRouter.enabledHint": "Lorsqu'il est activé, OpenRouter est privilégié pour les appels d'IA cloud, sauf si le mode actif interdit le cloud.",
   "settings.openRouter.errors.generic": "Une erreur OpenRouter inattendue s'est produite",
   "settings.openRouter.freeModel.deepseekR1": "DeepSeek R1 (gratuit)",
-  "settings.openRouter.freeModel.fallbackNotice": "Affichage d'une liste de secours hors ligne — le catalogue de modèles en direct n'est pas disponible pour le moment.",
+  "settings.openRouter.freeModel.fallbackNotice": "Affichage de la liste de secours statique — le catalogue OpenRouter en direct n'est pas disponible pour le moment.",
   "settings.openRouter.freeModel.gemma327b": "Gemma 3 27B IT (gratuit)",
   "settings.openRouter.freeModel.llama3370b": "Llama 3.3 70B Instruct (gratuit)",
   "settings.openRouter.freeModel.mistral7b": "Mistral 7B Instruct (gratuit)",

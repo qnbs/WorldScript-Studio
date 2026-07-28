@@ -347,7 +347,7 @@
   "proforge.progress.metric.totalTime": "Συνολικός χρόνος",
   "proforge.progress.metric.totalTokens": "Σύνολο Μαρκών",
   "proforge.progress.noneRunning": "Δεν λειτουργεί αγωγός.",
-  "proforge.progress.stageDetails": "Λεπτομέρειες σκηνής: {{stage}}",
+  "proforge.progress.stageDetails": "Λεπτομέρειες σταδίου: {{stage}}",
   "proforge.progress.statusLabel": "Κατάσταση",
   "proforge.progress.totals": "Σύνολα αγωγών",
   "proforge.review.accept": "Αποδέχομαι",

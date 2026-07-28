@@ -599,7 +599,7 @@
   "settings.openRouter.enabledHint": "Wenn aktiviert, wird OpenRouter für Cloud-KI-Aufrufe bevorzugt, sofern der aktive Modus Cloud nicht verbietet.",
   "settings.openRouter.errors.generic": "Ein unerwarteter OpenRouter-Fehler ist aufgetreten",
   "settings.openRouter.freeModel.deepseekR1": "DeepSeek R1 (gratis)",
-  "settings.openRouter.freeModel.fallbackNotice": "Offline-Fallback-Liste wird angezeigt — der Live-Modellkatalog ist gerade nicht verfügbar.",
+  "settings.openRouter.freeModel.fallbackNotice": "Es wird die statische Fallback-Liste angezeigt — der Live-Modellkatalog von OpenRouter ist gerade nicht verfügbar.",
   "settings.openRouter.freeModel.gemma327b": "Gemma 3 27B IT (gratis)",
   "settings.openRouter.freeModel.llama3370b": "Llama 3.3 70B Instruct (gratis)",
   "settings.openRouter.freeModel.mistral7b": "Mistral 7B Instruct (gratis)",

@@ -420,6 +420,51 @@ describe('OpenRouterSection', () => {
     );
   });
 
+  it('does not show a stale-model warning for a deliberately entered custom model ID (CodeRabbit regression)', async () => {
+    // QNBS-v3: a custom ID is never in the live catalog by definition — the stale-warning check
+    // must not conflate "user typed a custom ID" with "catalog dropped a previously known model".
+    mocks.settingsState.openRouter = { enabled: false, preferredModel: 'my-team/private-model' };
+    mocks.fetchModels.mockResolvedValue([{ id: 'other/model:free', name: 'Other Model (free)' }]);
+    const user = userEvent.setup();
+    render(<OpenRouterSection />);
+
+    const customInput = await waitFor(() =>
+      screen.getByLabelText('settings.openRouter.customModelAriaLabel'),
+    );
+    expect(customInput).toHaveValue('my-team/private-model');
+
+    // Explicitly commit the same custom ID — this is what marks it "deliberately custom".
+    await user.clear(customInput);
+    await user.type(customInput, 'my-team/private-model');
+    await user.tab();
+
+    const select = screen.getByLabelText('settings.openRouter.modelAriaLabel');
+    await waitFor(() => {
+      expect(within(select).getByText('Other Model (free)')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('settings.openRouter.modelUnavailable')).not.toBeInTheDocument();
+  });
+
+  it('a catalog refresh mid-edit does not stomp an uncommitted custom-model keystroke (CodeRabbit regression)', async () => {
+    // QNBS-v3: knownOptionIds gets a new Set identity on every fetch (including this manual
+    // refresh); the sync effect must not treat that as an external preferredModel change and
+    // overwrite what the user is actively typing.
+    const user = userEvent.setup();
+    render(<OpenRouterSection />);
+    const select = await waitFor(() => screen.getByLabelText('settings.openRouter.modelAriaLabel'));
+    await user.selectOptions(select, '__custom__');
+    const customInput = screen.getByLabelText('settings.openRouter.customModelAriaLabel');
+
+    await user.type(customInput, 'still-typing/not-committed-yet');
+    mocks.fetchModels.mockClear();
+    await user.click(
+      screen.getByRole('button', { name: 'settings.openRouter.refreshModelsAriaLabel' }),
+    );
+    await waitFor(() => expect(mocks.fetchModels).toHaveBeenCalled());
+
+    expect(customInput).toHaveValue('still-typing/not-committed-yet');
+  });
+
   it('refresh button clears the cache and re-fetches the catalog', async () => {
     const user = userEvent.setup();
     render(<OpenRouterSection />);

@@ -305,12 +305,23 @@ export const OpenRouterSection: FC = () => {
     [freeModelIds, paidModelIds],
   );
 
-  // Keep local custom-model state in sync with external Redux changes.
+  // QNBS-v3: knownOptionIds gets a new Set identity on every catalog fetch (mount, refresh
+  // button), not just when preferredModel changes — only resync customModelInput when
+  // preferredModel itself changed, so a refresh mid-edit can't stomp the user's typed text.
+  const prevPreferredModelRef = useRef(preferredModel);
+  // QNBS-v3: tracks an ID the user explicitly committed via the custom-model input, so the
+  // stale-model warning below can't misfire for it — see modelIsStale. State, not a ref: it's
+  // read directly in the render body, and a ref mutation alone wouldn't trigger a re-render.
+  const [explicitCustomId, setExplicitCustomId] = useState<string | null>(null);
   useEffect(() => {
     const known = knownOptionIds.has(preferredModel);
     setIsCustomModel(!known);
-    if (known) setCustomModelInput('');
-    else setCustomModelInput(preferredModel);
+    if (known) {
+      setCustomModelInput('');
+    } else if (prevPreferredModelRef.current !== preferredModel) {
+      setCustomModelInput(preferredModel);
+    }
+    prevPreferredModelRef.current = preferredModel;
   }, [preferredModel, knownOptionIds]);
 
   const showSaveMsg = useCallback((ok: boolean, text: string) => {
@@ -450,6 +461,7 @@ export const OpenRouterSection: FC = () => {
       if (value === CUSTOM_MODEL_VALUE) {
         setIsCustomModel(true);
       } else {
+        setExplicitCustomId(null);
         setIsCustomModel(false);
         setCustomModelInput('');
         dispatch(settingsActions.setOpenRouter({ preferredModel: value }));
@@ -461,6 +473,9 @@ export const OpenRouterSection: FC = () => {
   const commitCustomModel = useCallback(() => {
     const trimmed = customModelInput.trim();
     if (trimmed) {
+      // QNBS-v3: remembers this exact ID was deliberately entered as custom, so a later catalog
+      // refresh that doesn't list it can't misreport it as a removed/stale catalog model.
+      setExplicitCustomId(trimmed);
       dispatch(settingsActions.setOpenRouter({ preferredModel: trimmed }));
       return;
     }
@@ -496,7 +511,10 @@ export const OpenRouterSection: FC = () => {
   // reflects the CURRENT catalog; only then can "preferredModel isn't in it" mean the model is
   // actually gone (vs. still loading, or cloud access being policy-blocked).
   const catalogReady = !isModelsLoading && !modelFetchError && !policyBlocked;
-  const modelIsStale = catalogReady && !knownOptionIds.has(preferredModel);
+  // QNBS-v3: exempt an ID the user explicitly entered as custom this session — otherwise a
+  // deliberate non-catalog model gets nagged as if it were a removed catalog selection.
+  const modelIsStale =
+    catalogReady && !knownOptionIds.has(preferredModel) && explicitCustomId !== preferredModel;
 
   const handleSwitchToAvailableModel = useCallback(() => {
     const fallbackId = freeModelOptions[0]?.value ?? OPENROUTER_FREE_MODEL_FALLBACK[0];
