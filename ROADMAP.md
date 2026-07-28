@@ -22,11 +22,11 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 ---
 
 
-## Upcoming — v1.24 / v2.0 Foundation (PLANNED)
+## Upcoming — v2.0 Foundation (PLANNED)
 
-Forward-looking work carried out of the v1.23 cycle:
+Forward-looking work carried out of the v1.24 cycle (i18n expansion and the six-PR hardening
+sequence below both shipped in v1.24.0/v1.24.1 — see the RELEASED sections):
 
-- **i18n — 17 locales (✅ bulk-translated):** added `fi/sv/hu/is/eu` (Beta) + `fa` (RTL, Persian). Priority chrome hand-translated; **all remaining modules machine-translated** (glossary v2.0, placeholder-masked) to ~96-100 % across all 10 Beta locales. Remaining: **human native review** (checklist in [`docs/TRANSLATION-GUIDE.md`](docs/TRANSLATION-GUIDE.md)). See [`docs/LANGUAGE-EXPANSION-2026.md`](docs/LANGUAGE-EXPANSION-2026.md).
 - **Coverage targets:** lift toward L≥85 % / B≥75 % / F≥80 % — focus on AI routing, Voice, Copilot.
 - **Local AI & Voice hardening:** Whisper/Kokoro on low-end devices, model-integrity checks, Eco-Mode.
 - **Error boundaries + structured logging** for AI/worker failures.
@@ -35,6 +35,29 @@ Forward-looking work carried out of the v1.23 cycle:
 - **Plugin Registry Beta:** graduate from the sandbox-hardening phase.
 - **Bundle optimisation:** further code-splitting for heavy chunks.
 - **Local-first:** advance ADR-0008 — B2.1 Y.Text migration → B2.2 SoT flip behind `enableLocalFirstSync`.
+- **i18n human native review:** 14 Beta/RTL locales (all except de/en/es/fr/it) are machine-translated to ~96-100 %; native-speaker review still open (checklist in [`docs/TRANSLATION-GUIDE.md`](docs/TRANSLATION-GUIDE.md)). See [`docs/LANGUAGE-EXPANSION-2026.md`](docs/LANGUAGE-EXPANSION-2026.md).
+
+---
+
+## v1.24.1 — Local-AI Reliability, Heuristic Fallbacks, LanguageTool (RELEASED 2026-07-28)
+
+**Status:** ✅ Released — see [`CHANGELOG.md`](CHANGELOG.md) `[1.24.1]`.
+
+- Local-AI reliability: desktop Ollama/LM Studio/vLLM discovery fixes, corrected a misleading browser AI-status badge.
+- AI heuristic-fallback foundation (ADR-0011) + per-feature generators for Outline, Character, World profiles, and Plot Board "suggest next beat" — offline-capable degradation when cloud/local AI is unavailable.
+- Real self-hosted LanguageTool grammar/spelling integration (privacy-first, replaces a placeholder typo list).
+- 20-PR Dependabot backlog triage (16 merged, 4 closed as superseded after root-causing AI SDK v4/Biome 2.5.x/dev-tooling blockers).
+- Issue #60 vendor-fork audit closeout (`packages/collab-transport` vs. upstream y-webrtc 10.3.0).
+- Security/build hardening: `persist-credentials` (CWE-522), a Tailwind `ltr`/`rtl` fix, 3 ineffective dynamic imports, 2 CWE-209 fixes.
+
+---
+
+## v1.24.0 — Critical Hardening + 17→19 Locale Expansion (RELEASED 2026-06-21)
+
+**Status:** ✅ Released — see [`CHANGELOG.md`](CHANGELOG.md) `[1.24.0]`.
+
+- Six stacked PRs: privacy, experimental-feature labeling, coverage, voice consent, local-AI, and doc/hygiene hardening.
+- i18n expansion: added `fi/sv/hu/is/eu` (Beta) + `fa` (RTL, Persian) — 11→17 locales at release time; `ru`/`ko` followed in a later v1.24.x patch, bringing the current total to **19**. Priority chrome hand-translated; remaining modules machine-translated (glossary v2.0, placeholder-masked) to ~96-100 % across all Beta locales.
 
 ---
 

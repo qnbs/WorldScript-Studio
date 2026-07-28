@@ -127,7 +127,7 @@ WorldScript-Studio/
 ├── contexts/         # React contexts per view + I18n + CommandExecutor
 ├── features/         # Redux slices (project, settings, writer, status, featureFlags, plotBoard, progressTracker, sceneComments)
 ├── hooks/            # Custom React hooks per view + shared hooks (e.g. useGlobalKeyboardShortcuts)
-├── locales/          # i18n source JSON — 17 locales: de/en/es/fr/it core + ar/he/fa RTL + el/ja/pt/zh/fi/sv/hu/is/eu Beta (key parity vs en)
+├── locales/          # i18n source JSON — 19 locales: de/en/es/fr/it core + ar/he/fa RTL + el/ja/pt/zh/fi/sv/hu/is/eu/ru/ko Beta (key parity vs en)
 ├── services/         # Adapters: AI, DB, storage, collaboration, EPUB; commands/, keyboard/, help/, settingsExchange
 ├── stories/          # Storybook stories for UI components
 ├── docs/             # Deep-dive docs (CI reference, history, graphify)

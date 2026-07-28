@@ -32,7 +32,7 @@ contexts/         → React context providers (one per major view + I18nContext 
 features/         → Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
 hooks/            → Custom hooks with view business logic (one hook per view)
 services/         → External adapters: geminiService, aiProviderService, dbService (dual IndexedDB + migration), storageService, collaborationService; **ai/** (aiModeService — execution modes, aiPolicy, aiRetry; **providers/** — openrouterProvider with circuit breaker); **copilot/** (heuristicEngine 8 rules, insightGenerator, copilotContextService, actionApplier); **commands/** (palette registry); **keyboard/** (shortcut matching); **help/** (doc retrieval for AI); **settingsExchange** (settings JSON)
-locales/          → i18n source files — de/en/es/fr/it (core) + ar/he/fa (RTL Beta) + el/ja/pt/zh/fi/sv/hu/is/eu (Beta) × ~20 JSON modules (17 locales; see the README badge for the live key count)
+locales/          → i18n source files — de/en/es/fr/it (core) + ar/he/fa (RTL Beta) + el/ja/pt/zh/fi/sv/hu/is/eu/ru/ko (Beta) × 21 JSON modules (19 locales; see the README badge for the live key count)
 public/locales/   → i18n runtime files served at BASE_URL
 tests/            → Unit + E2E tests (Vitest + Playwright)
 types/            → Additional TypeScript type definitions
@@ -144,7 +144,7 @@ types.ts          → Core shared interfaces and types
 
 - All user-facing strings must use `t('key.path')` from `useTranslation()`
 - Source files: `locales/{lang}/{module}.json` (15 modules). Runtime: **one** merged **`public/locales/{lang}/bundle.json`** per language — regenerate with **`pnpm run i18n:bundle`** or **`pnpm run i18n:check`** (parity check **and** bundle build); **`predev`** / **`prebuild`** also rebuild bundles so the UI never shows raw keys after editing locale JSON.
-- **17 locales ship** (de/en/es/fr/it core + ar/he/fa RTL + el/ja/pt/zh/fi/sv/hu/is/eu Beta); all must keep key parity with English (`pnpm run i18n:check` in CI). The `/i18n-key` skill auto-fills the **5 core** (de/en/es/fr/it); update Beta/RTL locales manually afterward.
+- **19 locales ship** (de/en/es/fr/it core + ar/he/fa RTL + el/ja/pt/zh/fi/sv/hu/is/eu/ru/ko Beta); all must keep key parity with English (`pnpm run i18n:check` in CI). The `/i18n-key` skill auto-fills the **5 core** (de/en/es/fr/it); update Beta/RTL locales manually afterward.
 - English is the fallback language
 - New keys: add to **`locales/en/`** first, then **de**, **fr**, **es**, **it** (or run `node scripts/check-i18n-keys.mjs --fix` and translate), then commit updated **`bundle.json`** files
 
