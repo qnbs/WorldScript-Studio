@@ -139,6 +139,11 @@ jobs:
           NODE_OPTIONS: "--no-experimental-webstorage --max-old-space-size=4096"
           CI: "true"
 
+      - name: Coverage ratchet check (informational, non-blocking)
+        if: always()
+        continue-on-error: true
+        run: node scripts/check-coverage-ratchet.mjs
+
       - name: Upload Vitest JSON results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
