@@ -126,7 +126,8 @@ describe('runRagVectorMigration', () => {
     expect(ragCall?.[0]).toBe('proj-1');
     expect(ragCall?.[1]).toBe(manuscript);
     expect(typeof ragCall?.[2]).toBe('function');
-    expect((ragCall?.[2] as () => boolean)()).toBe(true);
+    const migrateGate = ragCall?.[2];
+    expect((migrateGate as () => boolean)()).toBe(true);
     expect(mockExec).toHaveBeenCalledWith(expect.stringContaining('rag_vectors_v2_migrated'));
   });
 

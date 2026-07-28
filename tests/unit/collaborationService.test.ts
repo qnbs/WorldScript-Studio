@@ -482,7 +482,8 @@ describe('collaborationService encryption', () => {
     // The call from _setAwarenessUser in connect() should pass an __enc object, not a plain user
     const awarenessCall = calls.find((c: unknown[]) => c[0] === 'user');
     expect(awarenessCall?.[1]).toHaveProperty('__enc');
-    expect(typeof (awarenessCall?.[1] as Record<string, unknown>)['__enc']).toBe('string');
+    const awarenessPayload = awarenessCall?.[1];
+    expect(typeof (awarenessPayload as Record<string, unknown>)['__enc']).toBe('string');
   });
 
   // QNBS-v3: Plaintext mode — awareness is stored as plain CollaborationUser object.
