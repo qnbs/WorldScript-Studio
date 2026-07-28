@@ -171,7 +171,7 @@ importers:
         version: 1.1.0
       uuid:
         specifier: '>=11.1.1'
-        version: 14.0.0
+        version: 14.0.1
       xstate:
         specifier: ^5.32.1
         version: 5.32.1
@@ -7397,8 +7397,8 @@ packages:
   utrie@1.0.2:
     resolution: {integrity: sha512-1MLa5ouZiOmQzUbjbu9VmjLzn1QLXBhwpUa7kdLUQK+KQ5KA9I1vk5U4YHe/X2Ch7PYnJfWuWT+VbuxbGwljhw==}
 
-  uuid@14.0.0:
-    resolution: {integrity: sha512-Qo+uWgilfSmAhXCMav1uYFynlQO7fMFiMVZsQqZRMIXp0O7rR7qjkj+cPvBHLgBqi960QCoo/PH2/6ZtVqKvrg==}
+  uuid@14.0.1:
+    resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
     hasBin: true
 
   v8-to-istanbul@9.3.0:
@@ -9710,7 +9710,7 @@ snapshots:
       open: 7.4.2
       proxy-agent: 6.5.0
       tmp: 0.2.7
-      uuid: 14.0.0
+      uuid: 14.0.1
       yargs: 15.4.1
       yargs-parser: 13.1.2
     transitivePeerDependencies:
@@ -10270,7 +10270,7 @@ snapshots:
       playwright-core: 1.61.0
       rimraf: 3.0.2
       storybook: 10.4.5(@testing-library/dom@10.4.1)(@types/react@19.2.17)(prettier@3.8.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      uuid: 14.0.0
+      uuid: 14.0.1
     transitivePeerDependencies:
       - '@swc/helpers'
       - '@types/node'
@@ -12977,7 +12977,7 @@ snapshots:
       istanbul-lib-coverage: 3.2.2
       p-map: 3.0.0
       rimraf: 3.0.2
-      uuid: 14.0.0
+      uuid: 14.0.1
 
   istanbul-lib-report@3.0.1:
     dependencies:
@@ -13154,7 +13154,7 @@ snapshots:
     dependencies:
       mkdirp: 1.0.4
       strip-ansi: 6.0.1
-      uuid: 14.0.0
+      uuid: 14.0.1
       xml: 1.0.1
 
   jest-leak-detector@30.4.1:
@@ -15479,7 +15479,7 @@ snapshots:
       base64-arraybuffer: 1.0.2
     optional: true
 
-  uuid@14.0.0: {}
+  uuid@14.0.1: {}
 
   v8-to-istanbul@9.3.0:
     dependencies:
