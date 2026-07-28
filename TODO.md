@@ -15,6 +15,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **Feature catalog reconciled** — `featureCatalog.ts` covers all 23 flags; `defaultOn` derived from the slice (drift now impossible, guarded by `tests/unit/featureCatalog.test.ts`); added risk/desktop/dependency metadata.
 - ✅ **Grouped Settings UI** — Experimental flags grouped by category with risk hints, dependency-aware disabling (Voice WASM ⇠ Voice Support), "Desktop only" note (Rust Compute), and Reset-to-defaults.
 - ⬜ **WebNN flag decision** — `enableWebnnInference` is a ghost/stub (no runtime gate reads it). Either wire `selectEnableWebnnInference` into the ONNX RT WebNN provider selection, or retire the flag.
+- ⬜ **CII Best Practices badge** — removed from `README.md` (was a literal `projects/XXXX` placeholder — broken image, dead link). Register the project at <https://bestpractices.coreinfrastructure.org/> (external, interactive signup — maintainer-only action), then re-add the badge with the real project ID.
 
 
 ## v1.23 — P0 Audit Follow-up (DELIVERED 2026-06-16)
