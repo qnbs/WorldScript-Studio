@@ -75,6 +75,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **AI SDK family upgraded to v4/v7** (`ai` 6→7, `@ai-sdk/google`/`@ai-sdk/openai`/`@ai-sdk/react` 3→4).
+  Bumped as one coordinated unit rather than merging the four Dependabot PRs individually — `@ai-sdk/google@4`
+  emits the new `LanguageModelV4` spec, which the `ai` package's `LanguageModel` type only recognizes from
+  v7 onward, so upgrading `@ai-sdk/google` alone (as Dependabot's #255 proposed) left
+  `services/ai/providerFactory.ts` with a real `tsc` error. No application code changes were needed beyond
+  the version bump — `streamText`/`toTextStreamResponse`/`onFinish`'s `usage` shape in
+  `services/ai/worldScriptCompletionFetch.ts` and `createLanguageModelForWorldScript`'s `LanguageModel`
+  return type in `services/ai/providerFactory.ts` are unaffected. Verified with `pnpm run typecheck`,
+  `pnpm run lint`, and the full AI-provider/completion-fetch test suites (all passing).
+
 - **Settings hygiene.** Removed stale Experimental-category search hints (`plot board`, `codex`,
   `cross project` — retired/promoted flags) in favor of current features; `ProForgeDashboard` now
   uses the catalog-driven `MaturityBadge` instead of a hard-coded Experimental pill, keeping the
