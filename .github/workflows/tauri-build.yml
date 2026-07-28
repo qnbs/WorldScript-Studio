@@ -27,11 +27,14 @@ jobs:
         include:
           - os: ubuntu-22.04
           - os: windows-latest
-          # QNBS-v3: macos-latest is the Apple-Silicon (aarch64) runner; macos-13 is the last
-          # Intel (x86_64) runner. Both are needed so Intel Macs get a native build + auto-update
-          # (the latest.json generator already maps *_x64.app.tar.gz → darwin-x86_64).
+          # QNBS-v3: macos-13 (the last Intel/x86_64 hosted runner) removed 2026-07-28 -- it never
+          # actually provisions a runner (job sits in "queued" indefinitely; timeout-minutes never
+          # applies since that only counts once a job starts, so 3 consecutive real runs each hung
+          # the full 24h GitHub Actions queue ceiling before auto-cancelling). GitHub has been
+          # retiring Intel-hosted macOS runners; macos-latest (Apple Silicon) is the only macOS
+          # bundle target until a working Intel option exists again. Native Intel-Mac builds are
+          # tracked as a re-opened follow-up, not silently dropped.
           - os: macos-latest
-          - os: macos-13
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -190,7 +193,10 @@ jobs:
               *_aarch64.app.tar.gz)
                 # QNBS-v3: macOS updater bundle is .app.tar.gz (not .dmg).
                 # .dmg is the user-facing installer; .app.tar.gz is what Tauri downloads for in-app updates.
-                # aarch64 = macos-latest ARM runner; x64 = macos-13 Intel runner (both in matrix).
+                # aarch64 = macos-latest ARM runner. x64 has no runner in the matrix currently
+                # (macos-13 removed, see the matrix comment above) -- this case is unreachable
+                # until a working Intel runner is restored, kept so a future re-add needs no
+                # changes here.
                 MAC_AARCH64_URL="${REPO_URL}/${URLNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
               *_x64.app.tar.gz)
                 MAC_X64_URL="${REPO_URL}/${URLNAME}"; MAC_X64_SIG="$SIG_CONTENT" ;;

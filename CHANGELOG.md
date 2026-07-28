@@ -63,12 +63,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is hidden for unsupported locales (tr/he/fi/hu/is/eu/ko). Opt-in via Settings → Connections; run a
   server with `docker run -p 8010:8010 erikvl87/languagetool`. See [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md)
   and [ADR 0010](docs/adr/0010-languagetool-self-hosted.md).
-- **Native Intel-Mac (x86_64) desktop builds.** `tauri-build.yml` now builds on `macos-13` (Intel) in
-  addition to `macos-latest` (Apple Silicon), so Intel Macs get a native bundle and in-app updates.
-  The `latest.json` updater manifest already mapped `*_x64.app.tar.gz` → `darwin-x86_64`, so the Intel
-  entry appears automatically; the generator now also emits a per-arch warning when one arch produces
-  no signed bundle (a half-failed matrix is diagnosable) and hard-fails only if **no** arch signed.
-  Builds remain unsigned/un-notarized (cert provisioning still deferred). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md).
+- **Native Intel-Mac (x86_64) desktop builds — added, then reverted within this release.**
+  `tauri-build.yml` briefly added `macos-13` (Intel) to the build matrix alongside `macos-latest`
+  (Apple Silicon). In practice the `macos-13` hosted runner never provisions: the job sits in
+  GitHub's queue indefinitely instead of starting, so its own `timeout-minutes: 45` never applies —
+  and because the `release` job's `needs: [bundle]` only resolves once every matrix leg reaches a
+  terminal state, this blocked the **entire** release for the full ~24h GitHub Actions queue ceiling
+  even though Ubuntu/Windows/macOS-ARM finished in ~12 minutes. Removed `macos-13` from the matrix;
+  Intel Mac builds are tracked as a re-opened follow-up in `TODO.md` pending a working Intel runner
+  option. The `latest.json` generator's per-arch warning / hard-fail-only-if-no-arch-signs logic
+  (added alongside the original matrix change) is unaffected and already tolerates the missing arch.
+  See [`docs/TAURI-CI.md`](docs/TAURI-CI.md).
 - **New Help article — "AI execution modes & OpenRouter".** Documents the four live-switchable
   execution modes (Hybrid / Cloud / Local / Eco) and OpenRouter's free tier + circuit breaker
   (4×429 → 5 min pause, RPM tracking), which shipped without a Help entry. Added to the AI Studio help
