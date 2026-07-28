@@ -171,6 +171,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **GitHub Actions workflows drop persisted checkout credentials (CWE-522, zizmor/CodeRabbit).**
+  `actions/checkout` leaves the `GITHUB_TOKEN` in the local git config by default so later steps can
+  push; none of the jobs across `ci.yml` (8 checkout steps), `codeql.yml`, `docker.yml`,
+  `mutation.yml`, `storybook-debug.yml`, `tauri-build.yml`, or `voice-nightly.yml` push or commit
+  after cloning, so the token had no reason to persist beyond the checkout step. All 14 checkout
+  steps now set `persist-credentials: false`.
 - **`@babel/core` security override bounded to the 7.x line, fixing a broken Storybook build.**
   The `pnpm-workspace.yaml` override for GHSA-4x5r-pxfx-6jf8 (`>=7.29.6`) had no upper bound, unlike
   every sibling override in the same block. When Babel 8.0.1 was published, pnpm resolved it for
