@@ -32,9 +32,23 @@ import '@fontsource/noto-sans-arabic/700.css';
 import '@fontsource/noto-sans-hebrew/400.css';
 import '@fontsource/noto-sans-hebrew/500.css';
 import '@fontsource/noto-sans-hebrew/700.css';
-/* QNBS-v3: Phase 3 — CJK fonts for ja/zh Beta languages.
-   Fonts loaded via Google Fonts CDN in index.html for ja/zh.
-   Greek uses system fallback (most systems have Noto Sans Greek pre-installed). */
+/* QNBS-v3: Phase 3 — CJK (ja/zh) + Greek (el) self-hosted fonts, replacing a broken Google Fonts
+   CDN request (`Noto+Sans+GR` does not exist at Google Fonts — the combined CSS2 request 400'd,
+   silently dropping the JP/KR families requested alongside it too). Noto Sans JP/KR/SC are
+   dedicated @fontsource packages; Greek uses the base @fontsource/noto-sans package's `greek`
+   subset instead of a nonexistent "Noto Sans GR" family. */
+import '@fontsource/noto-sans-jp/400.css';
+import '@fontsource/noto-sans-jp/500.css';
+import '@fontsource/noto-sans-jp/700.css';
+import '@fontsource/noto-sans-kr/400.css';
+import '@fontsource/noto-sans-kr/500.css';
+import '@fontsource/noto-sans-kr/700.css';
+import '@fontsource/noto-sans-sc/400.css';
+import '@fontsource/noto-sans-sc/500.css';
+import '@fontsource/noto-sans-sc/700.css';
+import '@fontsource/noto-sans/greek-400.css';
+import '@fontsource/noto-sans/greek-500.css';
+import '@fontsource/noto-sans/greek-700.css';
 
 import './index.css';
 import './register-sw';
