@@ -421,8 +421,7 @@ describe('OpenRouterSection', () => {
   });
 
   it('does not show a stale-model warning for a deliberately entered custom model ID (CodeRabbit regression)', async () => {
-    // QNBS-v3: a custom ID is never in the live catalog by definition — the stale-warning check
-    // must not conflate "user typed a custom ID" with "catalog dropped a previously known model".
+    // QNBS-v3: a custom ID is never in the catalog by definition — must not be flagged as stale.
     mocks.settingsState.openRouter = { enabled: false, preferredModel: 'my-team/private-model' };
     mocks.fetchModels.mockResolvedValue([{ id: 'other/model:free', name: 'Other Model (free)' }]);
     const user = userEvent.setup();
@@ -446,9 +445,7 @@ describe('OpenRouterSection', () => {
   });
 
   it('a catalog refresh mid-edit does not stomp an uncommitted custom-model keystroke (CodeRabbit regression)', async () => {
-    // QNBS-v3: knownOptionIds gets a new Set identity on every fetch (including this manual
-    // refresh); the sync effect must not treat that as an external preferredModel change and
-    // overwrite what the user is actively typing.
+    // QNBS-v3: a refresh gives knownOptionIds a new Set identity — must not be read as an external preferredModel change and overwrite what the user is actively typing.
     const user = userEvent.setup();
     render(<OpenRouterSection />);
     const select = await waitFor(() => screen.getByLabelText('settings.openRouter.modelAriaLabel'));
@@ -462,7 +459,12 @@ describe('OpenRouterSection', () => {
     );
     await waitFor(() => expect(mocks.fetchModels).toHaveBeenCalled());
 
-    expect(customInput).toHaveValue('still-typing/not-committed-yet');
+    // QNBS-v3: re-query the live DOM node — a captured pre-refresh reference could pass even if the component remounted the field and reset it.
+    await waitFor(() => {
+      expect(screen.getByLabelText('settings.openRouter.customModelAriaLabel')).toHaveValue(
+        'still-typing/not-committed-yet',
+      );
+    });
   });
 
   it('refresh button clears the cache and re-fetches the catalog', async () => {
