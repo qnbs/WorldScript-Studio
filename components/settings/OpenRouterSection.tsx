@@ -20,7 +20,7 @@ import {
 import {
   getApproxRpm,
   isCircuitOpen,
-  OPENROUTER_FREE_MODELS,
+  OPENROUTER_FREE_MODEL_FALLBACK,
   resetOpenRouterCircuit,
 } from '../../services/ai/providers/openrouterProvider';
 import { logger } from '../../services/logger';
@@ -32,6 +32,18 @@ import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
 
 const CUSTOM_MODEL_VALUE = '__custom__';
+
+// QNBS-v3: i18n label suffix for each OPENROUTER_FREE_MODEL_FALLBACK entry — only rendered when
+// the live catalog has no `:free` models at all (offline, fetch failure, or a genuinely empty
+// catalog). Live-fetched free models use the catalog's own `name` field instead.
+const FALLBACK_MODEL_LABEL_SUFFIX: Record<(typeof OPENROUTER_FREE_MODEL_FALLBACK)[number], string> =
+  {
+    'deepseek/deepseek-r1:free': 'deepseekR1',
+    'meta-llama/llama-3.3-70b-instruct:free': 'llama3370b',
+    'qwen/qwen2.5-72b-instruct:free': 'qwen2572b',
+    'google/gemma-3-27b-it:free': 'gemma327b',
+    'mistralai/mistral-7b-instruct:free': 'mistral7b',
+  };
 
 // ─── Sub-component: circuit breaker status indicator ─────────────────────────
 
@@ -128,7 +140,9 @@ export const OpenRouterSection: FC = () => {
   }, []);
 
   const enabled = openRouterSettings?.enabled ?? false;
-  const preferredModel = openRouterSettings?.preferredModel ?? 'deepseek/deepseek-r1:free';
+  // QNBS-v3: Derived from the offline fallback, not a re-typed literal — this is the component's
+  // local default before Redux settings load, not a primary model source.
+  const preferredModel = openRouterSettings?.preferredModel ?? OPENROUTER_FREE_MODEL_FALLBACK[0];
 
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [storedKey, setStoredKey] = useState<string | null>(null);
@@ -142,7 +156,9 @@ export const OpenRouterSection: FC = () => {
   const [isModelsLoading, setIsModelsLoading] = useState(false);
   const [modelFetchError, setModelFetchError] = useState<string | null>(null);
   const [isCustomModel, setIsCustomModel] = useState(
-    !OPENROUTER_FREE_MODELS.includes(preferredModel as (typeof OPENROUTER_FREE_MODELS)[number]),
+    !OPENROUTER_FREE_MODEL_FALLBACK.includes(
+      preferredModel as (typeof OPENROUTER_FREE_MODEL_FALLBACK)[number],
+    ),
   );
   const [customModelInput, setCustomModelInput] = useState(isCustomModel ? preferredModel : '');
   const saveMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -223,16 +239,90 @@ export const OpenRouterSection: FC = () => {
     };
   }, [fetchCatalog, storedKey]);
 
-  // Keep local custom-model state in sync with external Redux changes.
+  // QNBS-v3: Free-tier group is derived from the LIVE catalog, not the frozen fallback constant —
+  // OpenRouter's free tier rotates weekly, and a hardcoded primary list silently drops new free
+  // models from the UI (the OR-1 bug this refactor fixes). Only fall back to the static list when
+  // the live catalog has no `:free` models at all.
+  const liveFreeModels = useMemo(() => models.filter((m) => isOpenRouterFreeModel(m.id)), [models]);
+  const usingFallbackFreeModels = liveFreeModels.length === 0;
+  // QNBS-v3: ID-only, deliberately independent of `t` — this feeds knownOptionIds (the redux-sync
+  // effect, selectValue, commitCustomModel all depend on it), which must stay referentially stable
+  // across a render that only changed an unrelated piece of state. If it depended on `t` (via the
+  // label-bearing modelGroups) instead, an unstable translation-function reference would make the
+  // redux-sync effect re-run on every render and stomp the user's in-progress custom-model entry.
+  const freeModelIds = useMemo<string[]>(
+    () =>
+      usingFallbackFreeModels
+        ? [...OPENROUTER_FREE_MODEL_FALLBACK]
+        : liveFreeModels.map((m) => m.id),
+    [usingFallbackFreeModels, liveFreeModels],
+  );
+  const paidModelIds = useMemo(
+    () => models.filter((m) => !isOpenRouterFreeModel(m.id)).map((m) => m.id),
+    [models],
+  );
+  const freeModelOptions = useMemo(
+    () =>
+      usingFallbackFreeModels
+        ? OPENROUTER_FREE_MODEL_FALLBACK.map((m) => ({
+            value: m as string,
+            label: t(`settings.openRouter.freeModel.${FALLBACK_MODEL_LABEL_SUFFIX[m]}`),
+          }))
+        : liveFreeModels.map((m) => ({ value: m.id, label: m.name ?? m.id })),
+    [usingFallbackFreeModels, liveFreeModels, t],
+  );
+  // QNBS-v3: OR-1 fix — filter solely by isOpenRouterFreeModel; the former extra `freeIds` set
+  // (membership in the hardcoded list) caused any live-fetched free model NOT on that list to be
+  // dropped from both the free AND paid groups instead of appearing in the free group.
+  const paidModelOptions = useMemo(
+    () =>
+      models
+        .filter((m) => !isOpenRouterFreeModel(m.id))
+        .map((m) => ({ value: m.id, label: m.name ?? m.id })),
+    [models],
+  );
+  const modelGroups = useMemo(() => {
+    const groups: { label: string; options: { value: string; label: string }[] }[] = [
+      { label: t('settings.openRouter.freeTierNote'), options: freeModelOptions },
+    ];
+    if (paidModelOptions.length > 0) {
+      groups.push({ label: t('settings.openRouter.paidModelNote'), options: paidModelOptions });
+    }
+    groups.push({
+      label: t('settings.openRouter.customModelLabel'),
+      options: [{ value: CUSTOM_MODEL_VALUE, label: t('settings.openRouter.customModelLabel') }],
+    });
+    return groups;
+  }, [freeModelOptions, paidModelOptions, t]);
+  // QNBS-v3: OR-3 fix — the actual set of selectable values (free ∪ paid ∪ custom sentinel), NOT
+  // `new Set(models.map(...))` (which was mislabeled "knownPaidIds" and included free models too).
+  // `selectValue` previously trusted this broader-than-rendered set, so a live-fetched free model
+  // not on the hardcoded list could report as "known" while having no matching <option> — a silent
+  // Select/state divergence. Built from freeModelIds/paidModelIds (not modelGroups) so it stays
+  // referentially stable independent of `t` — see the freeModelIds comment above.
+  const knownOptionIds = useMemo(
+    () => new Set([...freeModelIds, ...paidModelIds, CUSTOM_MODEL_VALUE]),
+    [freeModelIds, paidModelIds],
+  );
+
+  // QNBS-v3: knownOptionIds gets a new Set identity on every catalog fetch (mount, refresh
+  // button), not just when preferredModel changes — only resync customModelInput when
+  // preferredModel itself changed, so a refresh mid-edit can't stomp the user's typed text.
+  const prevPreferredModelRef = useRef(preferredModel);
+  // QNBS-v3: tracks an ID the user explicitly committed via the custom-model input, so the
+  // stale-model warning below can't misfire for it — see modelIsStale. State, not a ref: it's
+  // read directly in the render body, and a ref mutation alone wouldn't trigger a re-render.
+  const [explicitCustomId, setExplicitCustomId] = useState<string | null>(null);
   useEffect(() => {
-    const free = OPENROUTER_FREE_MODELS.includes(
-      preferredModel as (typeof OPENROUTER_FREE_MODELS)[number],
-    );
-    const knownPaid = models.some((m) => m.id === preferredModel);
-    setIsCustomModel(!free && !knownPaid);
-    if (free || knownPaid) setCustomModelInput('');
-    else setCustomModelInput(preferredModel);
-  }, [preferredModel, models]);
+    const known = knownOptionIds.has(preferredModel);
+    setIsCustomModel(!known);
+    if (known) {
+      setCustomModelInput('');
+    } else if (prevPreferredModelRef.current !== preferredModel) {
+      setCustomModelInput(preferredModel);
+    }
+    prevPreferredModelRef.current = preferredModel;
+  }, [preferredModel, knownOptionIds]);
 
   const showSaveMsg = useCallback((ok: boolean, text: string) => {
     setSaveMsg({ ok, text });
@@ -371,6 +461,7 @@ export const OpenRouterSection: FC = () => {
       if (value === CUSTOM_MODEL_VALUE) {
         setIsCustomModel(true);
       } else {
+        setExplicitCustomId(null);
         setIsCustomModel(false);
         setCustomModelInput('');
         dispatch(settingsActions.setOpenRouter({ preferredModel: value }));
@@ -382,18 +473,18 @@ export const OpenRouterSection: FC = () => {
   const commitCustomModel = useCallback(() => {
     const trimmed = customModelInput.trim();
     if (trimmed) {
+      // QNBS-v3: remembers this exact ID was deliberately entered as custom, so a later catalog
+      // refresh that doesn't list it can't misreport it as a removed/stale catalog model.
+      setExplicitCustomId(trimmed);
       dispatch(settingsActions.setOpenRouter({ preferredModel: trimmed }));
       return;
     }
     // QNBS-v3: Empty custom input — revert the selection to the actually-configured model so the UI
     // doesn't show "custom" selected while the stored model stays unchanged (keeps UI ↔ config in sync).
-    const free = OPENROUTER_FREE_MODELS.includes(
-      preferredModel as (typeof OPENROUTER_FREE_MODELS)[number],
-    );
-    const storedIsCustom = !free && !models.some((m) => m.id === preferredModel);
+    const storedIsCustom = !knownOptionIds.has(preferredModel);
     setIsCustomModel(storedIsCustom);
     setCustomModelInput(storedIsCustom ? preferredModel : '');
-  }, [customModelInput, dispatch, preferredModel, models]);
+  }, [customModelInput, dispatch, preferredModel, knownOptionIds]);
 
   const handleCustomModelBlur = useCallback(() => {
     commitCustomModel();
@@ -409,6 +500,27 @@ export const OpenRouterSection: FC = () => {
     [commitCustomModel],
   );
 
+  // QNBS-v3: OR-5 fix — manual refresh. Clears the 1h cache and re-fetches immediately so the user
+  // isn't stuck waiting out the cache TTL to see a newly-released free model.
+  const handleRefreshCatalog = useCallback(() => {
+    clearOpenRouterModelCache();
+    void fetchCatalog(storedKey);
+  }, [fetchCatalog, storedKey]);
+
+  // QNBS-v3: OR-2 fix — a successful, non-blocked, non-loading fetch means `knownOptionIds`
+  // reflects the CURRENT catalog; only then can "preferredModel isn't in it" mean the model is
+  // actually gone (vs. still loading, or cloud access being policy-blocked).
+  const catalogReady = !isModelsLoading && !modelFetchError && !policyBlocked;
+  // QNBS-v3: exempt an ID the user explicitly entered as custom this session — otherwise a
+  // deliberate non-catalog model gets nagged as if it were a removed catalog selection.
+  const modelIsStale =
+    catalogReady && !knownOptionIds.has(preferredModel) && explicitCustomId !== preferredModel;
+
+  const handleSwitchToAvailableModel = useCallback(() => {
+    const fallbackId = freeModelOptions[0]?.value ?? OPENROUTER_FREE_MODEL_FALLBACK[0];
+    dispatch(settingsActions.setOpenRouter({ preferredModel: fallbackId }));
+  }, [dispatch, freeModelOptions]);
+
   // Cleanup on unmount.
   useEffect(() => {
     return () => {
@@ -419,57 +531,12 @@ export const OpenRouterSection: FC = () => {
     };
   }, []);
 
-  const knownPaidIds = useMemo(() => new Set(models.map((m) => m.id)), [models]);
-
   const selectValue = useMemo(() => {
     if (isCustomModel) return CUSTOM_MODEL_VALUE;
-    const free = OPENROUTER_FREE_MODELS.includes(
-      preferredModel as (typeof OPENROUTER_FREE_MODELS)[number],
-    );
-    // QNBS-v3: Paid catalog models are known by id, so keep the real value instead of falling back to custom.
-    if (free || knownPaidIds.has(preferredModel)) return preferredModel;
-    return CUSTOM_MODEL_VALUE;
-  }, [isCustomModel, preferredModel, knownPaidIds]);
-
-  const modelOptions = useMemo(
-    () =>
-      OPENROUTER_FREE_MODELS.map((m) => ({
-        value: m,
-        label: t(
-          `settings.openRouter.freeModel.${
-            {
-              'deepseek/deepseek-r1:free': 'deepseekR1',
-              'meta-llama/llama-3.3-70b-instruct:free': 'llama3370b',
-              'qwen/qwen2.5-72b-instruct:free': 'qwen2572b',
-              'google/gemma-3-27b-it:free': 'gemma327b',
-              'mistralai/mistral-7b-instruct:free': 'mistral7b',
-            }[m]
-          }`,
-        ),
-      })),
-    [t],
-  );
-
-  const fetchedPaidOptions = useMemo(() => {
-    const freeIds = new Set<string>(OPENROUTER_FREE_MODELS);
-    return models
-      .filter((m) => !freeIds.has(m.id) && !isOpenRouterFreeModel(m.id))
-      .map((m) => ({ value: m.id, label: m.name ?? m.id }));
-  }, [models]);
-
-  const modelGroups = useMemo(() => {
-    const groups: { label: string; options: { value: string; label: string }[] }[] = [
-      { label: t('settings.openRouter.freeTierNote'), options: modelOptions },
-    ];
-    if (fetchedPaidOptions.length > 0) {
-      groups.push({ label: t('settings.openRouter.paidModelNote'), options: fetchedPaidOptions });
-    }
-    groups.push({
-      label: t('settings.openRouter.customModelLabel'),
-      options: [{ value: CUSTOM_MODEL_VALUE, label: t('settings.openRouter.customModelLabel') }],
-    });
-    return groups;
-  }, [modelOptions, fetchedPaidOptions, t]);
+    // QNBS-v3: OR-3 fix — check against the actually-rendered option set, not a broader "known
+    // models" set that could include an ID with no matching <option>.
+    return knownOptionIds.has(preferredModel) ? preferredModel : CUSTOM_MODEL_VALUE;
+  }, [isCustomModel, preferredModel, knownOptionIds]);
 
   const modeWarning = useMemo(() => {
     if (aiMode === 'local') return t('settings.openRouter.modeWarning.local');
@@ -627,12 +694,23 @@ export const OpenRouterSection: FC = () => {
 
           {/* Preferred model */}
           <div className="space-y-2">
-            <label
-              htmlFor="openrouter-model"
-              className="text-sm font-medium text-[var(--sc-text-secondary)]"
-            >
-              {t('settings.openRouter.preferredModel')}
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label
+                htmlFor="openrouter-model"
+                className="text-sm font-medium text-[var(--sc-text-secondary)]"
+              >
+                {t('settings.openRouter.preferredModel')}
+              </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefreshCatalog}
+                disabled={isModelsLoading || policyBlocked}
+                aria-label={t('settings.openRouter.refreshModelsAriaLabel')}
+              >
+                {t('settings.openRouter.refreshModels')}
+              </Button>
+            </div>
             {isModelsLoading && (
               <div className="flex items-center gap-2 text-xs text-[var(--sc-text-muted)]">
                 <Spinner className="h-3 w-3" />
@@ -642,6 +720,11 @@ export const OpenRouterSection: FC = () => {
             {modelFetchError && (
               <p className="text-xs text-[var(--sc-danger-fg)]" role="alert">
                 {modelFetchError}
+              </p>
+            )}
+            {!isModelsLoading && usingFallbackFreeModels && (
+              <p className="text-xs text-[var(--sc-warning-fg)]" role="status">
+                {t('settings.openRouter.freeModel.fallbackNotice')}
               </p>
             )}
             {!isModelsLoading && (
@@ -666,6 +749,19 @@ export const OpenRouterSection: FC = () => {
                 placeholder={t('settings.openRouter.customModelPlaceholder')}
                 aria-label={t('settings.openRouter.customModelAriaLabel')}
               />
+            )}
+            {modelIsStale && (
+              <div
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--sc-warning-bg)] p-2"
+                role="alert"
+              >
+                <p className="text-xs text-[var(--sc-warning-fg)]">
+                  {t('settings.openRouter.modelUnavailable')}
+                </p>
+                <Button variant="secondary" size="sm" onClick={handleSwitchToAvailableModel}>
+                  {t('settings.openRouter.switchToAvailableModel')}
+                </Button>
+              </div>
             )}
             <p className="text-xs text-[var(--sc-text-muted)]">
               {t('settings.openRouter.freeTierNote')}

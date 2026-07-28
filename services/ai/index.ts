@@ -107,7 +107,7 @@ export {
 export {
   getApproxRpm,
   isCircuitOpen,
-  OPENROUTER_FREE_MODELS,
+  OPENROUTER_FREE_MODEL_FALLBACK,
   type OpenRouterFreeModel,
   resetOpenRouterCircuit,
 } from './providers/openrouterProvider';
