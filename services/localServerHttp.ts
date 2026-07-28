@@ -7,9 +7,12 @@
  * on the web we keep the global fetch. The plugin is imported dynamically so the web bundle never
  * loads it. Kept deliberately thin: URL normalization, timeout composition, error classification.
  */
+import { createLogger } from './logger';
 import { isTauriRuntime } from './tauriRuntime';
 
-export type LocalServerErrorKind = 'unreachable' | 'timeout';
+const log = createLogger('localServerHttp');
+
+export type LocalServerErrorKind = 'unreachable' | 'timeout' | 'plugin_unavailable';
 
 /** Classified local-server failure. User aborts are NOT wrapped — they rethrow unchanged. */
 export class LocalServerError extends Error {
@@ -56,11 +59,32 @@ export interface LocalServerFetchInit {
   timeoutMs?: number;
 }
 
-/** Picks the native Tauri HTTP plugin on desktop, global fetch on the web. */
+/**
+ * Picks the native Tauri HTTP plugin on desktop, global fetch on the web.
+ *
+ * QNBS-v3: the dynamic import can fail at runtime even when `isTauriRuntime()` is true — a build
+ * config regression that externalizes `@tauri-apps/*` leaves this as an unresolvable bare
+ * specifier in the packaged app. That failure must NOT be swallowed into the generic
+ * 'unreachable' classification (indistinguishable from a genuinely-down server); it's a plugin
+ * load failure, not a network failure, and is far more actionable to surface distinctly. No
+ * `globalThis.fetch` fallback here (unlike services/ai/fetchAdapter.ts's cloud-provider path) —
+ * it wouldn't help localhost targets, which fail on CORS in the WebView regardless.
+ */
 async function resolveFetch(): Promise<typeof fetch> {
   if (isTauriRuntime()) {
-    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-    return tauriFetch as unknown as typeof fetch;
+    try {
+      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+      return tauriFetch as unknown as typeof fetch;
+    } catch (err) {
+      log.error('Tauri HTTP plugin failed to load; local server requests cannot proceed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw new LocalServerError(
+        'plugin_unavailable',
+        'Local server networking is unavailable: the desktop HTTP plugin failed to load.',
+        { cause: err },
+      );
+    }
   }
   return globalThis.fetch.bind(globalThis);
 }

@@ -222,4 +222,47 @@ describe('AiProviderCard — ollama provider (#266)', () => {
       localBackendPreset: 'ollama_default',
     });
   });
+
+  it('desktop: a classified test failure renders the translated key, not the raw technical message', async () => {
+    setDesktopRuntime(true);
+    vi.mocked(testAIConnection).mockResolvedValue({
+      ok: false,
+      error: 'Ollama HTTP 503',
+      kind: 'httpError',
+      params: { status: 503 },
+    });
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => {
+      // QNBS-v3: the translated text renders in two places (the status-badge error line and the
+      // manual "Test connection" result span) — both share the same `testError` state.
+      expect(screen.getAllByText('settings.ai.testError.httpError').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText('Ollama HTTP 503')).toBeNull();
+  });
+
+  it('desktop: an unexpected failure (no params) renders the translated key without crashing', async () => {
+    setDesktopRuntime(true);
+    vi.mocked(testAIConnection).mockResolvedValue({
+      ok: false,
+      error: 'TypeError: something internal broke at services/foo.ts:42',
+      kind: 'unexpected',
+    });
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText('settings.ai.testError.unexpected').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText(/something internal broke/)).toBeNull();
+  });
 });

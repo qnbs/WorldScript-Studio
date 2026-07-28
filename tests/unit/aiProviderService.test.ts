@@ -236,12 +236,14 @@ describe('testAIConnection', () => {
     const result = await testAIConnection('anthropic', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('CORS');
+    expect(result.kind).toBe('backendProxyRequired');
   });
 
   it('returns ok:false for ollama in browser (no Tauri)', async () => {
     const result = await testAIConnection('ollama', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('desktop app');
+    expect(result.kind).toBe('desktopRequired');
   });
 
   it('returns ok:false when openai key is missing', async () => {
@@ -249,6 +251,8 @@ describe('testAIConnection', () => {
     const result = await testAIConnection('openai', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('Key');
+    expect(result.kind).toBe('noApiKey');
+    expect(result.params).toEqual({ provider: 'OpenAI' });
   });
 
   it('returns ok:false when gemini key is missing', async () => {
@@ -256,11 +260,14 @@ describe('testAIConnection', () => {
     const result = await testAIConnection('gemini', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('key');
+    expect(result.kind).toBe('noApiKey');
+    expect(result.params).toEqual({ provider: 'Gemini' });
   });
 
   it('returns ok:false for unknown provider', async () => {
     const result = await testAIConnection('unknown' as never, {});
     expect(result.ok).toBe(false);
+    expect(result.kind).toBe('unknownProvider');
   });
 
   it('returns ok:true for webllm when WebGPU is available', async () => {
@@ -274,6 +281,7 @@ describe('testAIConnection', () => {
     const result = await testAIConnection('webllm', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('WebGPU');
+    expect(result.kind).toBe('noWebgpu');
   });
 
   it('returns ok:true for onnx (WASM always available)', async () => {
@@ -614,6 +622,8 @@ describe('testAIConnection additional branches', () => {
     const result = await testAIConnection('openai', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('403');
+    expect(result.kind).toBe('httpError');
+    expect(result.params).toEqual({ status: 403 });
   });
 
   it('grok: returns ok:false when no API key', async () => {
@@ -621,6 +631,8 @@ describe('testAIConnection additional branches', () => {
     const result = await testAIConnection('grok', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('Key');
+    expect(result.kind).toBe('noApiKey');
+    expect(result.params).toEqual({ provider: 'Grok' });
   });
 
   it('grok: returns ok:false on HTTP 429', async () => {
@@ -629,6 +641,8 @@ describe('testAIConnection additional branches', () => {
     const result = await testAIConnection('grok', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('429');
+    expect(result.kind).toBe('httpError');
+    expect(result.params).toEqual({ status: 429 });
   });
 
   it('gemini: returns ok:true on HTTP 200', async () => {
@@ -644,6 +658,8 @@ describe('testAIConnection additional branches', () => {
     const result = await testAIConnection('gemini', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('401');
+    expect(result.kind).toBe('httpError');
+    expect(result.params).toEqual({ status: 401 });
   });
 
   it('returns ok:false with error message when fetch throws (catch branch)', async () => {
@@ -652,6 +668,10 @@ describe('testAIConnection additional branches', () => {
     const result = await testAIConnection('openai', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('network error');
+    expect(result.kind).toBe('unexpected');
+    // QNBS-v3 (CodeAnt CWE-209): the raw message stays in `error` (for logs) only -- `unexpected`
+    // has no `params`, since the i18n string for it never interpolates the raw exception text.
+    expect(result.params).toBeUndefined();
   });
 });
 

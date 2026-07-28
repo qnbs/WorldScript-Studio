@@ -125,6 +125,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [ADR 0012](docs/adr/0012-local-server-connectivity-tauri-http.md) and
   [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md).
 
+- **Desktop Ollama/LM Studio/vLLM discovery still broken in packaged builds after #269 (#266).**
+  Root cause: `vite.config.ts`'s `rollupOptions.external` unconditionally externalized every
+  `@tauri-apps/*` package from **every** `vite build`, including the exact build Tauri's
+  `beforeBuildCommand` invokes to produce the `.deb`/`.msi`. Since `services/localServerHttp.ts`'s
+  `@tauri-apps/plugin-http` import is dynamic, this left an unresolvable bare module specifier in
+  the shipped desktop bundle — every caller's catch classified the resulting load failure
+  identically to a genuinely-down server (no CORS noise, no discovery, even with Ollama/LM Studio
+  running). `tauri dev` was unaffected (Vite's dev server doesn't apply `rollupOptions`), so the
+  regression only surfaced in packaged builds. Fixed by extracting the existing Tauri-build
+  detection (`resolveViteBase.ts`'s `TAURI_ENV_PLATFORM`/`TAURI_PLATFORM` check) into a shared
+  `isTauriBuild()` export and making the external array conditional on it; the web/PWA build is
+  unaffected. `localServerHttp.ts`'s `resolveFetch()` also now classifies a plugin load failure as
+  a distinct `LocalServerError('plugin_unavailable')` (logged), instead of folding it into
+  `'unreachable'`. See the 2026-07-28 update in
+  [ADR 0012](docs/adr/0012-local-server-connectivity-tauri-http.md).
+
 - **Feature-catalog / slice default drift made structurally impossible.** `features/featureCatalog.ts`
   now covers all **22** flags (was 16) and **derives** each entry's `defaultOn` from the slice's
   `defaultFeatureFlagsState` instead of hand-keying it — the class of bug where the catalog said

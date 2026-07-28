@@ -4,11 +4,12 @@ import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { GITHUB_PAGES_BASE, resolveViteBase } from './config/resolveViteBase';
+import { GITHUB_PAGES_BASE, isTauriBuild, resolveViteBase } from './config/resolveViteBase';
 
 const isAnalyze = process.env['ANALYZE'] === 'true';
 
 const deployBase = resolveViteBase();
+const isTauri = isTauriBuild();
 
 export default defineConfig({
   base: deployBase,
@@ -123,10 +124,13 @@ export default defineConfig({
         ),
     },
     rollupOptions: {
-      external: [
-        // QNBS-v3: Tauri APIs are only available in the desktop shell — externalize all @tauri-apps/* so the web/Vercel build never tries to bundle them.
-        /^@tauri-apps\//,
-      ],
+      // QNBS-v3: externalizing @tauri-apps/* must NOT apply to the Tauri desktop build itself —
+      // services/localServerHttp.ts's dynamic `await import('@tauri-apps/plugin-http')` would be
+      // left as an unresolvable bare specifier in the packaged .deb/.msi, silently breaking local
+      // Ollama/LM Studio/vLLM discovery (see docs/adr/0012-local-server-connectivity-tauri-http.md).
+      // Web/Vercel builds still externalize them — those code paths are gated by isTauriRuntime()
+      // and never exercised there.
+      external: isTauri ? [] : [/^@tauri-apps\//],
       output: {
         // Asset hashing for cache busting
         entryFileNames: 'assets/[name]-[hash].js',
