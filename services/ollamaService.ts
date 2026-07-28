@@ -193,8 +193,15 @@ export async function testOllamaConnection(baseUrl?: string): Promise<TestConnec
     // QNBS-v3: plugin_unavailable means the desktop HTTP transport itself failed to load — not
     // that Ollama is down. Surfacing it distinctly (rather than folding into "not reachable")
     // makes a future build-config regression immediately diagnosable from the UI alone.
+    // QNBS-v3 (CodeRabbit CWE-209): `LocalServerError` is a public class whose `.message` isn't
+    // guaranteed safe for every kind — build our own fixed, safe string instead of trusting it,
+    // matching the 'timeout'/'unreachable' branches above which never reuse the instance message.
     if (error instanceof LocalServerError && error.kind === 'plugin_unavailable') {
-      return { ok: false, error: error.message, kind: 'pluginUnavailable' };
+      return {
+        ok: false,
+        error: 'Ollama: local server networking unavailable (desktop HTTP plugin failed to load)',
+        kind: 'pluginUnavailable',
+      };
     }
     const message = error instanceof Error ? error.message : String(error);
     // QNBS-v3 (CodeAnt CWE-209): the raw transport message (could be a TypeError message with

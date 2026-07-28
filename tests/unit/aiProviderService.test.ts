@@ -764,7 +764,9 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
     ) as unknown[][];
     expect(ollamaCalls).toHaveLength(2);
     expect(String(ollamaCalls[0]?.[0])).toContain('/api/tags');
-    expect(String(ollamaCalls[1]?.[0])).toContain('/models');
+    // QNBS-v3 (CodeRabbit): assert the exact OpenAI-compatible path — a loose '/models' substring
+    // would also pass for an incorrect '/models' (missing '/v1' prefix) endpoint.
+    expect(String(ollamaCalls[1]?.[0])).toContain('/v1/models');
   });
 
   it('does not attempt a second request for LM Studio/vLLM (only Ollama has a native fallback)', async () => {
