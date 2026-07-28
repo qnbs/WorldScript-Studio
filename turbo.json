@@ -1,5 +1,23 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "ANALYZE",
+    "BASE_URL",
+    "CF_PAGES",
+    "CF_PAGES_BRANCH",
+    "CF_PAGES_SKIP_WRANGLER",
+    "CLOUDFLARE_MANUAL_DEPLOY",
+    "CLOUDFLARE_PAGES_PROJECT",
+    "DEPLOY_TARGET",
+    "DEV",
+    "GRAPHIFY_SKIP",
+    "PLAYWRIGHT_REUSE_SERVER",
+    "PLAYWRIGHT_SKIP_VRT",
+    "RUN_DEEP_E2E",
+    "RUN_MOBILE_E2E",
+    "RUN_REAL_VOICE_E2E",
+    "SMOKE_PORT"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

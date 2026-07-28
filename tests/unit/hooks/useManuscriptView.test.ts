@@ -212,7 +212,8 @@ describe('handleMoveSection', () => {
 
     const call = mockDispatch.mock.calls.find((c) => c[0]?.type === 'project/setManuscript');
     expect(call).toBeDefined();
-    const newOrder = (call?.[0] as { payload: StorySection[] }).payload;
+    const action = call?.[0];
+    const newOrder = (action as { payload: StorySection[] }).payload;
     expect(newOrder[0]?.id).toBe('s2');
     expect(newOrder[1]?.id).toBe('s1');
   });
@@ -257,7 +258,8 @@ describe('handleDragSort', () => {
 
     const call = mockDispatch.mock.calls.find((c) => c[0]?.type === 'project/setManuscript');
     expect(call).toBeDefined();
-    const newOrder = (call?.[0] as { payload: StorySection[] }).payload;
+    const action = call?.[0];
+    const newOrder = (action as { payload: StorySection[] }).payload;
     expect(newOrder[0]?.id).toBe('s2');
     expect(newOrder[2]?.id).toBe('s1');
   });
