@@ -30,12 +30,10 @@
     "Noto Sans Arabic", "Noto Sans Hebrew", "Inter", system-ui, -apple-system, sans-serif;
   --font-editor-rtl:
     "Noto Naskh Arabic", "Noto Sans Hebrew", "Merriweather", Georgia, "Times New Roman", serif;
-  /* QNBS-v3: Phase 3 — CJK/Greek font stacks for ja/zh/el Beta languages.
-     CJK: Noto Sans JP covers Hiragana, Katakana, and Kanji (loaded via Google Fonts).
-     Greek: Noto Sans GR covers monotonic and polytonic Greek (loaded via Google Fonts). */
-  --font-ui-cjk: "Noto Sans JP", "Inter", system-ui, -apple-system, sans-serif;
-  --font-ui-greek: "Noto Sans GR", "Inter", system-ui, -apple-system, sans-serif;
-  /* QNBS-v3: Korean (Hangul) — Noto Sans KR (loaded via Google Fonts CDN); Inter lacks Hangul glyphs. */
+  /* QNBS-v3: self-hosted via @fontsource (index.tsx), replacing a broken Google Fonts request ("Noto Sans GR" doesn't exist) — SC added for zh's Simplified Han forms; Greek uses the base "Noto Sans" family's greek subset. */
+  --font-ui-cjk: "Noto Sans JP", "Noto Sans SC", "Inter", system-ui, -apple-system, sans-serif;
+  --font-ui-greek: "Noto Sans", "Inter", system-ui, -apple-system, sans-serif;
+  /* QNBS-v3: Korean (Hangul) — Noto Sans KR, self-hosted via @fontsource; Inter lacks Hangul glyphs. */
   --font-ui-kr: "Noto Sans KR", "Inter", system-ui, -apple-system, sans-serif;
   --sc-prose-measure: 65ch;
 

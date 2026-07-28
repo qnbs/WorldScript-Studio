@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-06-10
+- **Revised: 2026-07-28** — corrected a false Consequences claim (see below); no change to the Decision.
 - **Deciders:** Maintainer + Claude Code
 - **Context tags:** security, csp, networking, byok, tauri
 
@@ -56,13 +57,28 @@ needed there.
   successful AI prompt injection into a code path that issues a request) can reach any HTTPS origin.
   Mitigations: no secrets are placed in `connect-src`-reachable globals; API keys are encrypted at
   rest and only attached to the user-configured provider request; AI output is never `eval`'d
-  (`CLAUDE.md` Key Constraints); the host (Vercel/CF) tightens CSP further via HTTP response headers
-  in production. Closing this fully requires build-time CSP generation from the provider registry +
-  a validated custom-endpoint allowlist (Option C), deferred to v2.0.
+  (`CLAUDE.md` Key Constraints). Closing this fully requires build-time CSP generation from the
+  provider registry + a validated custom-endpoint allowlist (Option C), deferred to v2.0.
+- **Revision note (2026-07-28):** this section previously claimed "the host (Vercel/CF) tightens CSP
+  further via HTTP response headers in production." That was **false** at the time it was written —
+  none of `vercel.json`, `public/_headers`, or `nginx.conf` set a `Content-Security-Policy` header, so
+  the accepted `connect-src` residual risk above had *no* documented compensating control. This has
+  now been fixed: `vercel.json`, `public/_headers`, and `nginx.conf` all set a real `Content-Security-Policy`
+  header, identical to the `index.html` meta CSP (`connect-src` is unchanged — this ADR's tradeoff still
+  applies there — but `frame-ancestors 'none'` is only meaningful as a header, never as a meta tag, so
+  that specific directive is a genuine new hardening on the three hosts that can set it).
+  **GitHub Pages — the canonical upstream mirror — cannot set any HTTP response header at all** (no
+  `_headers`-equivalent, no platform config surface); the `index.html` meta CSP is the *only*
+  enforcement point there, and `Permissions-Policy` has no meta-tag equivalent at all, so it cannot be
+  set on GitHub Pages under any circumstance. Any future claim in this ADR about host-level hardening
+  must be checked against all four surfaces, not assumed.
 - **Maintenance rule:** when adding a new **localhost** or **wss** endpoint, update **both**
   `index.html` and `src-tauri/tauri.conf.json`, and extend `tests/unit/csp.test.ts`. New **cloud
   HTTPS** providers need no `connect-src` change on web (covered by `https:`) but **do** need an
-  explicit entry in the strict Tauri `connect-src`.
+  explicit entry in the strict Tauri `connect-src`. **New header-origin or directive change:** update
+  `vercel.json`, `public/_headers`, and `nginx.conf` together, plus `tests/unit/csp.test.ts` and
+  `tests/unit/deploymentHeaders.test.ts` — a divergence between the header CSP and the meta CSP makes
+  the meta tag misleading (see `docs/DEPLOYMENT.md` § Header invariants per host).
 
 ## Rejected alternatives
 
