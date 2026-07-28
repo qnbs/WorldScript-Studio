@@ -230,6 +230,7 @@
   "settings.ai.providerStatusDisconnected": "Nem elérhető",
   "settings.ai.providerStatusLabel": "Kapcsolat állapota",
   "settings.ai.providerStatusReady": "Kész",
+  "settings.ai.providerStatusUnavailableBrowser": "Böngészőben nem érhető el",
   "settings.ai.providerTitle": "AI szolgáltató",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM (böngésző)",

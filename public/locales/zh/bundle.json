@@ -1838,6 +1838,7 @@
   "settings.ai.providerStatusDisconnected": "不可用",
   "settings.ai.providerStatusLabel": "连接状态",
   "settings.ai.providerStatusReady": "准备好",
+  "settings.ai.providerStatusUnavailableBrowser": "浏览器中不可用",
   "settings.ai.providerTitle": "人工智能提供商",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM（浏览器）",

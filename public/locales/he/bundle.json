@@ -1838,6 +1838,7 @@
   "settings.ai.providerStatusDisconnected": "לא זמין",
   "settings.ai.providerStatusLabel": "סטטוס חיבור",
   "settings.ai.providerStatusReady": "מוכן",
+  "settings.ai.providerStatusUnavailableBrowser": "לא זמין בדפדפן",
   "settings.ai.providerTitle": "ספק AI",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM ‏(דפדפן)",

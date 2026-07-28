@@ -230,6 +230,7 @@
   "settings.ai.providerStatusDisconnected": "Недоступно",
   "settings.ai.providerStatusLabel": "Статус соединения",
   "settings.ai.providerStatusReady": "Готовый",
+  "settings.ai.providerStatusUnavailableBrowser": "Недоступно в браузере",
   "settings.ai.providerTitle": "Поставщик ИИ",
   "settings.ai.providerTransformers": "Трансформеры.js",
   "settings.ai.providerWebllm": "WebLLM (браузер)",

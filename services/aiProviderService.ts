@@ -706,18 +706,34 @@ export interface LocalEndpointScanResult {
  * QNBS-v3: Schneller Desktop-Check typischer lokaler /v1-Endpunkte — keine Secrets, nur
  * Erreichbarkeit. #266: routed through localServerFetch (Tauri plugin-http on desktop) so the
  * scan works inside the WebView, with per-endpoint state classification for actionable UI badges.
+ * Ollama tries its native /api/tags first (present since early versions) before falling back to
+ * the OpenAI-compat /v1/models shim (only on Ollama ≥0.1.24) — mirrors the native-first approach
+ * testOllamaConnection/listOllamaModels already use, so an older Ollama install isn't missed.
  */
 export async function scanLocalOpenAiCompatibleEndpoints(): Promise<LocalEndpointScanResult[]> {
   const candidates = [
-    { labelKey: 'settings.ai.scanLabelOllama', baseUrl: 'http://localhost:11434' },
-    { labelKey: 'settings.ai.scanLabelLmStudio', baseUrl: 'http://localhost:1234' },
-    { labelKey: 'settings.ai.scanLabelVllm', baseUrl: 'http://localhost:8000' },
+    { labelKey: 'settings.ai.scanLabelOllama', baseUrl: 'http://localhost:11434', ollama: true },
+    { labelKey: 'settings.ai.scanLabelLmStudio', baseUrl: 'http://localhost:1234', ollama: false },
+    { labelKey: 'settings.ai.scanLabelVllm', baseUrl: 'http://localhost:8000', ollama: false },
   ];
   return Promise.all(
-    candidates.map(async ({ labelKey, baseUrl }): Promise<LocalEndpointScanResult> => {
+    candidates.map(async ({ labelKey, baseUrl, ollama }): Promise<LocalEndpointScanResult> => {
       try {
-        const root = normalizeOpenAiCompatibleBaseUrl(baseUrl);
-        const res = await localServerFetch(`${root}/models`, { timeoutMs: 2800 });
+        let res: Response;
+        if (ollama) {
+          try {
+            res = await localServerFetch(`${baseUrl}/api/tags`, { timeoutMs: 2800 });
+          } catch (nativeErr) {
+            if (nativeErr instanceof LocalServerError && nativeErr.kind === 'timeout') {
+              throw nativeErr;
+            }
+            const root = normalizeOpenAiCompatibleBaseUrl(baseUrl);
+            res = await localServerFetch(`${root}/models`, { timeoutMs: 2800 });
+          }
+        } else {
+          const root = normalizeOpenAiCompatibleBaseUrl(baseUrl);
+          res = await localServerFetch(`${root}/models`, { timeoutMs: 2800 });
+        }
         const ok = res.ok || res.status === 401;
         return { labelKey, baseUrl, ok, state: ok ? 'ok' : 'http', status: res.status };
       } catch (err) {
