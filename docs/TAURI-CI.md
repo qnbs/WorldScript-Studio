@@ -124,8 +124,8 @@ Complete these steps once before pushing the first signed release tag:
    - tauri-bundle-ubuntu-22.04  → .deb, .AppImage + .sig files
    - tauri-bundle-windows-latest → .msi/.exe + .sig files
    - tauri-bundle-macos-latest  → .dmg + .app.tar.gz (aarch64) + .sig files
-   - tauri-bundle-macos-13      → .dmg + .app.tar.gz (x64 / Intel) + .sig files
-   - latest.json  (auto-updater manifest with linux/windows/darwin-aarch64/darwin-x86_64 entries)
+   - latest.json  (auto-updater manifest with linux/windows/darwin-aarch64 entries — no
+     darwin-x86_64; Intel Mac builds are deferred, see the Build matrix section above)
 
 5. Download the installer for your OS, install the app, open it.
 
