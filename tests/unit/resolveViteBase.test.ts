@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { GITHUB_PAGES_BASE, resolveViteBase } from '../../config/resolveViteBase';
+import { GITHUB_PAGES_BASE, isTauriBuild, resolveViteBase } from '../../config/resolveViteBase';
 
-// QNBS-v3: Guards the desktop blank-screen regression — Tauri builds MUST resolve to a relative
-// base so hashed assets load under tauri://localhost/ instead of 404ing on the GitHub Pages path.
+// QNBS-v3: Guards the desktop discovery regression — a Tauri build that externalized
+// @tauri-apps/* left an unresolvable bare module specifier in the shipped bundle (services/
+// localServerHttp.ts's dynamic `@tauri-apps/plugin-http` import). isTauriBuild is the single
+// source of truth vite.config.ts uses to keep rollupOptions.external in sync with `base`.
+describe('isTauriBuild', () => {
+  it('is true for Tauri 2.x desktop builds (TAURI_ENV_PLATFORM)', () => {
+    expect(isTauriBuild({ TAURI_ENV_PLATFORM: 'linux' })).toBe(true);
+  });
+
+  it('is true for the legacy Tauri 1.x env var (TAURI_PLATFORM)', () => {
+    expect(isTauriBuild({ TAURI_PLATFORM: 'windows' })).toBe(true);
+  });
+
+  it('is false for the web/PWA build with neither env var set', () => {
+    expect(isTauriBuild({})).toBe(false);
+    expect(isTauriBuild({ VITE_BASE: '/foo', DEPLOY_TARGET: 'edge' })).toBe(false);
+  });
+});
+
 describe('resolveViteBase', () => {
   it('returns a relative base for Tauri 2.x desktop builds (TAURI_ENV_PLATFORM)', () => {
     expect(resolveViteBase({ TAURI_ENV_PLATFORM: 'windows' })).toBe('./');

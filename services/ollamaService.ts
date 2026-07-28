@@ -162,6 +162,12 @@ export async function testOllamaConnection(
     if (error instanceof LocalServerError && error.kind === 'timeout') {
       return { ok: false, error: `Ollama timed out (${normalizeBaseUrl(baseUrl)})` };
     }
+    // QNBS-v3: plugin_unavailable means the desktop HTTP transport itself failed to load — not
+    // that Ollama is down. Surfacing it distinctly (rather than folding into "not reachable")
+    // makes a future build-config regression immediately diagnosable from the UI alone.
+    if (error instanceof LocalServerError && error.kind === 'plugin_unavailable') {
+      return { ok: false, error: error.message };
+    }
     const message = error instanceof Error ? error.message : String(error);
     return {
       ok: false,
