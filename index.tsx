@@ -32,11 +32,7 @@ import '@fontsource/noto-sans-arabic/700.css';
 import '@fontsource/noto-sans-hebrew/400.css';
 import '@fontsource/noto-sans-hebrew/500.css';
 import '@fontsource/noto-sans-hebrew/700.css';
-/* QNBS-v3: Phase 3 — CJK (ja/zh) + Greek (el) self-hosted fonts, replacing a broken Google Fonts
-   CDN request (`Noto+Sans+GR` does not exist at Google Fonts — the combined CSS2 request 400'd,
-   silently dropping the JP/KR families requested alongside it too). Noto Sans JP/KR/SC are
-   dedicated @fontsource packages; Greek uses the base @fontsource/noto-sans package's `greek`
-   subset instead of a nonexistent "Noto Sans GR" family. */
+/* QNBS-v3: CJK (ja/zh) + Greek (el) self-hosted, replacing a broken Google Fonts CDN request (`Noto+Sans+GR` doesn't exist there, so the combined request 400'd and silently dropped JP/KR too). */
 import '@fontsource/noto-sans-jp/400.css';
 import '@fontsource/noto-sans-jp/500.css';
 import '@fontsource/noto-sans-jp/700.css';

@@ -87,10 +87,7 @@
             upgrade-insecure-requests;
           " />
 
-    <!-- QNBS-v3: CJK (Noto Sans JP/KR/SC) + Greek (Noto Sans, greek subset) are self-hosted via
-         @fontsource in index.tsx — same pattern as the Arabic/Hebrew fonts below. No external font
-         CDN is requested; "Noto Sans GR" (the previous Google Fonts family name for Greek) does not
-         exist and 400'd the combined request, silently dropping JP/KR alongside it. -->
+    <!-- QNBS-v3: CJK/Greek self-hosted via @fontsource in index.tsx (no external font CDN) — "Noto Sans GR" doesn't exist at Google Fonts and 400'd the combined request, silently dropping JP/KR too. -->
 
     <title>WorldScript Studio</title>
 </head>

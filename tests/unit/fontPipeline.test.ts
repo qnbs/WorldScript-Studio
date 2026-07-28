@@ -18,9 +18,22 @@ const indexCss = readFileSync(fileURLToPath(new URL('../../index.css', import.me
  * QNBS-v3 convention requires explaining *why* a value was removed, which means the historical
  * broken value (e.g. "Noto Sans GR", "fonts.gstatic.com") legitimately appears in prose — this
  * must not trip a regression test meant to catch an actual re-introduced *live* reference.
+ *
+ * Applies the two replacements repeatedly until a fixed point (not just once): a single pass can
+ * leave a residual `<!--`/`/*` behind when one comment marker sits inside another (e.g. a `/*`
+ * inside an HTML comment, exposed after the HTML comment around it is stripped), which is exactly
+ * the "incomplete multi-character sanitization" pattern static analysis flags in one-pass regex
+ * strippers. This is test-only code reading trusted local source files, but the loop is free and
+ * removes the whole class of residual-marker findings.
  */
 function stripComments(src: string): string {
-  return src.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  let result = src;
+  let previous: string;
+  do {
+    previous = result;
+    result = result.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  } while (result !== previous);
+  return result;
 }
 
 /** Extract capture group 1 with a narrowing guard (noUncheckedIndexedAccess-safe). */
@@ -47,6 +60,14 @@ function webCsp(): string {
 // system-fallback decision. Empty today; keep this as the single place to record an exception
 // rather than silently skipping the loop below.
 const SYSTEM_FALLBACK_ALLOWLIST: readonly string[] = [];
+
+// QNBS-v3: families whose @fontsource package ships multiple subsets (e.g. base "Noto Sans"
+// bundles latin/cyrillic/greek/vietnamese as separate files) where the generic `'${pkg}/` prefix
+// check would pass on ANY subset import, including a Latin-only one that drops the actual script
+// coverage this family exists for. Require the specific subset prefix instead.
+const REQUIRED_IMPORT_PREFIXES: Readonly<Record<string, string>> = {
+  'Noto Sans': `'@fontsource/noto-sans/greek-`,
+};
 
 /** Pull every `--font-ui-*: "Family", ...;` declaration's families out of index.css. */
 function fontUiFamilyDeclarations(): { token: string; families: string[] }[] {
@@ -112,9 +133,10 @@ describe('Font pipeline — no external font CDN, self-hosted CJK/Greek', () => 
 
         // e.g. "Noto Sans JP" -> @fontsource/noto-sans-jp; "Noto Sans" -> @fontsource/noto-sans
         const pkg = `@fontsource/${family.toLowerCase().replace(/\s+/g, '-')}`;
+        const requiredPrefix = REQUIRED_IMPORT_PREFIXES[family] ?? `'${pkg}/`;
         expect(
-          indexTsx.includes(`'${pkg}/`),
-          `expected an @fontsource import for "${family}" (package "${pkg}") in index.tsx, or an entry in SYSTEM_FALLBACK_ALLOWLIST`,
+          indexTsx.includes(requiredPrefix),
+          `expected an import matching "${requiredPrefix}" for "${family}" in index.tsx, or an entry in SYSTEM_FALLBACK_ALLOWLIST`,
         ).toBe(true);
       }
     }

@@ -2,6 +2,12 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+  extractHeadersFileValue,
+  extractNginxHeaderValue,
+  extractVercelHeaderValue,
+  group1,
+} from '../utils/deploymentConfigParsers';
 
 // QNBS-v3: Regression guard for the ADR-0004 revision (2026-07-28) — the ADR previously claimed
 // "the host tightens CSP further via HTTP response headers in production", which was false: none
@@ -20,12 +26,6 @@ const tauriConf = readFileSync(
   fileURLToPath(new URL('../../src-tauri/tauri.conf.json', import.meta.url)),
   'utf8',
 );
-
-/** Extract capture group 1 with a narrowing guard (noUncheckedIndexedAccess-safe). */
-function group1(m: RegExpMatchArray | null, msg: string): string {
-  if (!m || m[1] === undefined) throw new Error(msg);
-  return m[1];
-}
 
 /** Pull the `connect-src …;` directive value out of a CSP string, normalized to whitespace tokens. */
 function connectSrcTokens(csp: string): string[] {
@@ -114,32 +114,14 @@ describe('CSP response headers — ADR-0004 revision (host header actually exist
     'utf8',
   );
 
-  /** vercel.json keeps the header value in a JSON array — parse and find it by key. */
   function vercelCsp(): string {
-    const conf = JSON.parse(vercelJson) as {
-      headers?: { source: string; headers: { key: string; value: string }[] }[];
-    };
-    for (const block of conf.headers ?? []) {
-      const found = block.headers.find((h) => h.key === 'Content-Security-Policy');
-      if (found) return found.value;
-    }
-    throw new Error('vercel.json must set a Content-Security-Policy header');
+    return extractVercelHeaderValue(vercelJson, 'Content-Security-Policy');
   }
-
-  /** `public/_headers` uses `Key: value` syntax on its own line. */
   function headersCsp(): string {
-    return group1(
-      headersFile.match(/Content-Security-Policy:\s*([^\n]*)/),
-      'Content-Security-Policy must exist in public/_headers',
-    ).trim();
+    return extractHeadersFileValue(headersFile, 'Content-Security-Policy');
   }
-
-  /** `nginx.conf` sets it via `add_header Content-Security-Policy "value" always;`. */
   function nginxHeaderCsp(): string {
-    return group1(
-      nginxConf.match(/add_header Content-Security-Policy "([^"]*)"/),
-      'Content-Security-Policy must exist in nginx.conf',
-    ).trim();
+    return extractNginxHeaderValue(nginxConf, 'Content-Security-Policy');
   }
 
   /** Split a CSP string into a directive -> token-set map for per-directive comparison. */
