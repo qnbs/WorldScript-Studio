@@ -230,6 +230,7 @@
   "settings.ai.providerStatusDisconnected": "در دسترس نیست",
   "settings.ai.providerStatusLabel": "وضعیت اتصال",
   "settings.ai.providerStatusReady": "آماده است",
+  "settings.ai.providerStatusUnavailableBrowser": "در مرورگر در دسترس نیست",
   "settings.ai.providerTitle": "ارائه دهنده هوش مصنوعی",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM (مرورگر)",

@@ -230,6 +230,7 @@
   "settings.ai.providerStatusDisconnected": "Nicht erreichbar",
   "settings.ai.providerStatusLabel": "Verbindungsstatus",
   "settings.ai.providerStatusReady": "Bereit",
+  "settings.ai.providerStatusUnavailableBrowser": "Im Browser nicht verfügbar",
   "settings.ai.providerTitle": "KI-Anbieter",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM (Browser)",

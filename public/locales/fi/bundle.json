@@ -1838,6 +1838,7 @@
   "settings.ai.providerStatusDisconnected": "Ei saatavilla",
   "settings.ai.providerStatusLabel": "Yhteyden tila",
   "settings.ai.providerStatusReady": "Valmis",
+  "settings.ai.providerStatusUnavailableBrowser": "Ei saatavilla selaimessa",
   "settings.ai.providerTitle": "AI Provider",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM (selain)",

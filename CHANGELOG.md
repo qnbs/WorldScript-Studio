@@ -151,6 +151,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `'unreachable'`. See the 2026-07-28 update in
   [ADR 0012](docs/adr/0012-local-server-connectivity-tauri-http.md).
 
+- **Misleading "Ready" status badge for Ollama in the browser (#266).** The generic connection-status
+  badge in `AiProviderCard` and the "desktop app required" banner were driven by two independent,
+  never-reconciled state signals — `testStatus` (defaults to `idle` → "Ready"/"Bereit") and
+  `isDesktop`. Since the auto-test effect and the manual "Test connection" button are both disabled
+  for Ollama in a browser, `testStatus` could never leave its idle default there, so the badge always
+  read "Ready" right next to a banner saying the opposite. It now shows a distinct "Not available in
+  browser" label instead whenever `provider === 'ollama' && !isDesktop`, localized in all 19 locales;
+  desktop is unaffected. Also: `scanLocalOpenAiCompatibleEndpoints()` now tries Ollama's native
+  `/api/tags` first, falling back to the OpenAI-compat `/v1/models` shim only on failure (mirrors
+  `testOllamaConnection`/`listOllamaModels`'s existing native-first approach), so an older Ollama
+  install without the compat shim isn't missed by the scan.
+
 - **Feature-catalog / slice default drift made structurally impossible.** `features/featureCatalog.ts`
   now covers all **22** flags (was 16) and **derives** each entry's `defaultOn` from the slice's
   `defaultFeatureFlagsState` instead of hand-keying it — the class of bug where the catalog said

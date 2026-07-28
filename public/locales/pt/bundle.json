@@ -1838,6 +1838,7 @@
   "settings.ai.providerStatusDisconnected": "Indisponível",
   "settings.ai.providerStatusLabel": "Status da conexão",
   "settings.ai.providerStatusReady": "Preparar",
+  "settings.ai.providerStatusUnavailableBrowser": "Não disponível no navegador",
   "settings.ai.providerTitle": "IA Provider",
   "settings.ai.providerTransformers": "Transformadores.js",
   "settings.ai.providerWebllm": "WebLLM (navegador)",

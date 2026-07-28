@@ -230,6 +230,7 @@
   "settings.ai.providerStatusDisconnected": "Ez dago erabilgarri",
   "settings.ai.providerStatusLabel": "Konexioaren egoera",
   "settings.ai.providerStatusReady": "Prest",
+  "settings.ai.providerStatusUnavailableBrowser": "Ez dago erabilgarri nabigatzailean",
   "settings.ai.providerTitle": "AI hornitzailea",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM (arakatzailea)",

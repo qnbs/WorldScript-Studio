@@ -158,6 +158,35 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(testAIConnection).not.toHaveBeenCalled();
   });
 
+  it('PWA: status badge shows "unavailable in browser", never the idle "Ready" label (matches the desktop-only banner instead of contradicting it)', () => {
+    setDesktopRuntime(false);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByText('settings.ai.providerStatusUnavailableBrowser')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.providerStatusReady')).toBeNull();
+  });
+
+  it('desktop: status badge never shows "unavailable in browser" for ollama (real test result renders instead)', async () => {
+    setDesktopRuntime(true);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    // The auto-test effect runs the mocked testAIConnection (ok:true); wait for it to settle.
+    await waitFor(() => {
+      expect(screen.getByText('settings.ai.providerStatusConnected')).toBeTruthy();
+    });
+    expect(screen.queryByText('settings.ai.providerStatusUnavailableBrowser')).toBeNull();
+  });
+
   it('desktop: auto-loads models and tests the connection when ollama is selected', async () => {
     setDesktopRuntime(true);
     render(

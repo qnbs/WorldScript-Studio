@@ -40,6 +40,11 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   // QNBS-v3 (T0): canonical detection (`__TAURI_INTERNALS__`-aware); `__TAURI__` alone read as web
   // in the real desktop shell, hiding desktop-only provider affordances.
   const isDesktop = isTauriRuntime();
+  // QNBS-v3: for Ollama in a browser, the auto-test effect and the manual "Test connection"
+  // button are both disabled (see below) — testStatus can never leave 'idle' here, so the
+  // generic status badge must not render its idle→"Ready" label, which would misleadingly
+  // imply a verified connection next to the "desktop app required" banner.
+  const ollamaUntestable = provider === 'ollama' && !isDesktop;
   const [openaiKey, setOpenaiKey] = useState('');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
@@ -205,19 +210,27 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             </span>
             <span
               className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-                testStatus === 'ok'
-                  ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
-                  : testStatus === 'error'
-                    ? 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]'
-                    : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
+                ollamaUntestable
+                  ? 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
+                  : testStatus === 'ok'
+                    ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
+                    : testStatus === 'error'
+                      ? 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]'
+                      : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
               }`}
             >
-              {testStatus === 'ok' && t('settings.ai.providerStatusConnected')}
-              {testStatus === 'error' && t('settings.ai.providerStatusDisconnected')}
-              {testStatus === 'idle' && t('settings.ai.providerStatusReady')}
+              {ollamaUntestable ? (
+                t('settings.ai.providerStatusUnavailableBrowser')
+              ) : (
+                <>
+                  {testStatus === 'ok' && t('settings.ai.providerStatusConnected')}
+                  {testStatus === 'error' && t('settings.ai.providerStatusDisconnected')}
+                  {testStatus === 'idle' && t('settings.ai.providerStatusReady')}
+                </>
+              )}
             </span>
           </div>
-          {testStatus === 'error' && testError && (
+          {!ollamaUntestable && testStatus === 'error' && testError && (
             <p className="text-xs text-[var(--sc-danger-fg)]">{testError}</p>
           )}
         </div>

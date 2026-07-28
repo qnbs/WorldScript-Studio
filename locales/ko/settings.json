@@ -230,6 +230,7 @@
   "settings.ai.providerStatusDisconnected": "없는",
   "settings.ai.providerStatusLabel": "연결 상태",
   "settings.ai.providerStatusReady": "준비가 된",
+  "settings.ai.providerStatusUnavailableBrowser": "브라우저에서 사용할 수 없음",
   "settings.ai.providerTitle": "AI 제공업체",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM(브라우저)",

@@ -732,6 +732,52 @@ describe('scanLocalOpenAiCompatibleEndpoints', () => {
       expect(r.state).toBe('unreachable');
     }
   });
+
+  it('tries native /api/tags for Ollama first and never falls back to /v1/models when it succeeds', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ models: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    const ollamaResult = results.find((r) => r.labelKey === 'settings.ai.scanLabelOllama');
+    expect(ollamaResult?.ok).toBe(true);
+    const ollamaCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('11434'),
+    ) as unknown[][];
+    expect(ollamaCalls).toHaveLength(1);
+    expect(String(ollamaCalls[0]?.[0])).toContain('/api/tags');
+  });
+
+  it('falls back to /v1/models for Ollama when the native /api/tags attempt fails (non-timeout)', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: unknown) => {
+      if (String(url).includes('/api/tags')) {
+        return Promise.reject(new TypeError('ECONNREFUSED'));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const results = await scanLocalOpenAiCompatibleEndpoints();
+    const ollamaResult = results.find((r) => r.labelKey === 'settings.ai.scanLabelOllama');
+    expect(ollamaResult?.ok).toBe(true);
+    const ollamaCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('11434'),
+    ) as unknown[][];
+    expect(ollamaCalls).toHaveLength(2);
+    expect(String(ollamaCalls[0]?.[0])).toContain('/api/tags');
+    expect(String(ollamaCalls[1]?.[0])).toContain('/models');
+  });
+
+  it('does not attempt a second request for LM Studio/vLLM (only Ollama has a native fallback)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await scanLocalOpenAiCompatibleEndpoints();
+    const lmStudioCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes('1234'));
+    const vllmCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes('8000'));
+    expect(lmStudioCalls).toHaveLength(1);
+    expect(vllmCalls).toHaveLength(1);
+  });
 });
 
 // ─── Service-level request deduplication ─────────────────────────────────────

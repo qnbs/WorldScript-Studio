@@ -230,6 +230,7 @@
   "settings.ai.providerStatusDisconnected": "Inte tillgänglig",
   "settings.ai.providerStatusLabel": "Anslutningsstatus",
   "settings.ai.providerStatusReady": "Redo",
+  "settings.ai.providerStatusUnavailableBrowser": "Inte tillgängligt i webbläsaren",
   "settings.ai.providerTitle": "AI-leverantör",
   "settings.ai.providerTransformers": "Transformers.js",
   "settings.ai.providerWebllm": "WebLLM (webbläsare)",
