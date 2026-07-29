@@ -42,7 +42,10 @@ const SELF_HOSTED_BUNDLES = {
   },
 };
 
-async function initDuckDb(): Promise<void> {
+// QNBS-v3: [Exported for tests/unit/duckdbWorkerHandler.test.ts to verify real handler logic without a live worker.]
+export async function initDuckDb(
+  emitProgress?: (stage: string, progress: number, message?: string) => void,
+): Promise<void> {
   const { AsyncDuckDB, selectBundle, ConsoleLogger } = await getDuckDb();
 
   const bundle = await selectBundle(SELF_HOSTED_BUNDLES);
@@ -54,6 +57,8 @@ async function initDuckDb(): Promise<void> {
 
   const useOpfs = await isOPFSSupported();
   if (useOpfs) {
+    // QNBS-v3: [Tracked separately from `connection` so a failed ATTACH can close this partial connection instead of leaking it.]
+    let opfsConnection: import('@duckdb/duckdb-wasm').AsyncDuckDBConnection | null = null;
     try {
       const { DuckDBDataProtocol } = await getDuckDb();
       const opfsRoot = await navigator.storage.getDirectory();
@@ -66,9 +71,19 @@ async function initDuckDb(): Promise<void> {
         DuckDBDataProtocol.BROWSER_FSACCESS,
         true,
       );
-      connection = await newDb.connect();
-      await connection.query("ATTACH 'worldscript_analytics.duckdb' AS analytics (TYPE duckdb)");
-    } catch {
+      opfsConnection = await newDb.connect();
+      await opfsConnection.query(
+        "ATTACH 'worldscript_analytics.duckdb' AS analytics (TYPE duckdb)",
+      );
+      connection = opfsConnection;
+    } catch (opfsErr) {
+      // QNBS-v3: [No bare postMessage from inside a task handler — OPFS-unavailable is surfaced via the progress channel duckdbClient's INIT adapter listens on instead.]
+      await opfsConnection?.close();
+      emitProgress?.(
+        'opfs-fallback',
+        1,
+        opfsErr instanceof Error ? opfsErr.message : String(opfsErr),
+      );
       connection = await newDb.connect();
     }
   } else {
@@ -78,7 +93,7 @@ async function initDuckDb(): Promise<void> {
   db = newDb;
 }
 
-async function handleQuery(ctx: WorkerHandlerContext): Promise<unknown> {
+export async function handleQuery(ctx: WorkerHandlerContext): Promise<unknown> {
   const { payload } = ctx;
   const req = payload as { sql?: string };
   if (!connection) throw new Error('DuckDB not initialized');
@@ -86,7 +101,7 @@ async function handleQuery(ctx: WorkerHandlerContext): Promise<unknown> {
   return result.toArray().map((row: { toJSON(): Record<string, unknown> }) => row.toJSON());
 }
 
-async function handleExec(ctx: WorkerHandlerContext): Promise<unknown> {
+export async function handleExec(ctx: WorkerHandlerContext): Promise<unknown> {
   const { payload } = ctx;
   const req = payload as { sql?: string };
   if (!connection) throw new Error('DuckDB not initialized');
@@ -94,7 +109,7 @@ async function handleExec(ctx: WorkerHandlerContext): Promise<unknown> {
   return { ok: true };
 }
 
-async function handleShutdown(): Promise<unknown> {
+export async function handleShutdown(): Promise<unknown> {
   await connection?.close();
   await db?.terminate();
   connection = null;
@@ -102,10 +117,14 @@ async function handleShutdown(): Promise<unknown> {
   return { ok: true };
 }
 
-registerTaskHandler('db.duckdb.init', async () => {
-  await initDuckDb();
-  return { ok: true };
-}, ['db.duckdb']);
+registerTaskHandler(
+  'db.duckdb.init',
+  async (ctx) => {
+    await initDuckDb(ctx.emitProgress);
+    return { ok: true };
+  },
+  ['db.duckdb'],
+);
 
 registerTaskHandler('db.duckdb.query', handleQuery, ['db.duckdb']);
 registerTaskHandler('db.duckdb.exec', handleExec, ['db.duckdb']);
