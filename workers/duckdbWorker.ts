@@ -54,25 +54,30 @@ async function isOPFSSupported(): Promise<boolean> {
   }
 }
 
+// QNBS-v3 (F-09): self-hosted, same-origin DuckDB-WASM assets — copied from the pinned
+// @duckdb/duckdb-wasm npm dependency by scripts/copy-duckdb-assets.mjs (predev/prebuild) into
+// public/duckdb/. Previously loaded from an unversioned third-party CDN, which was (a) a
+// floating "latest" dependency decoupled from the locked npm version, (b) a supply-chain trust
+// dependency in an app that markets "offline-first" and "no data is sent to a server", and (c)
+// already unreachable under worker-src 'self' blob:' CSP (no CDN allowance) — dead code, not
+// just a risk. Absolute path (not relative) so resolution is unambiguous whether constructed
+// from the main thread or this nested worker context.
+const DUCKDB_ASSET_BASE = `${import.meta.env.BASE_URL}duckdb/`;
+const SELF_HOSTED_BUNDLES = {
+  mvp: {
+    mainModule: `${DUCKDB_ASSET_BASE}duckdb-mvp.wasm`,
+    mainWorker: `${DUCKDB_ASSET_BASE}duckdb-browser-mvp.worker.js`,
+  },
+  eh: {
+    mainModule: `${DUCKDB_ASSET_BASE}duckdb-eh.wasm`,
+    mainWorker: `${DUCKDB_ASSET_BASE}duckdb-browser-eh.worker.js`,
+  },
+};
+
 async function initDuckDb(): Promise<void> {
   const { AsyncDuckDB, selectBundle, ConsoleLogger } = await getDuckDb();
 
-  const JSDELIVR_BUNDLES = {
-    mvp: {
-      mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm',
-      mainWorker:
-        'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js',
-    },
-    eh: {
-      mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm',
-      mainWorker:
-        'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js',
-    },
-  };
-
-  // QNBS-v3: Use self-hosted WASM assets from the Vite build output when available,
-  //          fallback to CDN for dev/test. Vite injectManifest exclusion prevents SW caching.
-  const bundle = await selectBundle(JSDELIVR_BUNDLES);
+  const bundle = await selectBundle(SELF_HOSTED_BUNDLES);
   const logger = new ConsoleLogger();
   // QNBS-v3: bundle.mainWorker can be null for non-browser bundles; guard before constructing Worker.
   if (!bundle.mainWorker) throw new Error('DuckDB bundle has no worker URL');

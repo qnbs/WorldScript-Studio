@@ -69,6 +69,11 @@ export default defineConfig({
           '**/vendor-transformers*',
           '**/vendor-voice-wasm*',
           '**/*.wasm',
+          // QNBS-v3 (F-09): self-hosted DuckDB-WASM runtime assets (scripts/copy-duckdb-assets.mjs)
+          // — the *.worker.js files here match the **/*.{js,...} allowlist above (unlike the
+          // *.wasm binaries, already excluded by both globIgnores and the extension allowlist);
+          // this is feature-flag-gated, lazily loaded content, same reasoning as vendor-duckdb*.
+          '**/duckdb/**',
         ],
       },
       // Manifest bereits in public/manifest.json eingebunden
