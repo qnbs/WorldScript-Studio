@@ -26,7 +26,10 @@ function makeCtx(overrides: Partial<WorkerHandlerContext> = {}): WorkerHandlerCo
 
 describe('inference.worker (v2) handleInference', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // QNBS-v3: [resetAllMocks (not clearAllMocks) — clears mockImplementation/mockResolvedValue
+    //          too, so a later test can't inherit mockPipelineFactory's return value from an
+    //          earlier one; every test below sets its own implementation explicitly.]
+    vi.resetAllMocks();
   });
 
   afterEach(() => {
