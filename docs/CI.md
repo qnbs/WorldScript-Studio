@@ -85,7 +85,7 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
-| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation** |
+| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), **`pnpm run smoke:prod`** (headless-Chromium prod-build + CSP-runtime gate — see below), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation**. No `if:` on the job itself — `smoke:prod` runs on every PR, not just `main` pushes. |
 | `e2e` | `quality` | Playwright **Chromium** + **Mobile Chrome** (Pixel 5) — `CI=true`, 2× retries, 50 min timeout; browser cache via `actions/cache@v5`. Firefox optional locally. `PLAYWRIGHT_SKIP_VRT=true` (VRT is its own job). |
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--max-workers=2 --retries=3 --screenshot-on-failure`; artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
@@ -93,6 +93,45 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
+
+---
+
+## CSP gates — which layer catches which failure class
+
+**Post-mortem (2026-07-29):** `script-src` shipped without `'wasm-unsafe-eval'` for two months
+(2026-05-27 → 2026-07-29, `faad8f0`), blocking `WebAssembly.instantiate` in every deployed
+Chromium browser — the entire advertised local-inference stack (WebLLM, ONNX Runtime Web,
+Transformers.js, DuckDB-WASM, Whisper-STT, Kokoro-TTS) never functioned in production. **A green
+CI run never once caught it.** The reason is a gate-design gap, not a gate that was skipped or
+disabled: the only CSP test that existed (Layer A below) checks a different property than the one
+that broke. See [ADR-0013](adr/0013-csp-wasm-and-blob-frames.md) for the full incident record.
+
+**Layer A alone was never sufficient, and never will be**, for anything shaped like this defect —
+that's the standing lesson, not a one-time fix:
+
+| Layer | Where | Checks | What it CANNOT catch |
+|-------|-------|--------|-----------------------|
+| **A — Consistency** | `tests/unit/csp.test.ts`, `tests/unit/deploymentHeaders.test.ts` | Cross-surface consistency — the 5 CSP surfaces agree with each other (identical strings / no header looser than the meta tag) | Whether the *agreed-upon* policy is itself correct — 5 identically-broken CSPs pass Layer A with a clean bill of health |
+| **B — Correctness** | `tests/unit/cspCorrectness.test.ts` | Specific directives contain the tokens a shipped feature actually needs (`'wasm-unsafe-eval'`, `frame-src blob:`, …), forbidden tokens are absent (`'unsafe-eval'`, `'unsafe-inline'` in `script-src`), and every inline `<script>` without a `src` has a matching hash | Whether the browser *actually enforces* the policy the way the static text implies — no real browser is involved |
+| **C — Runtime** | `scripts/smoke-prod-build.mjs` (`build` job, every PR) | Real headless-Chromium load of the production `dist/`: `securitypolicyviolation` DOM events, console block/refusal messages, a live `WebAssembly.instantiate` probe | Tauri's WebView-specific CSP enforcement — Playwright drives Chromium, not the Tauri WebView (see Tauri gap below) |
+
+A commit shaped like `faad8f0` today — `script-src 'self'` plus an unhashed inline `<script>`,
+while the app ships WASM-based features — now fails at **all three** independently: Layer B flags
+the missing `'wasm-unsafe-eval'` and the unhashed inline script; Layer C's WASM probe reports
+`BLOCKED` and its violation listeners report the inline-script refusal. Losing any one layer would
+still leave two others standing — that's the point of stacking these, not relying on one.
+
+**Tauri CSP gap (accepted, documented, not a Layer-C blind spot in practice):** Tauri's
+`src-tauri/tauri.conf.json` CSP has Layer A and Layer B coverage (both test files assert the
+Tauri surface too), but no Layer-C *runtime* probe — Playwright drives real Chromium via
+`vite preview`, not the Tauri WebView, so a Tauri-specific enforcement quirk (a different Chromium
+build embedded in the OS WebView, or a platform-specific CSP parsing difference) would only be
+caught by Layer B's static assertions, not an actual WebView load. Building a full Tauri WebView
+headless-runtime harness was judged disproportionate to the risk for this sprint — the Tauri CSP is
+the strictest of the 5 surfaces (no `https:` blanket, explicit `connect-src` allowlist), so a
+missed enforcement quirk there is more likely to be *overly strict* (breaking a real feature, which
+manual/E2E Tauri testing would surface) than *under-enforcing* (a security gap). Revisit if a
+Tauri-specific CSP bug ever ships past Layer A/B undetected.
 
 ---
 
