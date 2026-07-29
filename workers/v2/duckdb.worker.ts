@@ -77,8 +77,13 @@ export async function initDuckDb(
       );
       connection = opfsConnection;
     } catch (opfsErr) {
+      // QNBS-v3: [Cleanup is best-effort — a rejecting close() must not block the fallback below or replace the original OPFS error.]
+      try {
+        await opfsConnection?.close();
+      } catch (closeErr) {
+        console.warn('[duckdb.worker] Failed to close partial OPFS connection', closeErr);
+      }
       // QNBS-v3: [No bare postMessage from inside a task handler — OPFS-unavailable is surfaced via the progress channel duckdbClient's INIT adapter listens on instead.]
-      await opfsConnection?.close();
       emitProgress?.(
         'opfs-fallback',
         1,
