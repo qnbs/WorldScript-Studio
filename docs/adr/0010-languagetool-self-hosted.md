@@ -64,4 +64,18 @@ editor's **existing overlay + popover** rather than a new rendering layer.
 - **Follow-ups:** roll out new high-coverage UI locales (pl/nl/tr/uk/ro) — tracked separately; a future
   ADR could revisit a full offset-driven inline layer if phrase-level underlines are wanted.
 
+## CSP gap (fixed 2026-07-29, F-08 — broader than originally scoped)
+
+The default self-hosted port (`http://localhost:8010` / `http://127.0.0.1:8010`) was missing from
+`connect-src` on **all 5 CSP surfaces** (`index.html`, `vercel.json`, `public/_headers`,
+`nginx.conf` ×3, `src-tauri/tauri.conf.json`) from this feature's initial ship through 2026-07-29 —
+not just Tauri, as the originating audit (F-08) assumed. The audit's reasoning ("the web `https:`
+scheme-source masks the gap") does not hold here: LanguageTool's default URL is `http://`, not
+`https://`, and CSP source-matching is scheme-sensitive — a bare `https:` token never matches an
+`http://` origin. **LanguageTool has never worked against its own default local server, on any
+platform, under a CSP-enforcing browser**, since it shipped (#235/#236/#238). Fixed on all 5
+surfaces by adding the explicit port, alongside the existing `11434`/`1234`/`8000` local-service
+entries. Regression test: `tests/unit/cspCorrectness.test.ts`
+(`describe('CSP correctness — connect-src completeness (F-08)')`, asserted across all 5 surfaces).
+
 See [`docs/LANGUAGETOOL.md`](../LANGUAGETOOL.md) for the feature guide and setup.

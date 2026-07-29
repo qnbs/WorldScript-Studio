@@ -112,9 +112,12 @@ const WriterViewUI: FC = () => {
             aria-label={
               isProForgeActive ? t('proforge.toggle.deactivate') : t('proforge.toggle.activate')
             }
+            // QNBS-v3: desktop counterpart of the mobile ProForge/VC-panel contrast fix below —
+            // bg-accent/20 + text-ring-focus (a semi-transparent accent) was the same sub-4.5:1
+            // sepia failure, just via a different token pairing; use the vetted nav-active pair.
             className={`text-xs px-2 py-1 rounded border transition-colors ${
               isProForgeActive
-                ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]'
+                ? 'bg-[var(--nav-background-active)] border-[var(--sc-accent)]/40 text-[var(--nav-text-active)]'
                 : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'
             }`}
           >
@@ -145,7 +148,7 @@ const WriterViewUI: FC = () => {
           type="button"
           onClick={() => setFocusMode((f) => !f)}
           title={focusMode ? t('writer.focusMode.exit') : t('writer.focusMode.enter')}
-          className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
+          className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'bg-[var(--nav-background-active)] border-[var(--sc-accent)]/40 text-[var(--nav-text-active)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           {focusMode
             ? `⊠ ${t('writer.focusMode.exitLabel')}`
@@ -162,6 +165,7 @@ const WriterViewUI: FC = () => {
           ✦ {t('writer.flowMode.enterLabel')}
         </button>
         {/* QNBS-v3: ARIA + minimum touch target for VC toggle — axe/E2E and mobile Writer stability. */}
+        {/* QNBS-v3: active state uses --nav-background-active/--nav-text-active (pre-vetted per-theme contrast pair, see index.css), not --sc-accent for both bg and text — the raw bg-accent/20 + text-accent combo measured 4.47:1 on sepia (axe color-contrast, needs 4.5:1). */}
         <button
           type="button"
           data-testid="writer-version-control-btn"
@@ -169,7 +173,7 @@ const WriterViewUI: FC = () => {
           title={t('writer.versionControl.tooltip')}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
-          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-accent)]/40 text-[var(--sc-accent)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--nav-background-active)] border-[var(--sc-accent)]/40 text-[var(--nav-text-active)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>
@@ -188,7 +192,7 @@ const WriterViewUI: FC = () => {
             }
             className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${
               isProForgeActive
-                ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-accent)]/40 text-[var(--sc-accent)]'
+                ? 'bg-[var(--nav-background-active)] border-[var(--sc-accent)]/40 text-[var(--nav-text-active)]'
                 : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'
             }`}
           >
@@ -201,7 +205,7 @@ const WriterViewUI: FC = () => {
           onClick={() => dispatch(versionControlActions.togglePanel())}
           aria-label={t('writer.versionControl.label')}
           aria-expanded={isVCPanelOpen}
-          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-accent)]/40 text-[var(--sc-accent)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
+          className={`text-xs min-h-[44px] px-3 py-2 rounded border transition-colors touch-manipulation ${isVCPanelOpen ? 'bg-[var(--nav-background-active)] border-[var(--sc-accent)]/40 text-[var(--nav-text-active)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           ⎎ {t('writer.versionControl.label')}
         </button>

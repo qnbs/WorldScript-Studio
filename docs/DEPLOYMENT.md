@@ -128,6 +128,27 @@ When both a header CSP and the `index.html` meta CSP are present, the browser en
 
 ---
 
+## Why `'wasm-unsafe-eval'` (all 5 CSP surfaces)
+
+`script-src` on every surface (`index.html`, `vercel.json`, `public/_headers`, `nginx.conf` ×3,
+`src-tauri/tauri.conf.json`) carries `'self' 'wasm-unsafe-eval'`. **Not** the broader
+`'unsafe-eval'` keyword — that's forbidden. `'wasm-unsafe-eval'` only lifts the restriction on
+`WebAssembly.compile`/`instantiate`, required by WebLLM, ONNX Runtime Web, Transformers.js,
+DuckDB-WASM, Whisper-STT, and Kokoro-TTS — the local-inference stack this app advertises. Before
+2026-07-29 this token was absent everywhere, so `WebAssembly.instantiate` was blocked in every
+Chromium browser on every deployment surface (F-01) — the advertised feature never worked in
+production, and no test caught it because the CSP tests only checked cross-surface *consistency*,
+never functional correctness. Full rationale, alternatives considered, and the 3-layer test
+architecture that now guards this: [`docs/adr/0013-csp-wasm-and-blob-frames.md`](adr/0013-csp-wasm-and-blob-frames.md).
+
+`frame-src 'self' blob:` was added alongside it (previously absent everywhere, falling back to
+`default-src 'self'`, which blocks `blob:` iframes) — required by the Binder-PDF-preview and
+ManuscriptResearchSplit iframes, which render IndexedDB-backed assets via `URL.createObjectURL`.
+
+**Does this weaken the plugin sandbox?** No — `workers/plugin.worker.ts` sets
+`self.WebAssembly = undefined` before running untrusted plugin code and restores it afterward (both
+success and error paths), a JS-level guard independent of CSP. See ADR-0013 for the full analysis.
+
 ## Security notes
 
 - No server-side storage of manuscripts or API keys.

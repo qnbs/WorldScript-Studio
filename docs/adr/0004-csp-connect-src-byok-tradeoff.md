@@ -97,3 +97,6 @@ needed there.
 - `docs/SECURITY-THREAT-MODEL.md` (web-vs-Tauri egress asymmetry)
 - Audit 2026-06-09 finding F-2; commit `364025e`
 - [[0002-local-ai-stack-layering]], [[0003-workerbus-hybrid-routing]]
+- **See also:** [[0013-csp-wasm-and-blob-frames]] — this ADR covers `connect-src` only; the
+  `script-src` (`'wasm-unsafe-eval'`) and `frame-src` (`blob:`) decisions, and the 3-layer CSP
+  test architecture, are recorded separately there to keep each ADR scoped to one directive family.

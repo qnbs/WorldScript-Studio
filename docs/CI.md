@@ -85,14 +85,68 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
-| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation** |
+| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), **`pnpm run smoke:prod`** (headless-Chromium prod-build + CSP-runtime gate — see below), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation**. No `if:` on the job itself — `smoke:prod` runs on every PR, not just `main` pushes. |
 | `e2e` | `quality` | Playwright **Chromium** + **Mobile Chrome** (Pixel 5) — `CI=true`, 2× retries, 50 min timeout; browser cache via `actions/cache@v5`. Firefox optional locally. `PLAYWRIGHT_SKIP_VRT=true` (VRT is its own job). |
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
-| `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--max-workers=2 --retries=3 --screenshot-on-failure`; artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
+| `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--maxWorkers=2 --junit` (non-blocking, `continue-on-error: true` — see [exit criteria](#non-blocking-gates--exit-criteria-f-13)); artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
 | `vrt` | `build` | Visual regression against production `dist`; `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium); artifacts uploaded always |
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
+
+---
+
+## CSP gates — which layer catches which failure class
+
+**Post-mortem (2026-07-29):** `script-src` shipped without `'wasm-unsafe-eval'` for two months
+(2026-05-27 → 2026-07-29, `faad8f0`), blocking `WebAssembly.instantiate` in every deployed
+Chromium browser — the entire advertised local-inference stack (WebLLM, ONNX Runtime Web,
+Transformers.js, DuckDB-WASM, Whisper-STT, Kokoro-TTS) never functioned in production. **A green
+CI run never once caught it.** The reason is a gate-design gap, not a gate that was skipped or
+disabled: the only CSP test that existed (Layer A below) checks a different property than the one
+that broke. See [ADR-0013](adr/0013-csp-wasm-and-blob-frames.md) for the full incident record.
+
+**Layer A alone was never sufficient, and never will be**, for anything shaped like this defect —
+that's the standing lesson, not a one-time fix:
+
+| Layer | Where | Checks | What it CANNOT catch |
+|-------|-------|--------|-----------------------|
+| **A — Consistency** | `tests/unit/csp.test.ts`, `tests/unit/deploymentHeaders.test.ts` | Cross-surface consistency — the 5 CSP surfaces agree with each other (identical strings / no header looser than the meta tag) | Whether the *agreed-upon* policy is itself correct — 5 identically-broken CSPs pass Layer A with a clean bill of health |
+| **B — Correctness** | `tests/unit/cspCorrectness.test.ts` | Specific directives contain the tokens a shipped feature actually needs (`'wasm-unsafe-eval'`, `frame-src blob:`, …), forbidden tokens are absent (`'unsafe-eval'`, `'unsafe-inline'` in `script-src`), and every inline `<script>` without a `src` has a matching hash | Whether the browser *actually enforces* the policy the way the static text implies — no real browser is involved |
+| **C — Runtime** | `scripts/smoke-prod-build.mjs` (`build` job, every PR) | Real headless-Chromium load of the production `dist/`: `securitypolicyviolation` DOM events, console block/refusal messages, a live `WebAssembly.instantiate` probe | Tauri's WebView-specific CSP enforcement — Playwright drives Chromium, not the Tauri WebView (see Tauri gap below) |
+
+A commit shaped like `faad8f0` today — `script-src 'self'` plus an unhashed inline `<script>`,
+while the app ships WASM-based features — now fails at **all three** independently: Layer B flags
+the missing `'wasm-unsafe-eval'` and the unhashed inline script; Layer C's WASM probe reports
+`BLOCKED` and its violation listeners report the inline-script refusal. Losing any one layer would
+still leave two others standing — that's the point of stacking these, not relying on one.
+
+**Tauri CSP gap (accepted, documented, not a Layer-C blind spot in practice):** Tauri's
+`src-tauri/tauri.conf.json` CSP has Layer A and Layer B coverage (both test files assert the
+Tauri surface too), but no Layer-C *runtime* probe — Playwright drives real Chromium via
+`vite preview`, not the Tauri WebView, so a Tauri-specific enforcement quirk (a different Chromium
+build embedded in the OS WebView, or a platform-specific CSP parsing difference) would only be
+caught by Layer B's static assertions, not an actual WebView load. Building a full Tauri WebView
+headless-runtime harness was judged disproportionate to the risk for this sprint — the Tauri CSP is
+the strictest of the 5 surfaces (no `https:` blanket, explicit `connect-src` allowlist), so a
+missed enforcement quirk there is more likely to be *overly strict* (breaking a real feature, which
+manual/E2E Tauri testing would surface) than *under-enforcing* (a security gap). Revisit if a
+Tauri-specific CSP bug ever ships past Layer A/B undetected.
+
+---
+
+## Non-blocking gates — exit criteria (F-13)
+
+A non-blocking gate without a stated exit criterion is permanent, silent debt — it looks like
+progress-in-motion but nothing ever forces a revisit. Every `continue-on-error: true` / `|| true`
+in `ci.yml` is listed here with why it isn't blocking today and what has to be true before it is:
+
+| Gate | Why not blocking today | Exit criterion |
+|------|------------------------|-----------------|
+| Storybook `test-storybook` (`storybook` job, `continue-on-error: true`) | Fixed 2026-07-29 (F-12): the invocation was calling flags this test-runner version doesn't support (`--max-workers`/`--retries`/`--screenshot-on-failure`), so it failed on argument parsing before running a single story, on every prior run. This is the first run where it will actually execute real stories/a11y checks — no track record exists yet. Moved from `\|\| true` to step-level `continue-on-error: true` the same day (CodeRabbit-caught): `\|\| true` swallowed the exit code so the step showed green even while genuinely failing — the exact mechanism that let the F-12 bug go unnoticed. | Re-evaluate after **~10 real (non-argument-error) runs on `main`**; drop `continue-on-error` and make blocking if none fail on a genuine story/a11y assertion. |
+| `e2e-deep` (feature-flag matrix job, `continue-on-error: true`) | Deliberately informational by design — parametrizes across the full `testConfigurations` flag matrix (`tests/e2e/config/test-matrix.ts`) specifically to surface flag-interaction regressions that the required `e2e` gate's default-flag-state run cannot see; failures here are diagnostic signal, not necessarily a merge-blocking defect in the default configuration. | Promote a **specific flag combination** to blocking (add it to the required `e2e` spec instead) once it has been stable for **3 consecutive weeks of `main` runs** — do not flip the entire matrix job blocking at once, since that reintroduces the flakiness-cascade risk `e2e-deep` was created to avoid. |
+| Lighthouse **Desktop** step (`lighthouse` job, `continue-on-error: true`) — note: accessibility (`minScore: 0.95`) and CLS (`≤ 0.1`) stay **error**-level gates even on this step; only the broader desktop performance/SEO scores are non-blocking | Desktop performance baselines haven't been formally re-verified as stable since the last CI-runner change | Re-run `pnpm exec lhci autorun --config=.lighthouserc.desktop.cjs` locally or via `storybook-debug.yml`-style manual dispatch across **5 consecutive `main` runs**; if performance/SEO scores stay within the existing `warn` thresholds each time, remove `continue-on-error` for the step. |
+| Coverage ratchet (`scripts/check-coverage-ratchet.mjs`, `continue-on-error: true`) | **Deliberately, permanently advisory** — by design (see `vitest.config.ts`'s ratchet-history comment), it exists to *suggest* the next threshold bump, not to gate a merge on hitting one. | None — this is the one gate above intentionally without an exit criterion; its purpose is met by staying advisory. Reviewed here for completeness so it isn't mistaken for forgotten debt. |
 
 ---
 

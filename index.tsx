@@ -49,6 +49,14 @@ import '@fontsource/noto-sans/greek-700.css';
 import './index.css';
 import './register-sw';
 
+// QNBS-v3: Disable Aurora on low-end hardware (≤4 logical CPUs) to prevent GPU/battery drain;
+// prefers-reduced-data handled in CSS. Moved out of an inline <script> in index.html (ADR-0013) —
+// a same-origin module keeps `script-src` minimal (no 'unsafe-inline', no hash to maintain).
+// Placed as the first statement after imports so it runs before any Aurora CSS can paint.
+if (navigator.hardwareConcurrency <= 4) {
+  document.documentElement.classList.add('aurora-disabled');
+}
+
 // SPA redirect handler for GitHub Pages
 (() => {
   const url = new URL(window.location.href);

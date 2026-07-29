@@ -87,6 +87,48 @@ export function getActualKeyCount() {
   return keys.size;
 }
 
+// QNBS-v3 (F-10): the sole source of truth for the canonical production URL — see constants/brand.ts.
+const PRODUCTION_URL_ASSIGNMENT = /export const PRODUCTION_URL = '([^']+)';/;
+// QNBS-v3 (CodeRabbit): scheme optional (locales/it/help.json has no `https://` prefix) + hostname-boundary lookaround so `evil.com`-suffixed or `not`-prefixed lookalike hosts can't slip through as a "match".
+export const VERCEL_URL_PATTERN =
+  /(?<![a-zA-Z0-9-])(?:https?:\/\/)?worldscript-studio[a-z0-9-]*\.vercel\.app\/?(?![a-zA-Z0-9.-])/gi;
+
+/** Read the canonical production URL from constants/brand.ts (the single source of truth). */
+export function getCanonicalProductionUrl() {
+  const content = readFileSync(join(root, 'constants', 'brand.ts'), 'utf8');
+  const m = content.match(PRODUCTION_URL_ASSIGNMENT);
+  if (!m) throw new Error('PRODUCTION_URL not found in constants/brand.ts');
+  return m[1];
+}
+
+/**
+ * Scan for any `*.vercel.app` deployment URL that doesn't match the canonical one — the F-10
+ * drift (a dead `worldscript-studio-indol.vercel.app` preview URL had leaked into the in-app link
+ * and the Italian locale) would have been caught by this on day one.
+ */
+export function scanForUrlDrift(content, filePath, canonicalUrl) {
+  const findings = [];
+  const scanned = stripHistoricalSections(content);
+  const lines = scanned.split('\n');
+  // QNBS-v3 (CodeRabbit): strip the scheme too, so a scheme-less match normalizes to the same key as the always-schemed canonical URL instead of always comparing unequal.
+  const normalize = (u) =>
+    u
+      .replace(/^https?:\/\//i, '')
+      .replace(/\/$/, '')
+      .toLowerCase();
+  lines.forEach((line, i) => {
+    for (const m of line.matchAll(VERCEL_URL_PATTERN)) {
+      const found = m[0];
+      if (normalize(found) !== normalize(canonicalUrl)) {
+        findings.push(
+          `${filePath}:${i + 1} — references "${found}", canonical is "${canonicalUrl}" (constants/brand.ts#PRODUCTION_URL): "${line.trim()}"`,
+        );
+      }
+    }
+  });
+  return findings;
+}
+
 /** Latest released version tag (e.g. "1.24.1"), or null if no tags exist (e.g. a shallow clone). */
 // QNBS-v3: null (not a thrown error) on a shallow/tagless checkout — callers must treat "no tags" as "skip the PLANNED check", never as a drift finding of its own.
 export function getLatestReleasedVersion() {
@@ -152,10 +194,14 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
 }
 
 // QNBS-v3: exits 1 on any finding — unlike check-coverage-ratchet.mjs this gate is blocking, since a doc claiming a wrong locale/key/release count is actively misleading, not just an opportunity.
+// QNBS-v3 (F-10, CodeRabbit follow-up): locales/it/help.json IS included — it's exactly where the F-10 stale-URL drift happened; the in-app link reads the constant directly so it can't drift and isn't listed here.
+const URL_CHECK_FILES = ['README.md', 'CLAUDE.md', 'locales/it/help.json'];
+
 function main() {
   const localeCount = getActualLocaleCount();
   const keyCount = getActualKeyCount();
   const latestVersion = getLatestReleasedVersion();
+  const canonicalUrl = getCanonicalProductionUrl();
 
   const allFindings = [];
   for (const relPath of TARGET_FILES) {
@@ -167,6 +213,17 @@ function main() {
       continue; // file doesn't exist in this checkout — not this gate's concern
     }
     allFindings.push(...scanForDrift(content, relPath, { localeCount, keyCount, latestVersion }));
+  }
+
+  for (const relPath of URL_CHECK_FILES) {
+    const abs = join(root, relPath);
+    let content;
+    try {
+      content = readFileSync(abs, 'utf8');
+    } catch {
+      continue;
+    }
+    allFindings.push(...scanForUrlDrift(content, relPath, canonicalUrl));
   }
 
   if (allFindings.length > 0) {

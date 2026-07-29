@@ -1,8 +1,8 @@
 # WorldScript Studio — Codebase Audit Report
 
-**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)** → **2026-06-01 (Post-crash session: CI stabilisation + 14 CodeAnt AI fixes + E2E hardening)** → **2026-06-02 (Perf Phase 2.3 — pipeline-LRU unification + PR #69 CodeAnt fixes)** → **2026-06-03 (WorkerBus v2 Phase 3 — Rust TaskSupervisor + Tauri-build unblock)** → **2026-06-06 (Phase 3 i18n Expansion — ja/zh/pt/el + Intl APIs)** → **2026-06-09 (v1.21 Deep Audit Correction — Whisper WASM download UI + 3 CodeAnt fixes + CloudSync LWW)** → **2026-06-09 (feat/deep-audit-v1.21 — CSP hardening, zh locale ≤5% EN, coverage Batches A/B/C, VoiceActivityCoordinator B-2 bridge)** → **2026-06-11 (Ultimate Copilot v2 Phase 2+3 — markdown, sidebar, Apply-to-chapter, InlineAnnotation, ProForge chip; PR #110+#111)** → **2026-06-11 (v1.22.0 release — OpenRouter Cloud 5 provider, AI Execution Modes hybrid/cloud/local/eco, AiModeIndicator, SW cache-invalidation fix)** → **2026-06-13/14 (v1.23 perfection batch — OpenRouter + AI-Execution-Mode settings sections localized/modernized, i18n single-brace interpolation bug-class fix + `i18nPlaceholders` regression guard, bundle split + budget tightening PR #130)** → **2026-06-16 (v1.23.0 release — rebrand StoryCraft → WorldScript Studio, local-first data foundation ADR-0008, Tauri blank-screen + asset-URL fixes, AI error taxonomy + retry hardening, command-palette & local-AI settings localization, WorldScript W monogram icons)** → **2026-06-16 (post-release documentation perfection pass — corpus sync, metric reconciliation, history archival, dependabot hardening)** → **2026-06-17 (Language expansion — +6 locales fi/sv/hu/is/eu/fa (RTL); PR #174 merged; `LanguageSelector` exonym localization via `portal.language.names.*`; portal chrome 100 % for the 6 new langs; README/AUDIT/CHANGELOG docs sync)** → **2026-07-28 (v1.24.1 — Local-AI reliability fixes #266, Dependabot backlog triage, Issue #60 audit closeout, security/build hardening)**
+**Date:** 2026-04-17 (baseline); **follow-up chain:** … → 2026-05-28 (v1.19.0 — Security/Voice/RTL/Logger B-1..B-8) → **2026-05-30 (B-1 passphrase UX + CI unblock)** → **2026-05-31 (i18n audit + settings features + CI stabilization)** → **2026-05-31 (Edge-AI Perfection Cycle — Phases 0-7 complete)** → **2026-06-01 (Post-crash session: CI stabilisation + 14 CodeAnt AI fixes + E2E hardening)** → **2026-06-02 (Perf Phase 2.3 — pipeline-LRU unification + PR #69 CodeAnt fixes)** → **2026-06-03 (WorkerBus v2 Phase 3 — Rust TaskSupervisor + Tauri-build unblock)** → **2026-06-06 (Phase 3 i18n Expansion — ja/zh/pt/el + Intl APIs)** → **2026-06-09 (v1.21 Deep Audit Correction — Whisper WASM download UI + 3 CodeAnt fixes + CloudSync LWW)** → **2026-06-09 (feat/deep-audit-v1.21 — CSP hardening, zh locale ≤5% EN, coverage Batches A/B/C, VoiceActivityCoordinator B-2 bridge)** → **2026-06-11 (Ultimate Copilot v2 Phase 2+3 — markdown, sidebar, Apply-to-chapter, InlineAnnotation, ProForge chip; PR #110+#111)** → **2026-06-11 (v1.22.0 release — OpenRouter Cloud 5 provider, AI Execution Modes hybrid/cloud/local/eco, AiModeIndicator, SW cache-invalidation fix)** → **2026-06-13/14 (v1.23 perfection batch — OpenRouter + AI-Execution-Mode settings sections localized/modernized, i18n single-brace interpolation bug-class fix + `i18nPlaceholders` regression guard, bundle split + budget tightening PR #130)** → **2026-06-16 (v1.23.0 release — rebrand StoryCraft → WorldScript Studio, local-first data foundation ADR-0008, Tauri blank-screen + asset-URL fixes, AI error taxonomy + retry hardening, command-palette & local-AI settings localization, WorldScript W monogram icons)** → **2026-06-16 (post-release documentation perfection pass — corpus sync, metric reconciliation, history archival, dependabot hardening)** → **2026-06-17 (Language expansion — +6 locales fi/sv/hu/is/eu/fa (RTL); PR #174 merged; `LanguageSelector` exonym localization via `portal.language.names.*`; portal chrome 100 % for the 6 new langs; README/AUDIT/CHANGELOG docs sync)** → **2026-07-28 (v1.24.1 — Local-AI reliability fixes #266, Dependabot backlog triage, Issue #60 audit closeout, security/build hardening)** → **2026-07-29 (v1.24.2, PR #284 — CSP functional-truth, desktop crypto, and doc-truth hardening; the local-inference stack had been silently non-functional in production for two months; PR open/CI green, not yet merged)**
 **Scope:** Full application, repository configuration, CI/CD, documentation, release validation
-**Current version:** **v1.24.1** — 2026-07-28 (Local-AI reliability — desktop Ollama/LM Studio/vLLM discovery + browser status-badge fixes; AI heuristic-fallback foundation + Outline/Character/World/Plot-Board generators; real self-hosted LanguageTool integration; 20-PR Dependabot backlog triage; Issue #60 vendor-fork audit closeout; `persist-credentials`/CWE-209 security hardening; **2844 keys × 19 locales**)
+**Current version:** **v1.24.2** — 2026-07-29, **PR #284 open, CI green, not yet merged/tagged/released** (tag + GitHub Release publish are maintainer actions per this sprint's own hard rules) — CSP/crypto/doc-truth hardening: `'wasm-unsafe-eval'` restored on all 5 deployment surfaces after a 2-month functional-truth gap; desktop API-key encryption moved from unsalted SHA-256 to PBKDF2 600k + salt; DuckDB-WASM self-hosted; canonical Vercel URL unified; CI Storybook dedup + a genuinely broken test-runner invocation fixed; coverage ratchet raised to CI-measured values; **2849 keys × 19 locales**. Last actually-released version remains **v1.24.1** (2026-07-28) until this PR merges.
 
 **Quality gate (2026-06-17 — language expansion +6 locales):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2716 keys × 17 locales** — fi/sv/hu/is/eu + fa RTL) · placeholder guard ✅ (17 bundles) · targeted unit tests ✅ (LanguageSelector 9 · I18nContext 59 · i18nPlaceholders 33). `LanguageSelector` exonym labels localized via `portal.language.names.*` (native endonym stays hardcoded by design). **Bulk translation completed** for all 10 Beta locales (glossary v2.0, ~44 anchor terms/locale; placeholder-masked, checkpointed): post-run coverage fi 91 % · sv 90 % · hu 91 % · is 92 % · eu 92 % · fa 93 % · ja 99 % · zh 100 % · pt 98 % · el 97 % (Beta MT; human native review tracked). Two bulk-script bugs fixed: (1) `glossaryTranslate` partial-match left ~1,300 strings partially English → now exact-match only; (2) `--all` mangled `help.json` rich HTML → `help.json` excluded from `--all` (`ALL_SKIP`) and kept English fallback for the 6 new langs (tag-dense markup isn't MT-safe; human-review task). New `docs/TRANSLATION-GUIDE.md` + `I18N-GLOSSARY.md` v2.0.
 
@@ -11,6 +11,76 @@
 **Quality gate (2026-06-21 — v1.24.0 Critical & Immediate hardening sequence):** lint ✅ · typecheck ✅ (tsgo) · i18n:check ✅ (**2786 keys × 17 locales**) · suppressions ratchet ✅ (52, no new) · targeted unit tests ✅. Stacked PRs A–F: privacy analytics gating (SEC-6), reusable Badge + experimental labeling, coverage (collab-transport/ProForge/copilot, +101 tests), voice consent clarity, device-aware Ollama pull, hygiene/docs. Coverage/E2E/Lighthouse/Stryker remain CI-gate jobs.
 
 **Quality gate (2026-06-21 — feature-flag catalog + grouped Settings + ProForge opt-in):** lint ✅ · typecheck ✅ (tsgo) · i18n:check ✅ (**2793 keys × 17 locales**) · parity:check ✅ (0 drifts) · suppressions ratchet ✅ (52, no new) · targeted unit tests ✅ (127: slice 89, catalog 7, flagDependencies 5, FeatureFlagsSection 15, FeatureFlagsAndOverview 11). `enableProForge` default flipped to opt-in (now **17 on / 6 off**); `featureCatalog.ts` reconciled to all 23 flags with `defaultOn` **derived** from the slice (drift now structurally impossible — guarded by `tests/unit/featureCatalog.test.ts`). Shipped as a standalone PR off `main`.
+
+## Audit 2026-07-29 — CSP / Crypto / Truth (v1.24.2)
+
+**Quality gate (2026-07-29):** lint ✅ · typecheck ✅ (tsgo) · i18n:check ✅ (**2849 keys × 19
+locales**) · suppressions ratchet ✅ (52, no new) · token-audit ✅ (160, no new) · parity:check ✅
+(0 drifts) · `pnpm run build` + `bundle:budget` ✅ (154 JS chunks ≤ 6200 KB) ·
+`scripts/smoke-prod-build.mjs` ✅ (0 real CSP violations, 1 documented known-benign exclusion,
+`wasm: ok`) · CI `quality` job (Node 22 + 24) ✅ — coverage L80.86/F73.78/B66.74/S79.02, ratchet
+raised to L79/F72/B65/S77. Full execution record:
+[`docs/audit/WS-RUN-LOG-2026-07-29.md`](docs/audit/WS-RUN-LOG-2026-07-29.md). Branch
+`fix/csp-truth-hardening-v1.24.2`, PR #284.
+
+Source audit (`PROMPT-WSS-v1.24.x`) empirically re-verified against current disk state before any
+change landed — all 14 findings CONFIRMED, no baseline drift, base SHA `f5f9c1ba`.
+
+### Finding table
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| F-01 | 🔴 P0 | `script-src 'self'` missing `'wasm-unsafe-eval'` on all 5 CSP surfaces — `WebAssembly.instantiate` blocked in every deployed Chromium browser since 2026-05-27 (`faad8f0`); the entire advertised local-inference stack never functioned in production | Fixed on all 5 surfaces; [ADR-0013](docs/adr/0013-csp-wasm-and-blob-frames.md) |
+| F-02 | 🔴 P0 | Unhashed inline `<script>` in `index.html`, added in the same commit as the broken `script-src`, contradicting that commit's own CSP-strategy comment | Moved into `index.tsx` as a same-origin module |
+| F-03 | 🔴 P0 | No `frame-src`/`child-src` anywhere → `blob:` iframes (Binder PDF preview, ManuscriptResearchSplit) fall back to `default-src 'self'` and are blocked | `frame-src 'self' blob:` added to all 5 surfaces |
+| F-04 | 🔴 P0 | No gate could have caught F-01/F-02 — existing CSP tests check cross-surface consistency only; `smoke-prod-build.mjs` only listened for `pageerror`, which CSP violations never fire | New 3-layer test architecture: Layer A (consistency, existing) / Layer B (`tests/unit/cspCorrectness.test.ts`, new) / Layer C (hardened `smoke-prod-build.mjs`, real violation + WASM probes). `docs/CI.md` gate-governance table |
+| F-05/F-06 | 🟠 P1 | Desktop API-key encryption derived its key from a single unsalted SHA-256 digest of publicly-derivable material — obfuscation, not encryption | PBKDF2 600k + random 32-byte salt in `services/fs/fsCore.ts`, matching `storageEncryptionService.ts`. Legacy files discarded (not migrated), one-time re-entry notification |
+| F-07 | 🟠 P1 | README/CLAUDE.md made a blanket "encrypted at rest" claim; a fabricated `tauri-plugin-stronghold` OS-keychain claim had zero trace in the codebase; `SECURITY-THREAT-MODEL.md` never mentioned `fsCore.ts`/`settingsFsStore.ts` | Doc truth-up: differentiated 4-mechanism table in README, fabricated claim removed, threat-model gained a mitigations row + attack tree |
+| F-08 | 🟠 P1 | Tauri `connect-src` missing LanguageTool's port and the Hugging Face hosts WebLLM/Transformers.js resolve models from | Fixed; scope widened during verification — the LanguageTool port was missing on **all 5** surfaces, not just Tauri; the real weight-file CDN (`us.aws.cdn.hf.co`) traced empirically via `curl`, not guessed |
+| F-09 | 🟠 P1 | DuckDB-WASM loaded from an unversioned, floating-`latest` third-party CDN — already unreachable under the (correctly-scoped) `worker-src` CSP, so this was dead code, not just a supply-chain risk | Self-hosted from the pinned npm dependency via `scripts/copy-duckdb-assets.mjs` (gitignored, ~72 MB, never committed) |
+| F-10 | 🟡 P2 | Two conflicting production URLs; the in-app link and the Italian locale pointed at a dead domain | Empirically resolved (live 200 vs. 404 check) — no maintainer input needed. Unified into a `PRODUCTION_URL` constant + new drift gate |
+| F-11 | 🟡 P2 | Release/tag drift — `v1.24.1` tag 5 commits behind `HEAD` | Version bumped to `1.24.2` in this sprint (WS-7); tag/release publish remains a maintainer action |
+| F-12 | 🟡 P2 | Storybook built 3× per CI run; `ci.yml` header still said "StoryCraft Studio" | Deduped to 1×, header fixed. Bonus: the Storybook test-runner's flags were invalid for the installed CLI version, so it had never actually executed a single story on any prior CI run — fixed, and its `\|\| true` (which was itself hiding the failure) replaced with `continue-on-error: true` |
+| F-13 | 🟡 P2 | Coverage ratchet stale since 2026-06-06; 4 non-blocking CI gates with no stated exit criterion | Ratchet raised to CI-measured values (see quality-gate line above); `docs/CI.md` gained an exit-criteria table for all 4 |
+| F-14 | 🟡 P2 | Two live worker generations (v1 + WorkerBus v2) for DuckDB/inference, confirmed via real call-site tracing | Documented, not consolidated — [ADR-0014](docs/adr/0014-worker-generation-duplication.md); a dedicated migration sprint is the correct scope for consolidation |
+
+### Post-mortem: why no gate caught F-01 for two months
+
+**The question this sprint had to answer:** would a commit today, shaped exactly like `faad8f0`
+(`script-src 'self'` with no `'wasm-unsafe-eval'`, plus an unhashed inline `<script>`, in an app
+that ships WASM-based features), fail before reaching production?
+
+**Before this sprint: no.** The only CSP gate that existed —
+`tests/unit/csp.test.ts`/`deploymentHeaders.test.ts` — asserts that the 5 deployment surfaces
+agree with each other and that no header is looser than the meta tag. Four (then five) identically
+broken CSPs satisfy that property perfectly. It is a **consistency** gate, not a **correctness**
+gate, and nothing in the test suite or CI pipeline ever claimed otherwise — the gap wasn't a
+disabled check or a skipped test, it was a class of defect nobody had written a test for.
+`scripts/smoke-prod-build.mjs` loads the actual production build in real headless Chromium — the
+one place that *could* have caught this — but listened only for the `pageerror` DOM event, which
+CSP violations do not fire (they surface as `console` warnings and `securitypolicyviolation`
+events instead).
+
+**After this sprint: yes, in three independent places.** Layer B
+(`tests/unit/cspCorrectness.test.ts`) directly asserts `'wasm-unsafe-eval'` is present, forbidden
+tokens are absent, and — the single assertion that would have caught the 2026-05-27 defect on day
+one — that every inline `<script>` without a `src` has a matching content hash in `script-src`.
+Layer C (the hardened `smoke-prod-build.mjs`) now captures `securitypolicyviolation` events and
+CSP-related `console` messages, and runs a live `WebAssembly.instantiate` probe in real Chromium.
+Losing either layer independently would still leave one standing.
+
+**The gate-design lesson, generalized:** a passing test suite proves the properties it actually
+encodes, nothing more. "CSP tests are green" was true and irrelevant — the tests encoded
+*consistency*, and the defect was in *correctness*. The durable fix isn't more tests of the same
+kind; it's asking, for any gate, "what specific property does this check, and what class of defect
+would pass it anyway?" — and this sprint's own execution surfaced two more instances of exactly
+that pattern worth naming: the Storybook test-runner's `\|\| true` (F-12) turned a hard CLI
+argument-parsing failure into a green step for as long as it existed — the *identical* mechanism,
+one workstream over. And this sprint's own new F-10 drift gate initially excluded
+`locales/it/help.json`, the one file with real incident history, on the mistaken belief it was
+generated content — caught by a reviewer, not by first-pass design. Three separate instances of
+the same root cause in one sprint is itself the finding: **the failure mode is not rare, and
+"we added a test" is not sufficient evidence that the right property is being tested.**
 
 ## v1.24.1 Local-AI reliability + Dependabot batch (2026-07-28)
 
