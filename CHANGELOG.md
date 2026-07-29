@@ -5,9 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-<!-- QNBS-v3 (CodeRabbit): kept under [Unreleased], not a dated [1.24.2] heading — PR #284 is open/CI-green but not yet merged, tagged, or released; package.json/tauri.conf.json are pre-bumped to 1.24.2 as prep for that tag, matching this repo's existing version-bump-before-tag convention, but the CHANGELOG entry itself must not claim a release date until the tag actually exists. -->
+## [1.24.2] — 2026-07-29
 
 > CSP functional-truth, desktop crypto, and documentation-truth hardening sprint
 > (`PROMPT-WSS-v1.24.x`). Headline fix: `script-src` shipped without `'wasm-unsafe-eval'` for two
