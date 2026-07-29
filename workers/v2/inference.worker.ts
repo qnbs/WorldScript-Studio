@@ -42,7 +42,8 @@ async function loadPipeline(task: string, modelId: string, quantized = true) {
   });
 }
 
-async function handleInference(ctx: WorkerHandlerContext): Promise<unknown> {
+// QNBS-v3: [Exported for tests/unit/inferenceWorkerHandlerV2.test.ts to verify real handler logic without a live worker.]
+export async function handleInference(ctx: WorkerHandlerContext): Promise<unknown> {
   const { payload, signal, emitProgress } = ctx;
   const req = payload as {
     task: string;
