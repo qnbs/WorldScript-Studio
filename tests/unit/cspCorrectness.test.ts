@@ -154,6 +154,35 @@ describe('CSP correctness — Layer B (functional directives, not cross-surface 
   );
 });
 
+describe('CSP correctness — connect-src completeness (F-08)', () => {
+  // QNBS-v3: LanguageTool's default self-hosted URL is `http://localhost:8010` — an HTTP origin,
+  // which the web PWA's `https:` scheme-source does NOT cover either (different scheme). This was
+  // missing on ALL 5 surfaces, not just Tauri as the source audit assumed (its "the web `https:`
+  // masks the gap" reasoning only holds for HTTPS-reachable hosts). Fixed everywhere 2026-07-29.
+  it.each(namedCsps)(
+    '%s: allows LanguageTool default self-hosted port 8010 (features/settings/settingsSlice.ts:105)',
+    (_name, csp) => {
+      const tokens = directiveTokens(csp, 'connect-src') ?? [];
+      expect(tokens).toContain('http://localhost:8010');
+      expect(tokens).toContain('http://127.0.0.1:8010');
+    },
+  );
+
+  // QNBS-v3: the web PWA's `connect-src 'self' https: ...` DOES implicitly cover these HTTPS hosts
+  // (ADR-0004) — only the strict Tauri connect-src (no `https:` blanket) needs them enumerated.
+  describe('Tauri-only: Hugging Face Hub hosts (no https: blanket to fall back on)', () => {
+    const tauriConnectSrc = directiveTokens(tauriCsp(), 'connect-src') ?? [];
+
+    it('allows the Hugging Face Hub host that WebLLM/Transformers.js resolve models from (their library defaults)', () => {
+      expect(tauriConnectSrc).toContain('https://huggingface.co');
+    });
+
+    it('allows the Hugging Face Xet CDN bridge that actual model-weight downloads redirect to (empirically traced 2026-07-29: a resolve/main/*.bin request 302s to us.aws.cdn.hf.co)', () => {
+      expect(tauriConnectSrc).toContain('https://us.aws.cdn.hf.co');
+    });
+  });
+});
+
 describe('CSP correctness — no ungehashtes (unhashed) inline <script> in index.html', () => {
   // QNBS-v3: this single assertion would have caught the 2026-05-27 defect (faad8f0) on day one —
   // an inline <script> was added in the same commit as `script-src 'self'` with no nonce/hash,
