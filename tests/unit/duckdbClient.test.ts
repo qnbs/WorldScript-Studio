@@ -302,6 +302,19 @@ describe('duckdbClient abort', () => {
 
     await vi.waitFor(() => expect(cancel).toHaveBeenCalledWith('Aborted'));
   });
+
+  it('detaches its abort listener once the call settles, so a reused signal does not accumulate listeners', async () => {
+    // QNBS-v3: [regression guard — {once:true} only self-removes when the signal actually
+    //          fires; a caller reusing one AbortSignal across many non-aborted queries must not
+    //          leak one listener per call for the signal's whole lifetime.]
+    mockEnqueue.mockReturnValue(makeHandle(Promise.resolve([{ n: 1 }])));
+    const controller = new AbortController();
+    const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
+
+    await duckdbClient.query('SELECT 1', undefined, controller.signal);
+
+    expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
 });
 
 describe('duckdbClient OPFS fallback', () => {

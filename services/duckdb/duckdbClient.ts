@@ -54,65 +54,70 @@ async function send(
   //          a handle exists, which opens a gap; a same-tick abort must not be lost inside it.
   let abortedEarly = signal?.aborted ?? false;
   let handleRef: { cancel: (reason?: string) => void } | undefined;
-  signal?.addEventListener(
-    'abort',
-    () => {
-      abortedEarly = true;
-      handleRef?.cancel('Aborted');
-    },
-    { once: true },
-  );
-
-  const bus = await ensureDuckDbPool();
-  if (!bus) return { messageId, ok: false, error: 'WorkerBus v2 unavailable' };
-
-  // QNBS-v3: v1 never retried a failed QUERY/EXEC (caller decided) — disabling the bus's default
-  //          2-retry here keeps that behavior instead of silently stacking under
-  //          duckdbAnalytics.ts's own withDuckDbRetry() app-level retry (app/listenerMiddleware.ts).
-  const handle = bus.enqueue<
-    { sql?: string | undefined; params?: readonly unknown[] | undefined },
-    unknown
-  >(
-    TASK_TYPE[type],
-    { sql, params },
-    {
-      capabilities: ['db.duckdb'],
-      retryPolicy: { maxRetries: 0 },
-      onProgress: (p) => {
-        if (p.stage === 'opfs-fallback') opfsFallbackCb?.(p.message ?? 'OPFS unavailable');
-      },
-    },
-  );
-  handleRef = handle;
-  if (abortedEarly) handle.cancel('Aborted');
+  const onAbort = (): void => {
+    abortedEarly = true;
+    handleRef?.cancel('Aborted');
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
-    const raw = await handle.result;
-    const latencyMs = Date.now() - start;
-    if (type === 'QUERY') {
-      return { messageId, ok: true, rows: raw as Record<string, unknown>[], latencyMs };
-    }
-    return { messageId, ok: true, latencyMs };
-  } catch (err) {
-    const latencyMs = Date.now() - start;
-    if (signal?.aborted) return { messageId, ok: false, error: 'Aborted', latencyMs };
-    const message = errorMessage(err);
-    // QNBS-v3: [The duckdb pool's worker can idle-terminate (minWorkers:0) or crash-restart; a
-    //          freshly spawned worker's module state has no `connection` until INIT runs again.
-    //          Transparently re-init once and retry, instead of surfacing a confusing "not
-    //          initialized" error for what looks like a routine idle-timeout respawn.]
-    if (
-      !isReinitRetry &&
-      type !== 'INIT' &&
-      type !== 'SHUTDOWN' &&
-      message === 'DuckDB not initialized'
-    ) {
-      const reinit = await send('INIT', undefined, undefined, signal, true);
-      if (reinit.ok) {
-        return send(type, sql, params, signal, true);
+    const bus = await ensureDuckDbPool();
+    if (!bus) return { messageId, ok: false, error: 'WorkerBus v2 unavailable' };
+
+    // QNBS-v3: v1 never retried a failed QUERY/EXEC (caller decided) — disabling the bus's
+    //          default 2-retry here keeps that behavior instead of silently stacking under
+    //          duckdbAnalytics.ts's own withDuckDbRetry() app-level retry
+    //          (app/listenerMiddleware.ts).
+    const handle = bus.enqueue<
+      { sql?: string | undefined; params?: readonly unknown[] | undefined },
+      unknown
+    >(
+      TASK_TYPE[type],
+      { sql, params },
+      {
+        capabilities: ['db.duckdb'],
+        retryPolicy: { maxRetries: 0 },
+        onProgress: (p) => {
+          if (p.stage === 'opfs-fallback') opfsFallbackCb?.(p.message ?? 'OPFS unavailable');
+        },
+      },
+    );
+    handleRef = handle;
+    if (abortedEarly) handle.cancel('Aborted');
+
+    try {
+      const raw = await handle.result;
+      const latencyMs = Date.now() - start;
+      if (type === 'QUERY') {
+        return { messageId, ok: true, rows: raw as Record<string, unknown>[], latencyMs };
       }
+      return { messageId, ok: true, latencyMs };
+    } catch (err) {
+      const latencyMs = Date.now() - start;
+      if (signal?.aborted) return { messageId, ok: false, error: 'Aborted', latencyMs };
+      const message = errorMessage(err);
+      // QNBS-v3: [The duckdb pool's worker can idle-terminate (minWorkers:0) or crash-restart; a
+      //          freshly spawned worker's module state has no `connection` until INIT runs again.
+      //          Transparently re-init once and retry, instead of surfacing a confusing "not
+      //          initialized" error for what looks like a routine idle-timeout respawn.]
+      if (
+        !isReinitRetry &&
+        type !== 'INIT' &&
+        type !== 'SHUTDOWN' &&
+        message === 'DuckDB not initialized'
+      ) {
+        const reinit = await send('INIT', undefined, undefined, signal, true);
+        if (reinit.ok) {
+          return send(type, sql, params, signal, true);
+        }
+      }
+      return { messageId, ok: false, error: message, latencyMs };
     }
-    return { messageId, ok: false, error: message, latencyMs };
+  } finally {
+    // QNBS-v3: [{once:true} only self-removes once the listener actually fires — a caller that
+    //          reuses one AbortSignal across many queries (a common hook/thunk pattern) would
+    //          otherwise accumulate one listener per call for the signal's whole lifetime.]
+    signal?.removeEventListener('abort', onAbort);
   }
 }
 
