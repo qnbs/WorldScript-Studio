@@ -42,8 +42,7 @@ const SELF_HOSTED_BUNDLES = {
   },
 };
 
-// QNBS-v3: exported for tests/unit/duckdbWorkerHandler.test.ts (parity gate, PR 0 of the
-//          worker-generation consolidation) — verifies real handler logic without a live worker.
+// QNBS-v3: [Exported for tests/unit/duckdbWorkerHandler.test.ts to verify real handler logic without a live worker.]
 export async function initDuckDb(
   emitProgress?: (stage: string, progress: number, message?: string) => void,
 ): Promise<void> {
@@ -58,6 +57,8 @@ export async function initDuckDb(
 
   const useOpfs = await isOPFSSupported();
   if (useOpfs) {
+    // QNBS-v3: [Tracked separately from `connection` so a failed ATTACH can close this partial connection instead of leaking it.]
+    let opfsConnection: import('@duckdb/duckdb-wasm').AsyncDuckDBConnection | null = null;
     try {
       const { DuckDBDataProtocol } = await getDuckDb();
       const opfsRoot = await navigator.storage.getDirectory();
@@ -70,13 +71,14 @@ export async function initDuckDb(
         DuckDBDataProtocol.BROWSER_FSACCESS,
         true,
       );
-      connection = await newDb.connect();
-      await connection.query("ATTACH 'worldscript_analytics.duckdb' AS analytics (TYPE duckdb)");
+      opfsConnection = await newDb.connect();
+      await opfsConnection.query(
+        "ATTACH 'worldscript_analytics.duckdb' AS analytics (TYPE duckdb)",
+      );
+      connection = opfsConnection;
     } catch (opfsErr) {
-      // QNBS-v3: mirrors legacy workers/duckdbWorker.ts's out-of-band OPFS_FALLBACK message —
-      //          v2 has no bare postMessage escape hatch from inside a task handler, so this
-      //          reuses the existing progress channel instead (duckdbClient's INIT adapter
-      //          listens for the 'opfs-fallback' stage and forwards it to setOpfsFallbackHandler).
+      // QNBS-v3: [No bare postMessage from inside a task handler — OPFS-unavailable is surfaced via the progress channel duckdbClient's INIT adapter listens on instead.]
+      await opfsConnection?.close();
       emitProgress?.(
         'opfs-fallback',
         1,

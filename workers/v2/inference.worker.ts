@@ -42,8 +42,7 @@ async function loadPipeline(task: string, modelId: string, quantized = true) {
   });
 }
 
-// QNBS-v3: exported for tests/unit/inferenceWorkerHandlerV2.test.ts (parity gate, PR 0 of the
-//          worker-generation consolidation) — verifies real handler logic without a live worker.
+// QNBS-v3: [Exported for tests/unit/inferenceWorkerHandlerV2.test.ts to verify real handler logic without a live worker.]
 export async function handleInference(ctx: WorkerHandlerContext): Promise<unknown> {
   const { payload, signal, emitProgress } = ctx;
   const req = payload as {

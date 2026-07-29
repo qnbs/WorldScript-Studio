@@ -1,8 +1,5 @@
 // @vitest-environment jsdom
-// QNBS-v3: parity gate (PR 0, worker-generation consolidation, docs/adr/0014-worker-generation-
-//          duplication.md) — unit tests for the v2 DuckDB worker's handler functions, exercised
-//          directly (not via a real worker/WorkerBus) against a mocked @duckdb/duckdb-wasm, to
-//          catch response-shape / OPFS-fallback-signal drift from v1 before any consumer cuts over.
+// QNBS-v3: [Parity gate for the v2 DuckDB worker handlers (docs/adr/0014) — catches response-shape/OPFS-fallback drift from v1 before any consumer cuts over.]
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkerHandlerContext } from '../../packages/worker-bus/src/workerBootstrap';
@@ -14,8 +11,7 @@ class MockWorker {
 }
 vi.stubGlobal('Worker', MockWorker);
 
-// QNBS-v3: vi.hoisted — the worker module is imported statically below, so the mock factory runs
-//          during the hoisted import phase; plain consts would hit a TDZ ReferenceError.
+// QNBS-v3: [vi.hoisted — the mock factory runs during the hoisted import phase, so plain consts would hit a TDZ ReferenceError.]
 const {
   mockSelectBundle,
   mockInstantiate,
@@ -28,8 +24,7 @@ const {
   const mockRegisterFileHandle = vi.fn();
   const mockConnect = vi.fn();
   const mockDbTerminate = vi.fn();
-  // QNBS-v3: must be a `function`, not an arrow — arrow functions aren't constructable, and
-  //          `initDuckDb()` calls `new AsyncDuckDB(...)`.
+  // QNBS-v3: [Must be a `function`, not an arrow — arrow functions aren't constructable, and initDuckDb() calls `new AsyncDuckDB(...)`.]
   const MockAsyncDuckDB = vi.fn().mockImplementation(function MockAsyncDuckDBCtor() {
     return {
       instantiate: mockInstantiate,
@@ -55,7 +50,7 @@ vi.mock('@duckdb/duckdb-wasm', () => ({
   DuckDBDataProtocol: { BROWSER_FSACCESS: 'browser-fsaccess' },
 }));
 
-// QNBS-v3: imported AFTER the mock is declared so the worker picks up the mocked module.
+// QNBS-v3: [Imported after the mock is declared so the worker picks up the mocked module.]
 import {
   handleExec,
   handleQuery,
@@ -88,17 +83,14 @@ function stubNoOpfs(): void {
   });
 }
 
-// QNBS-v3: always include `close` — the shared beforeEach calls the real handleShutdown() to
-//          reset module state, which unconditionally calls `connection?.close()`.
+// QNBS-v3: [Always include `close` — the shared beforeEach calls handleShutdown() to reset state, which unconditionally calls `connection?.close()`.]
 function mockConnection(overrides: { query?: ReturnType<typeof vi.fn> } = {}) {
   return { query: overrides.query ?? vi.fn(), close: vi.fn().mockResolvedValue(undefined) };
 }
 
 describe('duckdb.worker handlers', () => {
   beforeEach(async () => {
-    // QNBS-v3: connection/db are module-scoped in duckdb.worker.ts and persist across tests in
-    //          this file — reset via handleShutdown() before each test so "not initialized"
-    //          assertions aren't polluted by a previous test's initDuckDb() call.
+    // QNBS-v3: [connection/db are module-scoped and persist across tests — reset first so "not initialized" assertions aren't polluted by a prior test's initDuckDb().]
     await handleShutdown();
     vi.clearAllMocks();
     mockSelectBundle.mockResolvedValue({ mainModule: 'mvp.wasm', mainWorker: 'mvp.worker.js' });
@@ -134,6 +126,23 @@ describe('duckdb.worker handlers', () => {
       expect(emitProgress).toHaveBeenCalledWith('opfs-fallback', 1, 'registerFileHandle denied');
       // Falls back to a plain (in-memory) connect() despite the OPFS failure.
       expect(mockConnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the partially-initialized OPFS connection before falling back when ATTACH fails', async () => {
+      const opfsClose = vi.fn().mockResolvedValue(undefined);
+      const opfsQuery = vi.fn().mockRejectedValue(new Error('ATTACH failed'));
+      mockConnect
+        .mockResolvedValueOnce({ query: opfsQuery, close: opfsClose })
+        .mockResolvedValueOnce(mockConnection());
+      mockRegisterFileHandle.mockResolvedValue(undefined);
+      stubOpfsDirectory(vi.fn().mockResolvedValue({}));
+      const emitProgress = vi.fn();
+
+      await initDuckDb(emitProgress);
+
+      expect(opfsClose).toHaveBeenCalled();
+      expect(emitProgress).toHaveBeenCalledWith('opfs-fallback', 1, 'ATTACH failed');
+      expect(mockConnect).toHaveBeenCalledTimes(2);
     });
 
     it('does not emit opfs-fallback when OPFS is simply unsupported (no navigator.storage)', async () => {

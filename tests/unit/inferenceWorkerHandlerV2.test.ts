@@ -1,9 +1,5 @@
 // @vitest-environment jsdom
-// QNBS-v3: parity gate (PR 0, worker-generation consolidation, docs/adr/0014-worker-generation-
-//          duplication.md) — unit tests for the v2 inference worker's handler, exercised directly
-//          (not via a real worker/WorkerBus) against a mocked @huggingface/transformers, to catch
-//          drift from v1 (workers/inference.worker.ts) before any consumer cuts over. File name is
-//          distinct from the existing v1 tests/unit/inferenceWorker.test.ts until v1 is deleted.
+// QNBS-v3: [Parity gate for the v2 inference worker handler (docs/adr/0014) — catches drift from v1 before any consumer cuts over; named distinctly from tests/unit/inferenceWorker.test.ts until v1 is deleted.]
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkerHandlerContext } from '../../packages/worker-bus/src/workerBootstrap';
@@ -14,7 +10,7 @@ vi.mock('@huggingface/transformers', () => ({
   pipeline: mockPipelineFactory,
 }));
 
-// QNBS-v3: imported AFTER the mock is declared so the worker picks up the mocked factory.
+// QNBS-v3: [Imported after the mock is declared so the worker picks up the mocked factory.]
 import { handleInference } from '../../workers/v2/inference.worker';
 
 function makeCtx(overrides: Partial<WorkerHandlerContext> = {}): WorkerHandlerContext {
